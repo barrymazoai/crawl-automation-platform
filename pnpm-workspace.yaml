@@ -1,0 +1,45 @@
+packages:
+  - apps/*
+  - packages/*
+  - crawl-products
+
+catalog:
+  '@ant-design/icons': ^5.6.1
+  '@hono/node-server': ^1.19.1
+  '@aws-sdk/client-s3': ^3.864.0
+  '@aws-sdk/s3-request-presigner': ^3.864.0
+  '@orpc/client': ^1.12.2
+  '@orpc/contract': ^1.12.2
+  '@orpc/server': ^1.12.2
+  '@orpc/tanstack-query': ^1.12.2
+  '@tailwindcss/vite': ^4.1.18
+  '@tanstack/react-query': ^5.72.2
+  '@tanstack/react-router': ^1.120.3
+  '@types/node': ^22.13.14
+  '@types/archiver': ^6.0.3
+  '@types/unzipper': ^0.10.11
+  '@types/pg': ^8.15.5
+  '@types/react': ^19.2.10
+  '@types/react-dom': ^19.2.3
+  archiver: ^7.0.1
+  cron-parser: ^5.4.0
+  unzipper: ^0.12.3
+  '@vitejs/plugin-react': ^4.5.0
+  ag-grid-community: ^35.1.0
+  ag-grid-react: ^35.1.0
+  antd: ^5.27.5
+  drizzle-orm: ^0.44.5
+  hono: ^4.8.2
+  lucide-react: ^0.546.0
+  pg: ^8.16.3
+  pino: ^10.1.0
+  pino-pretty: ^13.1.2
+  react: ^19.2.3
+  react-dom: ^19.2.3
+  tailwindcss: ^4.1.18
+  tsdown: ^0.15.4
+  tsx: ^4.20.5
+  typescript: ^5.8.3
+  vite: ^6.3.5
+  vitest: ^3.2.4
+  zod: ^4.1.13

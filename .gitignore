@@ -1,0 +1,48 @@
+# OS and editor metadata
+.DS_Store
+.idea/
+.vscode/
+
+# Local tooling and package-manager state
+.superpowers/
+/.railway/
+/.pnpm-store/
+node_modules/
+dist/
+.turbo/
+.next/
+.vite/
+coverage/
+*.tsbuildinfo
+*.log
+*.pid
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Secrets and machine-specific configuration
+.env
+.env.*
+!.env.example
+!.env.*.example
+
+# Runtime state, checkpoints, and local databases
+/.crawl-products/
+/.automation-state/
+/.automation-runs/
+/runs/
+/state/
+/logs/
+*.sqlite
+*.sqlite-*
+*.db
+*.db-*
+
+# Generated crawl exports and downloaded evidence
+/output/
+/real-crawl-results/
+/subagent-simulation-results.json
+
+# Generated source files
+apps/web/src/routeTree.gen.ts

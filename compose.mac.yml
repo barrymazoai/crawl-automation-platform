@@ -1,0 +1,13 @@
+services:
+  crawl-console:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "${CRAWL_CONSOLE_PORT:-8787}:8080"
+    env_file:
+      - .env.mac
+    environment:
+      BACKEND_MODE: proxy
+      WEB_DIST_DIR: /app/apps/web/dist

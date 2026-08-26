@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["status", "recordsFile", "outputCount", "summary"],
+  "properties": {
+    "status": { "type": "string", "enum": ["complete", "needs_review", "failed"] },
+    "recordsFile": { "type": "string", "minLength": 1 },
+    "outputCount": { "type": "integer", "minimum": 0 },
+    "summary": { "type": "string" },
+    "reasonCode": { "type": ["string", "null"] }
+  }
+}
+

@@ -1,0 +1,51 @@
+company_id,company_name,website,current_products,contacts,employees,country,category,industries
+16d2811e-9cd8-4fbf-b8d5-441eb9cbd24b,LifeTime,lifetime.life,1,100,43000,United States,Sports Nutrition,"health, wellness & fitness; recreational facilities & services"
+1a6327ea-03bf-4547-aa0b-aa4470467cba,999,999.com.cn,2,8,21000,China,Medical / Health Nutrition,food production
+418a762c-848f-415b-b6d1-c5ddac4d50cd,Pine Brand,www.hayao.com,1,13,11000,China,Supplements,pharmaceuticals
+f430f8aa-8007-4627-8866-5cbf033802cf,Holland & Barrett,hollandandbarrett.com,2,100,4700,United Kingdom,Supplements,"health, wellness & fitness"
+180570a4-d190-4e3e-8251-0b6146fad430,Organo Gold Int'l Inc.,organogold.com,1,101,4300,United States,Beverage,food & beverages; restaurants
+421a6c0f-1146-40c7-baa9-af32f662f21d,hims & hers,hims.com,1,101,2000,United States,Medical / Health Nutrition,"health, wellness & fitness"
+38ef63b6-76d0-4b84-bb09-28f081e71c2e,Unicity,unicity.com,2,50,1900,United States,Supplements,"health, wellness & fitness"
+0917f2e1-e115-4c5d-a3a5-1d4719ea01b5,Core Power,fairlife.com,1,100,890,United States,Sports Nutrition,food & beverages
+b852da5e-5f1f-4966-afb2-e8e0a4fd8f4d,Abbott India Limited,abbott.co.in,1,100,890,India,Medical / Health Nutrition,electrical/electronic manufacturing
+ae05fae8-79ca-400f-98a2-cc1d666a5bd3,ATC Healthcare Corp,atchealthcare.com,1,100,850,United States,Supplements,staffing & recruiting
+93447fa7-7702-4225-8fc0-9e8b02456919,PharmaCare Laboratories Pty Ltd,pharmacare.com.au,1,101,690,Australia,Supplements,"health, wellness & fitness"
+fde746da-d8f0-455d-bc70-a9f9eb7885fc,KoRo,korodrogerie.de,2,100,660,Germany,Functional Food,retail
+3acfddaa-fa9b-4ad3-84dc-08301cc8ef09,GT's Alive,gtslivingfoods.com,1,101,530,United States,Beverage,food & beverages
+27338c29-5501-43a3-bc1a-40a35048611e,NUTRABOLT(TM),nutrabolt.com,1,100,530,United States,Sports Nutrition,food & beverages; consumer goods
+f0f89b14-e160-4450-90a1-151cf39ae035,BODYARMOR,drinkbodyarmor.com,1,99,510,United States,Sports Nutrition,food & beverages
+fe00cac1-4102-4aa9-b318-dee43265bee9,Kapiva,kapiva.in,2,101,490,India,Supplements,"health, wellness & fitness"
+9ff432aa-35d4-49e7-871d-6cadb844980b,Eqology,eqology.com,2,100,470,Norway,Supplements,"health, wellness & fitness"
+a6a99a5b-7b12-4436-b127-c1248993f3d1,Sunwave Pharma,sunwavepharma.com,0,100,410,Romania,Supplements,pharmaceuticals
+ed482836-257a-4df4-b68b-dc2729234494,Total Life Changes,totallifechanges.com,1,101,400,United States,Supplements,"health, wellness & fitness"
+1b4045a4-0666-4603-b262-a6308b000493,Waterdrop,waterdrop.com,1,100,400,Austria,Functional Beverage,food & beverages
+cf270624-9294-49b6-b3b5-cfc6f8972c71,Ideal Protein,idealprotein.com,2,100,380,Canada,Medical / Health Nutrition,"health, wellness & fitness"
+2b34e5fe-0c55-4aa4-a5b9-0493c7800369,Univera,univera.com,1,101,360,United States,Supplements,"health, wellness & fitness"
+aa1a25ef-0297-4972-8034-bc18dd91c7be,Munchkin,https://www.munchkin.com/,1,100,330,United States,Medical / Health Nutrition,retail; consumer goods
+0df8e759-db9b-4497-bb44-76504dc957ed,RYZE,www.ryzesuperfoods.com,2,101,300,United States,Beverage,food & beverages
+51bb9672-8c7a-436a-b320-0a234fca4fd3,Mariani,mariani.com,2,101,250,United States,Food,food production
+55e179d8-d2c2-4585-b045-78cf6164538b,Zinzino,zinzino.com,0,100,250,Sweden,Supplements,"health, wellness & fitness"
+786eea66-bf72-4190-8937-43f1295e04fa,Nahrin,nahrin.ch,1,78,250,Switzerland,Functional Food & Supplements,food production
+796e7635-7371-441a-8ce8-d01716fc5ce8,PowerLife,powerlife.com,1,72,240,United States,Supplements,"health, wellness & fitness"
+5356a2a8-2996-422b-9962-b131f2e3b408,Himalayan Institute,himalayaninstitute.org,1,1,240,United States,Supplements,nonprofit organization management
+89c9a6d3-3823-4e42-abd4-222e6ea4f35a,Purity Life Health Products A division of SunOpta Inc.,puritylife.com,1,100,210,Canada,Supplements,"health, wellness & fitness"
+97f4bdf1-957a-446b-85f1-8afed4504978,"Laboratorio Farmamedica, S.A.",farmamedica.com,2,81,190,Guatemala,Supplements,pharmaceuticals
+f83be64d-3277-42a6-8c26-e1c3a831541c,HSN / HSN Store,hsnstore.com,0,90,180,Spain,Sports Nutrition,"health, wellness & fitness"
+c5ca6375-089f-4b96-a081-df426eb98fed,1440 Foods Company,1440foods.com,2,100,170,United States,Sports Nutrition,food & beverages
+8de40039-7ee6-4204-a8a3-1e9c14481fff,FirstFitness Nutrition,firstfitness.com,1,99,160,United States,Supplements,"health, wellness & fitness"
+0f58c343-6ef1-4781-91ee-95cd83385882,Bonafide Health LLC,hellobonafide.com,2,101,150,United States,Supplements,pharmaceuticals
+ac0e41ac-a420-4120-83f6-e7bca94e5790,mindbodygreen,www.mindbodygreen.com,2,70,130,United States,Supplements,"health, wellness & fitness"
+4a3341bf-6772-4ec4-9403-33a3f295d619,"Microbiome Labs, LLC.",www.microbiomelabs.com,1,95,120,United States,Supplements,"health, wellness & fitness"
+f19b6ba1-fde6-43ba-9cb9-d33e84bc129c,Armra,armra.com,2,92,120,United States,Supplements,"health, wellness & fitness"
+f6bedcf7-ea86-498d-917c-ae6d581fdf16,Alka-Seltzer Plus,alkaseltzer.com,2,1,120,Indonesia,Medical / Health Nutrition,apparel & fashion
+38d15478-d151-4791-a897-a7d4591fb783,"Nivagen Pharmaceuticals, Inc.",nivagen.com,1,79,110,United States,Medical / Health Nutrition,pharmaceuticals
+e2ce487d-a55e-456c-8ee2-5eb8240ee8e8,B Life Company,blife.mx,1,76,110,Mexico,Supplements,pharmaceuticals
+923e97c3-bee0-44ed-8aab-6fb62c2c3b30,Nutrition Formulators,nutritionformulators.com,1,72,110,United States,Supplements,"health, wellness & fitness"
+caf6620b-5c16-4873-8599-8e462f84c7b6,"Vitality Works, Inc.",vitalityworks.com,2,1,110,United States,Supplements,"health, wellness & fitness"
+12f36269-5d34-4a3f-bff7-9cdda27b8019,"Nurture, Inc.",happyfamilyorganics.com,1,54,99,United States,Food,food & beverages
+6aee9fc6-280b-4190-b885-2ca61c90372d,Allegra,www.allegra.com,1,13,98,Mexico,Medical / Health Nutrition,performing arts
+12f97e56-0b46-47db-b2e8-a7b523aec795,Trec Nutrition,trecnutrition.com,0,66,95,Poland,Sports Nutrition,"health, wellness & fitness"
+192e6fad-4609-4721-adff-9f4c2b91b53d,Guardian Drug Company,guardiandrug.com,2,73,93,United States,Supplements,pharmaceuticals
+20f79b70-0ae9-43a5-ad67-b75b944ef092,Vitaminstore,vitaminstore.nl,0,55,85,Netherlands,Supplements,"health, wellness & fitness"
+80be18cd-07ee-4b63-81bd-de3a63e5f47c,Revive Active,row.reviveactive.com,0,57,82,Ireland,Supplements,"health, wellness & fitness"
+b52eacbe-4c79-4c10-b1af-b1294e0ac1e9,The AIM Companies,theaimcompanies.com,2,56,79,United States,Supplements,"health, wellness & fitness"

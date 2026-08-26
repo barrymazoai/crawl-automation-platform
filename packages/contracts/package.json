@@ -1,0 +1,24 @@
+{
+  "name": "@crawl-automation/contracts",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": { "types": "./src/index.ts", "import": "./dist/index.js" },
+    "./app-contract": { "types": "./src/app-contract.ts", "import": "./dist/app-contract.js" }
+  },
+  "scripts": {
+    "build": "tsdown src/index.ts src/app-contract.ts --format esm --dts",
+    "check-types": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@orpc/contract": "catalog:",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "tsdown": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}

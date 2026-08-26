@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["status", "itemCount", "batches", "summary"],
+  "properties": {
+    "status": { "type": "string", "enum": ["complete", "needs_review", "failed"] },
+    "itemCount": { "type": "integer", "minimum": 0 },
+    "batches": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["ordinal", "itemCount", "evidenceDirectory"],
+        "properties": {
+          "ordinal": { "type": "integer", "minimum": 0 },
+          "itemCount": { "type": "integer", "minimum": 0 },
+          "evidenceDirectory": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "summary": { "type": "string" },
+    "reasonCode": { "type": ["string", "null"] }
+  }
+}
+

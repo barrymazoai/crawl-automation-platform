@@ -1,0 +1,26 @@
+{
+  "name": "@crawl-automation/runtime",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "exports": { ".": { "types": "./src/index.ts", "import": "./dist/index.js" } },
+  "scripts": {
+    "build": "tsdown src/index.ts --format esm --dts",
+    "check-types": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@crawl-automation/contracts": "workspace:*",
+    "archiver": "catalog:",
+    "unzipper": "catalog:",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@types/archiver": "catalog:",
+    "@types/node": "catalog:",
+    "@types/unzipper": "catalog:",
+    "tsdown": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}

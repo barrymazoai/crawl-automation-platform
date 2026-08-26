@@ -1,0 +1,16 @@
+.git
+.railway
+.superpowers
+.crawl-products
+.automation-runs
+.automation-state
+**/node_modules
+**/dist
+real-crawl-results
+output
+*.zip
+*.png
+*.jpg
+*.jpeg
+*.DS_Store
+

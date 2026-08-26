@@ -1,0 +1,20 @@
+{
+  "https://mx.birdman.com/products/falcon-protein-pumpkin-spice-510-gr-edicion-limitada": {
+    "price": "599.00",
+    "currency": "MXN",
+    "sku": "FPU510",
+    "variantId": "40268507906135",
+    "available": false,
+    "source": "https://mx.birdman.com/products/falcon-protein-pumpkin-spice-510-gr-edicion-limitada.js",
+    "observedAt": "2026-08-15T00:00:00.000Z"
+  },
+  "https://mx.birdman.com/products/parrot-greens-protein-berry-vainilla-210-gr": {
+    "price": "239.00",
+    "currency": "MXN",
+    "sku": "PBE210",
+    "variantId": "12695621959767",
+    "available": true,
+    "source": "https://mx.birdman.com/products/parrot-greens-protein-berry-vainilla-210-gr.js",
+    "observedAt": "2026-08-15T00:00:00.000Z"
+  }
+}
