@@ -3,7 +3,7 @@ import path from "node:path";
 import type { OcrClient } from "@crawl-automation/ocr-client";
 import { extractZipSafe } from "@crawl-automation/runtime";
 import { z } from "zod";
-import { productBatchSchema, type ProductBatch, type SupplySmartApi } from "./supply-smart-ingest.js";
+import { productBatchSchema, type ProductBatch, type SupplySmartDatabase } from "./supply-smart-ingest.js";
 
 const processResultSchema = z.object({
   status: z.enum(["complete", "needs_review", "failed"]),
@@ -22,7 +22,7 @@ export interface DtcPipelineOptions {
   archives: string[];
   ocrConcurrency: number;
   ocr: OcrClient;
-  supplySmart: SupplySmartApi;
+  supplySmart: SupplySmartDatabase;
   runProcessor: (prompt: string) => Promise<unknown>;
 }
 

@@ -35,7 +35,7 @@ import {
   type NormalizedProduct,
   type ProductBatch,
   type ProductFacts,
-  type SupplySmartApi,
+  type SupplySmartDatabase,
 } from "../supply-smart-ingest.js";
 
 const ASIN_RE = /^[A-Z0-9]{10}$/;
@@ -57,7 +57,7 @@ export interface AmazonPipelineOptions {
   ocrConcurrency: number;
   signal: AbortSignal;
   ocr: OcrClient;
-  supplySmart: SupplySmartApi;
+  supplySmart: SupplySmartDatabase;
   runModel: ModelCall;
 }
 
@@ -397,7 +397,7 @@ export async function runAmazonPipeline(options: AmazonPipelineOptions): Promise
     return {
       status: "needs_review",
       reasonCode: "amazon_ingest_review",
-      summary: ingested.problems.slice(0, 20).join("; ") || "Jakarta 回读数量不一致",
+      summary: ingested.problems.slice(0, 20).join("; ") || "产品库回读数量不一致",
       itemCount: normalized.length,
     };
   }

@@ -14,12 +14,12 @@ import {
 } from "@crawl-automation/runtime";
 import { runAmazonPipeline } from "./amazon/pipeline.js";
 import { runDtcProcessing } from "./dtc-pipeline.js";
-import { productBatchSchema, SupplySmartApi, type ProductBatch } from "./supply-smart-ingest.js";
+import { productBatchSchema, SupplySmartDatabase, type ProductBatch } from "./supply-smart-ingest.js";
 
 const env = z.object({
   CONTROL_PLANE_URL: z.url(),
   MAC_NODE_TOKEN: z.string().min(24),
-  SUPPLY_SMART_API_URL: z.url(),
+  PRODUCT_DATABASE_URL: z.string().min(1),
   OCR_ENDPOINT: z.url(),
   NODE_ID: z.string().min(3).default("mac-mini-1"),
   NODE_NAME: z.string().default("Mac mini Processing Worker"),
@@ -56,7 +56,7 @@ class Semaphore {
 const client = new NodeApiClient({ baseUrl: env.CONTROL_PLANE_URL, token: env.MAC_NODE_TOKEN, nodeId: env.NODE_ID });
 const checkpoints = new LocalCheckpointStore(env.LOCAL_STATE_DB);
 const ocr = new OcrClient({ endpoint: env.OCR_ENDPOINT, timeoutMs: 30_000, retries: 2 });
-const supplySmart = new SupplySmartApi({ baseUrl: env.SUPPLY_SMART_API_URL, timeoutMs: 30_000, retries: 2 });
+const supplySmart = SupplySmartDatabase.fromDatabaseUrl(env.PRODUCT_DATABASE_URL);
 const codex = new CodexProcessRunner({
   executable: env.CODEX_EXECUTABLE,
   model: env.CODEX_MODEL,
@@ -168,7 +168,7 @@ async function ingestDtc(claim: any, jobDirectory: string) {
   const result = await supplySmart.ingestAndValidate(batch);
   await fs.writeFile(path.join(jobDirectory, "ingest-result.json"), `${JSON.stringify(result, null, 2)}\n`);
   if (result.problems.length > 0 || result.verified !== batch.products.length) {
-    return { review: { reasonCode: "jakarta_ingest_review", summary: result.problems.slice(0, 20).join("; ") || "Jakarta 回读数量不一致" } };
+    return { review: { reasonCode: "product_db_ingest_review", summary: result.problems.slice(0, 20).join("; ") || "产品库回读数量不一致" } };
   }
   return { ingestedCount: result.verified, factsCount: batch.facts.length, readbackHash: result.readbackHash, validationPassed: true };
 }
@@ -259,4 +259,5 @@ try {
 } finally {
   clearInterval(heartbeat);
   checkpoints.close();
+  await supplySmart.close();
 }
