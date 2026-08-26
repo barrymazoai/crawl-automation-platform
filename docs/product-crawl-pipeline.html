@@ -1,0 +1,1151 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>产品爬取自动化 · 端到端流程真源</title>
+  <meta name="description" content="Windows Browser、无状态 OCR API、Mac mini 语义处理、Jakarta 入库与 Railway 控制面的完整职责边界和数据流。">
+  <style>
+    :root {
+      --paper: #f6f3ec;
+      --paper-strong: #fffdf8;
+      --ink: #13211d;
+      --muted: #5f6f68;
+      --line: #d7d8cf;
+      --railway: #6d52b7;
+      --browser: #146a8a;
+      --ocr: #a96418;
+      --mac: #15725d;
+      --database: #236382;
+      --review: #a5483f;
+      --cleanup: #53655d;
+      --good: #176b55;
+      --warn: #9a5e17;
+      --bad: #9f3f38;
+      --shadow: 0 14px 40px rgba(29, 43, 37, .08);
+      --radius: 18px;
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at 4% 0%, rgba(21, 114, 93, .08), transparent 28rem),
+        radial-gradient(circle at 96% 8%, rgba(109, 82, 183, .08), transparent 30rem),
+        var(--paper);
+      font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+      line-height: 1.62;
+    }
+
+    button, input { font: inherit; }
+    a { color: inherit; }
+    code, pre, .mono {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+    }
+
+    .page {
+      width: min(1480px, calc(100% - 32px));
+      margin: 0 auto;
+      padding: 28px 0 80px;
+    }
+
+    .hero {
+      position: relative;
+      overflow: hidden;
+      padding: clamp(28px, 5vw, 64px);
+      border: 1px solid rgba(19, 33, 29, .12);
+      border-radius: 28px;
+      background: rgba(255, 253, 248, .88);
+      box-shadow: var(--shadow);
+    }
+
+    .hero::after {
+      content: "";
+      position: absolute;
+      width: 340px;
+      height: 340px;
+      right: -120px;
+      top: -150px;
+      border-radius: 50%;
+      border: 56px solid rgba(21, 114, 93, .07);
+      pointer-events: none;
+    }
+
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 9px;
+      margin-bottom: 18px;
+      color: var(--mac);
+      font-size: 13px;
+      font-weight: 800;
+      letter-spacing: .1em;
+      text-transform: uppercase;
+    }
+
+    .eyebrow::before {
+      content: "";
+      width: 30px;
+      height: 3px;
+      border-radius: 99px;
+      background: currentColor;
+    }
+
+    h1, h2, h3, h4, p { margin-top: 0; }
+    h1 {
+      max-width: 970px;
+      margin-bottom: 18px;
+      font-size: clamp(38px, 6vw, 78px);
+      line-height: 1.02;
+      letter-spacing: -.045em;
+    }
+
+    .hero-lead {
+      max-width: 940px;
+      margin-bottom: 28px;
+      color: #41534c;
+      font-size: clamp(17px, 2vw, 23px);
+    }
+
+    .hero-meta, .button-row, .legend, .tag-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .pill, .tag, .node-label {
+      display: inline-flex;
+      align-items: center;
+      width: fit-content;
+      border: 1px solid rgba(19, 33, 29, .13);
+      border-radius: 999px;
+      background: rgba(255, 255, 255, .72);
+      color: #42544d;
+      font-size: 12px;
+      font-weight: 750;
+      line-height: 1;
+    }
+
+    .pill { padding: 10px 12px; }
+    .tag, .node-label { padding: 7px 9px; }
+    .tag.skill { color: var(--browser); border-color: rgba(20, 106, 138, .3); }
+    .tag.codex { color: var(--mac); border-color: rgba(21, 114, 93, .3); }
+    .tag.no { color: var(--bad); border-color: rgba(159, 63, 56, .28); }
+    .tag.code { color: #5c4c8d; border-color: rgba(109, 82, 183, .28); }
+
+    .controls {
+      position: sticky;
+      z-index: 30;
+      top: 12px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin: 18px 0 32px;
+      padding: 10px;
+      border: 1px solid rgba(19, 33, 29, .12);
+      border-radius: 16px;
+      background: rgba(255, 253, 248, .88);
+      box-shadow: 0 10px 32px rgba(29, 43, 37, .09);
+      backdrop-filter: blur(18px);
+    }
+
+    .control {
+      cursor: pointer;
+      border: 0;
+      border-radius: 10px;
+      padding: 9px 12px;
+      background: transparent;
+      color: #43534d;
+      font-size: 13px;
+      font-weight: 750;
+    }
+
+    .control:hover, .control:focus-visible { background: #e9eee9; outline: none; }
+    .control.primary { background: var(--ink); color: white; }
+
+    section {
+      scroll-margin-top: 92px;
+      margin: 0 0 46px;
+    }
+
+    .section-head {
+      display: grid;
+      grid-template-columns: minmax(240px, .72fr) minmax(300px, 1.28fr);
+      gap: 28px;
+      align-items: end;
+      margin-bottom: 20px;
+    }
+
+    .section-kicker {
+      margin-bottom: 8px;
+      color: var(--mac);
+      font-size: 12px;
+      font-weight: 850;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+    }
+
+    h2 {
+      margin-bottom: 0;
+      font-size: clamp(28px, 4vw, 48px);
+      line-height: 1.08;
+      letter-spacing: -.035em;
+    }
+
+    .section-intro { margin-bottom: 0; color: var(--muted); font-size: 16px; }
+
+    .principles {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+    }
+
+    .principle, .panel, .topology-node, .stage, .matrix-wrap, .callout, .checklist {
+      border: 1px solid rgba(19, 33, 29, .12);
+      border-radius: var(--radius);
+      background: rgba(255, 253, 248, .91);
+      box-shadow: 0 8px 28px rgba(29, 43, 37, .045);
+    }
+
+    .principle { padding: 20px; }
+    .principle b { display: block; margin-bottom: 8px; font-size: 16px; }
+    .principle p { margin-bottom: 0; color: var(--muted); font-size: 13px; }
+
+    .topology {
+      display: grid;
+      grid-template-columns: 1fr 54px 1fr 54px 1.25fr;
+      gap: 0;
+      align-items: stretch;
+    }
+
+    .topology-node {
+      position: relative;
+      min-height: 210px;
+      padding: 22px;
+      border-top: 5px solid var(--node-color, var(--ink));
+    }
+
+    .topology-node h3 { margin: 10px 0 6px; font-size: 21px; }
+    .topology-node p { margin-bottom: 13px; color: var(--muted); font-size: 13px; }
+    .topology-node ul { margin: 0; padding-left: 18px; font-size: 13px; }
+    .topology-node.railway { --node-color: var(--railway); }
+    .topology-node.browser { --node-color: var(--browser); }
+    .topology-node.mac { --node-color: var(--mac); }
+
+    .api-dependency {
+      margin-top: 16px;
+      padding: 13px 14px;
+      border: 1px dashed rgba(182, 105, 34, .48);
+      border-radius: 12px;
+      background: rgba(255, 244, 225, .78);
+      color: #6f451f;
+      font-size: 12px;
+      line-height: 1.55;
+    }
+    .api-dependency b { display: block; margin-bottom: 3px; color: var(--ocr); letter-spacing: .04em; }
+
+    .adapter-flow {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+    }
+    .adapter-step {
+      position: relative;
+      min-height: 190px;
+      padding: 19px;
+      border: 1px solid rgba(19, 33, 29, .12);
+      border-top: 4px solid var(--ocr);
+      border-radius: 15px;
+      background: var(--paper-strong);
+    }
+    .adapter-step .step-id { display: block; margin-bottom: 9px; color: var(--ocr); font-size: 11px; font-weight: 850; letter-spacing: .1em; }
+    .adapter-step h3 { margin-bottom: 7px; font-size: 16px; }
+    .adapter-step p { margin-bottom: 9px; color: var(--muted); font-size: 12px; }
+    .adapter-step ul { margin: 0; padding-left: 17px; font-size: 12px; }
+
+    .arrow {
+      display: grid;
+      place-items: center;
+      color: #7f8c86;
+      font-size: 26px;
+      font-weight: 400;
+    }
+
+    .return-line {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      align-items: center;
+      gap: 12px;
+      margin: 14px 0 0;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+    }
+    .return-line::before, .return-line::after { content: ""; height: 1px; background: var(--line); }
+
+    .pipeline {
+      position: relative;
+      display: grid;
+      gap: 14px;
+    }
+
+    .pipeline::before {
+      content: "";
+      position: absolute;
+      top: 32px;
+      bottom: 32px;
+      left: 31px;
+      width: 2px;
+      background: linear-gradient(var(--railway), var(--browser), var(--ocr), var(--mac), var(--database));
+      opacity: .26;
+    }
+
+    .stage {
+      position: relative;
+      display: grid;
+      grid-template-columns: 64px minmax(210px, .72fr) minmax(420px, 1.55fr);
+      gap: 22px;
+      padding: 22px 24px 22px 0;
+      overflow: hidden;
+    }
+
+    .stage::after {
+      content: "";
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 5px;
+      background: var(--stage-color, var(--ink));
+    }
+
+    .stage-number {
+      z-index: 1;
+      display: grid;
+      place-items: center;
+      align-self: start;
+      width: 38px;
+      height: 38px;
+      margin: 2px auto 0;
+      border: 3px solid var(--paper-strong);
+      border-radius: 50%;
+      background: var(--stage-color, var(--ink));
+      color: white;
+      box-shadow: 0 0 0 1px rgba(19, 33, 29, .1);
+      font-size: 13px;
+      font-weight: 850;
+    }
+
+    .stage h3 { margin-bottom: 5px; font-size: 20px; }
+    .stage-subtitle { margin-bottom: 11px; color: var(--muted); font-size: 13px; }
+    .stage-owner { color: var(--stage-color, var(--ink)); font-size: 12px; font-weight: 850; letter-spacing: .05em; text-transform: uppercase; }
+    .stage.railway { --stage-color: var(--railway); }
+    .stage.browser { --stage-color: var(--browser); }
+    .stage.ocr { --stage-color: var(--ocr); }
+    .stage.mac { --stage-color: var(--mac); }
+    .stage.database { --stage-color: var(--database); }
+    .stage.review { --stage-color: var(--review); }
+    .stage.cleanup { --stage-color: var(--cleanup); }
+
+    .detail-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+    }
+
+    .detail {
+      min-width: 0;
+      padding: 13px;
+      border-radius: 12px;
+      background: #f1f1eb;
+    }
+    .detail.good { background: #edf5f1; }
+    .detail.no { background: #f8edeb; }
+    .detail.output { background: #edf2f7; }
+    .detail h4 { margin-bottom: 6px; color: #53615c; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; }
+    .detail ul { margin: 0; padding-left: 17px; font-size: 12px; }
+    .detail p { margin: 0; font-size: 12px; }
+
+    details {
+      margin-top: 11px;
+      border-top: 1px dashed #ced2cb;
+      padding-top: 9px;
+    }
+    summary { cursor: pointer; color: #41534c; font-size: 12px; font-weight: 780; }
+    details p, details ul { margin: 8px 0 0; color: var(--muted); font-size: 12px; }
+
+    .image-flow {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 12px;
+      align-items: stretch;
+    }
+
+    .image-step {
+      position: relative;
+      padding: 18px;
+      border: 1px solid rgba(19, 33, 29, .12);
+      border-radius: 15px;
+      background: var(--paper-strong);
+    }
+    .image-step:not(:last-child)::after {
+      content: "→";
+      position: absolute;
+      z-index: 2;
+      top: 50%;
+      right: -19px;
+      transform: translateY(-50%);
+      color: #77847e;
+      font-size: 20px;
+      font-weight: 700;
+    }
+    .image-step .step-id { display: block; margin-bottom: 9px; color: var(--mac); font-size: 11px; font-weight: 850; letter-spacing: .1em; }
+    .image-step h3 { margin-bottom: 7px; font-size: 16px; }
+    .image-step p { margin: 0; color: var(--muted); font-size: 12px; }
+
+    .callout {
+      display: grid;
+      grid-template-columns: 210px 1fr;
+      gap: 24px;
+      margin-top: 16px;
+      padding: 22px;
+      border-left: 5px solid var(--warn);
+    }
+    .callout strong { color: var(--warn); font-size: 17px; }
+    .callout p { margin: 0; color: var(--muted); font-size: 13px; }
+
+    .matrix-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; min-width: 980px; }
+    th, td { padding: 14px 15px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; font-size: 12px; }
+    th { position: sticky; top: 0; background: #edece5; color: #52615a; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; }
+    tr:last-child td { border-bottom: 0; }
+    td:first-child { font-weight: 800; }
+    .source-chip { display: inline-block; margin: 2px 4px 2px 0; padding: 4px 7px; border-radius: 6px; background: #ecefe9; font-size: 11px; }
+
+    pre {
+      overflow: auto;
+      margin: 10px 0 0;
+      padding: 14px;
+      border-radius: 12px;
+      background: #17231f;
+      color: #e8f2ed;
+      font-size: 11px;
+      line-height: 1.55;
+    }
+
+    .branch-grid, .gap-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+    }
+
+    .branch, .gap {
+      padding: 19px;
+      border: 1px solid rgba(19, 33, 29, .12);
+      border-radius: 15px;
+      background: var(--paper-strong);
+    }
+    .branch h3, .gap h3 { margin-bottom: 7px; font-size: 16px; }
+    .branch p, .gap p { margin-bottom: 0; color: var(--muted); font-size: 12px; }
+    .branch.good { border-top: 4px solid var(--good); }
+    .branch.review { border-top: 4px solid var(--review); }
+    .branch.failed { border-top: 4px solid var(--bad); }
+    .gap { border-left: 4px solid var(--bad); }
+    .gap b { display: block; margin-bottom: 6px; color: var(--bad); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; }
+
+    .state-flow {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      overflow-x: auto;
+      padding: 18px;
+      border: 1px solid rgba(19, 33, 29, .12);
+      border-radius: var(--radius);
+      background: var(--paper-strong);
+    }
+    .state { flex: 0 0 auto; padding: 10px 12px; border-radius: 10px; background: #edf0eb; font-size: 12px; font-weight: 800; }
+    .state.review { background: #f5e7e4; color: var(--review); }
+    .state-arrow { color: #8a958f; }
+
+    .checklist { padding: 24px; }
+    .check-head { display: flex; justify-content: space-between; align-items: center; gap: 18px; margin-bottom: 16px; }
+    .check-head h3 { margin: 0; font-size: 20px; }
+    .progress { color: var(--mac); font-size: 13px; font-weight: 850; }
+    .check-items { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px 20px; }
+    .check-item { display: flex; gap: 10px; align-items: flex-start; padding: 10px 0; border-bottom: 1px dashed #d8dbd4; color: #405049; font-size: 13px; }
+    .check-item input { width: 17px; height: 17px; margin-top: 2px; accent-color: var(--mac); }
+
+    .footer {
+      display: flex;
+      justify-content: space-between;
+      gap: 20px;
+      padding-top: 24px;
+      border-top: 1px solid var(--line);
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    @media (max-width: 1120px) {
+      .principles { grid-template-columns: repeat(2, 1fr); }
+      .topology { grid-template-columns: 1fr; gap: 9px; }
+      .topology .arrow { transform: rotate(90deg); height: 34px; }
+      .stage { grid-template-columns: 58px 1fr; }
+      .stage-main { grid-column: 2; }
+      .stage-details { grid-column: 2; }
+      .image-flow { grid-template-columns: 1fr 1fr; }
+      .adapter-flow { grid-template-columns: 1fr 1fr; }
+      .image-step:not(:last-child)::after { display: none; }
+      .branch-grid, .gap-grid { grid-template-columns: 1fr 1fr; }
+    }
+
+    @media (max-width: 720px) {
+      .page { width: min(100% - 18px, 1480px); padding-top: 9px; }
+      .hero { padding: 26px 20px; border-radius: 19px; }
+      h1 { font-size: 42px; }
+      .controls { top: 6px; overflow-x: auto; flex-wrap: nowrap; }
+      .control { flex: 0 0 auto; }
+      .section-head { grid-template-columns: 1fr; gap: 9px; }
+      .principles, .image-flow, .adapter-flow, .branch-grid, .gap-grid, .check-items { grid-template-columns: 1fr; }
+      .stage { grid-template-columns: 48px minmax(0, 1fr); gap: 10px; padding-right: 12px; }
+      .detail-grid { grid-template-columns: 1fr; }
+      .callout { grid-template-columns: 1fr; gap: 6px; }
+      .footer { flex-direction: column; }
+    }
+
+    @media print {
+      body { background: white; }
+      .page { width: 100%; }
+      .controls { display: none; }
+      .hero, .principle, .panel, .topology-node, .stage, .matrix-wrap, .callout, .checklist { box-shadow: none; break-inside: avoid; }
+      details { display: block; }
+      details > * { display: block; }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <header class="hero" id="top">
+      <div class="eyebrow">Target Architecture · Review Draft</div>
+      <h1>产品爬取自动化<br>端到端流程真源</h1>
+      <p class="hero-lead">这张图描述当前迁移后的目标架构与实现状态。核心边界：Skill 只用于 DTC 浏览器爬取；Mac Processing 对全部图片调用无状态 OCR HTTP API；Codex 只处理固定索引里的页面与 OCR 文字，不视觉读取图片；入库必须通过 Jakarta API 并回读。</p>
+      <div class="hero-meta">
+        <span class="pill">DTC：capture → process → ingest → cleanup</span>
+        <span class="pill">Amazon：Link Monitor pipeline → verify → cleanup</span>
+        <span class="pill">Capture：DTC Browser / Mac Adapter</span>
+        <span class="pill">Browser：Windows A · 2 进程</span>
+        <span class="pill">OCR API：Windows B · 无状态 HTTP</span>
+        <span class="pill">Process：Mac mini · 2 进程 · Luna Medium</span>
+        <span class="pill">数据库：Jakarta product/enrich</span>
+      </div>
+    </header>
+
+    <nav class="controls" aria-label="页面导航">
+      <button class="control primary" data-target="principles">核心边界</button>
+      <button class="control" data-target="topology">节点拓扑</button>
+      <button class="control" data-target="amazon">Amazon 流程</button>
+      <button class="control" data-target="pipeline">详细流程</button>
+      <button class="control" data-target="images">图片与 OCR</button>
+      <button class="control" data-target="provenance">字段来源</button>
+      <button class="control" data-target="states">状态与清理</button>
+      <button class="control" data-target="gaps">迁移状态</button>
+      <button class="control" data-target="review">验收清单</button>
+      <button class="control" id="toggle-details">展开全部细节</button>
+      <button class="control" id="print-page">打印 / 保存 PDF</button>
+    </nav>
+
+    <section id="principles">
+      <div class="section-head">
+        <div>
+          <div class="section-kicker">01 · Non-negotiable boundaries</div>
+          <h2>四条不能混淆的边界</h2>
+        </div>
+        <p class="section-intro">后面所有流程都必须服从这四条。任何实现如果越过边界，就算功能暂时能跑，也不属于目标架构。</p>
+      </div>
+      <div class="principles">
+        <article class="principle">
+          <b>Skill 只在 Capture</b>
+          <p>只有 DTC 的 Windows Browser Capture 加载 <span class="mono">crawl-products</span>。Amazon 是 Mac Process 内的固定 Adapter；OCR、Process、Review、Ingest 都不读取 Skill。</p>
+        </article>
+        <article class="principle">
+          <b>OCR 是无状态 HTTP API</b>
+          <p>Mac 对全部画廊图片逐张调用接口，只接收文字、坐标和置信度。没有 OCR Job、OCR Artifact，也不判断 Benefits、Form 或 Health Function。</p>
+        </article>
+        <article class="principle">
+          <b>Codex 是受控转换器</b>
+          <p>代码按 ASIN/变体边界构造固定输入；DTC 可逐产品调用，Amazon 沿用最多 50 条一批但按 ASIN 严格对齐。Codex 不浏览网站、不遍历目录、不控制队列。</p>
+        </article>
+        <article class="principle">
+          <b>数据库写入有门禁</b>
+          <p>每个变体独立入库；必须先完成证据校验，再调用 Jakarta API，最后按 externalId 回读成功才允许清理。</p>
+        </article>
+      </div>
+    </section>
+
+    <section id="topology">
+      <div class="section-head">
+        <div>
+          <div class="section-kicker">02 · Deployment topology</div>
+          <h2>三个执行面＋一个无状态 OCR API</h2>
+        </div>
+        <p class="section-intro">Railway 只调度 Browser、Processing、Ingest/Cleanup Job。OCR 服务虽然部署在另一台 Windows，但它不领取队列任务，只同步响应 Mac 发出的图片 HTTP 请求。</p>
+      </div>
+      <div class="topology">
+        <article class="topology-node railway">
+          <span class="node-label">CLOUD · RAILWAY</span>
+          <h3>控制面</h3>
+          <p>只管状态和调度，不处理商品内容。</p>
+          <ul>
+            <li>URL Router：DTC / sales_channel</li>
+            <li>创建 Job DAG</li>
+            <li>租约、超时、重试</li>
+            <li>DTC Artifact 与 Amazon 运行状态</li>
+            <li>needs_review 与节点状态</li>
+          </ul>
+        </article>
+        <div class="arrow" aria-hidden="true">→</div>
+        <article class="topology-node browser">
+          <span class="node-label">WINDOWS A · BROWSER</span>
+          <h3>Browser Node</h3>
+          <p>两个 Codex/Chrome Worker；只有这里使用 Skill。</p>
+          <ul>
+            <li>网站发现与页面访问</li>
+            <li>目录、变体、SKU、价格</li>
+            <li>HTML / JSON / 全部图片</li>
+            <li>EvidenceBundleV1</li>
+          </ul>
+        </article>
+        <div class="arrow" aria-hidden="true">→</div>
+        <article class="topology-node mac">
+          <span class="node-label">MAC MINI · PROCESSING + DATA</span>
+          <h3>处理与入库节点</h3>
+          <p>同时承载两条本地工作流：处理 Windows 交来的 DTC EvidenceBundle；原样运行 Amazon Link Monitor 管线。最终统一校验并写入 Jakarta。</p>
+          <ul>
+            <li>Amazon Link Monitor 原生模块</li>
+            <li>逐图调用 OCR HTTP API</li>
+            <li>本地 OCR checkpoint 与证据切片</li>
+            <li>Luna Medium 结构转换</li>
+            <li>Jakarta Schema 校验</li>
+            <li>API 入库和数据库回读</li>
+          </ul>
+          <div class="api-dependency"><b>HTTP DEPENDENCY · WINDOWS B</b>OCR API：POST image → OCR JSON。无 Job、无租约、无 Artifact；服务端不保存流程状态。</div>
+        </article>
+      </div>
+      <div class="branch-grid" style="margin-top:14px">
+        <article class="branch good"><h3>A · DTC Browser Capture</h3><p>普通品牌站由 Windows A 的 Browser Worker 领取 <span class="mono">browser</span> capability，使用 crawl-products Skill 和 Chrome，输出 EvidenceBundleV1。</p></article>
+        <article class="branch" style="border-top:4px solid var(--ocr)"><h3>B · Amazon 原生流水线</h3><p>Mac mini 直接复用 Link Monitor 的 Amazon 搜索、变体解析、HTML 快照、规则清洗、Codex 清洗与 OCR 标签流程；不用 Skill，也不生成 EvidenceBundle。</p></article>
+        <article class="branch" style="border-top:4px solid var(--mac)"><h3>C · 在最终数据契约汇合</h3><p>DTC 和 Amazon 的原始证据存储方式不同，不强行统一。两条路径只在规范化产品结构、证据校验和 Jakarta 入库契约处汇合。</p></article>
+      </div>
+      <div class="return-line">DTC 跨机器使用 EvidenceBundle；Amazon 沿用 Link Monitor 本地文件断点并生成 ProductBatchV2，不新增中间 Bundle</div>
+    </section>
+
+    <section id="amazon">
+      <div class="section-head">
+        <div>
+          <div class="section-kicker">03 · Reuse Link Monitor</div>
+          <h2>Amazon 直接搬用现有 Link Monitor 流程</h2>
+        </div>
+        <p class="section-intro">Amazon 不是通用网站，不需要重新设计一套 Adapter 产物。把原项目已验证的搜索、变体、快照、清洗、OCR 与入库模块搬进 Mac Worker；Railway 只包住任务状态、并发和 Review，不改变它们之间的本地数据流。</p>
+      </div>
+
+      <div class="adapter-flow" aria-label="Link Monitor Amazon 既有流程">
+        <article class="adapter-step">
+          <span class="step-id">A1 · ROUTE + RUN</span>
+          <h3>Railway 只负责调度</h3>
+          <p>识别 Amazon 后把任务交给 Mac 上的 Link Monitor Runner。</p>
+          <ul><li>sourceType=sales_channel</li><li>adapter=amazon</li><li>记录 run、进度与控制指令</li><li>不投递 DTC Browser Skill</li></ul>
+        </article>
+        <article class="adapter-step">
+          <span class="step-id">A2 · DISCOVERY</span>
+          <h3>真实 Chrome 扫 Amazon 搜索页</h3>
+          <p>直接复用 amazon-search、browser、discovery。</p>
+          <ul><li>按 Amazon 品牌翻搜索页</li><li>真实 Chrome CDP，非纯 fetch</li><li>已知 ASIN 去重与增量发现</li><li>页上限/风控/失败状态保留</li></ul>
+        </article>
+        <article class="adapter-step">
+          <span class="step-id">A3 · VARIANTS + SNAPSHOT</span>
+          <h3>解析变体家族并保存 HTML</h3>
+          <p>直接复用 resolve-variants 与 snapshot。</p>
+          <ul><li>一个详情页解析整个 variation family</li><li>每个 ASIN 保留独立身份</li><li>完整 HTML 原子写成 ASIN.html.br</li><li>中断后已完成结果不丢</li></ul>
+        </article>
+        <article class="adapter-step">
+          <span class="step-id">A4 · CODE CLEAN</span>
+          <h3>规则清洗本地 HTML</h3>
+          <p>直接复用 extract-product；零模型、零网络。</p>
+          <ul><li>标题、品牌、价格、评分、库存</li><li>图片 URL、Ingredients 原文</li><li>Bullets、Description、A+ 文本</li><li>约 1.8MB HTML 压到语义所需片段</li></ul>
+        </article>
+        <article class="adapter-step">
+          <span class="step-id">A5 · TEXT CODEX</span>
+          <h3>两路 Codex 做文本语义清洗</h3>
+          <p>直接复用 semantic-clean 与 clean 编排。</p>
+          <ul><li>每批最多 50 个产品</li><li>Mac 全局最多 2 个 Codex 进程</li><li>Nutrition 范围、功效、剂型、成分</li><li>按 ASIN 对齐，逐批写 semantic checkpoint</li></ul>
+        </article>
+        <article class="adapter-step">
+          <span class="step-id">A6 · PRODUCT BATCH</span>
+          <h3>构造本地 ProductBatchV2</h3>
+          <p>沿用 EnrichPayload 字段并补齐 SKU、family 与 Facts 契约。</p>
+          <ul><li>externalId=ASIN</li><li>每个变体单独一条 product</li><li>Nutrition evidence 与成分非空</li><li>product-batch.json 原子落盘</li></ul>
+        </article>
+        <article class="adapter-step">
+          <span class="step-id">A7 · OCR STREAM</span>
+          <h3>本地图片进入 OCR 流水线</h3>
+          <p>直接复用 run-labels-ocr 与 ocr-label-pipeline。</p>
+          <ul><li>图片保存在 images/ASIN/00.jpg…</li><li>单产品图片 OCR 并发 4</li><li>每图原子写 00.ocr.json</li><li>只用结构词筛出 Facts 候选</li></ul>
+        </article>
+        <article class="adapter-step" style="border-top-color:var(--mac)">
+          <span class="step-id">A8 · FACTS + FINAL SINK</span>
+          <h3>Luna 解析 OCR 文本并写 Jakarta</h3>
+          <p>产品 OCR 完成即进 Codex 队列，不等待全量图片。</p>
+          <ul><li>Luna 全局并发 2，不接收图片</li><li>逐产品写 label.raw.json 断点</li><li>调用 product/enrich 与 product/submitFacts</li><li>product/getById 回读通过后才完成</li></ul>
+        </article>
+      </div>
+
+      <div class="callout" style="margin-top:14px;border-left-color:var(--mac)">
+        <strong style="color:var(--mac)">Amazon 的真实中间状态，不是 Bundle</strong>
+        <p><span class="mono">ASIN.html.br</span> 是可离线重放的页面真源；<span class="mono">images/ASIN/*</span> 是图片真源；每图 <span class="mono">*.ocr.json</span> 是 OCR 断点；每产品 <span class="mono">label.raw.json</span> 是模型判定断点；<span class="mono">product-batch.json</span> 和 <span class="mono">ingest-result.json</span> 是结构化与回读断点。Railway 只读取进度和控制状态，不搬运这些同机文件。</p>
+      </div>
+
+      <div class="callout" style="margin-top:14px;border-left-color:var(--good)">
+        <strong style="color:var(--good)">迁移已落地</strong>
+        <p>简化版 <span class="mono">processAmazon</span> 已删除。当前代码已迁入 Chrome CDP、搜索分页、变体家族、Brotli 快照、确定性提取、Nutrition 语义清洗、逐图 OCR 缓存、Facts 文本解析和 Jakarta API 回读门禁。</p>
+      </div>
+
+      <div class="panel" style="margin-top:14px;padding:22px">
+        <h3>迁移后的模块边界</h3>
+        <div class="detail-grid" style="margin-top:12px">
+          <div class="detail good"><h4>已迁入</h4><p>amazon-search、browser、snapshot、extract-product、semantic-clean、ocr-label-pipeline、label-parse 与 Link Check 纯函数。</p></div>
+          <div class="detail"><h4>薄编排层</h4><p>Railway 管 Job；Mac 保持 HTML、图片、OCR、label 与 batch 断点，同一 Job 重试直接复用。</p></div>
+          <div class="detail output"><h4>新最终写入端</h4><p>通过 Jakarta product/enrich、product/submitFacts 写入，再用 product/getById 回读验证。</p></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="pipeline">
+      <div class="section-head">
+        <div>
+          <div class="section-kicker">04 · End-to-end workflow</div>
+          <h2>从输入网址到数据库清理</h2>
+        </div>
+        <p class="section-intro">Stage 01–06 细画 DTC 跨机器路径；Amazon 不经过这些 EvidenceBundle 阶段，而是执行上一节的 Link Monitor 原生流程，并在 Stage 07 校验门禁前汇合。点击“查看判定细节”可展开。</p>
+      </div>
+
+      <div class="pipeline">
+        <article class="stage railway">
+          <div class="stage-number">00</div>
+          <div class="stage-main">
+            <div class="stage-owner">Railway control plane</div>
+            <h3>接收网站任务并建立 DAG</h3>
+            <p class="stage-subtitle">一个网站一个 Run；多个网站是多个独立 Run，可并发调度。</p>
+            <div class="tag-row"><span class="tag no">不用 Skill</span><span class="tag no">不用 Codex</span><span class="tag code">代码状态机</span></div>
+          </div>
+          <div class="stage-details">
+            <div class="detail-grid">
+              <div class="detail"><h4>输入</h4><ul><li>网站 URL</li><li>任务范围 / 优先级</li><li>来源类型 DTC / 固定渠道</li></ul></div>
+              <div class="detail good"><h4>DTC 调度</h4><ul><li>capture/process/ingest/cleanup</li><li>跨机器 Artifact 依赖</li><li>等待对应 Worker 领取租约</li></ul></div>
+              <div class="detail output"><h4>Amazon 调度</h4><ul><li>一个 Link Monitor pipeline Job</li><li>内部进度沿用原断点</li><li>完成后 verify/cleanup</li></ul></div>
+            </div>
+          </div>
+        </article>
+
+        <article class="stage browser">
+          <div class="stage-number">01</div>
+          <div class="stage-main">
+            <div class="stage-owner">Windows A · DTC Browser Node</div>
+            <h3>DTC 网站发现目录</h3>
+            <p class="stage-subtitle">只有通用 DTC 网站进入此阶段；Amazon 转入上一节的 Link Monitor 流程。</p>
+            <div class="tag-row"><span class="tag skill">crawl-products Skill</span><span class="tag codex">Codex + Chrome</span></div>
+          </div>
+          <div class="stage-details">
+            <div class="detail-grid">
+              <div class="detail"><h4>输入</h4><ul><li>DTC 网站 URL</li><li>Job / Run ID</li><li>Windows 本地任务目录</li></ul></div>
+              <div class="detail good"><h4>必须完成</h4><ul><li>目录耗尽</li><li>每个可售变体独立</li><li>variantId / SKU / options</li><li>真实详情页 URL</li></ul></div>
+              <div class="detail no"><h4>禁止</h4><ul><li>不做 OCR</li><li>不生成 healthFunctions/form</li><li>不判断哪张是 Facts</li><li>不访问数据库</li></ul></div>
+            </div>
+            <details>
+              <summary>DTC 发现和终止判定</summary>
+              <ul><li>优先探测 Shopify 等结构化目录；结构化端点用于枚举、SKU、价格和图片 URL。</li><li>非标准站点通过浏览器探索目录、分页、详情页和变体。</li><li>只有目录耗尽、所有 URL 有终态、变体展开完成，Capture 才能 complete。</li></ul>
+            </details>
+          </div>
+        </article>
+
+        <article class="stage browser">
+          <div class="stage-number">02</div>
+          <div class="stage-main">
+            <div class="stage-owner">Windows A · DTC Browser Node</div>
+            <h3>保存每个 DTC 变体的原始证据</h3>
+            <p class="stage-subtitle">此处收集“全部”，但不解释图片内容。</p>
+            <div class="tag-row"><span class="tag skill">Skill 仍在 DTC Capture 内</span><span class="tag code">Manifest 校验</span></div>
+          </div>
+          <div class="stage-details">
+            <div class="detail-grid">
+              <div class="detail good"><h4>保存</h4><ul><li>完整 HTML</li><li>清洗正文</li><li>Shopify / JSON-LD</li><li>全部画廊原图</li><li>必要页面截图</li></ul></div>
+              <div class="detail"><h4>EvidenceItem</h4><ul><li>externalId</li><li>productUrl / title</li><li>sku / skuMissing</li><li>variant 原始对象</li><li>sourceFiles / imageFiles</li></ul></div>
+              <div class="detail output"><h4>输出</h4><ul><li>EvidenceBundleV1 ZIP</li><li>文件 SHA256</li><li>byteSize / mediaType</li><li>capture.complete</li></ul></div>
+            </div>
+            <details>
+              <summary>为什么不能在这里标记 Facts</summary>
+              <p>文件名、alt 和图片顺序可能误导；Browser 阶段尚未读取图片内部文字。它只能完整收集，不能把某张图片声明为可靠的 Supplement Facts。</p>
+            </details>
+          </div>
+        </article>
+
+        <article class="stage railway">
+          <div class="stage-number">03</div>
+          <div class="stage-main">
+            <div class="stage-owner">DTC artifact handoff</div>
+            <h3>跨机器上传 DTC EvidenceBundle</h3>
+            <p class="stage-subtitle">这一阶段只属于 Windows DTC → Mac 的文件交接；Amazon 完全绕过。</p>
+            <div class="tag-row"><span class="tag no">不用 Skill</span><span class="tag no">不用 Codex</span><span class="tag code">对象存储 + 元数据</span></div>
+          </div>
+          <div class="stage-details">
+            <div class="detail-grid">
+              <div class="detail"><h4>控制面保存</h4><ul><li>Artifact ID</li><li>kind=evidence_bundle</li><li>SHA256 / 大小</li><li>对象存储引用</li></ul></div>
+              <div class="detail good"><h4>DTC 门禁</h4><ul><li>Manifest 文件齐全</li><li>上传哈希一致</li><li>Capture Job completed</li><li>不静默缺图</li></ul></div>
+              <div class="detail output"><h4>下游</h4><ul><li>DTC Process Job 转 queued</li><li>Mac Worker 下载一次</li><li>Amazon 不经过此 Stage</li></ul></div>
+            </div>
+          </div>
+        </article>
+
+        <article class="stage mac">
+          <div class="stage-number">04</div>
+          <div class="stage-main">
+            <div class="stage-owner">Mac mini · Processing Worker → Windows B OCR API</div>
+            <h3>下载 DTC 证据并逐图调用 OCR HTTP API</h3>
+            <p class="stage-subtitle">Mac 不知道哪张图片有用，因此把全部画廊图片送入接口；接口同步返回 OCR JSON。</p>
+            <div class="tag-row"><span class="tag no">不用 Skill</span><span class="tag no">不用 Codex</span><span class="tag code">Mac 调用代码 + 无状态 HTTP</span></div>
+          </div>
+          <div class="stage-details">
+            <div class="detail-grid">
+              <div class="detail"><h4>DTC 输入</h4><ul><li>从云端下载一次 EvidenceBundle</li><li>读取 Manifest 全部 imageFiles</li><li>校验 Bundle 与文件哈希</li><li>建立图片 OCR checkpoint</li></ul></div>
+              <div class="detail good"><h4>逐图并发 HTTP 调用</h4><ul><li>固定并发池 POST 多张图片</li><li>当前实现 4 路，可配置上限</li><li>接收文字 / 坐标 / 置信度</li><li>失败按单图重试</li><li>结果保存为本地 .ocr.json</li></ul></div>
+              <div class="detail no"><h4>明确不存在</h4><ul><li>没有 OCR Job 或租约</li><li>没有 OCRBundle 上传</li><li>接口不保留业务状态</li><li>接口不做任何语义判断</li></ul></div>
+            </div>
+            <details>
+              <summary>失败恢复与缓存边界</summary>
+              <p>DTC 本地 checkpoint 以图片路径绑定 OCR 响应。Mac 重启后可复用已完成结果，只重试缺失或失败图片；本地证据丢失时从云端 EvidenceBundle 重新下载。Amazon 的恢复规则见上一节：直接复用 ASIN HTML、图片、.ocr.json、label.raw.json、product-batch.json 与 ingest-result.json。</p>
+            </details>
+          </div>
+        </article>
+
+        <article class="stage mac">
+          <div class="stage-number">05</div>
+          <div class="stage-main">
+            <div class="stage-owner">Mac mini · deterministic preprocessor</div>
+            <h3>按变体建立受限证据输入</h3>
+            <p class="stage-subtitle">程序使用本地 OCR 响应做机械整理，不让 Codex 自己遍历整个任务目录。</p>
+            <div class="tag-row"><span class="tag no">不用 Skill</span><span class="tag no">此步不用 Codex</span><span class="tag code">固定代码</span></div>
+          </div>
+          <div class="stage-details">
+            <div class="detail-grid">
+              <div class="detail good"><h4>机械处理</h4><ul><li>Schema 与哈希校验</li><li>按 EvidenceItem 分组</li><li>正文去导航/页脚/重复</li><li>OCR 空白和重复文本去除</li><li>保留 source/image ID</li></ul></div>
+              <div class="detail"><h4>可做的锚点</h4><ul><li>Facts 明确标题匹配</li><li>Ingredients 明确标题匹配</li><li>Directions 明确标题匹配</li><li>低置信度 / OCR 失败</li></ul></div>
+              <div class="detail no"><h4>不能预判</h4><ul><li>不能把营销句标成 Benefits</li><li>不能生成 healthFunctions</li><li>不能依据成分猜功能</li><li>不能凭包装外观猜剂型</li></ul></div>
+            </div>
+            <details>
+              <summary>单产品 SemanticInput 包含什么</summary>
+              <ul><li>结构化身份：variantId、SKU、价格、币种、商品 URL。</li><li>索引明确列出的页面证据文件；不存在统一的“Product Details”字段，除非网页原文真的有该标题。</li><li>全部非空 OCR 文本：有逻辑 image ID、置信度和坐标，供 Codex 做语义判断。</li><li>索引不提供原图路径，Codex 不打开或视觉读取任何原图。</li></ul>
+            </details>
+          </div>
+        </article>
+
+        <article class="stage mac">
+          <div class="stage-number">06</div>
+          <div class="stage-main">
+            <div class="stage-owner">Mac mini · Luna Medium</div>
+            <h3>单产品语义转换</h3>
+            <p class="stage-subtitle">这是固定函数式调用，不是让 Agent 自己规划流程。</p>
+            <div class="tag-row"><span class="tag no">不加载 Skill</span><span class="tag codex">Codex / Luna Medium</span><span class="tag code">固定输入输出 Schema</span></div>
+          </div>
+          <div class="stage-details">
+            <div class="detail-grid">
+              <div class="detail good"><h4>Codex 负责</h4><ul><li>从 OCR/页面原文识别功效句</li><li>归一 productForm</li><li>解析 mainIngredients 层级</li><li>营养单品范围判断</li><li>每个结论引用 evidence ID</li></ul></div>
+              <div class="detail"><h4>图片读取边界</h4><ul><li>全部图片先由 OCR API 读取</li><li>Facts 候选只传 OCR 文字</li><li>OCR 行列含混时进入 Review</li><li>Codex 不接收任何原始像素</li></ul></div>
+              <div class="detail no"><h4>Codex 禁止</h4><ul><li>不访问浏览器</li><li>不查找文件</li><li>不管理 Job</li><li>不自由写产物目录</li><li>不直接入库</li></ul></div>
+            </div>
+            <details>
+              <summary>三个语义字段的真实来源</summary>
+              <ul><li><b>mainIngredients：</b>Facts/Ingredients OCR 和页面 Ingredients 原文；必须保留标签文字。</li><li><b>productForm：</b>标题、变体、Directions、Serving Size 或 OCR 原文里明确出现的 capsule/softgel/liquid/gummy 等证据。</li><li><b>healthFunctions：</b>Codex 从页面正文与全部 OCR 文本中识别明确支持/用途句，再映射为数据库词表。OCR API 本身不认识 Benefits。</li></ul>
+            </details>
+          </div>
+        </article>
+
+        <article class="stage mac">
+          <div class="stage-number">07</div>
+          <div class="stage-main">
+            <div class="stage-owner">Mac mini · validator</div>
+            <h3>代码校验与 Review 门禁</h3>
+            <p class="stage-subtitle">模型结果不能直接入库；先验证身份、证据、taxonomy 和 Jakarta Schema。</p>
+            <div class="tag-row"><span class="tag no">不用 Skill</span><span class="tag code">机械全量校验</span><span class="tag codex">可选受限语义复审</span></div>
+          </div>
+          <div class="stage-details">
+            <div class="detail-grid">
+              <div class="detail good"><h4>身份校验</h4><ul><li>externalId = 真实 variantId</li><li>SKU 与 EvidenceItem 一致</li><li>每个可售变体独立</li><li>URL、价格、币种可追溯</li></ul></div>
+              <div class="detail good"><h4>语义校验</h4><ul><li>每字段有 evidence ID</li><li>成分对象字段齐全</li><li>category 属于固定枚举</li><li>未知/未归组显式报告</li></ul></div>
+              <div class="detail output"><h4>两种出口</h4><ul><li>PASS → normalized artifact</li><li>FAIL/冲突 → needs_review artifact</li></ul></div>
+            </div>
+            <details>
+              <summary>不得自动通过的情况</summary>
+              <ul><li>OCR 没有 Facts，DOM 也没有 Ingredients/Formula。</li><li>功效只有模型常识，没有页面或 OCR 原文支持。</li><li>剂型证据互相冲突。</li><li>SKU、variantId、价格在不同来源不一致。</li><li>成分 taxonomy 无法稳定映射。</li></ul>
+            </details>
+          </div>
+        </article>
+
+        <article class="stage database">
+          <div class="stage-number">08</div>
+          <div class="stage-main">
+            <div class="stage-owner">Mac mini → Jakarta Product Server</div>
+            <h3>调用 product/enrich 入库</h3>
+            <p class="stage-subtitle">使用业务 API，不由本项目直接拼 SQL。</p>
+            <div class="tag-row"><span class="tag no">不用 Skill</span><span class="tag no">不用 Codex</span><span class="tag code">Jakarta API</span></div>
+          </div>
+          <div class="stage-details">
+            <div class="detail-grid">
+              <div class="detail"><h4>请求</h4><ul><li>每个变体一条请求</li><li>externalId=variantId</li><li>SKU 放 variantAttrs.sku</li><li>mainIngredients 为对象数组</li></ul></div>
+              <div class="detail good"><h4>Jakarta 处理</h4><ul><li>公司与产品归属</li><li>listing 与 snapshot</li><li>图片关系</li><li>form/function/ingredient taxonomy</li></ul></div>
+              <div class="detail output"><h4>接口响应</h4><ul><li>productId / listingId</li><li>matchedBy / created</li><li>relations 计数</li><li>unknown / ungrouped</li></ul></div>
+            </div>
+          </div>
+        </article>
+
+        <article class="stage database">
+          <div class="stage-number">09</div>
+          <div class="stage-main">
+            <div class="stage-owner">Mac mini · read-back verifier</div>
+            <h3>按 externalId 回读数据库</h3>
+            <p class="stage-subtitle">HTTP 200 不等于完成；必须读取最终物化结果。</p>
+            <div class="tag-row"><span class="tag code">只读数据库验证</span><span class="tag no">不靠接口自报成功</span></div>
+          </div>
+          <div class="stage-details">
+            <div class="detail-grid">
+              <div class="detail good"><h4>核对</h4><ul><li>product / product_channel</li><li>SKU attrs</li><li>price / currency / status</li><li>snapshot 数量</li></ul></div>
+              <div class="detail good"><h4>关系</h4><ul><li>product_image</li><li>product_ingredient</li><li>product_health_function</li><li>product_form</li></ul></div>
+              <div class="detail output"><h4>完成条件</h4><ul><li>foundCount = expectedCount</li><li>passedCount = expectedCount</li><li>missing=0 / failed=0</li></ul></div>
+            </div>
+          </div>
+        </article>
+
+        <article class="stage cleanup">
+          <div class="stage-number">10</div>
+          <div class="stage-main">
+            <div class="stage-owner">Mac mini + Railway</div>
+            <h3>成功清理；Review 永久保留到解决</h3>
+            <p class="stage-subtitle">清理是最后一个正式 Job，不是某个 Worker 顺手删除。</p>
+            <div class="tag-row"><span class="tag code">可审计删除</span><span class="tag no">needs_review 不删除</span></div>
+          </div>
+          <div class="stage-details">
+            <div class="detail-grid">
+              <div class="detail good"><h4>成功 Run</h4><ul><li>DTC：删除云端 EvidenceBundle</li><li>全部来源：删除 Mac 本地工作目录</li><li>保留数据库记录与 Run 摘要</li></ul></div>
+              <div class="detail no"><h4>needs_review</h4><ul><li>DTC：云端 Bundle 与 Mac 缓存都保留</li><li>Amazon：HTML、图片、OCR、label、batch 与 ingest 断点保留</li><li>处理完成并回读后才删除</li></ul></div>
+              <div class="detail output"><h4>最终状态</h4><ul><li>completed</li><li>needs_review</li><li>failed（可重试或终止）</li></ul></div>
+            </div>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section id="images">
+      <div class="section-head">
+        <div>
+          <div class="section-kicker">05 · Image truth pipeline</div>
+          <h2>图片到底在哪里被“看懂”</h2>
+        </div>
+        <p class="section-intro">关键区别：Browser 收集像素；Mac 把像素发给 OCR API；OCR 只读取字符；Codex 解释文字含义。这些不是同一个动作。</p>
+      </div>
+      <div class="image-flow">
+        <article class="image-step"><span class="step-id">A · CAPTURE</span><h3>全部画廊图片</h3><p>Browser 下载所有图片，但不知道哪张是 Facts、Benefits 或 Directions。</p></article>
+        <article class="image-step"><span class="step-id">B · HTTP OCR ALL</span><h3>Mac 逐图调用接口</h3><p>每张图片作为 HTTP 请求发出；OCR API 返回文字、坐标和置信度，不保存 Job 或 Artifact。</p></article>
+        <article class="image-step"><span class="step-id">C · LOCAL INDEX</span><h3>本地缓存与机械整理</h3><p>Mac 保存 .ocr.json，去空、去重、保留 image ID；仅对明确 Facts 标题做字符串锚点。</p></article>
+        <article class="image-step"><span class="step-id">D · CODEX TEXT</span><h3>语义判断</h3><p>Codex读取所有有效 OCR 文本与页面正文，识别功效、剂型和成分证据。</p></article>
+        <article class="image-step"><span class="step-id">E · VALIDATE</span><h3>结构校验或 Review</h3><p>模型只解析 OCR 文字；OCR 结构冲突或无法形成合法成分行时停在 needs_review，不用视觉猜测补全。</p></article>
+      </div>
+      <div class="callout">
+        <strong>OCR 不认识 Benefits</strong>
+        <p>如果图片明确写着 “Benefits”，程序可以记录标题命中；如果只有“Supports brain and eye development”这类营销句，只有 Codex 语义阶段才能判断它是否支持某个 healthFunction。OCR API 只报告这句话存在。</p>
+      </div>
+      <div class="callout" style="border-left-color: var(--mac)">
+        <strong style="color: var(--mac)">没有统一 Product Details</strong>
+        <p>系统只保存网页原始 HTML、可见正文和真实 DOM 标题。只有站点本身存在 “Product Details” 标题时才保留这个名称；否则一律称为页面原始正文片段，不能伪造成标准字段。</p>
+      </div>
+    </section>
+
+    <section id="provenance">
+      <div class="section-head">
+        <div>
+          <div class="section-kicker">06 · Field provenance</div>
+          <h2>每个数据库字段从哪里来</h2>
+        </div>
+        <p class="section-intro">字段没有证据时，正确出口是 needs_review 或排除，不是让模型补常识。</p>
+      </div>
+      <div class="matrix-wrap">
+        <table>
+          <thead><tr><th>最终字段</th><th>原始真源</th><th>机械处理</th><th>Codex语义职责</th><th>缺失或冲突</th></tr></thead>
+          <tbody>
+            <tr><td>externalId</td><td><span class="source-chip">Shopify variantId</span><span class="source-chip">渠道稳定 ID</span></td><td>格式校验、批内唯一</td><td>无</td><td>不能稳定确定 → needs_review</td></tr>
+            <tr><td>SKU</td><td><span class="source-chip">Variant JSON</span><span class="source-chip">页面结构化数据</span></td><td>原样保存；缺失写 skuMissing=true</td><td>无；禁止编造</td><td>来源冲突 → needs_review</td></tr>
+            <tr><td>price / currency</td><td><span class="source-chip">Shopify JSON</span><span class="source-chip">priceCurrency</span><span class="source-chip">页面价格</span></td><td>选择同一变体、保留 capturedAt</td><td>仅在格式歧义时规范，不发明值</td><td>价格冲突 → needs_review</td></tr>
+            <tr><td>images</td><td><span class="source-chip">画廊 CDN URL</span></td><td>下载、哈希、去重、保留全部 URL</td><td>不决定是否入图库；默认全部保留</td><td>下载失败显式记录；不能静默减少</td></tr>
+            <tr><td>Facts 候选</td><td><span class="source-chip">全部图片 OCR</span><span class="source-chip">DOM Facts</span></td><td>明确标题/Serving Size 等锚点匹配</td><td>仅从 OCR 文字解析表格关系</td><td>OCR 结构冲突或不可读 → Review；禁止视觉猜测</td></tr>
+            <tr><td>mainIngredients</td><td><span class="source-chip">Facts OCR</span><span class="source-chip">Ingredients DOM</span></td><td>候选证据切片、枚举校验</td><td>解析 name/substance/form/category，并引用原文</td><td>taxonomy 不稳定 → needs_review</td></tr>
+            <tr><td>productForm</td><td><span class="source-chip">标题</span><span class="source-chip">Variant</span><span class="source-chip">Directions</span><span class="source-chip">Serving Size/OCR</span></td><td>保留原始片段，不直接猜值</td><td>把明确证据映射为 Capsule/Softgel/Liquid/Gummy 等词表值</td><td>无明确证据或相互冲突 → needs_review</td></tr>
+            <tr><td>healthFunctions</td><td><span class="source-chip">页面用途原文</span><span class="source-chip">全部 OCR 文本</span></td><td>去重、保留 source/image ID；不标 Benefits</td><td>识别支持/用途语句，映射数据库功能词表，必须引用证据</td><td>只有成分常识、没有原文支持 → 不生成/needs_review</td></tr>
+            <tr><td>nutritionScope</td><td><span class="source-chip">标题</span><span class="source-chip">描述</span><span class="source-chip">Facts/Ingredients</span></td><td>显式 Bundle/Pack 等硬规则</td><td>判断是否为可独立入库的口服营养单品</td><td>非营养/组合装 → exclusion，不入库</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="panel" style="margin-top:16px;padding:22px">
+        <h3>Normalize 的固定输出示例</h3>
+        <pre>{
+  "externalId": "46738668814572",
+  "variantAttrs": { "sku": "ToddlerIronDrops-2oz" },
+  "productForm": {
+    "value": "Liquid",
+    "evidence": ["page:directions#2", "ocr:image-05#line-3"]
+  },
+  "healthFunctions": [
+    {
+      "value": "Energy Support",
+      "evidence": ["page:how-it-works#1"]
+    }
+  ],
+  "mainIngredients": [
+    {
+      "name": "Vitamin C",
+      "substance": "Vitamin C",
+      "form": "Ascorbic Acid",
+      "category": "vitamins",
+      "evidence": ["ocr:image-02#line-6"]
+    }
+  ]
+}</pre>
+      </div>
+    </section>
+
+    <section id="states">
+      <div class="section-head">
+        <div>
+          <div class="section-kicker">07 · State, concurrency, retention</div>
+          <h2>状态、并发与文件生命周期</h2>
+        </div>
+        <p class="section-intro">并发由代码和租约控制，不由 Prompt 决定。Railway 是队列真源；SQLite 只保存节点本地 checkpoint 和 outbox。</p>
+      </div>
+      <div class="state-flow" aria-label="任务状态机">
+        <span class="state">queued</span><span class="state-arrow">→</span>
+        <span class="state">leased</span><span class="state-arrow">→</span>
+        <span class="state">running</span><span class="state-arrow">→</span>
+        <span class="state">completed</span><span class="state-arrow">→ 下游 Job</span>
+        <span class="state-arrow">或</span><span class="state">retry_wait</span>
+        <span class="state-arrow">或</span><span class="state review">needs_review</span>
+        <span class="state-arrow">或</span><span class="state review">failed</span>
+      </div>
+      <div class="branch-grid" style="margin-top:14px">
+        <article class="branch good"><h3>成功分支</h3><p>Capture、Process、Ingest、Read-back 全部通过；DTC 清理云端 Bundle 与 Mac 缓存，Amazon 清理本轮本地工作文件并保留必要运行摘要。</p></article>
+        <article class="branch review"><h3>Review 分支</h3><p>任何身份、证据或 taxonomy 冲突都会停止 Ingest；DTC 保留云端与本地证据，Amazon 保留 HTML、图片、OCR、label、batch 和 ingest 断点。</p></article>
+        <article class="branch failed"><h3>失败与重试</h3><p>临时网络/节点错误进入 retry_wait；登录墙、验证码、范围歧义等不可自动解决问题进入 needs_review。</p></article>
+      </div>
+      <div class="panel" style="margin-top:14px;padding:22px">
+        <h3>节点并发真源</h3>
+        <div class="detail-grid">
+          <div class="detail"><h4>Capture executors</h4><p>Browser Windows 同时最多 2 个 DTC 网站；Mac 独立运行迁入的 Link Monitor Amazon Runner。两条来源流程不占用彼此的抓取进程池。</p></div>
+          <div class="detail"><h4>OCR HTTP API · Windows B</h4><p>不领取 Railway Job；只接受 Mac 的图片请求并同步返回 JSON。接口无状态，服务并发由 HTTP Server 自身限制。</p></div>
+          <div class="detail"><h4>Mac mini Process</h4><p>同时最多 2 个 Process Job；每个 Job 内用图片并发池调用 OCR API（当前 4 路），完成后再按单产品固定请求调用 Luna Medium。</p></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="gaps">
+      <div class="section-head">
+        <div>
+          <div class="section-kicker">08 · Migration status</div>
+          <h2>本轮迁移状态</h2>
+        </div>
+        <p class="section-intro">旧实现已经推倒重写。这里区分已由代码和测试确认的内容，以及部署前仍需用真实服务验证的内容。</p>
+      </div>
+      <div class="gap-grid">
+        <article class="gap"><b>DONE · DAG</b><h3>OCR/Normalize 独立 Job 已删除</h3><p>DTC 为 capture→process→ingest→cleanup；Amazon 为 process→cleanup。</p></article>
+        <article class="gap"><b>DONE · ARTIFACT</b><h3>OCRBundle 已删除</h3><p>DTC OCR JSON 留在 Mac；Amazon 使用每图 .ocr.json，Amazon 不上传 Bundle。</p></article>
+        <article class="gap"><b>DONE · AMAZON</b><h3>Link Monitor 核心已迁入</h3><p>CDP、分页、变体、快照、规则提取、语义清洗、OCR Facts 与标签解析均已接线。</p></article>
+        <article class="gap"><b>DONE · CHECKPOINT</b><h3>Amazon 可断点重放</h3><p>保留 HTML、extracted、semantic、图片、OCR、label、batch 和 ingest result。</p></article>
+        <article class="gap"><b>DONE · SKILL</b><h3>Skill 只留在 DTC Capture</h3><p>Mac Process Prompt 明确禁止读取 Skill，Amazon 只运行固定 Adapter。</p></article>
+        <article class="gap"><b>DONE · EVIDENCE</b><h3>DTC 使用固定 evidence index</h3><p>程序列出 sourceFiles 与全部图片 OCR；Codex 不遍历目录，也不打开原图。</p></article>
+        <article class="gap"><b>DONE · SCHEMA</b><h3>ProductBatchV2 已实现</h3><p>支持 SKU、family、分类成分对象与独立 Facts rows，并执行 Zod 门禁。</p></article>
+        <article class="gap"><b>DONE · API</b><h3>数据库直写已删除</h3><p>统一调用 product/enrich、product/submitFacts 和 product/getById。</p></article>
+        <article class="gap"><b>DONE · TESTS</b><h3>迁入 205 个 Link Monitor 测试</h3><p>另有 DAG 与 Jakarta API 客户端测试；类型检查和生产构建通过。</p></article>
+        <article class="gap"><b>VERIFY · SERVICES</b><h3>等待 Mac 真实联调</h3><p>需配置 Chrome CDP、OCR_ENDPOINT、SUPPLY_SMART_API_URL，再跑一个 Amazon 与一个 DTC smoke。</p></article>
+        <article class="gap"><b>VERIFY · COMPANY</b><h3>品牌域名映射需看真实库结果</h3><p>精确/唯一匹配失败会停在 needs_review，不会用 Amazon 域名冒充公司域名。</p></article>
+        <article class="gap"><b>VERIFY · DEPLOY</b><h3>Railway migration 002 待执行</h3><p>上线后确认新 capability、Job stage、节点心跳与 cleanup 行为。</p></article>
+      </div>
+    </section>
+
+    <section id="review">
+      <div class="section-head">
+        <div>
+          <div class="section-kicker">09 · Human sign-off</div>
+          <h2>请逐项验证这份流程</h2>
+        </div>
+        <p class="section-intro">勾选状态只保存在当前浏览器，不会修改仓库或控制面。任何一项不正确，都应该先修图，再动代码。</p>
+      </div>
+      <div class="checklist">
+        <div class="check-head"><h3>架构验收清单</h3><span class="progress" id="progress">0 / 13 已确认</span></div>
+        <div class="check-items" id="check-items">
+          <label class="check-item"><input type="checkbox" data-check="1">Skill只在 Windows Browser Capture 使用。</label>
+          <label class="check-item"><input type="checkbox" data-check="2">Browser收集全部图片，但不判断哪张是 Facts。</label>
+          <label class="check-item"><input type="checkbox" data-check="13">Amazon 直接复用 Link Monitor 本地快照、清洗与 OCR 流程，生成本地 ProductBatchV2，不生成 EvidenceBundle。</label>
+          <label class="check-item"><input type="checkbox" data-check="3">Mac Process 对全部图片调用 Windows OCR HTTP API；没有 OCR Job 或 OCRBundle。</label>
+          <label class="check-item"><input type="checkbox" data-check="4">单个 Process Job 内并发 OCR 全部图片；API 只返回文字、坐标、置信度，结果只在 Mac 本地缓存。</label>
+          <label class="check-item"><input type="checkbox" data-check="5">Mac代码按单产品构造受限 SemanticInput。</label>
+          <label class="check-item"><input type="checkbox" data-check="6">Codex不读 Skill、不访问浏览器、不遍历目录。</label>
+          <label class="check-item"><input type="checkbox" data-check="7">Codex读取全部有效 OCR 文本；原始像素只按需提供。</label>
+          <label class="check-item"><input type="checkbox" data-check="8">Form、Functions、Ingredients 每项都有真实 evidence ID。</label>
+          <label class="check-item"><input type="checkbox" data-check="9">每个可售变体以 variantId/externalId 独立入库，SKU保留。</label>
+          <label class="check-item"><input type="checkbox" data-check="10">入库只走 Jakarta product/enrich，不直接拼 SQL。</label>
+          <label class="check-item"><input type="checkbox" data-check="11">HTTP成功后必须数据库回读，8/8一类计数对账通过。</label>
+          <label class="check-item"><input type="checkbox" data-check="12">成功后清理；needs_review 中 DTC 保留 Bundle，Amazon 保留 HTML、图片、OCR、label、batch 与 ingest 断点。</label>
+        </div>
+      </div>
+    </section>
+
+    <footer class="footer">
+      <span>文件：docs/product-crawl-pipeline.html · 单文件离线页面</span>
+      <span>目标架构审阅稿 · 不代表当前代码已经全部实现</span>
+    </footer>
+  </main>
+
+  <script>
+    const navButtons = document.querySelectorAll('[data-target]');
+    navButtons.forEach((button) => {
+      button.addEventListener('click', () => {
+        document.getElementById(button.dataset.target)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+    });
+
+    const detailButton = document.getElementById('toggle-details');
+    let detailsOpen = false;
+    detailButton.addEventListener('click', () => {
+      detailsOpen = !detailsOpen;
+      document.querySelectorAll('details').forEach((detail) => { detail.open = detailsOpen; });
+      detailButton.textContent = detailsOpen ? '收起全部细节' : '展开全部细节';
+    });
+
+    document.getElementById('print-page').addEventListener('click', () => window.print());
+
+    const checks = [...document.querySelectorAll('[data-check]')];
+    const progress = document.getElementById('progress');
+    const storageKey = 'product-crawl-pipeline-review-v1';
+    try {
+      const saved = JSON.parse(localStorage.getItem(storageKey) || '{}');
+      checks.forEach((checkbox) => { checkbox.checked = Boolean(saved[checkbox.dataset.check]); });
+    } catch {}
+
+    function updateProgress() {
+      const state = Object.fromEntries(checks.map((checkbox) => [checkbox.dataset.check, checkbox.checked]));
+      const completed = checks.filter((checkbox) => checkbox.checked).length;
+      progress.textContent = `${completed} / ${checks.length} 已确认`;
+      try { localStorage.setItem(storageKey, JSON.stringify(state)); } catch {}
+    }
+    checks.forEach((checkbox) => checkbox.addEventListener('change', updateProgress));
+    updateProgress();
+  </script>
+</body>
+</html>
