@@ -15,9 +15,9 @@ create table if not exists pipeline_source (
   enabled boolean not null default true,
   next_run_at timestamptz,
   created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now(),
-  unique(origin,mode)
+  updated_at timestamptz not null default now()
 );
+create unique index if not exists pipeline_source_url_mode_idx on pipeline_source(url,mode);
 
 create table if not exists pipeline_run (
   id uuid primary key,
@@ -35,7 +35,7 @@ create index if not exists pipeline_run_status_idx on pipeline_run(status,create
 create table if not exists pipeline_job (
   id uuid primary key,
   run_id uuid not null references pipeline_run(id) on delete cascade,
-  stage text not null check(stage in ('capture','ocr','normalize','ingest','cleanup')),
+  stage text not null check(stage in ('capture','process','ingest','cleanup')),
   state text not null default 'queued' check(state in ('queued','leased','running','retry_wait','needs_review','failed','completed')),
   required_capability text not null,
   depends_on uuid[] not null default '{}',
@@ -74,7 +74,7 @@ create table if not exists pipeline_artifact (
   id uuid primary key,
   run_id uuid not null references pipeline_run(id) on delete cascade,
   job_id uuid not null references pipeline_job(id) on delete cascade,
-  kind text not null check(kind in ('evidence_bundle','ocr_bundle','codex_raw','normalized','review')),
+  kind text not null check(kind in ('evidence_bundle','codex_raw','normalized','review')),
   bucket_key text not null unique,
   file_name text not null,
   content_type text not null,
@@ -116,4 +116,3 @@ create table if not exists pipeline_idempotency (
   created_at timestamptz not null default now(),
   primary key(scope,idempotency_key)
 );
-

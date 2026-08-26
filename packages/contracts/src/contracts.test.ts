@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { EvidenceBundleV1Schema } from "./index";
+import { EvidenceBundleV1Schema, jobStages, nodeCapabilities } from "./index";
 
 describe("EvidenceBundleV1", () => {
   it("rejects a mismatched item count", () => {
@@ -21,3 +21,9 @@ describe("EvidenceBundleV1", () => {
   });
 });
 
+describe("pipeline v2 contracts", () => {
+  it("keeps OCR inside process and gives Amazon a fixed adapter capability", () => {
+    expect(jobStages).toEqual(["capture", "process", "ingest", "cleanup"]);
+    expect(nodeCapabilities).toEqual(["browser", "amazon", "process", "ingest", "cleanup"]);
+  });
+});

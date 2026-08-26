@@ -56,7 +56,7 @@ export function mountNodeApi(app: Hono, options: { repository: PipelineRepositor
     authenticate(c.req.header("authorization"));
     if (!options.storage) return c.json({ error: { code: "storage_unavailable", message: "对象存储未配置" } }, 503);
     const input = await body(c, z.object({
-      leaseToken: z.string().min(20), kind: z.enum(["evidence_bundle", "ocr_bundle", "codex_raw", "normalized", "review"]),
+      leaseToken: z.string().min(20), kind: z.enum(["evidence_bundle", "codex_raw", "normalized", "review"]),
       fileName: z.string().min(1), contentType: z.string().min(1), sha256: z.string().regex(/^[a-f0-9]{64}$/), byteSize: z.number().int().nonnegative(),
     }));
     const { leaseToken, ...metadata } = input;

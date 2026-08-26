@@ -10,7 +10,7 @@ import { api } from "./api";
 import "./styles.css";
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { refetchInterval: 15_000, staleTime: 5_000, retry: 1 } } });
-const stages = ["capture", "ocr", "normalize", "ingest", "cleanup"];
+const stages = ["capture", "process", "ingest", "cleanup"];
 const gridTheme = themeQuartz.withParams({ accentColor: "#2f705a", backgroundColor: "#ffffff", borderColor: "#e6e9e7", headerBackgroundColor: "#f7f9f7", headerTextColor: "#5d6962", fontFamily: "Inter, system-ui, sans-serif", fontSize: 12, rowBorder: true, wrapperBorder: false });
 const labels: Record<string, string> = { queued: "排队中", active: "运行中", retry_wait: "等待重试", needs_review: "需要复核", failed: "失败", completed: "已完成", leased: "已领取", running: "运行中", online: "在线", stale: "心跳延迟", offline: "离线" };
 const Status = ({ value }: { value: string }) => <span className={`status-tag status-${value}`}>{labels[value] ?? value}</span>;

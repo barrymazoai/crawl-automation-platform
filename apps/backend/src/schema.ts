@@ -5,7 +5,7 @@ export const sources = pgTable("pipeline_source", {
   adapter: text(), mode: text().notNull(), scheduleCron: text("schedule_cron"), scheduleTimezone: text("schedule_timezone").notNull(),
   enabled: boolean().notNull(), nextRunAt: timestamp("next_run_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull(), updatedAt: timestamp("updated_at", { withTimezone: true }).notNull(),
-}, (table) => [uniqueIndex("pipeline_source_origin_mode_idx").on(table.origin, table.mode)]);
+}, (table) => [uniqueIndex("pipeline_source_url_mode_idx").on(table.url, table.mode)]);
 
 export const runs = pgTable("pipeline_run", {
   id: uuid().primaryKey(), sourceId: uuid("source_id").notNull(), status: text().notNull(), itemCount: integer("item_count").notNull(),
@@ -27,4 +27,3 @@ export const artifacts = pgTable("pipeline_artifact", {
   sha256: text().notNull(), byteSize: bigint("byte_size", { mode: "number" }).notNull(), status: text().notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull(), deletedAt: timestamp("deleted_at", { withTimezone: true }),
 });
-

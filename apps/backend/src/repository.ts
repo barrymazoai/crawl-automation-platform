@@ -11,6 +11,28 @@ function nextCronDate(expression: string, timezone: string, currentDate = new Da
   return CronExpressionParser.parse(expression, { currentDate, tz: timezone }).next().toDate();
 }
 
+type DagSource = { url: string; type: "dtc_browser" | "sales_channel"; adapter: "amazon" | null };
+export type JobDagEntry = [string, JobStage, NodeCapability, string[], number, unknown];
+
+export function buildJobDag(item: DagSource, createId: () => string = randomUUID) {
+  const processId = createId(), cleanupId = createId();
+  const jobs: JobDagEntry[] = [];
+  let firstJobId: string;
+  if (item.adapter === "amazon") {
+    jobs.push([processId, "process", "amazon", [], 3, { url: item.url, sourceType: item.type, adapter: "amazon" }]);
+    jobs.push([cleanupId, "cleanup", "cleanup", [processId], 5, { sourceJobId: processId }]);
+    firstJobId = processId;
+  } else {
+    const captureId = createId(), ingestId = createId();
+    jobs.push([captureId, "capture", "browser", [], 3, { url: item.url, sourceType: item.type, adapter: null }]);
+    jobs.push([processId, "process", "process", [captureId], 2, { sourceJobId: captureId }]);
+    jobs.push([ingestId, "ingest", "ingest", [processId], 2, { sourceJobId: processId }]);
+    jobs.push([cleanupId, "cleanup", "cleanup", [ingestId], 5, { sourceJobId: ingestId }]);
+    firstJobId = captureId;
+  }
+  return { firstJobId, jobs };
+}
+
 export class PipelineRepository {
   constructor(private pool: Pool, private leaseTtlSeconds = 120) {}
 
@@ -71,7 +93,7 @@ export class PipelineRepository {
         const source = (await client.query(
           `insert into pipeline_source(id,url,origin,source_type,adapter,mode,schedule_cron,schedule_timezone,next_run_at)
            values($1,$2,$3,$4,$5,$6,$7,$8,$9)
-           on conflict(origin,mode) do update set url=excluded.url,source_type=excluded.source_type,adapter=excluded.adapter,
+           on conflict(url,mode) do update set source_type=excluded.source_type,adapter=excluded.adapter,
              schedule_cron=excluded.schedule_cron,schedule_timezone=excluded.schedule_timezone,next_run_at=excluded.next_run_at,enabled=true,updated_at=now()
            returning id`,
           [sourceId, item.url, new URL(item.url).origin, item.type, item.adapter, input.mode, input.scheduleCron ?? null, input.scheduleTimezone, nextRunAt],
@@ -227,9 +249,11 @@ export class PipelineRepository {
         const job = await this.requireLease(client, jobId, token);
         await client.query(`update pipeline_job set state='completed',output=$2::jsonb,completed_at=now(),leased_by=null,
           lease_token_hash=null,lease_expires_at=null,error_code=null,error_message=null,updated_at=now() where id=$1`, [jobId, JSON.stringify(output ?? {})]);
-        if (job.stage === "capture") {
+        if (job.stage === "capture" || job.stage === "process") {
           const itemCount = Number((output as any)?.itemCount ?? 0);
-          await client.query("update pipeline_run set item_count=$2,updated_at=now() where id=$1", [job.run_id, itemCount]);
+          if (itemCount > 0 || job.stage === "capture") {
+            await client.query("update pipeline_run set item_count=greatest(item_count,$2),updated_at=now() where id=$1", [job.run_id, itemCount]);
+          }
         }
         if (job.stage === "cleanup") await client.query("update pipeline_run set status='completed',updated_at=now() where id=$1", [job.run_id]);
         await this.event(client, job.run_id, jobId, "job.completed", job.leased_by, output ?? {});
@@ -330,21 +354,14 @@ export class PipelineRepository {
     });
   }
 
-  private async insertJobDag(client: PoolClient, runId: string, item: { url: string; type: "dtc_browser" | "sales_channel"; adapter: "amazon" | null }) {
-    const captureId = randomUUID(), ocrId = randomUUID(), normalizeId = randomUUID(), ingestId = randomUUID(), cleanupId = randomUUID();
-    const jobs: Array<[string, JobStage, NodeCapability, string[], number, unknown]> = [
-      [captureId, "capture", item.type === "sales_channel" ? "sales_channel" : "browser", [], 3, { url: item.url, sourceType: item.type, adapter: item.adapter }],
-      [ocrId, "ocr", "ocr", [captureId], 2, { sourceJobId: captureId }],
-      [normalizeId, "normalize", "normalize", [ocrId], 2, { sourceJobId: ocrId }],
-      [ingestId, "ingest", "ingest", [normalizeId], 2, { sourceJobId: normalizeId }],
-      [cleanupId, "cleanup", "cleanup", [ingestId], 5, { sourceJobId: ingestId }],
-    ];
+  private async insertJobDag(client: PoolClient, runId: string, item: DagSource) {
+    const { firstJobId, jobs } = buildJobDag(item);
     for (const job of jobs) await client.query(
       `insert into pipeline_job(id,run_id,stage,required_capability,depends_on,max_attempts,payload)
        values($1,$2,$3,$4,$5::uuid[],$6,$7::jsonb)`,
       [job[0], runId, job[1], job[2], job[3], job[4], JSON.stringify(job[5])],
     );
-    return captureId;
+    return firstJobId;
   }
 
   private event(client: PoolClient, runId: string, jobId: string | null, type: string, actor: string, payload: unknown) {

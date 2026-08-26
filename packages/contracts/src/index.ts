@@ -1,8 +1,8 @@
 import { z } from "zod";
 
-export const jobStages = ["capture", "ocr", "normalize", "ingest", "cleanup"] as const;
+export const jobStages = ["capture", "process", "ingest", "cleanup"] as const;
 export const jobStates = ["queued", "leased", "running", "retry_wait", "needs_review", "failed", "completed"] as const;
-export const nodeCapabilities = ["browser", "sales_channel", "ocr", "text_codex", "normalize", "ingest", "cleanup"] as const;
+export const nodeCapabilities = ["browser", "amazon", "process", "ingest", "cleanup"] as const;
 
 export const JobStageSchema = z.enum(jobStages);
 export const JobStateSchema = z.enum(jobStates);
@@ -14,7 +14,7 @@ export type NodeCapability = z.infer<typeof NodeCapabilitySchema>;
 
 export const ArtifactRefSchema = z.object({
   id: z.uuid(),
-  kind: z.enum(["evidence_bundle", "ocr_bundle", "codex_raw", "normalized", "review"]),
+  kind: z.enum(["evidence_bundle", "codex_raw", "normalized", "review"]),
   sha256: z.string().regex(/^[a-f0-9]{64}$/),
   byteSize: z.number().int().nonnegative(),
   contentType: z.string().min(1),

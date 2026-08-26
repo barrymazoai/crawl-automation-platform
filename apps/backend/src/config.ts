@@ -26,7 +26,7 @@ export function loadConfig(env = process.env) {
   const browserToken = value.BROWSER_NODE_TOKEN ?? value.CAPTURE_WORKER_TOKEN;
   const macToken = value.MAC_NODE_TOKEN ?? value.CLEAN_WORKER_TOKEN;
   if (browserToken) nodeTokens.set(browserToken, ["browser"]);
-  if (macToken) nodeTokens.set(macToken, ["sales_channel", "ocr", "text_codex", "normalize", "ingest", "cleanup"]);
+  if (macToken) nodeTokens.set(macToken, ["amazon", "process", "ingest", "cleanup"]);
   return {
     port: value.PORT, mode: value.BACKEND_MODE, databaseUrl: value.DATABASE_URL,
     controlPlaneUrl: value.CONTROL_PLANE_URL, controlPlaneProxyUrl: value.CONTROL_PLANE_PROXY_URL,
