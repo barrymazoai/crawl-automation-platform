@@ -4,15 +4,17 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { z } from "zod";
 import {
-  CodexProcessRunner, LocalCheckpointStore, NodeApiClient, buildBrowserCapturePrompt,
+  CodexAppServerRunner, CodexProcessRunner, LocalCheckpointStore, NodeApiClient, buildBrowserCapturePrompt,
   runPool, withLeaseHeartbeat, zipDirectory,
 } from "@crawl-automation/runtime";
+import type { CodexRunner } from "@crawl-automation/runtime";
 
 const env = z.object({
   CONTROL_PLANE_URL: z.url(), NODE_TOKEN: z.string().min(24), NODE_ID: z.string().min(3),
   NODE_NAME: z.string().default("Windows Browser Worker"), NODE_CONCURRENCY: z.coerce.number().int().min(1).max(2).default(2),
   WORK_ROOT: z.string().default(path.resolve(".automation-runs")), LOCAL_STATE_DB: z.string().default(path.resolve(".automation-state/browser.sqlite")),
   REPOSITORY_ROOT: z.string().default(process.cwd()), CODEX_EXECUTABLE: z.string().default("codex"),
+  CODEX_RUNNER: z.enum(["exec", "app-server"]).default("exec"), CODEX_SKILL_PATH: z.string().optional(),
   CODEX_MODEL: z.string().default("gpt-5.6-luna"), CODEX_REASONING_EFFORT: z.string().default("medium"),
   CODEX_UNATTENDED_FULL_ACCESS: z.enum(["true", "false"]).default("false"),
 }).parse(process.env);
@@ -24,7 +26,9 @@ const resultSchema = z.object({
 });
 const client = new NodeApiClient({ baseUrl: env.CONTROL_PLANE_URL, token: env.NODE_TOKEN, nodeId: env.NODE_ID });
 const checkpoints = new LocalCheckpointStore(env.LOCAL_STATE_DB);
-const runner = new CodexProcessRunner({ executable: env.CODEX_EXECUTABLE, model: env.CODEX_MODEL, reasoningEffort: env.CODEX_REASONING_EFFORT, unattendedFullAccess: env.CODEX_UNATTENDED_FULL_ACCESS === "true" });
+const runnerOptions = { executable: env.CODEX_EXECUTABLE, model: env.CODEX_MODEL, reasoningEffort: env.CODEX_REASONING_EFFORT, unattendedFullAccess: env.CODEX_UNATTENDED_FULL_ACCESS === "true" };
+const runner: CodexRunner = env.CODEX_RUNNER === "app-server" ? new CodexAppServerRunner(runnerOptions) : new CodexProcessRunner(runnerOptions);
+const skillPath = path.resolve(env.CODEX_SKILL_PATH ?? path.join(env.REPOSITORY_ROOT, "crawl-products", "SKILL.md"));
 const controller = new AbortController();
 const active = new Set<string>();
 let quotaPaused = false;
@@ -75,8 +79,14 @@ async function handle(claim: any) {
       })();
       const basePrompt = buildBrowserCapturePrompt({ url: job.source.url, runId: job.runId, jobDirectory, nodeId: env.NODE_ID });
       const prompt = `${basePrompt}\n\n每批完成后执行：node apps/browser-node/scripts/publish-capture-batch.mjs <任务目录> <ordinal> <item-count> <staging-directory>，把 staging 批次原子发布到 handoff。最终 batches 必须与已发布 handoff 完全一致。`;
+      const previousSession = env.CODEX_RUNNER === "app-server" ? checkpoints.getCodexSession(job.id) : null;
       const raw = await runner.run({ prompt, cwd: env.REPOSITORY_ROOT, addDirectories: [jobDirectory], schemaPath: fileURLToPath(new URL("../capture-result.schema.json", import.meta.url)),
-        outputPath: path.join(jobDirectory, "capture-result.json"), eventLogPath: path.join(jobDirectory, "codex-events.jsonl"), signal });
+        outputPath: path.join(jobDirectory, "capture-result.json"), eventLogPath: path.join(jobDirectory, "codex-events.jsonl"), signal,
+        ...(previousSession?.threadId ? { threadId: previousSession.threadId } : {}),
+        threadName: `Crawl ${new URL(job.source.url).hostname} · ${job.id.slice(0, 8)}`,
+        skill: { name: "crawl-products", path: skillPath },
+        onSession: ({ threadId, turnId }) => checkpoints.saveCodexSession(job.id, threadId, turnId, env.CODEX_RUNNER),
+      });
       watcherStopped = true; await watcher; if (watcherError) throw watcherError;
       const result = resultSchema.parse(raw);
       if (result.status !== "complete") {
@@ -97,8 +107,8 @@ async function handle(claim: any) {
   } finally { active.delete(job.id); }
 }
 
-await client.register({ name: env.NODE_NAME, platform: `${os.platform()} ${os.release()}`, version: "0.2.0", capabilities: ["browser"], maxConcurrency: env.NODE_CONCURRENCY });
+await client.register({ name: env.NODE_NAME, platform: `${os.platform()} ${os.release()}`, version: "0.3.0", capabilities: ["browser"], maxConcurrency: env.NODE_CONCURRENCY });
 const heartbeat = setInterval(() => void client.heartbeat([...active]).catch(console.error), 30_000);
 try {
   await runPool({ concurrency: env.NODE_CONCURRENCY, signal: controller.signal, claim: () => quotaPaused ? Promise.resolve(null) : client.claim(["browser"]), handle, onError: console.error });
-} finally { clearInterval(heartbeat); checkpoints.close(); }
+} finally { clearInterval(heartbeat); await runner.close?.(); checkpoints.close(); }

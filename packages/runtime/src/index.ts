@@ -8,6 +8,10 @@ import { pipeline } from "node:stream/promises";
 import archiver from "archiver";
 import unzipper from "unzipper";
 import type { JobStage, NodeCapability } from "@crawl-automation/contracts";
+import type { CodexRunInput, CodexRunner } from "./codex-runner";
+
+export { CodexAppServerError, CodexAppServerRunner, type CodexAppServerOptions } from "./codex-app-server";
+export type { CodexRunInput, CodexRunner, CodexSession } from "./codex-runner";
 
 export class ApiError extends Error {
   constructor(public code: string, message: string, public status = 400) {
@@ -55,6 +59,10 @@ export class LocalCheckpointStore {
         attempts integer not null default 0, next_attempt_at text not null, last_error text,
         created_at text not null, updated_at text not null
       );
+      create table if not exists codex_session (
+        job_id text primary key, thread_id text not null, turn_id text,
+        runner text not null, updated_at text not null
+      );
     `);
   }
   save(jobId: string, stage: JobStage, state: string, payload: unknown, leaseToken?: string) {
@@ -66,6 +74,18 @@ export class LocalCheckpointStore {
   get(jobId: string) {
     const row = this.db.prepare("select * from checkpoint where job_id=?").get(jobId) as Record<string, unknown> | undefined;
     return row ? { ...row, payload: JSON.parse(String(row.payload_json)) } : null;
+  }
+  saveCodexSession(jobId: string, threadId: string, turnId?: string, runner = "app-server") {
+    const now = new Date().toISOString();
+    this.db.prepare(`insert into codex_session(job_id,thread_id,turn_id,runner,updated_at) values(?,?,?,?,?)
+      on conflict(job_id) do update set thread_id=excluded.thread_id,
+      turn_id=case when excluded.thread_id=codex_session.thread_id then coalesce(excluded.turn_id,codex_session.turn_id) else excluded.turn_id end,
+      runner=excluded.runner,updated_at=excluded.updated_at`)
+      .run(jobId, threadId, turnId ?? null, runner, now);
+  }
+  getCodexSession(jobId: string) {
+    return (this.db.prepare("select job_id as jobId,thread_id as threadId,turn_id as turnId,runner,updated_at as updatedAt from codex_session where job_id=?")
+      .get(jobId) as { jobId: string; threadId: string; turnId: string | null; runner: string; updatedAt: string } | undefined) ?? null;
   }
   enqueue(method: string, requestPath: string, body: unknown, idempotencyKey: string) {
     const now = new Date().toISOString();
@@ -154,9 +174,9 @@ export async function extractZipSafe(filename: string, destination: string) {
   await directory.extract({ path: root });
 }
 
-export class CodexProcessRunner {
+export class CodexProcessRunner implements CodexRunner {
   constructor(private options: { executable?: string; model?: string; reasoningEffort?: string; unattendedFullAccess?: boolean } = {}) {}
-  async run(input: { prompt: string; cwd: string; schemaPath: string; outputPath: string; eventLogPath: string; addDirectories?: string[]; signal?: AbortSignal }) {
+  async run(input: CodexRunInput) {
     await fsp.mkdir(path.dirname(input.outputPath), { recursive: true });
     const args = ["exec", "-", "--model", this.options.model ?? "gpt-5.6-luna", "-c", `model_reasoning_effort=${JSON.stringify(this.options.reasoningEffort ?? "medium")}`,
       "--cd", input.cwd, "--output-schema", input.schemaPath, "--output-last-message", input.outputPath, "--json", "--color", "never"];
