@@ -12,12 +12,12 @@ This monorepo is the deterministic controller for distributed product crawling.
 
 The control plane owns two finite DAGs:
 
-- DTC: `capture (Windows Browser + crawl-products Skill) -> process (Mac OCR + Codex) -> ingest (Jakarta API) -> cleanup`
-- Amazon: `process (Mac fixed adapter + OCR + Codex + Jakarta API) -> cleanup`
+- DTC: `capture (Windows Browser + crawl-products Skill) -> process (Mac OCR + Codex) -> ingest (Mac Product DB Adapter) -> cleanup`
+- Amazon: `process (Mac fixed adapter + OCR + Codex + Product DB Adapter) -> cleanup`
 
 There is no standalone OCR Job and no OCRBundle. DTC EvidenceBundle archives cross from Windows to the Mac through object storage; the Mac expands them once, calls the OCR API for all images with bounded concurrency, and processes the OCR sidecars locally. Amazon never uploads an EvidenceBundle: its fixed adapter uses the Mac Chrome CDP connection, saves resumable local Brotli snapshots, expands every explicit variation into an independent listing, performs deterministic Link Monitor extraction, then runs semantic and label-text processing.
 
-Only the Windows capture stage uses `crawl-products`. Processing is fixed workflow code and does not load the Skill. Both routes write through Jakarta `product/enrich`, submit label rows through `product/submitFacts`, and verify each returned product with `product/getById` before cleanup is allowed.
+Only the Windows capture stage uses `crawl-products`. Processing is fixed workflow code and does not load the Skill. Both routes use the in-repository Product DB Adapter copied from the validated Link Monitor/Jakarta v2 write flow. It writes products, independent channel listings, snapshots, SKU attrs, images, vocabularies, formulas, and observations through `PRODUCT_DATABASE_URL`, then reads every `(channel, externalId)` back before cleanup is allowed.
 
 ## Local verification
 
@@ -30,9 +30,9 @@ pnpm build
 
 ## Deployment
 
-Deploy the root `Dockerfile` as the Railway control plane. On the Mac mini, `.env.mac` configures the LAN-only proxy console and `compose.mac.yml` exposes it on port 8787. Run `scripts/mac/start-worker.sh` on the host so Codex, Chrome CDP, the OCR endpoint, and the Jakarta product API are reachable. On Windows, copy `apps/browser-node/.env.example` to `.env` and run `apps/browser-node/scripts/start.ps1`.
+Deploy the root `Dockerfile` as the Railway control plane. On the Mac mini, `.env.mac` configures the LAN-only proxy console and `compose.mac.yml` exposes it on port 8787. Run `scripts/mac/start-worker.sh` on the host so Codex, Chrome CDP, the OCR endpoint, and the product database are reachable. On Windows, copy `apps/browser-node/.env.example` to `.env` and run `apps/browser-node/scripts/start.ps1`.
 
-The Mac worker defaults to two total jobs, two global Codex calls, and four concurrent OCR image requests. Configure `SUPPLY_SMART_API_URL`, `OCR_ENDPOINT`, and `CHROME_CDP_URL` in `.env.mac-worker`; `PRODUCT_DATABASE_URL` is no longer used.
+The Mac worker defaults to two total jobs, two global Codex calls, and four concurrent OCR image requests. Configure `PRODUCT_DATABASE_URL`, `OCR_ENDPOINT`, and `CHROME_CDP_URL` in `.env.mac-worker`. No Jakarta checkout or separate Product Server is required on the Mac.
 
 Cloud and Mac artifacts are deleted only by the cleanup Job after ingestion read-back succeeds and no review remains open. `needs_review` artifacts remain available until resolution.
 

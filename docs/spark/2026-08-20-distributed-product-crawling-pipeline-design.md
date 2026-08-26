@@ -16,7 +16,7 @@
 | --- | --- | --- |
 | Railway | 控制面、PostgreSQL 队列、租约、审核、对象引用 | 不运行 Chrome/Codex/OCR |
 | Windows Browser Node | DTC 网站；Codex Luna Medium + 可编程 Chrome + `crawl-products` Skill | 2 个站点 |
-| Mac mini Worker | DTC process、Amazon 固定 Adapter、Jakarta 入库、清理 | 2 个 Job |
+| Mac mini Worker | DTC process、Amazon 固定 Adapter、Product DB 直连入库、清理 | 2 个 Job |
 | OCR HTTP API | 接收单张图片并返回文字行与坐标 | 每个 Job 默认 4 张并发 |
 | Mac Codex | Nutrition/功效/剂型/成分与 OCR Facts 文本转换 | 全局 2 个进程 |
 
@@ -40,7 +40,7 @@ capture [Windows/browser]
 5. 程序把全部图片并发送到 OCR API，结果写在图片旁的 `.ocr.json`。
 6. Mac Codex 只读页面证据和 OCR 文本；它不再调用抓取 Skill，也不操作浏览器。
 7. 结构校验通过后上传一个小型 `normalized` JSON，供 ingest Job 使用。
-8. ingest 调 Jakarta API 并回读；成功后 cleanup 删除云端产物和 Mac 整个 run 目录。
+8. ingest 使用仓库内 Product DB Adapter 直连同一产品库并回读；成功后 cleanup 删除云端产物和 Mac 整个 run 目录。
 
 ### Amazon
 
@@ -59,8 +59,8 @@ Amazon process 在一个可恢复 Job 中完成完整流程，不上传 Amazon E
 6. Link Monitor Nutrition 语义协议按最多 50 条切批；Mac 全局最多两个 Luna Medium 调用。
 7. 只有 included 产品进入图片线；程序下载完整画廊，并发调用 OCR API。
 8. OCR 先用 Facts 标题和结构词做高召回筛选；只有命中的 OCR 文字交给 Luna 解析。Codex 不重新视觉读取图片。
-9. 解析结果转成 Jakarta `product/enrich` 与 `product/submitFacts` 请求；每个 ASIN 独立入库。
-10. `product/getById` 回读全部通过后，cleanup 删除该 Job 的本地快照、图片、OCR sidecar 和模型输出。
+9. 解析结果交给 Product DB Adapter，按 Link Monitor 的表结构与写入顺序落库；每个 ASIN 独立入库。
+10. 按 `(channel, externalId)` 回读全部通过后，cleanup 删除该 Job 的本地快照、图片、OCR sidecar 和模型输出。
 
 ## 数据契约
 
@@ -91,10 +91,11 @@ ProductBatchV2
 
 写入边界：
 
-- `product/enrich`：产品、挂牌观测、图片、功效、剂型、主要成分。
-- `product/submitFacts`：从 OCR Facts 面板解析出的结构化配方行。
-- `product/getById`：每条写入后的最终回读。
-- SKU 与 family 信息进入 listing 的 `variantAttrs`；`channel + externalId` 是挂牌幂等身份。
+- `product` / `product_channel` / `listing_snapshot`：SKU 粒度产品、挂牌身份和追加式观测。
+- `product_image` / `product_*`：图片、功效、剂型和主要成分关系。
+- `formula` / `formula_ingredient` / `formula_observation`：从 OCR Facts 面板解析出的结构化配方与时间轴。
+- SKU 与 family 信息进入 listing `attrs`；`channel + externalId` 是挂牌幂等身份，存在 externalId 时禁止降级按 URL/标题合并。
+- 每条写入后按 `(channel, externalId)` 回读产品、SKU 和 Formula；全部通过才允许 cleanup。
 
 ## 恢复与审核
 
@@ -114,10 +115,10 @@ Amazon Job 还会把这些可重放文件放在 run 目录：
 出现下列情况进入 `needs_review`，不执行 cleanup：
 
 - CAPTCHA、不可读页面或没有稳定 ASIN/externalId。
-- 品牌无法唯一映射到 Jakarta 公司域名。
+- 品牌无法唯一映射到产品库公司域名。
 - 多张图明确属于不同配方，无法映射到一个变体。
 - OCR 命中 Facts 结构但解析不出合法成分行。
-- Jakarta 公司匹配、listing 观测、Facts 录入或回读失败。
+- 产品库公司匹配、listing 观测、Facts 录入或回读失败。
 - DTC 变体/SKU/证据存在冲突。
 
 人工选择 retry/resume 后继续同一个 Job 目录，复用快照、OCR sidecar 和模型输出。人工 abandon 只改变任务状态；物理清理仍应走明确的清理动作，避免误删审核证据。

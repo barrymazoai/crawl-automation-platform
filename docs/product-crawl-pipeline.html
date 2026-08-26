@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light">
   <title>产品爬取自动化 · 端到端流程真源</title>
-  <meta name="description" content="Windows Browser、无状态 OCR API、Mac mini 语义处理、Jakarta 入库与 Railway 控制面的完整职责边界和数据流。">
+  <meta name="description" content="Windows Browser、无状态 OCR API、Mac mini 语义处理、Product DB 直连入库与 Railway 控制面的完整职责边界和数据流。">
   <style>
     :root {
       --paper: #f6f3ec;
@@ -530,7 +530,7 @@
     <header class="hero" id="top">
       <div class="eyebrow">Target Architecture · Review Draft</div>
       <h1>产品爬取自动化<br>端到端流程真源</h1>
-      <p class="hero-lead">这张图描述当前迁移后的目标架构与实现状态。核心边界：Skill 只用于 DTC 浏览器爬取；Mac Processing 对全部图片调用无状态 OCR HTTP API；Codex 只处理固定索引里的页面与 OCR 文字，不视觉读取图片；入库必须通过 Jakarta API 并回读。</p>
+      <p class="hero-lead">这张图描述当前迁移后的目标架构与实现状态。核心边界：Skill 只用于 DTC 浏览器爬取；Mac Processing 对全部图片调用无状态 OCR HTTP API；Codex 只处理固定索引里的页面与 OCR 文字，不视觉读取图片；入库由仓库内 Product DB Adapter 直连同一产品库并回读。</p>
       <div class="hero-meta">
         <span class="pill">DTC：capture → process → ingest → cleanup</span>
         <span class="pill">Amazon：Link Monitor pipeline → verify → cleanup</span>
@@ -538,7 +538,7 @@
         <span class="pill">Browser：Windows A · 2 进程</span>
         <span class="pill">OCR API：Windows B · 无状态 HTTP</span>
         <span class="pill">Process：Mac mini · 2 进程 · Luna Medium</span>
-        <span class="pill">数据库：Jakarta product/enrich</span>
+        <span class="pill">数据库：Product DB Adapter 直连</span>
       </div>
     </header>
 
@@ -579,7 +579,7 @@
         </article>
         <article class="principle">
           <b>数据库写入有门禁</b>
-          <p>每个变体独立入库；必须先完成证据校验，再调用 Jakarta API，最后按 externalId 回读成功才允许清理。</p>
+          <p>每个变体独立入库；必须先完成证据校验，再由 Product DB Adapter 写入，最后按 channel + externalId 回读成功才允许清理。</p>
         </article>
       </div>
     </section>
@@ -621,14 +621,14 @@
         <article class="topology-node mac">
           <span class="node-label">MAC MINI · PROCESSING + DATA</span>
           <h3>处理与入库节点</h3>
-          <p>同时承载两条本地工作流：处理 Windows 交来的 DTC EvidenceBundle；原样运行 Amazon Link Monitor 管线。最终统一校验并写入 Jakarta。</p>
+          <p>同时承载两条本地工作流：处理 Windows 交来的 DTC EvidenceBundle；原样运行 Amazon Link Monitor 管线。最终统一校验并直连同一产品库。</p>
           <ul>
             <li>Amazon Link Monitor 原生模块</li>
             <li>逐图调用 OCR HTTP API</li>
             <li>本地 OCR checkpoint 与证据切片</li>
             <li>Luna Medium 结构转换</li>
-            <li>Jakarta Schema 校验</li>
-            <li>API 入库和数据库回读</li>
+            <li>ProductBatchV2 Schema 校验</li>
+            <li>事务入库和数据库回读</li>
           </ul>
           <div class="api-dependency"><b>HTTP DEPENDENCY · WINDOWS B</b>OCR API：POST image → OCR JSON。无 Job、无租约、无 Artifact；服务端不保存流程状态。</div>
         </article>
@@ -636,7 +636,7 @@
       <div class="branch-grid" style="margin-top:14px">
         <article class="branch good"><h3>A · DTC Browser Capture</h3><p>普通品牌站由 Windows A 的 Browser Worker 领取 <span class="mono">browser</span> capability，使用 crawl-products Skill 和 Chrome，输出 EvidenceBundleV1。</p></article>
         <article class="branch" style="border-top:4px solid var(--ocr)"><h3>B · Amazon 原生流水线</h3><p>Mac mini 直接复用 Link Monitor 的 Amazon 搜索、变体解析、HTML 快照、规则清洗、Codex 清洗与 OCR 标签流程；不用 Skill，也不生成 EvidenceBundle。</p></article>
-        <article class="branch" style="border-top:4px solid var(--mac)"><h3>C · 在最终数据契约汇合</h3><p>DTC 和 Amazon 的原始证据存储方式不同，不强行统一。两条路径只在规范化产品结构、证据校验和 Jakarta 入库契约处汇合。</p></article>
+        <article class="branch" style="border-top:4px solid var(--mac)"><h3>C · 在最终数据契约汇合</h3><p>DTC 和 Amazon 的原始证据存储方式不同，不强行统一。两条路径只在 ProductBatchV2、证据校验和 Product DB Adapter 处汇合。</p></article>
       </div>
       <div class="return-line">DTC 跨机器使用 EvidenceBundle；Amazon 沿用 Link Monitor 本地文件断点并生成 ProductBatchV2，不新增中间 Bundle</div>
     </section>
@@ -695,9 +695,9 @@
         </article>
         <article class="adapter-step" style="border-top-color:var(--mac)">
           <span class="step-id">A8 · FACTS + FINAL SINK</span>
-          <h3>Luna 解析 OCR 文本并写 Jakarta</h3>
+          <h3>Luna 解析 OCR 文本并写产品库</h3>
           <p>产品 OCR 完成即进 Codex 队列，不等待全量图片。</p>
-          <ul><li>Luna 全局并发 2，不接收图片</li><li>逐产品写 label.raw.json 断点</li><li>调用 product/enrich 与 product/submitFacts</li><li>product/getById 回读通过后才完成</li></ul>
+          <ul><li>Luna 全局并发 2，不接收图片</li><li>逐产品写 label.raw.json 断点</li><li>Adapter 写产品、挂牌、快照和 Formula</li><li>按 channel + externalId 回读通过后才完成</li></ul>
         </article>
       </div>
 
@@ -708,7 +708,7 @@
 
       <div class="callout" style="margin-top:14px;border-left-color:var(--good)">
         <strong style="color:var(--good)">迁移已落地</strong>
-        <p>简化版 <span class="mono">processAmazon</span> 已删除。当前代码已迁入 Chrome CDP、搜索分页、变体家族、Brotli 快照、确定性提取、Nutrition 语义清洗、逐图 OCR 缓存、Facts 文本解析和 Jakarta API 回读门禁。</p>
+        <p>简化版 <span class="mono">processAmazon</span> 已删除。当前代码已迁入 Chrome CDP、搜索分页、变体家族、Brotli 快照、确定性提取、Nutrition 语义清洗、逐图 OCR 缓存、Facts 文本解析和 Product DB 回读门禁。</p>
       </div>
 
       <div class="panel" style="margin-top:14px;padding:22px">
@@ -716,7 +716,7 @@
         <div class="detail-grid" style="margin-top:12px">
           <div class="detail good"><h4>已迁入</h4><p>amazon-search、browser、snapshot、extract-product、semantic-clean、ocr-label-pipeline、label-parse 与 Link Check 纯函数。</p></div>
           <div class="detail"><h4>薄编排层</h4><p>Railway 管 Job；Mac 保持 HTML、图片、OCR、label 与 batch 断点，同一 Job 重试直接复用。</p></div>
-          <div class="detail output"><h4>新最终写入端</h4><p>通过 Jakarta product/enrich、product/submitFacts 写入，再用 product/getById 回读验证。</p></div>
+          <div class="detail output"><h4>新最终写入端</h4><p>仓库内 Adapter 直接写入与 Link Monitor 相同的产品表，再按 channel + externalId 回读验证。</p></div>
         </div>
       </div>
     </section>
@@ -875,7 +875,7 @@
           <div class="stage-main">
             <div class="stage-owner">Mac mini · validator</div>
             <h3>代码校验与 Review 门禁</h3>
-            <p class="stage-subtitle">模型结果不能直接入库；先验证身份、证据、taxonomy 和 Jakarta Schema。</p>
+            <p class="stage-subtitle">模型结果不能直接入库；先验证身份、证据、taxonomy 和 ProductBatchV2 Schema。</p>
             <div class="tag-row"><span class="tag no">不用 Skill</span><span class="tag code">机械全量校验</span><span class="tag codex">可选受限语义复审</span></div>
           </div>
           <div class="stage-details">
@@ -894,16 +894,16 @@
         <article class="stage database">
           <div class="stage-number">08</div>
           <div class="stage-main">
-            <div class="stage-owner">Mac mini → Jakarta Product Server</div>
-            <h3>调用 product/enrich 入库</h3>
-            <p class="stage-subtitle">使用业务 API，不由本项目直接拼 SQL。</p>
-            <div class="tag-row"><span class="tag no">不用 Skill</span><span class="tag no">不用 Codex</span><span class="tag code">Jakarta API</span></div>
+            <div class="stage-owner">Mac mini → Product PostgreSQL</div>
+            <h3>Product DB Adapter 事务入库</h3>
+            <p class="stage-subtitle">复制 Link Monitor/Jakarta v2 的成熟写入顺序；不部署额外 Product Server。</p>
+            <div class="tag-row"><span class="tag no">不用 Skill</span><span class="tag no">不用 Codex</span><span class="tag code">PRODUCT_DATABASE_URL</span></div>
           </div>
           <div class="stage-details">
             <div class="detail-grid">
-              <div class="detail"><h4>请求</h4><ul><li>每个变体一条请求</li><li>externalId=variantId</li><li>SKU 放 variantAttrs.sku</li><li>mainIngredients 为对象数组</li></ul></div>
-              <div class="detail good"><h4>Jakarta 处理</h4><ul><li>公司与产品归属</li><li>listing 与 snapshot</li><li>图片关系</li><li>form/function/ingredient taxonomy</li></ul></div>
-              <div class="detail output"><h4>接口响应</h4><ul><li>productId / listingId</li><li>matchedBy / created</li><li>relations 计数</li><li>unknown / ungrouped</li></ul></div>
+              <div class="detail"><h4>输入</h4><ul><li>每个变体一条产品</li><li>externalId=variantId</li><li>SKU 放 listing attrs</li><li>Facts 为独立结构化 rows</li></ul></div>
+              <div class="detail good"><h4>事务写入</h4><ul><li>公司与 SKU 粒度产品</li><li>listing 与 snapshot</li><li>图片/form/function/ingredient</li><li>formula 与 observation</li></ul></div>
+              <div class="detail output"><h4>回读门禁</h4><ul><li>productId / listingId</li><li>channel / externalId</li><li>SKU attrs</li><li>Formula 存在性</li></ul></div>
             </div>
           </div>
         </article>
@@ -1070,9 +1070,9 @@
         <article class="gap"><b>DONE · SKILL</b><h3>Skill 只留在 DTC Capture</h3><p>Mac Process Prompt 明确禁止读取 Skill，Amazon 只运行固定 Adapter。</p></article>
         <article class="gap"><b>DONE · EVIDENCE</b><h3>DTC 使用固定 evidence index</h3><p>程序列出 sourceFiles 与全部图片 OCR；Codex 不遍历目录，也不打开原图。</p></article>
         <article class="gap"><b>DONE · SCHEMA</b><h3>ProductBatchV2 已实现</h3><p>支持 SKU、family、分类成分对象与独立 Facts rows，并执行 Zod 门禁。</p></article>
-        <article class="gap"><b>DONE · API</b><h3>数据库直写已删除</h3><p>统一调用 product/enrich、product/submitFacts 和 product/getById。</p></article>
-        <article class="gap"><b>DONE · TESTS</b><h3>迁入 205 个 Link Monitor 测试</h3><p>另有 DAG 与 Jakarta API 客户端测试；类型检查和生产构建通过。</p></article>
-        <article class="gap"><b>VERIFY · SERVICES</b><h3>等待 Mac 真实联调</h3><p>需配置 Chrome CDP、OCR_ENDPOINT、SUPPLY_SMART_API_URL，再跑一个 Amazon 与一个 DTC smoke。</p></article>
+        <article class="gap"><b>DONE · DB</b><h3>Product DB Adapter 已内置</h3><p>直接写产品、挂牌、快照、关系、Formula 与 Observation；不需要 Jakarta checkout 或 Product Server。</p></article>
+        <article class="gap"><b>DONE · TESTS</b><h3>迁入 205 个 Link Monitor 测试</h3><p>另有 DAG 与 Product DB Adapter 测试；类型检查和生产构建通过。</p></article>
+        <article class="gap"><b>VERIFY · SERVICES</b><h3>等待 Mac 真实联调</h3><p>需配置 Chrome CDP、OCR_ENDPOINT、PRODUCT_DATABASE_URL，再跑一个 Amazon 与一个 DTC smoke。</p></article>
         <article class="gap"><b>VERIFY · COMPANY</b><h3>品牌域名映射需看真实库结果</h3><p>精确/唯一匹配失败会停在 needs_review，不会用 Amazon 域名冒充公司域名。</p></article>
         <article class="gap"><b>VERIFY · DEPLOY</b><h3>Railway migration 002 待执行</h3><p>上线后确认新 capability、Job stage、节点心跳与 cleanup 行为。</p></article>
       </div>
@@ -1099,8 +1099,8 @@
           <label class="check-item"><input type="checkbox" data-check="7">Codex读取全部有效 OCR 文本；原始像素只按需提供。</label>
           <label class="check-item"><input type="checkbox" data-check="8">Form、Functions、Ingredients 每项都有真实 evidence ID。</label>
           <label class="check-item"><input type="checkbox" data-check="9">每个可售变体以 variantId/externalId 独立入库，SKU保留。</label>
-          <label class="check-item"><input type="checkbox" data-check="10">入库只走 Jakarta product/enrich，不直接拼 SQL。</label>
-          <label class="check-item"><input type="checkbox" data-check="11">HTTP成功后必须数据库回读，8/8一类计数对账通过。</label>
+          <label class="check-item"><input type="checkbox" data-check="10">入库只走仓库内 Product DB Adapter，不依赖额外 Product Server。</label>
+          <label class="check-item"><input type="checkbox" data-check="11">事务提交后必须按 channel + externalId 回读，8/8 一类计数对账通过。</label>
           <label class="check-item"><input type="checkbox" data-check="12">成功后清理；needs_review 中 DTC 保留 Bundle，Amazon 保留 HTML、图片、OCR、label、batch 与 ingest 断点。</label>
         </div>
       </div>
