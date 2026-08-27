@@ -91,6 +91,51 @@ async function prepareEvidence(options: DtcPipelineOptions) {
   return { semanticInputFile, imageCount: images.length };
 }
 
+function productUrlKey(value: unknown) {
+  if (typeof value !== "string") return null;
+  try {
+    const url = new URL(value);
+    url.search = "";
+    url.hash = "";
+    url.pathname = url.pathname.replace(/\/$/, "") || "/";
+    return url.toString();
+  } catch {
+    return null;
+  }
+}
+
+export async function hydrateProductImagesFromEvidence(rawBatch: unknown, semanticInputFile: string) {
+  if (!rawBatch || typeof rawBatch !== "object" || !Array.isArray((rawBatch as { products?: unknown }).products)) return rawBatch;
+  const semanticInput = JSON.parse(await fs.readFile(semanticInputFile, "utf8")) as {
+    sourceFiles?: Array<{ path?: unknown }>;
+  };
+  const imageLookup = new Map<string, string[]>();
+  for (const source of semanticInput.sourceFiles ?? []) {
+    if (typeof source.path !== "string" || path.basename(source.path) !== "records.json") continue;
+    const records = JSON.parse(await fs.readFile(source.path, "utf8")) as unknown;
+    if (!Array.isArray(records)) continue;
+    for (const record of records) {
+      if (!record || typeof record !== "object") continue;
+      const value = record as { productUrl?: unknown; fields?: { images?: unknown } };
+      const key = productUrlKey(value.productUrl);
+      const images = Array.isArray(value.fields?.images)
+        ? value.fields.images.filter((image): image is string => typeof image === "string")
+        : [];
+      if (key && images.length > 0) imageLookup.set(key, images);
+    }
+  }
+  return {
+    ...(rawBatch as Record<string, unknown>),
+    products: (rawBatch as { products: unknown[] }).products.map((product) => {
+      if (!product || typeof product !== "object") return product;
+      const value = product as Record<string, unknown>;
+      if (Array.isArray(value.images) && value.images.length > 0) return product;
+      const key = productUrlKey(value.productUrl) ?? productUrlKey(value.sourceUrl);
+      return { ...value, images: key ? imageLookup.get(key) ?? [] : [] };
+    }),
+  };
+}
+
 function buildProcessingPrompt(input: { sourceUrl: string; runId: string; semanticInputFile: string; outputFile: string; vocabulary: string[] }) {
   return `你是 Mac mini 上的固定数据处理 Worker。抓取已经结束；不要操作浏览器，不要读取或调用 crawl-products Skill。
 
@@ -135,7 +180,10 @@ export async function runDtcProcessing(options: DtcPipelineOptions) {
   const resolved = path.resolve(options.jobDirectory, result.recordsFile);
   const root = path.resolve(options.jobDirectory);
   if (resolved !== root && !resolved.startsWith(`${root}${path.sep}`)) throw new Error("处理输出路径越界");
-  const batch: ProductBatch = productBatchSchema.parse(JSON.parse(await fs.readFile(resolved, "utf8")));
+  const rawBatch = JSON.parse(await fs.readFile(resolved, "utf8"));
+  const hydratedBatch = await hydrateProductImagesFromEvidence(rawBatch, prepared.semanticInputFile);
+  const batch: ProductBatch = productBatchSchema.parse(hydratedBatch);
+  await fs.writeFile(resolved, `${JSON.stringify(batch, null, 2)}\n`);
   if (batch.products.length !== result.outputCount) throw new Error("处理结果 outputCount 与 products 数量不一致");
   const listingKeys = batch.products.map((product) => `${product.channel}:${product.externalId}`);
   if (new Set(listingKeys).size !== listingKeys.length) throw new Error("处理结果存在重复 channel+externalId");

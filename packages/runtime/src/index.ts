@@ -98,52 +98,99 @@ export class LocalCheckpointStore {
 }
 
 export class NodeApiClient {
-  constructor(private config: { baseUrl: string; token: string; nodeId: string; fetchImpl?: typeof fetch }) {}
-  private async request<T>(method: string, requestPath: string, body?: unknown, idempotencyKey?: string): Promise<T> {
-    const response = await (this.config.fetchImpl ?? fetch)(`${this.config.baseUrl.replace(/\/$/, "")}${requestPath}`, {
-      method,
-      headers: {
-        authorization: `Bearer ${this.config.token}`,
-        ...(body === undefined ? {} : { "content-type": "application/json" }),
-        ...(idempotencyKey ? { "idempotency-key": idempotencyKey } : {}),
-      },
-      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+  constructor(private config: {
+    baseUrl: string;
+    token: string;
+    nodeId: string;
+    fetchImpl?: typeof fetch;
+    requestTimeoutMs?: number;
+    transferTimeoutMs?: number;
+    retryAttempts?: number;
+    retryBaseDelayMs?: number;
+    retryMaxDelayMs?: number;
+  }) {}
+  private isTransient(error: unknown) {
+    if (error instanceof ApiError) return [408, 425, 429, 500, 502, 503, 504].includes(error.status);
+    if (error instanceof TypeError) return true;
+    let current = error;
+    while (current && typeof current === "object") {
+      const value = current as { name?: string; code?: string; cause?: unknown };
+      if (value.name === "AbortError" || value.name === "TimeoutError") return true;
+      if (value.code && ["ECONNRESET", "ETIMEDOUT", "EAI_AGAIN", "ECONNREFUSED", "ENETUNREACH", "EPIPE"].includes(value.code)) return true;
+      current = value.cause;
+    }
+    return false;
+  }
+  private async withRetry<T>(enabled: boolean, action: (signal: AbortSignal) => Promise<T>, timeoutMs = this.config.requestTimeoutMs ?? 10_000): Promise<T> {
+    const attempts = enabled ? Math.max(1, this.config.retryAttempts ?? 4) : 1;
+    const baseDelay = Math.max(0, this.config.retryBaseDelayMs ?? 250);
+    const maxDelay = Math.max(baseDelay, this.config.retryMaxDelayMs ?? 2_000);
+    let lastError: unknown;
+    for (let attempt = 1; attempt <= attempts; attempt += 1) {
+      try { return await action(AbortSignal.timeout(timeoutMs)); }
+      catch (error) {
+        lastError = error;
+        if (attempt === attempts || !this.isTransient(error)) throw error;
+        const delayMs = Math.min(maxDelay, baseDelay * (2 ** (attempt - 1)));
+        if (delayMs > 0) await new Promise((resolve) => setTimeout(resolve, delayMs));
+      }
+    }
+    throw lastError;
+  }
+  private async request<T>(method: string, requestPath: string, body?: unknown, idempotencyKey?: string, retry = false): Promise<T> {
+    const requestBody = body === undefined ? undefined : JSON.stringify(body);
+    return this.withRetry(retry, async (signal) => {
+      const response = await (this.config.fetchImpl ?? fetch)(`${this.config.baseUrl.replace(/\/$/, "")}${requestPath}`, {
+        method,
+        signal,
+        headers: {
+          authorization: `Bearer ${this.config.token}`,
+          ...(body === undefined ? {} : { "content-type": "application/json" }),
+          ...(idempotencyKey ? { "idempotency-key": idempotencyKey } : {}),
+        },
+        ...(requestBody === undefined ? {} : { body: requestBody }),
+      });
+      if (response.status === 204) return null as T;
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new ApiError(payload?.error?.code ?? "remote_error", payload?.error?.message ?? `HTTP ${response.status}`, response.status);
+      return payload as T;
     });
-    if (response.status === 204) return null as T;
-    const payload = await response.json().catch(() => ({}));
-    if (!response.ok) throw new ApiError(payload?.error?.code ?? "remote_error", payload?.error?.message ?? `HTTP ${response.status}`, response.status);
-    return payload as T;
   }
   register(input: { name: string; platform: string; version: string; capabilities: NodeCapability[]; maxConcurrency: number }) {
-    return this.request("POST", "/v1/node/register", { nodeId: this.config.nodeId, ...input });
+    return this.request("POST", "/v1/node/register", { nodeId: this.config.nodeId, ...input }, undefined, true);
   }
-  heartbeat(activeJobIds: string[]) { return this.request("POST", "/v1/node/heartbeat", { nodeId: this.config.nodeId, activeJobIds }); }
+  heartbeat(activeJobIds: string[]) { return this.request("POST", "/v1/node/heartbeat", { nodeId: this.config.nodeId, activeJobIds }, undefined, true); }
   claim(capabilities: NodeCapability[]) { return this.request<any>("POST", "/v1/node/jobs/claim", { nodeId: this.config.nodeId, capabilities }); }
-  start(jobId: string, leaseToken: string) { return this.request("POST", `/v1/node/jobs/${jobId}/start`, { leaseToken }); }
-  renew(jobId: string, leaseToken: string) { return this.request("POST", `/v1/node/jobs/${jobId}/heartbeat`, { leaseToken }); }
-  complete(jobId: string, leaseToken: string, output: unknown, key: string) { return this.request("POST", `/v1/node/jobs/${jobId}/complete`, { leaseToken, output }, key); }
+  start(jobId: string, leaseToken: string) { return this.request("POST", `/v1/node/jobs/${jobId}/start`, { leaseToken }, undefined, true); }
+  renew(jobId: string, leaseToken: string) { return this.request("POST", `/v1/node/jobs/${jobId}/heartbeat`, { leaseToken }, undefined, true); }
+  complete(jobId: string, leaseToken: string, output: unknown, key: string) { return this.request("POST", `/v1/node/jobs/${jobId}/complete`, { leaseToken, output }, key, true); }
   fail(jobId: string, leaseToken: string, failure: { code: string; message: string; retryable: boolean; needsReview?: boolean }) {
-    return this.request("POST", `/v1/node/jobs/${jobId}/fail`, { leaseToken, ...failure }, `failure:${jobId}:${sha256(JSON.stringify(failure))}`);
+    return this.request("POST", `/v1/node/jobs/${jobId}/fail`, { leaseToken, ...failure }, `failure:${jobId}:${sha256(JSON.stringify(failure))}`, true);
   }
   createArtifact(jobId: string, leaseToken: string, metadata: { kind: string; fileName: string; contentType: string; sha256: string; byteSize: number }) {
-    return this.request<any>("POST", `/v1/node/jobs/${jobId}/artifacts`, { leaseToken, ...metadata }, `artifact:${jobId}:${metadata.kind}:${metadata.sha256}`);
+    return this.request<any>("POST", `/v1/node/jobs/${jobId}/artifacts`, { leaseToken, ...metadata }, `artifact:${jobId}:${metadata.kind}:${metadata.sha256}`, true);
   }
   confirmArtifact(artifactId: string, jobId: string, leaseToken: string) {
-    return this.request("POST", `/v1/node/artifacts/${artifactId}/confirm`, { jobId, leaseToken });
+    return this.request("POST", `/v1/node/artifacts/${artifactId}/confirm`, { jobId, leaseToken }, undefined, true);
   }
-  artifactDownload(artifactId: string) { return this.request<{ downloadUrl: string }>("POST", `/v1/node/artifacts/${artifactId}/download`, {}); }
-  runArtifacts(runId: string) { return this.request<{ artifacts: any[] }>("GET", `/v1/node/runs/${runId}/artifacts`); }
+  artifactDownload(artifactId: string) { return this.request<{ downloadUrl: string }>("POST", `/v1/node/artifacts/${artifactId}/download`, {}, undefined, true); }
+  runArtifacts(runId: string) { return this.request<{ artifacts: any[] }>("GET", `/v1/node/runs/${runId}/artifacts`, undefined, undefined, true); }
   deleteArtifact(artifactId: string, jobId: string, leaseToken: string) { return this.request("POST", `/v1/node/artifacts/${artifactId}/delete`, { jobId, leaseToken }); }
   async upload(uploadUrl: string, filename: string, hash: string, contentType: string) {
     const data = await fsp.readFile(filename);
-    const response = await (this.config.fetchImpl ?? fetch)(uploadUrl, { method: "PUT", headers: { "content-type": contentType, "x-amz-meta-sha256": hash }, body: data });
-    if (!response.ok) throw new ApiError("artifact_upload_failed", `上传失败：HTTP ${response.status}`, response.status);
+    await this.withRetry(true, async (signal) => {
+      const response = await (this.config.fetchImpl ?? fetch)(uploadUrl, { method: "PUT", signal, headers: { "content-type": contentType, "x-amz-meta-sha256": hash }, body: data });
+      if (!response.ok) throw new ApiError("artifact_upload_failed", `上传失败：HTTP ${response.status}`, response.status);
+    }, this.config.transferTimeoutMs ?? 120_000);
   }
   async download(downloadUrl: string, filename: string) {
-    const response = await (this.config.fetchImpl ?? fetch)(downloadUrl);
-    if (!response.ok) throw new ApiError("artifact_download_failed", `下载失败：HTTP ${response.status}`, response.status);
+    const data = await this.withRetry(true, async (signal) => {
+      const response = await (this.config.fetchImpl ?? fetch)(downloadUrl, { signal });
+      if (!response.ok) throw new ApiError("artifact_download_failed", `下载失败：HTTP ${response.status}`, response.status);
+      return Buffer.from(await response.arrayBuffer());
+    }, this.config.transferTimeoutMs ?? 120_000);
     await fsp.mkdir(path.dirname(filename), { recursive: true });
-    await fsp.writeFile(filename, Buffer.from(await response.arrayBuffer()));
+    await fsp.writeFile(filename, data);
   }
 }
 
@@ -175,6 +222,12 @@ export async function extractZipSafe(filename: string, destination: string) {
   await directory.extract({ path: root });
 }
 
+export function codexExecutionPolicyArgs(unattendedFullAccess = false) {
+  return unattendedFullAccess
+    ? ["--skip-git-repo-check", "--dangerously-bypass-approvals-and-sandbox"]
+    : ["--skip-git-repo-check", "--approve-for-me"];
+}
+
 export class CodexProcessRunner implements CodexRunner {
   constructor(private options: { executable?: string; model?: string; reasoningEffort?: string; unattendedFullAccess?: boolean; env?: NodeJS.ProcessEnv } = {}) {}
   async run(input: CodexRunInput) {
@@ -182,8 +235,7 @@ export class CodexProcessRunner implements CodexRunner {
     const args = ["exec", "-", "--model", this.options.model ?? "gpt-5.6-luna", "-c", `model_reasoning_effort=${JSON.stringify(this.options.reasoningEffort ?? "medium")}`,
       "--cd", input.cwd, "--output-schema", input.schemaPath, "--output-last-message", input.outputPath, "--json", "--color", "never"];
     for (const directory of input.addDirectories ?? []) args.push("--add-dir", directory);
-    if (this.options.unattendedFullAccess) args.push("--dangerously-bypass-approvals-and-sandbox");
-    else args.push("--approve-for-me", "--sandbox", "workspace-write");
+    args.push(...codexExecutionPolicyArgs(this.options.unattendedFullAccess));
     const log = fs.createWriteStream(input.eventLogPath, { flags: "a" });
     const child = spawn(this.options.executable ?? "codex", args, { cwd: input.cwd, stdio: ["pipe", "pipe", "pipe"], windowsHide: true, env: { ...process.env, ...this.options.env } });
     child.stdout.pipe(log, { end: false }); child.stderr.pipe(log, { end: false }); child.stdin.end(input.prompt);

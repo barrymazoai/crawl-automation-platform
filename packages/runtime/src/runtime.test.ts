@@ -6,7 +6,7 @@ import readline from "node:readline";
 import { PassThrough } from "node:stream";
 import type { ChildProcessWithoutNullStreams } from "node:child_process";
 import { describe, expect, it, vi } from "vitest";
-import { CodexAppServerRunner, LocalCheckpointStore, buildBrowserCapturePrompt, classifyUrl } from "./index";
+import { CodexAppServerRunner, LocalCheckpointStore, NodeApiClient, buildBrowserCapturePrompt, classifyUrl, codexExecutionPolicyArgs } from "./index";
 
 function fakeAppServer() {
   const stdin = new PassThrough();
@@ -79,6 +79,76 @@ describe("runtime routing", () => {
     expect(store.getCodexSession("job-1")).toMatchObject({ threadId: "thread-1", turnId: "turn-1", runner: "app-server" });
     store.close();
     await fs.rm(directory, { recursive: true, force: true });
+  });
+
+  it("retries a transient job start without retrying job claims", async () => {
+    const reset = Object.assign(new Error("socket reset"), { code: "ECONNRESET" });
+    const startFetch = vi.fn<typeof fetch>()
+      .mockRejectedValueOnce(new TypeError("fetch failed", { cause: reset }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ success: true }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }));
+    const client = new NodeApiClient({
+      baseUrl: "https://control.example",
+      token: "node-token",
+      nodeId: "mac-1",
+      fetchImpl: startFetch,
+      retryAttempts: 2,
+      retryBaseDelayMs: 0,
+      retryMaxDelayMs: 0,
+      requestTimeoutMs: 1_000,
+    });
+
+    await expect(client.start("job-1", "lease-token")).resolves.toEqual({ success: true });
+    expect(startFetch).toHaveBeenCalledTimes(2);
+    expect(startFetch.mock.calls.map(([url]) => String(url))).toEqual([
+      "https://control.example/v1/node/jobs/job-1/start",
+      "https://control.example/v1/node/jobs/job-1/start",
+    ]);
+
+    const claimFetch = vi.fn<typeof fetch>().mockRejectedValue(new TypeError("fetch failed", { cause: reset }));
+    const claimClient = new NodeApiClient({
+      baseUrl: "https://control.example",
+      token: "node-token",
+      nodeId: "mac-1",
+      fetchImpl: claimFetch,
+      retryAttempts: 4,
+      retryBaseDelayMs: 0,
+      retryMaxDelayMs: 0,
+    });
+    await expect(claimClient.claim(["process"])).rejects.toThrow("fetch failed");
+    expect(claimFetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("retries transient artifact downloads and only writes the complete response", async () => {
+    const directory = await fs.mkdtemp(path.join(os.tmpdir(), "crawl-download-"));
+    const target = path.join(directory, "artifact.zip");
+    const reset = Object.assign(new Error("socket reset"), { code: "ECONNRESET" });
+    const fetchImpl = vi.fn<typeof fetch>()
+      .mockRejectedValueOnce(new TypeError("fetch failed", { cause: reset }))
+      .mockResolvedValueOnce(new Response(Buffer.from("complete artifact"), { status: 200 }));
+    const client = new NodeApiClient({
+      baseUrl: "https://control.example",
+      token: "node-token",
+      nodeId: "mac-1",
+      fetchImpl,
+      retryAttempts: 2,
+      retryBaseDelayMs: 0,
+      retryMaxDelayMs: 0,
+      transferTimeoutMs: 1_000,
+    });
+
+    await client.download("https://artifacts.example/file.zip", target);
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+    expect(await fs.readFile(target, "utf8")).toBe("complete artifact");
+    await fs.rm(directory, { recursive: true, force: true });
+  });
+
+  it("uses one compatible Codex approval and sandbox policy", () => {
+    expect(codexExecutionPolicyArgs()).toEqual(["--skip-git-repo-check", "--approve-for-me"]);
+    expect(codexExecutionPolicyArgs()).not.toContain("--sandbox");
+    expect(codexExecutionPolicyArgs(true)).toEqual(["--skip-git-repo-check", "--dangerously-bypass-approvals-and-sandbox"]);
   });
 
   it("runs and resumes structured App Server turns over stdio", async () => {

@@ -124,11 +124,11 @@ async function uploadBatch(claim: any, jobDirectory: string, batch: { ordinal: n
 
 async function handle(claim: any, lane: WorkerLane) {
   const { job, lease } = claim; active.add(job.id);
-  const jobDirectory = path.resolve(env.WORK_ROOT, job.runId, job.id);
-  await fs.mkdir(jobDirectory, { recursive: true });
-  checkpoints.save(job.id, "capture", "leased", { url: job.source.url }, lease.token);
-  await client.start(job.id, lease.token);
   try {
+    const jobDirectory = path.resolve(env.WORK_ROOT, job.runId, job.id);
+    await fs.mkdir(jobDirectory, { recursive: true });
+    checkpoints.save(job.id, "capture", "leased", { url: job.source.url }, lease.token);
+    await client.start(job.id, lease.token);
     await withLeaseHeartbeat({ client, jobId: job.id, leaseToken: lease.token, signal: controller.signal }, async (signal) => {
       const uploaded = new Map<number, string>(); let watcherStopped = false; let watcherError: unknown;
       const scan = async () => {
