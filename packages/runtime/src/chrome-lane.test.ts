@@ -23,7 +23,7 @@ describe("Chrome worker lanes", () => {
       LOCALAPPDATA: "C:\\Users\\Barry\\AppData\\Local",
       PROGRAMFILES: "C:\\Program Files",
       "PROGRAMFILES(X86)": "C:\\Program Files (x86)",
-    })).toContain("C:\\Users\\Barry\\AppData\\Local/Google/Chrome/Application/chrome.exe");
+    })).toContain("C:\\Users\\Barry\\AppData\\Local\\Google\\Chrome\\Application\\chrome.exe");
   });
 
   it("does not become healthy until CDP and the Playwright preflight pass", async () => {
