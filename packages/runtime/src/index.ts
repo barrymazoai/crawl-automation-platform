@@ -11,6 +11,7 @@ import type { JobStage, NodeCapability } from "@crawl-automation/contracts";
 import type { CodexRunInput, CodexRunner } from "./codex-runner";
 
 export { CodexAppServerError, CodexAppServerRunner, type CodexAppServerOptions } from "./codex-app-server";
+export { allocateLoopbackPort, chromeExecutableCandidates, resolveChromeExecutable, startChromeLane, type ChromeLane } from "./chrome-lane";
 export type { CodexRunInput, CodexRunner, CodexSession } from "./codex-runner";
 
 export class ApiError extends Error {
@@ -38,8 +39,8 @@ export function classifyUrl(raw: string) {
   };
 }
 
-export function buildBrowserCapturePrompt(input: { url: string; runId: string; jobDirectory: string; nodeId: string }) {
-  return `你是 Browser Node 上的单站点抓取 Worker，只处理当前任务。\n\n任务 ID：${input.runId}\n节点：${input.nodeId}\n网站：${input.url}\n任务目录：${input.jobDirectory}\n\n开始前拉取 crawl-products Skill 的最新代码，然后完整读取并使用该 Skill。使用本机可编程 Chrome 完成目录发现和页面证据抓取。控制器负责并发、租约、重试和上传；不要访问控制面或业务数据库。\n\n每个可售变体必须作为独立候选项，保留真实 SKU；没有 SKU 时写 sku=null、skuMissing=true，禁止编造。保存清洗后的正文、关键 DOM/JSON、原始图片和必要截图，把语义判断、OCR、最终规范化和入库留给 Mac Worker。\n\n每完成 25–50 个变体生成一个不可变 EvidenceBundleV1 批次并立即发布。遇到登录墙、验证码、站点范围歧义或证据冲突时返回 needs_review。目录耗尽并完成 Manifest 对账后才返回 complete。`;
+export function buildBrowserCapturePrompt(input: { url: string; runId: string; jobDirectory: string; nodeId: string; laneId?: number; cdpUrl?: string }) {
+  return `你是 Browser Node 上的单站点抓取 Worker，只处理当前任务。\n\n任务 ID：${input.runId}\n节点：${input.nodeId}\nLane：${input.laneId ?? 1}\n网站：${input.url}\n任务目录：${input.jobDirectory}\n\n开始前拉取 crawl-products Skill 的最新代码，然后完整读取并使用该 Skill。当前是 worker_cdp 自动化模式：必须读取 Skill 的 worker-cdp-browser reference，使用 crawl-products/lib/worker-cdp-browser.mjs 连接环境变量 CRAWL_BROWSER_CDP_URL。禁止调用 agent.browsers、@Chrome 或 In-App Browser，也不要启动另一个 Chrome；控制器已经为本 Lane 启动并通过门禁的独立 Chrome（${input.cdpUrl ?? "见环境变量"}）。\n\n先建立 worker_cdp binding、tab 和 workerHooks，再探测 Shopify。主机 HTTP 探测返回 null 时不代表非 Shopify：先打开入口页，再用 createBrowserJsonFetcher(tab) 重试同源 products.json，并把同一 fetchJson 传给 createShopifyHarvestHooks。所有原始图片和平台变体 JSON 必须使用 workerHooks 通过 Chrome 获取，禁止在主机 fetch 失败后静默留下缺图或缺 SKU。只有两个通道都没有 Shopify 正信号时才进入浏览器 Preflight。\n\n控制器负责并发、租约、重试和上传；不要访问控制面或业务数据库。每个可售变体必须作为独立候选项，保留真实 SKU；没有 SKU 时写 sku=null、skuMissing=true，禁止编造。保存清洗后的正文、关键 DOM/JSON、原始图片和必要截图，把语义判断、OCR、最终规范化和入库留给 Mac Worker。\n\n每完成 25–50 个变体生成一个不可变 EvidenceBundleV1 批次并立即发布。遇到登录墙、验证码、站点范围歧义或证据冲突时返回 needs_review。目录耗尽并完成 Manifest 对账后才返回 complete。`;
 }
 
 export class LocalCheckpointStore {
@@ -175,7 +176,7 @@ export async function extractZipSafe(filename: string, destination: string) {
 }
 
 export class CodexProcessRunner implements CodexRunner {
-  constructor(private options: { executable?: string; model?: string; reasoningEffort?: string; unattendedFullAccess?: boolean } = {}) {}
+  constructor(private options: { executable?: string; model?: string; reasoningEffort?: string; unattendedFullAccess?: boolean; env?: NodeJS.ProcessEnv } = {}) {}
   async run(input: CodexRunInput) {
     await fsp.mkdir(path.dirname(input.outputPath), { recursive: true });
     const args = ["exec", "-", "--model", this.options.model ?? "gpt-5.6-luna", "-c", `model_reasoning_effort=${JSON.stringify(this.options.reasoningEffort ?? "medium")}`,
@@ -184,7 +185,7 @@ export class CodexProcessRunner implements CodexRunner {
     if (this.options.unattendedFullAccess) args.push("--dangerously-bypass-approvals-and-sandbox");
     else args.push("--approve-for-me", "--sandbox", "workspace-write");
     const log = fs.createWriteStream(input.eventLogPath, { flags: "a" });
-    const child = spawn(this.options.executable ?? "codex", args, { cwd: input.cwd, stdio: ["pipe", "pipe", "pipe"], windowsHide: true, env: process.env });
+    const child = spawn(this.options.executable ?? "codex", args, { cwd: input.cwd, stdio: ["pipe", "pipe", "pipe"], windowsHide: true, env: { ...process.env, ...this.options.env } });
     child.stdout.pipe(log, { end: false }); child.stderr.pipe(log, { end: false }); child.stdin.end(input.prompt);
     const abort = () => child.kill("SIGTERM"); input.signal?.addEventListener("abort", abort, { once: true });
     const code = await new Promise<number | null>((resolve, reject) => { child.once("error", reject); child.once("close", resolve); })

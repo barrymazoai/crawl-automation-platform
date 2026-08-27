@@ -37,6 +37,7 @@ export type CodexAppServerOptions = {
   reasoningEffort?: string;
   unattendedFullAccess?: boolean;
   requestTimeoutMs?: number;
+  env?: NodeJS.ProcessEnv;
   processFactory?: () => ChildProcessWithoutNullStreams;
 };
 
@@ -81,7 +82,7 @@ export class CodexAppServerRunner implements CodexRunner {
     const child = this.options.processFactory?.() ?? spawn(
       this.options.executable ?? "codex",
       ["app-server", "--stdio"],
-      { stdio: ["pipe", "pipe", "pipe"], windowsHide: true, env: process.env },
+      { stdio: ["pipe", "pipe", "pipe"], windowsHide: true, env: { ...process.env, ...this.options.env } },
     );
     this.child = child;
     const lines = readline.createInterface({ input: child.stdout });

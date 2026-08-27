@@ -61,17 +61,24 @@ description: "用视觉优先的三步 preflight（站点判定 → 路径探索
 
 ## 浏览器
 
-`browserMode` 默认 `"extension"`（本地 Chrome）；公开站点的多任务并发可显式选择 `"iab"`。用户明确选择的浏览器是硬约束，不得静默换成另一种模式；**同模式重建断掉的 binding 不算切换，是 incomplete 恢复的标准动作**。
+浏览器有三种模式：手工会话默认 `"extension"`（本地 Chrome），公开站点可显式选择 `"iab"`；Browser Node 设置 `CRAWL_BROWSER_PROVIDER=worker_cdp` 时必须使用 `"worker_cdp"`。自动化模式先完整读取 [worker-cdp-browser.md](references/worker-cdp-browser.md)，不得调用 `agent.browsers`、`@Chrome` 或 IAB。用户或控制器明确选择的浏览器是硬约束，不得静默换成另一种模式；**同模式重建断掉的 binding 不算切换，是 incomplete 恢复的标准动作**。
 
 唯一的例外（用户长期授权）：**IAB 平台层拒绝访问站点**（如 `iab_site_safety_policy_rejected_navigation`）时，降级为 `extension` 继续，降级原因写入 worker-notes 并在汇报中说明。此例外只覆盖 IAB 自身的访问策略拒绝；站点侧的 challenge、登录墙、TLS 错误不适用，仍按原分类处理。extension 是单租约：批次中多个站点需要它时，只能排队顺序执行，禁止并发。
 
-外部 Chrome 先完整读取 `chrome:control-chrome` 的 `SKILL.md`；In-App Browser 先完整读取 `browser:control-in-app-browser` 的 `SKILL.md`。建立绑定：
+手工外部 Chrome 先完整读取 `chrome:control-chrome` 的 `SKILL.md`；In-App Browser 先完整读取 `browser:control-in-app-browser` 的 `SKILL.md`。建立绑定：
 
 ```js
 if (globalThis.crawlBrowser == null) {
-  const binding = await agent.browsers.get(browserMode); // "extension" 或 "iab"
+  const workerMode = process.env.CRAWL_BROWSER_PROVIDER === "worker_cdp";
+  globalThis.browserMode = workerMode ? "worker_cdp" : (globalThis.browserMode || "extension");
+  if (workerMode && globalThis.workerBrowser == null) {
+    globalThis.workerBrowser = await import(`${SKILL}/lib/worker-cdp-browser.mjs`);
+  }
+  const binding = workerMode
+    ? await workerBrowser.connectWorkerBrowser()
+    : await agent.browsers.get(browserMode); // "extension" 或 "iab"
   await binding.nameSession("🔎 crawl-products <site>");
-  nodeRepl.write(await binding.documentation());
+  if (!workerMode) nodeRepl.write(await binding.documentation());
   globalThis.crawlBrowser = binding;
 }
 globalThis.crawlProductsTab ??= await crawlBrowser.tabs.new();
@@ -98,7 +105,17 @@ globalThis.productSemantics = globalThis.productSemantics
   ?? await import(`${SKILL}/lib/product-semantics.mjs`);
 globalThis.productOutput = globalThis.productOutput
   ?? await import(`${SKILL}/lib/enrich-product-output.mjs`);
-globalThis.browserMode ??= "extension";
+globalThis.workerBrowser = globalThis.workerBrowser
+  ?? await import(`${SKILL}/lib/worker-cdp-browser.mjs`);
+globalThis.browserMode ??= process.env.CRAWL_BROWSER_PROVIDER === "worker_cdp"
+  ? "worker_cdp"
+  : "extension";
+globalThis.workerHooks ??= browserMode === "worker_cdp"
+  ? {
+      fetchImage: workerBrowser.createBrowserImageFetcher(tab),
+      fetchProductData: workerBrowser.createBrowserProductDataFetcher(tab),
+    }
+  : {};
 globalThis.outDir ??= `${nodeRepl.cwd}/.crawl-products/runs/<site>`;
 ```
 
@@ -136,12 +153,23 @@ Preflight A 之前先探测平台数据端点。约 60% 的营养品站是 Shopi
 
 ```js
 globalThis.shopify = globalThis.shopify ?? await import(`${SKILL}/lib/shopify-http.mjs`);
-const probe = await shopify.probeShopifyCatalog(entryUrl);
+let shopifyFetchJson;
+let probe = await shopify.probeShopifyCatalog(entryUrl);
+if (!probe && browserMode === "worker_cdp") {
+  // 主机 TLS/代理失败不能解释成“不是 Shopify”。通过已通过门禁的
+  // lane-local Chrome 建立同源页面，再用页面 fetch 重试。
+  await tab.goto(entryUrl);
+  shopifyFetchJson = workerBrowser.createBrowserJsonFetcher(tab);
+  probe = await shopify.probeShopifyCatalog(entryUrl, { fetchJson: shopifyFetchJson });
+}
 if (probe && probe.multiBrandRetailer) {
   // 综合多品牌卖场（vendor 多样、无主导品牌）→ 出 scope，直接终止，0 条记录
   // entry-decision 记 kind:"multi_brand_retailer"、evidence: vendor 分布
 } else if (probe) {
-  const built = await shopify.createShopifyHarvestHooks(entryUrl);
+  const built = await shopify.createShopifyHarvestHooks(entryUrl, {
+    ...(shopifyFetchJson ? { fetchJson: shopifyFetchJson } : {}),
+  });
+  if (browserMode === "worker_cdp") built.hooks.fetchImage = workerHooks.fetchImage;
   // entry-decision 记 kind:"storefront"、channel:"shopify_http"、商品数 built.productCount
   globalThis.result = await harvest.runHarvest(crawlBrowser, tab, plan, {
     outDir, fields: sourceFields, hooks: built.hooks,   // ← 注入 HTTP hooks，引擎不碰浏览器
@@ -192,6 +220,7 @@ if (!valid) throw new Error(errors.join(","));   // 缺终止契约=回 Prefligh
 globalThis.result = await harvest.runHarvest(crawlBrowser, tab, plan, {
   outDir,
   fields: sourceFields,
+  ...(browserMode === "worker_cdp" ? { hooks: workerHooks } : {}),
   // 用户明确只要前 N 个（成本封顶）时才传；命中 maxItems 会以
   // complete + oracle "capped" + result.productLimit.accepted 诚实收尾
   // acceptProductLimit: true,
@@ -211,6 +240,7 @@ switch (result.status) {
   case "incomplete": /* → 修复 binding/tab 后必须 resume：*/
     globalThis.result = await harvest.runHarvest(crawlBrowser, tab, plan, {
       outDir, fields: sourceFields, resume: true,
+      ...(browserMode === "worker_cdp" ? { hooks: workerHooks } : {}),
     });
     break;
   case "terminal":   /* → 带证据报告 */ break;

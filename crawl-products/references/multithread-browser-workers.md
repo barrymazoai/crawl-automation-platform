@@ -6,6 +6,7 @@
 
 - `"extension"`（默认）：`agent.browsers.get("extension")`，保留登录态、代理和本地 Profile；同一个 `extensionInstanceId` 只能安全串行。
 - `"iab"`：`agent.browsers.get("iab")`，适合公开站点的任务隔离并发；不继承用户 Chrome 的 Cookie、登录态、Clash 路由或 Profile。
+- `"worker_cdp"`：Browser Node 为每个 Lane 启动独立 Chrome/Profile/CDP，Skill 用 `worker-cdp-browser.mjs` 连接；每个 Lane 同时只处理一个网站，禁止跨 Lane 复用 binding/tab。
 
 用户明确选择的浏览器模式是硬约束：iab 遇到 challenge/TLS/网络失败必须记录并报告，不得偷偷切到 extension，反之亦然。**同模式重建断掉的 binding 不是切换**，是 `incomplete` 恢复的标准动作。
 
@@ -78,7 +79,7 @@ worker 线程的初始 prompt 就是它的 goal，写成完成契约而不是步
 |---|---|---|
 | tab 污染 | 超时、截图空白、`discardTab` | `replaceTaintedTab()` 换新 tab，同一 binding 内重试一次 |
 | 单页 target 反复崩溃 | 同一商品页连续关闭/超时 | 换 tab 重试一次；仍失败 → 该 **URL** 记 failed 终态（带尝试史），继续其余商品 |
-| binding 丢失 | `tabs.new()` 也失败 | 置 binding 为空 → 重新 `agent.browsers.get(browserMode)` → 新 tab → `runHarvest(..., { resume: true })` |
+| binding 丢失 | `tabs.new()` 也失败 | 置 binding 为空 → 按当前模式重新连接（worker_cdp 重新 `connectWorkerBrowser()`，手工模式重新 `agent.browsers.get()`）→ 新 tab → `runHarvest(..., { resume: true })` |
 | 接口缺失 | 如 iab 无 `tabs.content` | 能力差异，非故障；引擎自动降级为顺序提取，禁止判 terminal 或换浏览器模式 |
 | IAB 平台拒绝访问 | `iab_site_safety_policy_rejected_navigation` 等 | 用户长期授权的唯一换模式场景：降级 `extension` 继续，记入 worker-notes；批次中此类站点进入 extension 顺序队列（单租约，逐站跑） |
 | 线程死亡 | state.json 停滞、任务无响应 | 协调者重发 goal prompt，重入线程从磁盘续 |

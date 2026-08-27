@@ -8,6 +8,7 @@
     "build": "tsdown src/index.ts --format esm",
     "start": "node dist/index.js",
     "smoke:app-server": "pnpm --filter @crawl-automation/runtime build && node scripts/smoke-app-server.mjs",
+    "smoke:browser": "pnpm --filter @crawl-automation/runtime build && node scripts/smoke-browser.mjs",
     "capture:local": "pnpm --filter @crawl-automation/runtime build && node scripts/run-local-capture.mjs",
     "check-types": "tsc --noEmit",
     "test": "vitest run"

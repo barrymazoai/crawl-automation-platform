@@ -91,7 +91,8 @@ export function isMultiBrandRetailer(products, opts = {}) {
 export async function probeShopifyCatalog(input, opts = {}) {
   const base = origin(input);
   if (!base) return null;
-  const body = await fetchJson(`${base}/products.json?limit=250`, opts.timeoutMs);
+  const fetchImpl = opts.fetchJson || fetchJson;
+  const body = await fetchImpl(`${base}/products.json?limit=250`, opts.timeoutMs ?? PROBE_TIMEOUT_MS);
   if (!body || !Array.isArray(body.products)) return null;
   return {
     origin: base,

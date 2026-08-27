@@ -54,6 +54,12 @@ function goodEvidencePackage() {
 }
 
 describe("HarvestPlan validation", () => {
+  it("preserves the Browser Node worker_cdp mode", () => {
+    const input = goodPlan();
+    input.site.browserMode = "worker_cdp";
+    expect(normalizeHarvestPlan(input).site.browserMode).toBe("worker_cdp");
+  });
+
   it("accepts a complete plan and fills default budgets", () => {
     const { valid, errors, plan } = validateHarvestPlan(goodPlan());
     expect(errors).toEqual([]);

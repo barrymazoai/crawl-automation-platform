@@ -1,11 +1,12 @@
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   createShopifyHarvestHooks,
   fetchAllShopifyProducts,
+  probeShopifyCatalog,
   shopifyProductToRecord,
 } from "./shopify-http.mjs";
 import { runHarvest } from "./run-harvest.mjs";
@@ -82,6 +83,17 @@ describe("fetchAllShopifyProducts paging", () => {
     });
     expect(out.products).toHaveLength(20);
     expect(out.truncated).toBe(true);
+  });
+});
+
+describe("Shopify probe transport fallback", () => {
+  it("accepts a browser-backed JSON fetcher when host HTTP is unavailable", async () => {
+    const fetchJson = vi.fn(async () => ({
+      products: [product("alpha", "Alpha", [{ id: 1, option1: "60ct", sku: "A-60", price: "11.90" }])],
+    }));
+    const result = await probeShopifyCatalog("https://shop.test", { fetchJson });
+    expect(result).toMatchObject({ available: true, sampleCount: 1 });
+    expect(fetchJson).toHaveBeenCalledWith("https://shop.test/products.json?limit=250", 12_000);
   });
 });
 

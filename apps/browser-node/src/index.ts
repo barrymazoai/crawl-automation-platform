@@ -1,13 +1,14 @@
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { z } from "zod";
 import {
   CodexAppServerRunner, CodexProcessRunner, LocalCheckpointStore, NodeApiClient, buildBrowserCapturePrompt,
-  runPool, withLeaseHeartbeat, zipDirectory,
+  startChromeLane, withLeaseHeartbeat, zipDirectory,
 } from "@crawl-automation/runtime";
 import type { CodexRunner } from "@crawl-automation/runtime";
+import type { ChromeLane } from "@crawl-automation/runtime";
 
 const env = z.object({
   CONTROL_PLANE_URL: z.url(), NODE_TOKEN: z.string().min(24), NODE_ID: z.string().min(3),
@@ -17,6 +18,9 @@ const env = z.object({
   CODEX_RUNNER: z.enum(["exec", "app-server"]).default("exec"), CODEX_SKILL_PATH: z.string().optional(),
   CODEX_MODEL: z.string().default("gpt-5.6-luna"), CODEX_REASONING_EFFORT: z.string().default("medium"),
   CODEX_UNATTENDED_FULL_ACCESS: z.enum(["true", "false"]).default("false"),
+  CHROME_EXECUTABLE_PATH: z.string().optional(), CHROME_HEADLESS: z.enum(["true", "false"]).default("false"),
+  CHROME_PROFILE_ROOT: z.string().default(path.resolve(".automation-state/chrome")),
+  CHROME_STARTUP_TIMEOUT_MS: z.coerce.number().int().min(1_000).max(120_000).default(20_000),
 }).parse(process.env);
 
 const resultSchema = z.object({
@@ -26,14 +30,75 @@ const resultSchema = z.object({
 });
 const client = new NodeApiClient({ baseUrl: env.CONTROL_PLANE_URL, token: env.NODE_TOKEN, nodeId: env.NODE_ID });
 const checkpoints = new LocalCheckpointStore(env.LOCAL_STATE_DB);
-const runnerOptions = { executable: env.CODEX_EXECUTABLE, model: env.CODEX_MODEL, reasoningEffort: env.CODEX_REASONING_EFFORT, unattendedFullAccess: env.CODEX_UNATTENDED_FULL_ACCESS === "true" };
-const runner: CodexRunner = env.CODEX_RUNNER === "app-server" ? new CodexAppServerRunner(runnerOptions) : new CodexProcessRunner(runnerOptions);
 const skillPath = path.resolve(env.CODEX_SKILL_PATH ?? path.join(env.REPOSITORY_ROOT, "crawl-products", "SKILL.md"));
 const controller = new AbortController();
 const active = new Set<string>();
 let quotaPaused = false;
 
+type WorkerLane = { id: number; chrome: ChromeLane; runner: CodexRunner };
+
 process.on("SIGINT", () => controller.abort()); process.on("SIGTERM", () => controller.abort());
+
+async function preflightWorkerBrowser(cdpUrl: string) {
+  const adapterPath = path.join(env.REPOSITORY_ROOT, "crawl-products", "lib", "worker-cdp-browser.mjs");
+  const adapter = await import(pathToFileURL(adapterPath).href) as {
+    connectWorkerBrowser(input: { cdpUrl: string }): Promise<any>;
+  };
+  const browser = await adapter.connectWorkerBrowser({ cdpUrl });
+  let tab: any;
+  try {
+    tab = await browser.tabs.new();
+    await tab.goto("data:text/html,<title>crawl-browser-ready</title><main>ready</main>");
+    const title = await tab.playwright.evaluate(() => document.title);
+    const screenshot = await tab.screenshot();
+    if (title !== "crawl-browser-ready" || !screenshot?.length) {
+      throw new Error("worker_cdp_preflight_invalid_result");
+    }
+  } finally {
+    await tab?.close().catch(() => {});
+    await browser.disconnect().catch(() => {});
+  }
+}
+
+async function createWorkerLanes() {
+  const lanes: WorkerLane[] = [];
+  for (let laneId = 1; laneId <= env.NODE_CONCURRENCY; laneId += 1) {
+    try {
+      lanes.push(await createWorkerLane(laneId));
+    } catch (error) {
+      console.error(`browser lane ${laneId} unavailable`, error);
+    }
+  }
+  if (lanes.length === 0) throw new Error("no_healthy_browser_lanes");
+  return lanes;
+}
+
+async function createWorkerLane(laneId: number): Promise<WorkerLane> {
+  const chrome = await startChromeLane({
+    id: laneId,
+    profileRoot: env.CHROME_PROFILE_ROOT,
+    ...(env.CHROME_EXECUTABLE_PATH ? { executablePath: env.CHROME_EXECUTABLE_PATH } : {}),
+    headless: env.CHROME_HEADLESS === "true",
+    startupTimeoutMs: env.CHROME_STARTUP_TIMEOUT_MS,
+    preflight: preflightWorkerBrowser,
+  });
+  const runnerOptions = {
+    executable: env.CODEX_EXECUTABLE,
+    model: env.CODEX_MODEL,
+    reasoningEffort: env.CODEX_REASONING_EFFORT,
+    unattendedFullAccess: env.CODEX_UNATTENDED_FULL_ACCESS === "true",
+    env: {
+      CRAWL_BROWSER_PROVIDER: "worker_cdp",
+      CRAWL_BROWSER_CDP_URL: chrome.cdpUrl,
+      CRAWL_BROWSER_LANE_ID: String(laneId),
+    },
+  };
+  const runner: CodexRunner = env.CODEX_RUNNER === "app-server"
+    ? new CodexAppServerRunner(runnerOptions)
+    : new CodexProcessRunner(runnerOptions);
+  console.log(`browser lane ${laneId} ready at ${chrome.cdpUrl}`);
+  return { id: laneId, chrome, runner };
+}
 
 async function listHandoffs(jobDirectory: string) {
   const root = path.join(jobDirectory, "handoff");
@@ -57,7 +122,7 @@ async function uploadBatch(claim: any, jobDirectory: string, batch: { ordinal: n
   return created.artifact.id as string;
 }
 
-async function handle(claim: any) {
+async function handle(claim: any, lane: WorkerLane) {
   const { job, lease } = claim; active.add(job.id);
   const jobDirectory = path.resolve(env.WORK_ROOT, job.runId, job.id);
   await fs.mkdir(jobDirectory, { recursive: true });
@@ -77,10 +142,10 @@ async function handle(claim: any) {
           await new Promise((resolve) => setTimeout(resolve, 1000));
         }
       })();
-      const basePrompt = buildBrowserCapturePrompt({ url: job.source.url, runId: job.runId, jobDirectory, nodeId: env.NODE_ID });
+      const basePrompt = buildBrowserCapturePrompt({ url: job.source.url, runId: job.runId, jobDirectory, nodeId: env.NODE_ID, laneId: lane.id, cdpUrl: lane.chrome.cdpUrl });
       const prompt = `${basePrompt}\n\n每批完成后执行：node apps/browser-node/scripts/publish-capture-batch.mjs <任务目录> <ordinal> <item-count> <staging-directory>，把 staging 批次原子发布到 handoff。最终 batches 必须与已发布 handoff 完全一致。`;
       const previousSession = env.CODEX_RUNNER === "app-server" ? checkpoints.getCodexSession(job.id) : null;
-      const raw = await runner.run({ prompt, cwd: env.REPOSITORY_ROOT, addDirectories: [jobDirectory], schemaPath: fileURLToPath(new URL("../capture-result.schema.json", import.meta.url)),
+      const raw = await lane.runner.run({ prompt, cwd: env.REPOSITORY_ROOT, addDirectories: [jobDirectory], schemaPath: fileURLToPath(new URL("../capture-result.schema.json", import.meta.url)),
         outputPath: path.join(jobDirectory, "capture-result.json"), eventLogPath: path.join(jobDirectory, "codex-events.jsonl"), signal,
         ...(previousSession?.threadId ? { threadId: previousSession.threadId } : {}),
         threadName: `Crawl ${new URL(job.source.url).hostname} · ${job.id.slice(0, 8)}`,
@@ -107,8 +172,35 @@ async function handle(claim: any) {
   } finally { active.delete(job.id); }
 }
 
-await client.register({ name: env.NODE_NAME, platform: `${os.platform()} ${os.release()}`, version: "0.3.0", capabilities: ["browser"], maxConcurrency: env.NODE_CONCURRENCY });
+async function runLane(lane: WorkerLane) {
+  while (!controller.signal.aborted) {
+    try {
+      if (!await lane.chrome.health()) {
+        console.error(`browser lane ${lane.id} lost Chrome; restarting before the next claim`);
+        await lane.runner.close?.();
+        await lane.chrome.close();
+        Object.assign(lane, await createWorkerLane(lane.id));
+        continue;
+      }
+      const claim = quotaPaused ? null : await client.claim(["browser"]);
+      if (claim) await handle(claim, lane);
+      else await new Promise((resolve) => setTimeout(resolve, 5_000));
+    } catch (error) {
+      console.error(`browser lane ${lane.id} error`, error);
+    }
+  }
+}
+
+const lanes = await createWorkerLanes();
+await client.register({ name: env.NODE_NAME, platform: `${os.platform()} ${os.release()}`, version: "0.4.0", capabilities: ["browser"], maxConcurrency: lanes.length });
 const heartbeat = setInterval(() => void client.heartbeat([...active]).catch(console.error), 30_000);
 try {
-  await runPool({ concurrency: env.NODE_CONCURRENCY, signal: controller.signal, claim: () => quotaPaused ? Promise.resolve(null) : client.claim(["browser"]), handle, onError: console.error });
-} finally { clearInterval(heartbeat); await runner.close?.(); checkpoints.close(); }
+  await Promise.all(lanes.map(runLane));
+} finally {
+  clearInterval(heartbeat);
+  await Promise.allSettled(lanes.map(async (lane) => {
+    await lane.runner.close?.();
+    await lane.chrome.close();
+  }));
+  checkpoints.close();
+}

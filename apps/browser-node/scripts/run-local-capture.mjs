@@ -2,8 +2,8 @@ import { randomUUID } from "node:crypto";
 import fs from "node:fs";
 import fsp from "node:fs/promises";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
-import { CodexAppServerRunner, buildBrowserCapturePrompt } from "../../../packages/runtime/dist/index.js";
+import { fileURLToPath, pathToFileURL } from "node:url";
+import { CodexAppServerRunner, buildBrowserCapturePrompt, startChromeLane } from "../../../packages/runtime/dist/index.js";
 
 function parseArgs(argv) {
   const options = { url: null, jobDirectory: null };
@@ -49,11 +49,34 @@ persistSession();
 
 const skillPath = path.join(repositoryRoot, "crawl-products", "SKILL.md");
 const publisherPath = path.join(repositoryRoot, "apps", "browser-node", "scripts", "publish-capture-batch.mjs");
+const chrome = await startChromeLane({
+  id: 1,
+  profileRoot: process.env.CHROME_PROFILE_ROOT ?? path.join(repositoryRoot, ".automation-state", "chrome-local"),
+  executablePath: process.env.CHROME_EXECUTABLE_PATH,
+  headless: process.env.CHROME_HEADLESS === "true",
+  startupTimeoutMs: Number(process.env.CHROME_STARTUP_TIMEOUT_MS || 20_000),
+  preflight: async (cdpUrl) => {
+    const adapter = await import(pathToFileURL(path.join(repositoryRoot, "crawl-products", "lib", "worker-cdp-browser.mjs")).href);
+    const binding = await adapter.connectWorkerBrowser({ cdpUrl });
+    let tab;
+    try {
+      tab = await binding.tabs.new();
+      await tab.goto("data:text/html,<title>crawl-browser-ready</title><main>ready</main>");
+      const title = await tab.playwright.evaluate(() => document.title);
+      if (title !== "crawl-browser-ready" || !(await tab.screenshot())?.length) throw new Error("worker_cdp_preflight_invalid_result");
+    } finally {
+      await tab?.close().catch(() => {});
+      await binding.disconnect().catch(() => {});
+    }
+  },
+});
 const basePrompt = buildBrowserCapturePrompt({
   url: options.url,
   runId: session.runId,
   jobDirectory,
   nodeId: "local-app-server",
+  laneId: 1,
+  cdpUrl: chrome.cdpUrl,
 });
 const prompt = `${basePrompt}
 
@@ -77,6 +100,11 @@ const runner = new CodexAppServerRunner({
   model: process.env.CODEX_MODEL ?? "gpt-5.6-luna",
   reasoningEffort: process.env.CODEX_REASONING_EFFORT ?? "medium",
   unattendedFullAccess: process.env.CODEX_UNATTENDED_FULL_ACCESS === "true",
+  env: {
+    CRAWL_BROWSER_PROVIDER: "worker_cdp",
+    CRAWL_BROWSER_CDP_URL: chrome.cdpUrl,
+    CRAWL_BROWSER_LANE_ID: "1",
+  },
 });
 
 persistSession({ status: "running", result: null, error: null });
@@ -102,4 +130,5 @@ try {
   throw error;
 } finally {
   await runner.close();
+  await chrome.close();
 }
