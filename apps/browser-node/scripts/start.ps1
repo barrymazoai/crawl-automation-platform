@@ -8,5 +8,5 @@ if (Test-Path $envFile) {
   }
 }
 Set-Location $repositoryRoot
-corepack pnpm build
-corepack pnpm --filter @crawl-automation/browser-node start
+pnpm build
+pnpm --filter @crawl-automation/browser-node start
