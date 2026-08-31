@@ -30,12 +30,12 @@ export function buildJobDag(item: DagSource, createId: () => string = randomUUID
   const payload = { url: item.url, sourceType: item.type, adapter: item.adapter };
   if (item.adapter) {
     const captureId = createId();
-    jobs.push([captureId, "capture_catalog", item.adapter, [], 3, payload]);
+    jobs.push([captureId, "capture_catalog", item.adapter, [], 6, payload]);
     return { firstJobId: captureId, jobs };
   }
   const browserId = createId(), convertId = createId();
-  jobs.push([browserId, "capture", "browser", [], 3, payload]);
-  jobs.push([convertId, "capture_catalog", "dtc", [browserId], 2, { ...payload, sourceJobId: browserId }]);
+  jobs.push([browserId, "capture", "browser", [], 6, payload]);
+  jobs.push([convertId, "capture_catalog", "dtc", [browserId], 5, { ...payload, sourceJobId: browserId }]);
   return { firstJobId: browserId, jobs };
 }
 
@@ -327,7 +327,9 @@ export class PipelineRepository {
         await client.query("insert into pipeline_review(id,run_id,job_id,reason_code,reason_message) values($1,$2,$3,$4,$5)", [reviewId, job.run_id, jobId, input.code, input.message]);
         await client.query("update pipeline_run set open_review_count=open_review_count+1,error_code=$2,error_message=$3,updated_at=now() where id=$1", [job.run_id, input.code, input.message]);
       } else if (input.retryable && job.attempt < job.max_attempts) {
-        const delaySeconds = Math.min(300, 2 ** job.attempt * 5);
+        // 退避上限 30 分钟：基础设施故障（站点冷却、服务重启、断网）动辄十几分钟，
+        // 原来 300 秒封顶意味着任务撑不过一次冷却就被判永久失败。
+        const delaySeconds = Math.min(1800, 2 ** job.attempt * 10);
         await client.query(`update pipeline_job set state='retry_wait',available_at=now()+make_interval(secs=>$2),leased_by=null,
           lease_token_hash=null,lease_expires_at=null,error_code=$3,error_message=$4,updated_at=now() where id=$1`, [jobId, delaySeconds, input.code, input.message]);
         await client.query("update pipeline_run set error_code=$2,error_message=$3,updated_at=now() where id=$1", [job.run_id, input.code, input.message]);
@@ -439,10 +441,10 @@ export class PipelineRepository {
         const textId = randomUUID(), joinId = randomUUID(), unifyId = randomUUID();
         const imagesId = input.imagesRequired ? randomUUID() : null;
         const jobs: JobDagEntry[] = [
-          [textId, "process_text", "process_text", [], 2, base],
-          ...(imagesId ? [[imagesId, "process_images", "process_images", [], 2, base] as JobDagEntry] : []),
-          [joinId, "product_join", "product_join", imagesId ? [textId, imagesId] : [textId], 2, base],
-          [unifyId, "product_unify", "product_unify", [joinId], 2, base],
+          [textId, "process_text", "process_text", [], 5, base],
+          ...(imagesId ? [[imagesId, "process_images", "process_images", [], 5, base] as JobDagEntry] : []),
+          [joinId, "product_join", "product_join", imagesId ? [textId, imagesId] : [textId], 5, base],
+          [unifyId, "product_unify", "product_unify", [joinId], 5, base],
         ];
         await this.insertJobs(client, job.run_id, jobs);
         await this.event(client, job.run_id, jobId, "batch.registered", job.leased_by, input);
@@ -466,8 +468,8 @@ export class PipelineRepository {
         )).rows.map((row) => row.id as string);
         const finalizeId = randomUUID(), ingestId = randomUUID(), cleanupId = randomUUID();
         const jobs: JobDagEntry[] = [
-          [finalizeId, "catalog_finalize", "catalog_finalize", [jobId, ...unifyIds], 2, { ...input, sourceJobId: jobId }],
-          [ingestId, "ingest_staging", "ingest_staging", [finalizeId], 2, { sourceJobId: finalizeId }],
+          [finalizeId, "catalog_finalize", "catalog_finalize", [jobId, ...unifyIds], 5, { ...input, sourceJobId: jobId }],
+          [ingestId, "ingest_staging", "ingest_staging", [finalizeId], 5, { sourceJobId: finalizeId }],
           [cleanupId, "cleanup_run", "cleanup_run", [ingestId], 5, { sourceJobId: ingestId }],
         ];
         await this.insertJobs(client, job.run_id, jobs);

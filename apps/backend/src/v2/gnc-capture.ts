@@ -15,6 +15,8 @@ export interface GncCaptureCatalogOptions {
   workRoot: string;
   maxItems: number;
   batchSize: number;
+  /** 每抓一个商品后的额外等待（毫秒），用于控制请求速率避开风控。 */
+  productDelayMs?: number | undefined;
   signal: AbortSignal;
   rotation?: SalesChannelNavigationRotation | undefined;
   registerBatch: (batch: { batchId: string; ordinal: number; itemCount: number; batchDirectory: string; imagesRequired: boolean; exit?: string }) => Promise<unknown>;
@@ -125,6 +127,7 @@ export async function runGncCaptureCatalog(options: GncCaptureCatalogOptions): P
       maxItems: options.maxItems,
       signal: options.signal,
       ...(options.rotation ? { rotation: options.rotation } : {}),
+      ...(options.productDelayMs ? { productDelayMs: options.productDelayMs } : {}),
       onProduct: (product) => publisher.add(product),
     }, discovery.urls);
     await publisher.flush();

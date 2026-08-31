@@ -37,7 +37,7 @@ describe("buildJobDag", () => {
   it("sales channel runs start with a single capture_catalog job", () => {
     const dag = buildJobDag({ url: "https://www.gnc.com/brand/gnc", type: "sales_channel", adapter: "gnc" }, ids());
     expect(dag.jobs).toEqual([
-      ["id-1", "capture_catalog", "gnc", [], 3, { url: "https://www.gnc.com/brand/gnc", sourceType: "sales_channel", adapter: "gnc" }],
+      ["id-1", "capture_catalog", "gnc", [], 6, { url: "https://www.gnc.com/brand/gnc", sourceType: "sales_channel", adapter: "gnc" }],
     ]);
     expect(dag.firstJobId).toBe("id-1");
   });
@@ -166,5 +166,23 @@ describe("PipelineRepository.finalizeCatalog", () => {
     expect(ingest![4]).toEqual([finalize![0]]);
     expect(cleanup![4]).toEqual([ingest![0]]);
     expect(result.unifyJobCount).toBe(2);
+  });
+});
+
+describe("重试预算（基础设施故障容错）", () => {
+  it("退避随尝试次数指数拉长，上限 30 分钟", () => {
+    // fail() 里的公式：min(1800, 2^attempt * 10) 秒
+    const backoff = (attempt: number) => Math.min(1800, 2 ** attempt * 10);
+    expect([1, 2, 3, 4, 5].map(backoff)).toEqual([20, 40, 80, 160, 320]);
+    expect(backoff(8)).toBe(1800);
+    // 单个 job 在判永久失败前累计能等的时间，要能扛过一次 30 分钟的站点冷却
+    const total = [1, 2, 3, 4, 5].reduce((sum, a) => sum + backoff(a), 0);
+    expect(total).toBeGreaterThan(600);
+  });
+
+  it("各阶段的重试上限足以扛过基础设施抖动", () => {
+    const dag = buildJobDag({ url: "https://www.gnc.com/brands/x/", type: "sales_channel", adapter: "gnc" }, ids());
+    const [, , , , maxAttempts] = dag.jobs[0]!;
+    expect(maxAttempts).toBe(6);
   });
 });

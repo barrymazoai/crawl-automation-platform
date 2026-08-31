@@ -37,6 +37,24 @@ export class SalesChannelEgressManager {
     return selection ? { exitId: selection.exit.id, proxyName: selection.exit.proxyName } : null;
   }
 
+  /**
+   * 是否还有未冷却的出口（无副作用）。
+   *
+   * 抓取 worker 在领任务前必须先问这个：出口全部冷却时不要领任务，否则会把
+   * 整个队列拉出来一个个空转失败，用十分钟的冷却赔掉所有任务的重试预算。
+   */
+  hasAvailableExit(channel: string) {
+    const policy = this.policies.get(channel);
+    if (!policy) return true;
+    return this.options.state.current(policy) !== null;
+  }
+
+  /** 全部出口冷却时，最早可用的时间（用于日志说明还要等多久）。 */
+  nextAvailableAt(channel: string) {
+    const policy = this.policies.get(channel);
+    return policy ? this.options.state.nextAvailableAt(policy) : null;
+  }
+
   async prepare(channel: string) {
     const policy = this.policy(channel);
     const selection = this.options.state.current(policy);

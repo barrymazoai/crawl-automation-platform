@@ -134,10 +134,25 @@ export interface GncBrowserCrawlOptions {
   onNavigation?: (event: { kind: "catalog" | "product"; url: string; status: number; traffic: BrowserTraffic; denied: boolean }) => void | Promise<void>;
   /** v2：每成功抓到一个商品（含缓存命中）立即回调，用于边抓边发布 Batch。 */
   onProduct?: (product: ExtractedGncProduct) => void | Promise<void>;
+  /**
+   * 每真实抓取一个商品页后的额外等待（毫秒）。控制整体请求速率、避开站点风控。
+   * 缓存命中的商品不等待——那次没有发出请求。
+   */
+  productDelayMs?: number;
 }
 
 function assertNotAborted(signal: AbortSignal) {
   if (signal.aborted) throw new Error("GNC pipeline aborted");
+}
+
+/** 可被中断信号立即打断的等待，避免停 worker 时还要干等一整个延迟。 */
+function sleep(ms: number, signal: AbortSignal) {
+  if (ms <= 0 || signal.aborted) return Promise.resolve();
+  return new Promise<void>((resolve) => {
+    const timer = setTimeout(finish, ms);
+    function finish() { clearTimeout(timer); signal.removeEventListener("abort", finish); resolve(); }
+    signal.addEventListener("abort", finish, { once: true });
+  });
 }
 
 async function writeJson(filename: string, value: unknown) {
@@ -274,6 +289,7 @@ export async function captureProducts(options: GncBrowserCrawlOptions, initial: 
       bySku.set(product.sku, product);
       await writeJson(path.join(directory, `${product.sku}.json`), product);
       options.rotation?.recordProductSuccess();
+      await sleep(options.productDelayMs ?? 0, options.signal);
     }
   } finally { await holder.close(); }
   const truncated = isGncCaptureIncomplete({

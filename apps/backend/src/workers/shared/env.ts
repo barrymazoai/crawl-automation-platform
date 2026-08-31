@@ -54,6 +54,9 @@ export const stageEnv = {
 /** 抓取入口共用：批量大小与单品牌上限。 */
 export const captureEnv = {
   V2_CAPTURE_BATCH_SIZE: z.coerce.number().int().min(5).max(100).default(25),
+  // 每抓完一个商品的额外等待（毫秒）。这是控制整体速率、避开风控的主要旋钮：
+  // 每商品实测约 17 秒，加 40 秒延迟后有效速率约 63 商品/小时（实测被挑战时是 128/小时）。
+  CAPTURE_PRODUCT_DELAY_MS: z.coerce.number().int().min(0).max(600_000).default(40_000),
   AMAZON_MAX_ITEMS: z.coerce.number().int().min(1).max(2000).default(500),
   GNC_MAX_ITEMS: z.coerce.number().int().min(1).max(5000).default(500),
   SWANSON_MAX_ITEMS: z.coerce.number().int().min(1).max(5000).default(2000),
@@ -75,8 +78,10 @@ export const egressEnv = {
   GNC_EGRESS_POOL: z.string().min(1).default("us-residential-4"),
   GNC_EGRESS_SELECTOR: z.string().min(1).default("GNC出口"),
   GNC_EGRESS_EXITS: z.string().default("texas=美国德州ip,washington=美国华盛顿ip,los-angeles=美国洛杉矶ip,redmond=美国雷德蒙德ip"),
-  GNC_EGRESS_BATCH_SIZE: z.coerce.number().int().min(1).max(500).default(20),
-  GNC_EGRESS_CHALLENGE_COOLDOWN_MS: z.coerce.number().int().min(60_000).max(86_400_000).default(600_000),
+  // 单个出口连续抓多少商品后轮换。调小 = 单个 IP 单次负载更轻。
+  GNC_EGRESS_BATCH_SIZE: z.coerce.number().int().min(1).max(500).default(10),
+  // 被挑战后该出口的冷却。10 分钟太短——轮动一圈用不了 10 分钟，回来时 IP 还没凉透。
+  GNC_EGRESS_CHALLENGE_COOLDOWN_MS: z.coerce.number().int().min(60_000).max(86_400_000).default(1_800_000),
   GNC_EGRESS_NETWORK_FAILURE_COOLDOWN_MS: z.coerce.number().int().min(10_000).max(86_400_000).default(120_000),
   GNC_EGRESS_MAX_FAILURE_RETRIES: z.coerce.number().int().min(1).max(20).default(4),
 } as const;

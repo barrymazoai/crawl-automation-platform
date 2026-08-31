@@ -57,8 +57,21 @@ await startWorker({
   capabilities: ["gnc"],
   sourceAdapters: ["gnc"],
   env,
-  // 方案 6 软阈值：磁盘吃紧时不再领新品牌（当前品牌继续收尾）。
-  canClaim: () => disk.allowNewCatalog(),
+  /**
+   * 领任务前的两道闸门：
+   * 1. 磁盘软阈值——吃紧时不领新品牌（当前品牌继续收尾）。
+   * 2. 出口可用性——四个出口全部冷却（被挑战或断网）时不要领任务。
+   *    没有这道闸门，一次 10 分钟的冷却会让 worker 把整个队列拉出来空转失败，
+   *    十分钟的冷却赔掉上百个任务的重试预算（2026-08-31 实测：95 个任务在一分钟内失败）。
+   */
+  canClaim: async () => {
+    if (!await disk.allowNewCatalog()) return false;
+    if (!egress.hasAvailableExit("gnc")) {
+      console.log(JSON.stringify({ type: "egress_all_cooling_pause_claim", channel: "gnc", nextAvailableAt: egress.nextAvailableAt("gnc") }));
+      return false;
+    }
+    return true;
+  },
   telemetry: async () => {
     const extras: Record<string, unknown> = {};
     const diskState = await diskTelemetry(disk, env.DISK_SOFT_MIN_FREE_GB, env.DISK_HARD_MIN_FREE_GB);
@@ -84,6 +97,7 @@ await startWorker({
       workRoot: env.WORK_ROOT,
       maxItems: env.GNC_MAX_ITEMS,
       batchSize: env.V2_CAPTURE_BATCH_SIZE,
+      productDelayMs: env.CAPTURE_PRODUCT_DELAY_MS,
       signal,
       rotation: egress.rotation("gnc"),
       registerBatch: (batch) => client.registerCaptureBatch(job.id, leaseToken, batch),
