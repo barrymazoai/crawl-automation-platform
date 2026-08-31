@@ -10,7 +10,7 @@ export const jobStages = [
 export const jobStates = ["queued", "leased", "running", "retry_wait", "needs_review", "failed", "completed"] as const;
 export const nodeCapabilities = [
   "browser", "amazon", "gnc", "swanson", "process", "ingest", "cleanup",
-  "process_text", "process_images", "product_join", "product_unify",
+  "dtc", "process_text", "process_images", "product_join", "product_unify",
   "catalog_finalize", "ingest_staging", "cleanup_run",
 ] as const;
 

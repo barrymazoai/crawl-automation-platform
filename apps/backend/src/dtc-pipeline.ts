@@ -241,51 +241,5 @@ ${PRODUCT_UNIFY_PROMPT_RULES}
 ${input.vocabulary.join(" | ")}`;
 }
 
-export async function runDtcProcessing(options: DtcPipelineOptions) {
-  const prepared = await prepareEvidence(options);
-  const outputFile = path.join(options.jobDirectory, "product-batch.json");
-  const vocabulary = await options.supplySmart.loadHealthFunctions();
-  const prompt = buildProcessingPrompt({ sourceUrl: options.sourceUrl, runId: options.runId, semanticInputFile: prepared.semanticInputFile, outputFile, vocabulary });
-  const result = processResultSchema.parse(await options.runProcessor(prompt));
-  if (result.status !== "complete") return { result, batch: null, imageCount: prepared.imageCount };
 
-  const resolved = path.resolve(options.jobDirectory, result.recordsFile);
-  const root = path.resolve(options.jobDirectory);
-  if (resolved !== root && !resolved.startsWith(`${root}${path.sep}`)) throw new Error("处理输出路径越界");
-  const rawBatch = JSON.parse(await fs.readFile(resolved, "utf8"));
-  const normalizedBatch = normalizeDtcBatchShapes(rawBatch);
-  const hydratedBatch = await hydrateProductImagesFromEvidence(normalizedBatch, prepared.semanticInputFile);
-  const batch: ProductBatch = productBatchSchema.parse(hydratedBatch);
-  if (prepared.capturedRecordCount > 0 && batch.products.length === 0) {
-    return {
-      result: {
-        status: "needs_review" as const,
-        recordsFile: result.recordsFile,
-        outputCount: 0,
-        summary: `抓取证据包含 ${prepared.capturedRecordCount} 条商品候选，但 DTC 处理输出为 0；请复核是否误排除了同质多包装或其他可售营养品。`,
-        reasonCode: "dtc_zero_output_with_candidates",
-      },
-      batch: null,
-      imageCount: prepared.imageCount,
-    };
-  }
-  const unifyProblems = findMissingProductUnifyFields(batch);
-  if (unifyProblems.length > 0) {
-    return {
-      result: {
-        status: "needs_review" as const,
-        recordsFile: result.recordsFile,
-        outputCount: batch.products.length,
-        summary: `Product Unify 输出不完整：${unifyProblems.slice(0, 20).join("; ")}`,
-        reasonCode: "dtc_product_unify_incomplete",
-      },
-      batch: null,
-      imageCount: prepared.imageCount,
-    };
-  }
-  await fs.writeFile(resolved, `${JSON.stringify(batch, null, 2)}\n`);
-  if (batch.products.length !== result.outputCount) throw new Error("处理结果 outputCount 与 products 数量不一致");
-  const listingKeys = batch.products.map((product) => `${product.channel}:${product.externalId}`);
-  if (new Set(listingKeys).size !== listingKeys.length) throw new Error("处理结果存在重复 channel+externalId");
-  return { result, batch, batchFile: resolved, imageCount: prepared.imageCount };
-}
+// v1 单体编排 runDtcProcessing 已删除：DTC 现在走 workers/capture-dtc.ts + v2/channels/dtc.ts

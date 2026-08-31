@@ -13,6 +13,22 @@ import { normalizedProductSchema, productBatchSchema, type NormalizedProduct, ty
 
 type ModelCall = (input: { prompt: string; tag: string }) => Promise<string>;
 
+/** discoverCatalog / captureProducts 需要的最小选项集。 */
+export interface SwansonCaptureOptions {
+  url: string;
+  maxItems: number;
+  signal: AbortSignal;
+}
+
+/** extractFacts 需要的最小选项集。 */
+export interface SwansonFactsOptions {
+  jobDirectory: string;
+  runId: string;
+  ocrConcurrency: number;
+  ocr: OcrClient;
+  runModel: ModelCall;
+}
+
 export interface SwansonPipelineOptions {
   url: string;
   runId: string;
@@ -92,7 +108,7 @@ interface CatalogEntry {
   data: ConstructorVariationData;
 }
 
-interface SwansonCatalog {
+export interface SwansonCatalog {
   inputKind: "brand_catalog" | "product" | "search";
   entries: CatalogEntry[];
   expectedCount: number | null;
@@ -101,7 +117,7 @@ interface SwansonCatalog {
   pageCount: number;
 }
 
-interface CapturedSwansonProduct {
+export interface CapturedSwansonProduct {
   externalId: string;
   sku: string | null;
   product: ShopifyProduct;
@@ -183,7 +199,7 @@ export function parseSwansonConstructorPage(value: unknown) {
   return { total: number(response.total_num_results), resultCount: results.length, entries };
 }
 
-async function discoverCatalog(options: SwansonPipelineOptions): Promise<SwansonCatalog> {
+export async function discoverCatalog(options: SwansonCaptureOptions): Promise<SwansonCatalog> {
   const direct = productHandle(options.url);
   if (direct) {
     return {
@@ -237,7 +253,7 @@ async function discoverCatalog(options: SwansonPipelineOptions): Promise<Swanson
   };
 }
 
-async function captureProducts(options: SwansonPipelineOptions, catalog: SwansonCatalog) {
+export async function captureProducts(options: SwansonCaptureOptions, catalog: SwansonCatalog) {
   const products = await mapWithConcurrency(catalog.entries, 4, async (entry) => {
     assertNotAborted(options.signal);
     const productUrl = `https://www.swansonvitamins.com/products/${entry.handle}`;
@@ -260,7 +276,7 @@ async function captureProducts(options: SwansonPipelineOptions, catalog: Swanson
   return products.flat();
 }
 
-function stripHtml(value: string) {
+export function stripHtml(value: string) {
   return value.replace(/<[^>]+>/g, " ").replace(/&nbsp;/g, " ").replace(/&amp;/g, "&").replace(/\s+/g, " ").trim();
 }
 
@@ -277,7 +293,7 @@ async function downloadImages(product: CapturedSwansonProduct, root: string, con
   });
 }
 
-async function extractFacts(options: SwansonPipelineOptions, product: CapturedSwansonProduct): Promise<{ facts: ProductFacts | null; labelText: string | null; ingredients: string[]; review: string | null }> {
+export async function extractFacts(options: SwansonFactsOptions, product: CapturedSwansonProduct): Promise<{ facts: ProductFacts | null; labelText: string | null; ingredients: string[]; review: string | null }> {
   if (product.images.length === 0) return { facts: null, labelText: null, ingredients: [], review: null };
   const images = await downloadImages(product, path.join(options.jobDirectory, "swanson", "images"), options.ocrConcurrency);
   const ocrImages = await mapWithConcurrency(images, options.ocrConcurrency, async (filename, index): Promise<IndexedOcrImage> => {
@@ -381,7 +397,7 @@ function structuredVariant(product: CapturedSwansonProduct, semantic: GncCleanRe
   return variant;
 }
 
-function unifyInput(product: CapturedSwansonProduct, semantic: GncCleanResult): ProductUnifyInput {
+export function unifyInput(product: CapturedSwansonProduct, semantic: GncCleanResult): ProductUnifyInput {
   const attrs = variantAttrs(product);
   return {
     clientRef: product.externalId,
@@ -399,7 +415,7 @@ function normalizeGtin(value: string | null) {
   return /^(?:\d{8}|\d{12,14})$/.test(digits) ? digits : undefined;
 }
 
-function normalizeProduct(product: CapturedSwansonProduct, semantic: GncCleanResult, unified: ProductUnifyResult, domain: string, runId: string, crawlScope: "full" | "partial"): NormalizedProduct {
+export function normalizeProduct(product: CapturedSwansonProduct, semantic: GncCleanResult, unified: ProductUnifyResult, domain: string, runId: string, crawlScope: "full" | "partial"): NormalizedProduct {
   const attrs = variantAttrs(product);
   const variant = { ...unified.variant, ...structuredVariant(product, semantic) };
   if (variant.flavor && /^default title$/i.test(variant.flavor)) delete variant.flavor;
@@ -439,95 +455,5 @@ function normalizeProduct(product: CapturedSwansonProduct, semantic: GncCleanRes
   });
 }
 
-export async function runSwansonPipeline(options: SwansonPipelineOptions): Promise<SwansonPipelineResult> {
-  const root = path.join(options.jobDirectory, "swanson");
-  await fs.mkdir(root, { recursive: true });
-  const catalog = await discoverCatalog(options);
-  await writeJson(path.join(root, "discovery.json"), catalog);
-  if (catalog.entries.length === 0) return { status: "needs_review", reasonCode: "swanson_no_products", summary: "Swanson 页面没有发现商品", itemCount: 0 };
-  const products = await captureProducts(options, catalog);
-  const scopeDecision = decideSalesChannelScope({
-    inputKind: catalog.inputKind,
-    exhausted: catalog.exhausted,
-    truncated: catalog.truncated || products.length > options.maxItems,
-    expectedCount: catalog.expectedCount,
-    discoveredCount: products.length,
-    processedCount: Math.min(products.length, options.maxItems),
-  });
-  const selectedProducts = products.slice(0, options.maxItems);
-  await writeJson(path.join(root, "captured.json"), selectedProducts);
-  const factResults = await mapWithConcurrency(selectedProducts, Math.min(options.ocrConcurrency, 4), (product) => extractFacts(options, product));
-  const vocabulary = await options.supplySmart.loadHealthFunctions();
-  const semanticInputs: GncCleanInput[] = selectedProducts.map((product, index) => ({
-    sku: product.externalId,
-    title: product.product.title,
-    description: stripHtml(product.product.description),
-    details: [product.catalog.data.main_ingred, product.catalog.data.potent, product.catalog.data.pfdesc].filter(Boolean).join("\n"),
-    labelText: factResults[index]?.labelText ?? null,
-    labelIngredients: factResults[index]?.ingredients ?? [],
-  }));
-  const semanticFile = path.join(root, "semantic.json");
-  let semantic = await readJson<{ results: GncCleanResult[]; warnings: string[] }>(semanticFile);
-  if (!semantic) {
-    const outcomes = await mapWithConcurrency(chunk(semanticInputs, 50), 2, async (batch, index) => {
-      const prompt = `${buildGncBatchPrompt(batch, vocabulary)}\nIMPORTANT: Return one object with one string field named payload, and serialize the requested JSON array exactly inside payload.`;
-      return parseGncBatchOutput(await options.runModel({ prompt, tag: `swanson-semantic-${index}` }), batch, vocabulary);
-    });
-    semantic = {
-      results: outcomes.flatMap((outcome) => outcome.results),
-      warnings: outcomes.flatMap((outcome) => outcome.problems),
-    };
-    await writeJson(semanticFile, semantic);
-  }
-  const semanticResults = semantic.results;
-  const semanticById = new Map(semanticResults.map((result) => [result.sku, result]));
-  const unifyFile = path.join(root, "product-unify.json");
-  let unify = await readJson<ProductUnifyOutcome>(unifyFile);
-  if (!unify) {
-    const inputs = selectedProducts.flatMap((product) => {
-      const semantic = semanticById.get(product.externalId);
-      return semantic?.scopeDecision === "included" ? [unifyInput(product, semantic)] : [];
-    });
-    unify = await runProductUnify({ inputs, runModel: options.runModel, tagPrefix: "swanson-unify" });
-    await writeJson(unifyFile, unify);
-  }
-  const unifyById = new Map(unify.results.map((result) => [result.clientRef, result]));
-  const blocking = factResults.flatMap((result) => result.review ? [result.review] : []);
-  const normalized: NormalizedProduct[] = [];
-  const facts: ProductFacts[] = [];
-  const domainCache = new Map<string, string | null>();
-  for (let index = 0; index < selectedProducts.length; index += 1) {
-    const product = selectedProducts[index]!;
-    const semantic = semanticById.get(product.externalId);
-    if (!semantic || semantic.scopeDecision !== "included") continue;
-    const unified = unifyById.get(product.externalId);
-    if (!unified) { blocking.push(`${product.externalId}: Product Unify 没有形成合法结果`); continue; }
-    const brand = product.catalog.brand;
-    if (!domainCache.has(brand)) domainCache.set(brand, await options.supplySmart.resolveCompanyDomain(brand) ?? (/^Swanson(?: Vitamins)?$/i.test(brand) ? "swansonvitamins.com" : null));
-    const domain = domainCache.get(brand);
-    if (!domain) { blocking.push(`${product.externalId}: 品牌「${brand}」无法唯一映射到公司域名`); continue; }
-    normalized.push(normalizeProduct(product, semantic, unified, domain, options.runId, scopeDecision.scope));
-    if (factResults[index]?.facts) facts.push(factResults[index]!.facts!);
-  }
-  const batch: ProductBatch = productBatchSchema.parse({ schemaVersion: "2.0", products: normalized, facts });
-  await writeJson(path.join(root, "product-batch.json"), batch);
-  if (blocking.length > 0) {
-    await writeJson(path.join(root, "review.json"), { blocking, warnings: [...semantic.warnings, ...unify.problems] });
-    return { status: "needs_review", reasonCode: "swanson_data_review", summary: blocking.slice(0, 20).join("; "), itemCount: normalized.length };
-  }
-  const ingested = await options.productWriter.ingestAndValidate(batch, { runId: options.runId, sourceUrl: options.url });
-  if (ingested.problems.length > 0 || ingested.verified !== batch.products.length) {
-    await writeJson(path.join(root, "ingest-review.json"), ingested);
-    return { status: "needs_review", reasonCode: "swanson_ingest_review", summary: ingested.problems.slice(0, 20).join("; ") || "产品库回读数量不一致", itemCount: normalized.length };
-  }
-  await writeJson(path.join(root, "ingest-result.json"), ingested);
-  return {
-    status: "complete",
-    itemCount: normalized.length,
-    discoveredCount: selectedProducts.length,
-    excludedCount: selectedProducts.length - normalized.length,
-    factsCount: facts.length,
-    readbackHash: ingested.readbackHash,
-    summary: `Swanson 完成：发现 ${selectedProducts.length}，入库并回读 ${normalized.length}，Facts ${facts.length}，scope=${scopeDecision.scope}${scopeDecision.reasons.length ? `（${scopeDecision.reasons.join(", ")}）` : ""}`,
-  };
-}
+
+// v1 单体编排 runSwansonPipeline 已删除：Swanson 现在走 workers/capture-swanson.ts + v2/channels/swanson.ts

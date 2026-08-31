@@ -5,9 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/index.ts",
-    "build": "tsdown src/index.ts src/mac-worker.ts src/migrate.ts --format esm",
+    "build": "tsdown src/index.ts src/migrate.ts src/workers/capture-gnc.ts src/workers/capture-amazon.ts src/workers/capture-swanson.ts src/workers/capture-dtc.ts src/workers/text.ts src/workers/image.ts src/workers/unify.ts src/workers/finalize.ts --format esm",
     "start": "node dist/index.js",
-    "start:worker": "node dist/mac-worker.js",
     "backfill:amazon:dry": "tsx scripts/amazon-backfill-dry-run.ts",
     "backfill:amazon:image": "tsx scripts/amazon-backfill-image-lane.ts",
     "backfill:amazon:formula": "tsx scripts/amazon-backfill-formula-dry-run.ts",
@@ -20,7 +19,15 @@
     "gnc:traffic-probe": "tsx scripts/gnc-traffic-probe.ts",
     "migrate": "tsx src/migrate.ts",
     "check-types": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "worker:capture-gnc": "node dist/workers/capture-gnc.js",
+    "worker:capture-amazon": "node dist/workers/capture-amazon.js",
+    "worker:capture-swanson": "node dist/workers/capture-swanson.js",
+    "worker:capture-dtc": "node dist/workers/capture-dtc.js",
+    "worker:text": "node dist/workers/text.js",
+    "worker:image": "node dist/workers/image.js",
+    "worker:unify": "node dist/workers/unify.js",
+    "worker:finalize": "node dist/workers/finalize.js"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "catalog:",

@@ -14,38 +14,33 @@ function nextCronDate(expression: string, timezone: string, currentDate = new Da
 type DagSource = { url: string; type: "dtc_browser" | "sales_channel"; adapter: "amazon" | "gnc" | "swanson" | null };
 export type JobDagEntry = [string, JobStage, NodeCapability, string[], number, unknown];
 
-export function buildJobDag(item: DagSource, createId: () => string = randomUUID, options?: { pipelineV2?: boolean }) {
+/**
+ * v2 并行流水线的初始 DAG。
+ *
+ * Sales Channel（amazon/gnc/swanson）：抓取在 Mac 本地，根节点直接是 capture_catalog。
+ * DTC：浏览器抓取在 Windows（capture），Mac 侧再跑一个 capture_catalog 把证据转成
+ * 统一契约——两者从 capture_catalog 往后完全一致。
+ *
+ * 后续节点全部动态追加：抓取 worker 每发布一个 Batch 调 registerCaptureBatch 追加该
+ * Batch 的处理子 DAG；目录遍历结束调 finalizeCatalog 追加 run 级尾部
+ * （catalog_finalize -> ingest_staging -> cleanup_run）。
+ */
+export function buildJobDag(item: DagSource, createId: () => string = randomUUID) {
   const jobs: JobDagEntry[] = [];
-  if (options?.pipelineV2) {
-    // v2 并行流水线：初始 DAG 只有 capture_catalog。抓取 worker 每发布一个 Batch 调用
-    // registerCaptureBatch 追加该 Batch 的处理子 DAG；目录遍历结束时调用 finalizeCatalog
-    // 追加 run 级尾部（catalog_finalize -> ingest_staging -> cleanup_run）。
+  const payload = { url: item.url, sourceType: item.type, adapter: item.adapter };
+  if (item.adapter) {
     const captureId = createId();
-    const capability: NodeCapability = item.adapter ?? "browser";
-    jobs.push([captureId, "capture_catalog", capability, [], 3, { url: item.url, sourceType: item.type, adapter: item.adapter, pipeline: "v2" }]);
+    jobs.push([captureId, "capture_catalog", item.adapter, [], 3, payload]);
     return { firstJobId: captureId, jobs };
   }
-  const processId = createId(), cleanupId = createId();
-  let firstJobId: string;
-  if (item.adapter === "amazon" || item.adapter === "gnc" || item.adapter === "swanson") {
-    jobs.push([processId, "process", item.adapter, [], 3, { url: item.url, sourceType: item.type, adapter: item.adapter }]);
-    jobs.push([cleanupId, "cleanup", "cleanup", [processId], 5, { sourceJobId: processId }]);
-    firstJobId = processId;
-  } else {
-    const captureId = createId(), ingestId = createId();
-    jobs.push([captureId, "capture", "browser", [], 3, { url: item.url, sourceType: item.type, adapter: null }]);
-    jobs.push([processId, "process", "process", [captureId], 2, { sourceJobId: captureId }]);
-    jobs.push([ingestId, "ingest", "ingest", [processId], 2, { sourceJobId: processId }]);
-    jobs.push([cleanupId, "cleanup", "cleanup", [ingestId], 5, { sourceJobId: ingestId }]);
-    firstJobId = captureId;
-  }
-  return { firstJobId, jobs };
+  const browserId = createId(), convertId = createId();
+  jobs.push([browserId, "capture", "browser", [], 3, payload]);
+  jobs.push([convertId, "capture_catalog", "dtc", [browserId], 2, { ...payload, sourceJobId: browserId }]);
+  return { firstJobId: browserId, jobs };
 }
 
 export class PipelineRepository {
-  // v2Adapters：启用 v2 并行流水线的来源集合（"amazon"|"gnc"|"swanson"|"dtc"）。
-  // 未列入的来源继续走 v1 单体 DAG，保证新旧流程可以按 Adapter 逐个切换。
-  constructor(private pool: Pool, private leaseTtlSeconds = 120, private v2Adapters: ReadonlySet<string> = new Set()) {}
+  constructor(private pool: Pool, private leaseTtlSeconds = 120) {}
 
   private async transaction<T>(action: (client: PoolClient) => Promise<T>) {
     const client = await this.pool.connect();
@@ -417,8 +412,7 @@ export class PipelineRepository {
   }
 
   private async insertJobDag(client: PoolClient, runId: string, item: DagSource) {
-    const pipelineV2 = this.v2Adapters.has(item.adapter ?? "dtc");
-    const { firstJobId, jobs } = buildJobDag(item, randomUUID, { pipelineV2 });
+    const { firstJobId, jobs } = buildJobDag(item);
     await this.insertJobs(client, runId, jobs);
     return firstJobId;
   }

@@ -37,7 +37,7 @@ if (config.mode === "proxy") {
 } else {
   await migrate(config.databaseUrl!);
   const pool = new pg.Pool({ connectionString: config.databaseUrl, max: 12 });
-  const repository = new PipelineRepository(pool, config.leaseTtlSeconds, config.v2Adapters);
+  const repository = new PipelineRepository(pool, config.leaseTtlSeconds);
   const storage = config.s3 ? new ObjectStorage(config.s3) : null;
   mountNodeApi(app, { repository, storage, nodeTokens: config.nodeTokens });
   let scheduling = false;

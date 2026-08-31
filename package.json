@@ -15,8 +15,7 @@
     "test": "vitest run packages apps/backend/src --no-cache && pnpm --dir crawl-products test",
     "dev:web": "pnpm --filter @crawl-automation/web dev",
     "dev:backend": "pnpm --filter @crawl-automation/backend dev",
-    "start:browser-node": "pnpm build && pnpm --filter @crawl-automation/browser-node start",
-    "start:mac-worker": "pnpm build && pnpm --filter @crawl-automation/backend start:worker"
+    "start:browser-node": "pnpm build && pnpm --filter @crawl-automation/browser-node start"
   },
   "devDependencies": {
     "@types/node": "catalog:",

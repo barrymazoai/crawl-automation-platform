@@ -30,54 +30,25 @@ function ids() {
 }
 
 describe("buildJobDag", () => {
-  it("routes DTC through Windows capture, one Mac process, Jakarta ingest, and cleanup", () => {
+
+
+
+
+  it("sales channel runs start with a single capture_catalog job", () => {
+    const dag = buildJobDag({ url: "https://www.gnc.com/brand/gnc", type: "sales_channel", adapter: "gnc" }, ids());
+    expect(dag.jobs).toEqual([
+      ["id-1", "capture_catalog", "gnc", [], 3, { url: "https://www.gnc.com/brand/gnc", sourceType: "sales_channel", adapter: "gnc" }],
+    ]);
+    expect(dag.firstJobId).toBe("id-1");
+  });
+
+  it("DTC runs capture on Windows then converts evidence on the Mac", () => {
     const dag = buildJobDag({ url: "https://example.com", type: "dtc_browser", adapter: null }, ids());
     expect(dag.jobs.map((job) => [job[1], job[2], job[3]])).toEqual([
       ["capture", "browser", []],
-      ["process", "process", ["id-3"]],
-      ["ingest", "ingest", ["id-1"]],
-      ["cleanup", "cleanup", ["id-4"]],
-    ]);
-    expect(dag.firstJobId).toBe("id-3");
-  });
-
-  it("routes Amazon through the fixed Mac adapter without capture or ingest artifacts", () => {
-    const dag = buildJobDag({ url: "https://www.amazon.com/dp/B000000000", type: "sales_channel", adapter: "amazon" }, ids());
-    expect(dag.jobs.map((job) => [job[1], job[2], job[3]])).toEqual([
-      ["process", "amazon", []],
-      ["cleanup", "cleanup", ["id-1"]],
+      ["capture_catalog", "dtc", ["id-1"]],
     ]);
     expect(dag.firstJobId).toBe("id-1");
-  });
-
-  it("routes GNC through its fixed Mac adapter without Windows capture", () => {
-    const dag = buildJobDag({ url: "https://www.gnc.com/whey-protein/379969.html", type: "sales_channel", adapter: "gnc" }, ids());
-    expect(dag.jobs.map((job) => [job[1], job[2], job[3]])).toEqual([
-      ["process", "gnc", []],
-      ["cleanup", "cleanup", ["id-1"]],
-    ]);
-    expect(dag.firstJobId).toBe("id-1");
-  });
-
-  it("routes Swanson through its fixed Mac adapter without Windows capture", () => {
-    const dag = buildJobDag({ url: "https://www.swansonvitamins.com/collections/all?facet.brand=NOW+Foods", type: "sales_channel", adapter: "swanson" }, ids());
-    expect(dag.jobs.map((job) => [job[1], job[2], job[3]])).toEqual([
-      ["process", "swanson", []],
-      ["cleanup", "cleanup", ["id-1"]],
-    ]);
-  });
-
-  it("v2 starts a sales channel run with a single capture_catalog job", () => {
-    const dag = buildJobDag({ url: "https://www.gnc.com/brand/gnc", type: "sales_channel", adapter: "gnc" }, ids(), { pipelineV2: true });
-    expect(dag.jobs).toEqual([
-      ["id-1", "capture_catalog", "gnc", [], 3, { url: "https://www.gnc.com/brand/gnc", sourceType: "sales_channel", adapter: "gnc", pipeline: "v2" }],
-    ]);
-    expect(dag.firstJobId).toBe("id-1");
-  });
-
-  it("v2 routes DTC capture_catalog to the browser capability", () => {
-    const dag = buildJobDag({ url: "https://example.com", type: "dtc_browser", adapter: null }, ids(), { pipelineV2: true });
-    expect(dag.jobs.map((job) => [job[1], job[2]])).toEqual([["capture_catalog", "browser"]]);
   });
 });
 
