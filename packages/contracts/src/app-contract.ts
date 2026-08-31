@@ -20,6 +20,22 @@ export const appContract = {
         completed24h: z.number(),
         avgSeconds24h: z.number().nullable(),
       })).default([]),
+      // 正在执行的 job（流水线泳道卡片用）。
+      activeJobs: z.array(z.object({
+        runId: z.string(),
+        stage: z.string(),
+        state: z.string(),
+        batchId: z.string().nullable(),
+        exit: z.string().nullable(),
+        url: z.string(),
+        adapter: z.string().nullable(),
+      })).default([]),
+      // worker 心跳上报的遥测：磁盘背压、出口轮动（含当前 IP）、Codex 余量。
+      telemetry: z.object({
+        disk: z.object({ nodeId: z.string(), freeGb: z.number(), softGb: z.number(), hardGb: z.number(), state: z.enum(["normal", "soft", "hard"]) }).nullable(),
+        egress: z.object({ channel: z.string(), exitId: z.string(), ip: z.string().nullable(), exits: z.array(z.string()), updatedAt: z.string() }).nullable(),
+        codex: z.object({ fiveHourPercentLeft: z.number().nullable(), weeklyPercentLeft: z.number().nullable(), resetsAt: z.string().nullable(), updatedAt: z.string() }).nullable(),
+      }).default({ disk: null, egress: null, codex: null }),
     })),
   },
   classify: {

@@ -17,9 +17,11 @@ export interface GncCaptureCatalogOptions {
   batchSize: number;
   signal: AbortSignal;
   rotation?: SalesChannelNavigationRotation | undefined;
-  registerBatch: (batch: { batchId: string; ordinal: number; itemCount: number; batchDirectory: string; imagesRequired: boolean }) => Promise<unknown>;
+  registerBatch: (batch: { batchId: string; ordinal: number; itemCount: number; batchDirectory: string; imagesRequired: boolean; exit?: string }) => Promise<unknown>;
   /** 可选：每次 Batch 发布前调用（磁盘硬阈值背压等待）。 */
   beforePublish?: (() => Promise<void>) | undefined;
+  /** 可选：当前出口 id（IP 轮动），标注进 Batch 供网页展示。 */
+  currentExit?: (() => string | null) | undefined;
   finalizeCatalog: (catalog: { inputKind: "brand_catalog" | "product" | "search"; exhausted: boolean; truncated: boolean; expectedCount: number | null; discoveredCount: number; processedCount: number }) => Promise<unknown>;
 }
 
@@ -112,6 +114,7 @@ export async function runGncCaptureCatalog(options: GncCaptureCatalogOptions): P
     imagesRequired: batchImagesRequired,
     registerBatch: options.registerBatch,
     ...(options.beforePublish ? { beforePublish: options.beforePublish } : {}),
+    ...(options.currentExit ? { currentExit: options.currentExit } : {}),
   });
   await publisher.init();
   let capture;

@@ -163,7 +163,9 @@ export class NodeApiClient {
   register(input: { name: string; platform: string; version: string; capabilities: NodeCapability[]; maxConcurrency: number }) {
     return this.request("POST", "/v1/node/register", { nodeId: this.config.nodeId, ...input }, undefined, true);
   }
-  heartbeat(activeJobIds: string[]) { return this.request("POST", "/v1/node/heartbeat", { nodeId: this.config.nodeId, activeJobIds }, undefined, true); }
+  heartbeat(activeJobIds: string[], extras?: Record<string, unknown>) {
+    return this.request("POST", "/v1/node/heartbeat", { nodeId: this.config.nodeId, activeJobIds, ...(extras ? { extras } : {}) }, undefined, true);
+  }
   claim(capabilities: NodeCapability[], sourceAdapters?: SalesChannelAdapter[]) {
     return this.request<any>("POST", "/v1/node/jobs/claim", {
       nodeId: this.config.nodeId,
@@ -178,7 +180,7 @@ export class NodeApiClient {
     return this.request("POST", `/v1/node/jobs/${jobId}/fail`, { leaseToken, ...failure }, `failure:${jobId}:${sha256(JSON.stringify(failure))}`, true);
   }
   // v2：Batch 原子发布（capture.ready.json 就绪）后注册处理子 DAG。幂等键 = 稳定的 batchId。
-  registerCaptureBatch(jobId: string, leaseToken: string, batch: { batchId: string; ordinal: number; itemCount: number; batchDirectory: string; imagesRequired: boolean }) {
+  registerCaptureBatch(jobId: string, leaseToken: string, batch: { batchId: string; ordinal: number; itemCount: number; batchDirectory: string; imagesRequired: boolean; exit?: string | null }) {
     return this.request<{ textJobId: string; imagesJobId: string | null; joinJobId: string; unifyJobId: string }>(
       "POST", `/v1/node/jobs/${jobId}/batches`, { leaseToken, ...batch }, undefined, true,
     );

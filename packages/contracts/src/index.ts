@@ -154,6 +154,15 @@ export const RunListItemSchema = z.object({
   adapter: z.string().nullable(),
   status: z.string(),
   stages: z.record(z.string(), z.string()),
+  // v2：每 stage 的 Batch 级进度（品牌运行矩阵的分段进度条数据源）。
+  stageProgress: z.record(z.string(), z.object({
+    total: z.number().int(),
+    completed: z.number().int(),
+    active: z.number().int(),
+    queued: z.number().int(),
+    review: z.number().int(),
+    failed: z.number().int(),
+  })).default({}),
   itemCount: z.number().int(),
   openReviews: z.number().int(),
   createdAt: IsoDate,

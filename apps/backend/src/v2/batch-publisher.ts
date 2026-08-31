@@ -4,7 +4,7 @@ import { CapturedProductBatchV1Schema, type CapturedProductBatchV1, type Capture
 import { listReadyDirectories, publishReadyMarker, readReadyMarker, writeJsonAtomic } from "@crawl-automation/runtime";
 import { batchDirectory, batchIdFor, READY, relativeBatchDirectory, runRoot } from "./paths.js";
 
-export type BatchRegisterInput = { batchId: string; ordinal: number; itemCount: number; batchDirectory: string; imagesRequired: boolean };
+export type BatchRegisterInput = { batchId: string; ordinal: number; itemCount: number; batchDirectory: string; imagesRequired: boolean; exit?: string };
 
 export interface BatchPublisherConfig<TRaw> {
   channel: string;
@@ -20,6 +20,8 @@ export interface BatchPublisherConfig<TRaw> {
   registerBatch(batch: BatchRegisterInput): Promise<unknown>;
   /** 可选：每次发布前调用（磁盘硬阈值背压在这里等待，方案 6）。 */
   beforePublish?(): Promise<void>;
+  /** 可选：当前出口 id（IP 轮动渠道），标注进 Batch 注册请求供网页展示。 */
+  currentExit?(): string | null;
 }
 
 /**
@@ -81,12 +83,14 @@ export class BatchPublisher<TRaw> {
       products: products.map((product) => this.config.toContract(product)),
     } satisfies CapturedProductBatchV1);
     await writeJsonAtomic(path.join(directory, "batch.json"), batch);
+    const exit = this.config.currentExit?.() ?? null;
     const register: BatchRegisterInput = {
       batchId,
       ordinal,
       itemCount: products.length,
       batchDirectory: relativeBatchDirectory(this.config.runId, batchId),
       imagesRequired: this.config.imagesRequired(products),
+      ...(exit ? { exit } : {}),
     };
     // 标记内容即注册请求：先落标记再注册，重试时 init() 可从标记逐字重放注册。
     await publishReadyMarker(directory, READY.capture, register);

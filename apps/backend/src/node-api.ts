@@ -21,8 +21,13 @@ export function mountNodeApi(app: Hono, options: { repository: PipelineRepositor
   });
   app.post("/v1/node/heartbeat", async (c) => {
     authenticate(c.req.header("authorization"));
-    const input = await body(c, z.object({ nodeId: z.string().min(3), activeJobIds: z.array(z.uuid()).max(16) }));
-    return c.json(await options.repository.heartbeatNode(input.nodeId, input.activeJobIds));
+    const input = await body(c, z.object({
+      nodeId: z.string().min(3),
+      activeJobIds: z.array(z.uuid()).max(16),
+      // worker 遥测（磁盘背压、出口轮动 IP、Codex 余量），透传存进节点 metadata。
+      extras: z.record(z.string(), z.unknown()).optional(),
+    }));
+    return c.json(await options.repository.heartbeatNode(input.nodeId, input.activeJobIds, input.extras));
   });
   app.post("/v1/node/jobs/claim", async (c) => {
     const allowed = authenticate(c.req.header("authorization"));
@@ -66,6 +71,7 @@ export function mountNodeApi(app: Hono, options: { repository: PipelineRepositor
       itemCount: z.number().int().positive(),
       batchDirectory: z.string().min(1),
       imagesRequired: z.boolean(),
+      exit: z.string().min(1).max(64).nullish(),
     }));
     const { leaseToken, ...batch } = input;
     return c.json(await options.repository.registerCaptureBatch(c.req.param("id"), leaseToken, batch), 201);

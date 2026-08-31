@@ -1,3 +1,4 @@
+import { exec, execFile } from "node:child_process";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -79,6 +80,10 @@ const env = z.object({
   // 方案 6：磁盘背压阈值（GB），只作用于抓取。软阈值不领新目录；硬阈值暂停发布 Batch。
   DISK_SOFT_MIN_FREE_GB: z.coerce.number().min(1).max(1000).default(40),
   DISK_HARD_MIN_FREE_GB: z.coerce.number().min(1).max(1000).default(15),
+  // 遥测（可选）：经此 HTTP 代理回显出口真实 IP（如 Clash mixed 端口 http://127.0.0.1:7897）。
+  SALES_CHANNEL_PROXY_URL: z.url().optional(),
+  // 遥测（可选）：Codex 余量查询命令，需输出 JSON {fiveHourPercentLeft, weeklyPercentLeft, resetsAt?}，每 5 分钟执行一次。
+  CODEX_USAGE_COMMAND: optionalSecret,
   SALES_CHANNEL_EGRESS_ENABLED: z.enum(["true", "false"]).default("false"),
   SALES_CHANNEL_EGRESS_STATE_DB: z.string().default(path.resolve(".automation-state/sales-channel-egress.sqlite")),
   SALES_CHANNEL_EGRESS_PROFILE_ROOT: z.string().default(path.resolve(".automation-state/sales-channel-egress-chrome")),
@@ -335,6 +340,71 @@ const diskGuard = new DiskGuard({
   hardMinFreeGb: env.DISK_HARD_MIN_FREE_GB,
   log: (event) => console.log(JSON.stringify(event)),
 });
+
+// ── 心跳遥测：磁盘背压、出口轮动 IP、Codex 余量（后两者 5 分钟缓存，控制面经 summary 透出给网页） ──
+const TELEMETRY_TTL_MS = 5 * 60_000;
+let egressIpCache: { exitId: string; ip: string | null; at: number } | null = null;
+async function currentEgressIp(exitId: string) {
+  if (!env.SALES_CHANNEL_PROXY_URL) return null;
+  if (egressIpCache && egressIpCache.exitId === exitId && Date.now() - egressIpCache.at < TELEMETRY_TTL_MS) return egressIpCache.ip;
+  const ip = await new Promise<string | null>((resolve) => {
+    execFile("curl", ["-sf", "--max-time", "8", "-x", env.SALES_CHANNEL_PROXY_URL!, "https://api.ipify.org"], (error, stdout) => {
+      resolve(error ? null : /^[0-9a-fA-F.:]{3,45}$/.test(stdout.trim()) ? stdout.trim() : null);
+    });
+  });
+  egressIpCache = { exitId, ip, at: Date.now() };
+  return ip;
+}
+let codexUsageCache: { value: Record<string, unknown> | null; at: number } | null = null;
+async function codexUsage() {
+  if (!env.CODEX_USAGE_COMMAND) return null;
+  if (codexUsageCache && Date.now() - codexUsageCache.at < TELEMETRY_TTL_MS) return codexUsageCache.value;
+  const value = await new Promise<Record<string, unknown> | null>((resolve) => {
+    exec(env.CODEX_USAGE_COMMAND!, { timeout: 30_000 }, (error, stdout) => {
+      if (error) return resolve(null);
+      try {
+        const parsed = z.object({
+          fiveHourPercentLeft: z.number().min(0).max(100).nullish(),
+          weeklyPercentLeft: z.number().min(0).max(100).nullish(),
+          resetsAt: z.string().nullish(),
+        }).parse(JSON.parse(stdout));
+        resolve({
+          fiveHourPercentLeft: parsed.fiveHourPercentLeft ?? null,
+          weeklyPercentLeft: parsed.weeklyPercentLeft ?? null,
+          resetsAt: parsed.resetsAt ?? null,
+          updatedAt: new Date().toISOString(),
+        });
+      } catch { resolve(null); }
+    });
+  });
+  codexUsageCache = { value, at: Date.now() };
+  return value;
+}
+async function telemetryExtras() {
+  const extras: Record<string, unknown> = {};
+  const freeGb = await diskGuard.freeGb().catch(() => null);
+  if (freeGb != null) {
+    extras.disk = {
+      freeGb: Math.round(freeGb * 10) / 10,
+      softGb: env.DISK_SOFT_MIN_FREE_GB,
+      hardGb: env.DISK_HARD_MIN_FREE_GB,
+      state: freeGb < env.DISK_HARD_MIN_FREE_GB ? "hard" : freeGb < env.DISK_SOFT_MIN_FREE_GB ? "soft" : "normal",
+    };
+  }
+  const exit = egressManager?.currentExit("gnc");
+  if (exit && gncEgressPolicy) {
+    extras.egress = {
+      channel: "gnc",
+      exitId: exit.exitId,
+      ip: await currentEgressIp(exit.exitId),
+      exits: gncEgressPolicy.exits.map((entry) => entry.id),
+      updatedAt: new Date().toISOString(),
+    };
+  }
+  const usage = await codexUsage();
+  if (usage) extras.codex = usage;
+  return extras;
+}
 // 渠道钩子注册表：阶段 4 迁移 Amazon/Swanson/DTC 时只在这里加一行 + 实现 v2/channels/<channel>.ts。
 const v2Channels: Record<string, ChannelHooks<any, any, any>> = {
   gnc: createGncChannelHooks({ pdfRenderScript: env.GNC_PDF_RENDER_SCRIPT }),
@@ -458,6 +528,7 @@ async function handle(claim: any) {
           registerBatch: (batch) => client.registerCaptureBatch(job.id, lease.token, batch),
           finalizeCatalog: (catalog) => client.finalizeCatalog(job.id, lease.token, catalog),
           beforePublish: () => diskGuard.waitForPublishAllowance(signal),
+          currentExit: () => egressManager?.currentExit("gnc")?.exitId ?? null,
         });
         if (output.status === "needs_review") {
           await failForReview(claim, output.reasonCode, output.summary);
@@ -520,7 +591,9 @@ await client.register({
   capabilities: nodeCapabilities,
   maxConcurrency: env.NODE_MAX_CONCURRENCY,
 });
-const heartbeat = setInterval(() => void client.heartbeat([...active]).catch(console.error), 30_000);
+const heartbeat = setInterval(() => {
+  void telemetryExtras().then((extras) => client.heartbeat([...active], extras)).catch(console.error);
+}, 30_000);
 try {
   await runPool({
     concurrency: env.NODE_MAX_CONCURRENCY,

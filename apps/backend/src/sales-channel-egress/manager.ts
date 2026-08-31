@@ -29,6 +29,14 @@ export class SalesChannelEgressManager {
     }
   }
 
+  /** 当前生效出口（无副作用，供遥测与 Batch 标注使用）。 */
+  currentExit(channel: string) {
+    const policy = this.policies.get(channel);
+    if (!policy) return null;
+    const selection = this.options.state.current(policy);
+    return selection ? { exitId: selection.exit.id, proxyName: selection.exit.proxyName } : null;
+  }
+
   async prepare(channel: string) {
     const policy = this.policy(channel);
     const selection = this.options.state.current(policy);

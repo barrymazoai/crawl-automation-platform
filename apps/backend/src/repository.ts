@@ -68,7 +68,7 @@ export class PipelineRepository {
   }
 
   async summary() {
-    const [runs, nodes, jobs, stages] = await Promise.all([
+    const [runs, nodes, jobs, stages, activeJobs, nodeRows] = await Promise.all([
       this.pool.query(`select count(*)::int total,
         count(*) filter(where status in ('queued','active','retry_wait') and open_review_count=0)::int active,
         count(*) filter(where status not in ('completed','failed','abandoned') and open_review_count>0)::int needs_review,
@@ -85,8 +85,18 @@ export class PipelineRepository {
         count(*) filter(where state='completed' and completed_at>now()-interval '24 hours')::int completed_24h,
         round(avg(extract(epoch from completed_at-started_at)) filter(where state='completed' and completed_at>now()-interval '24 hours'))::int avg_seconds_24h
         from pipeline_job group by stage order by stage`),
+      this.pool.query(`select j.run_id, j.stage, j.state, j.payload->>'batchId' batch_id, j.payload->>'exit' exit, s.url, s.adapter
+        from pipeline_job j join pipeline_run r on r.id=j.run_id join pipeline_source s on s.id=r.source_id
+        where j.state in ('leased','running') order by j.updated_at desc limit 30`),
+      this.pool.query(`select id, metadata from pipeline_node where last_seen_at>now()-interval '2 minutes' order by last_seen_at desc`),
     ]);
     const r = runs.rows[0]; const n = nodes.rows[0];
+    // 遥测：取各在线节点上报的 extras，磁盘取可用空间最小的节点，出口/Codex 取最新一份。
+    const extras = nodeRows.rows.map((row) => ({ nodeId: row.id as string, ...(row.metadata?.extras ?? {}) }));
+    const disks = extras.filter((entry) => entry.disk).map((entry) => ({ nodeId: entry.nodeId, ...entry.disk }));
+    const disk = disks.sort((a, b) => a.freeGb - b.freeGb)[0] ?? null;
+    const egress = extras.find((entry) => entry.egress)?.egress ?? null;
+    const codex = extras.find((entry) => entry.codex)?.codex ?? null;
     return {
       runs: { total: r.total, active: r.active, needsReview: r.needs_review, failed: r.failed, completed: r.completed },
       nodes: { total: n.total, online: n.online },
@@ -95,6 +105,11 @@ export class PipelineRepository {
         stage: row.stage, queued: row.queued, active: row.active, needsReview: row.needs_review,
         completed1h: row.completed_1h, completed24h: row.completed_24h, avgSeconds24h: row.avg_seconds_24h,
       })),
+      activeJobs: activeJobs.rows.map((row) => ({
+        runId: row.run_id, stage: row.stage, state: row.state, batchId: row.batch_id ?? null,
+        exit: row.exit ?? null, url: row.url, adapter: row.adapter ?? null,
+      })),
+      telemetry: { disk, egress, codex },
     };
   }
 
@@ -160,15 +175,29 @@ export class PipelineRepository {
     values.push(limit);
     const result = await this.pool.query(
       `select r.id,s.url,s.source_type,s.adapter,r.status,r.item_count,r.open_review_count,r.created_at,r.updated_at,
-        coalesce(jsonb_object_agg(j.stage,j.state) filter(where j.id is not null),'{}'::jsonb) stages
-       from pipeline_run r join pipeline_source s on s.id=r.source_id left join pipeline_job j on j.run_id=r.id
+        coalesce(p.stages,'{}'::jsonb) stages, coalesce(p.progress,'{}'::jsonb) stage_progress
+       from pipeline_run r join pipeline_source s on s.id=r.source_id
+       left join lateral (
+         select jsonb_object_agg(g.stage, g.last_state) stages, jsonb_object_agg(g.stage, g.counts) progress
+         from (
+           select j.stage, (array_agg(j.state order by j.created_at desc))[1] last_state,
+             jsonb_build_object(
+               'total', count(*),
+               'completed', count(*) filter(where j.state='completed'),
+               'active', count(*) filter(where j.state in ('leased','running')),
+               'queued', count(*) filter(where j.state in ('queued','retry_wait')),
+               'review', count(*) filter(where j.state='needs_review'),
+               'failed', count(*) filter(where j.state='failed')) counts
+           from pipeline_job j where j.run_id=r.id group by j.stage
+         ) g
+       ) p on true
        ${where.length ? `where ${where.join(" and ")}` : ""}
-       group by r.id,s.url,s.source_type,s.adapter order by r.created_at desc limit $${values.length}`,
+       order by r.created_at desc limit $${values.length}`,
       values,
     );
     return result.rows.map((row) => ({
       id: row.id, url: row.url, sourceType: row.source_type, adapter: row.adapter, status: row.status,
-      stages: row.stages, itemCount: row.item_count, openReviews: row.open_review_count,
+      stages: row.stages, stageProgress: row.stage_progress, itemCount: row.item_count, openReviews: row.open_review_count,
       createdAt: iso(row.created_at), updatedAt: iso(row.updated_at),
     }));
   }
@@ -207,8 +236,12 @@ export class PipelineRepository {
     return { success: true };
   }
 
-  async heartbeatNode(nodeId: string, activeJobIds: string[]) {
-    await this.pool.query("update pipeline_node set last_seen_at=now(),metadata=jsonb_set(metadata,'{reportedActiveJobs}',$2::jsonb),updated_at=now() where id=$1", [nodeId, JSON.stringify(activeJobIds)]);
+  async heartbeatNode(nodeId: string, activeJobIds: string[], extras?: Record<string, unknown>) {
+    await this.pool.query(
+      `update pipeline_node set last_seen_at=now(),
+        metadata=metadata||jsonb_build_object('reportedActiveJobs',$2::jsonb)||coalesce($3::jsonb,'{}'::jsonb),updated_at=now() where id=$1`,
+      [nodeId, JSON.stringify(activeJobIds), extras ? JSON.stringify({ extras, extrasAt: new Date().toISOString() }) : null],
+    );
     return { success: true, serverTime: new Date().toISOString() };
   }
 
@@ -403,12 +436,12 @@ export class PipelineRepository {
    * 为该 Batch 追加处理子 DAG：process_text (+ process_images) -> product_join -> product_unify。
    * 幂等键使用稳定的 batchId；内容（fingerprint）不一致时按设计报错暴露，不静默放行。
    */
-  async registerCaptureBatch(jobId: string, token: string, input: { batchId: string; ordinal: number; itemCount: number; batchDirectory: string; imagesRequired: boolean }) {
+  async registerCaptureBatch(jobId: string, token: string, input: { batchId: string; ordinal: number; itemCount: number; batchDirectory: string; imagesRequired: boolean; exit?: string | null | undefined }) {
     return this.transaction(async (client) => {
       return this.idempotent(client, `batch:${jobId}`, input.batchId, input, async () => {
         const job = await this.requireLease(client, jobId, token);
         if (job.stage !== "capture_catalog") throw new Error("只有 capture_catalog job 可以注册 Capture Batch");
-        const base = { batchId: input.batchId, ordinal: input.ordinal, itemCount: input.itemCount, batchDirectory: input.batchDirectory, sourceJobId: jobId };
+        const base = { batchId: input.batchId, ordinal: input.ordinal, itemCount: input.itemCount, batchDirectory: input.batchDirectory, sourceJobId: jobId, ...(input.exit ? { exit: input.exit } : {}) };
         const textId = randomUUID(), joinId = randomUUID(), unifyId = randomUUID();
         const imagesId = input.imagesRequired ? randomUUID() : null;
         const jobs: JobDagEntry[] = [
