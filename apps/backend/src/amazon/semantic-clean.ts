@@ -120,8 +120,8 @@ Rules:
 - scope_evidence: 1-5 short excerpts from TITLE/FORM_FIELD/BULLETS/DESC/APLUS/INGREDIENTS_RAW that justify the decision. Never invent evidence.
 - health_functions: pick ONLY from the allowed list below. Choose 1-4 that the marketing copy actually claims. Empty array if none apply. Never invent a value outside the list.
 - product_form: one of ${PRODUCT_FORMS.join("/")}. Prefer FORM_FIELD when present, otherwise infer from the copy.
-- ingredients: segment INGREDIENTS_RAW into individual ingredient names. Drop anything that is not an ingredient (allergen warnings, disclaimers, "labeling", "treat", "cure", legal text). Keep the original spelling. Empty array if INGREDIENTS_RAW is empty or contains no real ingredients.
-- A record cannot be included with an empty ingredients array. This product batch has no separate formula field inside each product, so formula/Facts evidence must be materialized into ingredient names before inclusion.
+- ingredients: extract ingredient names explicitly stated anywhere in TITLE/BULLETS/DESC/APLUS/INGREDIENTS_RAW. Prefer a dedicated INGREDIENTS_RAW list when present. Drop anything that is not an ingredient (claims, allergen warnings, disclaimers, legal text). Keep the original spelling. Empty array when none of the supplied text explicitly names an ingredient; never infer ingredients from a product-line name or health claim.
+- Missing text ingredients alone is not a reason to exclude an otherwise explicit oral nutrition product. The next pipeline stage reads label images and can supply Facts/formula evidence. Keep ingredients as an empty array when the page text does not expose them; never invent them.
 
 Output ONLY a JSON array, one object per ASIN, in the same order:
 [{"asin": string, "scope_decision": "included"|"excluded", "scope_reason": string, "scope_evidence": string[], "health_functions": string[], "product_form": string, "ingredients": string[]}]
@@ -176,16 +176,17 @@ export function enforceNutritionScope(
 	input: CleanInput,
 	result: CleanResult,
 ): CleanResult {
+	const title = input.title ?? "";
 	const text = [
 		input.title,
 		input.formField,
 		input.bullets,
 		input.description,
-		input.aplusText,
 	]
 		.filter(Boolean)
 		.join(" ");
-	if (BUNDLE_RE.test(text)) {
+	// A+ 经常包含同系列比较表，里面的 pack/kit 不能污染当前 SKU 的范围判断。
+	if (BUNDLE_RE.test(title)) {
 		return {
 			...result,
 			scopeDecision: "excluded",
@@ -204,13 +205,6 @@ export function enforceNutritionScope(
 		};
 	}
 	if (result.scopeDecision !== "included") return result;
-	if (result.ingredients.length === 0) {
-		return {
-			...result,
-			scopeDecision: "excluded",
-			scopeReason: "ingredients_and_formula_missing",
-		};
-	}
 	if (result.scopeEvidence.length === 0) {
 		return {
 			...result,

@@ -13,6 +13,8 @@ const schema = z.object({
   CLEAN_WORKER_TOKEN: z.string().min(24).optional(),
   LAN_UI_ENABLED: z.enum(["true", "false"]).default("false"),
   LEASE_TTL_SECONDS: z.coerce.number().int().min(30).max(3600).default(120),
+  // v2 并行流水线按来源灰度：逗号分隔的 "amazon"|"gnc"|"swanson"|"dtc"。未列入的来源走 v1 单体 DAG。
+  PIPELINE_V2_ADAPTERS: z.string().default(""),
   S3_ENDPOINT: z.url().optional(), S3_REGION: z.string().default("auto"), S3_BUCKET: z.string().optional(),
   S3_ACCESS_KEY_ID: z.string().optional(), S3_SECRET_ACCESS_KEY: z.string().optional(),
   S3_FORCE_PATH_STYLE: z.enum(["true", "false"]).default("true"),
@@ -26,12 +28,17 @@ export function loadConfig(env = process.env) {
   const browserToken = value.BROWSER_NODE_TOKEN ?? value.CAPTURE_WORKER_TOKEN;
   const macToken = value.MAC_NODE_TOKEN ?? value.CLEAN_WORKER_TOKEN;
   if (browserToken) nodeTokens.set(browserToken, ["browser"]);
-  if (macToken) nodeTokens.set(macToken, ["amazon", "process", "ingest", "cleanup"]);
+  if (macToken) nodeTokens.set(macToken, [
+    "amazon", "gnc", "swanson", "process", "ingest", "cleanup",
+    "process_text", "process_images", "product_join", "product_unify",
+    "catalog_finalize", "ingest_staging", "cleanup_run",
+  ]);
   return {
     port: value.PORT, mode: value.BACKEND_MODE, databaseUrl: value.DATABASE_URL,
     controlPlaneUrl: value.CONTROL_PLANE_URL, controlPlaneProxyUrl: value.CONTROL_PLANE_PROXY_URL,
     adminToken: value.ADMIN_API_TOKEN,
     lanUiEnabled: value.LAN_UI_ENABLED === "true", leaseTtlSeconds: value.LEASE_TTL_SECONDS,
+    v2Adapters: new Set(value.PIPELINE_V2_ADAPTERS.split(",").map((entry) => entry.trim()).filter(Boolean)),
     nodeTokens,
     s3: value.S3_ENDPOINT && value.S3_BUCKET && value.S3_ACCESS_KEY_ID && value.S3_SECRET_ACCESS_KEY ? {
       endpoint: value.S3_ENDPOINT, region: value.S3_REGION, bucket: value.S3_BUCKET,

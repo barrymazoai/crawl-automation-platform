@@ -3,7 +3,7 @@
 This monorepo is the deterministic controller for distributed product crawling.
 
 - `apps/web`: Mac mini operations console (Vite, React, TanStack Router/Query, Ant Design, AG Grid, Tailwind).
-- `apps/backend`: Railway control plane plus the Mac processing worker and the migrated Link Monitor Amazon adapter.
+- `apps/backend`: Railway control plane plus the Mac processing worker and fixed Amazon/GNC/Swanson adapters.
 - `apps/browser-node`: Windows Codex + programmable Chrome worker.
 - `packages/contracts`: versioned `EvidenceBundleV1`, Job, Node, and typed oRPC contracts.
 - `packages/runtime`: leases, node client, local SQLite checkpoint/outbox, switchable Codex exec/App Server runners, and artifact helpers.
@@ -12,12 +12,12 @@ This monorepo is the deterministic controller for distributed product crawling.
 
 The control plane owns two finite DAGs:
 
-- DTC: `capture (Windows Browser + crawl-products Skill) -> process (Mac OCR + Codex) -> ingest (Mac Product DB Adapter) -> cleanup`
-- Amazon: `process (Mac fixed adapter + OCR + Codex + Product DB Adapter) -> cleanup`
+- DTC: `capture (Windows Browser + crawl-products Skill) -> process (Mac OCR + Codex) -> ingest (Jakarta Observation RPC) -> cleanup`
+- Amazon/GNC/Swanson: `process (Mac fixed adapter + OCR + Codex + Jakarta Observation RPC) -> cleanup`
 
-There is no standalone OCR Job and no OCRBundle. DTC EvidenceBundle archives cross from Windows to the Mac through object storage; the Mac expands them once, calls the OCR API for all images with bounded concurrency, and processes the OCR sidecars locally. Amazon never uploads an EvidenceBundle: its fixed adapter uses the Mac Chrome CDP connection, saves resumable local Brotli snapshots, expands every explicit variation into an independent listing, performs deterministic Link Monitor extraction, then runs semantic and label-text processing.
+There is no standalone OCR Job and no OCRBundle. DTC EvidenceBundle archives cross from Windows to the Mac through object storage; the Mac expands them once, calls the OCR API for all images with bounded concurrency, and processes the OCR sidecars locally. Fixed sales-channel adapters never upload an EvidenceBundle. Amazon exhausts Brand Store navigation with Mac Chrome CDP and expands ASIN variation families. GNC exhausts Salesforce Commerce Cloud pagination and `ProductGroup` variants. Swanson exhausts its Constructor brand catalog, expands every variation, and reads Shopify product JSON. All three use the same catalog-scope gate: only a fully exhausted brand catalog is `full`; product/search/truncated runs are `partial` and cannot delist absent listings.
 
-Only the Windows capture stage uses `crawl-products`. Processing is fixed workflow code and does not load the Skill. Both routes use the in-repository Product DB Adapter copied from the validated Link Monitor/Jakarta v2 write flow. It writes products, independent channel listings, snapshots, SKU attrs, images, vocabularies, formulas, and observations through `PRODUCT_DATABASE_URL`, then reads every `(channel, externalId)` back before cleanup is allowed.
+Only the Windows capture stage uses `crawl-products`. Processing is fixed workflow code and does not load the Skill. Both routes submit normalized observations through Jakarta Product Server's `ingestObservationBatch`, read them back with `verifyObservationBatch`, and only then close the run with `completeCrawlRun`. `PRODUCT_DATABASE_URL` remains read-only for the existing health-function vocabulary and brand-to-domain lookup; all product mutations use `PRODUCT_SERVER_URL`.
 
 ## Local verification
 
@@ -30,11 +30,17 @@ pnpm build
 
 ## Deployment
 
-Deploy the root `Dockerfile` as the Railway control plane. On the Mac mini, `.env.mac` configures the LAN-only proxy console and `compose.mac.yml` exposes it on port 8787. Run `scripts/mac/start-worker.sh` on the host so Codex, Chrome CDP, the OCR endpoint, and the product database are reachable. On Windows, copy `apps/browser-node/.env.example` to `.env` and run `apps/browser-node/scripts/start.ps1`.
+The control plane is deployment-location independent: every worker talks only to its configured `CONTROL_PLANE_URL`. It may run from the root `Dockerfile` on Railway, or directly on a Mac mini host through `scripts/mac/start-local-control-plane.sh` and `scripts/mac/com.supplysmart.crawl-control-plane-local.plist`. The Mac launch script defaults to port `8791` and an isolated `crawl_control_plane_local` database; host workers use `http://127.0.0.1:8791`, while LAN browsers use `http://<mac-ip>:8791`. Moving the control plane later requires changing the endpoint, not the worker or adapter workflow.
 
-The Mac worker defaults to two total jobs, two global Codex calls, and four concurrent OCR image requests. Configure `PRODUCT_DATABASE_URL`, `OCR_ENDPOINT`, and `CHROME_CDP_URL` in `.env.mac-worker`. No Jakarta checkout or separate Product Server is required on the Mac.
+Run `scripts/mac/start-worker.sh` on the Mac host so Codex, Chrome CDP, the OCR endpoint, and the product database are reachable. The dedicated GNC launcher defaults to the local control plane and can be redirected with `GNC_CONTROL_PLANE_URL`. On Windows, copy `apps/browser-node/.env.example` to `.env` and run `apps/browser-node/scripts/start.ps1`.
+
+The Mac worker defaults to two total jobs, two global Codex calls, and four concurrent OCR image requests. Configure `PRODUCT_SERVER_URL`, the read-only `PRODUCT_DATABASE_URL`, and `OCR_ENDPOINT` in `.env.mac-worker`. `PRODUCT_SERVER_URL` may point directly at the internal Product Server, or at the public biz-server `/database` gateway together with `PRODUCT_SERVER_API_KEY`. When `CHROME_CDP_URL` is unset, the worker starts and owns a visible Chrome with a persistent profile; set it only to attach to an already running real Chrome.
 
 Cloud and Mac artifacts are deleted only by the cleanup Job after ingestion read-back succeeds and no review remains open. `needs_review` artifacts remain available until resolution.
+
+### Proxy routing safety
+
+Automation may add a domain rule or change which existing proxy group a domain rule targets. It must never change the selected node inside any proxy group, including `AI/X专用` and `🔁德州前置`; node selection is a manual operator-only action. Proxy checks may read the current group and node, but must not call the controller API or edit configuration to select, reorder, add, or remove nodes unless the operator explicitly authorizes that exact node change.
 
 ## Windows Browser Node
 

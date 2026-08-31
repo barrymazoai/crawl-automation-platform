@@ -78,6 +78,15 @@ export interface Page {
 	/** 返回主文档的 HTTP 状态码；拿不到时为 0（判定要用它区分 404 / 503）。 */
 	navigate(url: string): Promise<number>;
 	evaluate<T>(expression: string): Promise<T>;
+	/** 最近一次 navigate（含其子资源）经 CDP 观察到的实际传输量。 */
+	traffic(): BrowserTraffic;
+}
+
+export interface BrowserTraffic {
+	requestCount: number;
+	failedRequestCount: number;
+	encodedBytes: number;
+	byResourceType: Record<string, { requestCount: number; encodedBytes: number }>;
 }
 
 export async function checkBrowserAvailable(): Promise<string> {
@@ -155,6 +164,7 @@ export async function openPage(): Promise<PageSession> {
 	return {
 		navigate: (url) => page.navigate(url),
 		evaluate: (expr) => page.evaluate(expr),
+		traffic: () => page.traffic(),
 		async close() {
 			release();
 		},
@@ -226,7 +236,7 @@ export async function withPage<T>(fn: (page: Page) => Promise<T>): Promise<T> {
 
 	const ws = new WebSocket(target.webSocketDebuggerUrl);
 	let nextId = 0;
-	const pending = new Map<number, (v: unknown) => void>();
+	const pending = new Map<number, (message: Record<string, unknown>) => void>();
 	const events = new Map<string, () => void>();
 
 	const send = (method: string, params: Record<string, unknown> = {}) =>
@@ -236,11 +246,19 @@ export async function withPage<T>(fn: (page: Page) => Promise<T>): Promise<T> {
 				pending.delete(id);
 				reject(new BrowserUnavailableError(`${method} timed out`));
 			}, NAV_TIMEOUT_MS);
-			pending.set(id, (v) => {
+			pending.set(id, (message) => {
 				clearTimeout(timer);
-				resolve(v as Record<string, unknown>);
+				const error = message.error as { message?: string } | undefined;
+				if (error) reject(new BrowserUnavailableError(`${method}: ${error.message ?? "CDP protocol error"}`));
+				else resolve((message.result as Record<string, unknown> | undefined) ?? {});
 			});
-			ws.send(JSON.stringify({ id, method, params }));
+			try {
+				ws.send(JSON.stringify({ id, method, params }));
+			} catch (error) {
+				clearTimeout(timer);
+				pending.delete(id);
+				reject(new BrowserUnavailableError(`${method}: ${error instanceof Error ? error.message : String(error)}`));
+			}
 		});
 
 	try {
@@ -261,18 +279,44 @@ export async function withPage<T>(fn: (page: Page) => Promise<T>): Promise<T> {
 
 		// 主文档的响应状态；每次 navigate 前清零。
 		let documentStatus = 0;
+		let traffic: BrowserTraffic = { requestCount: 0, failedRequestCount: 0, encodedBytes: 0, byResourceType: {} };
+		const requestTypes = new Map<string, string>();
+		const resource = (type: unknown) => {
+			const key = typeof type === "string" && type ? type : "Other";
+			return traffic.byResourceType[key] ??= { requestCount: 0, encodedBytes: 0 };
+		};
 		ws.addEventListener("message", (e) => {
 			const msg = JSON.parse(String(e.data));
 			if (msg.id && pending.has(msg.id)) {
-				pending.get(msg.id)?.(msg.result);
+				pending.get(msg.id)?.(msg);
 				pending.delete(msg.id);
 				return;
 			}
 			if (msg.method === "Network.responseReceived") {
+				const requestId = String(msg.params?.requestId ?? "");
+				if (requestId) requestTypes.set(requestId, String(msg.params?.type ?? "Other"));
 				// 只认主文档，忽略图片 / XHR 之类的子资源
 				if (msg.params?.type === "Document") {
 					documentStatus = msg.params?.response?.status ?? 0;
 				}
+			}
+			if (msg.method === "Network.requestWillBeSent") {
+				const requestId = String(msg.params?.requestId ?? "");
+				const type = String(msg.params?.type ?? requestTypes.get(requestId) ?? "Other");
+				if (requestId) requestTypes.set(requestId, type);
+				traffic.requestCount += 1;
+				resource(type).requestCount += 1;
+			}
+			if (msg.method === "Network.loadingFinished") {
+				const requestId = String(msg.params?.requestId ?? "");
+				const bytes = Math.max(0, Number(msg.params?.encodedDataLength ?? 0));
+				traffic.encodedBytes += bytes;
+				resource(requestTypes.get(requestId)).encodedBytes += bytes;
+				requestTypes.delete(requestId);
+			}
+			if (msg.method === "Network.loadingFailed") {
+				traffic.failedRequestCount += 1;
+				requestTypes.delete(String(msg.params?.requestId ?? ""));
 			}
 			if (msg.method && events.has(msg.method)) {
 				events.get(msg.method)?.();
@@ -287,6 +331,8 @@ export async function withPage<T>(fn: (page: Page) => Promise<T>): Promise<T> {
 		const page: Page = {
 			async navigate(url) {
 				documentStatus = 0;
+				traffic = { requestCount: 0, failedRequestCount: 0, encodedBytes: 0, byResourceType: {} };
+				requestTypes.clear();
 				// 等真实的 load 事件，而不是拍脑袋 sleep —— 固定等待既慢又偶发抓空。
 				const loaded = new Promise<void>((resolve) => {
 					const timer = setTimeout(resolve, NAV_TIMEOUT_MS);
@@ -308,7 +354,11 @@ export async function withPage<T>(fn: (page: Page) => Promise<T>): Promise<T> {
 					awaitPromise: true,
 				});
 				const result = res.result as { value?: unknown } | undefined;
+				if (!result) throw new BrowserUnavailableError("Runtime.evaluate returned no result");
 				return result?.value as T;
+			},
+			traffic() {
+				return JSON.parse(JSON.stringify(traffic)) as BrowserTraffic;
 			},
 		};
 

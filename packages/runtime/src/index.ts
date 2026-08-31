@@ -7,10 +7,11 @@ import fsp from "node:fs/promises";
 import { pipeline } from "node:stream/promises";
 import archiver from "archiver";
 import unzipper from "unzipper";
-import type { JobStage, NodeCapability } from "@crawl-automation/contracts";
+import type { JobStage, NodeCapability, SalesChannelAdapter } from "@crawl-automation/contracts";
 import type { CodexRunInput, CodexRunner } from "./codex-runner";
 
 export { CodexAppServerError, CodexAppServerRunner, type CodexAppServerOptions } from "./codex-app-server";
+export { hasReadyMarker, listReadyDirectories, publishReadyMarker, readReadyMarker, writeJsonAtomic } from "./ready-marker";
 export { allocateLoopbackPort, chromeExecutableCandidates, resolveChromeExecutable, startChromeLane, type ChromeLane } from "./chrome-lane";
 export type { CodexRunInput, CodexRunner, CodexSession } from "./codex-runner";
 
@@ -30,12 +31,15 @@ export function classifyUrl(raw: string) {
   catch { throw new ApiError("invalid_url", `网址无效：${raw}`); }
   const host = url.hostname.toLowerCase().replace(/^www\./, "");
   const isAmazon = host === "amazon.com" || host.endsWith(".amazon.com") || /^amazon\.[a-z.]+$/.test(host) || host.includes("amazon.");
+  const isGnc = host === "gnc.com" || host.endsWith(".gnc.com");
+  const isSwanson = host === "swansonvitamins.com" || host.endsWith(".swansonvitamins.com");
+  const adapter = isAmazon ? "amazon" as const : isGnc ? "gnc" as const : isSwanson ? "swanson" as const : null;
   return {
     url: url.toString(), host,
-    type: isAmazon ? "sales_channel" as const : "dtc_browser" as const,
-    adapter: isAmazon ? "amazon" as const : null,
+    type: adapter ? "sales_channel" as const : "dtc_browser" as const,
+    adapter,
     supported: true,
-    reason: isAmazon ? "Amazon 固定适配器" : "DTC 网站由 Browser Node 抓取",
+    reason: isAmazon ? "Amazon 固定适配器" : isGnc ? "GNC 固定适配器" : isSwanson ? "Swanson 固定适配器" : "DTC 网站由 Browser Node 抓取",
   };
 }
 
@@ -160,12 +164,30 @@ export class NodeApiClient {
     return this.request("POST", "/v1/node/register", { nodeId: this.config.nodeId, ...input }, undefined, true);
   }
   heartbeat(activeJobIds: string[]) { return this.request("POST", "/v1/node/heartbeat", { nodeId: this.config.nodeId, activeJobIds }, undefined, true); }
-  claim(capabilities: NodeCapability[]) { return this.request<any>("POST", "/v1/node/jobs/claim", { nodeId: this.config.nodeId, capabilities }); }
+  claim(capabilities: NodeCapability[], sourceAdapters?: SalesChannelAdapter[]) {
+    return this.request<any>("POST", "/v1/node/jobs/claim", {
+      nodeId: this.config.nodeId,
+      capabilities,
+      ...(sourceAdapters ? { sourceAdapters } : {}),
+    });
+  }
   start(jobId: string, leaseToken: string) { return this.request("POST", `/v1/node/jobs/${jobId}/start`, { leaseToken }, undefined, true); }
   renew(jobId: string, leaseToken: string) { return this.request("POST", `/v1/node/jobs/${jobId}/heartbeat`, { leaseToken }, undefined, true); }
   complete(jobId: string, leaseToken: string, output: unknown, key: string) { return this.request("POST", `/v1/node/jobs/${jobId}/complete`, { leaseToken, output }, key, true); }
   fail(jobId: string, leaseToken: string, failure: { code: string; message: string; retryable: boolean; needsReview?: boolean }) {
     return this.request("POST", `/v1/node/jobs/${jobId}/fail`, { leaseToken, ...failure }, `failure:${jobId}:${sha256(JSON.stringify(failure))}`, true);
+  }
+  // v2：Batch 原子发布（capture.ready.json 就绪）后注册处理子 DAG。幂等键 = 稳定的 batchId。
+  registerCaptureBatch(jobId: string, leaseToken: string, batch: { batchId: string; ordinal: number; itemCount: number; batchDirectory: string; imagesRequired: boolean }) {
+    return this.request<{ textJobId: string; imagesJobId: string | null; joinJobId: string; unifyJobId: string }>(
+      "POST", `/v1/node/jobs/${jobId}/batches`, { leaseToken, ...batch }, undefined, true,
+    );
+  }
+  // v2：目录完全遍历后追加 run 级尾部（catalog_finalize -> ingest_staging -> cleanup_run）。
+  finalizeCatalog(jobId: string, leaseToken: string, catalog: { inputKind: "brand_catalog" | "product" | "search"; exhausted: boolean; truncated: boolean; expectedCount: number | null; discoveredCount: number; processedCount: number }) {
+    return this.request<{ finalizeJobId: string; ingestJobId: string; cleanupJobId: string; unifyJobCount: number }>(
+      "POST", `/v1/node/jobs/${jobId}/finalize-catalog`, { leaseToken, ...catalog }, undefined, true,
+    );
   }
   createArtifact(jobId: string, leaseToken: string, metadata: { kind: string; fileName: string; contentType: string; sha256: string; byteSize: number }) {
     return this.request<any>("POST", `/v1/node/jobs/${jobId}/artifacts`, { leaseToken, ...metadata }, `artifact:${jobId}:${metadata.kind}:${metadata.sha256}`, true);
@@ -229,12 +251,13 @@ export function codexExecutionPolicyArgs(unattendedFullAccess = false) {
 }
 
 export class CodexProcessRunner implements CodexRunner {
-  constructor(private options: { executable?: string; model?: string; reasoningEffort?: string; unattendedFullAccess?: boolean; env?: NodeJS.ProcessEnv } = {}) {}
+  constructor(private options: { executable?: string; model?: string; reasoningEffort?: string; unattendedFullAccess?: boolean; persistSession?: boolean; env?: NodeJS.ProcessEnv } = {}) {}
   async run(input: CodexRunInput) {
     await fsp.mkdir(path.dirname(input.outputPath), { recursive: true });
-    const args = ["exec", "-", "--model", this.options.model ?? "gpt-5.6-luna", "-c", `model_reasoning_effort=${JSON.stringify(this.options.reasoningEffort ?? "medium")}`,
+    const args = ["exec", ...(this.options.persistSession ? [] : ["--ephemeral"]), "-", "--model", this.options.model ?? "gpt-5.6-luna", "-c", `model_reasoning_effort=${JSON.stringify(this.options.reasoningEffort ?? "medium")}`,
       "--cd", input.cwd, "--output-schema", input.schemaPath, "--output-last-message", input.outputPath, "--json", "--color", "never"];
     for (const directory of input.addDirectories ?? []) args.push("--add-dir", directory);
+    if (input.imagePaths?.length) args.push("--image", ...input.imagePaths);
     args.push(...codexExecutionPolicyArgs(this.options.unattendedFullAccess));
     const log = fs.createWriteStream(input.eventLogPath, { flags: "a" });
     const child = spawn(this.options.executable ?? "codex", args, { cwd: input.cwd, stdio: ["pipe", "pipe", "pipe"], windowsHide: true, env: { ...process.env, ...this.options.env } });

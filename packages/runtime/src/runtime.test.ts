@@ -58,8 +58,11 @@ function fakeAppServer() {
 }
 
 describe("runtime routing", () => {
-  it("routes Amazon to its fixed adapter and DTC to Browser Node", () => {
+  it("routes fixed sales channels to Mac adapters and DTC to Browser Node", () => {
     expect(classifyUrl("https://www.amazon.com/dp/B000000000")).toMatchObject({ type: "sales_channel", adapter: "amazon" });
+    expect(classifyUrl("https://www.gnc.com/whey-protein/379969.html")).toMatchObject({ type: "sales_channel", adapter: "gnc" });
+    expect(classifyUrl("https://subdomain.gnc.com/category")).toMatchObject({ type: "sales_channel", adapter: "gnc" });
+    expect(classifyUrl("https://www.swansonvitamins.com/collections/all?facet.brand=NOW+Foods")).toMatchObject({ type: "sales_channel", adapter: "swanson" });
     expect(classifyUrl("brand.example/products/a")).toMatchObject({ type: "dtc_browser", adapter: null });
   });
 
@@ -119,6 +122,26 @@ describe("runtime routing", () => {
     });
     await expect(claimClient.claim(["process"])).rejects.toThrow("fetch failed");
     expect(claimFetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("sends an optional sales-channel adapter allowlist when claiming work", async () => {
+    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(new Response(null, { status: 204 }));
+    const client = new NodeApiClient({
+      baseUrl: "https://control.example",
+      token: "node-token",
+      nodeId: "mac-gnc-1",
+      fetchImpl,
+    });
+
+    await client.claim(["gnc", "cleanup"], ["gnc"]);
+
+    expect(fetchImpl).toHaveBeenCalledOnce();
+    const [, init] = fetchImpl.mock.calls[0]!;
+    expect(JSON.parse(String(init?.body))).toEqual({
+      nodeId: "mac-gnc-1",
+      capabilities: ["gnc", "cleanup"],
+      sourceAdapters: ["gnc"],
+    });
   });
 
   it("retries transient artifact downloads and only writes the complete response", async () => {

@@ -161,7 +161,7 @@ async function handle(claim: any, lane: WorkerLane) {
       const total = result.batches.reduce((sum, batch) => sum + batch.itemCount, 0);
       if (total !== result.itemCount) throw new Error(`Manifest 数量 ${result.itemCount} 与批次合计 ${total} 不一致`);
       for (const batch of result.batches.sort((a, b) => a.ordinal - b.ordinal)) if (!uploaded.has(batch.ordinal)) uploaded.set(batch.ordinal, await uploadBatch(claim, jobDirectory, batch));
-      await client.complete(job.id, lease.token, { itemCount: result.itemCount, artifactIds: [...uploaded.values()], summary: result.summary }, `capture:${job.id}:${result.itemCount}`);
+      await client.complete(job.id, lease.token, { itemCount: result.itemCount, artifactIds: [...uploaded.values()], summary: result.summary }, `capture:${job.id}`);
       checkpoints.save(job.id, "capture", "completed", result, lease.token);
     });
   } catch (error) {

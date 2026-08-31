@@ -1,6 +1,6 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import type { Pool, PoolClient } from "pg";
-import type { JobStage, NodeCapability } from "@crawl-automation/contracts";
+import type { JobStage, NodeCapability, SalesChannelAdapter } from "@crawl-automation/contracts";
 import { classifyUrl } from "@crawl-automation/runtime";
 import { CronExpressionParser } from "cron-parser";
 
@@ -11,15 +11,24 @@ function nextCronDate(expression: string, timezone: string, currentDate = new Da
   return CronExpressionParser.parse(expression, { currentDate, tz: timezone }).next().toDate();
 }
 
-type DagSource = { url: string; type: "dtc_browser" | "sales_channel"; adapter: "amazon" | null };
+type DagSource = { url: string; type: "dtc_browser" | "sales_channel"; adapter: "amazon" | "gnc" | "swanson" | null };
 export type JobDagEntry = [string, JobStage, NodeCapability, string[], number, unknown];
 
-export function buildJobDag(item: DagSource, createId: () => string = randomUUID) {
-  const processId = createId(), cleanupId = createId();
+export function buildJobDag(item: DagSource, createId: () => string = randomUUID, options?: { pipelineV2?: boolean }) {
   const jobs: JobDagEntry[] = [];
+  if (options?.pipelineV2) {
+    // v2 并行流水线：初始 DAG 只有 capture_catalog。抓取 worker 每发布一个 Batch 调用
+    // registerCaptureBatch 追加该 Batch 的处理子 DAG；目录遍历结束时调用 finalizeCatalog
+    // 追加 run 级尾部（catalog_finalize -> ingest_staging -> cleanup_run）。
+    const captureId = createId();
+    const capability: NodeCapability = item.adapter ?? "browser";
+    jobs.push([captureId, "capture_catalog", capability, [], 3, { url: item.url, sourceType: item.type, adapter: item.adapter, pipeline: "v2" }]);
+    return { firstJobId: captureId, jobs };
+  }
+  const processId = createId(), cleanupId = createId();
   let firstJobId: string;
-  if (item.adapter === "amazon") {
-    jobs.push([processId, "process", "amazon", [], 3, { url: item.url, sourceType: item.type, adapter: "amazon" }]);
+  if (item.adapter === "amazon" || item.adapter === "gnc" || item.adapter === "swanson") {
+    jobs.push([processId, "process", item.adapter, [], 3, { url: item.url, sourceType: item.type, adapter: item.adapter }]);
     jobs.push([cleanupId, "cleanup", "cleanup", [processId], 5, { sourceJobId: processId }]);
     firstJobId = processId;
   } else {
@@ -34,7 +43,9 @@ export function buildJobDag(item: DagSource, createId: () => string = randomUUID
 }
 
 export class PipelineRepository {
-  constructor(private pool: Pool, private leaseTtlSeconds = 120) {}
+  // v2Adapters：启用 v2 并行流水线的来源集合（"amazon"|"gnc"|"swanson"|"dtc"）。
+  // 未列入的来源继续走 v1 单体 DAG，保证新旧流程可以按 Adapter 逐个切换。
+  constructor(private pool: Pool, private leaseTtlSeconds = 120, private v2Adapters: ReadonlySet<string> = new Set()) {}
 
   private async transaction<T>(action: (client: PoolClient) => Promise<T>) {
     const client = await this.pool.connect();
@@ -57,20 +68,33 @@ export class PipelineRepository {
   }
 
   async summary() {
-    const [runs, nodes, jobs] = await Promise.all([
+    const [runs, nodes, jobs, stages] = await Promise.all([
       this.pool.query(`select count(*)::int total,
-        count(*) filter(where status in ('queued','active','retry_wait'))::int active,
-        count(*) filter(where status='needs_review')::int needs_review,
+        count(*) filter(where status in ('queued','active','retry_wait') and open_review_count=0)::int active,
+        count(*) filter(where status not in ('completed','failed','abandoned') and open_review_count>0)::int needs_review,
         count(*) filter(where status='failed')::int failed,
         count(*) filter(where status='completed')::int completed from pipeline_run`),
       this.pool.query(`select count(*)::int total,count(*) filter(where last_seen_at>now()-interval '90 seconds')::int online from pipeline_node`),
       this.pool.query("select state,count(*)::int count from pipeline_job group by state"),
+      // 方案 7：分线吞吐直接从 job 表派生——每 stage 的排队/在跑/复核数、近 1h/24h 完成数与平均耗时。
+      this.pool.query(`select stage,
+        count(*) filter(where state in ('queued','retry_wait'))::int queued,
+        count(*) filter(where state in ('leased','running'))::int active,
+        count(*) filter(where state='needs_review')::int needs_review,
+        count(*) filter(where state='completed' and completed_at>now()-interval '1 hour')::int completed_1h,
+        count(*) filter(where state='completed' and completed_at>now()-interval '24 hours')::int completed_24h,
+        round(avg(extract(epoch from completed_at-started_at)) filter(where state='completed' and completed_at>now()-interval '24 hours'))::int avg_seconds_24h
+        from pipeline_job group by stage order by stage`),
     ]);
     const r = runs.rows[0]; const n = nodes.rows[0];
     return {
       runs: { total: r.total, active: r.active, needsReview: r.needs_review, failed: r.failed, completed: r.completed },
       nodes: { total: n.total, online: n.online },
       jobs: Object.fromEntries(jobs.rows.map((row) => [row.state, row.count])),
+      stages: stages.rows.map((row) => ({
+        stage: row.stage, queued: row.queued, active: row.active, needsReview: row.needs_review,
+        completed1h: row.completed_1h, completed24h: row.completed_24h, avgSeconds24h: row.avg_seconds_24h,
+      })),
     };
   }
 
@@ -188,7 +212,7 @@ export class PipelineRepository {
     return { success: true, serverTime: new Date().toISOString() };
   }
 
-  async claim(nodeId: string, capabilities: NodeCapability[]) {
+  async claim(nodeId: string, capabilities: NodeCapability[], sourceAdapters?: SalesChannelAdapter[]) {
     return this.transaction(async (client) => {
       await client.query(`update pipeline_job set state=case when attempt>=max_attempts then 'failed' else 'retry_wait' end,
         available_at=now(),leased_by=null,lease_token_hash=null,lease_expires_at=null,error_code='lease_expired',error_message='node lease expired',updated_at=now()
@@ -202,9 +226,10 @@ export class PipelineRepository {
         `select j.*,r.status run_status,s.url,s.source_type,s.adapter from pipeline_job j
          join pipeline_run r on r.id=j.run_id join pipeline_source s on s.id=r.source_id
          where j.state in ('queued','retry_wait') and j.available_at<=now() and j.required_capability=any($1::text[])
-           and r.status not in ('needs_review','failed','completed','abandoned')
+           and ($2::text[] is null or s.adapter=any($2::text[]))
+           and r.status <> 'abandoned'
            and not exists(select 1 from pipeline_job dependency where dependency.id=any(j.depends_on) and dependency.state<>'completed')
-         order by j.created_at for update of j skip locked limit 1`, [allowed],
+         order by j.created_at for update of j skip locked limit 1`, [allowed, sourceAdapters ?? null],
       )).rows[0];
       if (!job) return null;
       const token = leaseToken();
@@ -249,13 +274,13 @@ export class PipelineRepository {
         const job = await this.requireLease(client, jobId, token);
         await client.query(`update pipeline_job set state='completed',output=$2::jsonb,completed_at=now(),leased_by=null,
           lease_token_hash=null,lease_expires_at=null,error_code=null,error_message=null,updated_at=now() where id=$1`, [jobId, JSON.stringify(output ?? {})]);
-        if (job.stage === "capture" || job.stage === "process") {
+        if (job.stage === "capture" || job.stage === "process" || job.stage === "capture_catalog") {
           const itemCount = Number((output as any)?.itemCount ?? 0);
-          if (itemCount > 0 || job.stage === "capture") {
+          if (itemCount > 0 || job.stage === "capture" || job.stage === "capture_catalog") {
             await client.query("update pipeline_run set item_count=greatest(item_count,$2),updated_at=now() where id=$1", [job.run_id, itemCount]);
           }
         }
-        if (job.stage === "cleanup") await client.query("update pipeline_run set status='completed',updated_at=now() where id=$1", [job.run_id]);
+        if (job.stage === "cleanup" || job.stage === "cleanup_run") await client.query("update pipeline_run set status='completed',updated_at=now() where id=$1", [job.run_id]);
         await this.event(client, job.run_id, jobId, "job.completed", job.leased_by, output ?? {});
         return { success: true };
       });
@@ -267,15 +292,17 @@ export class PipelineRepository {
       return this.idempotent(client, `fail:${jobId}`, idempotencyKey, input, async () => {
       const job = await this.requireLease(client, jobId, token);
       if (input.needsReview) {
+        // Review 是旁路：只标记本 job 并登记复核项，不改 run 状态——同 run 的其他 job
+        // 继续可领取；下游隔离由 depends_on 依赖判定保证（needs_review 永远不算 completed）。
         const reviewId = randomUUID();
         await client.query("update pipeline_job set state='needs_review',leased_by=null,lease_token_hash=null,lease_expires_at=null,error_code=$2,error_message=$3,updated_at=now() where id=$1", [jobId, input.code, input.message]);
         await client.query("insert into pipeline_review(id,run_id,job_id,reason_code,reason_message) values($1,$2,$3,$4,$5)", [reviewId, job.run_id, jobId, input.code, input.message]);
-        await client.query("update pipeline_run set status='needs_review',open_review_count=open_review_count+1,error_code=$2,error_message=$3,updated_at=now() where id=$1", [job.run_id, input.code, input.message]);
+        await client.query("update pipeline_run set open_review_count=open_review_count+1,error_code=$2,error_message=$3,updated_at=now() where id=$1", [job.run_id, input.code, input.message]);
       } else if (input.retryable && job.attempt < job.max_attempts) {
         const delaySeconds = Math.min(300, 2 ** job.attempt * 5);
         await client.query(`update pipeline_job set state='retry_wait',available_at=now()+make_interval(secs=>$2),leased_by=null,
           lease_token_hash=null,lease_expires_at=null,error_code=$3,error_message=$4,updated_at=now() where id=$1`, [jobId, delaySeconds, input.code, input.message]);
-        await client.query("update pipeline_run set status='retry_wait',error_code=$2,error_message=$3,updated_at=now() where id=$1", [job.run_id, input.code, input.message]);
+        await client.query("update pipeline_run set error_code=$2,error_message=$3,updated_at=now() where id=$1", [job.run_id, input.code, input.message]);
       } else {
         await client.query("update pipeline_job set state='failed',leased_by=null,lease_token_hash=null,lease_expires_at=null,error_code=$2,error_message=$3,updated_at=now() where id=$1", [jobId, input.code, input.message]);
         await client.query("update pipeline_run set status='failed',error_code=$2,error_message=$3,updated_at=now() where id=$1", [job.run_id, input.code, input.message]);
@@ -335,7 +362,9 @@ export class PipelineRepository {
         await client.query("update pipeline_run set status='abandoned',open_review_count=greatest(open_review_count-1,0),updated_at=now() where id=$1", [review.run_id]);
       } else {
         await client.query("update pipeline_job set state='queued',available_at=now(),error_code=null,error_message=null,updated_at=now() where id=$1", [review.job_id]);
-        await client.query("update pipeline_run set status='queued',open_review_count=greatest(open_review_count-1,0),error_code=null,error_message=null,updated_at=now() where id=$1", [review.run_id]);
+        // run 状态不再承担拦截职责；这里只把历史遗留的 needs_review/retry_wait 状态复位为 active。
+        await client.query(`update pipeline_run set status=case when status in ('needs_review','retry_wait','queued') then 'active' else status end,
+          open_review_count=greatest(open_review_count-1,0),error_code=null,error_message=null,updated_at=now() where id=$1`, [review.run_id]);
       }
       return { success: true };
     });
@@ -347,21 +376,78 @@ export class PipelineRepository {
       max(r.updated_at) last_run_at,(array_agg(r.error_message order by r.updated_at desc) filter(where r.error_message is not null))[1] last_error
       from pipeline_source s left join pipeline_run r on r.source_id=s.id where s.source_type='sales_channel' group by s.adapter`)).rows;
     const map = new Map(rows.map((row) => [row.adapter, row]));
-    return ["amazon", "gnc", "target", "whole_foods"].map((adapter) => {
+    return ["amazon", "gnc", "swanson", "target", "whole_foods"].map((adapter) => {
       const row = map.get(adapter); const runCount = row?.run_count ?? 0; const successCount = row?.success_count ?? 0; const failureCount = row?.failure_count ?? 0;
-      return { adapter, implemented: adapter === "amazon", enabled: adapter === "amazon", runCount, successCount, failureCount,
+      return { adapter, implemented: adapter === "amazon" || adapter === "gnc" || adapter === "swanson", enabled: adapter === "amazon" || adapter === "gnc" || adapter === "swanson", runCount, successCount, failureCount,
         successRate: runCount ? successCount / runCount : 0, lastRunAt: row?.last_run_at ? iso(row.last_run_at) : null, lastError: row?.last_error ?? null };
     });
   }
 
   private async insertJobDag(client: PoolClient, runId: string, item: DagSource) {
-    const { firstJobId, jobs } = buildJobDag(item);
+    const pipelineV2 = this.v2Adapters.has(item.adapter ?? "dtc");
+    const { firstJobId, jobs } = buildJobDag(item, randomUUID, { pipelineV2 });
+    await this.insertJobs(client, runId, jobs);
+    return firstJobId;
+  }
+
+  private async insertJobs(client: PoolClient, runId: string, jobs: JobDagEntry[]) {
     for (const job of jobs) await client.query(
       `insert into pipeline_job(id,run_id,stage,required_capability,depends_on,max_attempts,payload)
        values($1,$2,$3,$4,$5::uuid[],$6,$7::jsonb)`,
       [job[0], runId, job[1], job[2], job[3], job[4], JSON.stringify(job[5])],
     );
-    return firstJobId;
+  }
+
+  /**
+   * v2：抓取 worker 每原子发布一个 Capture Batch（capture.ready.json 就绪后）调用一次，
+   * 为该 Batch 追加处理子 DAG：process_text (+ process_images) -> product_join -> product_unify。
+   * 幂等键使用稳定的 batchId；内容（fingerprint）不一致时按设计报错暴露，不静默放行。
+   */
+  async registerCaptureBatch(jobId: string, token: string, input: { batchId: string; ordinal: number; itemCount: number; batchDirectory: string; imagesRequired: boolean }) {
+    return this.transaction(async (client) => {
+      return this.idempotent(client, `batch:${jobId}`, input.batchId, input, async () => {
+        const job = await this.requireLease(client, jobId, token);
+        if (job.stage !== "capture_catalog") throw new Error("只有 capture_catalog job 可以注册 Capture Batch");
+        const base = { batchId: input.batchId, ordinal: input.ordinal, itemCount: input.itemCount, batchDirectory: input.batchDirectory, sourceJobId: jobId };
+        const textId = randomUUID(), joinId = randomUUID(), unifyId = randomUUID();
+        const imagesId = input.imagesRequired ? randomUUID() : null;
+        const jobs: JobDagEntry[] = [
+          [textId, "process_text", "process_text", [], 2, base],
+          ...(imagesId ? [[imagesId, "process_images", "process_images", [], 2, base] as JobDagEntry] : []),
+          [joinId, "product_join", "product_join", imagesId ? [textId, imagesId] : [textId], 2, base],
+          [unifyId, "product_unify", "product_unify", [joinId], 2, base],
+        ];
+        await this.insertJobs(client, job.run_id, jobs);
+        await this.event(client, job.run_id, jobId, "batch.registered", job.leased_by, input);
+        return { textJobId: textId, imagesJobId: imagesId, joinJobId: joinId, unifyJobId: unifyId };
+      });
+    });
+  }
+
+  /**
+   * v2：目录完全遍历后（capture worker 完成 capture_catalog 之前）调用一次，追加 run 级尾部：
+   * catalog_finalize（依赖 capture_catalog + 全部 product_unify）-> ingest_staging -> cleanup_run。
+   * completeCrawlRun 只会在 ingest_staging 中被调用一次——下架判定绝不按 Batch 触发。
+   */
+  async finalizeCatalog(jobId: string, token: string, input: { inputKind: string; exhausted: boolean; truncated: boolean; expectedCount: number | null; discoveredCount: number; processedCount: number }) {
+    return this.transaction(async (client) => {
+      return this.idempotent(client, `finalize:${jobId}`, "catalog", input, async () => {
+        const job = await this.requireLease(client, jobId, token);
+        if (job.stage !== "capture_catalog") throw new Error("只有 capture_catalog job 可以执行 Catalog Finalize");
+        const unifyIds = (await client.query(
+          "select id from pipeline_job where run_id=$1 and stage='product_unify' order by created_at", [job.run_id],
+        )).rows.map((row) => row.id as string);
+        const finalizeId = randomUUID(), ingestId = randomUUID(), cleanupId = randomUUID();
+        const jobs: JobDagEntry[] = [
+          [finalizeId, "catalog_finalize", "catalog_finalize", [jobId, ...unifyIds], 2, { ...input, sourceJobId: jobId }],
+          [ingestId, "ingest_staging", "ingest_staging", [finalizeId], 2, { sourceJobId: finalizeId }],
+          [cleanupId, "cleanup_run", "cleanup_run", [ingestId], 5, { sourceJobId: ingestId }],
+        ];
+        await this.insertJobs(client, job.run_id, jobs);
+        await this.event(client, job.run_id, jobId, "catalog.finalized", job.leased_by, input);
+        return { finalizeJobId: finalizeId, ingestJobId: ingestId, cleanupJobId: cleanupId, unifyJobCount: unifyIds.length };
+      });
+    });
   }
 
   private event(client: PoolClient, runId: string, jobId: string | null, type: string, actor: string, payload: unknown) {

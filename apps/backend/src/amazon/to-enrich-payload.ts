@@ -55,6 +55,8 @@ export interface PayloadInput {
 	companyDomain: string;
 	/** 抓取时刻（存档时间），**不是**清洗时刻 */
 	capturedAt: Date;
+	/** run 级目录门禁的结果；单品/搜索为 partial，完整 Brand Store 才能为 full */
+	crawlScope?: "full" | "partial";
 	/** 观测来源标签，落进 snapshot.source */
 	source?: string;
 }
@@ -73,12 +75,7 @@ export function amazonProductUrl(asin: string): string {
 /**
  * 组装一条载荷。
  *
- * ⚠️ `crawlScope` 永远是 `partial`。我们的品牌扫描有 Amazon 的 7 页 / 306 条
- * 硬上限（见 SUPPLYSMAR-251），**从来不是完整枚举**。报成 `full` 会触发
- * 入库侧的消失检测，把没扫到的挂牌误判成下架 —— 那是数据事故，不是小错。
- *
- * ⚠️ 也不要把我们的下架判定写进 listing 状态。文档 §④ 的边界声明（E5）：
- * 链接监控的活性判定和爬取派生的消失检测口径不同、互不回写。我们只做观测源。
+ * `crawlScope` 只能来自三渠道共用的 run 级目录门禁，不能由单个商品或模型决定。
  */
 export function toEnrichPayload(input: PayloadInput): EnrichPayload {
 	const { asin, extracted, semantic, companyDomain, capturedAt } = input;
@@ -110,7 +107,7 @@ export function toEnrichPayload(input: PayloadInput): EnrichPayload {
 		externalId: asin,
 		sourceUrl: url,
 		capturedAt: capturedAt.toISOString(),
-		crawlScope: "partial",
+		crawlScope: input.crawlScope ?? "partial",
 		source: input.source ?? "link-monitor",
 		images: extracted.images,
 		healthFunctions: semantic.healthFunctions,

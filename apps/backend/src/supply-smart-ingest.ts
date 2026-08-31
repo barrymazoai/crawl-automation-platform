@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import pg from "pg";
 import { z } from "zod";
+import { productVariantSchema } from "./product-unify.js";
 
 export const EnrichIngredientSchema = z.union([
   z.string().trim().min(1),
@@ -17,6 +18,7 @@ export const EnrichIngredientSchema = z.union([
 export const normalizedProductSchema = z.object({
   domain: z.string().trim().min(1),
   productName: z.string().trim().min(1),
+  titleRaw: z.string().trim().min(1).optional(),
   productUrl: z.url(),
   channel: z.string().trim().toLowerCase().min(1),
   externalId: z.string().trim().min(1),
@@ -35,6 +37,9 @@ export const normalizedProductSchema = z.object({
   inStock: z.boolean().optional(),
   unitsSold: z.number().int().nonnegative().optional(),
   unitsSoldPeriod: z.enum(["trailing_30d", "monthly", "lifetime", "unknown"]).optional(),
+  extras: z.record(z.string(), z.unknown()).optional(),
+  listedAt: z.iso.datetime().optional(),
+  listedAtSource: z.string().trim().min(1).optional(),
   images: z.array(z.url()),
   healthFunctions: z.array(z.string().trim().min(1)),
   mainIngredients: z.array(EnrichIngredientSchema).min(1),
@@ -44,6 +49,12 @@ export const normalizedProductSchema = z.object({
     decision: z.literal("included"),
     evidence: z.array(z.string().trim().min(1)).min(1),
   }),
+  gtin: z.string().regex(/^\d{8}$|^\d{12,14}$/).optional(),
+  baseName: z.string().trim().min(1).optional(),
+  variant: productVariantSchema.optional(),
+  variantConfidence: z.number().int().min(0).max(100).optional(),
+  variantSource: z.enum(["ai_extract", "channel_attrs", "manual"]).optional(),
+  attrsRaw: z.record(z.string(), z.unknown()).optional(),
   variantAttrs: z.record(z.string(), z.unknown()).optional(),
   family: z.object({
     parentExternalId: z.string().min(1).nullable(),
@@ -54,6 +65,10 @@ export const normalizedProductSchema = z.object({
 }).superRefine((value, context) => {
   if ((value.sku === null) !== value.skuMissing) {
     context.addIssue({ code: "custom", message: "sku 与 skuMissing 必须一致" });
+  }
+  const identityFields = [value.variant, value.variantConfidence, value.variantSource].filter((item) => item !== undefined).length;
+  if (identityFields > 0 && identityFields < 3) {
+    context.addIssue({ code: "custom", message: "variant、variantConfidence、variantSource 必须成组提供" });
   }
 });
 
@@ -74,6 +89,7 @@ export const productFactsSchema = z.object({
   capturedAt: z.iso.datetime(),
   source: z.string().trim().min(1),
   confidence: z.number().int().min(0).max(100),
+  sourceImageUrl: z.url().optional(),
   servingSize: z.number().positive().nullable().optional(),
   servingUnit: z.string().trim().nullable().optional(),
   servingsPerContainer: z.number().int().positive().nullable().optional(),
@@ -249,6 +265,14 @@ function ingredientName(value: NormalizedProduct["mainIngredients"][number]) {
 function listingAttrs(product: NormalizedProduct) {
   return {
     ...(product.variantAttrs ?? {}),
+    ...(product.attrsRaw ? { attrs_raw: product.attrsRaw } : {}),
+    ...(product.baseName ? { base_name: product.baseName } : {}),
+    ...(product.variant ? {
+      variant: product.variant,
+      variant_confidence: product.variantConfidence,
+      variant_source: product.variantSource,
+    } : {}),
+    ...(product.gtin ? { gtin: product.gtin } : {}),
     sku: product.sku,
     sku_missing: product.skuMissing,
     ...(product.family ? {
@@ -347,7 +371,7 @@ async function upsertListing(
     productId,
     product.channel,
     product.externalId,
-    product.productName,
+    product.titleRaw ?? product.productName,
     normalizeListingUrl(product.sourceUrl),
     product.sourceUrl,
     JSON.stringify(listingAttrs(product)),

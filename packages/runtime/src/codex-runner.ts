@@ -10,6 +10,8 @@ export type CodexRunInput = {
   outputPath: string;
   eventLogPath: string;
   addDirectories?: string[];
+  /** Images attached to the initial Codex turn through `codex exec --image`. */
+  imagePaths?: string[];
   signal?: AbortSignal;
   threadId?: string;
   threadName?: string;

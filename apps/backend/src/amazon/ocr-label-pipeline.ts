@@ -104,7 +104,7 @@ function topLeft(polygon: number[][] | undefined): { x: number; y: number } {
 
 export function formatOcrImage(image: IndexedOcrImage): string {
 	const lines = image.response.lines ?? [];
-	const body = lines
+	const body = lines.length > 0 ? lines
 		.map((line, lineIndex) => {
 			const { x, y } = topLeft(line.polygon);
 			const confidence = Number.isFinite(line.score)
@@ -112,7 +112,7 @@ export function formatOcrImage(image: IndexedOcrImage): string {
 				: "unknown";
 			return `[${lineIndex}][x=${x},y=${y},conf=${confidence}] ${line.text ?? ""}`;
 		})
-		.join("\n");
+		.join("\n") : String(image.response.text ?? "").trim();
 	return `IMAGE_INDEX=${image.index} FILE=${image.fileName}\n${body}`.trimEnd();
 }
 
@@ -140,6 +140,47 @@ export function buildOcrTextLabelPrompt(
 	return `${OCR_TEXT_LABEL_EXTRACTION_PROMPT}\n\nOCR IMAGES:\n\n${images
 		.map(formatOcrImage)
 		.join("\n\n")}`;
+}
+
+/**
+ * PDF 有可选择文字层时，沿用同一标签契约，但明确告诉模型这些内容不是 OCR。
+ * factsImages 仍使用零基页码，保持 LabelJson 协议不变。
+ */
+export function buildPdfTextLabelPrompt(
+	pages: readonly IndexedOcrImage[],
+): string {
+	const rules = OCR_TEXT_LABEL_EXTRACTION_PROMPT
+		.replace(
+			"下面是同一个商品的部分图片经 OCR 得到的文字行。你没有收到图片。",
+			"下面是同一个商品标签 PDF 的可选择文字层。你没有收到图片，这些文字不是 OCR 结果。",
+		)
+		.replace(
+			"每个区块的 IMAGE_INDEX 是它在商品图片列表里的原始零基下标；factsImages 必须返回这个原始下标，不能按本提示词里的区块顺序重新编号。",
+			"每个区块的 PAGE_INDEX 是 PDF 原始零基页码；factsImages 必须返回这个原始页码，不能按本提示词里的区块顺序重新编号。",
+		)
+		.replace("只依据 OCR 内容提取 Facts 面板。", "只依据 PDF 文字层提取 Facts 面板。")
+		.replace("OCR 缺字、截断或无法确认时", "PDF 文字层缺字、截断或无法确认时");
+	const body = pages.map((page) => {
+		const text = page.response.text ?? page.response.lines?.map((line) => line.text ?? "").join("\n") ?? "";
+		return `PAGE_INDEX=${page.index} FILE=${page.fileName}\n${text}`.trimEnd();
+	}).join("\n\n");
+	return `${rules}\n\nPDF TEXT PAGES:\n\n${body}`;
+}
+
+/** GNC 等固定渠道直接提供 HTML Facts 表格时，不再下载 PDF。 */
+export function buildHtmlFactsTablePrompt(tableText: string): string {
+	const rules = OCR_TEXT_LABEL_EXTRACTION_PROMPT
+		.replace(
+			"下面是同一个商品的部分图片经 OCR 得到的文字行。你没有收到图片。",
+			"下面是商品页面 Ingredients Accordion 中 HTML Facts 表格按行、按单元格提取的文字。你没有收到图片，这些文字不是 OCR 结果。",
+		)
+		.replace(
+			"每个区块的 IMAGE_INDEX 是它在商品图片列表里的原始零基下标；factsImages 必须返回这个原始下标，不能按本提示词里的区块顺序重新编号。",
+			"这是一个 HTML 表格证据源；factsImages 固定返回 [0]。",
+		)
+		.replace("只依据 OCR 内容提取 Facts 面板。", "只依据 HTML 表格内容提取 Facts 面板。")
+		.replace("OCR 缺字、截断或无法确认时", "HTML 表格缺字、截断或无法确认时");
+	return `${rules}\n\nHTML FACTS TABLE INDEX=0:\n\n${tableText.trim()}`;
 }
 
 export async function mapWithConcurrency<T, R>(

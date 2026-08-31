@@ -74,7 +74,8 @@ describe("buildBatchPrompt", () => {
 		const p = buildBatchPrompt([input("B001")], VOCAB);
 		expect(p).toContain("scope_decision");
 		expect(p).toContain("bundles/packs/kits/sets");
-		expect(p).toContain("cannot be included with an empty ingredients array");
+		expect(p).toContain("Missing text ingredients alone is not a reason to exclude");
+		expect(p).toContain("anywhere in TITLE/BULLETS/DESC/APLUS/INGREDIENTS_RAW");
 	});
 });
 
@@ -244,12 +245,21 @@ describe("Nutrition 最终范围闸门", () => {
 		});
 	});
 
-	it("没有成分时排除，不能先建空产品", () => {
+	it("页面文字没有成分时仍允许进入图片 Facts 阶段", () => {
 		expect(
 			enforceNutritionScope(input("B001"), result({ ingredients: [] })),
 		).toMatchObject({
-			scopeDecision: "excluded",
-			scopeReason: "ingredients_and_formula_missing",
+			scopeDecision: "included",
+			scopeReason: "nutrition_product",
 		});
+	});
+
+	it("A+ 比较表里的 pack 不会把当前单品误判为组合装", () => {
+		expect(
+			enforceNutritionScope(
+				input("B001", { title: "Vitamin C Gummies", aplusText: "Compare with Stick Pack and Starter Kit" }),
+				result(),
+			),
+		).toMatchObject({ scopeDecision: "included" });
 	});
 });

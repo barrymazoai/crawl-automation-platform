@@ -11,6 +11,7 @@
     "dev": "turbo dev",
     "build": "turbo build",
     "check-types": "turbo check-types",
+    "pretest": "pnpm --filter @crawl-automation/runtime... build",
     "test": "vitest run packages apps/backend/src --no-cache && pnpm --dir crawl-products test",
     "dev:web": "pnpm --filter @crawl-automation/web dev",
     "dev:backend": "pnpm --filter @crawl-automation/backend dev",

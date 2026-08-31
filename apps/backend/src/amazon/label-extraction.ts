@@ -1,5 +1,12 @@
 import type { LabelJson } from "./label-parse.js";
 
+type LabelModelCall = (input: { prompt: string; tag: string }) => Promise<string>;
+
+export interface StoredRawLabelVerdict {
+	raw: string;
+	parsed: LabelJson | null;
+}
+
 /**
  * 标签提取协议。核心约束是：serving 字段逐字取自同一张面板；不同配方不能合并。
  */
@@ -96,6 +103,29 @@ export function extractLabelJson(raw: string): LabelJson | null {
 		}
 	}
 	return candidates.at(-1) ?? null;
+}
+
+/**
+ * 模型偶尔会给出语义正确但 JSON 语法损坏的 payload（例如 enum 漏引号）。
+ * 对这种纯格式错误只重试一次；原始 OCR 提示仍在上下文里，修复模型不能补充新事实。
+ */
+export async function extractLabelJsonWithRepair(options: {
+	prompt: string;
+	tag: string;
+	runModel: LabelModelCall;
+	stored?: StoredRawLabelVerdict | null;
+}): Promise<StoredRawLabelVerdict> {
+	let raw = options.stored?.raw;
+	let parsed = options.stored?.parsed ?? (raw ? extractLabelJson(raw) : null);
+	if (!raw) {
+		raw = await options.runModel({ prompt: options.prompt, tag: options.tag });
+		parsed = extractLabelJson(raw);
+	}
+	if (parsed) return { raw, parsed };
+
+	const repairPrompt = `${options.prompt}\n\nThe previous payload below was not valid JSON. Repair JSON syntax only. Do not add, remove, infer, or change any facts. Every property name, string, enum slug, and unit must be JSON-quoted. Return one object with one string field named payload, and serialize the repaired JSON object exactly inside payload.\n\nINVALID PREVIOUS PAYLOAD:\n${raw}`;
+	const repairedRaw = await options.runModel({ prompt: repairPrompt, tag: `${options.tag}-repair` });
+	return { raw: repairedRaw, parsed: extractLabelJson(repairedRaw) };
 }
 
 /**

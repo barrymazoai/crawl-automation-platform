@@ -10,6 +10,16 @@ export const appContract = {
       runs: z.object({ total: z.number(), active: z.number(), needsReview: z.number(), failed: z.number(), completed: z.number() }),
       nodes: z.object({ online: z.number(), total: z.number() }),
       jobs: z.record(z.string(), z.number()),
+      // 方案 7：分线吞吐（每 stage 的排队/在跑/复核数、近 1h/24h 完成数与平均耗时秒数）。
+      stages: z.array(z.object({
+        stage: z.string(),
+        queued: z.number(),
+        active: z.number(),
+        needsReview: z.number(),
+        completed1h: z.number(),
+        completed24h: z.number(),
+        avgSeconds24h: z.number().nullable(),
+      })).default([]),
     })),
   },
   classify: {

@@ -57,15 +57,19 @@ describe("toEnrichPayload", () => {
 		expect(p.capturedAt).toBe("2026-08-12T10:00:00.000Z");
 	});
 
-	it("crawlScope 永远是 partial", () => {
-		// 我们的品牌扫描有 Amazon 7 页/306 条硬上限，从来不是完整枚举。
-		// 报成 full 会触发入库侧的消失检测，把没扫到的挂牌误判成下架。
+	it("crawlScope 缺省为 partial，并接受 run 级完整 Brand Store 门禁的 full", () => {
 		const p = toEnrichPayload({
 			...base,
 			extracted: extracted(),
 			semantic: semantic(),
 		});
 		expect(p.crawlScope).toBe("partial");
+		expect(toEnrichPayload({
+			...base,
+			extracted: extracted(),
+			semantic: semantic(),
+			crawlScope: "full",
+		}).crawlScope).toBe("full");
 	});
 
 	it("语义清洗的结果优先", () => {

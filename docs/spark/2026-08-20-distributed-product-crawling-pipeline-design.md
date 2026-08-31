@@ -8,7 +8,7 @@
 
 这套系统用程序控制队列、并发、租约、恢复、审核和清理。Codex 只承担两类需要理解能力的工作：Windows 上的陌生 DTC 网站抓取，以及 Mac 上的产品语义/标签 OCR 文本转换。
 
-固定站点不再每次交给抓取 Skill。Amazon Adapter 已从 Link Monitor 迁入本仓库，并继续使用它经过验证的 CDP、变体、快照、确定性提取、Nutrition 终判和标签解析规则。
+固定站点不再每次交给抓取 Skill。Amazon、GNC、Swanson 都使用仓库内固定 Adapter，只保留各自的目录、分页、变体和详情提取差异；之后共享 Product Unify、OCR、Observation RPC 与 full/partial 下架门禁。
 
 ## 节点与并发
 
@@ -16,7 +16,7 @@
 | --- | --- | --- |
 | Railway | 控制面、PostgreSQL 队列、租约、审核、对象引用 | 不运行 Chrome/Codex/OCR |
 | Windows Browser Node | DTC 网站；Codex Luna Medium + 可编程 Chrome + `crawl-products` Skill | 2 个站点 |
-| Mac mini Worker | DTC process、Amazon 固定 Adapter、Product DB 直连入库、清理 | 2 个 Job |
+| Mac mini Worker | DTC process、Amazon/GNC/Swanson 固定 Adapter、Jakarta Observation RPC、清理 | 2 个 Job |
 | OCR HTTP API | 接收单张图片并返回文字行与坐标 | 每个 Job 默认 4 张并发 |
 | Mac Codex | Nutrition/功效/剂型/成分与 OCR Facts 文本转换 | 全局 2 个进程 |
 
@@ -40,27 +40,28 @@ capture [Windows/browser]
 5. 程序把全部图片并发送到 OCR API，结果写在图片旁的 `.ocr.json`。
 6. Mac Codex 只读页面证据和 OCR 文本；它不再调用抓取 Skill，也不操作浏览器。
 7. 结构校验通过后上传一个小型 `normalized` JSON，供 ingest Job 使用。
-8. ingest 使用仓库内 Product DB Adapter 直连同一产品库并回读；成功后 cleanup 删除云端产物和 Mac 整个 run 目录。
+8. ingest 通过 Jakarta Product Server 写 Observation、回读、收口并再次回读；成功后 cleanup 删除云端产物和 Mac 整个 run 目录。
 
-### Amazon
+### 固定 Sales Channel（Amazon / GNC / Swanson）
 
 ```text
-process [Mac/amazon]
+process [Mac/amazon|gnc|swanson]
   -> cleanup [Mac/cleanup]
 ```
 
-Amazon process 在一个可恢复 Job 中完成完整流程，不上传 Amazon EvidenceBundle：
+Sales Channel process 在一个可恢复 Job 中完成完整流程，不上传 EvidenceBundle：
 
-1. 使用 Mac 上真实 Chrome 的 CDP；搜索页最多翻 Amazon 实际开放的 7 页。
-2. 从 `parentAsin` 与 `dimensionValuesDisplayData` 展开明确变体家族。
-3. 队列中的每个 ASIN 都单独打开并抓取，因此每个变体拥有自己的页面、图片和挂牌身份。
-4. 完整 HTML Brotli 压缩并原子写入 Job 本地目录；重试优先读快照，不重复请求 Amazon。
-5. Link Monitor 确定性提取器从 HTML 提取标题、品牌、价格、评分、库存、完整画廊、Item Form、Unit Count、Ingredients、Bullet、描述和 A+ 文案。
-6. Link Monitor Nutrition 语义协议按最多 50 条切批；Mac 全局最多两个 Luna Medium 调用。
-7. 只有 included 产品进入图片线；程序下载完整画廊，并发调用 OCR API。
-8. OCR 先用 Facts 标题和结构词做高召回筛选；只有命中的 OCR 文字交给 Luna 解析。Codex 不重新视觉读取图片。
-9. 解析结果交给 Product DB Adapter，按 Link Monitor 的表结构与写入顺序落库；每个 ASIN 独立入库。
-10. 按 `(channel, externalId)` 回读全部通过后，cleanup 删除该 Job 的本地快照、图片、OCR sidecar 和模型输出。
+1. 输入必须是品牌全部商品页才能争取 `full`；单品页和普通搜索页只能 `partial`。
+2. Amazon 遍历 Brand Store 导航并展开 ASIN variation family；GNC 耗尽 Load More 并展开 ProductGroup；Swanson 耗尽 Constructor 分页并展开 Shopify variation。
+3. 每个 ASIN/SKU 都单独抓取，因此每个变体拥有自己的详情、图片和挂牌身份。
+4. Adapter 输出页数、总数、耗尽、截断、发现数和处理数；共用代码据此决定 full/partial，模型无权决定。
+5. 确定性提取器读取标题、品牌、价格、评分、库存、画廊和渠道结构化字段。
+6. Nutrition 语义协议按最多 50 条切批；Mac 全局最多两个 Luna Medium 调用。
+7. 程序下载完整画廊，并发调用 OCR API；OCR 文字进入 Facts 与语义解析。
+8. Product Unify 统一 productName/baseName，并只输出允许的 strict variant key。
+9. 结果通过 Jakarta Observation RPC 入库、回读和收口；每个渠道稳定 ID 独立入库。
+10. `full` run 在同一 channel + company 范围内把本轮缺席 Listing 置 inactive 并产生 delisted；`partial` 永远不做缺席下架。
+11. 完成后再次回读全部通过，cleanup 才删除本地快照、图片、OCR sidecar 和模型输出。
 
 ## 数据契约
 

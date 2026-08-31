@@ -8,6 +8,16 @@
     "build": "tsdown src/index.ts src/mac-worker.ts src/migrate.ts --format esm",
     "start": "node dist/index.js",
     "start:worker": "node dist/mac-worker.js",
+    "backfill:amazon:dry": "tsx scripts/amazon-backfill-dry-run.ts",
+    "backfill:amazon:image": "tsx scripts/amazon-backfill-image-lane.ts",
+    "backfill:amazon:formula": "tsx scripts/amazon-backfill-formula-dry-run.ts",
+    "backfill:amazon:formula-vision": "tsx scripts/amazon-backfill-formula-vision-recovery.ts",
+    "backfill:amazon:staging": "tsx scripts/amazon-backfill-staging-lane.ts",
+    "backfill:amazon:snapshot-source": "tsx scripts/amazon-backfill-snapshot-source.ts",
+    "backfill:amazon:supervisor": "tsx scripts/amazon-backfill-supervisor.ts",
+    "gnc:identity-agent": "tsx scripts/gnc-company-identity-agent.ts",
+    "gnc:px-cooldown-probe": "tsx scripts/gnc-px-cooldown-probe.ts",
+    "gnc:traffic-probe": "tsx scripts/gnc-traffic-probe.ts",
     "migrate": "tsx src/migrate.ts",
     "check-types": "tsc --noEmit",
     "test": "vitest run"
@@ -26,6 +36,7 @@
     "pg": "catalog:",
     "pino": "catalog:",
     "undici": "^7.29.0",
+    "yaml": "^2.9.0",
     "zod": "catalog:"
   },
   "devDependencies": {

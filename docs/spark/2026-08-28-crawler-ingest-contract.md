@@ -252,7 +252,7 @@ GNC 页面的 `mpn` / UPC、Amazon 详情页偶尔露出的 UPC / EAN 都是它�
 - `full`：run 的 company（或 site）范围内、`lastSeenAt < run.startedAt` 且本轮没见到的 listing 置 inactive，各发一条 `delisted`。
 - 同一 run 再调 → `replayed: true`，不重复下架、不重复发事件。
 
-**只有同时满足才能声明 `full`**：输入是可定义边界的品牌页 / 店铺目录 / 官网全目录；分页 / Load More 程序化耗尽；没命中数量上限；没有 challenge / 登录墙 / 区域错误；所有变体都成为独立 item；`verifyObservationBatch` 全部通过且无 `needs_review`。任一不满足就是 `partial`。当前：Amazon 品牌搜索受 7 页上限约束**永远 partial**；GNC 品牌页 Load More 耗尽后可 full；DTC 全目录门禁通过可 full。
+**只有同时满足才能声明 `full`**：输入是可定义边界的品牌页 / 店铺目录 / 官网全目录；分页 / Load More / 品牌导航程序化耗尽；没命中数量上限；没有 challenge / 登录墙 / 区域错误；所有变体都成为独立 item；`verifyObservationBatch` 全部通过且无 `needs_review`。任一不满足就是 `partial`。当前 Amazon Brand Store、GNC 品牌页和 Swanson 品牌筛选页共用同一门禁；单品页和普通搜索页永远 partial。DTC 也只有全目录门禁通过才可 full。
 
 ## 6. 不要做的事
 

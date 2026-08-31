@@ -1,6 +1,6 @@
 import type { Hono } from "hono";
 import { z } from "zod";
-import { NodeCapabilitySchema } from "@crawl-automation/contracts";
+import { NodeCapabilitySchema, SalesChannelAdapterSchema } from "@crawl-automation/contracts";
 import type { PipelineRepository } from "./repository";
 import type { ObjectStorage } from "./object-storage";
 
@@ -26,9 +26,13 @@ export function mountNodeApi(app: Hono, options: { repository: PipelineRepositor
   });
   app.post("/v1/node/jobs/claim", async (c) => {
     const allowed = authenticate(c.req.header("authorization"));
-    const input = await body(c, z.object({ nodeId: z.string().min(3), capabilities: z.array(NodeCapabilitySchema).min(1) }));
+    const input = await body(c, z.object({
+      nodeId: z.string().min(3),
+      capabilities: z.array(NodeCapabilitySchema).min(1),
+      sourceAdapters: z.array(SalesChannelAdapterSchema).min(1).optional(),
+    }));
     if (input.capabilities.some((value) => !allowed.includes(value))) return c.json({ error: { code: "capability_forbidden", message: "Token 不允许该 capability" } }, 403);
-    const claim = await options.repository.claim(input.nodeId, input.capabilities);
+    const claim = await options.repository.claim(input.nodeId, input.capabilities, input.sourceAdapters);
     return claim ? c.json(claim) : c.body(null, 204);
   });
   app.post("/v1/node/jobs/:id/start", async (c) => {
@@ -51,6 +55,35 @@ export function mountNodeApi(app: Hono, options: { repository: PipelineRepositor
     const input = await body(c, z.object({ leaseToken: z.string().min(20), code: z.string().min(1), message: z.string().min(1), retryable: z.boolean(), needsReview: z.boolean().optional() }));
     const { leaseToken, ...failure } = input;
     return c.json(await options.repository.fail(c.req.param("id"), leaseToken, failure, c.req.header("idempotency-key") ?? ""));
+  });
+  // v2：抓取 worker 每原子发布一个 Capture Batch 后调用，为该 Batch 追加处理子 DAG。
+  app.post("/v1/node/jobs/:id/batches", async (c) => {
+    authenticate(c.req.header("authorization"));
+    const input = await body(c, z.object({
+      leaseToken: z.string().min(20),
+      batchId: z.string().min(1).max(128),
+      ordinal: z.number().int().nonnegative(),
+      itemCount: z.number().int().positive(),
+      batchDirectory: z.string().min(1),
+      imagesRequired: z.boolean(),
+    }));
+    const { leaseToken, ...batch } = input;
+    return c.json(await options.repository.registerCaptureBatch(c.req.param("id"), leaseToken, batch), 201);
+  });
+  // v2：目录完全遍历后调用一次，追加 run 级尾部（catalog_finalize -> ingest_staging -> cleanup_run）。
+  app.post("/v1/node/jobs/:id/finalize-catalog", async (c) => {
+    authenticate(c.req.header("authorization"));
+    const input = await body(c, z.object({
+      leaseToken: z.string().min(20),
+      inputKind: z.enum(["brand_catalog", "product", "search"]),
+      exhausted: z.boolean(),
+      truncated: z.boolean(),
+      expectedCount: z.number().int().nonnegative().nullable(),
+      discoveredCount: z.number().int().nonnegative(),
+      processedCount: z.number().int().nonnegative(),
+    }));
+    const { leaseToken, ...catalog } = input;
+    return c.json(await options.repository.finalizeCatalog(c.req.param("id"), leaseToken, catalog), 201);
   });
   app.post("/v1/node/jobs/:id/artifacts", async (c) => {
     authenticate(c.req.header("authorization"));
