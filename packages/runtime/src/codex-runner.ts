@@ -13,6 +13,8 @@ export type CodexRunInput = {
   /** Images attached to the initial Codex turn through `codex exec --image`. */
   imagePaths?: string[];
   signal?: AbortSignal;
+  /** 本次调用保留会话 rollout（默认 --ephemeral）。用于周期性留下含限额快照的会话文件。 */
+  persistSession?: boolean;
   threadId?: string;
   threadName?: string;
   skill?: { name: string; path: string };

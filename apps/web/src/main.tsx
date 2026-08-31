@@ -169,7 +169,7 @@ function Dashboard() {
           <div className="quota-row"><span className="quota-name">5 小时窗口</span><div className="meter"><i style={{ width: `${telemetry.codex.fiveHourPercentLeft ?? 0}%` }}/></div><span className="quota-val">{telemetry.codex.fiveHourPercentLeft ?? "—"}%</span></div>
           <div className="quota-row"><span className="quota-name">周限额</span><div className="meter"><i style={{ width: `${telemetry.codex.weeklyPercentLeft ?? 0}%`, background: (telemetry.codex.weeklyPercentLeft ?? 100) < 50 ? "#d9a63f" : undefined }}/></div><span className="quota-val">{telemetry.codex.weeklyPercentLeft ?? "—"}%</span></div>
           <div className="stat-foot">{telemetry.codex.resetsAt ? `窗口 ${new Date(telemetry.codex.resetsAt).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })} 重置 · ` : ""}上报于 {new Date(telemetry.codex.updatedAt).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}</div>
-        </> : <div className="stat-foot" style={{ marginTop: 12 }}>未接入 · worker 配置 CODEX_USAGE_COMMAND 后显示</div>}
+        </> : <div className="stat-foot" style={{ marginTop: 12 }}>等待 Codex 上报 · 首次模型调用后自动接入</div>}
       </div>
     </div>
 

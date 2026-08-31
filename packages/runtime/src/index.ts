@@ -256,7 +256,7 @@ export class CodexProcessRunner implements CodexRunner {
   constructor(private options: { executable?: string; model?: string; reasoningEffort?: string; unattendedFullAccess?: boolean; persistSession?: boolean; env?: NodeJS.ProcessEnv } = {}) {}
   async run(input: CodexRunInput) {
     await fsp.mkdir(path.dirname(input.outputPath), { recursive: true });
-    const args = ["exec", ...(this.options.persistSession ? [] : ["--ephemeral"]), "-", "--model", this.options.model ?? "gpt-5.6-luna", "-c", `model_reasoning_effort=${JSON.stringify(this.options.reasoningEffort ?? "medium")}`,
+    const args = ["exec", ...(this.options.persistSession || input.persistSession ? [] : ["--ephemeral"]), "-", "--model", this.options.model ?? "gpt-5.6-luna", "-c", `model_reasoning_effort=${JSON.stringify(this.options.reasoningEffort ?? "medium")}`,
       "--cd", input.cwd, "--output-schema", input.schemaPath, "--output-last-message", input.outputPath, "--json", "--color", "never"];
     for (const directory of input.addDirectories ?? []) args.push("--add-dir", directory);
     if (input.imagePaths?.length) args.push("--image", ...input.imagePaths);

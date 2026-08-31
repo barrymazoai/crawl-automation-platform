@@ -266,6 +266,8 @@ async function runModelPayload(jobDirectory: string, prompt: string, tag: string
       outputPath: path.join(jobDirectory, "model", `${name}.result.json`),
       eventLogPath: path.join(jobDirectory, "model", `${name}.events.jsonl`),
       signal,
+      // 每 5 分钟保留一次会话 rollout，供 Codex 余量遥测解析限额快照（其余调用仍 --ephemeral）。
+      persistSession: shouldPersistCodexSession(),
     });
     return z.object({ payload: z.string().min(2) }).parse(raw).payload;
   });
@@ -291,6 +293,7 @@ async function processDtc(claim: any, jobDirectory: string, signal: AbortSignal)
       outputPath: path.join(jobDirectory, "process-result.json"),
       eventLogPath: eventLog,
       signal,
+      persistSession: shouldPersistCodexSession(),
     })),
   });
   if (result.result.status !== "complete" || !result.batch || !result.batchFile) {
@@ -355,11 +358,79 @@ async function currentEgressIp(exitId: string) {
   egressIpCache = { exitId, ip, at: Date.now() };
   return ip;
 }
-let codexUsageCache: { value: Record<string, unknown> | null; at: number } | null = null;
-async function codexUsage() {
-  if (!env.CODEX_USAGE_COMMAND) return null;
-  if (codexUsageCache && Date.now() - codexUsageCache.at < TELEMETRY_TTL_MS) return codexUsageCache.value;
-  const value = await new Promise<Record<string, unknown> | null>((resolve) => {
+/**
+ * Codex 余量（零配置内建）：runModelPayload 每 5 分钟让一次调用保留会话 rollout，
+ * 这里解析最新 rollout 里的 rate_limits 快照（primary/secondary 窗口按时长映射为
+ * 5 小时窗口与周限额）。配置 CODEX_USAGE_COMMAND 时优先使用命令输出。
+ */
+const CODEX_SESSIONS_DIR = path.join(os.homedir(), ".codex", "sessions");
+let lastSessionPersistAt = 0;
+function shouldPersistCodexSession() {
+  if (Date.now() - lastSessionPersistAt < TELEMETRY_TTL_MS) return false;
+  lastSessionPersistAt = Date.now();
+  return true;
+}
+function findRateLimits(value: unknown): Record<string, any> | null {
+  if (Array.isArray(value)) { for (const item of value) { const hit = findRateLimits(item); if (hit) return hit; } return null; }
+  if (!value || typeof value !== "object") return null;
+  const record = value as Record<string, unknown>;
+  if (record.rate_limits && typeof record.rate_limits === "object") return record.rate_limits as Record<string, any>;
+  for (const item of Object.values(record)) { const hit = findRateLimits(item); if (hit) return hit; }
+  return null;
+}
+async function newestRolloutFile() {
+  const listDesc = async (dir: string, pattern: RegExp) =>
+    (await fs.readdir(dir).catch(() => [] as string[])).filter((name) => pattern.test(name)).sort().reverse();
+  for (const year of await listDesc(CODEX_SESSIONS_DIR, /^\d{4}$/)) {
+    for (const month of await listDesc(path.join(CODEX_SESSIONS_DIR, year), /^\d{2}$/)) {
+      for (const day of await listDesc(path.join(CODEX_SESSIONS_DIR, year, month), /^\d{2}$/)) {
+        const directory = path.join(CODEX_SESSIONS_DIR, year, month, day);
+        const files = await Promise.all((await listDesc(directory, /\.jsonl$/)).map(async (name) => {
+          const filename = path.join(directory, name);
+          return { filename, mtime: (await fs.stat(filename).catch(() => null))?.mtimeMs ?? 0 };
+        }));
+        const newest = files.sort((a, b) => b.mtime - a.mtime)[0];
+        if (newest) return newest.filename;
+      }
+    }
+  }
+  return null;
+}
+async function rateLimitsFromRollouts() {
+  const filename = await newestRolloutFile();
+  if (!filename) return null;
+  const handle = await fs.open(filename, "r");
+  try {
+    const size = (await handle.stat()).size;
+    const length = Math.min(size, 2_000_000);
+    const buffer = Buffer.alloc(length);
+    await handle.read(buffer, 0, length, size - length);
+    const lines = buffer.toString("utf8").split("\n");
+    if (size > length) lines.shift();
+    for (let index = lines.length - 1; index >= 0; index -= 1) {
+      if (!lines[index]!.includes('"rate_limits"')) continue;
+      try {
+        const parsed = JSON.parse(lines[index]!);
+        const snapshot = findRateLimits(parsed);
+        if (!snapshot) continue;
+        const windows = [snapshot.primary, snapshot.secondary].filter((window) => window && typeof window.used_percent === "number");
+        const fiveHour = windows.find((window) => window.window_minutes != null && window.window_minutes <= 24 * 60) ?? null;
+        const weekly = windows.find((window) => window.window_minutes != null && window.window_minutes > 24 * 60) ?? null;
+        const left = (window: any) => window ? Math.max(0, Math.min(100, Math.round((100 - window.used_percent) * 10) / 10)) : null;
+        const resets = (window: any) => window?.resets_at ? new Date(window.resets_at * 1000).toISOString() : null;
+        return {
+          fiveHourPercentLeft: left(fiveHour),
+          weeklyPercentLeft: left(weekly),
+          resetsAt: resets(fiveHour) ?? resets(weekly),
+          updatedAt: typeof parsed.timestamp === "string" ? parsed.timestamp : new Date().toISOString(),
+        };
+      } catch { /* 半行/损坏行跳过 */ }
+    }
+    return null;
+  } finally { await handle.close(); }
+}
+async function codexUsageFromCommand() {
+  return new Promise<Record<string, unknown> | null>((resolve) => {
     exec(env.CODEX_USAGE_COMMAND!, { timeout: 30_000 }, (error, stdout) => {
       if (error) return resolve(null);
       try {
@@ -377,6 +448,13 @@ async function codexUsage() {
       } catch { resolve(null); }
     });
   });
+}
+let codexUsageCache: { value: Record<string, unknown> | null; at: number } | null = null;
+async function codexUsage() {
+  if (codexUsageCache && Date.now() - codexUsageCache.at < TELEMETRY_TTL_MS) return codexUsageCache.value;
+  const value = env.CODEX_USAGE_COMMAND
+    ? await codexUsageFromCommand()
+    : await rateLimitsFromRollouts().catch(() => null);
   codexUsageCache = { value, at: Date.now() };
   return value;
 }
