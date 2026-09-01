@@ -43,9 +43,8 @@ export interface SwansonFetcher {
 }
 
 /** 在页面里按字段名扫描内嵌 JSON。手写扫描而非正则：值里含转义引号会把正则截断。 */
-const FACTS_SCRIPT = String.raw`(() => {
-  const html = document.documentElement.innerHTML;
-  const read = (field) => {
+const READ_FIELD_FN = String.raw`
+  const read = (html, field) => {
     const m = new RegExp('["\']?' + field + '["\']?\\s*:\\s*"', 'i').exec(html);
     if (!m) return null;
     let i = m.index + m[0].length, out = '';
@@ -57,12 +56,19 @@ const FACTS_SCRIPT = String.raw`(() => {
     }
     return out.length >= 20 ? out : null;
   };
-  for (const field of ['supplementFacts', 'nutritionFacts', 'productFacts', 'drugFacts']) {
-    const value = read(field);
-    if (value) return { field: field, raw: value, other: read('otherIngredients') || read('ingredients') };
-  }
-  return null;
-})()`;
+`;
+
+/** 同源 fetch 取源码后就地扫描，只回传抠到的几百字节。 */
+function factsViaFetchScript(url: string) {
+  return `fetch(${JSON.stringify(url)}, { credentials: 'include' }).then((r) => r.text()).then((html) => {
+    ${READ_FIELD_FN}
+    for (const field of ['supplementFacts', 'nutritionFacts', 'productFacts', 'drugFacts']) {
+      const value = read(html, field);
+      if (value) return { field: field, raw: value, other: read(html, 'otherIngredients') || read(html, 'ingredients') };
+    }
+    return null;
+  })`;
+}
 
 /** 只比对 origin + pathname + 关键查询参数，忽略站点自己加的跟踪参数。 */
 function sameTarget(actual: string, expected: string) {
@@ -89,7 +95,13 @@ const API_CONFIG_SCRIPT = String.raw`(() => {
 
 export function createSwansonFetcher(origin = "https://www.swansonvitamins.com"): SwansonFetcher {
   const holder = createPageHolder();
-  void origin;
+  let onOrigin = false;
+  /** 同源 fetch 需要先停在站点自己的页面上；落一次很轻的首页即可，之后复用。 */
+  const ensureOrigin = async (browser: { navigate(url: string): Promise<number> }) => {
+    if (onOrigin) return;
+    await browser.navigate(origin);
+    onOrigin = true;
+  };
 
   return {
     /**
@@ -136,24 +148,36 @@ export function createSwansonFetcher(origin = "https://www.swansonvitamins.com")
         if (!body.trim()) throw new Error(`Swanson 响应为空：${url}`);
         return body;
       });
-      } finally { await holder.close(); }
+      } finally { onOrigin = false; await holder.close(); }
     },
 
+    /**
+     * 用页面内 fetch 取商品页源码，而不是导航过去。
+     *
+     * 导航等于完整渲染：950KB 主文档之外还要执行页面 JS、拉几十个子资源、等 load，
+     * 实测把 CDP 拖到 Page.navigate / Runtime.evaluate 双双超时。
+     * 同源 fetch 只取主文档、不渲染、不占标签页，抠完成分表只回传几百字节。
+     *
+     * （之前页面内 fetch 失败过一次，那是取跨域的 ac.cnstrc.com 被 CORS 拦；
+     *   商品页与站点同源，不存在这个问题。）
+     */
     async facts(url) {
       try {
       return await holder.run(async (browser) => {
-        const status = await browser.navigate(url);
-        if (status >= 400) {
-          if (BLOCK_STATUSES.has(status)) throw new SwansonBlockedError(status, url);
-          throw new Error(`Swanson HTTP ${status}: ${url}`);
-        }
-        const found = await browser.evaluate<{ field: string; raw: string; other: string | null } | null>(FACTS_SCRIPT);
+        await ensureOrigin(browser);
+        const found = await browser.evaluate<{ field: string; raw: string; other: string | null } | null>(
+          factsViaFetchScript(url));
         if (!found) return null;
         const text = decodeFactsValue(found.raw);
         const other = found.other ? decodeFactsValue(found.other) : null;
         return other && !text.includes(other.slice(0, 40)) ? `${text}\n${other}` : text;
       });
-      } finally { await holder.close(); }
+      } catch (error) {
+        // 出错可能是标签页坏了，关掉让下次重新落地
+        onOrigin = false;
+        await holder.close().catch(() => {});
+        throw error;
+      }
     },
 
     async apiConfig(url) {
@@ -166,9 +190,9 @@ export function createSwansonFetcher(origin = "https://www.swansonvitamins.com")
           }
           return browser.evaluate<{ apiKey: string; filterName: string; filterValue: string } | null>(API_CONFIG_SCRIPT);
         });
-      } finally { await holder.close(); }
+      } finally { onOrigin = false; await holder.close(); }
     },
 
-    async close() { await holder.close(); },
+    async close() { onOrigin = false; await holder.close(); },
   };
 }
