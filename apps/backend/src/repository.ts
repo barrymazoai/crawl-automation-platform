@@ -76,6 +76,8 @@ export class PipelineRepository {
         count(*) filter(where state in ('queued','retry_wait'))::int queued,
         count(*) filter(where state in ('leased','running'))::int active,
         count(*) filter(where state='needs_review')::int needs_review,
+        count(*) filter(where state='failed')::int failed,
+        count(*) filter(where state='failed' and error_code='upstream_failed')::int blocked_by_upstream,
         count(*) filter(where state='completed' and completed_at>now()-interval '1 hour')::int completed_1h,
         count(*) filter(where state='completed' and completed_at>now()-interval '24 hours')::int completed_24h,
         round(avg(extract(epoch from completed_at-started_at)) filter(where state='completed' and completed_at>now()-interval '24 hours'))::int avg_seconds_24h
@@ -98,6 +100,7 @@ export class PipelineRepository {
       jobs: Object.fromEntries(jobs.rows.map((row) => [row.state, row.count])),
       stages: stages.rows.map((row) => ({
         stage: row.stage, queued: row.queued, active: row.active, needsReview: row.needs_review,
+        failed: row.failed, blockedByUpstream: row.blocked_by_upstream,
         completed1h: row.completed_1h, completed24h: row.completed_24h, avgSeconds24h: row.avg_seconds_24h,
       })),
       activeJobs: activeJobs.rows.map((row) => ({
@@ -294,21 +297,6 @@ export class PipelineRepository {
     return result.rowCount ?? 0;
   }
 
-  /** 复核放行某个任务时，把当初因它而被标记 upstream_failed 的下游一并放回队列。 */
-  private async releaseDownstreamBlocked(client: PoolClient, rootJobId: string) {
-    const result = await client.query(
-      `with recursive downstream as (
-         select id from pipeline_job where $1::uuid = any(depends_on)
-         union
-         select j.id from pipeline_job j join downstream d on d.id = any(j.depends_on)
-       )
-       update pipeline_job set state='queued', attempt=0, available_at=now(),
-         error_code=null, error_message=null, updated_at=now()
-       where id in (select id from downstream) and state='failed' and error_code='upstream_failed'
-       returning id`, [rootJobId]);
-    return result.rowCount ?? 0;
-  }
-
   private async requireLease(client: PoolClient, jobId: string, token: string) {
     const job = (await client.query("select * from pipeline_job where id=$1 for update", [jobId])).rows[0];
     if (!job || job.lease_token_hash !== leaseHash(token) || new Date(job.lease_expires_at) <= new Date()) throw new Error("租约无效或已过期");
@@ -371,16 +359,15 @@ export class PipelineRepository {
           lease_token_hash=null,lease_expires_at=null,error_code=$3,error_message=$4,updated_at=now() where id=$1`, [jobId, delaySeconds, input.code, input.message]);
         await client.query("update pipeline_run set error_code=$2,error_message=$3,updated_at=now() where id=$1", [job.run_id, input.code, input.message]);
       } else {
-        // 永久失败（重试耗尽）。两件事必须一起做，缺一个就会像 2026-08-31 那次一样静默卡死：
-        // 1. 登记复核项——否则失败只体现在 job 状态里，人工复核队列看不到，没人知道出事了。
-        // 2. 把下游显式标记成 upstream_failed——否则下游会一直躺在 queued 里假装"排队中"，
-        //    实际永远不可能被领取（依赖判定要求上游 completed），队列数字就是在撒谎。
-        const failureReviewId = randomUUID();
+        // 永久失败（重试耗尽）是终态：不进复核队列，也不会自己回到队列。
+        // 失败属于技术故障，和 needs_review 的数据判断是两回事，混在一起会让复核队列失去意义；
+        // 后续由人工分析原因后重新提交。这里只做两件事：
+        // 1. 把下游递归标记成 upstream_failed——否则下游会一直以 queued 停留，
+        //    却因依赖判定（要求上游 completed）永远领不走，队列数字等于在撒谎。
+        // 2. 记事件。可见性由 summary 的 failed 计数负责，不借用复核队列。
         await client.query("update pipeline_job set state='failed',leased_by=null,lease_token_hash=null,lease_expires_at=null,error_code=$2,error_message=$3,updated_at=now() where id=$1", [jobId, input.code, input.message]);
-        await client.query("insert into pipeline_review(id,run_id,job_id,reason_code,reason_message) values($1,$2,$3,$4,$5)",
-          [failureReviewId, job.run_id, jobId, input.code, `永久失败（尝试 ${job.attempt}/${job.max_attempts}）：${input.message}`]);
         const blockedDownstream = await this.markDownstreamBlocked(client, jobId);
-        await client.query("update pipeline_run set open_review_count=open_review_count+1,error_code=$2,error_message=$3,updated_at=now() where id=$1", [job.run_id, input.code, input.message]);
+        await client.query("update pipeline_run set error_code=$2,error_message=$3,updated_at=now() where id=$1", [job.run_id, input.code, input.message]);
         await this.event(client, job.run_id, jobId, "job.failed_permanently", job.leased_by, { ...input, blockedDownstream });
       }
       await this.event(client, job.run_id, jobId, "job.failed", job.leased_by, input);
@@ -438,8 +425,6 @@ export class PipelineRepository {
         await client.query("update pipeline_run set status='abandoned',open_review_count=greatest(open_review_count-1,0),updated_at=now() where id=$1", [review.run_id]);
       } else {
         await client.query("update pipeline_job set state='queued',attempt=0,available_at=now(),error_code=null,error_message=null,updated_at=now() where id=$1", [review.job_id]);
-        // 上游放行了，当初因它被标记 upstream_failed 的下游也要一起复活
-        if (review.job_id) await this.releaseDownstreamBlocked(client, review.job_id);
         // run 状态不再承担拦截职责；这里只把历史遗留的 needs_review/retry_wait 状态复位为 active。
         await client.query(`update pipeline_run set status=case when status in ('needs_review','retry_wait','queued') then 'active' else status end,
           open_review_count=greatest(open_review_count-1,0),error_code=null,error_message=null,updated_at=now() where id=$1`, [review.run_id]);

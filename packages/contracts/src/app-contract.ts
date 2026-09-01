@@ -16,6 +16,8 @@ export const appContract = {
         queued: z.number(),
         active: z.number(),
         needsReview: z.number(),
+        failed: z.number(),
+        blockedByUpstream: z.number(),
         completed1h: z.number(),
         completed24h: z.number(),
         avgSeconds24h: z.number().nullable(),

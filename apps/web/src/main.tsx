@@ -115,12 +115,13 @@ function Dashboard() {
   const stageRows = data?.stages ?? [];
   const byStage = new Map(stageRows.map((row) => [row.stage, row]));
   const laneStats = LANES.map((lane) => {
-    const agg = { queued: 0, active: 0, review: 0, done1h: 0, avg: null as number | null };
+    const agg = { queued: 0, active: 0, review: 0, failed: 0, blocked: 0, done1h: 0, avg: null as number | null };
     const avgs: number[] = [];
     for (const stage of lane.stages) {
       const row = byStage.get(stage);
       if (!row) continue;
       agg.queued += row.queued; agg.active += row.active; agg.review += row.needsReview; agg.done1h += row.completed1h;
+      agg.failed += row.failed ?? 0; agg.blocked += row.blockedByUpstream ?? 0;
       if (row.avgSeconds24h != null) avgs.push(row.avgSeconds24h);
     }
     if (avgs.length) agg.avg = Math.round(avgs.reduce((a, b) => a + b, 0) / avgs.length);
@@ -175,9 +176,11 @@ function Dashboard() {
 
     <div className="lanes">{laneStats.map((lane, index) => <div className="lane" key={lane.key}>
       <div className="lane-head">
-        <div className="lane-name">{lane.name} {lane.review > 0
-          ? <span className="tag warn" style={{ fontSize: 10 }}>{lane.review} 待复核</span>
-          : lane.active > 0 ? <span className="tag info" style={{ fontSize: 10 }}><span className="dot live"/>{lane.active} 在跑</span> : <span className="tag idle" style={{ fontSize: 10 }}>空闲</span>}</div>
+        <div className="lane-name">{lane.name} {lane.failed > 0
+          ? <span className="tag bad" style={{ fontSize: 10 }}>{lane.failed} 失败{lane.blocked > 0 ? `（${lane.blocked} 被上游拖住）` : ""}</span>
+          : lane.review > 0
+            ? <span className="tag warn" style={{ fontSize: 10 }}>{lane.review} 待复核</span>
+            : lane.active > 0 ? <span className="tag info" style={{ fontSize: 10 }}><span className="dot live"/>{lane.active} 在跑</span> : <span className="tag idle" style={{ fontSize: 10 }}>空闲</span>}</div>
         <div className="lane-kpis">
           <div className="lane-kpi"><b className="num">{lane.queued}</b><span>排队</span></div>
           <div className="lane-kpi"><b className="num">{lane.done1h}</b><span>1h 完成</span></div>
