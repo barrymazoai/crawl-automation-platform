@@ -7,6 +7,8 @@ export interface AmazonBackfillSource {
   titleRaw: string | null;
   attrs: Record<string, unknown> | null;
   productForms: string[];
+  /** 产品库里的变体家族 ID：保证兄弟变体同批送模型，模型才判断得出哪部分是产品线名。 */
+  familyId?: string | null;
 }
 
 function cleanText(value: unknown) {
@@ -38,6 +40,7 @@ export function buildAmazonBackfillUnifyInput(source: AmazonBackfillSource): Pro
     structuredVariant: amazonStructuredVariant(attrsRaw),
     attrsRaw,
     productFormHint: formHint,
+    familyKey: source.familyId ?? null,
   };
 }
 

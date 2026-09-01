@@ -186,3 +186,44 @@ describe("重试预算（基础设施故障容错）", () => {
     expect(maxAttempts).toBe(6);
   });
 });
+
+describe("永久失败的可见性与下游级联", () => {
+  it("重试耗尽时登记复核项，并把下游标记成 upstream_failed", async () => {
+    const token = "lease-token-1234567890";
+    const { pool, queries } = fakePool((sql) => {
+      if (sql.includes("select * from pipeline_job")) {
+        // attempt 已达上限 → 走永久失败分支
+        return { rows: [{ ...leasedJob("process_text", token), attempt: 5, max_attempts: 5 }] };
+      }
+      return undefined;
+    });
+    const repository = new PipelineRepository(pool);
+    await repository.fail("job-1", token, { code: "ocr_service_down", message: "OCR 服务不可用", retryable: true }, "fail-key-perm");
+
+    // 1) 任务本身置为 failed
+    expect(queries.some(({ sql }) => sql.includes("state='failed'") && sql.includes("pipeline_job"))).toBe(true);
+    // 2) 必须登记复核项——否则失败在复核队列里看不见
+    expect(queries.some(({ sql }) => sql.includes("insert into pipeline_review"))).toBe(true);
+    // 3) 必须级联标记下游，且用递归 CTE 覆盖多层依赖
+    const cascade = queries.find(({ sql }) => sql.includes("upstream_failed") && sql.includes("with recursive"));
+    expect(cascade).toBeTruthy();
+    expect(cascade!.sql).toContain("state in ('queued','retry_wait')");
+    // 4) run 的待复核计数要 +1
+    expect(queries.some(({ sql }) => sql.includes("open_review_count=open_review_count+1"))).toBe(true);
+  });
+
+  it("复核放行时把 upstream_failed 的下游一并放回队列", async () => {
+    const { pool, queries } = fakePool((sql) => {
+      if (sql.includes("from pipeline_review where id=")) {
+        return { rows: [{ id: "rev-1", run_id: "run-1", job_id: "job-1", status: "open" }] };
+      }
+      return undefined;
+    });
+    const repository = new PipelineRepository(pool);
+    await repository.resolveReview("rev-1", "retry", "人工确认后重试");
+
+    const release = queries.find(({ sql }) => sql.includes("upstream_failed") && sql.includes("state='queued'"));
+    expect(release).toBeTruthy();
+    expect(release!.sql).toContain("with recursive");
+  });
+});

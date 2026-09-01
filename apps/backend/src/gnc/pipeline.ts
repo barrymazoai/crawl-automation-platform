@@ -108,6 +108,8 @@ export function gncUnifyInput(product: ExtractedGncProduct, semantic: GncCleanRe
     structuredVariant,
     attrsRaw: product.variantAttrs,
     productFormHint: semantic.productForm === "other" ? null : semantic.productForm,
+    // 站点自带的产品线 ID：保证兄弟变体同批送模型
+    familyKey: product.family?.parentExternalId ?? null,
   };
 }
 

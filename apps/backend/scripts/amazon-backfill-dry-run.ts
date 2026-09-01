@@ -58,6 +58,7 @@ if (target && !(["localhost", "127.0.0.1"].includes(target.hostname) && target.p
 interface BackfillRow {
   product_id: string;
   product_name: string;
+  family_id: string | null;
   company_name: string | null;
   amazon_url: string;
   external_id: string | null;
@@ -149,6 +150,7 @@ images AS (
 SELECT
   p.id AS product_id,
   p.name AS product_name,
+  p.family_id,
   c.name AS company_name,
   COALESCE(l.url, d.url) AS amazon_url,
   l.external_id,
@@ -222,6 +224,7 @@ try {
     titleRaw: row.title_raw,
     attrs: row.attrs,
     productForms: row.product_forms ?? [],
+    familyId: row.family_id,
   }));
   await fs.writeFile(path.join(cli.outputDirectory, "selected.json"), `${JSON.stringify(claimedRows, null, 2)}\n`);
 

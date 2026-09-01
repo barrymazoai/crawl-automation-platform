@@ -62,6 +62,17 @@ export interface ProductUnifyInput {
   attrsRaw: Record<string, unknown>;
   /** 上一个语义阶段给出的剂型；只作为提示，不冒充渠道结构化字段。 */
   productFormHint?: string | null;
+  /**
+   * 同一产品线（变体家族）的稳定标识，来自站点自身而非模型：
+   * GNC 的 family.parentExternalId、Amazon 的 parentAsin、Swanson 的 familyParentId、
+   * 产品库里的 family_id 都可以填。
+   *
+   * 填了它，兄弟变体一定会进同一次模型调用——模型能看到"它们彼此差在哪"，
+   * 才判断得出哪部分是产品线名、哪部分是变体维度。缺了这个上下文，模型面对孤立
+   * 一条时会把 Extra Strength 这类修饰词当成变体（或反之），并因为无法可靠隔离
+   * 产品线而返回 null base_name。
+   */
+  familyKey?: string | null;
 }
 
 export interface ProductUnifyResult {
@@ -401,6 +412,41 @@ export function parseProductUnifyOutput(raw: string, expected: ProductUnifyInput
   };
 }
 
+/**
+ * 按变体家族分批：同一 family 的成员永远落在同一批，绝不跨调用拆开。
+ *
+ * 规则：
+ * - 有 familyKey 的先按 family 聚拢；family 本身超过 batchSize 时**整体成为一批**
+ *   （宁可批次偏大，也不能把兄弟拆开——拆开就等于放弃了这次改动的全部意义）。
+ * - 没有 familyKey 的条目按原来的顺序填进剩余空位。
+ * - 家族内部保持输入顺序，输出仍与输入一一对应。
+ */
+export function groupInputsIntoBatches(inputs: readonly ProductUnifyInput[], batchSize: number) {
+  const families = new Map<string, ProductUnifyInput[]>();
+  const singles: ProductUnifyInput[] = [];
+  for (const input of inputs) {
+    const key = input.familyKey?.trim();
+    if (!key) { singles.push(input); continue; }
+    const bucket = families.get(key);
+    if (bucket) bucket.push(input); else families.set(key, [input]);
+  }
+  const batches: ProductUnifyInput[][] = [];
+  let current: ProductUnifyInput[] = [];
+  const flush = () => { if (current.length) { batches.push(current); current = []; } };
+  // 大家族独占一批；小家族依次装箱，装不下就先封箱再开新批。
+  for (const members of families.values()) {
+    if (members.length >= batchSize) { flush(); batches.push(members); continue; }
+    if (current.length + members.length > batchSize) flush();
+    current.push(...members);
+  }
+  for (const single of singles) {
+    if (current.length >= batchSize) flush();
+    current.push(single);
+  }
+  flush();
+  return batches;
+}
+
 export async function runProductUnify(options: {
   inputs: ProductUnifyInput[];
   runModel: (input: { prompt: string; tag: string }) => Promise<string>;
@@ -409,8 +455,7 @@ export async function runProductUnify(options: {
   concurrency?: number;
 }): Promise<ProductUnifyOutcome> {
   const batchSize = Math.max(1, Math.floor(options.batchSize ?? 20));
-  const batches: ProductUnifyInput[][] = [];
-  for (let index = 0; index < options.inputs.length; index += batchSize) batches.push(options.inputs.slice(index, index + batchSize));
+  const batches = groupInputsIntoBatches(options.inputs, batchSize);
   const outcomes: ProductUnifyOutcome[] = new Array(batches.length);
   let cursor = 0;
   await Promise.all(Array.from({ length: Math.min(Math.max(1, options.concurrency ?? 2), batches.length) }, async () => {

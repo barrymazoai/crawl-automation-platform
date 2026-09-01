@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildProductUnifyPrompt,
+  groupInputsIntoBatches,
   canonicalVariantStrength,
   canonicalVariantForm,
   completeProductNameWithVariant,
@@ -132,5 +133,43 @@ describe("Product Unify", () => {
       servings: "90",
       form: "capsule",
     })).toBe("Nopal 180 Capsules, 90 Servings");
+  });
+});
+
+describe("groupInputsIntoBatches（变体家族分组）", () => {
+  const make = (clientRef: string, familyKey?: string): ProductUnifyInput => ({
+    clientRef, channel: "gnc", titleRaw: clientRef, brand: "B",
+    structuredVariant: {}, attrsRaw: {}, ...(familyKey ? { familyKey } : {}),
+  });
+
+  it("同一家族的成员永远在同一批，不会被批次边界拆开", () => {
+    // 家族 A 有 3 个成员，若按顺序每 2 条切一次就会被拆开
+    const inputs = [make("a1", "A"), make("a2", "A"), make("a3", "A"), make("b1", "B"), make("b2", "B")];
+    const batches = groupInputsIntoBatches(inputs, 2);
+    for (const family of ["A", "B"]) {
+      const holding = batches.filter((batch) => batch.some((item) => item.familyKey === family));
+      expect(holding).toHaveLength(1);
+    }
+  });
+
+  it("超过批次上限的大家族整体成为一批，宁可超载也不拆开", () => {
+    const big = Array.from({ length: 25 }, (_, index) => make(`x${index}`, "BIG"));
+    const batches = groupInputsIntoBatches(big, 10);
+    expect(batches).toHaveLength(1);
+    expect(batches[0]).toHaveLength(25);
+  });
+
+  it("没有 familyKey 的条目按原顺序装箱，且不超过批次上限", () => {
+    const inputs = Array.from({ length: 7 }, (_, index) => make(`s${index}`));
+    const batches = groupInputsIntoBatches(inputs, 3);
+    expect(batches.map((batch) => batch.length)).toEqual([3, 3, 1]);
+    expect(batches.flat().map((item) => item.clientRef)).toEqual(inputs.map((item) => item.clientRef));
+  });
+
+  it("家族与散件混合时，输入一个不丢", () => {
+    const inputs = [make("a1", "A"), make("s1"), make("a2", "A"), make("s2"), make("b1", "B")];
+    const batches = groupInputsIntoBatches(inputs, 3);
+    expect(batches.flat()).toHaveLength(inputs.length);
+    expect(new Set(batches.flat().map((item) => item.clientRef)).size).toBe(inputs.length);
   });
 });

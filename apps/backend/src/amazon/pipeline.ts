@@ -401,6 +401,8 @@ export function amazonUnifyInput(product: CapturedProduct, semantic: CleanResult
       ...(product.familyLabel ? { familyLabel: product.familyLabel } : {}),
     },
     productFormHint: semantic.productForm === "other" ? null : semantic.productForm,
+    // ASIN 变体家族：保证兄弟变体同批送模型
+    familyKey: product.family.parentAsin ?? null,
   };
 }
 
