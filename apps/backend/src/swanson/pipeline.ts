@@ -226,6 +226,32 @@ export function parseSwansonConstructorPage(value: unknown) {
   return { total: number(response.total_num_results), resultCount: results.length, entries };
 }
 
+interface SwansonApiConfig { apiKey: string; filterName: string; filterValue: string }
+
+/**
+ * Constructor 的接入参数（apiKey / FILTER_NAME / FILTER_VALUE）。
+ *
+ * 这三个值是**全站常量**，跟品牌无关。但它们只出现在列表页的 HTML 里，
+ * 而列表页有 1.18MB——按品牌各抓一次，422 个品牌就要下 500MB，纯粹重复读同一个 key，
+ * 既慢又给站点添压力（2026-09-01 那次 429 多半有这一份"贡献"）。
+ *
+ * 所以取一次就缓存在进程里。接口后来报 key 失效时调用方清掉重取即可。
+ */
+let apiConfigCache: SwansonApiConfig | null = null;
+
+export function clearSwansonApiConfigCache() { apiConfigCache = null; }
+
+async function resolveApiConfig(listingUrl: string, options: SwansonCaptureOptions): Promise<SwansonApiConfig> {
+  if (apiConfigCache) return apiConfigCache;
+  const html = await fetchText(listingUrl, options.signal, options.fetcher);
+  const apiKey = html.match(/constructorApiKey\s*=\s*['"]([^'"]+)/)?.[1];
+  const filterName = html.match(/var FILTER_NAME\s*=\s*['"]([^'"]+)/)?.[1];
+  const filterValue = html.match(/var FILTER_VALUE\s*=\s*['"]([^'"]+)/)?.[1];
+  if (!apiKey || !filterName || !filterValue) throw new Error("Swanson 目录页缺少 Constructor API 配置");
+  apiConfigCache = { apiKey, filterName, filterValue };
+  return apiConfigCache;
+}
+
 export async function discoverCatalog(options: SwansonCaptureOptions): Promise<SwansonCatalog> {
   const direct = productHandle(options.url);
   if (direct) {
@@ -240,11 +266,7 @@ export async function discoverCatalog(options: SwansonCaptureOptions): Promise<S
   }
   const source = new URL(options.url);
   const brand = source.searchParams.get("facet.brand")?.trim() || null;
-  const html = await fetchText(source.toString(), options.signal, options.fetcher);
-  const apiKey = html.match(/constructorApiKey\s*=\s*['"]([^'"]+)/)?.[1];
-  const filterName = html.match(/var FILTER_NAME\s*=\s*['"]([^'"]+)/)?.[1];
-  const filterValue = html.match(/var FILTER_VALUE\s*=\s*['"]([^'"]+)/)?.[1];
-  if (!apiKey || !filterName || !filterValue) throw new Error("Swanson 目录页缺少 Constructor API 配置");
+  const { apiKey, filterName, filterValue } = await resolveApiConfig(source.toString(), options);
 
   const entries = new Map<string, CatalogEntry>();
   let expectedCount: number | null = null;
@@ -260,7 +282,20 @@ export async function discoverCatalog(options: SwansonCaptureOptions): Promise<S
     endpoint.searchParams.set("page", String(page));
     endpoint.searchParams.set("num_results_per_page", String(perPage));
     if (brand) endpoint.searchParams.append("filters[brand][]", brand);
-    const parsed = parseSwansonConstructorPage(await fetchJson(endpoint.toString(), options.signal, options.fetcher));
+    /*
+     * 第一页失败就清掉缓存重取一次：apiKey 是缓存的全站常量，站点换了 key 之后
+     * 整批品牌都会失败，让第一个撞上的任务顺手把缓存刷新掉，后面的就正常了。
+     */
+    let parsed;
+    try {
+      parsed = parseSwansonConstructorPage(await fetchJson(endpoint.toString(), options.signal, options.fetcher));
+    } catch (error) {
+      if (page > 1 || !apiConfigCache) throw error;
+      clearSwansonApiConfigCache();
+      const refreshed = await resolveApiConfig(source.toString(), options);
+      endpoint.searchParams.set("key", refreshed.apiKey);
+      parsed = parseSwansonConstructorPage(await fetchJson(endpoint.toString(), options.signal, options.fetcher));
+    }
     expectedCount = parsed.total;
     fetchedResultCount += parsed.resultCount;
     for (const entry of parsed.entries) {

@@ -89,12 +89,13 @@ export function createSwansonFetcher(origin = "https://www.swansonvitamins.com")
          *   那里面根本没有它。
          */
         const body = await browser.evaluate<string>(String.raw`(() => {
+          // 只有 HTML 页面才读源码（目录页要的 constructorApiKey 在 <script> 里，
+          // 读 innerText 拿不到）。其余一律读正文——.js 接口的 content-type 是
+          // application/javascript，白名单式判断会漏掉它，把 JSON 当 HTML 返回源码。
           const type = (document.contentType || '').toLowerCase();
+          if (type.indexOf('html') >= 0) return document.documentElement.outerHTML;
           const pre = document.querySelector('pre');
-          const jsonLike = type.indexOf('json') >= 0 || type.indexOf('plain') >= 0
-            || (pre && document.body && document.body.children.length === 1);
-          return jsonLike ? (pre ? pre.innerText : document.body.innerText)
-                          : document.documentElement.outerHTML;
+          return pre ? pre.innerText : (document.body ? document.body.innerText : '');
         })()`);
         if (!body.trim()) throw new Error(`Swanson 响应为空：${url}`);
         return body;

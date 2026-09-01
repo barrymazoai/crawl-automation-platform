@@ -36,3 +36,11 @@ describe("Swanson fixed adapter", () => {
     })).toEqual({ size: "60 Count", strength: "50 Billion CFU", form: "capsule" });
   });
 });
+
+describe("Constructor 接入参数缓存", () => {
+  it("清缓存的接口存在——key 失效时要能强制重取", async () => {
+    const { clearSwansonApiConfigCache } = await import("./pipeline.js");
+    expect(typeof clearSwansonApiConfigCache).toBe("function");
+    expect(() => clearSwansonApiConfigCache()).not.toThrow();
+  });
+});
