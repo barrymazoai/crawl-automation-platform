@@ -36,3 +36,25 @@ describe("导航到达校验", () => {
     expect(typeof mod.createSwansonFetcher).toBe("function");
   });
 });
+
+describe("createSerialQueue", () => {
+  it("并发提交的任务严格串行执行", async () => {
+    const { createSerialQueue } = await import("./fetcher.js");
+    const enqueue = createSerialQueue();
+    const order: string[] = [];
+    const slow = enqueue(async () => { order.push("a-start"); await new Promise((r) => setTimeout(r, 30)); order.push("a-end"); });
+    const fast = enqueue(async () => { order.push("b"); });
+    await Promise.all([slow, fast]);
+    // b 必须等 a 完全结束——共享标签页容不下交错
+    expect(order).toEqual(["a-start", "a-end", "b"]);
+  });
+
+  it("前一个任务失败不阻塞后一个", async () => {
+    const { createSerialQueue } = await import("./fetcher.js");
+    const enqueue = createSerialQueue();
+    const failed = enqueue(async () => { throw new Error("боом"); });
+    const ok = enqueue(async () => "好");
+    await expect(failed).rejects.toThrow();
+    await expect(ok).resolves.toBe("好");
+  });
+});

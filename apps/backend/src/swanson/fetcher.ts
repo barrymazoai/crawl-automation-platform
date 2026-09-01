@@ -93,9 +93,30 @@ const API_CONFIG_SCRIPT = String.raw`(() => {
   return apiKey && filterName && filterValue ? { apiKey: apiKey, filterName: filterName, filterValue: filterValue } : null;
 })()`;
 
+/**
+ * 浏览器操作的互斥锁。
+ *
+ * fetcher 只有一个标签页（page holder 里的 session 是共享的），而商品抓取用
+ * mapWithConcurrency 并发驱动：两个商品同时在飞时，A 刚导航到自己的 .js，
+ * B 的 evaluate 就跑在同一页上；任何一个失败，holder 的 discard 会把标签页
+ * 关掉，连另一个正在用它的调用一起杀——实测表现就是 Page.navigate timed out
+ * 与 Runtime.evaluate timed out 成对刷屏、双双进重试。
+ *
+ * 所以浏览器操作必须排队，正确性不依赖调用方把并发度配成 1。
+ */
+export function createSerialQueue() {
+  let tail: Promise<unknown> = Promise.resolve();
+  return function enqueue<T>(task: () => Promise<T>): Promise<T> {
+    const next = tail.then(task, task);   // 前一个成败都不影响排队
+    tail = next.then(() => undefined, () => undefined);
+    return next;
+  };
+}
+
 export function createSwansonFetcher(origin = "https://www.swansonvitamins.com"): SwansonFetcher {
   const holder = createPageHolder();
   let onOrigin = false;
+  const locked = createSerialQueue();
   /** 同源 fetch 需要先停在站点自己的页面上；落一次很轻的首页即可，之后复用。 */
   const ensureOrigin = async (browser: { navigate(url: string): Promise<number> }) => {
     if (onOrigin) return;
@@ -120,6 +141,7 @@ export function createSwansonFetcher(origin = "https://www.swansonvitamins.com")
      * 关掉重开代价很小，换来的是每次都从干净的新标签页开始。
      */
     async text(url) {
+      return locked(async () => {
       try {
       return await holder.run(async (browser) => {
         const status = await browser.navigate(url);
@@ -149,6 +171,7 @@ export function createSwansonFetcher(origin = "https://www.swansonvitamins.com")
         return body;
       });
       } finally { onOrigin = false; await holder.close(); }
+      });
     },
 
     /**
@@ -162,6 +185,7 @@ export function createSwansonFetcher(origin = "https://www.swansonvitamins.com")
      *   商品页与站点同源，不存在这个问题。）
      */
     async facts(url) {
+      return locked(async () => {
       try {
       return await holder.run(async (browser) => {
         await ensureOrigin(browser);
@@ -178,9 +202,11 @@ export function createSwansonFetcher(origin = "https://www.swansonvitamins.com")
         await holder.close().catch(() => {});
         throw error;
       }
+      });
     },
 
     async apiConfig(url) {
+      return locked(async () => {
       try {
         return await holder.run(async (browser) => {
           const status = await browser.navigate(url);
@@ -191,6 +217,7 @@ export function createSwansonFetcher(origin = "https://www.swansonvitamins.com")
           return browser.evaluate<{ apiKey: string; filterName: string; filterValue: string } | null>(API_CONFIG_SCRIPT);
         });
       } finally { onOrigin = false; await holder.close(); }
+      });
     },
 
     async close() { onOrigin = false; await holder.close(); },
