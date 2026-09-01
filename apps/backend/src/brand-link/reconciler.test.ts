@@ -17,7 +17,7 @@ function pools(control: Responder, product: Responder = () => ({ rows: [] })) {
   return { controlPool, productPool, sqls, params };
 }
 
-const options = { channel: "gnc", catalogMaxAgeMs: 3_600_000, enqueuePerTick: 5, queueTarget: 20, enqueueAmbiguous: false };
+const options = { channel: "gnc", catalogMaxAgeMs: 3_600_000, enqueuePerTick: 5, queueTarget: 20, enqueueAmbiguous: false, brandSitesPerTick: 0 };
 const repository = { createRuns: vi.fn(async () => ({ created: [{ id: "run-1" }], rejected: [] })) } as any;
 
 describe("BrandLinkReconciler", () => {
@@ -70,6 +70,7 @@ describe("BrandLinkReconciler", () => {
     const { controlPool, productPool, sqls, params } = pools((sql) => {
       if (sql.includes("j.stage='resolve_brand_catalog'")) return { rows: [] };
       if (sql.includes("channel_catalog_snapshot where channel")) return { rows: [{ entry_count: 272, captured_at: captured }] };
+      if (sql.includes("site_checked_at is null")) return { rows: [] };
       if (sql.includes("from channel_brand_catalog")) return { rows: [{ slug: "alani-nu", label: "Alani Nu" }] };
       if (sql.includes("select company_id from channel_brand_link")) return { rows: [] };
       if (sql.includes("where channel=$1 and status = any")) {
@@ -93,6 +94,7 @@ describe("BrandLinkReconciler", () => {
     const { controlPool, productPool, sqls } = pools((sql) => {
       if (sql.includes("j.stage='resolve_brand_catalog'")) return { rows: [] };
       if (sql.includes("channel_catalog_snapshot where channel")) return { rows: [{ entry_count: 272, captured_at: captured }] };
+      if (sql.includes("site_checked_at is null")) return { rows: [] };
       if (sql.includes("from channel_brand_catalog")) return { rows: [{ slug: "alani-nu", label: "Alani Nu" }] };
       if (sql.includes("select company_id from channel_brand_link")) return { rows: [{ company_id: "c-1" }] };
       if (sql.includes("j.stage='capture_catalog'")) return { rows: [{ n: 20 }] };
@@ -108,6 +110,7 @@ describe("BrandLinkReconciler", () => {
     const { controlPool, productPool, params } = pools((sql) => {
       if (sql.includes("j.stage='resolve_brand_catalog'")) return { rows: [] };
       if (sql.includes("channel_catalog_snapshot where channel")) return { rows: [{ entry_count: 272, captured_at: captured }] };
+      if (sql.includes("site_checked_at is null")) return { rows: [] };
       if (sql.includes("from channel_brand_catalog")) return { rows: [{ slug: "ancient-nutrition", label: "Ancient Nutrition" }] };
       if (sql.includes("select company_id from channel_brand_link")) return { rows: [] };
       return { rows: [] };
@@ -125,6 +128,7 @@ describe("BrandLinkReconciler 入队门槛", () => {
     const { controlPool, productPool, params } = pools((sql) => {
       if (sql.includes("j.stage='resolve_brand_catalog'")) return { rows: [] };
       if (sql.includes("channel_catalog_snapshot where channel")) return { rows: [{ entry_count: 9, captured_at: captured }] };
+      if (sql.includes("site_checked_at is null")) return { rows: [] };
       if (sql.includes("from channel_brand_catalog")) return { rows: catalog };
       if (sql.includes("select company_id from channel_brand_link")) return { rows: [] };
       return { rows: [] };
@@ -155,6 +159,7 @@ describe("BrandLinkReconciler 入队门槛", () => {
     const { controlPool, productPool } = pools((sql, parameters) => {
       if (sql.includes("j.stage='resolve_brand_catalog'")) return { rows: [] };
       if (sql.includes("channel_catalog_snapshot where channel")) return { rows: [{ entry_count: 9, captured_at: captured }] };
+      if (sql.includes("site_checked_at is null")) return { rows: [] };
       if (sql.includes("from channel_brand_catalog")) return { rows: [] };
       if (sql.includes("corroboration\n        from channel_brand_link") || sql.includes("evidence->'evidence'->>'corroboration'")) {
         return { rows: [
@@ -178,6 +183,7 @@ describe("BrandLinkReconciler 入队门槛", () => {
     const { controlPool, productPool } = pools((sql, parameters) => {
       if (sql.includes("j.stage='resolve_brand_catalog'")) return { rows: [] };
       if (sql.includes("channel_catalog_snapshot where channel")) return { rows: [{ entry_count: 9, captured_at: captured }] };
+      if (sql.includes("site_checked_at is null")) return { rows: [] };
       if (sql.includes("from channel_brand_catalog")) return { rows: [] };
       if (sql.includes("evidence->'evidence'->>'corroboration'")) {
         return { rows: [
@@ -198,6 +204,7 @@ describe("BrandLinkReconciler 入队门槛", () => {
     const { controlPool, productPool } = pools((sql, parameters) => {
       if (sql.includes("j.stage='resolve_brand_catalog'")) return { rows: [] };
       if (sql.includes("channel_catalog_snapshot where channel")) return { rows: [{ entry_count: 9, captured_at: captured }] };
+      if (sql.includes("site_checked_at is null")) return { rows: [] };
       if (sql.includes("from channel_brand_catalog")) return { rows: [] };
       if (sql.includes("evidence->'evidence'->>'corroboration'")) {
         return { rows: [
@@ -220,6 +227,7 @@ describe("BrandLinkReconciler 佐证复核", () => {
     const { controlPool, productPool, params } = pools((sql) => {
       if (sql.includes("j.stage='resolve_brand_catalog'")) return { rows: [] };
       if (sql.includes("channel_catalog_snapshot where channel")) return { rows: [{ entry_count: 9, captured_at: captured }] };
+      if (sql.includes("site_checked_at is null")) return { rows: [] };
       if (sql.includes("from channel_brand_catalog")) return { rows: catalog };
       if (sql.includes("select company_id from channel_brand_link")) return { rows: [] };
       return { rows: [] };

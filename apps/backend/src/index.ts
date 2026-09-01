@@ -56,7 +56,7 @@ if (config.mode === "proxy") {
         const productPool = new pg.Pool({ connectionString: config.brandLink!.productDatabaseUrl, max: 2 });
         return config.brandLink!.channels.map((channel) => new BrandLinkReconciler(
           pool, productPool, repository,
-          { channel, catalogMaxAgeMs: config.brandLink!.catalogMaxAgeMs, enqueuePerTick: config.brandLink!.enqueuePerTick, queueTarget: config.brandLink!.queueTarget, enqueueAmbiguous: config.brandLink!.enqueueAmbiguous },
+          { channel, catalogMaxAgeMs: config.brandLink!.catalogMaxAgeMs, enqueuePerTick: config.brandLink!.enqueuePerTick, queueTarget: config.brandLink!.queueTarget, brandSitesPerTick: config.brandLink!.brandSitesPerTick, enqueueAmbiguous: config.brandLink!.enqueueAmbiguous },
           (event) => logger.info(event, "brand-link"),
         ));
       })()

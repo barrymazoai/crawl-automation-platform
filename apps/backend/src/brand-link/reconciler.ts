@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 import type { PipelineRepository } from "../repository.js";
+import { resolveBrandSite, sameSite } from "./brand-site.js";
 import { assessEvidence, isCorroborated } from "./evidence.js";
 import { BrandCatalogMatcher, type CatalogEntry } from "./matcher.js";
 
@@ -21,6 +22,8 @@ export interface BrandLinkOptions {
   queueTarget: number;
   /** subset 档要不要自动入队。默认不入队，留给人工确认。 */
   enqueueAmbiguous: boolean;
+  /** 每轮解析多少个品牌的官网。请求打在品牌自己站点上，不占渠道额度，但也不必一次冲完。 */
+  brandSitesPerTick: number;
 }
 
 export interface BrandLinkStatus {
@@ -60,6 +63,7 @@ export class BrandLinkReconciler {
     const snapshot = await this.readSnapshot();
     if (this.isStale(snapshot)) await this.requestCatalogRefresh();
     if (!snapshot || snapshot.entryCount === 0) return { matched: 0, enqueued: 0 };
+    await this.resolveBrandSites();
     const matched = await this.matchCompanies(snapshot.capturedAt);
     await this.settleContestedSlugs();
     const enqueued = await this.enqueueResolved();
@@ -133,12 +137,39 @@ export class BrandLinkReconciler {
   }
 
   /**
+   * 解析品牌自己的官网，缓存进目录表。
+   *
+   * 按品牌算而不按公司算是关键：目录 272 个品牌，公司 4092 家，一个品牌查一次，
+   * 之后所有认领它的公司都白用这条证据。请求全部打在品牌自己的站点上。
+   */
+  private async resolveBrandSites() {
+    if (this.options.brandSitesPerTick <= 0) return 0;
+    const pending = (await this.control.query<{ slug: string; label: string }>(
+      "select slug, label from channel_brand_catalog where channel=$1 and site_checked_at is null limit $2",
+      [this.options.channel, this.options.brandSitesPerTick])).rows;
+    if (!pending.length) return 0;
+    let found = 0;
+    for (const brand of pending) {
+      const result = await resolveBrandSite(brand.slug, brand.label);
+      await this.control.query(
+        `update channel_brand_catalog set site=$3, site_host=$4, site_source=$5, site_checked_at=now()
+         where channel=$1 and slug=$2`,
+        [this.options.channel, brand.slug, result.probed ? `https://${result.probed}` : null,
+          result.host, result.host ? "guessed" : "none"]);
+      if (result.host) found += 1;
+    }
+    this.log({ type: "brand_sites_resolved", channel: this.options.channel, probed: pending.length, found });
+    return found;
+  }
+
+  /**
    * 拿最新目录去比对还没结论、或结论早于当前目录版本的公司。
    * 匹配全在内存里做，几千家公司也就毫秒级，不占渠道配额。
    */
   private async matchCompanies(catalogSeenAt: Date) {
-    const entries = (await this.control.query<CatalogEntry>(
-      "select slug, label from channel_brand_catalog where channel=$1", [this.options.channel])).rows;
+    const entries = (await this.control.query<CatalogEntry & { site_host: string | null }>(
+      "select slug, label, site_host from channel_brand_catalog where channel=$1", [this.options.channel])).rows;
+    const brandSites = new Map(entries.map((entry) => [entry.slug, entry.site_host]));
     if (!entries.length) return 0;
     const matcher = new BrandCatalogMatcher(entries);
 
@@ -171,8 +202,13 @@ export class BrandLinkReconciler {
       const evidence = hit
         ? assessEvidence({ website: company.website, profile: company.profile }, hit.slug, hit.label)
         : null;
+      /*
+       * 最硬的一条证据：品牌自己的官网和这家公司的官网是同一个域名。
+       * 域名对域名没有模糊空间，比"域名像不像品牌名"可靠得多，所以它能单独定案。
+       */
+      const siteMatch = hit ? sameSite(brandSites.get(hit.slug) ?? null, company.website) : false;
       const status = !hit ? "absent"
-        : hit.tier === "exact" || (evidence && isCorroborated(evidence)) ? "resolved"
+        : siteMatch || hit.tier === "exact" || (evidence && isCorroborated(evidence)) ? "resolved"
         : "ambiguous";
       await this.control.query(
         `insert into channel_brand_link(company_id,channel,company_name,status,brand_slug,brand_label,brand_url,tier,evidence,catalog_seen_at,checked_at)
@@ -186,7 +222,8 @@ export class BrandLinkReconciler {
           hit?.slug ?? null, hit?.label ?? null,
           hit ? `https://www.${this.options.channel}.com/brands/${hit.slug}/` : null,
           hit?.tier ?? null,
-          { catalogSize: matcher.size, canonicalName: company.canonical_name, website: company.website, evidence },
+          { catalogSize: matcher.size, canonicalName: company.canonical_name, website: company.website,
+            evidence, brandSite: brandSites.get(hit?.slug ?? "") ?? null, siteMatch },
           catalogSeenAt,
         ]);
       matched += 1;
@@ -211,8 +248,11 @@ export class BrandLinkReconciler {
    */
   private async settleContestedSlugs() {
     const rows = (await this.control.query<{
-      company_id: string; brand_slug: string; status: string; enqueued_at: string | null; corroboration: string | null;
-    }>(`select company_id, brand_slug, status, enqueued_at, evidence->'evidence'->>'corroboration' corroboration
+      company_id: string; brand_slug: string; status: string; enqueued_at: string | null;
+      corroboration: string | null; site_match: boolean | null;
+    }>(`select company_id, brand_slug, status, enqueued_at,
+          evidence->'evidence'->>'corroboration' corroboration,
+          (evidence->>'siteMatch')::boolean site_match
         from channel_brand_link
         where channel=$1 and brand_slug is not null and status in ('resolved','ambiguous')`,
       [this.options.channel])).rows;
@@ -224,8 +264,8 @@ export class BrandLinkReconciler {
       groups.set(row.brand_slug, group);
     }
 
-    const hard = (row: { corroboration: string | null }) =>
-      row.corroboration === "domain_exact" || row.corroboration === "profile";
+    const hard = (row: { corroboration: string | null; site_match: boolean | null }) =>
+      row.site_match === true || row.corroboration === "domain_exact" || row.corroboration === "profile";
     let settled = 0;
     let rejected = 0;
     for (const [slug, group] of groups) {
