@@ -3,6 +3,7 @@ import path from "node:path";
 import type { CapturedProductV1 } from "@crawl-automation/contracts";
 import { writeJsonAtomic } from "@crawl-automation/runtime";
 import { captureProducts, discoverCatalog, stripHtml, type CapturedSwansonProduct, type SwansonThrottle } from "../swanson/pipeline.js";
+import { hasCompleteFactsText } from "../gnc/facts.js";
 import { createSwansonFetcher } from "../swanson/fetcher.js";
 import { BatchPublisher } from "./batch-publisher.js";
 import { runRoot } from "./paths.js";
@@ -50,7 +51,18 @@ export function toSwansonCapturedProduct(product: CapturedSwansonProduct): Captu
     descriptionText: stripHtml(product.product.description) || null,
     detailText: [data.main_ingred, data.potent, data.pfdesc].filter(Boolean).join("\n") || null,
     ingredientText: data.main_ingred ?? null,
-    factsEvidence: { htmlTable: null, pdfUrl: null, imageRefs: product.images },
+    /*
+     * 页面自带的成分表放进 htmlTable——这是契约里给"HTML 里已有完整成分表"留的位置，
+     * GNC 也用它。不完整就留 null，让图片线去 OCR。
+     *
+     * 之前这里写死 null，抓取阶段辛苦抠出来的成分表在发布批次时就被丢掉了，
+     * 下游拿不到，商品全被判成"没有配方证据"而排除。
+     */
+    factsEvidence: {
+      htmlTable: product.factsText && hasCompleteFactsText(product.factsText) ? product.factsText : null,
+      pdfUrl: null,
+      imageRefs: product.images,
+    },
     images: product.images,
     sourceFiles: [`products/${product.externalId.replace(/[^a-zA-Z0-9_-]/g, "_")}.json`],
     captureCompleteness: "full",

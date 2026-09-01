@@ -64,27 +64,40 @@ const FACTS_SCRIPT = String.raw`(() => {
 
 export function createSwansonFetcher(origin = "https://www.swansonvitamins.com"): SwansonFetcher {
   const holder = createPageHolder();
-  let landed = false;
-
-  /** 目录与商品 JSON 走页面内 fetch：同源 Cookie 与 TLS 指纹都是真实浏览器的。 */
-  const ensureLanded = async (browser: { navigate(url: string): Promise<number> }) => {
-    if (landed) return;
-    await browser.navigate(origin);
-    landed = true;
-  };
+  void origin;
 
   return {
+    /**
+     * 直接导航到接口地址再读正文，而不是在页面里 fetch。
+     *
+     * Constructor 的目录接口在 ac.cnstrc.com，跟站点不同源；页面内 fetch 会触发
+     * CORS 预检，被浏览器拦掉且拿不到状态码（只会看到一个 rejected 的 Promise）。
+     * 导航没有同源限制，JSON 会被渲染成纯文本，直接读 body 就是响应体。
+     */
     async text(url) {
       return holder.run(async (browser) => {
-        await ensureLanded(browser);
-        const script = `fetch(${JSON.stringify(url)}, { credentials: 'include' })
-          .then((r) => r.text().then((t) => ({ ok: r.ok, status: r.status, body: t })))`;
-        const result = await browser.evaluate<{ ok: boolean; status: number; body: string }>(script);
-        if (!result.ok) {
-          if (BLOCK_STATUSES.has(result.status)) throw new SwansonBlockedError(result.status, url);
-          throw new Error(`Swanson HTTP ${result.status}: ${url}`);
+        const status = await browser.navigate(url);
+        if (status >= 400) {
+          if (BLOCK_STATUSES.has(status)) throw new SwansonBlockedError(status, url);
+          throw new Error(`Swanson HTTP ${status}: ${url}`);
         }
-        return result.body;
+        /*
+         * JSON 接口与 HTML 页面要读的东西不同：
+         * - JSON 被 Chrome 渲染进一个 <pre>，读它的文字就是响应体；
+         * - HTML 页面必须读源码——目录页要的 constructorApiKey 在 <script> 里，
+         *   读 innerText 只会拿到渲染后的可见文字（实测 4058 字符 vs 源码 95 万），
+         *   那里面根本没有它。
+         */
+        const body = await browser.evaluate<string>(String.raw`(() => {
+          const type = (document.contentType || '').toLowerCase();
+          const pre = document.querySelector('pre');
+          const jsonLike = type.indexOf('json') >= 0 || type.indexOf('plain') >= 0
+            || (pre && document.body && document.body.children.length === 1);
+          return jsonLike ? (pre ? pre.innerText : document.body.innerText)
+                          : document.documentElement.outerHTML;
+        })()`);
+        if (!body.trim()) throw new Error(`Swanson 响应为空：${url}`);
+        return body;
       });
     },
 
@@ -95,7 +108,6 @@ export function createSwansonFetcher(origin = "https://www.swansonvitamins.com")
           if (BLOCK_STATUSES.has(status)) throw new SwansonBlockedError(status, url);
           throw new Error(`Swanson HTTP ${status}: ${url}`);
         }
-        landed = true;
         const found = await browser.evaluate<{ field: string; raw: string; other: string | null } | null>(FACTS_SCRIPT);
         if (!found) return null;
         const text = decodeFactsValue(found.raw);
