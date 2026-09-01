@@ -74,6 +74,21 @@ export class ClashControllerSelector {
     throw new Error(`clash_selector_switch_failed:${selector}:${proxyName}:${lastError}`);
   }
 
+  /**
+   * 读出某个选择组的成员清单。
+   *
+   * 出口清单从这里实时取，而不是在 .env 里再抄一份——两处维护迟早不一致，
+   * 而"配置里写着的出口在组里其实不存在"这种错要到运行时切换失败才暴露。
+   */
+  async listMembers(selector: string): Promise<string[]> {
+    const list = await this.proxies();
+    const group = list.proxies[selector];
+    if (!group) throw new Error(`missing_selector:${selector}`);
+    const members = group.all ?? [];
+    if (members.length === 0) throw new Error(`empty_selector:${selector}`);
+    return members;
+  }
+
   async close() {
     await this.agent?.close();
   }

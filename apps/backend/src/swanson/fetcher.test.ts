@@ -1,74 +1,30 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
-import { createHttpFetcher, createResilientFetcher, SwansonBlockedError } from "./fetcher.js";
+import { describe, expect, it } from "vitest";
+import { decodeFactsValue, BLOCK_STATUSES, SwansonBlockedError } from "./fetcher.js";
 
-const signal = new AbortController().signal;
-const res = (status: number, body = "ok", headers: Record<string, string> = {}) =>
-  ({ ok: status >= 200 && status < 300, status, text: async () => body, headers: { get: (k: string) => headers[k] ?? null } }) as any;
-
-afterEach(() => { vi.unstubAllGlobals(); });
-
-describe("createHttpFetcher", () => {
-  it("正常响应直接返回正文", async () => {
-    vi.stubGlobal("fetch", vi.fn(async () => res(200, "{\"a\":1}")));
-    await expect(createHttpFetcher().text("https://x/1.js", signal)).resolves.toBe("{\"a\":1}");
+describe("decodeFactsValue", () => {
+  it("还原 unicode 转义与转义斜杠", () => {
+    expect(decodeFactsValue("Digest Gold\\u00ae Blend")).toBe("Digest Gold® Blend");
+    expect(decodeFactsValue("Pectinase (w\\/Phytase)")).toBe("Pectinase (w/Phytase)");
   });
-
-  it("429 按 Retry-After 说的时长等待后重试", async () => {
-    const fetchMock = vi.fn()
-      .mockResolvedValueOnce(res(429, "", { "retry-after": "3" }))
-      .mockResolvedValueOnce(res(200, "好了"));
-    vi.stubGlobal("fetch", fetchMock);
-    const slept: number[] = [];
-    const fetcher = createHttpFetcher({ sleep: async (ms) => { slept.push(ms); } });
-    await expect(fetcher.text("https://x/1.js", signal)).resolves.toBe("好了");
-    expect(slept).toEqual([3000]);
+  it("剥掉残留 HTML 标签并压缩空白", () => {
+    expect(decodeFactsValue("<b>Serving  Size</b>   1 Capsule")).toBe("Serving Size 1 Capsule");
   });
-
-  it("没有 Retry-After 时指数退避", async () => {
-    vi.stubGlobal("fetch", vi.fn(async () => res(503)));
-    const slept: number[] = [];
-    const fetcher = createHttpFetcher({ backoffMs: 100, maxRetries: 3, sleep: async (ms) => { slept.push(ms); } });
-    await expect(fetcher.text("https://x/1.js", signal)).rejects.toThrow(SwansonBlockedError);
-    expect(slept).toEqual([100, 200, 400]);
-  });
-
-  it("404 这类业务错误立即抛出，不浪费退避预算", async () => {
-    const fetchMock = vi.fn(async () => res(404));
-    vi.stubGlobal("fetch", fetchMock);
-    await expect(createHttpFetcher().text("https://x/nope.js", signal)).rejects.toThrow(/HTTP 404/);
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+  it("还原 HTML 实体", () => {
+    expect(decodeFactsValue("Vitamin A &amp; D")).toBe("Vitamin A & D");
   });
 });
 
-describe("createResilientFetcher", () => {
-  it("成功一次就把连续拦截计数清零——偶发抖动不该攒成切换理由", async () => {
-    const fetchMock = vi.fn()
-      .mockResolvedValueOnce(res(429)).mockResolvedValueOnce(res(429))   // 第一次调用：重试耗尽
-      .mockResolvedValue(res(200, "好"));
-    vi.stubGlobal("fetch", fetchMock);
-    const events: any[] = [];
-    const fetcher = createResilientFetcher({ maxRetries: 1, backoffMs: 1, switchAfterBlocks: 2, sleep: async () => {}, log: (e) => events.push(e) });
-    await expect(fetcher.text("https://x/1.js", signal)).rejects.toThrow(SwansonBlockedError);
-    await expect(fetcher.text("https://x/2.js", signal)).resolves.toBe("好");
-    expect(fetcher.mode).toBe("http");
-    expect(events.some((e) => e.type === "swanson_switch_to_browser")).toBe(false);
+describe("限流信号", () => {
+  it("403 / 429 / 503 算被拦截，404 不算", () => {
+    expect(BLOCK_STATUSES.has(429)).toBe(true);
+    expect(BLOCK_STATUSES.has(403)).toBe(true);
+    expect(BLOCK_STATUSES.has(503)).toBe(true);
+    expect(BLOCK_STATUSES.has(404)).toBe(false);
   });
-
-  it("连续被拦截到阈值才切浏览器", async () => {
-    vi.stubGlobal("fetch", vi.fn(async () => res(429)));
-    const events: any[] = [];
-    const fetcher = createResilientFetcher({ maxRetries: 0, switchAfterBlocks: 2, sleep: async () => {}, log: (e) => events.push(e) });
-    await expect(fetcher.text("https://x/1.js", signal)).rejects.toThrow(SwansonBlockedError);
-    expect(fetcher.mode).toBe("http");
-    // 第二次连续被拦截时触发切换（浏览器不可用会抛别的错，但切换事件已记录）
-    await fetcher.text("https://x/2.js", signal).catch(() => {});
-    expect(events.some((e) => e.type === "swanson_switch_to_browser")).toBe(true);
-  });
-
-  it("switchAfterBlocks=0 表示永不切换", async () => {
-    vi.stubGlobal("fetch", vi.fn(async () => res(429)));
-    const fetcher = createResilientFetcher({ maxRetries: 0, switchAfterBlocks: 0, sleep: async () => {} });
-    for (let i = 0; i < 5; i += 1) await fetcher.text(`https://x/${i}.js`, signal).catch(() => {});
-    expect(fetcher.mode).toBe("http");
+  it("SwansonBlockedError 带上状态码与地址，便于定位", () => {
+    const error = new SwansonBlockedError(429, "https://x/y.js");
+    expect(error.status).toBe(429);
+    expect(error.message).toContain("429");
+    expect(error.message).toContain("https://x/y.js");
   });
 });

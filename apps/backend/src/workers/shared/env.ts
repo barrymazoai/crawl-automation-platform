@@ -66,6 +66,10 @@ export const captureEnv = {
   SWANSON_REQUEST_DELAY_MS: z.coerce.number().int().min(0).max(60_000).default(300),
   /** 连续被限流多少次后切到浏览器通道。0 = 不切。 */
   SWANSON_SWITCH_TO_BROWSER_AFTER: z.coerce.number().int().min(0).max(20).default(2),
+  /** Swanson 的出口选择组；每抓够一批就换一个节点，避免单 IP 扛全部流量被限流。 */
+  SWANSON_EGRESS_SELECTOR: z.string().min(1).default("Swanson出口"),
+  /** 每抓多少个商品换一个出口。 */
+  SWANSON_EGRESS_BATCH_SIZE: z.coerce.number().int().min(1).max(200).default(20),
 } as const;
 
 /** 需要真实浏览器的抓取入口（Amazon）。 */

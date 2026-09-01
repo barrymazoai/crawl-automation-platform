@@ -3,7 +3,7 @@ import path from "node:path";
 import type { CapturedProductV1 } from "@crawl-automation/contracts";
 import { writeJsonAtomic } from "@crawl-automation/runtime";
 import { captureProducts, discoverCatalog, stripHtml, type CapturedSwansonProduct, type SwansonThrottle } from "../swanson/pipeline.js";
-import { createResilientFetcher } from "../swanson/fetcher.js";
+import { createSwansonFetcher } from "../swanson/fetcher.js";
 import { BatchPublisher } from "./batch-publisher.js";
 import { runRoot } from "./paths.js";
 
@@ -13,8 +13,8 @@ export interface SwansonCaptureCatalogOptions {
   workRoot: string;
   maxItems: number;
   throttle?: SwansonThrottle;
-  /** 连续被限流多少次后切浏览器通道；0 表示不切。 */
-  switchToBrowserAfter?: number;
+  /** 每抓一个商品调用一次，用于出口轮动。 */
+  onProduct?: () => Promise<void> | void;
   batchSize: number;
   signal: AbortSignal;
   registerBatch: (batch: { batchId: string; ordinal: number; itemCount: number; batchDirectory: string; imagesRequired: boolean }) => Promise<unknown>;
@@ -70,14 +70,12 @@ export function swansonBatchImagesRequired(products: readonly CapturedSwansonPro
 export async function runSwansonCaptureCatalog(options: SwansonCaptureCatalogOptions): Promise<SwansonCaptureCatalogResult> {
   const root = runRoot(options.workRoot, options.runId);
   await fs.mkdir(root, { recursive: true });
-  // 取数通道整轮共用一条：连续被限流才切浏览器，切了之后后续请求都走浏览器
-  const fetcher = createResilientFetcher({
-    switchAfterBlocks: options.switchToBrowserAfter ?? 2,
-    log: (event) => console.log(JSON.stringify(event)),
-  });
+  // 整轮共用一条浏览器通道：目录接口、商品 JSON、成分表都在页面上下文里取
+  const fetcher = createSwansonFetcher();
   const captureOptions = {
     url: options.url, maxItems: options.maxItems, signal: options.signal,
-    fetcher, throttle: options.throttle ?? { concurrency: 4, delayMs: 300 },
+    fetcher, throttle: options.throttle ?? { concurrency: 2, delayMs: 2000 },
+    ...(options.onProduct ? { onProduct: options.onProduct } : {}),
   };
   try {
   const catalog = await discoverCatalog(captureOptions);

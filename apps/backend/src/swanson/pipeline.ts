@@ -2,8 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import type { OcrClient } from "@crawl-automation/ocr-client";
 import { buildOcrTextLabelPrompt, mapWithConcurrency, selectFactsOcrImages, type IndexedOcrImage } from "../amazon/ocr-label-pipeline.js";
-import { createResilientFetcher, type SwansonFetcher } from "./fetcher.js";
-import { extractSwansonHtmlFacts } from "./facts-html.js";
+import { createSwansonFetcher, type SwansonFetcher } from "./fetcher.js";
 import { extractLabelJsonWithRepair, type StoredRawLabelVerdict } from "../amazon/label-extraction.js";
 import { parseLabel, scoreConfidence } from "../amazon/label-parse.js";
 import { chunk } from "../amazon/semantic-clean.js";
@@ -23,10 +22,14 @@ export interface SwansonThrottle {
   delayMs: number;
 }
 
+/** 抓完一个商品的回调，用于出口轮动计数。 */
+export type SwansonProductTick = () => Promise<void> | void;
+
 export interface SwansonCaptureOptions {
   /** 取数通道。不传就现开一条会自动切浏览器的通道。 */
   fetcher?: SwansonFetcher;
   throttle?: SwansonThrottle;
+  onProduct?: SwansonProductTick;
   url: string;
   maxItems: number;
   signal: AbortSignal;
@@ -149,7 +152,7 @@ function assertNotAborted(signal: AbortSignal) {
 }
 
 /** 兜底通道：调用方没提供时用的默认实例，保证老调用点不用改签名。 */
-const defaultFetcher = createResilientFetcher({ log: (event) => console.log(JSON.stringify(event)) });
+const defaultFetcher = createSwansonFetcher();
 
 async function fetchText(url: string, signal: AbortSignal, fetcher: SwansonFetcher = defaultFetcher) {
   return fetcher.text(url, signal);
@@ -290,9 +293,10 @@ export async function captureProducts(options: SwansonCaptureOptions, catalog: S
      */
     let factsText: string | null = null;
     try {
-      const html = await fetchText(productUrl, options.signal, options.fetcher);
-      factsText = extractSwansonHtmlFacts(html)?.factsText ?? null;
+      factsText = (await (options.fetcher ?? defaultFetcher).facts(productUrl, options.signal)) ?? null;
     } catch { factsText = null; }
+    // 轮动计数在等待之前：换出口本身也要时间，别和节流叠加成双倍延迟
+    await options.onProduct?.();
     // 节流：控制整体速率，不去试探站点的配额上限。小规模压测没限流不代表六千多个也没事。
     await sleep(throttle.delayMs, options.signal);
     const images = [...new Set([
