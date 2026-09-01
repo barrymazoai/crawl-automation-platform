@@ -1,10 +1,11 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import type { OcrClient } from "@crawl-automation/ocr-client";
-import { buildOcrTextLabelPrompt, mapWithConcurrency, selectFactsOcrImages, type IndexedOcrImage } from "../amazon/ocr-label-pipeline.js";
+import { buildHtmlFactsTablePrompt, buildOcrTextLabelPrompt, mapWithConcurrency, selectFactsOcrImages, type IndexedOcrImage } from "../amazon/ocr-label-pipeline.js";
+import { hasCompleteFactsText } from "../gnc/facts.js";
 import { createSwansonFetcher, type SwansonFetcher } from "./fetcher.js";
 import { extractLabelJsonWithRepair, type StoredRawLabelVerdict } from "../amazon/label-extraction.js";
-import { parseLabel, scoreConfidence } from "../amazon/label-parse.js";
+import { parseLabel, scoreConfidence, type LabelJson, type ParsedLabel } from "../amazon/label-parse.js";
 import { chunk } from "../amazon/semantic-clean.js";
 import { buildGncBatchPrompt, parseGncBatchOutput, type GncCleanInput, type GncCleanResult } from "../gnc/semantic.js";
 import { canonicalVariantForm, runProductUnify, type ProductUnifyInput, type ProductUnifyOutcome, type ProductUnifyResult, type ProductVariant } from "../product-unify.js";
@@ -243,12 +244,10 @@ export function clearSwansonApiConfigCache() { apiConfigCache = null; }
 
 async function resolveApiConfig(listingUrl: string, options: SwansonCaptureOptions): Promise<SwansonApiConfig> {
   if (apiConfigCache) return apiConfigCache;
-  const html = await fetchText(listingUrl, options.signal, options.fetcher);
-  const apiKey = html.match(/constructorApiKey\s*=\s*['"]([^'"]+)/)?.[1];
-  const filterName = html.match(/var FILTER_NAME\s*=\s*['"]([^'"]+)/)?.[1];
-  const filterValue = html.match(/var FILTER_VALUE\s*=\s*['"]([^'"]+)/)?.[1];
-  if (!apiKey || !filterName || !filterValue) throw new Error("Swanson 目录页缺少 Constructor API 配置");
-  apiConfigCache = { apiKey, filterName, filterValue };
+  // 在页面里抠，不把 1.1MB 的列表页经 CDP 搬回来
+  const config = await (options.fetcher ?? defaultFetcher).apiConfig(listingUrl, options.signal);
+  if (!config) throw new Error("Swanson 目录页缺少 Constructor API 配置");
+  apiConfigCache = config;
   return apiConfigCache;
 }
 
@@ -371,7 +370,36 @@ async function downloadImages(product: CapturedSwansonProduct, root: string, con
 }
 
 export async function extractFacts(options: SwansonFactsOptions, product: CapturedSwansonProduct): Promise<{ facts: ProductFacts | null; labelText: string | null; ingredients: string[]; review: string | null }> {
-  if (product.images.length === 0) return { facts: null, labelText: null, ingredients: [], review: null };
+  /*
+   * 页面自带成分表时先拿它解析，不要绕道 OCR。
+   *
+   * 之前这里无条件走图片：即使抓取阶段已经拿到 928 字的完整成分表，Facts 解析
+   * 仍然去读标签图，模型回"从 OCR 里读不出来"，于是 facts=null、产品被隔离
+   * （2026-09-01 实测 Culturelle 就是这么丢的）。HTML 文字本来就比 OCR 可靠，
+   * 没有理由舍近求远。抠不到或解析不出才降级到图片，跟 GNC 同一套阶梯。
+   */
+  const htmlFactsText = (product.factsText ?? "").trim();
+  if (hasCompleteFactsText(htmlFactsText)) {
+    const prompt = `${buildHtmlFactsTablePrompt(htmlFactsText)}\nIMPORTANT: Return one object with one string field named payload, and serialize the requested JSON object exactly inside payload.`;
+    const verdict = await extractLabelJsonWithRepair({
+      prompt,
+      tag: `swanson-label-${product.externalId}-html-table`,
+      runModel: options.runModel,
+    });
+    const parsedHtml = parseLabel(verdict.parsed);
+    if (parsedHtml) {
+      return {
+        facts: buildSwansonFacts(product, options.runId, verdict.parsed!, parsedHtml, "html_table", null),
+        labelText: htmlFactsText,
+        ingredients: parsedHtml.rows.filter((row) => row.isActive).map((row) => row.rawText),
+        review: null,
+      };
+    }
+  }
+
+  if (product.images.length === 0) {
+    return { facts: null, labelText: htmlFactsText || null, ingredients: [], review: null };
+  }
   const images = await downloadImages(product, path.join(options.jobDirectory, "swanson", "images"), options.ocrConcurrency);
   const ocrImages = await mapWithConcurrency(images, options.ocrConcurrency, async (filename, index): Promise<IndexedOcrImage> => {
     const cache = `${filename}.ocr.json`;
@@ -396,14 +424,24 @@ export async function extractFacts(options: SwansonFactsOptions, product: Captur
   if (label?.skip) return { facts: null, labelText: verdict.raw ?? null, ingredients: [], review: null };
   const parsed = parseLabel(label);
   if (!parsed) return { facts: null, labelText: verdict.raw ?? null, ingredients: [], review: `${product.externalId}: Facts 语义解析失败` };
-  const facts: ProductFacts = {
+  const facts = buildSwansonFacts(product, options.runId, label!, parsed, "label_ocr", product.images[selected[0]!.index] ?? null);
+  return { facts, labelText: verdict.raw ?? null, ingredients: parsed.rows.filter((row) => row.isActive).map((row) => row.rawText), review: null };
+}
+
+/** 两条解析路径（HTML 成分表 / 图片 OCR）共用的 ProductFacts 构造。 */
+function buildSwansonFacts(
+  product: CapturedSwansonProduct, runId: string,
+  label: LabelJson, parsed: ParsedLabel,
+  method: "html_table" | "label_ocr", sourceImageUrl: string | null,
+): ProductFacts {
+  return {
     channel: "swanson",
     externalId: product.externalId,
     sourceUrl: product.productUrl,
     capturedAt: product.capturedAt,
-    source: `crawl-automation:${options.runId}:label_ocr`,
-    confidence: scoreConfidence(label!, parsed),
-    ...(product.images[selected[0]!.index] ? { sourceImageUrl: product.images[selected[0]!.index] } : {}),
+    source: `crawl-automation:${runId}:${method}`,
+    confidence: scoreConfidence(label, parsed),
+    ...(sourceImageUrl ? { sourceImageUrl } : {}),
     servingSize: parsed.servingSize,
     servingUnit: parsed.servingUnit,
     servingsPerContainer: parsed.servingsPerContainer,
@@ -417,7 +455,6 @@ export async function extractFacts(options: SwansonFactsOptions, product: Captur
       parentPosition: row.parentIndex == null ? null : parsed.rows[row.parentIndex]?.position ?? null,
     })),
   };
-  return { facts, labelText: verdict.raw ?? null, ingredients: parsed.rows.filter((row) => row.isActive).map((row) => row.rawText), review: null };
 }
 
 function swansonSize(value: string | undefined, count: number | undefined) {

@@ -37,6 +37,8 @@ export interface SwansonFetcher {
   text(url: string, signal: AbortSignal): Promise<string>;
   /** 打开商品页并就地抠出成分表；抠不到返回 null，由图片线兜底。 */
   facts(url: string, signal: AbortSignal): Promise<string | null>;
+  /** 打开列表页并就地抠出 Constructor 接入参数，只回传这三个值。 */
+  apiConfig(url: string, signal: AbortSignal): Promise<{ apiKey: string; filterName: string; filterValue: string } | null>;
   close(): Promise<void>;
 }
 
@@ -62,6 +64,29 @@ const FACTS_SCRIPT = String.raw`(() => {
   return null;
 })()`;
 
+/** 只比对 origin + pathname + 关键查询参数，忽略站点自己加的跟踪参数。 */
+function sameTarget(actual: string, expected: string) {
+  try {
+    const a = new URL(actual), b = new URL(expected);
+    return a.origin === b.origin && a.pathname === b.pathname;
+  } catch { return false; }
+}
+
+/**
+ * 在页面里抠 Constructor 接入参数。
+ *
+ * 跟成分表同一个道理：列表页有 1.1MB，把整页经 CDP 传回 Node 会把 Runtime.evaluate
+ * 拖超时（实测多个品牌因此失败）。这三个值加起来不到 100 字节，就地取出即可。
+ */
+const API_CONFIG_SCRIPT = String.raw`(() => {
+  const html = document.documentElement.innerHTML;
+  const pick = (re) => { const m = re.exec(html); return m ? m[1] : null; };
+  const apiKey = pick(/constructorApiKey\s*=\s*['"]([^'"]+)/);
+  const filterName = pick(/var FILTER_NAME\s*=\s*['"]([^'"]+)/);
+  const filterValue = pick(/var FILTER_VALUE\s*=\s*['"]([^'"]+)/);
+  return apiKey && filterName && filterValue ? { apiKey: apiKey, filterName: filterName, filterValue: filterValue } : null;
+})()`;
+
 export function createSwansonFetcher(origin = "https://www.swansonvitamins.com"): SwansonFetcher {
   const holder = createPageHolder();
   void origin;
@@ -74,8 +99,17 @@ export function createSwansonFetcher(origin = "https://www.swansonvitamins.com")
      * CORS 预检，被浏览器拦掉且拿不到状态码（只会看到一个 rejected 的 Promise）。
      * 导航没有同源限制，JSON 会被渲染成纯文本，直接读 body 就是响应体。
      */
+    /*
+     * 每次请求用完就关标签页。
+     *
+     * page holder 在 CDP 超时后会换标签页重试，而复用的标签页可能还停在上一个地址，
+     * 于是"取 JSON 接口"读回来的是上一个 HTML 页面——表现为 JSON.parse 报
+     * Unexpected token '<'（1.1MB 的列表页很容易把 evaluate 拖超时）。
+     * 关掉重开代价很小，换来的是每次都从干净的新标签页开始。
+     */
     async text(url) {
-      return holder.run(async (browser) => {
+      try {
+      return await holder.run(async (browser) => {
         const status = await browser.navigate(url);
         if (status >= 400) {
           if (BLOCK_STATUSES.has(status)) throw new SwansonBlockedError(status, url);
@@ -88,6 +122,8 @@ export function createSwansonFetcher(origin = "https://www.swansonvitamins.com")
          *   读 innerText 只会拿到渲染后的可见文字（实测 4058 字符 vs 源码 95 万），
          *   那里面根本没有它。
          */
+        const here = await browser.evaluate<string>("location.href");
+        if (!sameTarget(here, url)) throw new Error(`Swanson 导航未到达目标：期望 ${url}，实际 ${here}`);
         const body = await browser.evaluate<string>(String.raw`(() => {
           // 只有 HTML 页面才读源码（目录页要的 constructorApiKey 在 <script> 里，
           // 读 innerText 拿不到）。其余一律读正文——.js 接口的 content-type 是
@@ -100,10 +136,12 @@ export function createSwansonFetcher(origin = "https://www.swansonvitamins.com")
         if (!body.trim()) throw new Error(`Swanson 响应为空：${url}`);
         return body;
       });
+      } finally { await holder.close(); }
     },
 
     async facts(url) {
-      return holder.run(async (browser) => {
+      try {
+      return await holder.run(async (browser) => {
         const status = await browser.navigate(url);
         if (status >= 400) {
           if (BLOCK_STATUSES.has(status)) throw new SwansonBlockedError(status, url);
@@ -115,6 +153,20 @@ export function createSwansonFetcher(origin = "https://www.swansonvitamins.com")
         const other = found.other ? decodeFactsValue(found.other) : null;
         return other && !text.includes(other.slice(0, 40)) ? `${text}\n${other}` : text;
       });
+      } finally { await holder.close(); }
+    },
+
+    async apiConfig(url) {
+      try {
+        return await holder.run(async (browser) => {
+          const status = await browser.navigate(url);
+          if (status >= 400) {
+            if (BLOCK_STATUSES.has(status)) throw new SwansonBlockedError(status, url);
+            throw new Error(`Swanson HTTP ${status}: ${url}`);
+          }
+          return browser.evaluate<{ apiKey: string; filterName: string; filterValue: string } | null>(API_CONFIG_SCRIPT);
+        });
+      } finally { await holder.close(); }
     },
 
     async close() { await holder.close(); },

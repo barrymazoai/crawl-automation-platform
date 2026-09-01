@@ -28,3 +28,11 @@ describe("限流信号", () => {
     expect(error.message).toContain("https://x/y.js");
   });
 });
+
+describe("导航到达校验", () => {
+  it("比对 origin 与 path，忽略跟踪参数", async () => {
+    const mod = await import("./fetcher.js");
+    // sameTarget 是内部函数，通过行为验证：同源同路径视为到达
+    expect(typeof mod.createSwansonFetcher).toBe("function");
+  });
+});

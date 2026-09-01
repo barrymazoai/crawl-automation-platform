@@ -44,3 +44,41 @@ describe("Constructor 接入参数缓存", () => {
     expect(() => clearSwansonApiConfigCache()).not.toThrow();
   });
 });
+
+describe("Facts 解析优先用页面成分表", () => {
+  const factsText = "Supplement Facts Serving Size One (1) Capsule Servings Per Container 30 "
+    + "Amount Per Serving % Daily Value Calories 0 Total Carbohydrate 0 g 0% "
+    + "Lactobacillus rhamnosus GG 40 mg (10 billion CFUs) Inulin (Chicory Root Extract) 200 mg "
+    + "Other Ingredients: hydroxypropyl methylcellulose, vegetable magnesium stearate.";
+  // images 留空：一旦走到图片线就会真的去下载，测试里不许发生
+  const product = {
+    externalId: "CUL001",
+    productUrl: "https://www.swansonvitamins.com/products/x",
+    capturedAt: new Date().toISOString(),
+    images: [],
+    factsText,
+  } as any;
+
+  it("页面成分表完整时先送 HTML 解析，不走 OCR", async () => {
+    const { extractFacts } = await import("./pipeline.js");
+    const tags: string[] = [];
+    await extractFacts({
+      jobDirectory: "/tmp/不应被使用", runId: "run-1", ocrConcurrency: 1,
+      ocr: { recognize: () => { throw new Error("不应调用 OCR"); } },
+      runModel: async ({ tag }: { tag: string }) => { tags.push(tag); return "{}"; },
+    } as any, product);
+    // 标签带 html-table 后缀，证明走的是页面成分表那条路
+    expect(tags).toContain("swanson-label-CUL001-html-table");
+    expect(tags.some((tag) => tag === "swanson-label-CUL001")).toBe(false);
+  });
+
+  it("页面没有成分表且没有图片时如实返回空，不编造", async () => {
+    const { extractFacts } = await import("./pipeline.js");
+    const result = await extractFacts({
+      jobDirectory: "/tmp/x", runId: "run-1", ocrConcurrency: 1,
+      ocr: { recognize: async () => ({}) }, runModel: async () => "{}",
+    } as any, { ...product, factsText: null });
+    expect(result.facts).toBeNull();
+    expect(result.review).toBeNull();
+  });
+});

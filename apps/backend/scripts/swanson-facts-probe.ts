@@ -19,6 +19,7 @@ async function main() {
       const probe = await fetcher.text(url, signal);
       const idx = probe.search(/supplementFacts/i);
       console.log(`  取回正文 ${probe.length} 字符 · supplementFacts 位置 ${idx}`);
+      console.log(`  开头 160: ${probe.slice(0, 160).replace(/\n/g, " ")}`);
       if (idx >= 0) console.log(`  周边: ${probe.slice(idx, idx + 160).replace(/\n/g, " ")}`);
     }
   } finally { await fetcher.close(); await browser.close?.().catch(() => {}); }
