@@ -142,6 +142,32 @@ export function createSwansonFetcher(origin = "https://www.swansonvitamins.com")
      */
     async text(url) {
       return locked(async () => {
+      /*
+       * 同源地址（商品 .js 等）走页面内 fetch：一次 evaluate + 一次 HTTP 请求就完了。
+       * 走导航的话是"开标签页→导航（等整个文档生命周期）→evaluate→关标签页"，
+       * 每步都要跨 CDP 与美国代理各一回合，7.8KB 的 JSON 也要耗 3~5 秒——
+       * 这曾是每商品 19 秒的大头。跨域地址（ac.cnstrc.com）被 CORS 拦，仍走导航。
+       */
+      if (new URL(url).origin === origin) {
+        try {
+          return await holder.run(async (browser) => {
+            await ensureOrigin(browser);
+            const script = `fetch(${JSON.stringify(url)}, { credentials: 'include' })
+              .then((r) => r.text().then((t) => ({ ok: r.ok, status: r.status, body: t })))`;
+            const result = await browser.evaluate<{ ok: boolean; status: number; body: string }>(script);
+            if (!result.ok) {
+              if (BLOCK_STATUSES.has(result.status)) throw new SwansonBlockedError(result.status, url);
+              throw new Error(`Swanson HTTP ${result.status}: ${url}`);
+            }
+            return result.body;
+          });
+        } catch (error) {
+          // 标签页可能已坏，关掉让下次重新落地；限流错误原样上抛
+          onOrigin = false;
+          await holder.close().catch(() => {});
+          throw error;
+        }
+      }
       try {
       return await holder.run(async (browser) => {
         const status = await browser.navigate(url);
