@@ -87,7 +87,13 @@ export async function startWorker(options: WorkerOptions) {
       await fs.mkdir(jobDirectory, { recursive: true });
       checkpoints.save(job.id, job.stage, "leased", job.payload, lease.token);
       await client.start(job.id, lease.token);
-      await withLeaseHeartbeat({ client, jobId: job.id, leaseToken: lease.token, signal: controller.signal }, async (signal) => {
+      await withLeaseHeartbeat({
+        client, jobId: job.id, leaseToken: lease.token, signal: controller.signal,
+        onRenewError: (error, failures) => console.error(JSON.stringify({
+          type: "lease_renew_failed", jobId: job.id, stage: job.stage, failures,
+          message: error instanceof Error ? error.message : String(error),
+        })),
+      }, async (signal) => {
         const output = await options.handle({ job, leaseToken: lease.token, jobDirectory, signal, client });
         if (output && typeof output === "object" && "review" in output) {
           const review = (output as { review: { reasonCode: string; summary: string } }).review;
@@ -100,7 +106,9 @@ export async function startWorker(options: WorkerOptions) {
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      await client.fail(job.id, lease.token, { code: `${job.stage}_worker_error`, message, retryable: true }).catch(() => {});
+      console.error(JSON.stringify({ type: "job_failed", jobId: job.id, stage: job.stage, message: message.slice(0, 300) }));
+      await client.fail(job.id, lease.token, { code: `${job.stage}_worker_error`, message, retryable: true })
+        .catch((failError) => console.error(JSON.stringify({ type: "job_fail_report_failed", jobId: job.id, message: String(failError).slice(0, 200) })));
       checkpoints.save(job.id, job.stage, "failed", { error: message }, lease.token);
     } finally {
       active.delete(job.id);

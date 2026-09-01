@@ -274,10 +274,28 @@ export class CodexProcessRunner implements CodexRunner {
   }
 }
 
-export async function withLeaseHeartbeat(input: { client: NodeApiClient; jobId: string; leaseToken: string; signal?: AbortSignal; intervalMs?: number }, action: (signal: AbortSignal) => Promise<unknown>) {
+export async function withLeaseHeartbeat(
+  input: { client: NodeApiClient; jobId: string; leaseToken: string; signal?: AbortSignal; intervalMs?: number; maxFailures?: number; onRenewError?: (error: unknown, consecutiveFailures: number) => void },
+  action: (signal: AbortSignal) => Promise<unknown>,
+) {
   const controller = new AbortController();
   const stop = () => controller.abort(); input.signal?.addEventListener("abort", stop, { once: true });
-  const timer = setInterval(() => void input.client.renew(input.jobId, input.leaseToken).catch(() => controller.abort()), input.intervalMs ?? 30_000);
+  // 续期失败不再"一次就放弃"：单次网络抖动不该杀掉一个跑了几分钟的任务。
+  // 连续失败到 maxFailures 次才中止，并且每次都把错误抛给调用方记录——
+  // 原来这里静默 catch，导致租约过期的真实原因在日志里完全看不到。
+  const maxFailures = input.maxFailures ?? 3;
+  let consecutiveFailures = 0;
+  const renew = async () => {
+    try {
+      await input.client.renew(input.jobId, input.leaseToken);
+      consecutiveFailures = 0;
+    } catch (error) {
+      consecutiveFailures += 1;
+      input.onRenewError?.(error, consecutiveFailures);
+      if (consecutiveFailures >= maxFailures) controller.abort();
+    }
+  };
+  const timer = setInterval(() => void renew(), input.intervalMs ?? 30_000);
   try { return await action(controller.signal); }
   finally { clearInterval(timer); controller.abort(); input.signal?.removeEventListener("abort", stop); }
 }

@@ -1,7 +1,29 @@
+import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { z } from "zod";
 import { CodexProcessRunner } from "@crawl-automation/runtime";
+
+/**
+ * 定位 Codex 的结构化输出 schema。
+ *
+ * 这里曾经写死相对层级（dist/workers/ 比 dist/ 深一层），改路径后每一次 Codex 调用
+ * 都因找不到文件而失败，而且错误只出现在 Codex 的事件日志里——整条处理线静默全灭了
+ * 一整晚。现在改成向上查找 + 启动即校验：路径不对就直接起不来，不会再悄悄跑空。
+ */
+function resolveSchemaPath(fileName: string) {
+  let directory = path.dirname(fileURLToPath(import.meta.url));
+  for (let depth = 0; depth < 6; depth += 1) {
+    const candidate = path.join(directory, fileName);
+    if (fs.existsSync(candidate)) return candidate;
+    const parent = path.dirname(directory);
+    if (parent === directory) break;
+    directory = parent;
+  }
+  throw new Error(`codex_schema_not_found:${fileName}（从 ${fileURLToPath(import.meta.url)} 向上找不到）`);
+}
+
+const MODEL_PAYLOAD_SCHEMA = resolveSchemaPath("model-payload.schema.json");
 
 /** 进程级并发闸门：Codex 限流是账号级的，各 Pool 进程静态切分预算（方案 4）。 */
 export class Semaphore {
@@ -52,7 +74,7 @@ export function createCodex(env: CodexEnv) {
         prompt,
         cwd: env.REPOSITORY_ROOT,
         addDirectories: [jobDirectory],
-        schemaPath: fileURLToPath(new URL("../../../model-payload.schema.json", import.meta.url)),
+        schemaPath: MODEL_PAYLOAD_SCHEMA,
         outputPath: path.join(jobDirectory, "model", `${name}.result.json`),
         eventLogPath: path.join(jobDirectory, "model", `${name}.events.jsonl`),
         signal,
