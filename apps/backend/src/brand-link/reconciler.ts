@@ -180,15 +180,18 @@ export class BrandLinkReconciler {
    * enqueued_at 一旦写上就不会重排，所以重启、重跑都不会产生重复抓取任务。
    */
   /**
-   * 一个渠道品牌只能归一家公司。多家公司认领同一个 slug 时，把它们全部降级成待确认——
-   * 冲突本身就说明匹配没把握，自动抓下去只会把产品记到错的公司名下。
+   * 一个渠道品牌只能归一家公司。两家以上都拿到 exact 时，谁都不自动抓，全部转人工。
+   *
+   * 只看 exact 之间的冲突：一个 exact 配几个 ambiguous 是常态（Alani Nutrition LLC
+   * 对上 alani-nu 是对的，Nu-Health 只是名字里也有 nu），把 exact 也一起降级等于
+   * 白白丢掉唯一那条可信结论。
    */
   private async demoteContestedSlugs() {
     const { rowCount } = await this.control.query(
       `update channel_brand_link set status='ambiguous', checked_at=now()
        where channel=$1 and status='resolved' and enqueued_at is null and brand_slug in (
          select brand_slug from channel_brand_link
-         where channel=$1 and brand_slug is not null and status in ('resolved','ambiguous')
+         where channel=$1 and brand_slug is not null and status='resolved'
          group by brand_slug having count(*) > 1)`, [this.options.channel]);
     if (rowCount) this.log({ type: "brand_link_contested_slugs_demoted", channel: this.options.channel, count: rowCount });
     return rowCount ?? 0;

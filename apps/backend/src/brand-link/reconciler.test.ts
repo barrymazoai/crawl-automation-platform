@@ -162,5 +162,7 @@ describe("BrandLinkReconciler 入队门槛", () => {
     expect(demote).toContain("status='ambiguous'");
     // 已经入队的不动——那批已经在跑，改状态只会让队列和缓存对不上
     expect(demote).toContain("enqueued_at is null");
+    // 只看 exact 之间的冲突：一个 exact 配几个 ambiguous 是常态，不该连累那条可信结论
+    expect(demote).toContain("status='resolved'\n         group by brand_slug");
   });
 });
