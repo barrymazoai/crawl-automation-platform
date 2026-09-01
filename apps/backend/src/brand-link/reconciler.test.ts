@@ -17,7 +17,7 @@ function pools(control: Responder, product: Responder = () => ({ rows: [] })) {
   return { controlPool, productPool, sqls, params };
 }
 
-const options = { channel: "gnc", catalogMaxAgeMs: 3_600_000, enqueuePerTick: 5, enqueueAmbiguous: false };
+const options = { channel: "gnc", catalogMaxAgeMs: 3_600_000, enqueuePerTick: 5, queueTarget: 20, enqueueAmbiguous: false };
 const repository = { createRuns: vi.fn(async () => ({ created: [{ id: "run-1" }], rejected: [] })) } as any;
 
 describe("BrandLinkReconciler", () => {
@@ -86,6 +86,21 @@ describe("BrandLinkReconciler", () => {
     const upsert = params.find((p) => p.length === 10 && p[0] === "c-1");
     expect(upsert?.[3]).toBe("resolved");
     expect(upsert?.[9]).toEqual(captured);
+  });
+
+  it("抓取队列已满时不补新品牌——爬完一个才补一个", async () => {
+    const captured = new Date();
+    const { controlPool, productPool, sqls } = pools((sql) => {
+      if (sql.includes("j.stage='resolve_brand_catalog'")) return { rows: [] };
+      if (sql.includes("channel_catalog_snapshot where channel")) return { rows: [{ entry_count: 272, captured_at: captured }] };
+      if (sql.includes("from channel_brand_catalog")) return { rows: [{ slug: "alani-nu", label: "Alani Nu" }] };
+      if (sql.includes("select company_id from channel_brand_link")) return { rows: [{ company_id: "c-1" }] };
+      if (sql.includes("j.stage='capture_catalog'")) return { rows: [{ n: 20 }] };
+      return { rows: [] };
+    });
+    const result = await new BrandLinkReconciler(controlPool, productPool, repository, options).tick();
+    expect(result.enqueued).toBe(0);
+    expect(sqls.some((sql) => sql.includes("where channel=$1 and status = any"))).toBe(false);
   });
 
   it("subset 档默认不自动入队，留给人工确认", async () => {

@@ -8,8 +8,16 @@ export interface BrandLinkOptions {
   channel: string;
   /** 目录快照超过这个时长就重新抓一次。 */
   catalogMaxAgeMs: number;
-  /** 每轮最多为多少家新解析出的公司排抓取任务——滴灌，避免一次灌爆队列。 */
+  /** 每轮最多为多少家新解析出的公司排抓取任务。 */
   enqueuePerTick: number;
+  /**
+   * 抓取队列的目标水位：待抓品牌少于这个数才补新的。
+   *
+   * 解析线一轮能出几千个结论，抓取线一小时只能消化四五个品牌。按固定速率灌，
+   * 一天就能堆出上万个排队任务——队列失去可读性，也没法再按优先级调整顺序。
+   * 按水位补则是"爬完一个补一个"，队列里永远只留一小截待抓清单。
+   */
+  queueTarget: number;
   /** subset 档要不要自动入队。默认不入队，留给人工确认。 */
   enqueueAmbiguous: boolean;
 }
@@ -168,12 +176,21 @@ export class BrandLinkReconciler {
    * enqueued_at 一旦写上就不会重排，所以重启、重跑都不会产生重复抓取任务。
    */
   private async enqueueResolved() {
+    // 反压：抓取队列还满着就不补，等抓取线消化。
+    const waiting = Number((await this.control.query(
+      `select count(*)::int n from pipeline_job j
+       join pipeline_run r on r.id=j.run_id join pipeline_source s on s.id=r.source_id
+       where j.stage='capture_catalog' and j.state in ('queued','retry_wait','leased','running') and s.adapter=$1`,
+      [this.options.channel])).rows[0]?.n ?? 0);
+    const room = Math.min(this.options.enqueuePerTick, this.options.queueTarget - waiting);
+    if (room <= 0) return 0;
+
     const tiers = this.options.enqueueAmbiguous ? ["resolved", "ambiguous"] : ["resolved"];
     const ready = (await this.control.query<{ company_id: string; brand_url: string }>(
       `select company_id, brand_url from channel_brand_link
        where channel=$1 and status = any($2::text[]) and brand_url is not null and enqueued_at is null
        order by checked_at limit $3`,
-      [this.options.channel, tiers, this.options.enqueuePerTick])).rows;
+      [this.options.channel, tiers, room])).rows;
     if (!ready.length) return 0;
 
     let enqueued = 0;

@@ -22,6 +22,8 @@ const schema = z.object({
   BRAND_LINK_CATALOG_MAX_AGE_HOURS: z.coerce.number().min(1).max(24 * 30).default(24),
   /** 每轮最多滴灌几个新品牌进抓取队列——解析比抓取快得多，不滴灌会一次灌爆队列。 */
   BRAND_LINK_ENQUEUE_PER_TICK: z.coerce.number().int().min(0).max(200).default(5),
+  /** 抓取队列目标水位：待抓品牌少于这个数才补新的，队列里永远只留一小截清单。 */
+  BRAND_LINK_QUEUE_TARGET: z.coerce.number().int().min(1).max(2000).default(20),
   /** subset 档（只共享部分词元）默认不自动入队，留人工确认。 */
   BRAND_LINK_ENQUEUE_AMBIGUOUS: z.enum(["true", "false"]).default("false"),
 });
@@ -50,6 +52,7 @@ export function loadConfig(env = process.env) {
       channels: value.BRAND_LINK_CHANNELS.split(",").map((entry) => entry.trim()).filter(Boolean),
       catalogMaxAgeMs: value.BRAND_LINK_CATALOG_MAX_AGE_HOURS * 3_600_000,
       enqueuePerTick: value.BRAND_LINK_ENQUEUE_PER_TICK,
+      queueTarget: value.BRAND_LINK_QUEUE_TARGET,
       enqueueAmbiguous: value.BRAND_LINK_ENQUEUE_AMBIGUOUS === "true",
     } : null,
     s3: value.S3_ENDPOINT && value.S3_BUCKET && value.S3_ACCESS_KEY_ID && value.S3_SECRET_ACCESS_KEY ? {
