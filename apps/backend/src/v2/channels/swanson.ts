@@ -9,6 +9,7 @@ import {
   unifyInput,
   type CapturedSwansonProduct,
 } from "../../swanson/pipeline.js";
+import { hasCompleteFactsText } from "../../gnc/facts.js";
 import { runRoot } from "../paths.js";
 import type { ChannelFactsResult, ChannelHooks, StageContext } from "../stages.js";
 
@@ -33,8 +34,10 @@ export function createSwansonChannelHooks(): ChannelHooks<CapturedSwansonProduct
         title: product.product.title,
         description: stripHtml(product.product.description),
         details: [product.catalog.data.main_ingred, product.catalog.data.potent, product.catalog.data.pfdesc].filter(Boolean).join("\n"),
-        // 文字线不等图片线：标签文本留空，成分证据由图片线在 Join 时补齐。
-        labelText: null,
+        // 页面自带成分表时直接给文字线用；抠不到才留空，等图片线在 Join 时补齐。
+        // 留空会让模型以 ingredients_and_formula_missing 把商品判出范围——
+        // 2026-09-01 实测 Enzymedica 43 个商品因此全军覆没。
+        labelText: (product.factsText ?? "").trim() || null,
         labelIngredients: [],
       }));
       const outcomes = await mapWithConcurrency(chunk(inputs, 50), 2, async (batch, index) => {
@@ -46,8 +49,8 @@ export function createSwansonChannelHooks(): ChannelHooks<CapturedSwansonProduct
     semanticKey: (semantic) => semantic.sku,
     included: (semantic) => semantic.scopeDecision === "included",
 
-    // Swanson 商品页没有 HTML 成分表：所有 Facts 证据都在图片里，统一走图片线。
-    htmlFactsReady: () => false,
+    // 跟 GNC 一致：页面成分表完整就不必再 OCR，抠不到才走图片线。
+    htmlFactsReady: (product) => hasCompleteFactsText((product.factsText ?? "").trim()),
     extractFacts: async (ctx: StageContext, product) => {
       const result = await extractSwansonFacts({
         jobDirectory: runRoot(ctx.workRoot, ctx.runId),

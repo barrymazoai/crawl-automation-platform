@@ -82,8 +82,18 @@ async function extractPdfTextPages(pdf: string, script: string): Promise<PdfText
   });
 }
 
+/**
+ * 数出文本里有多少个"剂量+单位"。
+ *
+ * 除了常规的 mg/mcg/IU/CFU，还要认酶制剂与益生菌的活性单位——酶产品的成分表
+ * 通篇写的是 23,000 DU、80,000 HUT、4,000 FIP，一个 mg 都没有。只认常规单位
+ * 会把这类完整的成分表判成"不完整"，白白退回去做 OCR。
+ */
 function amountTokenCount(text: string) {
-  return text.match(/\b\d+(?:\.\d+)?\s*(?:mcg|µg|ug|mg|g|iu|ml|cfu|billion|million|calories?)\b/gi)?.length ?? 0;
+  const conventional = "mcg|µg|ug|mg|g|iu|ml|cfu|billion|million|calories?";
+  // 酶活性单位（FCC 体系）与益生菌计数单位
+  const activity = "du|agu|hut|fip|cu|bgu|xu|galu|su|alu|lcu|hcu|pgu|endo-pgu|gdu|mcu|sapu|papu|apu|lapu|pc|fcc|usp";
+  return text.match(new RegExp(`\\b\\d[\\d,]*(?:\\.\\d+)?\\s*(?:${conventional}|${activity})\\b`, "gi"))?.length ?? 0;
 }
 
 /**

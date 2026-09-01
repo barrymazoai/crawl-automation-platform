@@ -3,6 +3,7 @@ import path from "node:path";
 import type { OcrClient } from "@crawl-automation/ocr-client";
 import { buildOcrTextLabelPrompt, mapWithConcurrency, selectFactsOcrImages, type IndexedOcrImage } from "../amazon/ocr-label-pipeline.js";
 import { createResilientFetcher, type SwansonFetcher } from "./fetcher.js";
+import { extractSwansonHtmlFacts } from "./facts-html.js";
 import { extractLabelJsonWithRepair, type StoredRawLabelVerdict } from "../amazon/label-extraction.js";
 import { parseLabel, scoreConfidence } from "../amazon/label-parse.js";
 import { chunk } from "../amazon/semantic-clean.js";
@@ -131,6 +132,8 @@ export interface SwansonCatalog {
 export interface CapturedSwansonProduct {
   externalId: string;
   sku: string | null;
+  /** 页面自带的成分表；抠不到时为 null，改由图片线 OCR 兜底。 */
+  factsText?: string | null;
   product: ShopifyProduct;
   variant: ShopifyVariant;
   catalog: CatalogEntry;
@@ -280,6 +283,16 @@ export async function captureProducts(options: SwansonCaptureOptions, catalog: S
     assertNotAborted(options.signal);
     const productUrl = `https://www.swansonvitamins.com/products/${entry.handle}`;
     const product = await fetchJson<ShopifyProduct>(`${productUrl}.js`, options.signal, options.fetcher);
+    /*
+     * 成分表在页面里，不在 .js 接口里——后者的 description 只有几百字营销文案。
+     * 多花一次 HTML 请求换掉两三张图的下载与 OCR，是划算的；抠不到就留空，
+     * 由图片线兜底（跟 GNC 一样：HTML 有就用，没有才 OCR）。
+     */
+    let factsText: string | null = null;
+    try {
+      const html = await fetchText(productUrl, options.signal, options.fetcher);
+      factsText = extractSwansonHtmlFacts(html)?.factsText ?? null;
+    } catch { factsText = null; }
     // 节流：控制整体速率，不去试探站点的配额上限。小规模压测没限流不代表六千多个也没事。
     await sleep(throttle.delayMs, options.signal);
     const images = [...new Set([
@@ -294,6 +307,7 @@ export async function captureProducts(options: SwansonCaptureOptions, catalog: S
       catalog: { ...entry, title: entry.title || product.title, brand: entry.brand || product.vendor },
       productUrl,
       images,
+      factsText,
       capturedAt: new Date().toISOString(),
     }));
   });
