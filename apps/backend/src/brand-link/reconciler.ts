@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 import type { PipelineRepository } from "../repository.js";
+import { assessEvidence, isCorroborated } from "./evidence.js";
 import { BrandCatalogMatcher, type CatalogEntry } from "./matcher.js";
 
 export interface BrandLinkOptions {
@@ -141,8 +142,12 @@ export class BrandLinkReconciler {
     if (!entries.length) return 0;
     const matcher = new BrandCatalogMatcher(entries);
 
-    const companies = (await this.product.query<{ id: string; name: string; canonical_name: string | null }>(
-      "select id, name, canonical_name from company where is_nutrition")).rows;
+    // 一并取出佐证字段：名字只负责给出候选，能不能自动去抓由官网域名和公司简介决定。
+    const companies = (await this.product.query<{
+      id: string; name: string; canonical_name: string | null; website: string | null; profile: string | null;
+    }>(`select id::text id, name, canonical_name, coalesce(canonical_website, website) website,
+          coalesce(description,'') || ' ' || array_to_string(coalesce(keywords,'{}'),' ') profile
+        from company where is_nutrition`)).rows;
     const done = new Set((await this.control.query<{ company_id: string }>(
       "select company_id from channel_brand_link where channel=$1 and catalog_seen_at >= $2",
       [this.options.channel, catalogSeenAt])).rows.map((row) => row.company_id));
@@ -151,10 +156,24 @@ export class BrandLinkReconciler {
     for (const company of companies) {
       if (done.has(company.id)) continue;
       const hit = matcher.match([company.name, company.canonical_name ?? ""]);
-      // 只有 exact（全部词元逐一对齐）才自动去抓。strong 档实测约一半是错的——
-      // Prime Labs→PRIME、Nutrition Now→NOW、Xtend-Life→XTEND 都是不同的公司，
-      // 它们靠"剥掉通用词后剩下的部分相同"凑到一起，光看名字分不出来，只能交给人。
-      const status = !hit ? "absent" : hit.tier === "exact" ? "resolved" : "ambiguous";
+      /*
+       * 名字之外再要一条独立佐证才放行。
+       *
+       * 只看名字时，strong / subset 两档实测约七成是误配——Alpha Flow 对上
+       * Flow Supplements、Nature's Bounty 对上 Nature's Lab，名字都沾边，公司完全不同。
+       * 加上官网域名与公司简介之后，这类误配没有任何佐证，会留在人工队列里；
+       * 而 Alani Nutrition LLC（alaninu.com）、Onnit Labs（onnit.com）这种真实对应
+       * 则能被佐证救回来，不必浪费人工。
+       *
+       * exact 档本身已经够强（实测 123 家里 122 家都能拿到佐证），不因缺佐证而降级，
+       * 免得把 Tomorrow's Nutrition → tomorrows-nutrition 这类只差单复数的正确匹配挡掉。
+       */
+      const evidence = hit
+        ? assessEvidence({ website: company.website, profile: company.profile }, hit.slug, hit.label)
+        : null;
+      const status = !hit ? "absent"
+        : hit.tier === "exact" || (evidence && isCorroborated(evidence)) ? "resolved"
+        : "ambiguous";
       await this.control.query(
         `insert into channel_brand_link(company_id,channel,company_name,status,brand_slug,brand_label,brand_url,tier,evidence,catalog_seen_at,checked_at)
          values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,now())
@@ -167,7 +186,7 @@ export class BrandLinkReconciler {
           hit?.slug ?? null, hit?.label ?? null,
           hit ? `https://www.${this.options.channel}.com/brands/${hit.slug}/` : null,
           hit?.tier ?? null,
-          { catalogSize: matcher.size, canonicalName: company.canonical_name },
+          { catalogSize: matcher.size, canonicalName: company.canonical_name, website: company.website, evidence },
           catalogSeenAt,
         ]);
       matched += 1;

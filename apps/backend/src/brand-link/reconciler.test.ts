@@ -166,3 +166,43 @@ describe("BrandLinkReconciler 入队门槛", () => {
     expect(demote).toContain("status='resolved'\n         group by brand_slug");
   });
 });
+
+describe("BrandLinkReconciler 佐证复核", () => {
+  const captured = new Date();
+  function tick(company: any, catalog: any[]) {
+    const { controlPool, productPool, params } = pools((sql) => {
+      if (sql.includes("j.stage='resolve_brand_catalog'")) return { rows: [] };
+      if (sql.includes("channel_catalog_snapshot where channel")) return { rows: [{ entry_count: 9, captured_at: captured }] };
+      if (sql.includes("from channel_brand_catalog")) return { rows: catalog };
+      if (sql.includes("select company_id from channel_brand_link")) return { rows: [] };
+      return { rows: [] };
+    }, () => ({ rows: [company] }));
+    return { run: new BrandLinkReconciler(controlPool, productPool, repository, options).tick(), params };
+  }
+  const statusOf = (params: unknown[][], id: string) =>
+    (params.find((p) => p.length === 10 && p[0] === id) ?? [])[3];
+
+  it("名字只沾边但官网域名对得上——佐证把它救回来自动抓", async () => {
+    const { run, params } = tick(
+      { id: "c-10", name: "Onnit Labs, Inc.", canonical_name: "Onnit Labs", website: "https://onnit.com", profile: "" },
+      [{ slug: "onnit", label: "Onnit" }]);
+    await run;
+    expect(statusOf(params, "c-10")).toBe("resolved");
+  });
+
+  it("名字沾边且毫无佐证——留在人工队列，不去抓", async () => {
+    const { run, params } = tick(
+      { id: "c-11", name: "Alpha Flow", canonical_name: null, website: "https://alphaflow.com", profile: "Alpha Flow drinks" },
+      [{ slug: "flow-supplements", label: "Flow Supplements" }]);
+    await run;
+    expect(statusOf(params, "c-11")).toBe("ambiguous");
+  });
+
+  it("exact 档即使拿不到佐证也照常放行——只差单复数的正确匹配不该被挡", async () => {
+    const { run, params } = tick(
+      { id: "c-12", name: "Tomorrow's Nutrition", canonical_name: null, website: "https://tomorrownutrition.com", profile: "" },
+      [{ slug: "tomorrows-nutrition", label: "Tomorrow's Nutrition" }]);
+    await run;
+    expect(statusOf(params, "c-12")).toBe("resolved");
+  });
+});
