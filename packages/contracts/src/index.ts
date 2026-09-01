@@ -6,6 +6,8 @@ export const jobStages = [
   "capture", "process", "ingest", "cleanup",
   "capture_catalog", "process_text", "process_images", "product_join", "product_unify",
   "catalog_finalize", "ingest_staging", "cleanup_run",
+  // 解析线：把渠道品牌目录抓下来，供公司↔品牌匹配使用（与抓取线并行）
+  "resolve_brand_catalog",
 ] as const;
 export const jobStates = ["queued", "leased", "running", "retry_wait", "needs_review", "failed", "completed"] as const;
 export const nodeCapabilities = [

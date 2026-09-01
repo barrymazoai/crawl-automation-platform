@@ -63,7 +63,7 @@ export class PipelineRepository {
   }
 
   async summary() {
-    const [runs, nodes, jobs, stages, activeJobs, nodeRows] = await Promise.all([
+    const [runs, nodes, jobs, stages, activeJobs, nodeRows, brandLinkRows] = await Promise.all([
       this.pool.query(`select count(*)::int total,
         count(*) filter(where status in ('queued','active','retry_wait') and open_review_count=0)::int active,
         count(*) filter(where status not in ('completed','failed','abandoned') and open_review_count>0)::int needs_review,
@@ -86,6 +86,12 @@ export class PipelineRepository {
         from pipeline_job j join pipeline_run r on r.id=j.run_id join pipeline_source s on s.id=r.source_id
         where j.state in ('leased','running') order by j.updated_at desc limit 30`),
       this.pool.query(`select id, metadata from pipeline_node where last_seen_at>now()-interval '2 minutes' order by last_seen_at desc`),
+      // 解析线进度：公司↔渠道品牌的匹配结论与滴灌入队情况，跟抓取线并行推进。
+      this.pool.query(`select l.channel, l.status, count(*)::int n,
+        count(*) filter(where l.enqueued_at is not null)::int enqueued,
+        max(c.entry_count) catalog_entries, max(c.captured_at) catalog_captured_at
+        from channel_brand_link l left join channel_catalog_snapshot c on c.channel=l.channel
+        group by l.channel, l.status`),
     ]);
     const r = runs.rows[0]; const n = nodes.rows[0];
     // 遥测：取各在线节点上报的 extras，磁盘取可用空间最小的节点，出口/Codex 取最新一份。
@@ -108,6 +114,22 @@ export class PipelineRepository {
         exit: row.exit ?? null, url: row.url, adapter: row.adapter ?? null,
       })),
       telemetry: { disk, egress, codex },
+      brandLink: [...new Set(brandLinkRows.rows.map((row) => row.channel as string))].map((channel) => {
+        const rows = brandLinkRows.rows.filter((row) => row.channel === channel);
+        const of = (status: string) => rows.find((row) => row.status === status);
+        const resolved = of("resolved");
+        return {
+          channel,
+          catalogEntries: Number(rows[0]?.catalog_entries ?? 0),
+          catalogCapturedAt: rows[0]?.catalog_captured_at ? new Date(rows[0].catalog_captured_at).toISOString() : null,
+          resolved: Number(resolved?.n ?? 0),
+          ambiguous: Number(of("ambiguous")?.n ?? 0),
+          absent: Number(of("absent")?.n ?? 0),
+          enqueued: rows.reduce((sum, row) => sum + Number(row.enqueued), 0),
+          // 已解析但还没排进抓取队列：解析线领先抓取线多少
+          pendingEnqueue: Number(resolved?.n ?? 0) - Number(resolved?.enqueued ?? 0),
+        };
+      }),
     };
   }
 
@@ -333,7 +355,10 @@ export class PipelineRepository {
             await client.query("update pipeline_run set item_count=greatest(item_count,$2),updated_at=now() where id=$1", [job.run_id, itemCount]);
           }
         }
-        if (job.stage === "cleanup" || job.stage === "cleanup_run") await client.query("update pipeline_run set status='completed',updated_at=now() where id=$1", [job.run_id]);
+        // 目录刷新是单 job 的 run，没有 cleanup 收尾，这里直接收口，否则它会永远挂在"进行中"
+        if (job.stage === "cleanup" || job.stage === "cleanup_run" || job.stage === "resolve_brand_catalog") {
+          await client.query("update pipeline_run set status='completed',updated_at=now() where id=$1", [job.run_id]);
+        }
         await this.event(client, job.run_id, jobId, "job.completed", job.leased_by, output ?? {});
         return { success: true };
       });

@@ -130,6 +130,7 @@ function Dashboard() {
   const laneChips = LANES.map((lane) => (data?.activeJobs ?? []).filter((job) => (lane.stages as readonly string[]).includes(job.stage)));
   const done1hTotal = stageRows.reduce((sum, row) => sum + row.completed1h, 0);
   const telemetry = data?.telemetry;
+  const brandLink = data?.brandLink?.[0];
   const activeRuns = (runs.data ?? []).filter((run) => !["completed", "abandoned"].includes(run.status) || run.openReviews > 0).slice(0, 8);
   const recentDone = (runs.data ?? []).filter((run) => run.status === "completed" && !run.openReviews).slice(0, 4);
   const matrixRows = [...activeRuns, ...recentDone];
@@ -171,6 +172,17 @@ function Dashboard() {
           <div className="quota-row"><span className="quota-name">周限额</span><div className="meter"><i style={{ width: `${telemetry.codex.weeklyPercentLeft ?? 0}%`, background: (telemetry.codex.weeklyPercentLeft ?? 100) < 50 ? "#d9a63f" : undefined }}/></div><span className="quota-val">{telemetry.codex.weeklyPercentLeft ?? "—"}%</span></div>
           <div className="stat-foot">{telemetry.codex.resetsAt ? `窗口 ${new Date(telemetry.codex.resetsAt).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })} 重置 · ` : ""}上报于 {new Date(telemetry.codex.updatedAt).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}</div>
         </> : <div className="stat-foot" style={{ marginTop: 12 }}>等待 Codex 上报 · 首次模型调用后自动接入</div>}
+      </div>
+      <div className="stat wide">
+        <div className="stat-label" style={{ display: "flex", justifyContent: "space-between" }}>品牌解析线 {brandLink
+          ? <span className="tag good" style={{ fontSize: 10 }}><span className="dot live"/>与抓取并行</span>
+          : <span className="tag idle" style={{ fontSize: 10 }}>未启动</span>}</div>
+        {brandLink ? <>
+          <div className="stat-row num" style={{ fontSize: 19 }}>{brandLink.resolved} <span className="stat-sub">家已定位到 {brandLink.channel.toUpperCase()} 品牌页</span></div>
+          <div className="meter"><i style={{ width: `${brandLink.resolved ? Math.round((brandLink.enqueued / brandLink.resolved) * 100) : 0}%` }}/></div>
+          <div className="stat-foot num">已入队 {brandLink.enqueued} · 待入队 {brandLink.pendingEnqueue} · 待人工确认 {brandLink.ambiguous} · 渠道无此品牌 {brandLink.absent}</div>
+          <div className="stat-foot">目录 {brandLink.catalogEntries} 个品牌{brandLink.catalogCapturedAt ? ` · 更新于 ${new Date(brandLink.catalogCapturedAt).toLocaleString("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })}` : ""}</div>
+        </> : <div className="stat-foot" style={{ marginTop: 12 }}>控制面配置 PRODUCT_DATABASE_URL 后自动开始解析</div>}
       </div>
     </div>
 

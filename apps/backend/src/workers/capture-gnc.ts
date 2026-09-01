@@ -11,6 +11,7 @@ import { SalesChannelEgressManager } from "../sales-channel-egress/manager.js";
 import { SalesChannelEgressState } from "../sales-channel-egress/state.js";
 import type { SalesChannelEgressPolicy } from "../sales-channel-egress/types.js";
 import { DiskGuard } from "../v2/disk-guard.js";
+import { captureGncBrandCatalog } from "../gnc/brand-catalog.js";
 import { runGncCaptureCatalog } from "../v2/gnc-capture.js";
 import { baseEnv, captureEnv, egressEnv, loadEnv, parseEgressExits } from "./shared/env.js";
 import { startWorker } from "./shared/run.js";
@@ -91,6 +92,18 @@ await startWorker({
   handle: async ({ job, leaseToken, signal, client }) => {
     const selection = await egress.prepare("gnc");
     console.log(JSON.stringify({ type: "sales_channel_egress_prepared", channel: "gnc", exitId: selection.exit.id, successCount: selection.successCount }));
+
+    // 解析线的目录刷新：一次访问换回整页品牌，交给这个持有出口浏览器的池执行，
+    // 不另开绕过风控的通道。抓不全就如实上报，由控制面丢弃，绝不拿半份目录去比对。
+    if (job.stage === "resolve_brand_catalog") {
+      const catalog = await captureGncBrandCatalog({ url: job.source.url, signal, rotation: egress.rotation("gnc") });
+      console.log(JSON.stringify({ type: "gnc_brand_catalog_captured", entries: catalog.entries.length, expected: catalog.expectedCount, complete: catalog.complete }));
+      if (!catalog.entries.length) {
+        return { review: { reasonCode: "gnc_brand_catalog_empty", summary: `${job.source.url} 没有解析出任何品牌链接` } };
+      }
+      return { channel: "gnc", ...catalog };
+    }
+
     const result = await runGncCaptureCatalog({
       url: job.source.url,
       runId: job.runId,

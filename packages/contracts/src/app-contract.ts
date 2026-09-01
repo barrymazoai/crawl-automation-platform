@@ -38,6 +38,17 @@ export const appContract = {
         egress: z.object({ channel: z.string(), exitId: z.string(), ip: z.string().nullable(), exits: z.array(z.string()), updatedAt: z.string() }).nullable(),
         codex: z.object({ fiveHourPercentLeft: z.number().nullable(), weeklyPercentLeft: z.number().nullable(), resetsAt: z.string().nullable(), updatedAt: z.string() }).nullable(),
       }).default({ disk: null, egress: null, codex: null }),
+      // 解析线：公司↔渠道品牌匹配的进度，与抓取线并行推进。
+      brandLink: z.array(z.object({
+        channel: z.string(),
+        catalogEntries: z.number(),
+        catalogCapturedAt: z.string().nullable(),
+        resolved: z.number(),
+        ambiguous: z.number(),
+        absent: z.number(),
+        enqueued: z.number(),
+        pendingEnqueue: z.number(),
+      })).default([]),
     })),
   },
   classify: {
