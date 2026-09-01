@@ -33,6 +33,8 @@ await startWorker({
       workRoot: env.WORK_ROOT,
       maxItems: env.SWANSON_MAX_ITEMS,
       batchSize: env.V2_CAPTURE_BATCH_SIZE,
+      throttle: { concurrency: env.SWANSON_CONCURRENCY, delayMs: env.SWANSON_REQUEST_DELAY_MS },
+      switchToBrowserAfter: env.SWANSON_SWITCH_TO_BROWSER_AFTER,
       signal,
       registerBatch: (batch) => client.registerCaptureBatch(job.id, leaseToken, batch),
       finalizeCatalog: (catalog) => client.finalizeCatalog(job.id, leaseToken, catalog),

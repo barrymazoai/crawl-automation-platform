@@ -2,7 +2,8 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import type { CapturedProductV1 } from "@crawl-automation/contracts";
 import { writeJsonAtomic } from "@crawl-automation/runtime";
-import { captureProducts, discoverCatalog, stripHtml, type CapturedSwansonProduct } from "../swanson/pipeline.js";
+import { captureProducts, discoverCatalog, stripHtml, type CapturedSwansonProduct, type SwansonThrottle } from "../swanson/pipeline.js";
+import { createResilientFetcher } from "../swanson/fetcher.js";
 import { BatchPublisher } from "./batch-publisher.js";
 import { runRoot } from "./paths.js";
 
@@ -11,6 +12,9 @@ export interface SwansonCaptureCatalogOptions {
   runId: string;
   workRoot: string;
   maxItems: number;
+  throttle?: SwansonThrottle;
+  /** 连续被限流多少次后切浏览器通道；0 表示不切。 */
+  switchToBrowserAfter?: number;
   batchSize: number;
   signal: AbortSignal;
   registerBatch: (batch: { batchId: string; ordinal: number; itemCount: number; batchDirectory: string; imagesRequired: boolean }) => Promise<unknown>;
@@ -66,7 +70,16 @@ export function swansonBatchImagesRequired(products: readonly CapturedSwansonPro
 export async function runSwansonCaptureCatalog(options: SwansonCaptureCatalogOptions): Promise<SwansonCaptureCatalogResult> {
   const root = runRoot(options.workRoot, options.runId);
   await fs.mkdir(root, { recursive: true });
-  const captureOptions = { url: options.url, maxItems: options.maxItems, signal: options.signal };
+  // 取数通道整轮共用一条：连续被限流才切浏览器，切了之后后续请求都走浏览器
+  const fetcher = createResilientFetcher({
+    switchAfterBlocks: options.switchToBrowserAfter ?? 2,
+    log: (event) => console.log(JSON.stringify(event)),
+  });
+  const captureOptions = {
+    url: options.url, maxItems: options.maxItems, signal: options.signal,
+    fetcher, throttle: options.throttle ?? { concurrency: 4, delayMs: 300 },
+  };
+  try {
   const catalog = await discoverCatalog(captureOptions);
   await writeJsonAtomic(path.join(root, "capture", "discovery.json"), catalog);
   if (catalog.entries.length === 0) {
@@ -115,4 +128,8 @@ export async function runSwansonCaptureCatalog(options: SwansonCaptureCatalogOpt
     discoveredCount: products.length,
     summary: `Swanson 抓取完成：商品 ${products.length}，Batch ${publisher.batchCount}`,
   };
+  } finally {
+    // 通道可能持有浏览器，无论成败都要关掉
+    await fetcher.close();
+  }
 }

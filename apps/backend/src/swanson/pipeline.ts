@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import type { OcrClient } from "@crawl-automation/ocr-client";
 import { buildOcrTextLabelPrompt, mapWithConcurrency, selectFactsOcrImages, type IndexedOcrImage } from "../amazon/ocr-label-pipeline.js";
+import { createResilientFetcher, type SwansonFetcher } from "./fetcher.js";
 import { extractLabelJsonWithRepair, type StoredRawLabelVerdict } from "../amazon/label-extraction.js";
 import { parseLabel, scoreConfidence } from "../amazon/label-parse.js";
 import { chunk } from "../amazon/semantic-clean.js";
@@ -14,7 +15,17 @@ import { normalizedProductSchema, productBatchSchema, type NormalizedProduct, ty
 type ModelCall = (input: { prompt: string; tag: string }) => Promise<string>;
 
 /** discoverCatalog / captureProducts 需要的最小选项集。 */
+export interface SwansonThrottle {
+  /** 同时在飞的商品请求数。 */
+  concurrency: number;
+  /** 每个商品抓完后的额外等待毫秒，控制整体速率。 */
+  delayMs: number;
+}
+
 export interface SwansonCaptureOptions {
+  /** 取数通道。不传就现开一条会自动切浏览器的通道。 */
+  fetcher?: SwansonFetcher;
+  throttle?: SwansonThrottle;
   url: string;
   maxItems: number;
   signal: AbortSignal;
@@ -134,15 +145,25 @@ function assertNotAborted(signal: AbortSignal) {
   if (signal.aborted) throw new Error("Swanson pipeline aborted");
 }
 
-async function fetchText(url: string, signal: AbortSignal) {
-  const response = await fetch(url, { headers: REQUEST_HEADERS, signal });
-  if (!response.ok) throw new Error(`Swanson HTTP ${response.status}: ${url}`);
-  return response.text();
+/** 兜底通道：调用方没提供时用的默认实例，保证老调用点不用改签名。 */
+const defaultFetcher = createResilientFetcher({ log: (event) => console.log(JSON.stringify(event)) });
+
+async function fetchText(url: string, signal: AbortSignal, fetcher: SwansonFetcher = defaultFetcher) {
+  return fetcher.text(url, signal);
 }
 
-async function fetchJson<T>(url: string, signal: AbortSignal): Promise<T> {
-  return JSON.parse(await fetchText(url, signal)) as T;
+async function fetchJson<T>(url: string, signal: AbortSignal, fetcher?: SwansonFetcher): Promise<T> {
+  return JSON.parse(await fetchText(url, signal, fetcher)) as T;
 }
+
+const sleep = (ms: number, signal: AbortSignal) => {
+  if (ms <= 0 || signal.aborted) return Promise.resolve();
+  return new Promise<void>((resolve) => {
+    const timer = setTimeout(finish, ms);
+    function finish() { clearTimeout(timer); signal.removeEventListener("abort", finish); resolve(); }
+    signal.addEventListener("abort", finish, { once: true });
+  });
+};
 
 async function writeJson(filename: string, value: unknown) {
   await fs.mkdir(path.dirname(filename), { recursive: true });
@@ -213,7 +234,7 @@ export async function discoverCatalog(options: SwansonCaptureOptions): Promise<S
   }
   const source = new URL(options.url);
   const brand = source.searchParams.get("facet.brand")?.trim() || null;
-  const html = await fetchText(source.toString(), options.signal);
+  const html = await fetchText(source.toString(), options.signal, options.fetcher);
   const apiKey = html.match(/constructorApiKey\s*=\s*['"]([^'"]+)/)?.[1];
   const filterName = html.match(/var FILTER_NAME\s*=\s*['"]([^'"]+)/)?.[1];
   const filterValue = html.match(/var FILTER_VALUE\s*=\s*['"]([^'"]+)/)?.[1];
@@ -233,7 +254,7 @@ export async function discoverCatalog(options: SwansonCaptureOptions): Promise<S
     endpoint.searchParams.set("page", String(page));
     endpoint.searchParams.set("num_results_per_page", String(perPage));
     if (brand) endpoint.searchParams.append("filters[brand][]", brand);
-    const parsed = parseSwansonConstructorPage(await fetchJson(endpoint.toString(), options.signal));
+    const parsed = parseSwansonConstructorPage(await fetchJson(endpoint.toString(), options.signal, options.fetcher));
     expectedCount = parsed.total;
     fetchedResultCount += parsed.resultCount;
     for (const entry of parsed.entries) {
@@ -254,10 +275,13 @@ export async function discoverCatalog(options: SwansonCaptureOptions): Promise<S
 }
 
 export async function captureProducts(options: SwansonCaptureOptions, catalog: SwansonCatalog) {
-  const products = await mapWithConcurrency(catalog.entries, 4, async (entry) => {
+  const throttle = options.throttle ?? { concurrency: 4, delayMs: 0 };
+  const products = await mapWithConcurrency(catalog.entries, throttle.concurrency, async (entry) => {
     assertNotAborted(options.signal);
     const productUrl = `https://www.swansonvitamins.com/products/${entry.handle}`;
-    const product = await fetchJson<ShopifyProduct>(`${productUrl}.js`, options.signal);
+    const product = await fetchJson<ShopifyProduct>(`${productUrl}.js`, options.signal, options.fetcher);
+    // 节流：控制整体速率，不去试探站点的配额上限。小规模压测没限流不代表六千多个也没事。
+    await sleep(throttle.delayMs, options.signal);
     const images = [...new Set([
       ...(product.media ?? []).filter((item) => item.media_type === "image" && item.src).map((item) => absoluteImage(item.src!)),
       ...product.images.map(absoluteImage),
