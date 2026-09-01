@@ -149,22 +149,69 @@ describe("BrandLinkReconciler 入队门槛", () => {
     expect(upsert?.[3]).toBe("resolved");
   });
 
-  it("多家公司抢同一个 slug 时全部降级待确认", async () => {
-    const { controlPool, productPool, sqls } = pools((sql) => {
+  it("多家抢同一个 slug 且只有一家有硬佐证时，它胜出、其余判负", async () => {
+    const captured = new Date();
+    const updates: unknown[][] = [];
+    const { controlPool, productPool } = pools((sql, parameters) => {
       if (sql.includes("j.stage='resolve_brand_catalog'")) return { rows: [] };
       if (sql.includes("channel_catalog_snapshot where channel")) return { rows: [{ entry_count: 9, captured_at: captured }] };
-      if (sql.includes("from channel_brand_catalog")) return { rows: [{ slug: "natures-lab", label: "Nature's Lab" }] };
-      if (sql.includes("select company_id from channel_brand_link")) return { rows: [] };
+      if (sql.includes("from channel_brand_catalog")) return { rows: [] };
+      if (sql.includes("corroboration\n        from channel_brand_link") || sql.includes("evidence->'evidence'->>'corroboration'")) {
+        return { rows: [
+          { company_id: "win", brand_slug: "alani-nu", status: "ambiguous", enqueued_at: null, corroboration: "domain_exact" },
+          { company_id: "lose", brand_slug: "alani-nu", status: "ambiguous", enqueued_at: null, corroboration: "none" },
+        ] };
+      }
+      if (sql.includes("set status=$3")) { updates.push(parameters!); return { rows: [] }; }
       return { rows: [] };
     });
     await new BrandLinkReconciler(controlPool, productPool, repository, options).tick();
-    const demote = sqls.find((sql) => sql.includes("having count(*) > 1"));
-    expect(demote).toContain("status='ambiguous'");
-    // 已经入队的不动——那批已经在跑，改状态只会让队列和缓存对不上
-    expect(demote).toContain("enqueued_at is null");
-    // 只看 exact 之间的冲突：一个 exact 配几个 ambiguous 是常态，不该连累那条可信结论
-    expect(demote).toContain("status='resolved'\n         group by brand_slug");
+    expect(updates).toEqual(expect.arrayContaining([
+      ["win", "gnc", "resolved"],
+      ["lose", "gnc", "rejected"],
+    ]));
   });
+
+  it("多家都有佐证时谁也不放行，全部转人工", async () => {
+    const captured = new Date();
+    const updates: unknown[][] = [];
+    const { controlPool, productPool } = pools((sql, parameters) => {
+      if (sql.includes("j.stage='resolve_brand_catalog'")) return { rows: [] };
+      if (sql.includes("channel_catalog_snapshot where channel")) return { rows: [{ entry_count: 9, captured_at: captured }] };
+      if (sql.includes("from channel_brand_catalog")) return { rows: [] };
+      if (sql.includes("evidence->'evidence'->>'corroboration'")) {
+        return { rows: [
+          { company_id: "a", brand_slug: "inno-supps", status: "resolved", enqueued_at: null, corroboration: "domain_exact" },
+          { company_id: "b", brand_slug: "inno-supps", status: "resolved", enqueued_at: null, corroboration: "profile" },
+        ] };
+      }
+      if (sql.includes("set status=$3")) { updates.push(parameters!); return { rows: [] }; }
+      return { rows: [] };
+    });
+    await new BrandLinkReconciler(controlPool, productPool, repository, options).tick();
+    expect(updates).toEqual([["a", "gnc", "ambiguous"], ["b", "gnc", "ambiguous"]]);
+  });
+
+  it("已经在抓的那家不参与改判——改状态会让队列和缓存对不上", async () => {
+    const captured = new Date();
+    const updates: unknown[][] = [];
+    const { controlPool, productPool } = pools((sql, parameters) => {
+      if (sql.includes("j.stage='resolve_brand_catalog'")) return { rows: [] };
+      if (sql.includes("channel_catalog_snapshot where channel")) return { rows: [{ entry_count: 9, captured_at: captured }] };
+      if (sql.includes("from channel_brand_catalog")) return { rows: [] };
+      if (sql.includes("evidence->'evidence'->>'corroboration'")) {
+        return { rows: [
+          { company_id: "running", brand_slug: "quest", status: "resolved", enqueued_at: "2026-09-01", corroboration: "none" },
+          { company_id: "other", brand_slug: "quest", status: "ambiguous", enqueued_at: null, corroboration: "none" },
+        ] };
+      }
+      if (sql.includes("set status=$3")) { updates.push(parameters!); return { rows: [] }; }
+      return { rows: [] };
+    });
+    await new BrandLinkReconciler(controlPool, productPool, repository, options).tick();
+    expect(updates.some((u) => u[0] === "running")).toBe(false);
+  });
+
 });
 
 describe("BrandLinkReconciler 佐证复核", () => {

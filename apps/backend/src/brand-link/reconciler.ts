@@ -61,7 +61,7 @@ export class BrandLinkReconciler {
     if (this.isStale(snapshot)) await this.requestCatalogRefresh();
     if (!snapshot || snapshot.entryCount === 0) return { matched: 0, enqueued: 0 };
     const matched = await this.matchCompanies(snapshot.capturedAt);
-    await this.demoteContestedSlugs();
+    await this.settleContestedSlugs();
     const enqueued = await this.enqueueResolved();
     if (matched || enqueued) this.log({ type: "brand_link_tick", channel: this.options.channel, matched, enqueued });
     return { matched, enqueued };
@@ -199,21 +199,62 @@ export class BrandLinkReconciler {
    * enqueued_at 一旦写上就不会重排，所以重启、重跑都不会产生重复抓取任务。
    */
   /**
-   * 一个渠道品牌只能归一家公司。两家以上都拿到 exact 时，谁都不自动抓，全部转人工。
+   * 一个渠道品牌只能归一家公司。多家认领时用佐证裁决，而不是一律推给人工。
    *
-   * 只看 exact 之间的冲突：一个 exact 配几个 ambiguous 是常态（Alani Nutrition LLC
-   * 对上 alani-nu 是对的，Nu-Health 只是名字里也有 nu），把 exact 也一起降级等于
-   * 白白丢掉唯一那条可信结论。
+   * 名字沾边的近音词常常扎堆抢同一个品牌页——natures-fusions 被 Nature's Life /
+   * Nature's Nutrition / Nature's Health / Nature's Brands 一起认领，basic-supplements
+   * 被 Basic Drugs / Basic Vigor / Basic Organics 一起认领。这些名字之间光看字面分不出
+   * 高下，但官网域名一比就清楚：只有真正那家的域名对得上品牌 slug。
+   *
+   * 所以规则是：只有一家拿到硬佐证时它直接胜出，其余判负（rejected，不再占人工队列）；
+   * 多家都有佐证或一家都没有，才是真的说不清，全部转人工。
    */
-  private async demoteContestedSlugs() {
-    const { rowCount } = await this.control.query(
-      `update channel_brand_link set status='ambiguous', checked_at=now()
-       where channel=$1 and status='resolved' and enqueued_at is null and brand_slug in (
-         select brand_slug from channel_brand_link
-         where channel=$1 and brand_slug is not null and status='resolved'
-         group by brand_slug having count(*) > 1)`, [this.options.channel]);
-    if (rowCount) this.log({ type: "brand_link_contested_slugs_demoted", channel: this.options.channel, count: rowCount });
-    return rowCount ?? 0;
+  private async settleContestedSlugs() {
+    const rows = (await this.control.query<{
+      company_id: string; brand_slug: string; status: string; enqueued_at: string | null; corroboration: string | null;
+    }>(`select company_id, brand_slug, status, enqueued_at, evidence->'evidence'->>'corroboration' corroboration
+        from channel_brand_link
+        where channel=$1 and brand_slug is not null and status in ('resolved','ambiguous')`,
+      [this.options.channel])).rows;
+
+    const groups = new Map<string, typeof rows>();
+    for (const row of rows) {
+      const group = groups.get(row.brand_slug) ?? [];
+      group.push(row);
+      groups.set(row.brand_slug, group);
+    }
+
+    const hard = (row: { corroboration: string | null }) =>
+      row.corroboration === "domain_exact" || row.corroboration === "profile";
+    let settled = 0;
+    let rejected = 0;
+    for (const [slug, group] of groups) {
+      if (group.length < 2) continue;
+      const backed = group.filter(hard);
+      // 已经在抓的不动：改它的状态只会让队列和缓存对不上
+      const mutable = group.filter((row) => !row.enqueued_at);
+      if (backed.length === 1 && !backed[0]!.enqueued_at) {
+        await this.setStatus(backed[0]!.company_id, "resolved");
+        for (const loser of mutable.filter((row) => row !== backed[0])) {
+          await this.setStatus(loser.company_id, "rejected");
+          rejected += 1;
+        }
+        settled += 1;
+      } else if (backed.length !== 1) {
+        for (const row of mutable.filter((r) => r.status !== "ambiguous")) await this.setStatus(row.company_id, "ambiguous");
+      }
+      void slug;
+    }
+    if (settled || rejected) {
+      this.log({ type: "brand_link_contested_slugs_settled", channel: this.options.channel, settled, rejected });
+    }
+    return settled;
+  }
+
+  private async setStatus(companyId: string, status: string) {
+    await this.control.query(
+      "update channel_brand_link set status=$3, checked_at=now() where company_id=$1 and channel=$2",
+      [companyId, this.options.channel, status]);
   }
 
   private async enqueueResolved() {
@@ -280,6 +321,7 @@ export class BrandLinkReconciler {
     const resolved = by("resolved");
     const ambiguous = by("ambiguous");
     const enqueued = counts.reduce((sum, row) => sum + Number(row.enqueued), 0);
+    const rejected = Number(by("rejected")?.n ?? 0);
     return {
       channel: this.options.channel,
       catalogEntries: snapshot?.entryCount ?? 0,
@@ -287,7 +329,7 @@ export class BrandLinkReconciler {
       catalogStale: this.isStale(snapshot),
       resolved: Number(resolved?.n ?? 0),
       ambiguous: Number(ambiguous?.n ?? 0),
-      absent: Number(by("absent")?.n ?? 0),
+      absent: Number(by("absent")?.n ?? 0) + rejected,
       pendingEnqueue: Number(resolved?.n ?? 0) - Number(resolved?.enqueued ?? 0),
       enqueued,
     };
