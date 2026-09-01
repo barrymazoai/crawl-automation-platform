@@ -60,8 +60,12 @@ export const captureEnv = {
   AMAZON_MAX_ITEMS: z.coerce.number().int().min(1).max(2000).default(500),
   GNC_MAX_ITEMS: z.coerce.number().int().min(1).max(5000).default(500),
   SWANSON_MAX_ITEMS: z.coerce.number().int().min(1).max(5000).default(2000),
-  /** 同时在飞的商品请求数。实测并发 10 无间隔也不限流，默认取保守值。 */
-  SWANSON_CONCURRENCY: z.coerce.number().int().min(1).max(16).default(4),
+  /**
+   * 同时在飞的商品请求数。默认 1：抓取是流水线里的串行环节——抓到一批发布出去，
+   * 处理池并行消化，抓取继续往前走；并发抓同一个站没有收益，还得靠互斥锁
+   * 把共享标签页的操作重新串行化，纯属自我抵消。
+   */
+  SWANSON_CONCURRENCY: z.coerce.number().int().min(1).max(16).default(1),
   /** 每个商品抓完后的等待毫秒，控制整体速率。 */
   SWANSON_REQUEST_DELAY_MS: z.coerce.number().int().min(0).max(60_000).default(300),
   /** 连续被限流多少次后切到浏览器通道。0 = 不切。 */
