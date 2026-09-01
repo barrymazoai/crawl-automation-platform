@@ -118,3 +118,49 @@ describe("BrandLinkReconciler", () => {
     expect(enqueueParams?.[1]).toEqual(["resolved"]);
   });
 });
+
+describe("BrandLinkReconciler 入队门槛", () => {
+  const captured = new Date();
+  function tickWith(company: { id: string; name: string; canonical_name: string | null }, catalog: any[]) {
+    const { controlPool, productPool, params } = pools((sql) => {
+      if (sql.includes("j.stage='resolve_brand_catalog'")) return { rows: [] };
+      if (sql.includes("channel_catalog_snapshot where channel")) return { rows: [{ entry_count: 9, captured_at: captured }] };
+      if (sql.includes("from channel_brand_catalog")) return { rows: catalog };
+      if (sql.includes("select company_id from channel_brand_link")) return { rows: [] };
+      return { rows: [] };
+    }, () => ({ rows: [company] }));
+    return { run: new BrandLinkReconciler(controlPool, productPool, repository, options).tick(), params };
+  }
+
+  it("strong 档不自动入队——实测约一半是不同公司", async () => {
+    const { run, params } = tickWith(
+      { id: "c-3", name: "Onnit Labs, Inc.", canonical_name: "Onnit Labs" }, [{ slug: "onnit", label: "Onnit" }]);
+    await run;
+    const upsert = params.find((p) => p.length === 10 && p[0] === "c-3");
+    expect(upsert?.[3]).toBe("ambiguous");
+    expect(upsert?.[7]).toBe("strong");
+  });
+
+  it("exact 档才自动入队", async () => {
+    const { run, params } = tickWith(
+      { id: "c-4", name: "Onnit", canonical_name: null }, [{ slug: "onnit", label: "Onnit" }]);
+    await run;
+    const upsert = params.find((p) => p.length === 10 && p[0] === "c-4");
+    expect(upsert?.[3]).toBe("resolved");
+  });
+
+  it("多家公司抢同一个 slug 时全部降级待确认", async () => {
+    const { controlPool, productPool, sqls } = pools((sql) => {
+      if (sql.includes("j.stage='resolve_brand_catalog'")) return { rows: [] };
+      if (sql.includes("channel_catalog_snapshot where channel")) return { rows: [{ entry_count: 9, captured_at: captured }] };
+      if (sql.includes("from channel_brand_catalog")) return { rows: [{ slug: "natures-lab", label: "Nature's Lab" }] };
+      if (sql.includes("select company_id from channel_brand_link")) return { rows: [] };
+      return { rows: [] };
+    });
+    await new BrandLinkReconciler(controlPool, productPool, repository, options).tick();
+    const demote = sqls.find((sql) => sql.includes("having count(*) > 1"));
+    expect(demote).toContain("status='ambiguous'");
+    // 已经入队的不动——那批已经在跑，改状态只会让队列和缓存对不上
+    expect(demote).toContain("enqueued_at is null");
+  });
+});

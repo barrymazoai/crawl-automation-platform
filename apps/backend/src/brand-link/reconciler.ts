@@ -60,6 +60,7 @@ export class BrandLinkReconciler {
     if (this.isStale(snapshot)) await this.requestCatalogRefresh();
     if (!snapshot || snapshot.entryCount === 0) return { matched: 0, enqueued: 0 };
     const matched = await this.matchCompanies(snapshot.capturedAt);
+    await this.demoteContestedSlugs();
     const enqueued = await this.enqueueResolved();
     if (matched || enqueued) this.log({ type: "brand_link_tick", channel: this.options.channel, matched, enqueued });
     return { matched, enqueued };
@@ -150,7 +151,10 @@ export class BrandLinkReconciler {
     for (const company of companies) {
       if (done.has(company.id)) continue;
       const hit = matcher.match([company.name, company.canonical_name ?? ""]);
-      const status = !hit ? "absent" : hit.tier === "subset" ? "ambiguous" : "resolved";
+      // 只有 exact（全部词元逐一对齐）才自动去抓。strong 档实测约一半是错的——
+      // Prime Labs→PRIME、Nutrition Now→NOW、Xtend-Life→XTEND 都是不同的公司，
+      // 它们靠"剥掉通用词后剩下的部分相同"凑到一起，光看名字分不出来，只能交给人。
+      const status = !hit ? "absent" : hit.tier === "exact" ? "resolved" : "ambiguous";
       await this.control.query(
         `insert into channel_brand_link(company_id,channel,company_name,status,brand_slug,brand_label,brand_url,tier,evidence,catalog_seen_at,checked_at)
          values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,now())
@@ -175,6 +179,21 @@ export class BrandLinkReconciler {
    * 把已解析、还没排过队的公司滴灌进抓取队列——解析出一个就爬一个。
    * enqueued_at 一旦写上就不会重排，所以重启、重跑都不会产生重复抓取任务。
    */
+  /**
+   * 一个渠道品牌只能归一家公司。多家公司认领同一个 slug 时，把它们全部降级成待确认——
+   * 冲突本身就说明匹配没把握，自动抓下去只会把产品记到错的公司名下。
+   */
+  private async demoteContestedSlugs() {
+    const { rowCount } = await this.control.query(
+      `update channel_brand_link set status='ambiguous', checked_at=now()
+       where channel=$1 and status='resolved' and enqueued_at is null and brand_slug in (
+         select brand_slug from channel_brand_link
+         where channel=$1 and brand_slug is not null and status in ('resolved','ambiguous')
+         group by brand_slug having count(*) > 1)`, [this.options.channel]);
+    if (rowCount) this.log({ type: "brand_link_contested_slugs_demoted", channel: this.options.channel, count: rowCount });
+    return rowCount ?? 0;
+  }
+
   private async enqueueResolved() {
     // 反压：抓取队列还满着就不补，等抓取线消化。
     const waiting = Number((await this.control.query(

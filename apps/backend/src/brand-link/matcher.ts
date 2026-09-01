@@ -17,7 +17,21 @@ const WEAK = new Set([
 ]);
 
 export function tokens(raw: string) {
-  return raw.toLowerCase().replace(/[®™©]/g, " ").split(/[^a-z0-9]+/).filter((t) => t && !NOISE.has(t));
+  return rawTokens(raw).filter((t) => !NOISE.has(t));
+}
+const rawTokens = (raw: string) => raw.toLowerCase().replace(/[®™©]/g, " ").split(/[^a-z0-9]+/).filter(Boolean);
+/** 被当作无区分力而剥掉的词（法律后缀 + 行业通用词）。 */
+const dropped = (raw: string) => new Set(rawTokens(raw).filter((t) => NOISE.has(t) || WEAK.has(t)));
+/**
+ * 两边剥掉的词是否兼容：一方剥掉的必须是另一方的子集。
+ *
+ * 剥词之后再判相等是不安全的——Nature's Brands 和 Nature's Lab 剥完都只剩 natures，
+ * 可真正区分它们的恰恰就是被剥掉的 Brands / Lab。要求剥掉的词互为子集，
+ * 就只放行"一方多带了几个通用词"这种情况（Enzymedica Labs vs Enzymedica）。
+ */
+function droppedCompatible(a: Set<string>, b: Set<string>) {
+  const [small, large] = a.size <= b.size ? [a, b] : [b, a];
+  return [...small].every((t) => large.has(t));
 }
 /** 强词元 = 去掉行业通用词后剩下的、真正能区分品牌的部分。 */
 export const strong = (list: readonly string[]) => list.filter((t) => !WEAK.has(t));
@@ -31,6 +45,7 @@ export interface BrandMatch { slug: string; label: string; tier: MatchTier }
 interface PreparedBrand extends CatalogEntry {
   key: string; strongKey: string; strong: string[];
   slugKey: string; slugStrong: string[];
+  dropped: Set<string>;
 }
 
 /**
@@ -50,6 +65,7 @@ export class BrandCatalogMatcher {
         ...entry,
         key: key(labelTokens), strong: strong(labelTokens), strongKey: key(strong(labelTokens)),
         slugKey: key(slugTokens), slugStrong: strong(slugTokens),
+        dropped: dropped(entry.label && entry.label.length > 1 ? entry.label : entry.slug),
       };
     });
     for (const brand of this.brands) {
@@ -91,16 +107,21 @@ export class BrandCatalogMatcher {
 
       // 2) 强词元完全一致：忽略 Nutrition / Labs 这类通用词的有无
       if (strongKey) {
-        hit = this.brands.find((b) => b.strongKey === strongKey || key(b.slugStrong) === strongKey);
+        const rawDropped = dropped(raw);
+        hit = this.brands.find((b) =>
+          (b.strongKey === strongKey || key(b.slugStrong) === strongKey) && droppedCompatible(rawDropped, b.dropped));
         if (hit) { consider({ slug: hit.slug, label: hit.label, tier: "strong" }); continue; }
       }
 
       // 3) 强词元子集：一方的强词元全部出现在另一方里。只共用一个词元时，
       //    该词必须在目录里唯一，否则 Amazing Muscle 会命中 Amazing Nutrition。
       if (strongTokens.length) {
+        const rawDropped = dropped(raw);
         hit = this.brands.find((b) => {
           const brandTokens = b.strong.length ? b.strong : b.slugStrong;
           if (!brandTokens.length) return false;
+          // 同 strong 档：剥掉的词必须兼容，否则区分词被剥掉的那类误配会从这里溜进来
+          if (!droppedCompatible(rawDropped, b.dropped)) return false;
           const left = new Set(strongTokens), right = new Set(brandTokens);
           const subset = [...left].every((v) => right.has(v)) || [...right].every((v) => left.has(v));
           if (!subset || Math.abs(left.size - right.size) > 1) return false;

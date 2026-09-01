@@ -41,3 +41,27 @@ describe("BrandCatalogMatcher", () => {
     expect(matcher.match(["One of One"])).toMatchObject({ slug: "one-of-one" });
   });
 });
+
+describe("剥词之后再判相等的陷阱", () => {
+  const tricky = new BrandCatalogMatcher([
+    { slug: "natures-lab", label: "Nature's Lab®" },
+    { slug: "enzymedica", label: "Enzymedica®" },
+    { slug: "daily-wellness-company", label: "Daily Wellness Company®" },
+  ]);
+
+  it("区分词恰好被剥掉时不匹配：Nature's Brands ≠ Nature's Lab", () => {
+    // 两边剥完都只剩 natures，可真正区分它们的就是 Brands / Lab
+    expect(tricky.match(["Nature's Brands"])).toBeNull();
+    expect(tricky.match(["Nature's Health"])).toBeNull();
+    expect(tricky.match(["Nature's Life"])).toBeNull();
+    expect(tricky.match(["Daily Health, Inc."])).toBeNull();
+  });
+
+  it("一方只是多带了通用词时仍然匹配：Enzymedica Labs = Enzymedica", () => {
+    expect(tricky.match(["Enzymedica Labs, Inc."])).toMatchObject({ slug: "enzymedica", tier: "strong" });
+  });
+
+  it("公司名恰好等于目录名时仍是 exact", () => {
+    expect(tricky.match(["Nature's Lab"])).toMatchObject({ slug: "natures-lab", tier: "exact" });
+  });
+});
