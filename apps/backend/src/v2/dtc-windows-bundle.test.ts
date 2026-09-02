@@ -56,3 +56,28 @@ describe("Windows EvidenceBundleV1 → 产品", () => {
     expect(await readWindowsBundle(dir)).toBeNull();
   });
 });
+
+describe("Codex 拼的包路径写错时", () => {
+  it("imageFiles 指向不存在的路径 → 按 files 清单/文件名找回；record.json 按内容识别", async () => {
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), "win-bundle-wrongpath-"));
+    await fs.mkdir(path.join(dir, "capture", "img"), { recursive: true });
+    await fs.mkdir(path.join(dir, "items", "abc"), { recursive: true });
+    await fs.writeFile(path.join(dir, "capture", "img", "f0659bf6.webp"), "img");
+    await fs.writeFile(path.join(dir, "items", "abc", "page-dom.txt"), "dom");
+    await fs.writeFile(path.join(dir, "items", "abc", "record.json"), JSON.stringify({
+      productUrl: "https://liveowyn.com/products/x", fields: { title: "X Shake", images: ["https://cdn/x.png"], sku: "X-1", price: "9.99" },
+      variant: { variantId: "1", sku: "X-1", options: {}, price: "9.99", available: true },
+    }));
+    await fs.writeFile(path.join(dir, "bundle.json"), JSON.stringify({
+      items: [{ externalId: "1", productUrl: "https://liveowyn.com/products/x?variant=1", title: "X Shake", sku: "X-1", skuMissing: false,
+        variant: { variantId: "1", sku: "X-1", options: {}, price: "9.99", available: true },
+        sourceFiles: ["items/abc/page-dom.txt", "items/abc/record.json"],
+        imageFiles: ["capture/evidence/img/f0659bf6.webp", "capture/evidence/img/missing.webp"] }],
+      files: [{ path: "capture/img/f0659bf6.webp", sha256: "x", byteSize: 3, mediaType: "image/webp" }],
+    }));
+    const products = recordToProducts((await readWindowsBundle(dir))![0]!, dir, "2026-09-02T09:00:00.000Z");
+    expect(products).toHaveLength(1);
+    expect(products[0]!.title).toBe("X Shake");
+    expect(products[0]!.localImages).toEqual([path.join(dir, "capture", "img", "f0659bf6.webp")]);
+  });
+});

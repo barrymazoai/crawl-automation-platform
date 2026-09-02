@@ -10,6 +10,18 @@ import { canonicalVariantForm, type ProductUnifyInput, type ProductVariant } fro
 import type { DtcRawProduct } from "../dtc-capture.js";
 import { runRoot } from "../paths.js";
 import type { ChannelFactsResult, ChannelHooks, StageContext } from "../stages.js";
+import { buildBundleFileIndex } from "../dtc-capture.js";
+
+const evidenceIndexCache = new Map<string, Promise<Map<string, string>>>();
+/** 找本地图片：路径存在直接用；否则按文件名在本 run 的 evidence/ 下找（索引按 run 缓存）。 */
+async function resolveEvidenceImage(ctx: StageContext, filename: string) {
+  if (await fs.stat(filename).then(() => true).catch(() => false)) return filename;
+  const evidenceRoot = path.join(ctx.workRoot, ctx.runId, "v2", "evidence");
+  let index = evidenceIndexCache.get(evidenceRoot);
+  if (!index) { index = buildBundleFileIndex(evidenceRoot); evidenceIndexCache.set(evidenceRoot, index); }
+  const found = (await index).get(path.basename(filename));
+  return found ?? null;
+}
 
 /**
  * DTC（独立站）的 ChannelHooks。
@@ -66,7 +78,10 @@ export function createDtcChannelHooks(): ChannelHooks<DtcRawProduct, GncCleanRes
     async extractFacts(ctx: StageContext, product) {
       if (product.localImages.length === 0) return { facts: null };
       const workDirectory = path.join(runRoot(ctx.workRoot, ctx.runId), "labels", safeKey(product.externalId));
-      const ocrImages = await mapWithConcurrency(product.localImages, 1, async (filename, index): Promise<IndexedOcrImage> => {
+      // 证据包里的相对路径可能写错（Codex 拼的包），按文件名在 run 的证据目录里找回来；找不到的跳过而不是整批失败
+      const resolved = (await Promise.all(product.localImages.map((filename) => resolveEvidenceImage(ctx, filename)))).filter((f): f is string => Boolean(f));
+      if (resolved.length === 0) return { facts: null };
+      const ocrImages = await mapWithConcurrency(resolved, 1, async (filename, index): Promise<IndexedOcrImage> => {
         const cache = `${filename}.ocr.json`;
         let response = await readJson<any>(cache);
         if (!response) { response = await ctx.ocr.recognize(filename); await writeJson(cache, response); }

@@ -85,18 +85,52 @@ type WindowsBundleItem = {
   sourceFiles?: unknown; imageFiles?: unknown;
 };
 
+/**
+ * 包是 Codex 按提示词拼的，目录布局每次可能不同，items[].imageFiles/sourceFiles 还可能写错相对路径
+ * （实测：写 capture/evidence/img/x.webp，文件在 capture/img/x.webp；files 清单是对的）。
+ * 所以按"先信路径，不存在就按文件名找"的策略解析：files 清单（带 SHA）优先，再全目录扫描。
+ */
+export async function buildBundleFileIndex(directory: string, manifest?: Array<{ path?: unknown }>) {
+  const byName = new Map<string, string>();
+  for (const entry of manifest ?? []) {
+    const rel = typeof entry.path === "string" ? entry.path.replace(/\\/g, "/") : null;
+    if (rel && !byName.has(path.basename(rel))) byName.set(path.basename(rel), path.join(directory, rel));
+  }
+  const walk = async (dir: string) => {
+    for (const entry of await fs.readdir(dir, { withFileTypes: true }).catch(() => [])) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) await walk(full);
+      else if (!byName.has(entry.name)) byName.set(entry.name, full);
+    }
+  };
+  await walk(directory);
+  return byName;
+}
+
+export async function resolveBundleFile(directory: string, relative: string, index: Map<string, string>) {
+  const direct = path.join(directory, relative.replace(/\\/g, "/"));
+  if (await fs.stat(direct).then(() => true).catch(() => false)) return direct;
+  const found = index.get(path.basename(relative));
+  return found && await fs.stat(found).then(() => true).catch(() => false) ? found : null;
+}
+
 export async function readWindowsBundle(directory: string): Promise<EvidenceRecord[] | null> {
   const raw = await fs.readFile(path.join(directory, "bundle.json"), "utf8").catch(() => null);
   if (!raw) return null;
-  const bundle = JSON.parse(raw) as { items?: unknown };
+  const bundle = JSON.parse(raw) as { items?: unknown; files?: Array<{ path?: unknown }> };
   if (!Array.isArray(bundle.items)) return null;
+  const index = await buildBundleFileIndex(directory, bundle.files);
   const records: EvidenceRecord[] = [];
+  let missingImages = 0;
   for (const item of bundle.items as WindowsBundleItem[]) {
     const sourceFiles = Array.isArray(item.sourceFiles) ? item.sourceFiles.filter((v): v is string => typeof v === "string") : [];
-    const dataFile = sourceFiles.find((name) => name.endsWith(".json"));
-    const data = dataFile
-      ? await fs.readFile(path.join(directory, dataFile.replace(/\\/g, "/")), "utf8").then((t) => JSON.parse(t) as { productUrl?: unknown; fields?: Record<string, unknown>; variant?: WindowsBundleItem["variant"] }).catch(() => null)
-      : null;
+    // 商品数据 json：run 1 叫 data/<n>-<variant>.json，run 2 叫 items/<hash>/record.json 或 product.json——按内容挑，不按名字
+    let data: { productUrl?: unknown; fields?: Record<string, unknown>; variant?: WindowsBundleItem["variant"] } | null = null;
+    for (const name of sourceFiles.filter((n) => n.endsWith(".json"))) {
+      const file = await resolveBundleFile(directory, name, index);
+      const parsed = file ? await fs.readFile(file, "utf8").then((t) => JSON.parse(t)).catch(() => null) : null;
+      if (parsed && typeof parsed === "object" && (parsed.fields || parsed.productUrl)) { data = parsed; break; }
+    }
     const fields: Record<string, unknown> = { ...(data?.fields ?? {}) };
     // 字段名对齐 harvest 格式
     if (fields.ingredients == null && fields.ingredients_text != null) fields.ingredients = fields.ingredients_text;
@@ -104,7 +138,12 @@ export async function readWindowsBundle(directory: string): Promise<EvidenceReco
     if (fields.sku == null && item.sku != null) fields.sku = item.sku;
     const imageFiles = Array.isArray(item.imageFiles) ? item.imageFiles.filter((v): v is string => typeof v === "string") : [];
     const remoteImages = Array.isArray(fields.images) ? fields.images.filter((v): v is string => typeof v === "string") : [];
-    const gallery = imageFiles.map((localPath, index) => ({ localPath, url: remoteImages[index] ?? null, index }));
+    const gallery: Array<{ url: string | null; localPath: string | null; index: number }> = [];
+    for (const [i, name] of imageFiles.entries()) {
+      const file = await resolveBundleFile(directory, name, index);
+      if (!file) { missingImages += 1; continue; }
+      gallery.push({ localPath: path.relative(directory, file), url: remoteImages[i] ?? null, index: i });
+    }
     const variant = item.variant ?? data?.variant ?? null;
     records.push({
       productUrl: data?.productUrl ?? item.productUrl,
@@ -113,6 +152,7 @@ export async function readWindowsBundle(directory: string): Promise<EvidenceReco
       variants: variant && (text(variant.variantId) || text(variant.sku)) ? [variant] : [],
     });
   }
+  if (missingImages) console.warn(JSON.stringify({ type: "dtc_bundle_images_missing", directory, missing: missingImages }));
   return records;
 }
 
