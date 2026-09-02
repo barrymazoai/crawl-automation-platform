@@ -32,6 +32,7 @@ const disk = new DiskGuard({
 
 const holderFactoryFor = (apiKey: string) => () => createScraperApiHolder({
   apiKey,
+  onKeyExhausted: (key) => keyPool.exhausted(key),
   countryCode: env.SCRAPERAPI_COUNTRY,
   log: (event) => console.log(JSON.stringify(event)),
 });

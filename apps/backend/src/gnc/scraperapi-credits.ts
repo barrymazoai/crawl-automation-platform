@@ -68,8 +68,16 @@ export function createScraperApiKeyPool(options: ScraperApiKeyPoolOptions) {
     return null;
   }
 
+  /** 适配器收到 403 时调用：把这把 key 记为耗尽（不再查它），返回下一把可用 key。 */
+  async function exhausted(key: string): Promise<string | null> {
+    cache.set(key, { at: Date.now(), creditsLeft: 0 });
+    options.log?.({ type: "scraperapi_key_exhausted_midjob", key: maskKey(key) });
+    return current();
+  }
+
   return {
     current,
+    exhausted,
     invalidate,
     creditsLeft,
     async allow(): Promise<boolean> { return (await current()) != null; },

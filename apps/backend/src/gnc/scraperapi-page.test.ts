@@ -53,3 +53,50 @@ describe("GNC 目录页发现（ScraperAPI/linkedom）", () => {
     ]);
   });
 });
+
+describe("ScraperAPI 请求的重试边界", () => {
+  const ok = `<html><body><h1>ok</h1></body></html>${PAD}`;
+  function sequence(statuses: number[], onKey?: (k: string) => void) {
+    let i = 0; const keys: string[] = [];
+    const fetchImpl = (async (input: string | URL | Request) => {
+      keys.push(new URL(String(input)).searchParams.get("api_key")!);
+      const status = statuses[Math.min(i, statuses.length - 1)]!; i += 1;
+      return new Response(status === 200 ? ok : "err", { status, headers: { "content-type": "text/html" } });
+    }) as typeof fetch;
+    return { fetchImpl, calls: () => i, keys };
+  }
+
+  it("5xx/499 不扣费，最多再试 2 次后成功", async () => {
+    const f = sequence([500, 499, 200]);
+    const page = createScraperApiPage({ apiKey: "k1", fetchImpl: f.fetchImpl, retryDelayMs: 0 });
+    expect(await page.navigate("https://www.gnc.com/x/500001.html")).toBe(200);
+    expect(f.calls()).toBe(3);
+  });
+
+  it("连续 5xx 超过 2 次就放弃，不无限重试", async () => {
+    const f = sequence([500, 500, 500, 500, 500]);
+    const page = createScraperApiPage({ apiKey: "k1", fetchImpl: f.fetchImpl, retryDelayMs: 0 });
+    expect(await page.navigate("https://www.gnc.com/x/500001.html")).toBe(500);
+    expect(f.calls()).toBe(3);
+  });
+
+  it("200 但被 PX 拦（已扣费）绝不重试", async () => {
+    const blocked = `<html><body>Access to this page has been denied</body></html>${PAD}`;
+    let calls = 0;
+    const page = createScraperApiPage({ apiKey: "k1", fetchImpl: (async () => { calls += 1; return new Response(blocked, { status: 200 }); }) as typeof fetch });
+    await page.navigate("https://www.gnc.com/x/500001.html");
+    expect(calls).toBe(1);
+  });
+
+  it("403 换 key 后同一 URL 再发一次；没有可换的 key 就放弃", async () => {
+    const f = sequence([403, 200]);
+    const page = createScraperApiPage({ apiKey: "k1", fetchImpl: f.fetchImpl, onKeyExhausted: async () => "k2" });
+    expect(await page.navigate("https://www.gnc.com/x/500001.html")).toBe(200);
+    expect(f.keys).toEqual(["k1", "k2"]);
+
+    const g = sequence([403, 403]);
+    const page2 = createScraperApiPage({ apiKey: "k1", fetchImpl: g.fetchImpl, onKeyExhausted: async () => null });
+    expect(await page2.navigate("https://www.gnc.com/x/500001.html")).toBe(403);
+    expect(g.calls()).toBe(1);
+  });
+});

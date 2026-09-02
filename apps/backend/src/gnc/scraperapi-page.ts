@@ -22,8 +22,20 @@ export interface ScraperApiOptions {
   countryCode?: string;
   /** 请求超时毫秒。ScraperAPI 过 PX 可能较慢，给足。 */
   timeoutMs?: number;
-  /** 失败重试次数。 */
+  /**
+   * 对"已扣费"响应（200/404）绝不重试。只对 ScraperAPI 不收费的失败重试：
+   * 5xx / 499 / 网络超时，最多 freeRetries 次（默认 2）。
+   */
+  freeRetries?: number;
+  /** @deprecated 旧名，等同 freeRetries。 */
   maxRetries?: number;
+  /** 免费重试的退避基数（毫秒），第 n 次等 n×基数。 */
+  retryDelayMs?: number;
+  /**
+   * 收到 403（key 额度耗尽 / 并发超限）时换 key：返回新 key 则同一 URL 用新 key 再发一次（403 不扣费），
+   * 返回 null 则放弃。由 worker 的 key 池提供。
+   */
+  onKeyExhausted?: (exhaustedKey: string) => Promise<string | null>;
   fetchImpl?: typeof fetch;
   log?: (event: Record<string, unknown>) => void;
 }
@@ -37,8 +49,10 @@ function looksBlocked(html: string) {
 export function createScraperApiPage(options: ScraperApiOptions): Page & { requestCount: number } {
   const fetchImpl = options.fetchImpl ?? fetch;
   const timeoutMs = options.timeoutMs ?? 90_000;
-  // 默认不重试：每次请求都扣 ScraperAPI 额度，死链、封锁重试也不会变好；失败交给上层记录后人工看。
-  const maxRetries = options.maxRetries ?? 0;
+  // 已扣费的响应（200/404）一次定生死；只有不扣费的失败（5xx/499/超时）才重试，见 navigate 内注释。
+  const freeRetries = options.freeRetries ?? options.maxRetries ?? 2;
+  const retryDelayMs = options.retryDelayMs ?? 2_000;
+  let apiKey = options.apiKey;
 
   let currentDocument: ReturnType<typeof parseHTML>["document"] | null = null;
   let currentWindow: any = null;
@@ -46,7 +60,7 @@ export function createScraperApiPage(options: ScraperApiOptions): Page & { reque
   let requestCount = 0;
 
   const build = (url: string) => {
-    const params = new URLSearchParams({ api_key: options.apiKey, url });
+    const params = new URLSearchParams({ api_key: apiKey, url });
     if (options.countryCode) params.set("country_code", options.countryCode);
     if (options.render) params.set("render", "true");
     return `https://api.scraperapi.com/?${params.toString()}`;
@@ -58,18 +72,22 @@ export function createScraperApiPage(options: ScraperApiOptions): Page & { reque
     async navigate(url: string): Promise<number> {
       currentUrl = url;
       let lastStatus = 0;
-      for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
+      let freeAttemptsLeft = freeRetries;
+      let keySwitches = 0;
+      while (true) {
         requestCount += 1;
+        let retryFree = false;
         try {
           const response = await fetchImpl(build(url), { signal: AbortSignal.timeout(timeoutMs) });
           lastStatus = response.status;
           const html = await response.text();
           /*
-           * ScraperAPI 透传目标站的真实状态码。区分三种：
-           * - 404/410：目标页确实不存在（GNC 有失效 slug）。这是终态，不重试、
-           *   不烧额度——把文档建出来交给上层，discover 会看到没有商品链接、正常收尾。
-           * - 200 且内容够长且没被 PX 拦：成功。
-           * - 其余（PX 拦、空响应、5xx、ScraperAPI 自身错误）：可重试。
+           * ScraperAPI 只对 200/404 收费。分四类：
+           * - 404/410：目标页确实不存在（已扣费，终态）。把文档建出来交给上层，discover 会看到没有商品链接、正常收尾。
+           * - 200 且内容够长且没被 PX 拦：成功（已扣费）。
+           * - 200 但被 PX 拦/内容异常：已扣费，重试也不会变好，一次定生死。
+           * - 403：key 额度耗尽或并发超限（不扣费）→ 换 key 再发一次。
+           * - 5xx / 499 / 超时：ScraperAPI 自身失败（不扣费）→ 最多再试 freeRetries 次。
            */
           if (response.status === 404 || response.status === 410) {
             const parsed = parseHTML(html);
@@ -83,12 +101,20 @@ export function createScraperApiPage(options: ScraperApiOptions): Page & { reque
             currentWindow = parsed.window ?? parsed;
             return 200;
           }
-          options.log?.({ type: "scraperapi_retry", attempt: attempt + 1, status: response.status, len: html.length, blocked: looksBlocked(html), url });
+          if (response.status === 403 && options.onKeyExhausted && keySwitches < 3) {
+            const next = await options.onKeyExhausted(apiKey);
+            options.log?.({ type: "scraperapi_key_switch", status: 403, switched: Boolean(next), url });
+            if (next) { apiKey = next; keySwitches += 1; continue; }
+          }
+          retryFree = response.status >= 500 || response.status === 499 || response.status === 429;
+          options.log?.({ type: "scraperapi_retry", status: response.status, len: html.length, blocked: looksBlocked(html), free: retryFree, left: freeAttemptsLeft, url });
         } catch (error) {
-          options.log?.({ type: "scraperapi_error", attempt: attempt + 1, message: error instanceof Error ? error.message : String(error), url });
+          retryFree = true;
+          options.log?.({ type: "scraperapi_error", message: error instanceof Error ? error.message : String(error), left: freeAttemptsLeft, url });
         }
-        // 退避后重试——ScraperAPI 内部会换 IP 重试，我们也给它机会
-        if (attempt < maxRetries) await new Promise((r) => setTimeout(r, 2_000 * (attempt + 1)));
+        if (!retryFree || freeAttemptsLeft <= 0) break;
+        freeAttemptsLeft -= 1;
+        await new Promise((r) => setTimeout(r, retryDelayMs * (freeRetries - freeAttemptsLeft)));
       }
       currentDocument = null;
       return lastStatus || 0;
