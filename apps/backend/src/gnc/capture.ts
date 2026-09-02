@@ -30,8 +30,9 @@ export const GNC_DISCOVERY_SCRIPT = `(() => {
     // /energy-drinks/alaniNuEnergyCase.html——饮料、RTD、蛋白棒多为母产品，进去后 ProductGroup 会给出全部口味 SKU）。
     productLinks: [...new Set([
       ...[...document.querySelectorAll('a[href]')].map((node) => node.href).filter((href) => /\\/[0-9]{6}\\.html(?:$|[?#])/.test(href)),
-      ...[...document.querySelectorAll('.product-tile .pdp-link a[href], .product-tile a.tile-body-link[href], .product-tile .image-container a[href]')]
-        .map((node) => node.href).filter((href) => /\\/[^/?#]+\\.html(?:$|[?#])/.test(href) && !/\\/search\\b/.test(href)),
+      // 原始 HTML（ScraperAPI 不渲染）里卡片链接是 a.thumb-link / a.link，别依赖渲染后才有的类名
+      ...[...document.querySelectorAll('.product-tile a[href]')]
+        .map((node) => node.href).filter((href) => /\\/[^/?#]+\\.html(?:$|[?#])/.test(href) && !/\\/search\\b|demandware\\.store/.test(href)),
     ])],
     nextUrl: next?.getAttribute('data-grid-url') || next?.getAttribute('href') || null,
     expectedCount: number(progress?.[2]) ?? number(resultCount?.[1]),

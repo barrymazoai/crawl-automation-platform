@@ -39,9 +39,10 @@ describe("ScraperApiPage innerText", () => {
 describe("GNC 目录页发现（ScraperAPI/linkedom）", () => {
   it("同时收 6 位数字 SKU 链接和商品卡片里的母产品链接，不收搜索链接", async () => {
     const page = pageFor(`<html><body><span>5 Results</span>
-      <div class="product-tile"><div class="pdp-link"><a href="/energy-drinks/alaniNuEnergyCase.html">Energy Drink</a></div><a href="/search?q=ghost">ghost</a></div>
-      <div class="product-tile"><div class="pdp-link"><a href="/pre-workout-supplements/561567.html">Pre-Workout+</a></div></div>
-      <div class="product-tile"><div class="image-container"><a href="/protein-bars/alaniNuProteinBar.html"><img></a></div></div>
+      <div class="product-tile"><a class="thumb-link" href="/energy-drinks/alaniNuEnergyCase.html">Energy Drink</a><a href="/search?q=ghost">ghost</a>
+        <a class="wishlist-product" href="https://www.gnc.com/on/demandware.store/Sites-GNC2-Site/default/Wishlist-Add">♡</a></div>
+      <div class="product-tile"><a class="link" href="/pre-workout-supplements/561567.html">Pre-Workout+</a></div>
+      <div class="product-tile"><a class="thumb-link" href="/protein-bars/alaniNuProteinBar.html"><img></a></div>
       <a href="/brands/">All brands</a>
       </body></html>`);
     await page.navigate("https://www.gnc.com/brands/alani-nu/");
