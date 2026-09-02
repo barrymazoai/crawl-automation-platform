@@ -12,6 +12,7 @@ import { DiskGuard } from "../v2/disk-guard.js";
 import { captureGncBrandCatalog } from "../gnc/brand-catalog.js";
 import { createScraperApiHolder } from "../gnc/scraperapi-page.js";
 import { loadRecentGncSkus } from "../gnc/recent-skus.js";
+import { createScraperApiCreditGuard } from "../gnc/scraperapi-credits.js";
 import { runGncCaptureCatalog } from "../v2/gnc-capture.js";
 import { baseEnv, captureEnv, loadEnv, productEnv } from "./shared/env.js";
 import { startWorker, type JobContext, type JobResult } from "./shared/run.js";
@@ -33,12 +34,18 @@ const holderFactory = () => createScraperApiHolder({
   log: (event) => console.log(JSON.stringify(event)),
 });
 
+const credits = createScraperApiCreditGuard({
+  apiKey: env.SCRAPERAPI_KEY!,
+  minCredits: env.SCRAPERAPI_MIN_CREDITS,
+  log: (event) => console.log(JSON.stringify(event)),
+});
+
 await startWorker({
   role: "capture-gnc-scraperapi",
   capabilities: ["gnc"],
   sourceAdapters: ["gnc"],
   env,
-  canClaim: () => disk.allowNewCatalog(),
+  canClaim: async () => (await disk.allowNewCatalog()) && (await credits.allow()),
   telemetry: async () => {
     const diskState = await diskTelemetry(disk, env.DISK_SOFT_MIN_FREE_GB, env.DISK_HARD_MIN_FREE_GB);
     return diskState ? { disk: diskState } : {};

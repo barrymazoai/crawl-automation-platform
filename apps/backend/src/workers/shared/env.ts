@@ -58,6 +58,8 @@ export const captureEnv = {
   /** ScraperAPI 出口国家。GNC 要美国。 */
   SCRAPERAPI_COUNTRY: z.string().default("us"),
   /** 库里 last_seen_at 在这么多天内的 GNC SKU 不再抓（0 = 不跳过）。 */
+  /** ScraperAPI 余额低于这个数就不领新任务（GNC 每次请求 10 credits）。 */
+  SCRAPERAPI_MIN_CREDITS: z.coerce.number().int().min(0).default(200),
   GNC_SKIP_SEEN_DAYS: z.coerce.number().int().min(0).default(30),
   V2_CAPTURE_BATCH_SIZE: z.coerce.number().int().min(5).max(100).default(25),
   // 每抓完一个商品的额外等待（毫秒）。这是控制整体速率、避开风控的主要旋钮：
