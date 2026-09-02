@@ -3,6 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { z } from "zod";
+import { hostOfUrl, pullSiteProfiles, pushSiteProfiles } from "./site-profile-sync.js";
 import {
   CodexAppServerRunner, CodexProcessRunner, LocalCheckpointStore, NodeApiClient, buildBrowserCapturePrompt,
   startChromeLane, withLeaseHeartbeat, zipDirectory,
@@ -14,6 +15,8 @@ const env = z.object({
   CONTROL_PLANE_URL: z.url(), NODE_TOKEN: z.string().min(24), NODE_ID: z.string().min(3),
   NODE_NAME: z.string().default("Windows Browser Worker"), NODE_CONCURRENCY: z.coerce.number().int().min(1).max(2).default(2),
   WORK_ROOT: z.string().default(path.resolve(".automation-runs")), LOCAL_STATE_DB: z.string().default(path.resolve(".automation-state/browser.sqlite")),
+  // 站点 profile 的本地缓存目录（跨 run 持久）；真正的权威副本在控制面托管的对象存储里，开工前拉、收工后推
+  SITE_PROFILE_DIR: z.string().default(path.resolve(".automation-state/site-profiles")),
   REPOSITORY_ROOT: z.string().default(process.cwd()), CODEX_EXECUTABLE: z.string().default("codex"),
   CODEX_RUNNER: z.enum(["exec", "app-server"]).default("exec"), CODEX_SKILL_PATH: z.string().optional(),
   CODEX_MODEL: z.string().default("gpt-5.6-luna"), CODEX_REASONING_EFFORT: z.string().default("medium"),
@@ -91,6 +94,7 @@ async function createWorkerLane(laneId: number): Promise<WorkerLane> {
       CRAWL_BROWSER_PROVIDER: "worker_cdp",
       CRAWL_BROWSER_CDP_URL: chrome.cdpUrl,
       CRAWL_BROWSER_LANE_ID: String(laneId),
+      CRAWL_SITE_PROFILE_DIR: env.SITE_PROFILE_DIR,
     },
   };
   const runner: CodexRunner = env.CODEX_RUNNER === "app-server"
@@ -130,6 +134,12 @@ async function handle(claim: any, lane: WorkerLane) {
     checkpoints.save(job.id, "capture", "leased", { url: job.source.url }, lease.token);
     await client.start(job.id, lease.token);
     await withLeaseHeartbeat({ client, jobId: job.id, leaseToken: lease.token, signal: controller.signal }, async (signal) => {
+      // 站点 profile：先把控制面上这个 host 的探索路线拉到本地，Skill 命中就走复跑而不是首轮视觉旅程。
+      // 拉取失败不阻塞抓取（退化为首轮），但要记日志。
+      const jobStartedAt = new Date();
+      const host = hostOfUrl(job.source.url);
+      await pullSiteProfiles(client, env.SITE_PROFILE_DIR, host, (event) => console.log(JSON.stringify({ jobId: job.id, ...event })))
+        .catch((error) => console.error(JSON.stringify({ type: "site_profile_pull_failed", jobId: job.id, host, message: error instanceof Error ? error.message : String(error) })));
       const uploaded = new Map<number, string>(); let watcherStopped = false; let watcherError: unknown;
       const scan = async () => {
         for (const batch of await listHandoffs(jobDirectory)) {
@@ -142,7 +152,7 @@ async function handle(claim: any, lane: WorkerLane) {
           await new Promise((resolve) => setTimeout(resolve, 1000));
         }
       })();
-      const basePrompt = buildBrowserCapturePrompt({ url: job.source.url, runId: job.runId, jobDirectory, nodeId: env.NODE_ID, laneId: lane.id, cdpUrl: lane.chrome.cdpUrl });
+      const basePrompt = buildBrowserCapturePrompt({ url: job.source.url, runId: job.runId, jobDirectory, nodeId: env.NODE_ID, laneId: lane.id, cdpUrl: lane.chrome.cdpUrl, profileDir: env.SITE_PROFILE_DIR });
       const prompt = `${basePrompt}\n\n每批完成后执行：node apps/browser-node/scripts/publish-capture-batch.mjs <任务目录> <ordinal> <item-count> <staging-directory>，把 staging 批次原子发布到 handoff。最终 batches 必须与已发布 handoff 完全一致。`;
       const previousSession = env.CODEX_RUNNER === "app-server" ? checkpoints.getCodexSession(job.id) : null;
       const raw = await lane.runner.run({ prompt, cwd: env.REPOSITORY_ROOT, addDirectories: [jobDirectory], schemaPath: fileURLToPath(new URL("../capture-result.schema.json", import.meta.url)),
@@ -153,6 +163,9 @@ async function handle(claim: any, lane: WorkerLane) {
         onSession: ({ threadId, turnId }) => checkpoints.saveCodexSession(job.id, threadId, turnId, env.CODEX_RUNNER),
       });
       watcherStopped = true; await watcher; if (watcherError) throw watcherError;
+      // 无论结果如何，本次学到/更新的 profile 都推回控制面：needs_review 时字段规则往往也已经学到一半，下次能省
+      await pushSiteProfiles(client, env.SITE_PROFILE_DIR, jobStartedAt, (event) => console.log(JSON.stringify({ jobId: job.id, ...event })))
+        .catch((error) => console.error(JSON.stringify({ type: "site_profile_push_failed", jobId: job.id, host, message: error instanceof Error ? error.message : String(error) })));
       const result = resultSchema.parse(raw);
       if (result.status !== "complete") {
         await client.fail(job.id, lease.token, { code: result.reasonCode ?? `capture_${result.status}`, message: result.summary, retryable: result.status === "failed", needsReview: result.status === "needs_review" });

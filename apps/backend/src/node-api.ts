@@ -6,7 +6,7 @@ import type { ObjectStorage } from "./object-storage";
 
 const bearer = (value: string | undefined) => value?.match(/^Bearer\s+(.+)$/i)?.[1];
 
-export function mountNodeApi(app: Hono, options: { repository: PipelineRepository; storage: ObjectStorage | null; nodeTokens: Map<string, readonly string[]> }) {
+export function mountNodeApi(app: Hono, options: { repository: PipelineRepository; storage: ObjectStorage | null; nodeTokens: Map<string, readonly string[]>; keyPrefix?: string }) {
   const authenticate = (authorization: string | undefined) => {
     const token = bearer(authorization); const capabilities = token ? options.nodeTokens.get(token) : undefined;
     if (!capabilities) throw new Error("unauthorized");
@@ -116,6 +116,44 @@ export function mountNodeApi(app: Hono, options: { repository: PipelineRepositor
     const artifact = await options.repository.getArtifact(c.req.param("id"));
     if (artifact.status !== "ready") return c.json({ error: { code: "artifact_not_ready", message: "产物未就绪" } }, 409);
     return c.json({ downloadUrl: await options.storage.downloadUrl(artifact.bucket_key) });
+  });
+  /*
+   * 站点 profile：Skill 学到的探索路线，按 host 托管在对象存储。
+   * 节点开工前 GET 拉全部 ready 文件；收工后逐个 POST 登记 → PUT 上传 → confirm。
+   * 任何持有节点 token 的节点都能读写——换节点零配置。
+   */
+  const hostParam = z.string().min(1).max(253).regex(/^[a-z0-9.-]+$/i, "host 只能是域名");
+  const fileParam = z.string().min(6).max(300).regex(/^[a-z0-9._-]+\.json$/i, "文件名只能是 <host>-<hash>.json");
+  app.get("/v1/node/site-profiles/:host", async (c) => {
+    authenticate(c.req.header("authorization"));
+    if (!options.storage) return c.json({ error: { code: "storage_unavailable", message: "未配置对象存储" } }, 503);
+    const host = hostParam.parse(c.req.param("host")).toLowerCase();
+    const files = await options.repository.listSiteProfiles(host);
+    return c.json({ files: await Promise.all(files.map(async (file) => ({
+      fileName: file.file_name, sha256: file.sha256, byteSize: Number(file.byte_size), profileVersion: file.profile_version,
+      learnedBy: file.learned_by, updatedAt: file.updated_at, downloadUrl: await options.storage!.downloadUrl(file.bucket_key),
+    }))) });
+  });
+  app.post("/v1/node/site-profiles/:host/files", async (c) => {
+    authenticate(c.req.header("authorization"));
+    if (!options.storage) return c.json({ error: { code: "storage_unavailable", message: "未配置对象存储" } }, 503);
+    const host = hostParam.parse(c.req.param("host")).toLowerCase();
+    const input = await body(c, z.object({
+      nodeId: z.string().min(3), fileName: fileParam, sha256: z.string().regex(/^[0-9a-f]{64}$/), byteSize: z.number().int().positive(),
+      profileVersion: z.number().int().nullable().optional(),
+    }));
+    const record = await options.repository.upsertSiteProfile({ host, fileName: input.fileName, sha256: input.sha256, byteSize: input.byteSize, profileVersion: input.profileVersion ?? null, learnedBy: input.nodeId }, options.keyPrefix ?? "");
+    return c.json({ file: record, uploadUrl: await options.storage.uploadUrl(record.bucketKey, record.sha256, "application/json") }, 201);
+  });
+  app.post("/v1/node/site-profiles/:host/files/:file/confirm", async (c) => {
+    authenticate(c.req.header("authorization"));
+    if (!options.storage) return c.json({ error: { code: "storage_unavailable", message: "未配置对象存储" } }, 503);
+    const host = hostParam.parse(c.req.param("host")).toLowerCase();
+    const fileName = fileParam.parse(c.req.param("file"));
+    const record = await options.repository.getSiteProfile(host, fileName);
+    if (!record) return c.json({ error: { code: "not_found", message: "profile 文件未登记" } }, 404);
+    await options.storage.verify(record.bucket_key, record.sha256, Number(record.byte_size));
+    return c.json({ file: await options.repository.confirmSiteProfile(host, fileName) });
   });
   app.get("/v1/node/runs/:id/artifacts", async (c) => {
     authenticate(c.req.header("authorization"));

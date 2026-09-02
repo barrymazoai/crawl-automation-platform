@@ -117,6 +117,9 @@ globalThis.workerHooks ??= browserMode === "worker_cdp"
     }
   : {};
 globalThis.outDir ??= `${nodeRepl.cwd}/.crawl-products/runs/<site>`;
+// 站点 profile 目录：控制器通过 CRAWL_SITE_PROFILE_DIR 指定（跨 run 持久，控制面会在节点间同步）。
+// 有值就传给 crawlSite 的 profileDir——命中已有 profile 走"复跑"，否则首轮学完保存。
+globalThis.profileDir ??= process.env.CRAWL_SITE_PROFILE_DIR || null;
 ```
 
 开始前明确：入口 URL（一个或多个）、数量上限、是否要 API-ready、商品范围。默认字段：
@@ -203,6 +206,49 @@ if (probe && probe.multiBrandRetailer) {
 - 耗尽信号：`next_link_absent` / `button_gone` / `no_new_urls_after_clicks:N` / `no_new_cards_after_scrolls:N` / `single_page_confirmed`（必须与分页方式匹配，校验器会查）；
 - 对账 oracle：sitemap 计数、列表页声明计数（"200 products"）、Shopify `products.json`；
 - 预算：maxItems / maxPagesPerSeed / wallClockMinutes（单站总墙钟死线）/ stallMinutes（停滞死线）/ operationIdleMinutes（单次爬取调用的**无进展**超时，默认 5min，只在调用完全不吐进度时才终止——慢但活着的多页任务每处理一页 ping 一次即续命，不会被误杀）/ retryPerUrl。任一死线触发都会落盘 checkpoint 并返回 incomplete，绝不冻结。
+
+## 站点 profile：复跑走已学路线，不重做首轮
+
+`profileDir`（初始化里由 `CRAWL_SITE_PROFILE_DIR` 给出，控制器会在节点间同步这个目录）非空时，本节优先于 Preflight。profile 只存 seeds、分页动作、字段/图片/变体 selector 与动作语义，**不存商品值**——复跑重新枚举当前在售，新品上架、旧品下架都会自然反映出来。
+
+**开工先查**（Preflight A 之前）：
+
+```js
+globalThis.loadedProfile = profileDir
+  ? await crawl.loadSiteProfile(profileDir, entryUrl, { fields: sourceFields })
+  : null;
+```
+
+- `loadedProfile?.validation?.valid === true` → **复跑**，跳过 Preflight A/B 的视觉首遍，直接用 profile 组 route：
+
+  ```js
+  const p = loadedProfile.profile;
+  const derived = crawl.extractionProfilesFromVisualRoute(p.visualRoute);
+  const route = {
+    listingSeeds: p.discovery?.listingSeeds ?? [],
+    listingProfile: p.listingProfile,            // categoryLinkSelectors / productLinkSelectors / paginationActions
+    detailProfile: p.detailProfile ?? derived.detailProfile,
+    imageProfile: p.imageProfile ?? derived.imageProfile,
+    variantProfile: p.visualRoute?.variantProfile ?? null,
+    expandActions: p.visualRoute?.expandActions ?? [],
+  };
+  ```
+
+  然后按 [replay-quality-gates.md](references/replay-quality-gates.md) 用至少 2 个真实详情做结构校验（单商品目录 1 个）。通过 → Preflight C（终止契约照常回答，分页方式取 `listingProfile.paginationActions`）→ HarvestPlan → `runHarvest`。校验只有个别字段失败 → 按 reference 的"局部重学"只修那几个字段、保留已映射导航；**不得整站重探**。
+- 无 profile，或 `validation.reasons` 含 `version_mismatch`、模板指纹变化 → 首轮，按 Preflight 走。
+
+**收工必存**（`runHarvest` 完成且质量门通过后，首轮与复跑都要；0 商品、partial、needs_review 的结果不保存也不覆盖）：
+
+```js
+await crawl.saveSiteProfile(profileDir, crawl.createSiteProfile({
+  startUrl: entryUrl, fields: sourceFields, templateFingerprint,
+  discovery: { strategy: "visual_route", listingSeeds, storefrontOrigins, sampleProductUrl },
+  listingProfile, visualRoute, detailProfile, imageProfile, cdpProfile, portfolio,
+  learnedAt: loadedProfile?.profile?.learnedAt, validation: loadedProfile?.profile?.validation,
+}));
+```
+
+`createSiteProfile` 会归一化并丢掉非法内容，保存后回读一次确认 `discovery.listingSeeds` 和 `visualRoute` 还在。
 
 ## HarvestPlan 与机械收割
 

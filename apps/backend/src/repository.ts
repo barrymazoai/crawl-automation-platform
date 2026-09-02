@@ -432,6 +432,38 @@ export class PipelineRepository {
       return artifact;
     });
   }
+  /**
+   * 站点 profile 文件（Skill 学到的探索路线）——按 host 托管在对象存储，任何节点先拉后推。
+   * 见 migrations/006_site_profile.sql。
+   */
+  async listSiteProfiles(host: string) {
+    return (await this.pool.query(
+      "select host,file_name,bucket_key,sha256,byte_size,profile_version,learned_by,updated_at from site_profile_file where host=$1 and status='ready' order by file_name",
+      [host])).rows as Array<{ host: string; file_name: string; bucket_key: string; sha256: string; byte_size: string; profile_version: number | null; learned_by: string | null; updated_at: Date }>;
+  }
+  /** 登记一次上传（pending）；同名文件覆盖旧记录，confirm 成功才回到 ready。 */
+  async upsertSiteProfile(input: { host: string; fileName: string; sha256: string; byteSize: number; profileVersion?: number | null; learnedBy: string }, keyPrefix: string) {
+    const prefix = keyPrefix ? `${keyPrefix}/` : "";
+    const bucketKey = `${prefix}site-profiles/${input.host}/${input.fileName}`;
+    await this.pool.query(
+      `insert into site_profile_file(host,file_name,bucket_key,sha256,byte_size,profile_version,learned_by,status)
+       values($1,$2,$3,$4,$5,$6,$7,'pending')
+       on conflict(host,file_name) do update set sha256=excluded.sha256,byte_size=excluded.byte_size,
+         profile_version=excluded.profile_version,learned_by=excluded.learned_by,status='pending',updated_at=now()`,
+      [input.host, input.fileName, bucketKey, input.sha256, input.byteSize, input.profileVersion ?? null, input.learnedBy]);
+    return { host: input.host, fileName: input.fileName, bucketKey, sha256: input.sha256, byteSize: input.byteSize };
+  }
+  async confirmSiteProfile(host: string, fileName: string) {
+    const row = (await this.pool.query(
+      "update site_profile_file set status='ready',updated_at=now() where host=$1 and file_name=$2 returning host,file_name,bucket_key,sha256,byte_size",
+      [host, fileName])).rows[0];
+    if (!row) throw new Error("profile 文件未登记");
+    return row;
+  }
+  async getSiteProfile(host: string, fileName: string) {
+    return (await this.pool.query("select * from site_profile_file where host=$1 and file_name=$2", [host, fileName])).rows[0] ?? null;
+  }
+
   async markArtifactDeleted(id: string, failed = false) {
     await this.pool.query(`update pipeline_artifact set status=$2,deleted_at=case when $2='deleted' then now() else deleted_at end where id=$1`, [id, failed ? "delete_failed" : "deleted"]);
   }

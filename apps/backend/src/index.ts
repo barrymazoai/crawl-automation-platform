@@ -40,7 +40,7 @@ if (config.mode === "proxy") {
   const pool = new pg.Pool({ connectionString: config.databaseUrl, max: 12 });
   const repository = new PipelineRepository(pool, config.leaseTtlSeconds, config.s3KeyPrefix);
   const storage = config.s3 ? new ObjectStorage(config.s3) : null;
-  mountNodeApi(app, { repository, storage, nodeTokens: config.nodeTokens });
+  mountNodeApi(app, { repository, storage, nodeTokens: config.nodeTokens, keyPrefix: config.s3KeyPrefix });
   let scheduling = false;
   setInterval(() => {
     if (scheduling) return; scheduling = true;

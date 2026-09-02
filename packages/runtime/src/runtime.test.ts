@@ -73,6 +73,17 @@ describe("runtime routing", () => {
     expect(prompt).toContain("skuMissing=true");
   });
 
+  it("给了 profileDir 就要求先加载 profile、命中走复跑、结束保存；没给就只字不提", () => {
+    const withDir = buildBrowserCapturePrompt({ url: "https://brand.example", runId: "run-1", jobDirectory: "/jobs/run-1", nodeId: "windows-1", profileDir: "C:\\crawl\\site-profiles" });
+    expect(withDir).toContain("Profile 目录：C:\\crawl\\site-profiles");
+    expect(withDir).toContain("loadSiteProfile");
+    expect(withDir).toContain("不要再做首轮视觉旅程");
+    expect(withDir).toContain("必须保存 profile");
+    expect(withDir).toContain("禁止存本次的商品值");
+    const without = buildBrowserCapturePrompt({ url: "https://brand.example", runId: "run-1", jobDirectory: "/jobs/run-1", nodeId: "windows-1" });
+    expect(without).not.toContain("profile");
+  });
+
   it("persists resumable checkpoints in SQLite", async () => {
     const directory = await fs.mkdtemp(path.join(os.tmpdir(), "crawl-runtime-"));
     const store = new LocalCheckpointStore(path.join(directory, "state.sqlite"));
