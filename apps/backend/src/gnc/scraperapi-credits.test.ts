@@ -1,23 +1,45 @@
 import { describe, expect, it } from "vitest";
-import { createScraperApiCreditGuard } from "./scraperapi-credits.js";
+import { createScraperApiKeyPool } from "./scraperapi-credits.js";
 
-const account = (creditsLeft: number) => (async () => new Response(JSON.stringify({ creditsLeft }), { status: 200 })) as typeof fetch;
+function accounts(balances: Record<string, number>) {
+  let calls = 0;
+  const fetchImpl = (async (input: string | URL | Request) => {
+    calls += 1;
+    const key = new URL(String(input)).searchParams.get("api_key")!;
+    return new Response(JSON.stringify({ creditsLeft: balances[key] }), { status: 200 });
+  }) as typeof fetch;
+  return { fetchImpl, calls: () => calls };
+}
 
-describe("ScraperAPI 余额守卫", () => {
-  it("余额低于阈值不领任务，够了才领", async () => {
-    expect(await createScraperApiCreditGuard({ apiKey: "k", minCredits: 200, fetchImpl: account(150) }).allow()).toBe(false);
-    expect(await createScraperApiCreditGuard({ apiKey: "k", minCredits: 200, fetchImpl: account(5000) }).allow()).toBe(true);
+describe("ScraperAPI key 池", () => {
+  it("按顺序用第一个余额够的 key，用完自动换下一个", async () => {
+    const a = accounts({ k1: 150, k2: 4000 });
+    const pool = createScraperApiKeyPool({ keys: ["k1", "k2"], minCredits: 200, fetchImpl: a.fetchImpl });
+    expect(await pool.current()).toBe("k2");
+    expect(await pool.allow()).toBe(true);
   });
 
-  it("60 秒内只查一次账户接口", async () => {
-    let calls = 0;
-    const guard = createScraperApiCreditGuard({ apiKey: "k", minCredits: 200, fetchImpl: (async () => { calls += 1; return new Response(JSON.stringify({ creditsLeft: 5000 })); }) as typeof fetch });
-    await guard.allow(); await guard.allow(); await guard.allow();
-    expect(calls).toBe(1);
+  it("全部耗尽时不放行，并记录一次耗尽事件", async () => {
+    const a = accounts({ k1: 50, k2: 0 });
+    const events: any[] = [];
+    const pool = createScraperApiKeyPool({ keys: ["k1", "k2"], minCredits: 200, fetchImpl: a.fetchImpl, log: (e) => events.push(e) });
+    expect(await pool.allow()).toBe(false);
+    expect(await pool.allow()).toBe(false);
+    expect(events.filter((e) => e.type === "scraperapi_all_keys_exhausted")).toHaveLength(1);
+  });
+
+  it("60 秒内同一个 key 只查一次账户接口；invalidate 后重查", async () => {
+    const a = accounts({ k1: 4000 });
+    const pool = createScraperApiKeyPool({ keys: ["k1"], minCredits: 200, fetchImpl: a.fetchImpl });
+    await pool.current(); await pool.current(); await pool.current();
+    expect(a.calls()).toBe(1);
+    pool.invalidate();
+    await pool.current();
+    expect(a.calls()).toBe(2);
   });
 
   it("账户接口打不通时放行，不因守卫本身卡死队列", async () => {
-    const guard = createScraperApiCreditGuard({ apiKey: "k", minCredits: 200, fetchImpl: (async () => { throw new Error("down"); }) as typeof fetch });
-    expect(await guard.allow()).toBe(true);
+    const pool = createScraperApiKeyPool({ keys: ["k1"], minCredits: 200, fetchImpl: (async () => { throw new Error("down"); }) as typeof fetch });
+    expect(await pool.current()).toBe("k1");
   });
 });

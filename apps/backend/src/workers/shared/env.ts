@@ -55,6 +55,8 @@ export const stageEnv = {
 export const captureEnv = {
   /** ScraperAPI key：GNC 配了它就走 ScraperAPI 过 PerimeterX，不再用浏览器+代理。 */
   SCRAPERAPI_KEY: z.string().optional(),
+  /** 多个 key 逗号分隔，按顺序用，一个耗尽换下一个。 */
+  SCRAPERAPI_KEYS: z.string().optional(),
   /** ScraperAPI 出口国家。GNC 要美国。 */
   SCRAPERAPI_COUNTRY: z.string().default("us"),
   /** 库里 last_seen_at 在这么多天内的 GNC SKU 不再抓（0 = 不跳过）。 */

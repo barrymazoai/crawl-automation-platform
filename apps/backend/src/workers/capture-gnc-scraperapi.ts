@@ -12,14 +12,16 @@ import { DiskGuard } from "../v2/disk-guard.js";
 import { captureGncBrandCatalog } from "../gnc/brand-catalog.js";
 import { createScraperApiHolder } from "../gnc/scraperapi-page.js";
 import { loadRecentGncSkus } from "../gnc/recent-skus.js";
-import { createScraperApiCreditGuard } from "../gnc/scraperapi-credits.js";
+import { createScraperApiKeyPool } from "../gnc/scraperapi-credits.js";
 import { runGncCaptureCatalog } from "../v2/gnc-capture.js";
 import { baseEnv, captureEnv, loadEnv, productEnv } from "./shared/env.js";
 import { startWorker, type JobContext, type JobResult } from "./shared/run.js";
 import { diskTelemetry } from "./shared/telemetry.js";
 
 const env = loadEnv(baseEnv, captureEnv, productEnv);
-if (!env.SCRAPERAPI_KEY) throw new Error("capture-gnc-scraperapi 需要 SCRAPERAPI_KEY");
+// key 池：SCRAPERAPI_KEYS（逗号分隔，按顺序用）优先，否则退回单个 SCRAPERAPI_KEY
+const scraperApiKeys = (env.SCRAPERAPI_KEYS ?? env.SCRAPERAPI_KEY ?? "").split(",").map((k) => k.trim()).filter(Boolean);
+if (!scraperApiKeys.length) throw new Error("capture-gnc-scraperapi 需要 SCRAPERAPI_KEYS 或 SCRAPERAPI_KEY");
 
 const disk = new DiskGuard({
   root: env.WORK_ROOT,
@@ -28,24 +30,25 @@ const disk = new DiskGuard({
   log: (event) => console.log(JSON.stringify(event)),
 });
 
-const holderFactory = () => createScraperApiHolder({
-  apiKey: env.SCRAPERAPI_KEY!,
+const holderFactoryFor = (apiKey: string) => () => createScraperApiHolder({
+  apiKey,
   countryCode: env.SCRAPERAPI_COUNTRY,
   log: (event) => console.log(JSON.stringify(event)),
 });
 
-const credits = createScraperApiCreditGuard({
-  apiKey: env.SCRAPERAPI_KEY!,
+const keyPool = createScraperApiKeyPool({
+  keys: scraperApiKeys,
   minCredits: env.SCRAPERAPI_MIN_CREDITS,
   log: (event) => console.log(JSON.stringify(event)),
 });
+console.log(JSON.stringify({ type: "scraperapi_key_pool", keys: scraperApiKeys.length, minCredits: env.SCRAPERAPI_MIN_CREDITS, balances: await keyPool.balances() }));
 
 await startWorker({
   role: "capture-gnc-scraperapi",
   capabilities: ["gnc"],
   sourceAdapters: ["gnc"],
   env,
-  canClaim: async () => (await disk.allowNewCatalog()) && (await credits.allow()),
+  canClaim: async () => (await disk.allowNewCatalog()) && (await keyPool.allow()),
   telemetry: async () => {
     const diskState = await diskTelemetry(disk, env.DISK_SOFT_MIN_FREE_GB, env.DISK_HARD_MIN_FREE_GB);
     return diskState ? { disk: diskState } : {};
@@ -64,7 +67,19 @@ await startWorker({
   },
 });
 
-async function handleJob({ job, leaseToken, signal, client }: JobContext): Promise<JobResult> {
+async function handleJob(context: JobContext): Promise<JobResult> {
+  // 每个 job 开始时选一次 key，整个品牌用同一个；跑完让池子重新查余额
+  const apiKey = await keyPool.current();
+  if (!apiKey) return { review: { reasonCode: "scraperapi_credits_exhausted", summary: "ScraperAPI 所有 key 余额耗尽，任务未开始" } };
+  const holderFactory = holderFactoryFor(apiKey);
+  try {
+    return await handleJobWithHolder(context, holderFactory);
+  } finally {
+    keyPool.invalidate();
+  }
+}
+
+async function handleJobWithHolder({ job, leaseToken, signal, client }: JobContext, holderFactory: () => ReturnType<typeof createScraperApiHolder>): Promise<JobResult> {
   // 品牌目录刷新：ScraperAPI 拉一次 /brands，就地抠品牌链接。
   if (job.stage === "resolve_brand_catalog") {
     const holder = holderFactory();
