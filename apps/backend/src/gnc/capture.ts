@@ -26,7 +26,13 @@ export const GNC_DISCOVERY_SCRIPT = `(() => {
   return {
     denied: /Access to this page has been denied|Pardon Our Interruption|Press & Hold|captcha/i.test(bodyText)
       || /px-captcha|perimeterx|_pxCaptcha/i.test(html),
-    productLinks: [...new Set([...document.querySelectorAll('a[href]')].map((node) => node.href).filter((href) => /\\/[0-9]{6}\\.html(?:$|[?#])/.test(href)))],
+    // 两类商品链接：6 位数字 SKU（单品/口味），以及商品卡片里的母产品链接（字母 ID，如
+    // /energy-drinks/alaniNuEnergyCase.html——饮料、RTD、蛋白棒多为母产品，进去后 ProductGroup 会给出全部口味 SKU）。
+    productLinks: [...new Set([
+      ...[...document.querySelectorAll('a[href]')].map((node) => node.href).filter((href) => /\\/[0-9]{6}\\.html(?:$|[?#])/.test(href)),
+      ...[...document.querySelectorAll('.product-tile .pdp-link a[href], .product-tile a.tile-body-link[href], .product-tile .image-container a[href]')]
+        .map((node) => node.href).filter((href) => /\\/[^/?#]+\\.html(?:$|[?#])/.test(href) && !/\\/search\\b/.test(href)),
+    ])],
     nextUrl: next?.getAttribute('data-grid-url') || next?.getAttribute('href') || null,
     expectedCount: number(progress?.[2]) ?? number(resultCount?.[1]),
     visibleCount: number(progress?.[1]),
@@ -256,6 +262,8 @@ export async function captureProducts(options: GncBrowserCrawlOptions, initial: 
         bySku.set(cached.sku, cached);
         continue;
       }
+      // 母产品页抓出来的是默认口味 SKU，它随后又会以变体 URL 出现——同一 SKU 不再请求第二次
+      if (hintedSku && bySku.has(hintedSku)) continue;
       if (hintedSku && options.shouldSkip && await options.shouldSkip(hintedSku, url)) { skippedCount += 1; continue; }
       if (options.rotation?.shouldRotateBeforeProduct()) {
         await holder.close();

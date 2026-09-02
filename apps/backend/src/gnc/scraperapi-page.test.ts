@@ -35,3 +35,20 @@ describe("ScraperApiPage innerText", () => {
     await expect(page.evaluate(GNC_DISCOVERY_SCRIPT)).rejects.toThrow(/尚未成功 navigate/);
   });
 });
+
+describe("GNC 目录页发现（ScraperAPI/linkedom）", () => {
+  it("同时收 6 位数字 SKU 链接和商品卡片里的母产品链接，不收搜索链接", async () => {
+    const page = pageFor(`<html><body><span>5 Results</span>
+      <div class="product-tile"><div class="pdp-link"><a href="/energy-drinks/alaniNuEnergyCase.html">Energy Drink</a></div><a href="/search?q=ghost">ghost</a></div>
+      <div class="product-tile"><div class="pdp-link"><a href="/pre-workout-supplements/561567.html">Pre-Workout+</a></div></div>
+      <div class="product-tile"><div class="image-container"><a href="/protein-bars/alaniNuProteinBar.html"><img></a></div></div>
+      <a href="/brands/">All brands</a>
+      </body></html>`);
+    await page.navigate("https://www.gnc.com/brands/alani-nu/");
+    const discovery = await page.evaluate<{ productLinks: string[]; expectedCount: number | null }>(GNC_DISCOVERY_SCRIPT);
+    expect(discovery.expectedCount).toBe(5);
+    expect(discovery.productLinks.map((u) => new URL(u, "https://www.gnc.com/").pathname).sort()).toEqual([
+      "/energy-drinks/alaniNuEnergyCase.html", "/pre-workout-supplements/561567.html", "/protein-bars/alaniNuProteinBar.html",
+    ]);
+  });
+});
