@@ -19,6 +19,8 @@ export interface GncCaptureCatalogOptions {
   productDelayMs?: number | undefined;
   signal: AbortSignal;
   rotation?: SalesChannelNavigationRotation | undefined;
+  /** 取数层工厂：配了 ScraperAPI 就传它，capture 走 ScraperAPI 过 PerimeterX。 */
+  holderFactory?: (() => import("../amazon/browser.js").PageHolder) | undefined;
   registerBatch: (batch: { batchId: string; ordinal: number; itemCount: number; batchDirectory: string; imagesRequired: boolean; exit?: string }) => Promise<unknown>;
   /** 可选：每次 Batch 发布前调用（磁盘硬阈值背压等待）。 */
   beforePublish?: (() => Promise<void>) | undefined;
@@ -86,6 +88,7 @@ export async function runGncCaptureCatalog(options: GncCaptureCatalogOptions): P
   let discovery: GncDiscoveryResult;
   try {
     discovery = await discoverProductUrls({
+      ...(options.holderFactory ? { holderFactory: options.holderFactory } : {}),
       url: options.url,
       jobDirectory: root,
       maxItems: options.maxItems,
@@ -122,6 +125,7 @@ export async function runGncCaptureCatalog(options: GncCaptureCatalogOptions): P
   let capture;
   try {
     capture = await captureProducts({
+      ...(options.holderFactory ? { holderFactory: options.holderFactory } : {}),
       url: options.url,
       jobDirectory: root,
       maxItems: options.maxItems,

@@ -42,7 +42,7 @@ const egress = new SalesChannelEgressManager({
   policies: [policy],
   profileRoot: env.SALES_CHANNEL_EGRESS_PROFILE_ROOT,
   selectProxy: async ({ selector, proxyName }) => { await clashSelector.select(selector, proxyName); },
-  startBrowser: async ({ profileRoot }) => startChromeLane({ id: 1, profileRoot, headless: false }),
+  startBrowser: async ({ profileRoot }) => startChromeLane({ id: 1, profileRoot, headless: false, timezone: "America/New_York", locale: "en-US" }),
   onBrowserReady: (browser) => { process.env.CHROME_CDP_URL = browser.cdpUrl; },
 });
 const disk = new DiskGuard({

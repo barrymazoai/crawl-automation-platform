@@ -108,6 +108,15 @@ export async function startChromeLane(options: {
   profileRoot: string;
   executablePath?: string;
   headless?: boolean;
+  /**
+   * 浏览器对外呈现的时区（IANA 名）与界面语言。
+   *
+   * 抓取美国站点时必须与出口 IP 的地理一致：mini 本机是 Asia/Shanghai + zh-CN，
+   * 配上"美国住宅 IP"就是风控评分里的经典矛盾项——IP 名声好的时候扛得住，
+   * 名声一坏这两项就把总分推过线（2026-09-02 对 PerimeterX 实测得出）。
+   */
+  timezone?: string;
+  locale?: string;
   startupTimeoutMs?: number;
   port?: number;
   fetchImpl?: typeof fetch;
@@ -132,9 +141,13 @@ export async function startChromeLane(options: {
     "about:blank",
   ];
   if (options.headless) args.unshift("--headless=new", "--disable-gpu");
+  // --lang 影响界面语言与 navigator.language，--accept-lang 影响请求头
+  if (options.locale) args.unshift(`--lang=${options.locale}`, `--accept-lang=${options.locale}`);
   const child = (options.spawnImpl ?? ((command, commandArgs) => spawn(command, commandArgs, {
     stdio: ["pipe", "pipe", "pipe"],
     windowsHide: false,
+    // Chrome 从 TZ 环境变量取时区，Intl API 与 Date 都会跟着变
+    env: { ...process.env, ...(options.timezone ? { TZ: options.timezone } : {}) },
   })))(executable, args);
   const fetchImpl = options.fetchImpl ?? fetch;
   const stderr: string[] = [];

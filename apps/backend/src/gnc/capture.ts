@@ -1,6 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import { createPageHolder, type BrowserTraffic } from "../amazon/browser.js";
+import { createPageHolder, type BrowserTraffic, type PageHolder } from "../amazon/browser.js";
 import type { SalesChannelNavigationRotation } from "../sales-channel-egress/types.js";
 import { isGncCaptureIncomplete, isGncDiscoveryIncomplete } from "./completeness.js";
 import { extractGncProduct, variantUrls, type ExtractedGncProduct, type RawGncPage } from "./extract.js";
@@ -127,6 +127,8 @@ export interface GncCaptureResult {
 
 export interface GncBrowserCrawlOptions {
   url: string;
+  /** 取数层工厂。默认用浏览器；配了 ScraperAPI 就传它的 holder，过 PerimeterX。 */
+  holderFactory?: () => PageHolder;
   jobDirectory: string;
   maxItems: number;
   signal: AbortSignal;
@@ -175,7 +177,7 @@ export async function discoverProductUrls(options: GncBrowserCrawlOptions) {
   if (isProductUrl(options.url)) {
     return { urls: [options.url], pageCount: 0, expectedCount: 1, exhausted: true, truncated: false, nextUrl: null } satisfies GncDiscoveryResult;
   }
-  const holder = createPageHolder();
+  const holder = options.holderFactory ? options.holderFactory() : createPageHolder();
   const found = new Set<string>();
   const visited = new Set<string>();
   let next: string | null = options.url;
@@ -228,7 +230,7 @@ export async function discoverProductUrls(options: GncBrowserCrawlOptions) {
 
 export async function captureProducts(options: GncBrowserCrawlOptions, initial: string[]) {
   const directory = path.join(options.jobDirectory, "gnc", "captured");
-  const holder = createPageHolder();
+  const holder = options.holderFactory ? options.holderFactory() : createPageHolder();
   const queued = [...initial];
   const knownUrls = new Set(queued);
   const bySku = new Map<string, ExtractedGncProduct>();

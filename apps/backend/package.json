@@ -40,6 +40,7 @@
     "cron-parser": "catalog:",
     "drizzle-orm": "catalog:",
     "hono": "catalog:",
+    "linkedom": "^0.18.13",
     "pg": "catalog:",
     "pino": "catalog:",
     "undici": "^7.29.0",

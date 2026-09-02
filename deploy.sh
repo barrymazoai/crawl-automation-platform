@@ -17,7 +17,7 @@ for w in capture-gnc capture-swanson capture-amazon capture-dtc text image unify
   pkill -f "dist/workers/\$w.js" 2>/dev/null || true
 done
 pkill -f "sales-channel-egress-chrome" 2>/dev/null || true
-pnpm -r --filter "@crawl-automation/contracts" --filter "@crawl-automation/backend" build 2>&1 | grep -E "error" || true
+pnpm -r --filter "@crawl-automation/contracts" --filter "@crawl-automation/runtime" --filter "@crawl-automation/backend" build 2>&1 | grep -E "error" || true
 ./start-workers.sh
 stat -f "dist %Sm" -t "%H:%M:%S" apps/backend/dist/workers/text.js
 REMOTE

@@ -1,4 +1,5 @@
 import dns from "node:dns/promises";
+import { STEALTH_SCRIPT, simulateHumanBehavior } from "../sales-channel-egress/stealth.js";
 
 /**
  * 宿主机上真实 Chrome 的 CDP 客户端（裸协议，不用 Playwright/Puppeteer）。
@@ -323,7 +324,14 @@ export async function withPage<T>(fn: (page: Page) => Promise<T>): Promise<T> {
 			}
 		});
 
+		const stealthOn = process.env.SALES_CHANNEL_STEALTH === "true";
 		await send("Page.enable");
+		// 反检测脚本必须在页面任何脚本之前执行——用 addScriptToEvaluateOnNewDocument，
+		// 每次导航新文档时 Chrome 自动先跑它，PX 的采集脚本读到的就已经是"干净"的值。
+		if (stealthOn) {
+			try { await send("Page.addScriptToEvaluateOnNewDocument", { source: STEALTH_SCRIPT }); }
+			catch { /* 老版本 Chrome 没有这个方法也不致命 */ }
+		}
 		// 判定依赖状态码（404/410 → 下架，503/429 → 判不出），而 CDP 只有
 		// 开了 Network 域才拿得到；Runtime.evaluate 看不见 HTTP 状态。
 		await send("Network.enable");
@@ -345,6 +353,12 @@ export async function withPage<T>(fn: (page: Page) => Promise<T>): Promise<T> {
 				await send("Page.navigate", { url });
 				await loaded;
 				await new Promise((r) => setTimeout(r, SETTLE_MS));
+				// 导航后补一段真人行为（鼠标轨迹 + 滚动），喂给 PX 的行为采集器。
+				// 只在开关打开时做，避免给不需要的抓取平白加时延。
+				if (stealthOn) {
+					try { await simulateHumanBehavior((method, params) => send(method, params)); }
+					catch { /* 行为模拟失败不影响抓取本身 */ }
+				}
 				return documentStatus;
 			},
 			async evaluate<T>(expression: string) {

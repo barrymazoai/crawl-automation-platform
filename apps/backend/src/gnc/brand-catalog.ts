@@ -1,4 +1,4 @@
-import { createPageHolder } from "../amazon/browser.js";
+import { createPageHolder, type PageHolder } from "../amazon/browser.js";
 import { GncAccessChallengeError, isGncAccessChallenge } from "./capture.js";
 import type { SalesChannelNavigationRotation } from "../sales-channel-egress/types.js";
 
@@ -42,6 +42,10 @@ export interface GncBrandCatalogOptions {
   url: string;
   signal: AbortSignal;
   rotation?: SalesChannelNavigationRotation;
+  /** 取数层工厂：ScraperAPI 场景传它。它是 HTTP，没有滚动，靠 render 拿全量。 */
+  holderFactory?: () => PageHolder;
+  /** ScraperAPI 已渲染出全量、无需滚动时置 true（linkedom 无法滚动）。 */
+  skipScroll?: boolean;
   maxScrollRounds?: number;
   scrollWaitMs?: number;
 }
@@ -58,7 +62,8 @@ function sleep(ms: number, signal: AbortSignal) {
 export async function captureGncBrandCatalog(options: GncBrandCatalogOptions): Promise<GncBrandCatalogResult> {
   const maxRounds = options.maxScrollRounds ?? 40;
   const waitMs = options.scrollWaitMs ?? 1200;
-  const holder = createPageHolder();
+  const holder = options.holderFactory ? options.holderFactory() : createPageHolder();
+  const noScroll = options.skipScroll || Boolean(options.holderFactory);   // ScraperAPI 无浏览器可滚
   try {
     let page = await holder.run(async (browser) => {
       const status = await browser.navigate(options.url);
@@ -86,7 +91,7 @@ export async function captureGncBrandCatalog(options: GncBrandCatalogOptions): P
     let expectedCount = page.value.expectedCount;
     let rounds = 0;
     let stagnant = 0;
-    while (rounds < maxRounds && stagnant < 3) {
+    while (!noScroll && rounds < maxRounds && stagnant < 3) {
       if (options.signal.aborted) break;
       const before = entries.length;
       await holder.run(async (browser) => { await browser.evaluate("window.scrollTo(0, document.body.scrollHeight)"); });
