@@ -21,6 +21,8 @@ export interface GncCaptureCatalogOptions {
   rotation?: SalesChannelNavigationRotation | undefined;
   /** 取数层工厂：配了 ScraperAPI 就传它，capture 走 ScraperAPI 过 PerimeterX。 */
   holderFactory?: (() => import("../amazon/browser.js").PageHolder) | undefined;
+  /** 跨 run 去重钩子，见 captureProducts。 */
+  shouldSkip?: ((sku: string, url: string) => boolean | Promise<boolean>) | undefined;
   registerBatch: (batch: { batchId: string; ordinal: number; itemCount: number; batchDirectory: string; imagesRequired: boolean; exit?: string }) => Promise<unknown>;
   /** 可选：每次 Batch 发布前调用（磁盘硬阈值背压等待）。 */
   beforePublish?: (() => Promise<void>) | undefined;
@@ -133,6 +135,7 @@ export async function runGncCaptureCatalog(options: GncCaptureCatalogOptions): P
       ...(options.rotation ? { rotation: options.rotation } : {}),
       ...(options.productDelayMs ? { productDelayMs: options.productDelayMs } : {}),
       onProduct: (product) => publisher.add(product),
+      ...(options.shouldSkip ? { shouldSkip: options.shouldSkip } : {}),
     }, discovery.urls);
     await publisher.flush();
   } catch (error) {
@@ -166,6 +169,6 @@ export async function runGncCaptureCatalog(options: GncCaptureCatalogOptions): P
     itemCount: capture.products.length,
     batchCount: publisher.batchCount,
     discoveredCount: capture.queuedUrlCount,
-    summary: `GNC 抓取完成：商品 ${capture.products.length}，Batch ${publisher.batchCount}，URL ${capture.processedUrlCount}/${capture.queuedUrlCount}`,
+    summary: `GNC 抓取完成：商品 ${capture.products.length}，Batch ${publisher.batchCount}，URL ${capture.processedUrlCount}/${capture.queuedUrlCount}，跳过已有 ${capture.skippedCount}`,
   };
 }

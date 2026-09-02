@@ -11,12 +11,13 @@
 import { DiskGuard } from "../v2/disk-guard.js";
 import { captureGncBrandCatalog } from "../gnc/brand-catalog.js";
 import { createScraperApiHolder } from "../gnc/scraperapi-page.js";
+import { loadRecentGncSkus } from "../gnc/recent-skus.js";
 import { runGncCaptureCatalog } from "../v2/gnc-capture.js";
-import { baseEnv, captureEnv, loadEnv } from "./shared/env.js";
+import { baseEnv, captureEnv, loadEnv, productEnv } from "./shared/env.js";
 import { startWorker, type JobContext, type JobResult } from "./shared/run.js";
 import { diskTelemetry } from "./shared/telemetry.js";
 
-const env = loadEnv(baseEnv, captureEnv);
+const env = loadEnv(baseEnv, captureEnv, productEnv);
 if (!env.SCRAPERAPI_KEY) throw new Error("capture-gnc-scraperapi 需要 SCRAPERAPI_KEY");
 
 const disk = new DiskGuard({
@@ -69,9 +70,13 @@ async function handleJob({ job, leaseToken, signal, client }: JobContext): Promi
     return { channel: "gnc", ...catalog };
   }
 
+  // 每个 job 开始时取一次库里最近见过的 SKU：同一 SKU 不再花额度重抓
+  const recent = await loadRecentGncSkus(env.PRODUCT_DATABASE_URL, env.GNC_SKIP_SEEN_DAYS);
+  console.log(JSON.stringify({ type: "gnc_recent_skus_loaded", count: recent.size, withinDays: env.GNC_SKIP_SEEN_DAYS }));
   const result = await runGncCaptureCatalog({
     url: job.source.url,
     holderFactory,
+    shouldSkip: (sku) => recent.has(sku),
     runId: job.runId,
     workRoot: env.WORK_ROOT,
     maxItems: env.GNC_MAX_ITEMS,

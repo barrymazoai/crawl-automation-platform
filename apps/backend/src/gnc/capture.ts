@@ -122,6 +122,8 @@ export interface GncCaptureResult {
   products: ExtractedGncProduct[];
   processedUrlCount: number;
   queuedUrlCount: number;
+  /** 被 shouldSkip 跳过（库里最近已有）的 URL 数，不发请求。 */
+  skippedCount: number;
   truncated: boolean;
 }
 
@@ -136,6 +138,8 @@ export interface GncBrowserCrawlOptions {
   onNavigation?: (event: { kind: "catalog" | "product"; url: string; status: number; traffic: BrowserTraffic; denied: boolean }) => void | Promise<void>;
   /** v2：每成功抓到一个商品（含缓存命中）立即回调，用于边抓边发布 Batch。 */
   onProduct?: (product: ExtractedGncProduct) => void | Promise<void>;
+  /** 跨 run 去重：返回 true 则不发请求（例如库里最近已见过这个 SKU）。同 run 内的断点缓存在此之前判断。 */
+  shouldSkip?: (sku: string, url: string) => boolean | Promise<boolean>;
   /**
    * 每真实抓取一个商品页后的额外等待（毫秒）。控制整体请求速率、避开站点风控。
    * 缓存命中的商品不等待——那次没有发出请求。
@@ -238,6 +242,7 @@ export async function captureProducts(options: GncBrowserCrawlOptions, initial: 
   const knownUrls = new Set(queued);
   const bySku = new Map<string, ExtractedGncProduct>();
   let processedUrlCount = 0;
+  let skippedCount = 0;
   let variantOverflow = false;
   try {
     for (let cursor = 0; cursor < queued.length && bySku.size < options.maxItems; cursor += 1) {
@@ -251,6 +256,7 @@ export async function captureProducts(options: GncBrowserCrawlOptions, initial: 
         bySku.set(cached.sku, cached);
         continue;
       }
+      if (hintedSku && options.shouldSkip && await options.shouldSkip(hintedSku, url)) { skippedCount += 1; continue; }
       if (options.rotation?.shouldRotateBeforeProduct()) {
         await holder.close();
         if (!await options.rotation.rotateAfterBatch()) throw new Error("GNC 没有可用的 Sales Channel 出口");
@@ -304,5 +310,5 @@ export async function captureProducts(options: GncBrowserCrawlOptions, initial: 
     maxItems: options.maxItems,
     variantOverflow,
   });
-  return { products: [...bySku.values()], processedUrlCount, queuedUrlCount: knownUrls.size, truncated } satisfies GncCaptureResult;
+  return { products: [...bySku.values()], processedUrlCount, queuedUrlCount: knownUrls.size, skippedCount, truncated } satisfies GncCaptureResult;
 }
