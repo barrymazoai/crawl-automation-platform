@@ -15,12 +15,16 @@ cd "$ROOT/apps/backend"
 POOLS="capture-dtc:mini-cloud-dtc:1 text:mini-cloud-text:6 image:mini-cloud-image:3 unify:mini-cloud-unify:2 finalize:mini-cloud-finalize:1"
 only="${1:-}"
 
+# 只杀本套（NODE_ID=mini-cloud-*）的进程：NODE_ID 是环境变量不在命令行里，pkill -f 匹配不到，
+# 得逐个 PID 看 ps -E 的环境。之前这里用 pkill 匹配 NODE_ID，一次都没杀掉，攒了三份重复进程互相抢租约。
 for entry in $POOLS; do
-  pool="${entry%%:*}"
+  pool="${entry%%:*}"; rest="${entry#*:}"; node_id="${rest%%:*}"
   if [ -n "$only" ] && [ "$only" != "$pool" ]; then continue; fi
-  pkill -f "NODE_ID=mini-cloud-.* dist/workers/$pool.js" 2>/dev/null || true
+  for pid in $(pgrep -f "dist/workers/$pool.js"); do
+    if ps -Eo command= -p "$pid" 2>/dev/null | grep -q "NODE_ID=$node_id "; then kill "$pid" 2>/dev/null || true; fi
+  done
 done
-sleep 2
+sleep 3
 
 for entry in $POOLS; do
   pool="${entry%%:*}"; rest="${entry#*:}"
