@@ -1,7 +1,8 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { chunk } from "../../amazon/semantic-clean.js";
-import { buildOcrTextLabelPrompt, mapWithConcurrency, selectFactsOcrImages, type IndexedOcrImage } from "../../amazon/ocr-label-pipeline.js";
+import { buildHtmlFactsTablePrompt, buildOcrTextLabelPrompt, mapWithConcurrency, selectFactsOcrImages, type IndexedOcrImage } from "../../amazon/ocr-label-pipeline.js";
+import { hasCompleteFactsText } from "../../gnc/facts.js";
 import { extractLabelJsonWithRepair, type StoredRawLabelVerdict } from "../../amazon/label-extraction.js";
 import { parseLabel, scoreConfidence } from "../../amazon/label-parse.js";
 import { buildGncBatchPrompt, parseGncBatchOutput, type GncCleanInput, type GncCleanResult } from "../../gnc/semantic.js";
@@ -72,43 +73,64 @@ export function createDtcChannelHooks(): ChannelHooks<DtcRawProduct, GncCleanRes
     semanticKey: (semantic) => semantic.sku,
     included: (semantic) => semantic.scopeDecision === "included",
 
-    // 独立站没有统一的 HTML 成分表结构：Facts 证据一律来自画廊图片。
-    htmlFactsReady: () => false,
+    /*
+     * 独立站的成分表在哪不能预设——分层"看一眼再决定"：
+     *   1. 页面 HTML 里有完整成分表 → 文字线直接解析，不 OCR（htmlFactsReady）
+     *   2. 页面指认了成分表图片（alt/src 含 supplement/nutrition facts/label）→ 先只 OCR 这些
+     *   3. 都没有 → 画廊逐张 OCR
+     */
+    htmlFactsReady: (product) => hasCompleteFactsText((product.htmlFactsText ?? "").trim()),
 
     async extractFacts(ctx: StageContext, product) {
-      if (product.localImages.length === 0) return { facts: null };
       const workDirectory = path.join(runRoot(ctx.workRoot, ctx.runId), "labels", safeKey(product.externalId));
-      // 证据包里的相对路径可能写错（Codex 拼的包），按文件名在 run 的证据目录里找回来；找不到的跳过而不是整批失败
-      const resolved = (await Promise.all(product.localImages.map((filename) => resolveEvidenceImage(ctx, filename)))).filter((f): f is string => Boolean(f));
-      if (resolved.length === 0) return { facts: null };
-      const ocrImages = await mapWithConcurrency(resolved, 1, async (filename, index): Promise<IndexedOcrImage> => {
-        const cache = `${filename}.ocr.json`;
-        let response = await readJson<any>(cache);
-        if (!response) { response = await ctx.ocr.recognize(filename); await writeJson(cache, response); }
-        return { index, fileName: path.basename(filename), response };
-      });
-      const selected = selectFactsOcrImages(ocrImages);
-      if (selected.length === 0) return { facts: null };
-
       const verdictFile = path.join(workDirectory, "label.raw.json");
       const stored = await readJson<StoredRawLabelVerdict>(verdictFile);
-      const prompt = `${buildOcrTextLabelPrompt(selected)}\nIMPORTANT: Return one object with one string field named payload, and put the requested JSON object serialized exactly inside payload.`;
+      const htmlFactsText = (product.htmlFactsText ?? "").trim();
+      let prompt: string; let method: "label_html" | "label_ocr"; let sourceImageUrl: string | undefined;
+
+      if (hasCompleteFactsText(htmlFactsText)) {
+        // 第 1 层：页面成分表
+        method = "label_html";
+        prompt = `${buildHtmlFactsTablePrompt(htmlFactsText)}\nIMPORTANT: Return one object with one string field named payload, and put the requested JSON object serialized exactly inside payload.`;
+      } else {
+        if (product.localImages.length === 0) return { facts: null };
+        // 证据包里的相对路径可能写错（Codex 拼的包），按文件名在 run 的证据目录里找回来；找不到的跳过而不是整批失败
+        const resolvedAll = (await Promise.all(product.localImages.map(async (filename, i) => ({ i, file: await resolveEvidenceImage(ctx, filename) }))))
+          .filter((x): x is { i: number; file: string } => Boolean(x.file));
+        if (resolvedAll.length === 0) return { facts: null };
+        // 第 2 层：页面指认的成分表图排最前；只有它们没读出 Facts 才轮到第 3 层全画廊
+        const hinted = new Set(product.factsImageUrls);
+        const ordered = [...resolvedAll].sort((a, b) => Number(hinted.has(product.images[b.i] ?? "")) - Number(hinted.has(product.images[a.i] ?? "")));
+        const hintedCount = ordered.filter((x) => hinted.has(product.images[x.i] ?? "")).length;
+        const ocr = async (subset: typeof ordered) => mapWithConcurrency(subset, 1, async ({ i, file }): Promise<IndexedOcrImage> => {
+          const cache = `${file}.ocr.json`;
+          let response = await readJson<any>(cache);
+          if (!response) { response = await ctx.ocr.recognize(file); await writeJson(cache, response); }
+          return { index: i, fileName: path.basename(file), response };
+        });
+        let selected = hintedCount > 0 ? selectFactsOcrImages(await ocr(ordered.slice(0, hintedCount))) : [];
+        if (selected.length === 0) selected = selectFactsOcrImages(await ocr(ordered));
+        if (selected.length === 0) return { facts: null };
+        method = "label_ocr";
+        sourceImageUrl = product.images[selected[0]!.index];
+        prompt = `${buildOcrTextLabelPrompt(selected)}\nIMPORTANT: Return one object with one string field named payload, and put the requested JSON object serialized exactly inside payload.`;
+      }
       const verdict = await extractLabelJsonWithRepair({ prompt, tag: `dtc-label-${safeKey(product.externalId)}`, runModel: ctx.runModel, stored });
       if (!stored || stored.raw !== verdict.raw || stored.parsed !== verdict.parsed) await writeJson(verdictFile, verdict);
       const label = verdict.parsed;
-      if (label?.ambiguous) return { facts: null, review: `${product.externalId}: OCR 发现多张不同配方，不能合并` };
+      if (label?.ambiguous) return { facts: null, review: `${product.externalId}: ${method === "label_html" ? "页面成分表" : "OCR"}发现多张不同配方，不能合并` };
       if (label?.skip) return { facts: null };
       const parsed = parseLabel(label);
-      if (!parsed) return { facts: null, review: `${product.externalId}: OCR 命中 Facts 结构，但语义解析未形成合法成分行` };
+      if (!parsed) return { facts: null, review: `${product.externalId}: ${method === "label_html" ? "页面成分表" : "OCR"}命中 Facts 结构，但语义解析未形成合法成分行` };
       return {
         facts: {
           channel: "dtc",
           externalId: product.externalId,
           sourceUrl: product.productUrl,
           capturedAt: product.capturedAt,
-          source: `crawl-automation:${ctx.runId}:label_ocr`,
+          source: `crawl-automation:${ctx.runId}:${method}`,
           confidence: scoreConfidence(label!, parsed),
-          ...(product.images[selected[0]!.index] ? { sourceImageUrl: product.images[selected[0]!.index] } : {}),
+          ...(sourceImageUrl ? { sourceImageUrl } : {}),
           servingSize: parsed.servingSize,
           servingUnit: parsed.servingUnit,
           servingsPerContainer: parsed.servingsPerContainer,

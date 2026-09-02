@@ -81,3 +81,23 @@ describe("Codex 拼的包路径写错时", () => {
     expect(products[0]!.localImages).toEqual([path.join(dir, "capture", "img", "f0659bf6.webp")]);
   });
 });
+
+describe("页面 HTML 成分表接入", () => {
+  it("record.pageHtml 指向包内 HTML → 抠出成分表进 htmlTable，指认的成分表图排在 imageRefs 最前", async () => {
+    const { toDtcCapturedProduct } = await import("./dtc-capture.js");
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), "win-bundle-html-"));
+    await fs.mkdir(path.join(dir, "html"), { recursive: true });
+    await fs.writeFile(path.join(dir, "html", "p1.html"), `<html><body><h2>Supplement Facts</h2>
+      <table><tr><td>Serving Size</td><td>1 Scoop (30 g)</td></tr><tr><td>Servings Per Container</td><td>30</td></tr>
+      <tr><td>Vitamin C</td><td>90 mg</td><td>100%</td></tr><tr><td>Zinc</td><td>11 mg</td><td>100%</td></tr><tr><td>Protein</td><td>20 g</td><td>40%</td></tr></table>
+      <img alt="front" src="https://cdn/x/front.png"><img alt="Supplement Facts label" src="https://cdn/x/label.png"></body></html>`);
+    const record = { productUrl: "https://brand.example/products/p1", pageHtml: "html/p1.html",
+      fields: { title: "P1", images: ["https://cdn/x/front.png", "https://cdn/x/label.png"], sku: "P1" }, gallery: [], variants: [] };
+    const [product] = recordToProducts(record as any, dir, "2026-09-02T09:00:00.000Z");
+    expect(product!.htmlFactsText).toContain("Vitamin C | 90 mg | 100%");
+    expect(product!.factsImageUrls).toEqual(["https://cdn/x/label.png"]);
+    const contract = toDtcCapturedProduct(product!);
+    expect(contract.factsEvidence.htmlTable).toContain("HTML FACTS TABLE");
+    expect(contract.factsEvidence.imageRefs).toEqual(["https://cdn/x/label.png", "https://cdn/x/front.png"]);
+  });
+});

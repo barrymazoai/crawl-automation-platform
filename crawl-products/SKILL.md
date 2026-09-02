@@ -171,6 +171,8 @@ if (probe && probe.multiBrandRetailer) {
 } else if (probe) {
   const built = await shopify.createShopifyHarvestHooks(entryUrl, {
     ...(shopifyFetchJson ? { fetchJson: shopifyFetchJson } : {}),
+    // 接口里没有成分表：每个商品再用页面内同源 fetch 取一次商品页 HTML（不导航），Mac 侧从里面抠成分表/指认成分表图
+    ...(browserMode === "worker_cdp" ? { fetchHtml: workerBrowser.createBrowserHtmlFetcher(tab) } : {}),
   });
   if (browserMode === "worker_cdp") built.hooks.fetchImage = workerHooks.fetchImage;
   // entry-decision 记 kind:"storefront"、channel:"shopify_http"、商品数 built.productCount

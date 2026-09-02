@@ -126,6 +126,8 @@ describe("createShopifyHarvestHooks driving runHarvest with no browser", () => {
     ];
     const built = await createShopifyHarvestHooks("shop.test", {
       fetchJson: fakeCatalog(products),
+      // 页面 HTML：alpha 有成分表，beta 取不到（null）——取不到不能影响抓取
+      fetchHtml: async (url) => (url.endsWith("/alpha") ? `<html><body>${"x".repeat(600)}<h2>Supplement Facts</h2></body></html>` : null),
     });
     built.hooks.fetchImage = async () => ({ bytes: Buffer.from("img"), mime: "image/jpeg" });
 
@@ -147,6 +149,12 @@ describe("createShopifyHarvestHooks driving runHarvest with no browser", () => {
     expect(alpha.fields.sku).toBe("A-120");    // default = first available variant
     expect(alpha.fields.price).toBe("19.90");
     expect(alpha.variants[0]).toMatchObject({ sku: "A-60", options: { Size: "60ct" } });
+    // 商品页 HTML 落盘 + 按 URL 建索引；取不到的商品没有 pageHtml
+    expect(alpha.pageHtml).toMatch(/^evidence\/html\/[0-9a-f]{16}\.html$/);
+    expect(await fs.readFile(path.join(outDir, alpha.pageHtml), "utf8")).toContain("Supplement Facts");
+    const htmlIndex = JSON.parse(await fs.readFile(path.join(outDir, "evidence/html/html-index.json"), "utf8"));
+    expect(htmlIndex[alpha.productUrl]).toBe(alpha.pageHtml);
+    expect(packages.find((p) => p.productUrl.endsWith("/beta")).pageHtml).toBeUndefined();
 
     const audit = await verifyRunArtifacts(outDir);
     expect(audit.problems).toEqual([]);
@@ -212,5 +220,22 @@ describe("multi-brand retailer detection by vendor diversity", () => {
   it("stays cautious on tiny samples (too few to judge)", () => {
     const products = withVendors(["A", "B", "C", "D", "E", "F"]); // 6 vendors but only 6 products
     expect(isMultiBrandRetailer(products)).toBe(false);
+  });
+});
+
+describe("fetchPageHtml", () => {
+  it("接口枚举之外，每个商品能再取一次页面 HTML；给了 fetchHtml 就用它，返回 null 不抛", async () => {
+    const { createShopifyHarvestHooks } = await import("./shopify-http.mjs");
+    const products = [{ id: 1, handle: "shake", title: "Shake", variants: [{ id: 11, sku: "S1", price: "9.99", available: true }], images: [] }];
+    const fetchJson = async (url) => (url.includes("products.json") ? { products } : null);
+    const calls = [];
+    const built = await createShopifyHarvestHooks("https://brand.example", {
+      fetchJson,
+      fetchHtml: async (url) => { calls.push(url); return url.endsWith("/shake") ? "<html>Supplement Facts</html>" : null; },
+    });
+    expect(typeof built.hooks.fetchPageHtml).toBe("function");
+    expect(await built.hooks.fetchPageHtml("https://brand.example/products/shake")).toBe("<html>Supplement Facts</html>");
+    expect(await built.hooks.fetchPageHtml("https://brand.example/products/nope")).toBeNull();
+    expect(calls).toHaveLength(2);
   });
 });

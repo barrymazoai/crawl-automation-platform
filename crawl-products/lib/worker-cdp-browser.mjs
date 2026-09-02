@@ -234,6 +234,32 @@ export function createBrowserJsonFetcher(tab) {
   };
 }
 
+/**
+ * 页面内同源 fetch 商品页 HTML（不导航、不渲染整页）：独立站的成分表经常只在页面里、不在接口里，
+ * Shopify HTTP 通道枚举完后用它"去页面看一眼"。返回 HTML 字符串，非 HTML/失败返回 null。
+ */
+export function createBrowserHtmlFetcher(tab) {
+  if (!tab?.playwright?.evaluate) throw new Error("worker_cdp_tab_required");
+  return async (url, timeoutMs = 15_000) => {
+    const result = await tab.playwright.evaluate(async ({ target, timeout }) => {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), timeout);
+      try {
+        const response = await fetch(target, {
+          credentials: "include",
+          headers: { accept: "text/html,application/xhtml+xml" },
+          signal: controller.signal,
+        });
+        return { ok: response.ok, contentType: response.headers.get("content-type") || "", body: await response.text() };
+      } finally {
+        clearTimeout(timer);
+      }
+    }, { target: url, timeout: timeoutMs }, { timeoutMs: timeoutMs + 2_000 });
+    if (!result?.ok || !/html/i.test(result.contentType || "")) return null;
+    return typeof result.body === "string" && result.body.length > 0 ? result.body : null;
+  };
+}
+
 export function createBrowserImageFetcher(tab) {
   if (!tab?.goto) throw new Error("worker_cdp_tab_required");
   return async (url) => {

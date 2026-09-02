@@ -1,9 +1,12 @@
 import fs from "node:fs/promises";
+import fsSync from "node:fs";
 import path from "node:path";
 import type { CapturedProductV1 } from "@crawl-automation/contracts";
 import { extractZipSafe, writeJsonAtomic } from "@crawl-automation/runtime";
 import { BatchPublisher } from "./batch-publisher.js";
 import { runRoot } from "./paths.js";
+import { extractHtmlFacts } from "../dtc/html-facts.js";
+import { hasCompleteFactsText } from "../gnc/facts.js";
 
 /**
  * DTC（独立站）的 v2 抓取转换。
@@ -28,11 +31,17 @@ export interface DtcRawProduct {
   localImages: string[];
   variantOptions: Record<string, string>;
   detailText: string | null;
+  /** 页面 HTML 里抠出的成分表文本（"HTML FACTS TABLE\n..."），完整就不用 OCR。 */
+  htmlFactsText: string | null;
+  /** 页面指认的成分表图片 URL——OCR 时优先只看这些。 */
+  factsImageUrls: string[];
   capturedAt: string;
 }
 
 type EvidenceRecord = {
   productUrl?: unknown;
+  /** 商品页 HTML 的相对路径（Windows 端 harvest 存的），或已经读出来的 HTML 字符串。 */
+  pageHtml?: unknown;
   fields?: Record<string, unknown>;
   gallery?: Array<{ url?: unknown; localPath?: unknown; index?: unknown }>;
   variants?: Array<{ variantId?: unknown; sku?: unknown; title?: unknown; options?: Record<string, unknown>; price?: unknown; url?: unknown; available?: unknown }>;
@@ -120,6 +129,8 @@ export async function readWindowsBundle(directory: string): Promise<EvidenceReco
   const bundle = JSON.parse(raw) as { items?: unknown; files?: Array<{ path?: unknown }> };
   if (!Array.isArray(bundle.items)) return null;
   const index = await buildBundleFileIndex(directory, bundle.files);
+  const htmlIndexFile = index.get("html-index.json") ?? null;
+  const htmlIndex: Record<string, string> | null = htmlIndexFile ? await fs.readFile(htmlIndexFile, "utf8").then((t) => JSON.parse(t)).catch(() => null) : null;
   const records: EvidenceRecord[] = [];
   let missingImages = 0;
   for (const item of bundle.items as WindowsBundleItem[]) {
@@ -145,8 +156,15 @@ export async function readWindowsBundle(directory: string): Promise<EvidenceReco
       gallery.push({ localPath: path.relative(directory, file), url: remoteImages[i] ?? null, index: i });
     }
     const variant = item.variant ?? data?.variant ?? null;
+    // 商品页 HTML：harvest 记的 pageHtml > evidence/html/index.json 按 URL 查 > sourceFiles 里的 .html
+    const productUrl = text(data?.productUrl) ?? text(item.productUrl);
+    let pageHtml: string | null = text((data as any)?.pageHtml);
+    if (!pageHtml && productUrl && htmlIndex) pageHtml = htmlIndex[productUrl] ?? htmlIndex[productUrl.split("?")[0]!] ?? null;
+    if (!pageHtml) { const htmlFile = sourceFiles.find((n) => /\.html?$/i.test(n)); if (htmlFile) pageHtml = await resolveBundleFile(directory, htmlFile, index).then((f) => f ? path.relative(directory, f) : null); }
+    else { const f = await resolveBundleFile(directory, pageHtml, index); pageHtml = f ? path.relative(directory, f) : null; }
     records.push({
       productUrl: data?.productUrl ?? item.productUrl,
+      pageHtml,
       fields,
       gallery,
       variants: variant && (text(variant.variantId) || text(variant.sku)) ? [variant] : [],
@@ -157,6 +175,19 @@ export async function readWindowsBundle(directory: string): Promise<EvidenceReco
 }
 
 /** 一条 record 展开成若干产品：有变体则一变体一个产品，否则单个产品。 */
+/** 读商品页 HTML（相对路径或已内联的字符串），抠成分表。找不到/读不了就两者皆空，走 OCR。 */
+function htmlFactsFor(record: EvidenceRecord, evidenceDirectory: string, productUrl: string) {
+  const raw = text(record.pageHtml);
+  if (!raw) return { htmlFactsText: null, factsImageUrls: [] as string[] };
+  let html = raw;
+  if (!/<[a-z!][\s\S]*>/i.test(raw.slice(0, 200))) {
+    try { html = fsSync.readFileSync(path.resolve(evidenceDirectory, raw.replace(/\\/g, "/")), "utf8"); }
+    catch { return { htmlFactsText: null, factsImageUrls: [] as string[] }; }
+  }
+  const extracted = extractHtmlFacts(html, productUrl);
+  return { htmlFactsText: extracted.factsText, factsImageUrls: extracted.factsImageUrls };
+}
+
 export function recordToProducts(record: EvidenceRecord, evidenceDirectory: string, capturedAt: string): DtcRawProduct[] {
   const productUrl = text(record.productUrl);
   if (!productUrl) return [];
@@ -172,6 +203,7 @@ export function recordToProducts(record: EvidenceRecord, evidenceDirectory: stri
     images: remote,
     localImages: local,
     detailText: [text(fields.details), text(fields.ingredients)].filter(Boolean).join("\n") || null,
+    ...htmlFactsFor(record, evidenceDirectory, productUrl),
     capturedAt,
   };
   const variants = (record.variants ?? []).filter((variant) => text(variant.variantId) || text(variant.sku));
@@ -229,7 +261,12 @@ export function toDtcCapturedProduct(product: DtcRawProduct): CapturedProductV1 
     descriptionText: product.description,
     detailText: product.detailText,
     ingredientText: null,
-    factsEvidence: { htmlTable: null, pdfUrl: null, imageRefs: product.images },
+    // 页面成分表完整就走文字线（不 OCR）；否则图片线，且页面指认的成分表图排最前
+    factsEvidence: {
+      htmlTable: product.htmlFactsText && hasCompleteFactsText(product.htmlFactsText) ? product.htmlFactsText : null,
+      pdfUrl: null,
+      imageRefs: [...product.factsImageUrls, ...product.images.filter((u) => !product.factsImageUrls.includes(u))],
+    },
     images: product.images,
     sourceFiles: [`products/${product.externalId.replace(/[^a-zA-Z0-9_.-]/g, "_")}.json`],
     captureCompleteness: "full",

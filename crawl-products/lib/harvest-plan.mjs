@@ -32,6 +32,8 @@ export const HARVEST_FILE_LAYOUT = Object.freeze({
   result: "harvest-result.json",
   evidenceDir: "evidence",
   evidenceImageDir: "evidence/img",
+  evidenceHtmlDir: "evidence/html",
+  evidenceHtmlIndex: "evidence/html/html-index.json",
   evidenceRecords: "evidence/records.json",
   fieldPresenceStats: "evidence/field-presence-stats.json",
   semanticQueue: "semantic-queue.json",

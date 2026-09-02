@@ -286,6 +286,8 @@ export async function runHarvest(browser, tab, planInput, opts = {}) {
       || ((urls, upgradeOpts) => upgradeProducts(tabRef.tab, urls, { ...upgradeOpts, browser })),
     fetchImage: opts.hooks?.fetchImage || defaultFetchImage,
     fetchProductData: opts.hooks?.fetchProductData || defaultFetchProductData,
+    // 可选：取商品页 HTML（Shopify HTTP 通道用它"去页面看一眼"成分表）；没给就不取
+    ...(typeof opts.hooks?.fetchPageHtml === "function" ? { fetchPageHtml: opts.hooks.fetchPageHtml } : {}),
     filterScope: opts.hooks?.filterScope || filterHarvestStageRecords,
   };
 
@@ -707,6 +709,28 @@ async function buildEvidencePackage(record, url, outDir, hooks, log) {
     gallery.push(entry);
   }
 
+  // 商品页 HTML：独立站成分表常在页面里不在接口里。存一份，并按 URL 建索引（Codex 拼包时可能漏掉 sourceFiles，索引让 Mac 侧按 URL 找得到）。
+  let pageHtml = null;
+  if (typeof hooks.fetchPageHtml === "function") {
+    try {
+      const html = await hooks.fetchPageHtml(url);
+      if (html && html.length > 500) {
+        const fileName = `${createHash("sha256").update(url).digest("hex").slice(0, 16)}.html`;
+        const relative = path.join(HARVEST_FILE_LAYOUT.evidenceHtmlDir, fileName);
+        await mkdir(path.join(outDir, HARVEST_FILE_LAYOUT.evidenceHtmlDir), { recursive: true });
+        await writeFile(path.join(outDir, relative), html);
+        const indexPath = path.join(outDir, HARVEST_FILE_LAYOUT.evidenceHtmlIndex);
+        const existing = await readFile(indexPath, "utf8").then(JSON.parse).catch(() => ({}));
+        existing[url] = relative;
+        await writeJsonAtomic(indexPath, existing);
+        pageHtml = relative;
+        log("page_html_captured", { url, bytes: html.length });
+      }
+    } catch (error) {
+      log("page_html_failed", { url, error: String(error) });
+    }
+  }
+
   const pkg = normalizeEvidencePackage({
     productUrl: url,
     fields: {
@@ -728,5 +752,6 @@ async function buildEvidencePackage(record, url, outDir, hooks, log) {
   // every sellable state (id/SKU/options/price/variant URL) reaches
   // crawl-records and downstream enrich without a semantic round per variant.
   if (variants.length > 0) pkg.variants = variants;
+  if (pageHtml) pkg.pageHtml = pageHtml;
   return pkg;
 }
