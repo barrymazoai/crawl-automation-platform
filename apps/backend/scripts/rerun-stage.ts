@@ -52,9 +52,17 @@ async function main() {
     `update pipeline_job set state='queued', attempt=0, available_at=now(), error_code=null, error_message=null,
        leased_by=null, lease_token_hash=null, lease_expires_at=null, output=null, completed_at=null, updated_at=now()
      where run_id=$1 and stage = any($2::text[]) and state in ('completed','needs_review','failed','retry_wait','queued')`, [runId, jobStages]);
+  // 3. 幂等记录退休（改键名，不删）：complete/fail/batch/finalize 都按 jobId 记幂等，重跑输出不同会被判"与原请求不一致"
+  const retired = await pool.query(
+    `update pipeline_idempotency set idempotency_key = idempotency_key || ':stale-' || $3
+     where idempotency_key not like '%:stale-%' and scope in (
+       select 'complete:' || id from pipeline_job where run_id=$1 and stage = any($2::text[])
+       union select 'fail:' || id from pipeline_job where run_id=$1 and stage = any($2::text[])
+       union select 'batch:' || id from pipeline_job where run_id=$1 and stage = any($2::text[])
+       union select 'finalize:' || id from pipeline_job where run_id=$1 and stage = any($2::text[]))`, [runId, jobStages, stamp]);
   await pool.query(`update pipeline_review set status='resolved', resolution=$2, resolved_at=now() where run_id=$1 and status='open'`, [runId, `从 ${from} 阶段重跑`]);
   await pool.query(`update pipeline_run set status='active', open_review_count=0, error_code=null, error_message=null, updated_at=now() where id=$1`, [runId]);
   await pool.end();
-  console.log(`run ${runId}: 改名 ready 标记 ${moved} 个，重置 job ${reset.rowCount} 个（${jobStages.join(",")}）`);
+  console.log(`run ${runId}: 改名 ready 标记 ${moved} 个，重置 job ${reset.rowCount} 个（${jobStages.join(",")}），退休幂等记录 ${retired.rowCount} 条`);
 }
 main().catch((error) => { console.error(error.message); process.exit(1); });
