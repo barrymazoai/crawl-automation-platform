@@ -6,7 +6,9 @@
  * 抓取（capture）和图片 OCR（images）不在重跑范围内，它们的产物原样复用。
  *
  * 用法：CONTROL_PLANE_DB=<控制面库 URL> WORK_ROOT=<运行目录> npx tsx scripts/rerun-stage.ts <runId> <text|join|unify|finalize>
- *   或在 mini 上 source 对应的 .env.worker(.cloud) 后运行（自动从 PRODUCT_DATABASE_URL 推导控制面库）。
+ *   本地线：在 mini 上 source .env.worker 后运行（自动从 PRODUCT_DATABASE_URL 推导本地控制面库）。
+ *   云端线（.env.worker.cloud）：控制面库在 Railway 内网，本脚本只能改名标记；job 重置要用 --markers-only 跑这里，
+ *   再用 railway ssh 在容器内执行同样的 update（见 dtc-cloud-pipeline 记忆）。
  */
 import fs from "node:fs/promises";
 import path from "node:path";
@@ -21,8 +23,10 @@ const JOB_STAGES: Record<Stage, string[]> = {
 const MARKER: Record<Stage, string> = { text: "text.ready.json", join: "join.ready.json", unify: "unify.ready.json", finalize: "finalize.ready.json" };
 
 async function main() {
-  const [runId, from] = process.argv.slice(2) as [string, Stage];
-  if (!runId || !ORDER.includes(from)) throw new Error("用法: rerun-stage.ts <runId> <text|join|unify|finalize>");
+  const args = process.argv.slice(2).filter((a) => !a.startsWith("--"));
+  const markersOnly = process.argv.includes("--markers-only");
+  const [runId, from] = args as [string, Stage];
+  if (!runId || !ORDER.includes(from)) throw new Error("用法: rerun-stage.ts <runId> <text|join|unify|finalize> [--markers-only]");
   const workRoot = process.env.WORK_ROOT!;
   const dbUrl = process.env.CONTROL_PLANE_DB ?? (() => { const u = new URL(process.env.PRODUCT_DATABASE_URL!); u.pathname = "/crawl_control_plane_v2"; u.search = ""; return u.toString(); })();
   const stages = ORDER.slice(ORDER.indexOf(from));
@@ -40,6 +44,7 @@ async function main() {
     }
   }
 
+  if (markersOnly) { console.log(`run ${runId}: 改名 ready 标记 ${moved} 个（--markers-only，job 未重置）`); return; }
   // 2. job 重置为 queued（依赖关系原样保留，下游会等上游重新完成）
   const pool = new pg.Pool({ connectionString: dbUrl, max: 1 });
   const jobStages = stages.flatMap((s) => JOB_STAGES[s]);
