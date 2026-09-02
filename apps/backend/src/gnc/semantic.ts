@@ -32,6 +32,7 @@ export function buildGncBatchPrompt(inputs: GncCleanInput[], vocabulary: string[
 
 Rules:
 - Include only one sellable human oral nutrition product. Exclude bundles/kits, topical products, devices, pet products, and records without positive formula evidence.
+- bundle_or_pack means the listing combines DIFFERENT products or flavors: variety pack, assorted, mix-and-match, sampler, stack, kit, set, starter/gift set, "A + B". A multi-unit quantity pack of ONE identical product (12-Pack, Case of 24, 4 x 8 oz cartons, twin-pack, 3-count of the same item) is NOT a bundle: treat it as a pack-size variant of that product and include it when formula evidence exists.
 - LABEL_TEXT and LABEL_INGREDIENTS come from that exact SKU's official GNC Ingredients HTML table, or its PDF/OCR fallback, and are the strongest formula evidence.
 - scope_reason must be one of nutrition_product, non_nutrition_product, bundle_or_pack, ingredients_and_formula_missing, nutrition_evidence_missing.
 - scope_evidence must contain 1-5 short excerpts copied from the supplied fields. Never invent evidence.

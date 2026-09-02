@@ -33,3 +33,13 @@ describe("GNC semantic cleanup", () => {
     expect(result.results[0]?.ingredients).toEqual(["Protein"]);
   });
 });
+
+describe("bundle_or_pack 的边界", () => {
+  it("同一产品的数量装不算套装，只有混合不同产品/口味的才算", () => {
+    const prompt = buildGncBatchPrompt([input], ["Muscle Health"]);
+    expect(prompt).toContain("bundle_or_pack means the listing combines DIFFERENT products or flavors");
+    expect(prompt).toContain("12-Pack");
+    expect(prompt).toContain("is NOT a bundle");
+    expect(prompt).toContain("variety pack");
+  });
+});
