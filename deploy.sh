@@ -25,7 +25,7 @@ esac
 cd "$(dirname "$0")"
 rsync -a --exclude node_modules --exclude .git --exclude dist --exclude 'apps/web/dist' \
   --exclude state --exclude logs --exclude runs --exclude exports \
-  apps packages start-workers.sh "$HOST:$ROOT/"
+  apps packages start-workers.sh start-workers-cloud.sh "$HOST:$ROOT/"
 ssh -o BatchMode=yes "$HOST" "bash -s" <<REMOTE
 set -e
 export PATH=/opt/homebrew/bin:/usr/local/bin:\$PATH
