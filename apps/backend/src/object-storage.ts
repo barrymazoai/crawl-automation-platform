@@ -10,19 +10,24 @@ export class ObjectStorage {
     this.client = new S3Client({ ...options, requestChecksumCalculation: "WHEN_REQUIRED" });
   }
   /**
-   * 预签名上传地址。不带 Metadata：SDK 会把 x-amz-meta-* 提升到 query 而不是签名头，
-   * 上传端再当 header 发就签名不符（R2 严格要求 x-amz-* 必须签名）；就算放进 query，
-   * R2 也不会把它落成对象元数据。sha256 存在 pipeline_artifact 里，消费端下载后自行比对。
+   * 预签名上传地址。
+   * R2 严格要求 x-amz-* 头必须参与签名，而 SDK 默认把 x-amz-meta-* 提升到 query，
+   * 上传端再当 header 发就 SignatureDoesNotMatch（放 query 里 R2 也不落成对象元数据）。
+   * unhoistableHeaders 把它按回签名头，上传端照常发 content-type + x-amz-meta-sha256 即可。
    */
-  uploadUrl(key: string, _sha256: string, contentType: string) {
-    return getSignedUrl(this.client, new PutObjectCommand({ Bucket: this.options.bucket, Key: key, ContentType: contentType }),
-      { expiresIn: 900, signableHeaders: new Set(["content-type"]) });
+  uploadUrl(key: string, sha256: string, contentType: string) {
+    return getSignedUrl(this.client, new PutObjectCommand({ Bucket: this.options.bucket, Key: key, ContentType: contentType, Metadata: { sha256 } }), {
+      expiresIn: 900,
+      unhoistableHeaders: new Set(["x-amz-meta-sha256"]),
+      signableHeaders: new Set(["content-type", "x-amz-meta-sha256"]),
+    });
   }
   downloadUrl(key: string) { return getSignedUrl(this.client, new GetObjectCommand({ Bucket: this.options.bucket, Key: key }), { expiresIn: 900 }); }
-  /** 确认上传：只核对服务端能证实的字节数。哈希由消费端对下载到的真实字节重算比对。 */
-  async verify(key: string, _sha256: string, byteSize: number) {
+  /** 确认上传：核对字节数与上传端声明的 sha256。真正的完整性校验在消费端（下载后对真实字节重算）。 */
+  async verify(key: string, sha256: string, byteSize: number) {
     const result = await this.client.send(new HeadObjectCommand({ Bucket: this.options.bucket, Key: key }));
     if (Number(result.ContentLength) !== byteSize) throw new Error(`对象存储校验失败：字节数 ${result.ContentLength} ≠ ${byteSize}`);
+    if (result.Metadata?.sha256 !== sha256) throw new Error("对象存储校验失败：sha256 元数据不符");
   }
   delete(key: string) { return this.client.send(new DeleteObjectCommand({ Bucket: this.options.bucket, Key: key })); }
 }

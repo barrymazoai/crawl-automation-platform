@@ -203,9 +203,8 @@ export class NodeApiClient {
   async upload(uploadUrl: string, filename: string, hash: string, contentType: string) {
     const data = await fsp.readFile(filename);
     await this.withRetry(true, async (signal) => {
-      // 只发预签名里签过的头。x-amz-* 头必须参与签名，R2 严格执行；sha256 不走对象元数据，
-      // 由消费端下载后对真实字节重算并比对 pipeline_artifact.sha256（capture-dtc.ts）。
-      const response = await (this.config.fetchImpl ?? fetch)(uploadUrl, { method: "PUT", signal, headers: { "content-type": contentType }, body: data });
+      // 这两个头都在预签名的 SignedHeaders 里（见 object-storage.ts 的 unhoistableHeaders）
+      const response = await (this.config.fetchImpl ?? fetch)(uploadUrl, { method: "PUT", signal, headers: { "content-type": contentType, "x-amz-meta-sha256": hash }, body: data });
       if (!response.ok) throw new ApiError("artifact_upload_failed", `上传失败：HTTP ${response.status}`, response.status);
     }, this.config.transferTimeoutMs ?? 120_000);
   }
