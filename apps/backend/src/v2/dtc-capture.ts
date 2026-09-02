@@ -72,6 +72,50 @@ function galleryImages(record: EvidenceRecord, evidenceDirectory: string) {
   return { remote: [...new Set(remote)], local: [...new Set(local)] };
 }
 
+/**
+ * Windows browser-node 打的包（publish-capture-batch 的 EvidenceBundleV1 描述符）：
+ *   bundle.json { items:[{ externalId, productUrl, title, sku, variant, sourceFiles:["data/..json", "data/entry.png"], imageFiles:["images/..webp"] }] }
+ *   data/<n>-<variantId>.json { productUrl, fields:{ title, description, ingredients_text, images, sku, price, ... }, variant }
+ * 与 Skill harvest 的 evidence/records.json 是两套格式（后者一条 record 带多个 variants）。
+ * 这里把前者映射成 EvidenceRecord，后面的 recordToProducts 两种来源共用。
+ */
+type WindowsBundleItem = {
+  externalId?: unknown; productUrl?: unknown; title?: unknown; sku?: unknown;
+  variant?: { variantId?: unknown; sku?: unknown; title?: unknown; options?: Record<string, unknown>; price?: unknown; url?: unknown; available?: unknown } | null;
+  sourceFiles?: unknown; imageFiles?: unknown;
+};
+
+export async function readWindowsBundle(directory: string): Promise<EvidenceRecord[] | null> {
+  const raw = await fs.readFile(path.join(directory, "bundle.json"), "utf8").catch(() => null);
+  if (!raw) return null;
+  const bundle = JSON.parse(raw) as { items?: unknown };
+  if (!Array.isArray(bundle.items)) return null;
+  const records: EvidenceRecord[] = [];
+  for (const item of bundle.items as WindowsBundleItem[]) {
+    const sourceFiles = Array.isArray(item.sourceFiles) ? item.sourceFiles.filter((v): v is string => typeof v === "string") : [];
+    const dataFile = sourceFiles.find((name) => name.endsWith(".json"));
+    const data = dataFile
+      ? await fs.readFile(path.join(directory, dataFile.replace(/\\/g, "/")), "utf8").then((t) => JSON.parse(t) as { productUrl?: unknown; fields?: Record<string, unknown>; variant?: WindowsBundleItem["variant"] }).catch(() => null)
+      : null;
+    const fields: Record<string, unknown> = { ...(data?.fields ?? {}) };
+    // 字段名对齐 harvest 格式
+    if (fields.ingredients == null && fields.ingredients_text != null) fields.ingredients = fields.ingredients_text;
+    if (fields.title == null && item.title != null) fields.title = item.title;
+    if (fields.sku == null && item.sku != null) fields.sku = item.sku;
+    const imageFiles = Array.isArray(item.imageFiles) ? item.imageFiles.filter((v): v is string => typeof v === "string") : [];
+    const remoteImages = Array.isArray(fields.images) ? fields.images.filter((v): v is string => typeof v === "string") : [];
+    const gallery = imageFiles.map((localPath, index) => ({ localPath, url: remoteImages[index] ?? null, index }));
+    const variant = item.variant ?? data?.variant ?? null;
+    records.push({
+      productUrl: data?.productUrl ?? item.productUrl,
+      fields,
+      gallery,
+      variants: variant && (text(variant.variantId) || text(variant.sku)) ? [variant] : [],
+    });
+  }
+  return records;
+}
+
 /** 一条 record 展开成若干产品：有变体则一变体一个产品，否则单个产品。 */
 export function recordToProducts(record: EvidenceRecord, evidenceDirectory: string, capturedAt: string): DtcRawProduct[] {
   const productUrl = text(record.productUrl);
@@ -190,9 +234,11 @@ export async function runDtcCaptureCatalog(options: DtcCaptureCatalogOptions): P
     if (!await fs.stat(directory).catch(() => null)) await extractZipSafe(archive, directory);
     const recordsFile = path.join(directory, "evidence", "records.json");
     const raw = await fs.readFile(recordsFile, "utf8").catch(() => null);
-    if (!raw) continue;
-    const records = JSON.parse(raw) as EvidenceRecord[];
-    if (!Array.isArray(records)) continue;
+    let records: EvidenceRecord[] | null = null;
+    if (raw) { const parsed = JSON.parse(raw); records = Array.isArray(parsed) ? parsed as EvidenceRecord[] : null; }
+    // Windows browser-node 的 EvidenceBundleV1 描述符格式
+    if (!records) records = await readWindowsBundle(directory);
+    if (!records) continue;
     recordCount += records.length;
     for (const record of records) products.push(...recordToProducts(record, directory, capturedAt));
   }
