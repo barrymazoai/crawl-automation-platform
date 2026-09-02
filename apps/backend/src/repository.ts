@@ -40,7 +40,7 @@ export function buildJobDag(item: DagSource, createId: () => string = randomUUID
 }
 
 export class PipelineRepository {
-  constructor(private pool: Pool, private leaseTtlSeconds = 120) {}
+  constructor(private pool: Pool, private leaseTtlSeconds = 120, private keyPrefix = "") {}
 
   private async transaction<T>(action: (client: PoolClient) => Promise<T>) {
     const client = await this.pool.connect();
@@ -406,7 +406,9 @@ export class PipelineRepository {
       return this.idempotent(client, `artifact:${jobId}`, idempotencyKey, input, async () => {
       const job = await this.requireLease(client, jobId, token); const id = randomUUID();
       const safeName = input.fileName.replace(/[^a-zA-Z0-9._-]/g, "_");
-      const bucketKey = `runs/${job.run_id}/${jobId}/${id}-${safeName}`;
+      // 前缀让本流水线的产物在共享 bucket 里独占一个目录（S3_KEY_PREFIX）
+      const prefix = this.keyPrefix ? `${this.keyPrefix}/` : "";
+      const bucketKey = `${prefix}runs/${job.run_id}/${jobId}/${id}-${safeName}`;
       await client.query(`insert into pipeline_artifact(id,run_id,job_id,kind,bucket_key,file_name,content_type,sha256,byte_size)
         values($1,$2,$3,$4,$5,$6,$7,$8,$9)`, [id, job.run_id, jobId, input.kind, bucketKey, safeName, input.contentType, input.sha256, input.byteSize]);
       return { id, runId: job.run_id, jobId, bucketKey, ...input };

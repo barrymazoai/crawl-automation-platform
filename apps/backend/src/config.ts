@@ -16,6 +16,8 @@ const schema = z.object({
   S3_ENDPOINT: z.url().optional(), S3_REGION: z.string().default("auto"), S3_BUCKET: z.string().optional(),
   S3_ACCESS_KEY_ID: z.string().optional(), S3_SECRET_ACCESS_KEY: z.string().optional(),
   S3_FORCE_PATH_STYLE: z.enum(["true", "false"]).default("true"),
+  /** 对象 key 前缀，让本流水线的产物在共享 bucket 里独占一个目录。 */
+  S3_KEY_PREFIX: z.string().default(""),
   // 解析线：读公司表做公司↔渠道品牌匹配。不配就不启动解析线，其余功能不受影响。
   PRODUCT_DATABASE_URL: z.string().optional(),
   BRAND_LINK_CHANNELS: z.string().default("gnc"),
@@ -63,5 +65,6 @@ export function loadConfig(env = process.env) {
       forcePathStyle: value.S3_FORCE_PATH_STYLE === "true",
       credentials: { accessKeyId: value.S3_ACCESS_KEY_ID, secretAccessKey: value.S3_SECRET_ACCESS_KEY },
     } : null,
+    s3KeyPrefix: value.S3_KEY_PREFIX.replace(/^\/+|\/+$/g, ""),
   };
 }

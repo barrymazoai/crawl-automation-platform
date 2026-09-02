@@ -223,3 +223,25 @@ describe("永久失败是终态", () => {
     expect(stageQuery!).toContain("upstream_failed");
   });
 });
+
+describe("产物 key 前缀", () => {
+  it("配了 S3_KEY_PREFIX 就放进该目录，没配则保持原样", async () => {
+    const token = "lease-token-1234567890";
+    const make = (prefix?: string) => {
+      const { pool, queries } = fakePool((sql) => {
+        if (sql.includes("select * from pipeline_job")) return { rows: [leasedJob("capture", token)] };
+        return undefined;
+      });
+      return { repository: new PipelineRepository(pool, 120, prefix), queries };
+    };
+    const meta = { kind: "evidence_bundle", fileName: "batch-000001.zip", contentType: "application/zip", sha256: "a".repeat(64), byteSize: 10 };
+
+    const withPrefix = make("crawl-v2");
+    const a = await withPrefix.repository.createArtifact("job-1", token, meta as any, "k1");
+    expect((a as any).bucketKey).toMatch(/^crawl-v2\/runs\/run-1\/job-1\//);
+
+    const bare = make();
+    const b = await bare.repository.createArtifact("job-1", token, meta as any, "k2");
+    expect((b as any).bucketKey).toMatch(/^runs\/run-1\/job-1\//);
+  });
+});
