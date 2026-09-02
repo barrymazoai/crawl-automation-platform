@@ -19,10 +19,28 @@ export interface GncCleanResult {
   scopeEvidence: string[];
 }
 
+/** 混合套装的信号：不同产品/口味装在一起。命中即真套装。 */
+const VARIETY_PATTERN = /\b(variety|assorted|assortment|sampler|mix(?:ed)?[- ]?(?:pack|box|case)|mix[- ]and[- ]match|bundle|kit|stack|starter[- ]?(?:set|pack)|gift[- ]?(?:set|box)|combo|duo|trio)\b|\s\+\s/i;
+/** 数量装的信号：同一产品装 N 份。 */
+const QUANTITY_PACK_PATTERN = /\b(\d+)\s*[-x×]?\s*(?:pack|pk|count|ct|cans?|bottles?|cartons?|bars?|servings?)\b|\bcase\s+of\s+\d+\b|\b\d+\s*x\s*\d+(?:\.\d+)?\s*(?:fl\.?\s*oz|oz|ml|g)\b/i;
+
+/**
+ * 同一产品的数量装（12-Pack、Case of 24、4 x 8 oz）不是套装。这个判断交给模型不稳（liveowyn 121 个变体
+ * 里先 75 后 36 个仍被判 bundle），所以在 prompt 里逐条给确定性提示：命中数量装且无混合信号 → PACK_HINT。
+ */
+export function packHint(title: string, variantText?: string | null) {
+  const text = `${title} ${variantText ?? ""}`;
+  if (VARIETY_PATTERN.test(text)) return "variety_or_mixed";
+  if (QUANTITY_PACK_PATTERN.test(text)) return "quantity_pack";
+  return null;
+}
+
 export function buildGncBatchPrompt(inputs: GncCleanInput[], vocabulary: string[]) {
   const blocks = inputs.map((input) => [
     `### SKU ${input.sku}`,
     `TITLE: ${input.title.slice(0, 240)}`,
+    ...(packHint(input.title) === "quantity_pack" ? ["PACK_HINT: multi-unit quantity pack of ONE identical product — this is NOT a bundle; never use bundle_or_pack for this SKU"] : []),
+    ...(packHint(input.title) === "variety_or_mixed" ? ["PACK_HINT: mixed/variety pack of different products or flavors — bundle_or_pack"] : []),
     `DESCRIPTION: ${(input.description ?? "").slice(0, 1000)}`,
     `DETAILS: ${input.details.slice(0, 1600)}`,
     `LABEL_TEXT: ${(input.labelText ?? "").slice(0, 5000)}`,
@@ -32,7 +50,7 @@ export function buildGncBatchPrompt(inputs: GncCleanInput[], vocabulary: string[
 
 Rules:
 - Include only one sellable human oral nutrition product. Exclude bundles/kits, topical products, devices, pet products, and records without positive formula evidence.
-- bundle_or_pack means the listing combines DIFFERENT products or flavors: variety pack, assorted, mix-and-match, sampler, stack, kit, set, starter/gift set, "A + B". A multi-unit quantity pack of ONE identical product (12-Pack, Case of 24, 4 x 8 oz cartons, twin-pack, 3-count of the same item) is NOT a bundle: treat it as a pack-size variant of that product and include it when formula evidence exists.
+- bundle_or_pack means the listing combines DIFFERENT products or flavors: variety pack, assorted, mix-and-match, sampler, stack, kit, set, starter/gift set, "A + B". A multi-unit quantity pack of ONE identical product (12-Pack, Case of 24, 4 x 8 oz cartons, twin-pack, 3-count of the same item) is NOT a bundle: treat it as a pack-size variant of that product and include it when formula evidence exists. When a SKU carries PACK_HINT, follow it.
 - LABEL_TEXT and LABEL_INGREDIENTS come from that exact SKU's official GNC Ingredients HTML table, or its PDF/OCR fallback, and are the strongest formula evidence.
 - scope_reason must be one of nutrition_product, non_nutrition_product, bundle_or_pack, ingredients_and_formula_missing, nutrition_evidence_missing.
 - scope_evidence must contain 1-5 short excerpts copied from the supplied fields. Never invent evidence.
