@@ -126,18 +126,40 @@ export function createScraperApiPage(options: ScraperApiOptions): Page & { reque
   return page;
 }
 
+/** innerText 不含这些元素的内容；textContent 含。GNC 页面 <script> 里有 "RateLimiter-HideCaptcha" 之类的 URL，
+ *  若把脚本文本算进正文，denied 的 /captcha/i 判定会把每个正常页都当成 PerimeterX 挑战（2026-09-02 实测误判）。 */
+const PATCHED = Symbol("innerTextPatched");
+const INNER_TEXT_SKIP = new Set(["SCRIPT", "STYLE", "NOSCRIPT", "TEMPLATE"]);
+
+export function visibleText(node: any): string {
+  if (!node) return "";
+  if (node.nodeType === 3) return String(node.data ?? node.textContent ?? "");
+  if (node.nodeType === 1 && INNER_TEXT_SKIP.has(String(node.tagName).toUpperCase())) return "";
+  let out = "";
+  for (const child of node.childNodes ?? []) out += visibleText(child);
+  return out;
+}
+
 /**
  * 补齐 linkedom 缺的 DOM API，让 GNC 脚本照跑：
- * - innerText：linkedom 元素没有，用 textContent 等价兜底；
+ * - innerText：linkedom 元素没有，按浏览器语义（不含 script/style）从文本节点拼；
  * - document.images：linkedom 没有这个集合，用 querySelectorAll('img') 顶上，
  *   且返回真数组（脚本里 [...document.images] 要求可迭代）。
  */
 function patchInnerText(doc: any) {
-  const ElementProto = doc?.body?.constructor?.prototype;
-  if (ElementProto && !("innerText" in ElementProto)) {
-    try {
-      Object.defineProperty(ElementProto, "innerText", { get() { return this.textContent; }, configurable: true });
-    } catch { /* 已存在或不可定义就算了 */ }
+  // linkedom 的 Element 自带 innerText，但语义是 textContent（含脚本文本），必须覆盖，
+  // 覆盖到 Element 基类原型上（body 的构造器是 HTMLBodyElement，只改它不够）。
+  let proto = doc?.body ? Object.getPrototypeOf(doc.body) : null;
+  while (proto && proto !== Object.prototype) {
+    const own = Object.getOwnPropertyDescriptor(proto, "innerText");
+    if (own && !(own.get as any)?.[PATCHED]) {
+      try {
+        const getter = function (this: any) { return visibleText(this); };
+        (getter as any)[PATCHED] = true;
+        Object.defineProperty(proto, "innerText", { get: getter, configurable: true });
+      } catch { /* 不可定义就算了 */ }
+    }
+    proto = Object.getPrototypeOf(proto);
   }
   try {
     if (!Array.isArray(doc.images)) {
