@@ -212,6 +212,9 @@ export async function discoverProductUrls(options: GncBrowserCrawlOptions) {
           throw new Error(`GNC 所有 Sales Channel 出口均不可用：${currentUrl}`);
         }
       }
+      // 404/410：品牌页不存在（GNC 有失效 slug）。当空目录正常收尾，不抛错——
+      // 抛错会让任务失败重排、反复领、反复烧 ScraperAPI 额度。
+      if (page.status === 404 || page.status === 410) { exhausted = true; break; }
       if (page.status >= 400) throw new Error(`GNC 目录页不可读 HTTP ${page.status}: ${currentUrl}`);
       if (page.status === 0 && page.value.productLinks.length === 0 && page.value.expectedCount == null) {
         throw new Error(`GNC 目录页没有状态码且缺少目录证据：${currentUrl}`);

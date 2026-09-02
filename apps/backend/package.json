@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/index.ts",
-    "build": "tsdown src/index.ts src/migrate.ts src/workers/capture-gnc.ts src/workers/capture-amazon.ts src/workers/capture-swanson.ts src/workers/capture-dtc.ts src/workers/text.ts src/workers/image.ts src/workers/unify.ts src/workers/finalize.ts --format esm",
+    "build": "tsdown src/index.ts src/migrate.ts src/workers/capture-gnc.ts src/workers/capture-gnc-scraperapi.ts src/workers/capture-amazon.ts src/workers/capture-swanson.ts src/workers/capture-dtc.ts src/workers/text.ts src/workers/image.ts src/workers/unify.ts src/workers/finalize.ts --format esm",
     "start": "node dist/index.js",
     "backfill:amazon:dry": "tsx scripts/amazon-backfill-dry-run.ts",
     "backfill:amazon:image": "tsx scripts/amazon-backfill-image-lane.ts",

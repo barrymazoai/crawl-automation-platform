@@ -63,7 +63,19 @@ export function createScraperApiPage(options: ScraperApiOptions): Page & { reque
           const response = await fetchImpl(build(url), { signal: AbortSignal.timeout(timeoutMs) });
           lastStatus = response.status;
           const html = await response.text();
-          // ScraperAPI 自己会返回它到达目标的状态；200 且没被 PX 拦才算成功
+          /*
+           * ScraperAPI 透传目标站的真实状态码。区分三种：
+           * - 404/410：目标页确实不存在（GNC 有失效 slug）。这是终态，不重试、
+           *   不烧额度——把文档建出来交给上层，discover 会看到没有商品链接、正常收尾。
+           * - 200 且内容够长且没被 PX 拦：成功。
+           * - 其余（PX 拦、空响应、5xx、ScraperAPI 自身错误）：可重试。
+           */
+          if (response.status === 404 || response.status === 410) {
+            const parsed = parseHTML(html);
+            currentDocument = parsed.document;
+            currentWindow = parsed.window ?? parsed;
+            return response.status;
+          }
           if (response.status === 200 && html.length > 5_000 && !looksBlocked(html)) {
             const parsed = parseHTML(html);
             currentDocument = parsed.document;
