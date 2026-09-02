@@ -4,6 +4,8 @@
 #       ./start-workers.sh <池名>     只（重）起这一个
 # 池的参数固化在这里，随仓库走；不要在命令行里临时拼。
 set -e
+# 固化 PATH：非交互 ssh 调用时 node 不在默认 PATH 里
+export PATH=/opt/homebrew/bin:/usr/local/bin:$PATH
 cd "$(dirname "$0")"
 ROOT="$PWD"
 set -a; source "$ROOT/.env.worker"; set +a

@@ -4,6 +4,8 @@
 # 用法：./start-workers-cloud.sh            起全部
 #       ./start-workers-cloud.sh <池名>     只（重）起这一个
 set -e
+# 固化 PATH：非交互 ssh 调用时 node 不在默认 PATH 里
+export PATH=/opt/homebrew/bin:/usr/local/bin:$PATH
 cd "$(dirname "$0")"
 ROOT="$PWD"
 set -a; source "$ROOT/.env.worker.cloud"; set +a
