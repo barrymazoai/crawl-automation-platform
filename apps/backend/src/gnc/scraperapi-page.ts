@@ -37,7 +37,8 @@ function looksBlocked(html: string) {
 export function createScraperApiPage(options: ScraperApiOptions): Page & { requestCount: number } {
   const fetchImpl = options.fetchImpl ?? fetch;
   const timeoutMs = options.timeoutMs ?? 90_000;
-  const maxRetries = options.maxRetries ?? 3;
+  // 默认不重试：每次请求都扣 ScraperAPI 额度，死链、封锁重试也不会变好；失败交给上层记录后人工看。
+  const maxRetries = options.maxRetries ?? 0;
 
   let currentDocument: ReturnType<typeof parseHTML>["document"] | null = null;
   let currentWindow: any = null;

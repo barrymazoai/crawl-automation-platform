@@ -13,7 +13,7 @@ import { captureGncBrandCatalog } from "../gnc/brand-catalog.js";
 import { createScraperApiHolder } from "../gnc/scraperapi-page.js";
 import { runGncCaptureCatalog } from "../v2/gnc-capture.js";
 import { baseEnv, captureEnv, loadEnv } from "./shared/env.js";
-import { startWorker } from "./shared/run.js";
+import { startWorker, type JobContext, type JobResult } from "./shared/run.js";
 import { diskTelemetry } from "./shared/telemetry.js";
 
 const env = loadEnv(baseEnv, captureEnv);
@@ -42,34 +42,47 @@ await startWorker({
     const diskState = await diskTelemetry(disk, env.DISK_SOFT_MIN_FREE_GB, env.DISK_HARD_MIN_FREE_GB);
     return diskState ? { disk: diskState } : {};
   },
-  handle: async ({ job, leaseToken, signal, client }) => {
-    // 品牌目录刷新：ScraperAPI 拉一次 /brands，就地抠品牌链接。
-    if (job.stage === "resolve_brand_catalog") {
-      const holder = holderFactory();
-      const catalog = await captureGncBrandCatalog({ url: job.source.url, signal, holderFactory });
-      console.log(JSON.stringify({ type: "gnc_brand_catalog_captured", entries: catalog.entries.length, expected: catalog.expectedCount, complete: catalog.complete }));
-      await holder.close();
-      if (!catalog.entries.length) {
-        return { review: { reasonCode: "gnc_brand_catalog_empty", summary: `${job.source.url} 没有解析出任何品牌链接` } };
-      }
-      return { channel: "gnc", ...catalog };
+  // 任何异常都转成复核项而不是抛出：公共层会把抛出的错误标成 retryable 重排 6 次，
+  // 每次重领都再烧一遍 ScraperAPI 额度。失败就躺在复核队列里，一轮测完人工看。
+  handle: async (context) => {
+    try {
+      return await handleJob(context);
+    } catch (error) {
+      if (context.signal.aborted) throw error;
+      const message = error instanceof Error ? error.message : String(error);
+      console.error(JSON.stringify({ type: "gnc_scraperapi_job_failed", jobId: context.job.id, stage: context.job.stage, message: message.slice(0, 300) }));
+      return { review: { reasonCode: "gnc_scraperapi_failed", summary: `${context.job.source.url}: ${message.slice(0, 500)}` } };
     }
-
-    const result = await runGncCaptureCatalog({
-      url: job.source.url,
-      holderFactory,
-      runId: job.runId,
-      workRoot: env.WORK_ROOT,
-      maxItems: env.GNC_MAX_ITEMS,
-      batchSize: env.V2_CAPTURE_BATCH_SIZE,
-      productDelayMs: env.CAPTURE_PRODUCT_DELAY_MS,
-      signal,
-      registerBatch: (batch) => client.registerCaptureBatch(job.id, leaseToken, batch),
-      finalizeCatalog: (catalog) => client.finalizeCatalog(job.id, leaseToken, catalog),
-      beforePublish: () => disk.waitForPublishAllowance(signal),
-    });
-    return result.status === "needs_review"
-      ? { review: { reasonCode: result.reasonCode, summary: result.summary } }
-      : result;
   },
 });
+
+async function handleJob({ job, leaseToken, signal, client }: JobContext): Promise<JobResult> {
+  // 品牌目录刷新：ScraperAPI 拉一次 /brands，就地抠品牌链接。
+  if (job.stage === "resolve_brand_catalog") {
+    const holder = holderFactory();
+    const catalog = await captureGncBrandCatalog({ url: job.source.url, signal, holderFactory });
+    console.log(JSON.stringify({ type: "gnc_brand_catalog_captured", entries: catalog.entries.length, expected: catalog.expectedCount, complete: catalog.complete }));
+    await holder.close();
+    if (!catalog.entries.length) {
+      return { review: { reasonCode: "gnc_brand_catalog_empty", summary: `${job.source.url} 没有解析出任何品牌链接` } };
+    }
+    return { channel: "gnc", ...catalog };
+  }
+
+  const result = await runGncCaptureCatalog({
+    url: job.source.url,
+    holderFactory,
+    runId: job.runId,
+    workRoot: env.WORK_ROOT,
+    maxItems: env.GNC_MAX_ITEMS,
+    batchSize: env.V2_CAPTURE_BATCH_SIZE,
+    productDelayMs: env.CAPTURE_PRODUCT_DELAY_MS,
+    signal,
+    registerBatch: (batch) => client.registerCaptureBatch(job.id, leaseToken, batch),
+    finalizeCatalog: (catalog) => client.finalizeCatalog(job.id, leaseToken, catalog),
+    beforePublish: () => disk.waitForPublishAllowance(signal),
+  });
+  return result.status === "needs_review"
+    ? { review: { reasonCode: result.reasonCode, summary: result.summary } }
+    : result;
+}
