@@ -29,6 +29,22 @@ function serializeTable(table: any): string {
     .join("\n");
 }
 
+/**
+ * 真成分表长什么样：多行、每行短、且有相当比例的行带"数量+单位"或 %DV。
+ * 没有这道闸时，含 "Serving Size" 字样的整段营销文案会被当成成分表——实测 Amazon 存档里
+ * 抠出的所谓"完整成分表"全是产品简介+配料段，一旦误判就会跳过 OCR 拿这堆文字去解析剂量。
+ */
+const AMOUNT_ROW = /\b\d+(?:[.,]\d+)?\s*(?:mg|mcg|µg|ug|g|kg|iu|ml|l|kcal|cal|%|du|hut|fip|agu|cu|spu|alu|lacu|pc|billion|cfu)\b/i;
+const DV_ROW = /\d+\s*%/;
+function looksLikeFactsRows(text: string): boolean {
+  const rows = text.split("\n").map((r) => r.trim()).filter(Boolean);
+  if (rows.length < 4) return false;
+  const withAmount = rows.filter((r) => AMOUNT_ROW.test(r) || DV_ROW.test(r)).length;
+  const shortRows = rows.filter((r) => r.length <= 120).length;
+  // 至少 3 行带数量/DV，且这类行占比不低；整段散文会在这里被挡掉（行少、行长、无数量）
+  return withAmount >= 3 && withAmount / rows.length >= 0.3 && shortRows / rows.length >= 0.6;
+}
+
 /** 非表格写法（div/li 每行一项）：把成分表容器的可见文本按行切出来。 */
 function serializeBlock(root: any): string {
   const lines: string[] = [];
@@ -64,7 +80,7 @@ export function extractHtmlFacts(html: string, pageUrl: string): HtmlFactsExtrac
   const tables = [...new Set(anchored.flatMap((el: any) => el.tagName?.toUpperCase() === "TABLE" ? [el] : [...el.querySelectorAll("table")]))]
     .filter((table: any) => !table.querySelector("table"))
     .map(serializeTable)
-    .filter((text) => text.length > 20 && FACTS_ANCHOR.test(text));
+    .filter((text) => text.length > 20 && FACTS_ANCHOR.test(text) && looksLikeFactsRows(text));
   let factsText: string | null = tables.length ? tables.map((t) => `HTML FACTS TABLE\n${t}`).join("\n\n") : null;
 
   // 2. 非表格：挑最小的含 "Serving Size" 的容器（很多 Shopify 主题用 div/li 排版）
@@ -74,7 +90,7 @@ export function extractHtmlFacts(html: string, pageUrl: string): HtmlFactsExtrac
       .sort((a: any, b: any) => visibleText(a).length - visibleText(b).length);
     for (const block of blocks) {
       const text = serializeBlock(block);
-      if (text.length > 40 && text.length < 6000 && /serving\s*size/i.test(text)) { factsText = `HTML FACTS TABLE\n${text}`; break; }
+      if (text.length > 40 && text.length < 6000 && /serving\s*size/i.test(text) && looksLikeFactsRows(text)) { factsText = `HTML FACTS TABLE\n${text}`; break; }
     }
   }
 

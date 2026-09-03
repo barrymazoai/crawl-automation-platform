@@ -548,7 +548,13 @@ export async function extractFacts(
 ): Promise<AmazonFactsExtraction> {
   if (product.extracted.images.length === 0) return { facts: null, imageIngredients: [] };
   const images = await downloadImages(product, path.join(options.jobDirectory, "amazon", "images"), options.ocrConcurrency);
-  const ocrImages = await mapWithConcurrency(images, options.ocrConcurrency, async (filename, index): Promise<IndexedOcrImage> => {
+  /*
+   * 页面自己指认了成分表是哪张图时（实测 18.3% 的页面有），先只 OCR 这几张；读到 Facts 就不必再跑整轮画廊。
+   * 指认不到、或指认的图没读出 Facts，再退回全画廊 OCR——只调顺序与早停，不改变最终能读到的范围。
+   */
+  const hinted = new Set(product.extracted.factsImageUrls ?? []);
+  const hintedIdx = product.extracted.images.map((url, i) => (hinted.has(url) ? i : -1)).filter((i) => i >= 0);
+  const ocrOne = async (filename: string, index: number): Promise<IndexedOcrImage> => {
     const cache = `${filename}.ocr.json`;
     let response = await readJson<any>(cache);
     if (!response) {
@@ -556,8 +562,15 @@ export async function extractFacts(
       await writeJson(cache, response);
     }
     return { index, fileName: path.basename(filename), response };
-  });
-  const selected = selectFactsOcrImages(ocrImages);
+  };
+  const ocrSubset = (idx: number[]) => mapWithConcurrency(idx, options.ocrConcurrency, (i) => ocrOne(images[i]!, i));
+  let ocrImages: IndexedOcrImage[] = hintedIdx.length > 0 ? await ocrSubset(hintedIdx) : [];
+  let selected = selectFactsOcrImages(ocrImages);
+  if (selected.length === 0) {
+    const rest = images.map((_, i) => i).filter((i) => !hintedIdx.includes(i));
+    ocrImages = [...ocrImages, ...await ocrSubset(rest)].sort((a, b) => a.index - b.index);
+    selected = selectFactsOcrImages(ocrImages);
+  }
   if (selected.length === 0) {
     return {
       facts: null,

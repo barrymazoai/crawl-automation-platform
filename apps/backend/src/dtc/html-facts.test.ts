@@ -47,3 +47,20 @@ describe("独立站页面成分表识别", () => {
     expect(out).toEqual({ factsText: null, factsImageUrls: [] });
   });
 });
+
+describe("防误判：散文不能当成分表", () => {
+  it("含 Serving Size 字样的营销文案 + 配料段 → 不算成分表", () => {
+    const html = `<html><body><div id="productDescription">
+      <p>The Nature Made Diabetes Health Pack is scientifically formulated to provide nutritional support for people with diabetes. Each packet includes a complete, full-potency formulation of vitamins, minerals, and alpha lipoic acid. Serving Size 1 packet.</p>
+      <p>Label Information Ingredients Ascorbic Acid, Dibasic Calcium Phosphate, Cellulose Gel, Corn Starch, dl-alpha Tocopheryl Acetate, Lactose, Calcium Carbonate, Gelatin, Magnesium Oxide.</p>
+      </div></body></html>`;
+    expect(extractHtmlFacts(html, PAGE).factsText).toBeNull();
+  });
+
+  it("行数够但没有数量的清单 → 不算成分表", () => {
+    const html = `<html><body><section><h3>Supplement Facts</h3><ul>
+      <li>Serving Size: one capsule</li><li>Non-GMO</li><li>Gluten free</li><li>Third-party tested</li><li>Made in USA</li>
+      </ul></section></body></html>`;
+    expect(extractHtmlFacts(html, PAGE).factsText).toBeNull();
+  });
+});

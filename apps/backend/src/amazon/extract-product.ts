@@ -10,6 +10,7 @@
  * 挑错分支的代价是静默少抠一半数据（上架日期就踩过：42% vs 90%）。
  */
 
+import { extractHtmlFacts } from "../dtc/html-facts.js";
 import { extractBrand, extractProductDetails } from "./link-check.js";
 
 export interface ExtractedProduct {
@@ -24,6 +25,12 @@ export interface ExtractedProduct {
 	salesRank: number | null;
 	inStock: boolean | null;
 	images: string[];
+	/**
+	 * 页面自己标注为成分表/标签的图（alt/文件名含 supplement facts、nutrition label 等）。
+	 * 实测 600 个真实页面里 18.3% 能指认出来——OCR 时先只跑这些，读到就停，省掉整轮画廊 OCR。
+	 * 页面成分表**文字**在 Amazon 上实测 0%（见下方 ingredientsText 的注释），所以只取图不取表。
+	 */
+	factsImageUrls?: string[];
 	/** Amazon 的 "Item Form"：Gelcap / Tablet / Powder… */
 	itemForm: string | null;
 	/** Amazon 的 "Unit Count"：如 "90 Count" */
@@ -499,6 +506,7 @@ export function extractProduct(html: string): ExtractedProduct {
 		salesRank: details.bestSellersRank,
 		inStock: extractInStock(clean),
 		images: extractImages(html),
+		factsImageUrls: extractHtmlFacts(html, "https://www.amazon.com/").factsImageUrls,
 		itemForm: extractLabeledValue(clean, "Item Form"),
 		unitCount: extractLabeledValue(clean, "Unit Count"),
 		dateFirstAvailable: details.dateFirstAvailable,
