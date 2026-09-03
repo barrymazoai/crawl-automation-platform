@@ -30,13 +30,11 @@ ssh -o BatchMode=yes "$HOST" "bash -s" <<REMOTE
 set -e
 export PATH=/opt/homebrew/bin:/usr/local/bin:\$PATH
 cd $ROOT
+# 不在这里杀 worker：start-workers.sh 会按 NODE_ID 精确停掉本地线那一套再拉起来。
+# 按文件名 pkill 会连云端线（同名入口、NODE_ID=mini-cloud-*）一起打死，而本脚本
+# 并不负责把云端线拉回来。
 if [ "$MODE" = all ]; then
-  for w in capture-gnc capture-swanson capture-amazon capture-dtc capture-gnc-scraperapi text image unify finalize; do
-    pkill -f "dist/workers/\$w.js" 2>/dev/null || true
-  done
   pkill -f "sales-channel-egress-chrome" 2>/dev/null || true
-elif [ "$MODE" = only ]; then
-  pkill -f "dist/workers/$ONLY.js" 2>/dev/null || true
 fi
 pnpm -r --filter "@crawl-automation/contracts" --filter "@crawl-automation/runtime" --filter "@crawl-automation/backend" build 2>&1 | grep -E "error" || true
 if [ "$MODE" = all ]; then
