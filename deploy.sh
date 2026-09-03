@@ -25,7 +25,7 @@ esac
 cd "$(dirname "$0")"
 rsync -a --exclude node_modules --exclude .git --exclude dist --exclude 'apps/web/dist' \
   --exclude state --exclude logs --exclude runs --exclude exports \
-  apps packages start-workers.sh start-workers-cloud.sh "$HOST:$ROOT/"
+  apps packages start-workers.sh start-workers-cloud.sh start-control-plane.sh "$HOST:$ROOT/"
 ssh -o BatchMode=yes "$HOST" "bash -s" <<REMOTE
 set -e
 export PATH=/opt/homebrew/bin:/usr/local/bin:\$PATH
@@ -40,6 +40,7 @@ elif [ "$MODE" = only ]; then
 fi
 pnpm -r --filter "@crawl-automation/contracts" --filter "@crawl-automation/runtime" --filter "@crawl-automation/backend" build 2>&1 | grep -E "error" || true
 if [ "$MODE" = all ]; then
+  ./start-control-plane.sh
   ./start-workers.sh
 elif [ "$MODE" = only ]; then
   ./start-workers.sh "$ONLY"
