@@ -269,3 +269,37 @@ describe("页面 HTML 抓取不依赖调用方", () => {
     } finally { globalThis.fetch = original; }
   });
 });
+
+describe("页面里才有的成分表图也要抓", () => {
+  const plan2 = () => ({
+    site: { origin: "https://shop.test", entryUrl: "https://shop.test/", browserMode: "iab" },
+    decision: { kind: "storefront", evidence: ["screenshot:entry.png"] },
+    route: { listingSeeds: [{ url: "https://shop.test/products.json", paginationMode: "none" }], detailProfile: { fields: {} } },
+    termination: { perSeed: [{ url: "https://shop.test/products.json", exhaustionSignal: "single_page_confirmed" }], oracles: [] },
+  });
+
+  it("接口图库没有、但页面标注了成分表的图，会被补进下载列表并落盘", async () => {
+    const outDir = await makeOutDir();
+    const products = [product("alpha", "Alpha", [{ id: 11, option1: "1ct", sku: "A-1", price: "9.99", available: true }])];
+    const built = await createShopifyHarvestHooks("shop.test", {
+      fetchJson: fakeCatalog(products),
+      fetchHtml: async () => `<html><body>${"x".repeat(600)}
+        <img alt="Supplement Facts panel" src="https://cdn.shop.test/label-back.png">
+        <img alt="lifestyle shot" src="https://cdn.shop.test/lifestyle.jpg">
+        </body></html>`,
+    });
+    const fetched = [];
+    built.hooks.fetchImage = async (u) => { fetched.push(u); return { bytes: Buffer.from("img"), mime: "image/png" }; };
+
+    const result = await runHarvest(null, null, plan2(), { outDir, hooks: built.hooks });
+    expect(result.status).toBe("complete");
+    expect(result.pageHtml).toMatchObject({ captured: 1, extraFactsImages: 1 });
+    // 成分表图被下载了，纯生活方式图没有
+    expect(fetched.some((u) => u.includes("label-back.png"))).toBe(true);
+    expect(fetched.some((u) => u.includes("lifestyle.jpg"))).toBe(false);
+    const pkgs = JSON.parse(await fs.readFile(path.join(outDir, "evidence/records.json"), "utf8"));
+    const entry = pkgs[0].gallery.find((g) => (g.url || "").includes("label-back.png"));
+    expect(entry).toBeTruthy();
+    expect(entry.localPath).toMatch(/^evidence\/img\//);
+  });
+});

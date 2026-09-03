@@ -674,9 +674,58 @@ export async function updateRunState(outDir, state, notes = null, opts = {}) {
   }
 }
 
+/**
+ * 从商品页 HTML 里补捞图片：接口（如 Shopify products.json）给的图库不一定包含成分表那张图——
+ * 有些主题把它放在页面 section 或 metafield 里。只取"页面自己标注为成分表/标签"的候选，
+ * 判定复用 classifyFactsImageCandidate，避免把全站装饰图都拖下来。
+ */
+export function factsImagesFromHtml(html, pageUrl, known = new Set()) {
+  const found = new Map();
+  for (const tag of String(html || "").match(/<(?:img|source|a)\b[^>]*>/gi) ?? []) {
+    const attr = (name) => (tag.match(new RegExp(name + '\\s*=\\s*["\']([^"\']+)["\']', "i")) ?? [])[1] ?? "";
+    const srcset = attr("srcset") || attr("data-srcset");
+    const raw = attr("src") || attr("data-src") || (srcset ? srcset.split(",")[0].trim().split(/\s+/)[0] : "") || attr("href");
+    if (!raw || !/\.(?:png|jpe?g|webp|avif)(?:$|\?)/i.test(raw)) continue;
+    let url;
+    try { url = new URL(raw.replace(/&amp;/g, "&"), pageUrl).toString(); } catch { continue; }
+    const bare = url.split("?")[0];
+    if (known.has(url) || known.has(bare) || found.has(bare)) continue;
+    const verdict = classifyFactsImageCandidate({ url, alt: attr("alt"), title: attr("title") });
+    // 只收页面明确标注的（alt/文件名含 supplement facts / nutrition label 等）；"未标注的次级图"不在此列
+    if (verdict?.requiresVisualReview && verdict.reason === "explicit_metadata_candidate") found.set(bare, url);
+  }
+  return [...found.values()];
+}
+
+/** 取商品页 HTML 并落盘 + 按 URL 建索引（Codex 拼包时可能漏掉 sourceFiles，索引让 Mac 侧按 URL 找得到）。 */
+async function capturePageHtml(url, outDir, hooks, log, pageHtmlStats) {
+  if (typeof hooks.fetchPageHtml !== "function") return { pageHtml: null, html: null };
+  pageHtmlStats.attempted += 1;
+  try {
+    const html = await hooks.fetchPageHtml(url);
+    if (!html || html.length <= 500) { pageHtmlStats.empty += 1; return { pageHtml: null, html: null }; }
+    const fileName = `${createHash("sha256").update(url).digest("hex").slice(0, 16)}.html`;
+    const relative = path.join(HARVEST_FILE_LAYOUT.evidenceHtmlDir, fileName);
+    await mkdir(path.join(outDir, HARVEST_FILE_LAYOUT.evidenceHtmlDir), { recursive: true });
+    await writeFile(path.join(outDir, relative), html);
+    const indexPath = path.join(outDir, HARVEST_FILE_LAYOUT.evidenceHtmlIndex);
+    const existing = await readFile(indexPath, "utf8").then(JSON.parse).catch(() => ({}));
+    existing[url] = relative;
+    await writeJsonAtomic(indexPath, existing);
+    pageHtmlStats.captured += 1;
+    log("page_html_captured", { url, bytes: html.length });
+    return { pageHtml: relative, html };
+  } catch (error) {
+    pageHtmlStats.failed += 1;
+    pageHtmlStats.lastError = String(error).slice(0, 200);
+    log("page_html_failed", { url, error: String(error) });
+    return { pageHtml: null, html: null };
+  }
+}
+
 /** 页面 HTML 抓取的统计，随 harvest-result 落盘：不看 Codex 日志也能判断这一步有没有生效。每次 run 独立。 */
 function newPageHtmlStats() {
-  return { attempted: 0, captured: 0, failed: 0, empty: 0, lastError: null };
+  return { attempted: 0, captured: 0, failed: 0, empty: 0, extraFactsImages: 0, lastError: null };
 }
 
 async function buildEvidencePackage(record, url, outDir, hooks, log, pageHtmlStats) {
@@ -702,6 +751,15 @@ async function buildEvidencePackage(record, url, outDir, hooks, log, pageHtmlSta
   if (variants.length > 0) {
     log("platform_variants_captured", { url, variants: variants.length });
   }
+  // 先取页面 HTML：成分表可能只在页面里（文字或图），接口给的图库不一定包含那张图
+  const { pageHtml, html: pageHtmlText } = await capturePageHtml(url, outDir, hooks, log, pageHtmlStats);
+  if (pageHtmlText) {
+    const known = new Set(images.flatMap((item) => { const u = item.url || ""; return [u, u.split("?")[0]]; }));
+    const extra = factsImagesFromHtml(pageHtmlText, url, known);
+    for (const extraUrl of extra) images.push({ url: extraUrl, alt: "supplement facts (from page)" });
+    if (extra.length) { pageHtmlStats.extraFactsImages += extra.length; log("page_facts_images_added", { url, added: extra.length }); }
+  }
+
   let saved = 0;
   for (const [index, image] of images.entries()) {
     const entry = {
@@ -727,33 +785,6 @@ async function buildEvidencePackage(record, url, outDir, hooks, log, pageHtmlSta
       log("image_download_failed", { url: image.url, error: String(error) });
     }
     gallery.push(entry);
-  }
-
-  // 商品页 HTML：独立站成分表常在页面里不在接口里。存一份，并按 URL 建索引（Codex 拼包时可能漏掉 sourceFiles，索引让 Mac 侧按 URL 找得到）。
-  let pageHtml = null;
-  if (typeof hooks.fetchPageHtml === "function") {
-    pageHtmlStats.attempted += 1;
-    try {
-      const html = await hooks.fetchPageHtml(url);
-      if (html && html.length > 500) {
-        const fileName = `${createHash("sha256").update(url).digest("hex").slice(0, 16)}.html`;
-        const relative = path.join(HARVEST_FILE_LAYOUT.evidenceHtmlDir, fileName);
-        await mkdir(path.join(outDir, HARVEST_FILE_LAYOUT.evidenceHtmlDir), { recursive: true });
-        await writeFile(path.join(outDir, relative), html);
-        const indexPath = path.join(outDir, HARVEST_FILE_LAYOUT.evidenceHtmlIndex);
-        const existing = await readFile(indexPath, "utf8").then(JSON.parse).catch(() => ({}));
-        existing[url] = relative;
-        await writeJsonAtomic(indexPath, existing);
-        pageHtml = relative;
-        pageHtmlStats.captured += 1;
-        log("page_html_captured", { url, bytes: html.length });
-      }
-    } catch (error) {
-      pageHtmlStats.failed += 1;
-      pageHtmlStats.lastError = String(error).slice(0, 200);
-      log("page_html_failed", { url, error: String(error) });
-    }
-    if (!pageHtml && pageHtmlStats.failed === 0) pageHtmlStats.empty += 1;
   }
 
   const pkg = normalizeEvidencePackage({
