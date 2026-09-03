@@ -65,6 +65,12 @@ export interface ChannelHooks<TRaw = unknown, TSemantic = unknown, TFacts extend
    * 返回 null 表示不修改。
    */
   augmentFacts?(ctx: StageContext, product: TRaw, semantic: TSemantic | null, facts: ChannelFactsResult | null): Promise<ChannelFactsResult | null>;
+  /**
+   * 可选：join 处按"证据到齐后"的事实修订语义判定。
+   * 语义阶段跑在图片线之前，靠图片才拿得到成分表的渠道（DTC）在那时必然看不到证据，
+   * 会把整批判成 ingredients_and_formula_missing；等 join 时成分表已经在手，排除理由不再成立。
+   */
+  reviseScope?(semantic: TSemantic, facts: ChannelFactsResult | null): TSemantic;
   /** 返回 null 表示该产品无法构造 Unify 输入（会在 finalize 被隔离）。 */
   unifyInput(product: TRaw, semantic: TSemantic): ProductUnifyInput | null;
   /** 可选：对 Unify 结果做渠道规范化（例如 Amazon 的 strength 归一）。 */
@@ -172,13 +178,19 @@ export async function runProductJoinStage<TRaw, TSemantic, TFacts extends Channe
     : { facts: [] as FactsEntry[] };
   const semanticByKey = new Map((text.semantic.results as TSemantic[]).map((item) => [hooks.semanticKey(item), item]));
   const factsByKey = new Map([...text.facts, ...images.facts].map((item) => [item.key, item.result]));
+  let revised = 0;
   const items: JoinItem[] = await mapWithConcurrency(products, 2, async (product) => {
     const key = hooks.key(product);
-    const semantic = semanticByKey.get(key) ?? null;
+    let semantic: TSemantic | null = semanticByKey.get(key) ?? null;
     let facts = factsByKey.get(key) ?? null;
     if (hooks.augmentFacts) facts = await hooks.augmentFacts(ctx, product, semantic, facts) ?? facts;
+    if (semantic && hooks.reviseScope) {
+      const next = hooks.reviseScope(semantic, facts);
+      if (next !== semantic) { semantic = next; revised += 1; }
+    }
     return { key, semantic, facts };
   });
+  if (revised) console.log(JSON.stringify({ type: "join_scope_revised", batchId: payload.batchId, revised }));
   const output: JoinOutput = { items, warnings: text.semantic.warnings };
   await writeJsonAtomic(path.join(directory, "join.json"), output);
   await publishReadyMarker(directory, READY.join, { batchId: payload.batchId, itemCount: output.items.length });

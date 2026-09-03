@@ -74,6 +74,26 @@ export function createDtcChannelHooks(): ChannelHooks<DtcRawProduct, GncCleanRes
     included: (semantic) => semantic.scopeDecision === "included",
 
     /*
+     * 独立站的成分表要么在页面 HTML、要么在画廊图里，后者要等 OCR。而语义阶段跑在图片线之前，
+     * 那时 LABEL_TEXT 必然是空的，模型只能判 ingredients_and_formula_missing——liveowyn 121 个
+     * 变体就是这样全军覆没的，其实 OCR 后有 49 个成功解析出了完整营养成分表。
+     * 所以到 join（证据已到齐）再修订：仅当排除理由正是"没有配方证据"、而成分表确实拿到了才翻案；
+     * 非营养品、套装等与证据无关的排除理由一律保持不动。
+     */
+    reviseScope: (semantic, facts) => {
+      if (semantic.scopeDecision !== "excluded") return semantic;
+      if (semantic.scopeReason !== "ingredients_and_formula_missing" && semantic.scopeReason !== "nutrition_evidence_missing") return semantic;
+      const rows = facts?.facts?.rows?.length ?? 0;
+      if (rows < 2) return semantic;
+      return {
+        ...semantic,
+        scopeDecision: "included" as const,
+        scopeReason: "nutrition_product" as const,
+        scopeEvidence: [`成分表已从图片/页面提取到 ${rows} 行，原排除理由（缺配方证据）不成立`, ...semantic.scopeEvidence].slice(0, 5),
+      };
+    },
+
+    /*
      * 独立站的成分表在哪不能预设——分层"看一眼再决定"：
      *   1. 页面 HTML 里有完整成分表 → 文字线直接解析，不 OCR（htmlFactsReady）
      *   2. 页面指认了成分表图片（alt/src 含 supplement/nutrition facts/label）→ 先只 OCR 这些
