@@ -11,14 +11,15 @@ ROOT="$PWD"
 set -a; source "$ROOT/.env.worker.cloud"; set +a
 cd "$ROOT/apps/backend"
 
-# 池名:NODE_ID:并发度   （抓取在美国的 Windows 上，这里只做 DTC 转换和处理线）
-POOLS="capture-dtc:mini-cloud-dtc:1 text:mini-cloud-text:6 image:mini-cloud-image:3 unify:mini-cloud-unify:2 finalize:mini-cloud-finalize:1"
+# 池名:NODE_ID:节点并发:Codex并发   （抓取在美国的 Windows 上，这里只做 DTC 转换和处理线）
+# 第 4 段是 CODEX_CONCURRENCY，含义见 start-workers.sh。两条线共用同一个 Codex 账号，云端线给小一点。
+POOLS="capture-dtc:mini-cloud-dtc:1:2 text:mini-cloud-text:6:4 image:mini-cloud-image:3:2 unify:mini-cloud-unify:2:2 finalize:mini-cloud-finalize:1:2"
 only="${1:-}"
 
 # 只杀本套（NODE_ID=mini-cloud-*）的进程：NODE_ID 是环境变量不在命令行里，pkill -f 匹配不到，
 # 得逐个 PID 看 ps -E 的环境。之前这里用 pkill 匹配 NODE_ID，一次都没杀掉，攒了三份重复进程互相抢租约。
 for entry in $POOLS; do
-  pool="${entry%%:*}"; rest="${entry#*:}"; node_id="${rest%%:*}"
+  IFS=: read -r pool node_id conc codex <<<"$entry"
   if [ -n "$only" ] && [ "$only" != "$pool" ]; then continue; fi
   for pid in $(pgrep -f "dist/workers/$pool.js"); do
     if ps -Eo command= -p "$pid" 2>/dev/null | grep -q "NODE_ID=$node_id "; then kill "$pid" 2>/dev/null || true; fi
@@ -27,11 +28,10 @@ done
 sleep 3
 
 for entry in $POOLS; do
-  pool="${entry%%:*}"; rest="${entry#*:}"
-  node_id="${rest%%:*}"; conc="${rest##*:}"
+  IFS=: read -r pool node_id conc codex <<<"$entry"
   if [ -n "$only" ] && [ "$only" != "$pool" ]; then continue; fi
-  NODE_ID="$node_id" NODE_NAME="$node_id" NODE_MAX_CONCURRENCY="$conc" \
+  NODE_ID="$node_id" NODE_NAME="$node_id" NODE_MAX_CONCURRENCY="$conc" CODEX_CONCURRENCY="$codex" \
     nohup node "dist/workers/$pool.js" >> "$ROOT/logs/cloud-$pool.log" 2>&1 &
-  echo "$pool  NODE_ID=$node_id 并发=$conc  PID=$!"
+  echo "$pool  NODE_ID=$node_id 节点并发=$conc Codex并发=$codex  PID=$!"
   sleep 1
 done

@@ -23,7 +23,9 @@ export function mountNodeApi(app: Hono, options: { repository: PipelineRepositor
     authenticate(c.req.header("authorization"));
     const input = await body(c, z.object({
       nodeId: z.string().min(3),
-      activeJobIds: z.array(z.uuid()).max(16),
+      // 上限要盖过任何池的节点并发。曾经是 16：文字线提到 24 之后每次心跳都被拒（text.log 里 1,126 次），
+      // 节点在面板上"离线"5 小时、磁盘/Codex 遥测全丢；租约续期走的是另一条通道所以任务没受影响。
+      activeJobIds: z.array(z.uuid()).max(64),
       // worker 遥测（磁盘背压、出口轮动 IP、Codex 余量），透传存进节点 metadata。
       extras: z.record(z.string(), z.unknown()).optional(),
     }));
