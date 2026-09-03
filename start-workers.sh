@@ -12,7 +12,7 @@ set -a; source "$ROOT/.env.worker"; set +a
 cd "$ROOT/apps/backend"
 
 # 池名:NODE_ID:并发度   （capture-gnc 走浏览器+住宅 IP 那条线已停用，GNC 改走 ScraperAPI）
-POOLS="capture-swanson:barrydeMac-mini-capture-swanson:1 capture-gnc-scraperapi:barrydeMac-mini-gnc-scraperapi:1 text:barrydeMac-mini-text:12 image:barrydeMac-mini-image:3 unify:barrydeMac-mini-unify:2 finalize:barrydeMac-mini-finalize:1"
+POOLS="capture-swanson:barrydeMac-mini-capture-swanson:1 capture-gnc-scraperapi:barrydeMac-mini-gnc-scraperapi:1 text:barrydeMac-mini-text:24 image:barrydeMac-mini-image:3 unify:barrydeMac-mini-unify:2 finalize:barrydeMac-mini-finalize:1"
 only="${1:-}"
 
 for entry in $POOLS; do
