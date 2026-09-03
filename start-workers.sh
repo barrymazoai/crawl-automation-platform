@@ -15,10 +15,14 @@ cd "$ROOT/apps/backend"
 POOLS="capture-swanson:barrydeMac-mini-capture-swanson:1 capture-gnc-scraperapi:barrydeMac-mini-gnc-scraperapi:1 text:barrydeMac-mini-text:24 image:barrydeMac-mini-image:3 unify:barrydeMac-mini-unify:2 finalize:barrydeMac-mini-finalize:1"
 only="${1:-}"
 
+# 只杀本套（NODE_ID=barrydeMac-mini-*）的进程：云端那套 worker 入口文件同名，
+# 按文件名 pkill 会把它们一起杀掉（2026-09-03 提并发时误杀过 mini-cloud-text）。
 for entry in $POOLS; do
-  pool="${entry%%:*}"
+  pool="${entry%%:*}"; rest="${entry#*:}"; node_id="${rest%%:*}"
   if [ -n "$only" ] && [ "$only" != "$pool" ]; then continue; fi
-  pkill -f "dist/workers/$pool.js" 2>/dev/null || true
+  for pid in $(pgrep -f "dist/workers/$pool.js"); do
+    if ps -Eo command= -p "$pid" 2>/dev/null | grep -q "NODE_ID=$node_id "; then kill "$pid" 2>/dev/null || true; fi
+  done
 done
 sleep 3
 

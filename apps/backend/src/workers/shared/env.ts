@@ -15,7 +15,8 @@ export const baseEnv = {
   MAC_NODE_TOKEN: z.string().min(24),
   NODE_ID: z.string().min(3),
   NODE_NAME: z.string().default(""),
-  NODE_MAX_CONCURRENCY: z.coerce.number().int().min(1).max(16).default(1),
+  // 上限 64：文字池的批次几乎全是等模型返回，并发主要受 Codex 配额与内存约束，不该被一个魔数卡住
+  NODE_MAX_CONCURRENCY: z.coerce.number().int().min(1).max(64).default(1),
   WORK_ROOT: z.string().default(path.resolve(".automation-runs")),
   LOCAL_STATE_DB: z.string().default(path.resolve(".automation-state/worker.sqlite")),
   REPOSITORY_ROOT: z.string().default(process.cwd()),
