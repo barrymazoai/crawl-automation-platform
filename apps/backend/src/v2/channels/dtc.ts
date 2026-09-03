@@ -83,13 +83,20 @@ export function createDtcChannelHooks(): ChannelHooks<DtcRawProduct, GncCleanRes
     reviseScope: (semantic, facts) => {
       if (semantic.scopeDecision !== "excluded") return semantic;
       if (semantic.scopeReason !== "ingredients_and_formula_missing" && semantic.scopeReason !== "nutrition_evidence_missing") return semantic;
-      const rows = facts?.facts?.rows?.length ?? 0;
-      if (rows < 2) return semantic;
+      const rows = facts?.facts?.rows ?? [];
+      if (rows.length < 2) return semantic;
+      // 语义那一遍没读到成分时 ingredients 是空的；入库要求至少一条，这里按成分表的活性行补上，
+      // 补不出来就维持排除——放进去只会在 catalog_finalize 触发 schema 报错，把整个 run 拖垮。
+      const ingredients = semantic.ingredients.length > 0
+        ? semantic.ingredients
+        : [...new Set(rows.filter((row) => row.isActive !== false).map((row) => row.name.trim()).filter(Boolean))];
+      if (ingredients.length === 0) return semantic;
       return {
         ...semantic,
+        ingredients,
         scopeDecision: "included" as const,
         scopeReason: "nutrition_product" as const,
-        scopeEvidence: [`成分表已从图片/页面提取到 ${rows} 行，原排除理由（缺配方证据）不成立`, ...semantic.scopeEvidence].slice(0, 5),
+        scopeEvidence: [`成分表已从图片/页面提取到 ${rows.length} 行，原排除理由（缺配方证据）不成立`, ...semantic.scopeEvidence].slice(0, 5),
       };
     },
 
@@ -122,12 +129,25 @@ export function createDtcChannelHooks(): ChannelHooks<DtcRawProduct, GncCleanRes
         const hinted = new Set(product.factsImageUrls);
         const ordered = [...resolvedAll].sort((a, b) => Number(hinted.has(product.images[b.i] ?? "")) - Number(hinted.has(product.images[a.i] ?? "")));
         const hintedCount = ordered.filter((x) => hinted.has(product.images[x.i] ?? "")).length;
-        const ocr = async (subset: typeof ordered) => mapWithConcurrency(subset, 1, async ({ i, file }): Promise<IndexedOcrImage> => {
-          const cache = `${file}.ocr.json`;
-          let response = await readJson<any>(cache);
-          if (!response) { response = await ctx.ocr.recognize(file); await writeJson(cache, response); }
-          return { index: i, fileName: path.basename(file), response };
-        });
+        // 单张图 OCR 失败（画廊里混进 OCR 服务解不了的格式，实测有 .jpg 其实是 AVIF）只跳过这一张，
+        // 不能让整批 10 个产品跟着失败。
+        const ocr = async (subset: typeof ordered) => {
+          const results = await mapWithConcurrency(subset, 1, async ({ i, file }): Promise<IndexedOcrImage | null> => {
+            const cache = `${file}.ocr.json`;
+            let response = await readJson<any>(cache);
+            if (!response) {
+              try {
+                response = await ctx.ocr.recognize(file);
+              } catch (error) {
+                console.log(JSON.stringify({ type: "dtc_ocr_image_skipped", file: path.basename(file), reason: error instanceof Error ? error.message : String(error) }));
+                return null;
+              }
+              await writeJson(cache, response);
+            }
+            return { index: i, fileName: path.basename(file), response };
+          });
+          return results.filter((item): item is IndexedOcrImage => item !== null);
+        };
         let selected = hintedCount > 0 ? selectFactsOcrImages(await ocr(ordered.slice(0, hintedCount))) : [];
         if (selected.length === 0) selected = selectFactsOcrImages(await ocr(ordered));
         if (selected.length === 0) return { facts: null };

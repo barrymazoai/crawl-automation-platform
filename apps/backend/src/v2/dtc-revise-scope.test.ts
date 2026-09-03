@@ -34,3 +34,27 @@ describe("join 处按到齐的证据修订 scope", () => {
     expect(hooks.reviseScope!(input, facts(20))).toBe(input);
   });
 });
+
+describe("翻案时补齐 mainIngredients", () => {
+  it("语义没读到成分 → 用成分表的活性行补上（入库要求至少一条）", () => {
+    const out = hooks.reviseScope!({ ...base, scopeDecision: "excluded", scopeReason: "ingredients_and_formula_missing" }, facts(3));
+    expect(out.scopeDecision).toBe("included");
+    expect(out.ingredients).toEqual(["n0", "n1", "n2"]);
+  });
+
+  it("语义已有成分 → 不覆盖", () => {
+    const semantic = { ...base, ingredients: ["Vitamin D"], scopeDecision: "excluded", scopeReason: "ingredients_and_formula_missing" };
+    expect(hooks.reviseScope!(semantic, facts(9)).ingredients).toEqual(["Vitamin D"]);
+  });
+
+  it("成分表只有非活性行/空名 → 补不出成分，维持排除（否则 catalog_finalize 会整个 run 报错）", () => {
+    const inactive = { facts: { rows: [{ name: "Total Fat", isActive: false }, { name: "  ", isActive: true }, { name: "", isActive: true }] } } as any;
+    const out = hooks.reviseScope!({ ...base, scopeDecision: "excluded", scopeReason: "ingredients_and_formula_missing" }, inactive);
+    expect(out.scopeDecision).toBe("excluded");
+  });
+
+  it("活性行去重", () => {
+    const dup = { facts: { rows: [{ name: "Zinc" }, { name: "Zinc" }, { name: "Iron" }] } } as any;
+    expect(hooks.reviseScope!({ ...base, scopeDecision: "excluded", scopeReason: "nutrition_evidence_missing" }, dup).ingredients).toEqual(["Zinc", "Iron"]);
+  });
+});

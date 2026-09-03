@@ -1,3 +1,4 @@
+import * as fsp from "node:fs/promises";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -96,6 +97,32 @@ describe("v2 generic stages with gnc hooks", () => {
     expect(output.includedCount).toBe(2);
     expect(output.scope).toBe("partial");
     expect(output.reasons).toContain("quarantined:1");
+  });
+
+  it("catalog_finalize 把归一化失败的单个产品隔离，不让整个 run 挂掉", async () => {
+    // ingredients 为空过不了入库 schema（mainIngredients 至少一条）。以前会直接抛出，
+    // catalog_finalize 反复失败到 max_attempts，后面的入库和清理全部卡死。
+    await writeBatch(workRoot, "batch-000001", ["100001", "100002"].map(product));
+    await writeJsonAtomic(path.join(batchDirectory(workRoot, RUN_ID, "join", "batch-000001"), "join.json"), {
+      items: [
+        { key: "100001", semantic: semantic("100001"), facts: null },
+        { key: "100002", semantic: { ...semantic("100002"), ingredients: [] }, facts: null },
+      ],
+      warnings: [],
+    });
+    const unifyDirectory = batchDirectory(workRoot, RUN_ID, "unify", "batch-000001");
+    await writeJsonAtomic(path.join(unifyDirectory, "unify.json"), { results: ["100001", "100002"].map(unified), problems: [] });
+    await publishReadyMarker(unifyDirectory, READY.unify, { batchId: "batch-000001" });
+
+    const output = await runCatalogFinalizeStage(hooks(), context(workRoot), {
+      inputKind: "brand_catalog", exhausted: true, truncated: false, expectedCount: 2, discoveredCount: 2, processedCount: 2,
+    });
+    expect(output.includedCount).toBe(1);
+    expect(output.quarantinedCount).toBe(1);
+    const quarantine = JSON.parse(await fsp.readFile(path.join(workRoot, RUN_ID, "v2", "finalize", "quarantine.json"), "utf8"));
+    expect(quarantine).toHaveLength(1);
+    expect(quarantine[0].key).toBe("100002");
+    expect(quarantine[0].reasons[0]).toContain("入库字段校验未通过");
   });
 
   it("catalog_finalize grants full scope on a clean exhaustive run", async () => {

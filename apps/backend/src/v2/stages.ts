@@ -300,10 +300,21 @@ export async function runCatalogFinalizeStage<TRaw, TSemantic, TFacts extends Ch
   const scope: "full" | "partial" = ctx.forcePartialScope ? "partial" : scopeDecision.scope;
 
   const facts: ProductFacts[] = [];
-  const normalized = included.map((entry) => {
+  const normalized: NormalizedProduct[] = [];
+  // 归一化会做一次入库 schema 校验。单个产品不合格要按隔离处理，
+  // 直接抛出会让整个 run 的 catalog_finalize 反复失败、后面的入库和清理全部卡住。
+  for (const entry of included) {
+    let product: NormalizedProduct;
+    try {
+      product = hooks.normalize(ctx, { product: entry.product, semantic: entry.semantic, unified: entry.unified, domain: entry.domain, facts: entry.facts, scope });
+    } catch (error) {
+      const key = hooks.key(entry.product);
+      quarantined.push({ key, ...hooks.describe(entry.product), reasons: [`${key}: 入库字段校验未通过 ${error instanceof Error ? error.message : String(error)}`.slice(0, 500)] });
+      continue;
+    }
     if (entry.facts?.facts) facts.push(entry.facts.facts);
-    return hooks.normalize(ctx, { product: entry.product, semantic: entry.semantic, unified: entry.unified, domain: entry.domain, facts: entry.facts, scope });
-  });
+    normalized.push(product);
+  }
   const batch: ProductBatch = productBatchSchema.parse({ schemaVersion: "2.0", products: normalized, facts });
   await writeJsonAtomic(path.join(finalizeDirectory, "normalized.json"), batch);
   await writeJsonAtomic(path.join(finalizeDirectory, "quarantine.json"), quarantined);
