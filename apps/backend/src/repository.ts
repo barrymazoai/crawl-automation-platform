@@ -72,16 +72,23 @@ export class PipelineRepository {
       this.pool.query(`select count(*)::int total,count(*) filter(where last_seen_at>now()-interval '90 seconds')::int online from pipeline_node`),
       this.pool.query("select state,count(*)::int count from pipeline_job group by state"),
       // 方案 7：分线吞吐直接从 job 表派生——每 stage 的排队/在跑/复核数、近 1h/24h 完成数与平均耗时。
-      this.pool.query(`select stage,
-        count(*) filter(where state in ('queued','retry_wait'))::int queued,
-        count(*) filter(where state in ('leased','running'))::int active,
-        count(*) filter(where state='needs_review')::int needs_review,
-        count(*) filter(where state='failed')::int failed,
-        count(*) filter(where state='failed' and error_code='upstream_failed')::int blocked_by_upstream,
-        count(*) filter(where state='completed' and completed_at>now()-interval '1 hour')::int completed_1h,
-        count(*) filter(where state='completed' and completed_at>now()-interval '24 hours')::int completed_24h,
-        round(avg(extract(epoch from completed_at-started_at)) filter(where state='completed' and completed_at>now()-interval '24 hours'))::int avg_seconds_24h
-        from pipeline_job group by stage order by stage`),
+      // abandoned run 的任务领取时就被排除（见 claim 的 r.status <> 'abandoned'），这里也必须排除，
+      // 否则面板把永远不会被执行的任务算进待办：09-03 实测 process_text 显示 818，真正能领的只有 273。
+      // queued 再拆出被上游 depends_on 挡住的部分——"现在就能领"和"等前一阶段"是两回事。
+      this.pool.query(`select j.stage,
+        count(*) filter(where j.state in ('queued','retry_wait') and not exists(
+          select 1 from pipeline_job d where d.id=any(j.depends_on) and d.state<>'completed'))::int queued,
+        count(*) filter(where j.state in ('queued','retry_wait') and exists(
+          select 1 from pipeline_job d where d.id=any(j.depends_on) and d.state<>'completed'))::int waiting_upstream,
+        count(*) filter(where j.state in ('leased','running'))::int active,
+        count(*) filter(where j.state='needs_review')::int needs_review,
+        count(*) filter(where j.state='failed')::int failed,
+        count(*) filter(where j.state='failed' and j.error_code='upstream_failed')::int blocked_by_upstream,
+        count(*) filter(where j.state='completed' and j.completed_at>now()-interval '1 hour')::int completed_1h,
+        count(*) filter(where j.state='completed' and j.completed_at>now()-interval '24 hours')::int completed_24h,
+        round(avg(extract(epoch from j.completed_at-j.started_at)) filter(where j.state='completed' and j.completed_at>now()-interval '24 hours'))::int avg_seconds_24h
+        from pipeline_job j join pipeline_run r on r.id=j.run_id
+        where r.status <> 'abandoned' group by j.stage order by j.stage`),
       this.pool.query(`select j.run_id, j.stage, j.state, j.payload->>'batchId' batch_id, j.payload->>'exit' exit, s.url, s.adapter
         from pipeline_job j join pipeline_run r on r.id=j.run_id join pipeline_source s on s.id=r.source_id
         where j.state in ('leased','running') order by j.updated_at desc limit 30`),
@@ -106,7 +113,7 @@ export class PipelineRepository {
       jobs: Object.fromEntries(jobs.rows.map((row) => [row.state, row.count])),
       stages: stages.rows.map((row) => ({
         stage: row.stage, queued: row.queued, active: row.active, needsReview: row.needs_review,
-        failed: row.failed, blockedByUpstream: row.blocked_by_upstream,
+        failed: row.failed, blockedByUpstream: row.waiting_upstream,
         completed1h: row.completed_1h, completed24h: row.completed_24h, avgSeconds24h: row.avg_seconds_24h,
       })),
       activeJobs: activeJobs.rows.map((row) => ({

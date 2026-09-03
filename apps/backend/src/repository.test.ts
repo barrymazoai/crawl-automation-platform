@@ -209,7 +209,7 @@ describe("永久失败是终态", () => {
     expect(cascade!.sql).toContain("state in ('queued','retry_wait')");
   });
 
-  it("summary 按 stage 报出 failed 与 blockedByUpstream，失败不再隐形", async () => {
+  it("summary 按 stage 报出 failed 与待办，且排除 abandoned run 的任务", async () => {
     // summary() 直接用 pool.query（不走事务），所以这里的假 pool 要实现 query
     const seen: string[] = [];
     const pool = {
@@ -217,10 +217,15 @@ describe("永久失败是终态", () => {
       connect: async () => ({ query: async () => ({ rows: [] }), release: () => {} }),
     } as any;
     await new PipelineRepository(pool).summary().catch(() => {});
-    const stageQuery = seen.find((sql) => sql.includes("from pipeline_job group by stage"));
+    const stageQuery = seen.find((sql) => sql.includes("group by j.stage"));
     expect(stageQuery).toBeTruthy();
-    expect(stageQuery!).toContain("state='failed'");
-    expect(stageQuery!).toContain("upstream_failed");
+    expect(stageQuery!).toContain("j.state='failed'");
+    // abandoned run 的任务领取时就被排除，面板不能把它们算成待办：
+    // 09-03 实测 process_text 显示 818，真正能领的只有 273，差的 545 全在 abandoned run 里。
+    expect(stageQuery!).toContain("r.status <> 'abandoned'");
+    // queued 要区分"现在就能领"和"依赖还没跑完"
+    expect(stageQuery!).toContain("waiting_upstream");
+    expect(stageQuery!).toContain("d.state<>'completed'");
   });
 });
 
