@@ -239,3 +239,33 @@ describe("fetchPageHtml", () => {
     expect(calls).toHaveLength(2);
   });
 });
+
+describe("页面 HTML 抓取不依赖调用方", () => {
+  const plan = (oracleExpected) => ({
+    site: { origin: "https://shop.test", entryUrl: "https://shop.test/", browserMode: "iab" },
+    decision: { kind: "storefront", evidence: ["screenshot:entry.png"] },
+    route: { listingSeeds: [{ url: "https://shop.test/products.json", paginationMode: "none" }], detailProfile: { fields: {} } },
+    termination: {
+      perSeed: [{ url: "https://shop.test/products.json", exhaustionSignal: "single_page_confirmed" }],
+      oracles: oracleExpected ? [{ type: "shopify_products_json", expected: oracleExpected, source: "products.json" }] : [],
+    },
+  });
+
+  it("调用方没传 fetchPageHtml，runHarvest 也会用宿主 fetch 去抓，并把统计写进 harvest-result", async () => {
+    const outDir = await makeOutDir();
+    const products = [product("alpha", "Alpha", [{ id: 11, option1: "1ct", sku: "A-1", price: "9.99", available: true }])];
+    const built = await createShopifyHarvestHooks("shop.test", { fetchJson: fakeCatalog(products) });
+    built.hooks.fetchImage = async () => ({ bytes: Buffer.from("img"), mime: "image/jpeg" });
+    delete built.hooks.fetchPageHtml;   // 模拟 Codex 忘了传
+    const original = globalThis.fetch;
+    globalThis.fetch = async () => new Response(`<html><body>${"x".repeat(600)}<h2>Supplement Facts</h2></body></html>`, { headers: { "content-type": "text/html" } });
+    try {
+      const result = await runHarvest(null, null, plan(1), { outDir, hooks: built.hooks });
+      expect(result.status).toBe("complete");
+      expect(result.pageHtml).toMatchObject({ attempted: 1, captured: 1, failed: 0 });
+      const packages = JSON.parse(await fs.readFile(path.join(outDir, "evidence/records.json"), "utf8"));
+      expect(packages[0].pageHtml).toMatch(/^evidence\/html\//);
+      expect(await fs.readFile(path.join(outDir, packages[0].pageHtml), "utf8")).toContain("Supplement Facts");
+    } finally { globalThis.fetch = original; }
+  });
+});

@@ -28,6 +28,7 @@ import {
   upgradeProducts,
 } from "./crawl.mjs";
 import { isHeadingOnlyDetailValue } from "./engine.mjs";
+import { createBrowserHtmlFetcher } from "./worker-cdp-browser.mjs";
 import { classifyFactsImageCandidate } from "./product-semantics.mjs";
 import {
   classifyNutritionProductUrl,
@@ -268,6 +269,7 @@ export async function runHarvest(browser, tab, planInput, opts = {}) {
   // Tainted-tab replacements inside upgradeProducts must propagate to every
   // later browser call, so the default hooks read the tab through this ref.
   const tabRef = { tab };
+  const pageHtmlStats = newPageHtmlStats();
   const hooks = {
     enumerate: opts.hooks?.enumerate
       || ((seeds, enumerateOpts) => collectProductUrls(tabRef.tab, seeds, enumerateOpts)),
@@ -286,8 +288,20 @@ export async function runHarvest(browser, tab, planInput, opts = {}) {
       || ((urls, upgradeOpts) => upgradeProducts(tabRef.tab, urls, { ...upgradeOpts, browser })),
     fetchImage: opts.hooks?.fetchImage || defaultFetchImage,
     fetchProductData: opts.hooks?.fetchProductData || defaultFetchProductData,
-    // 可选：取商品页 HTML（Shopify HTTP 通道用它"去页面看一眼"成分表）；没给就不取
-    ...(typeof opts.hooks?.fetchPageHtml === "function" ? { fetchPageHtml: opts.hooks.fetchPageHtml } : {}),
+    /*
+     * 商品页 HTML：独立站的成分表常在页面里、不在接口里，所以每个商品都"去页面看一眼"。
+     * 不依赖调用方传 —— 调用方（Codex 写的脚本）可能忘了传，那样会静默退化成全靠 OCR。
+     * 优先级：调用方给的 > 用本次的 tab 页面内同源 fetch > 宿主机 fetch。
+     */
+    fetchPageHtml: opts.hooks?.fetchPageHtml
+      || (tabRef.tab?.playwright?.evaluate ? createBrowserHtmlFetcher(tabRef.tab) : null)
+      || (async (url) => {
+        try {
+          const response = await fetch(url, { headers: { accept: "text/html" } });
+          if (!response.ok || !/html/i.test(response.headers.get("content-type") || "")) return null;
+          return await response.text();
+        } catch { return null; }
+      }),
     filterScope: opts.hooks?.filterScope || filterHarvestStageRecords,
   };
 
@@ -377,6 +391,7 @@ export async function runHarvest(browser, tab, planInput, opts = {}) {
       ...(acceptLimit
         ? { productLimit: { accepted: true, maxItems: budgets.maxItems } }
         : {}),
+      pageHtml: { ...pageHtmlStats },
       startedAtMs: startedAt,
       finishedAtMs: nowMs(opts),
       failed: failedEntries,
@@ -559,7 +574,7 @@ export async function runHarvest(browser, tab, planInput, opts = {}) {
     for (const record of scope.included || []) {
       const url = record?.sourceUrl || record?.fields?.url;
       if (!url || !chunk.includes(url)) continue;
-      packagesByUrl.set(url, await buildEvidencePackage(record, url, outDir, hooks, log));
+      packagesByUrl.set(url, await buildEvidencePackage(record, url, outDir, hooks, log, pageHtmlStats));
       processed.set(url, "complete");
       progressed();
     }
@@ -659,7 +674,12 @@ export async function updateRunState(outDir, state, notes = null, opts = {}) {
   }
 }
 
-async function buildEvidencePackage(record, url, outDir, hooks, log) {
+/** 页面 HTML 抓取的统计，随 harvest-result 落盘：不看 Codex 日志也能判断这一步有没有生效。每次 run 独立。 */
+function newPageHtmlStats() {
+  return { attempted: 0, captured: 0, failed: 0, empty: 0, lastError: null };
+}
+
+async function buildEvidencePackage(record, url, outDir, hooks, log, pageHtmlStats) {
   const gallery = [];
   const images = recordImages(record);
   const flags = buildFlags(record);
@@ -712,6 +732,7 @@ async function buildEvidencePackage(record, url, outDir, hooks, log) {
   // 商品页 HTML：独立站成分表常在页面里不在接口里。存一份，并按 URL 建索引（Codex 拼包时可能漏掉 sourceFiles，索引让 Mac 侧按 URL 找得到）。
   let pageHtml = null;
   if (typeof hooks.fetchPageHtml === "function") {
+    pageHtmlStats.attempted += 1;
     try {
       const html = await hooks.fetchPageHtml(url);
       if (html && html.length > 500) {
@@ -724,11 +745,15 @@ async function buildEvidencePackage(record, url, outDir, hooks, log) {
         existing[url] = relative;
         await writeJsonAtomic(indexPath, existing);
         pageHtml = relative;
+        pageHtmlStats.captured += 1;
         log("page_html_captured", { url, bytes: html.length });
       }
     } catch (error) {
+      pageHtmlStats.failed += 1;
+      pageHtmlStats.lastError = String(error).slice(0, 200);
       log("page_html_failed", { url, error: String(error) });
     }
+    if (!pageHtml && pageHtmlStats.failed === 0) pageHtmlStats.empty += 1;
   }
 
   const pkg = normalizeEvidencePackage({
