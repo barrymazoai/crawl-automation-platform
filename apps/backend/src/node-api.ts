@@ -16,7 +16,7 @@ export function mountNodeApi(app: Hono, options: { repository: PipelineRepositor
 
   app.post("/v1/node/register", async (c) => {
     const allowed = authenticate(c.req.header("authorization"));
-    const input = await body(c, z.object({ nodeId: z.string().min(3), name: z.string().min(1), platform: z.string().min(1), version: z.string().min(1), capabilities: z.array(NodeCapabilitySchema), maxConcurrency: z.number().int().min(1).max(16) }));
+    const input = await body(c, z.object({ nodeId: z.string().min(3), name: z.string().min(1), platform: z.string().min(1), version: z.string().min(1), capabilities: z.array(NodeCapabilitySchema), maxConcurrency: z.number().int().min(1).max(64) }));
     return c.json(await options.repository.registerNode(input, [...allowed]));
   });
   app.post("/v1/node/heartbeat", async (c) => {
