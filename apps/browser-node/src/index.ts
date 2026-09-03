@@ -1,5 +1,6 @@
 import fs from "node:fs/promises";
 import os from "node:os";
+import { execSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { z } from "zod";
@@ -205,7 +206,13 @@ async function runLane(lane: WorkerLane) {
 }
 
 const lanes = await createWorkerLanes();
-await client.register({ name: env.NODE_NAME, platform: `${os.platform()} ${os.release()}`, version: "0.4.0", capabilities: ["browser"], maxConcurrency: lanes.length });
+// 上报真实代码版本：git 短哈希（拿不到就退回 package 版本）。之前写死 "0.4.0"，节点拉没拉新代码在面板上完全看不出来。
+const codeVersion = (() => {
+  try { return execSync("git rev-parse --short HEAD", { cwd: env.REPOSITORY_ROOT, stdio: ["ignore", "pipe", "ignore"] }).toString().trim() || "unknown"; }
+  catch { return "unknown"; }
+})();
+console.log(JSON.stringify({ type: "browser_node_version", commit: codeVersion, repositoryRoot: env.REPOSITORY_ROOT, siteProfileDir: env.SITE_PROFILE_DIR }));
+await client.register({ name: env.NODE_NAME, platform: `${os.platform()} ${os.release()}`, version: codeVersion, capabilities: ["browser"], maxConcurrency: lanes.length });
 const heartbeat = setInterval(() => void client.heartbeat([...active]).catch(console.error), 30_000);
 try {
   await Promise.all(lanes.map(runLane));
