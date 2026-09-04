@@ -44,6 +44,8 @@ export interface CodexEnv {
   CODEX_EXECUTABLE: string;
   CODEX_MODEL: string;
   CODEX_REASONING_EFFORT: string;
+  /** Codex 服务档位；设成 "fast" 即 Fast mode。不设则用 Codex 默认档。 */
+  CODEX_SERVICE_TIER?: string | undefined;
   CODEX_UNATTENDED_FULL_ACCESS: "true" | "false";
   CODEX_CONCURRENCY: number;
   REPOSITORY_ROOT: string;
@@ -54,6 +56,7 @@ export function createCodex(env: CodexEnv) {
     executable: env.CODEX_EXECUTABLE,
     model: env.CODEX_MODEL,
     reasoningEffort: env.CODEX_REASONING_EFFORT,
+    ...(env.CODEX_SERVICE_TIER ? { serviceTier: env.CODEX_SERVICE_TIER } : {}),
     unattendedFullAccess: env.CODEX_UNATTENDED_FULL_ACCESS === "true",
   });
   const slots = new Semaphore(env.CODEX_CONCURRENCY);

@@ -29,6 +29,8 @@ export const codexEnv = {
   CODEX_EXECUTABLE: z.string().default("codex"),
   CODEX_MODEL: z.string().default("gpt-5.6-luna"),
   CODEX_REASONING_EFFORT: z.string().default("medium"),
+  /** Codex 服务档位，"fast" = Fast mode（映射成请求的 priority）。留空用 Codex 默认档。 */
+  CODEX_SERVICE_TIER: z.string().trim().min(1).optional(),
   CODEX_UNATTENDED_FULL_ACCESS: z.enum(["true", "false"]).default("false"),
   CODEX_CONCURRENCY: z.coerce.number().int().min(1).max(16).default(2),
   CODEX_USAGE_COMMAND: optionalSecret,
