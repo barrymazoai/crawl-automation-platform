@@ -11,8 +11,43 @@ export type ChromeLane = {
   profileDirectory: string;
   executable: string;
   health(): Promise<boolean>;
+  /**
+   * 关掉这个 lane Chrome 里的所有页签，只留一个（Chrome 一个页签都不剩会自己退出）。
+   * 站点任务结束后调用：Skill 通过 CDP 开的页签不会随 Playwright 断开而关闭，
+   * 不清会一站一站地累积，直到 Chrome 变慢、CDP 无响应（2026-09-04 用户报告）。
+   * 只走 DevTools 的 HTTP 端点（/json/list、/json/close/<id>），不依赖 Playwright；失败不抛。
+   */
+  sweepPages(): Promise<{ closed: number; kept: number; failed: number }>;
   close(): Promise<void>;
 };
+
+type DevToolsTarget = { id: string; type: string; url?: string };
+
+/** 见 ChromeLane.sweepPages。keep 指保留几个页签，默认 1。 */
+export async function sweepChromePages(cdpUrl: string, fetchImpl: typeof fetch = fetch, keep = 1) {
+  let targets: DevToolsTarget[];
+  try {
+    const response = await fetchImpl(`${cdpUrl}/json/list`);
+    if (!response.ok) return { closed: 0, kept: 0, failed: 0 };
+    targets = await response.json() as DevToolsTarget[];
+  } catch {
+    return { closed: 0, kept: 0, failed: 0 };
+  }
+  // 只碰 page 类型；service worker / 扩展 / devtools 之类不动。
+  // 保留列表末尾的（DevTools 按最近活跃排序，末尾通常是最早打开的空白页），其余关掉。
+  const pages = targets.filter((target) => target.type === "page");
+  const toClose = pages.slice(0, Math.max(0, pages.length - keep));
+  let closed = 0; let failed = 0;
+  for (const target of toClose) {
+    try {
+      const response = await fetchImpl(`${cdpUrl}/json/close/${target.id}`);
+      if (response.ok) closed += 1; else failed += 1;
+    } catch {
+      failed += 1;
+    }
+  }
+  return { closed, kept: pages.length - closed, failed };
+}
 
 export function chromeExecutableCandidates(platform = process.platform, env: NodeJS.ProcessEnv = process.env) {
   if (platform === "win32") {
@@ -185,6 +220,7 @@ export async function startChromeLane(options: {
         return false;
       }
     },
+    sweepPages: () => sweepChromePages(cdpUrl, fetchImpl),
     close: () => stopChrome(child),
   };
 }

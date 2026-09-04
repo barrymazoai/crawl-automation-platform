@@ -183,7 +183,13 @@ async function handle(claim: any, lane: WorkerLane) {
     if (/quota|usage limit|rate limit/i.test(message)) quotaPaused = true;
     checkpoints.save(job.id, "capture", "failed", {}, lease.token);
     await client.fail(job.id, lease.token, { code: quotaPaused ? "codex_quota" : "browser_node_error", message, retryable: !quotaPaused, needsReview: quotaPaused }).catch(() => {});
-  } finally { active.delete(job.id); }
+  } finally {
+    active.delete(job.id);
+    // 无论成败都清掉本站开的页签：Skill 通过 CDP 开的页签不会随 Playwright 断开而关闭，
+    // 一站一站累积会拖垮 Chrome（用户 09-04 报告）。失败不抛，只记日志。
+    const swept = await lane.chrome.sweepPages().catch(() => ({ closed: 0, kept: 0, failed: -1 }));
+    console.log(JSON.stringify({ type: "lane_pages_swept", jobId: job.id, laneId: lane.id, ...swept }));
+  }
 }
 
 async function runLane(lane: WorkerLane) {
