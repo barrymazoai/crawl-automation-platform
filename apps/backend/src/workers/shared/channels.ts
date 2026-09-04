@@ -39,6 +39,7 @@ export function buildStageContext(input: {
   ocrConcurrency: number;
   forcePartialScope: boolean;
   runModel: StageContext["runModel"];
+  noCompanyStore?: StageContext["noCompanyStore"];
 }): StageContext {
   return {
     workRoot: input.workRoot,
@@ -51,5 +52,6 @@ export function buildStageContext(input: {
     ocrConcurrency: input.ocrConcurrency,
     forcePartialScope: input.forcePartialScope,
     runModel: input.runModel,
+    ...(input.noCompanyStore ? { noCompanyStore: input.noCompanyStore } : {}),
   };
 }

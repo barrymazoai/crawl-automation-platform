@@ -52,6 +52,9 @@ export function createDtcChannelHooks(): ChannelHooks<DtcRawProduct, GncCleanRes
     channel: "dtc",
     key: (product) => product.externalId,
     describe: (product) => ({ title: product.title, productUrl: product.productUrl }),
+    // 独立站的"品牌"就是站点本身，公司认领时按域名对
+    brand: (product) => product.domain || null,
+    sidelineFields: (product) => ({ sku: product.sku ?? null, price: product.price ?? null, capturedAt: product.capturedAt }),
 
     async clean(ctx, products, tagPrefix) {
       const vocabulary = await ctx.supplySmart.loadHealthFunctions();

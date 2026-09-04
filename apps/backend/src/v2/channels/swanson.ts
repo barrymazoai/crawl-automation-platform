@@ -26,6 +26,8 @@ export function createSwansonChannelHooks(): ChannelHooks<CapturedSwansonProduct
     channel: "swanson",
     key: (product) => product.externalId,
     describe: (product) => ({ title: product.product.title, productUrl: product.productUrl }),
+    brand: (product) => product.catalog.brand || null,
+    sidelineFields: (product) => ({ sku: product.sku ?? null, price: (product.variant.price / 100).toFixed(2), capturedAt: product.capturedAt }),
 
     async clean(ctx, products, tagPrefix) {
       const vocabulary = await ctx.supplySmart.loadHealthFunctions();

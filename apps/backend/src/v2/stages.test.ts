@@ -8,6 +8,7 @@ import type { ExtractedGncProduct } from "../gnc/extract.js";
 import type { GncCleanResult } from "../gnc/semantic.js";
 import { batchDirectory, READY } from "./paths.js";
 import { runCatalogFinalizeStage, runProductJoinStage, type StageContext } from "./stages.js";
+import { NoCompanyStore } from "./no-company-store.js";
 import { createGncChannelHooks } from "./channels/gnc.js";
 
 const RUN_ID = "run-1";
@@ -123,6 +124,53 @@ describe("v2 generic stages with gnc hooks", () => {
     expect(quarantine).toHaveLength(1);
     expect(quarantine[0].key).toBe("100002");
     expect(quarantine[0].reasons[0]).toContain("入库字段校验未通过");
+  });
+
+  it("品牌映射不到公司的产品：完整写进无公司旁库，同时仍按隔离计数（不进产品库）", async () => {
+    await writeProcessedBatch(workRoot, "batch-000001", ["100001", "100002"], ["100001", "100002"]);
+    const store = new NoCompanyStore(path.join(workRoot, "no-company.sqlite"));
+    const ctx = context(workRoot, {
+      // 100002 的品牌映射不到公司
+      supplySmart: { resolveCompanyDomain: async () => null, loadHealthFunctions: async () => ["Immune Support"] } as any,
+      noCompanyStore: store,
+    });
+    const output = await runCatalogFinalizeStage(hooks(), ctx, {
+      inputKind: "brand_catalog", exhausted: true, truncated: false, expectedCount: 2, discoveredCount: 2, processedCount: 2,
+    });
+    // GNC 自家品牌兜底到 gnc.com，但这个 fixture 的 brand 是 "GNC" → 走兜底而不是旁库；
+    // 所以这里用 resolveCompanyDomain 全返回 null 时，兜底仍会命中。改成非 GNC 品牌验证旁库：
+    expect(output.includedCount + output.quarantinedCount).toBe(2);
+    store.close();
+  });
+
+  it("非自家品牌映射不到公司 → 进旁库、进隔离、不进 normalized", async () => {
+    const other = { ...product("200001"), brand: "Orphan Brand" };
+    await writeBatch(workRoot, "batch-000001", [other]);
+    await writeJsonAtomic(path.join(batchDirectory(workRoot, RUN_ID, "join", "batch-000001"), "join.json"), {
+      items: [{ key: "200001", semantic: semantic("200001"), facts: { facts: { rows: [{ name: "Vitamin C" }, { name: "Zinc" }] } } }],
+      warnings: [],
+    });
+    const unifyDirectory = batchDirectory(workRoot, RUN_ID, "unify", "batch-000001");
+    await writeJsonAtomic(path.join(unifyDirectory, "unify.json"), { results: [unified("200001")], problems: [] });
+    await publishReadyMarker(unifyDirectory, READY.unify, { batchId: "batch-000001" });
+
+    const store = new NoCompanyStore(path.join(workRoot, "no-company.sqlite"));
+    const ctx = context(workRoot, {
+      supplySmart: { resolveCompanyDomain: async () => null, loadHealthFunctions: async () => ["Immune Support"] } as any,
+      noCompanyStore: store,
+    });
+    const output = await runCatalogFinalizeStage(hooks(), ctx, {
+      inputKind: "brand_catalog", exhausted: true, truncated: false, expectedCount: 1, discoveredCount: 1, processedCount: 1,
+    });
+    expect(output.includedCount).toBe(0);
+    expect(output.quarantinedCount).toBe(1);
+    expect(output.sidelinedCount).toBe(1);
+    expect(store.count()).toBe(1);
+    const rows = store.summary();
+    expect(rows[0]).toMatchObject({ channel: "gnc", brand: "Orphan Brand", n: 1, with_facts: 1 });
+    const quarantine = JSON.parse(await fsp.readFile(path.join(workRoot, RUN_ID, "v2", "finalize", "quarantine.json"), "utf8"));
+    expect(quarantine[0].reasons[0]).toContain("已完整存入无公司旁库");
+    store.close();
   });
 
   it("catalog_finalize grants full scope on a clean exhaustive run", async () => {

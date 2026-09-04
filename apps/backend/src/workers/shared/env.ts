@@ -50,6 +50,8 @@ export const stageEnv = {
   // 方案 9：迁移期强制所有入库声明 partial，物理上杜绝缺席下架。
   FORCE_PARTIAL_SCOPE: z.enum(["true", "false"]).default("true"),
   REVIEW_ROOT: z.string().default(path.resolve(".automation-review")),
+  /** "没有公司"的产品旁库（SQLite）。品牌映射不到公司的产品不进产品库，完整存这里。 */
+  NO_COMPANY_DB: z.string().default(path.resolve(".automation-state/no-company-products.sqlite")),
 } as const;
 
 /** 抓取入口共用：批量大小与单品牌上限。 */

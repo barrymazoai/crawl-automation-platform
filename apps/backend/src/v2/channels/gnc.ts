@@ -18,6 +18,8 @@ export function createGncChannelHooks(config: { pdfRenderScript: string }): Chan
     channel: "gnc",
     key: (product) => product.sku,
     describe: (product) => ({ title: product.title, productUrl: product.productUrl }),
+    brand: (product) => product.brand || null,
+    sidelineFields: (product) => ({ sku: product.sku, price: product.price ?? null, capturedAt: product.capturedAt }),
 
     async clean(ctx, products, tagPrefix) {
       const vocabulary = await ctx.supplySmart.loadHealthFunctions();

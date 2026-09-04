@@ -9,6 +9,7 @@ import type { ProductObservationClient } from "../product-observation-client.js"
 import { decideSalesChannelScope } from "../sales-channel-scope.js";
 import { runProductUnify, type ProductUnifyInput, type ProductUnifyOutcome, type ProductUnifyResult } from "../product-unify.js";
 import { batchDirectory, READY, runRoot } from "./paths.js";
+import type { NoCompanyStore, NoCompanyProductEntry } from "./no-company-store.js";
 
 /**
  * v2 处理线的通用编排层。所有 channel 共用：目录布局、ready 标记恢复、
@@ -31,6 +32,11 @@ export interface StageContext {
   /** 方案 9：迁移期强制 partial，物理上杜绝缺席下架。验收通过后才允许关闭。 */
   forcePartialScope: boolean;
   runModel: ModelCall;
+  /**
+   * "没有公司"的产品旁库。品牌映射不到公司的产品不进产品库，完整写进这里（09-04 决定），
+   * 等这一轮跑完再统一整理。没接旁库时退回老行为：只在 quarantine.json 里留一行。
+   */
+  noCompanyStore?: NoCompanyStore;
 }
 
 export interface ChannelFactsResult {
@@ -79,6 +85,10 @@ export interface ChannelHooks<TRaw = unknown, TSemantic = unknown, TFacts extend
   /** 可选：finalize 阶段的渠道级质量校验，返回的原因会把该产品送进隔离区。 */
   validate?(product: TRaw, semantic: TSemantic, facts: ChannelFactsResult | null): string[];
   resolveDomain(ctx: StageContext, product: TRaw): Promise<string | null>;
+  /** 可选：品牌名（写旁库时记下来，整理品牌→公司映射靠它）。 */
+  brand?(product: TRaw): string | null;
+  /** 可选：旁库扁平列用的 sku / 价格 / 抓取时间，没有就存 null。 */
+  sidelineFields?(product: TRaw): { sku?: string | null; price?: string | null; capturedAt?: string | null };
   normalize(ctx: StageContext, input: NormalizeInput<TRaw, TSemantic>): NormalizedProduct;
 }
 
@@ -113,6 +123,34 @@ async function readCaptureProducts<TRaw>(ctx: StageContext, batchId: string): Pr
   const directory = path.join(batchDirectory(ctx.workRoot, ctx.runId, "capture", batchId), "products");
   const files = (await fs.readdir(directory)).filter((name) => name.endsWith(".json")).sort();
   return Promise.all(files.map((name) => readJsonFile<TRaw>(path.join(directory, name))));
+}
+
+/** 把一个"只差公司"的产品打包成旁库记录：原料全留，外加几列扁平字段方便直接查。 */
+function sidelineEntry<TRaw, TSemantic>(
+  hooks: ChannelHooks<TRaw, TSemantic, any>, ctx: StageContext,
+  product: TRaw, semantic: TSemantic, unified: ProductUnifyResult, facts: ChannelFactsResult | null,
+): NoCompanyProductEntry {
+  const described = hooks.describe(product);
+  const fields = hooks.sidelineFields?.(product) ?? {};
+  const ingredients = (semantic as { ingredients?: unknown })?.ingredients;
+  return {
+    channel: hooks.channel,
+    externalId: hooks.key(product),
+    brand: hooks.brand?.(product) ?? null,
+    runId: ctx.runId,
+    sourceUrl: ctx.sourceUrl,
+    title: described.title,
+    productUrl: described.productUrl,
+    capturedAt: fields.capturedAt ?? null,
+    sku: fields.sku ?? null,
+    price: fields.price ?? null,
+    ingredients: Array.isArray(ingredients) ? ingredients.map(String) : [],
+    factsRows: facts?.facts?.rows?.length ?? 0,
+    raw: product,
+    semantic,
+    unified,
+    facts,
+  };
 }
 
 /** process_text：语义清洗 + 文字路径 Facts（不依赖任何图片工作，不等待图片线）。 */
@@ -238,6 +276,8 @@ export interface CatalogFinalizeOutput {
   includedCount: number;
   excludedCount: number;
   quarantinedCount: number;
+  /** 其中因"品牌映射不到公司"而完整写进旁库的数量（也计入 quarantinedCount）。 */
+  sidelinedCount: number;
   factsCount: number;
   batchCount: number;
 }
@@ -257,6 +297,7 @@ export async function runCatalogFinalizeStage<TRaw, TSemantic, TFacts extends Ch
   const unifyRoot = path.join(runRoot(ctx.workRoot, ctx.runId), "unify");
   const batchDirectories = await listReadyDirectories(unifyRoot, READY.unify);
   const quarantined: QuarantineEntry[] = [];
+  const sidelined: NoCompanyProductEntry[] = [];
   const included: Array<{ product: TRaw; semantic: TSemantic; unified: ProductUnifyResult; domain: string; facts: ChannelFactsResult | null }> = [];
   let excludedCount = 0;
   for (const batchPath of batchDirectories) {
@@ -277,7 +318,16 @@ export async function runCatalogFinalizeStage<TRaw, TSemantic, TFacts extends Ch
       const unified = unifyByKey.get(key);
       if (!unified) reasons.push(`${key}: Product Unify 没有形成合法名称与变体结果`);
       const domain = await hooks.resolveDomain(ctx, product);
-      if (!domain) reasons.push(`${key}: 品牌无法唯一映射到公司域名`);
+      if (!domain) {
+        // 只有"品牌映射不到公司"这一个问题、数据本身完整的，完整写进旁库；
+        // 还夹着别的问题（Unify 失败、Facts 有歧义）的照旧只隔离，那不是"没公司"这一类。
+        if (reasons.length === 0 && unified && ctx.noCompanyStore) {
+          sidelined.push(sidelineEntry(hooks, ctx, product, semantic, unified, item?.facts ?? null));
+          reasons.push(`${key}: 品牌无法唯一映射到公司域名（已完整存入无公司旁库）`);
+        } else {
+          reasons.push(`${key}: 品牌无法唯一映射到公司域名`);
+        }
+      }
       if (reasons.length > 0) {
         quarantined.push({ key, ...hooks.describe(product), reasons });
         continue;
@@ -316,11 +366,15 @@ export async function runCatalogFinalizeStage<TRaw, TSemantic, TFacts extends Ch
     normalized.push(product);
   }
   const batch: ProductBatch = productBatchSchema.parse({ schemaVersion: "2.0", products: normalized, facts });
+  // 旁库先于 ready 标记落盘：标记一出，这个 run 的 finalize 不会再算第二遍。
+  const sidelinedCount = ctx.noCompanyStore ? ctx.noCompanyStore.upsertMany(sidelined) : 0;
+  if (sidelinedCount) console.log(JSON.stringify({ type: "no_company_sidelined", runId: ctx.runId, count: sidelinedCount, store: ctx.noCompanyStore!.filename }));
   await writeJsonAtomic(path.join(finalizeDirectory, "normalized.json"), batch);
   await writeJsonAtomic(path.join(finalizeDirectory, "quarantine.json"), quarantined);
   const output: CatalogFinalizeOutput = {
     scope, reasons,
     includedCount: normalized.length,
+    sidelinedCount,
     excludedCount,
     quarantinedCount: quarantined.length,
     factsCount: facts.length,
