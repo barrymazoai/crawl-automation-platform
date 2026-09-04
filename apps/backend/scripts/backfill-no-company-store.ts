@@ -8,9 +8,10 @@
  *
  * 09-02 误删过一批 run 目录，那些 run 的原文已经没了，回填不到，脚本会单独列出来。
  *
- * 用法：npx tsx scripts/backfill-no-company-store.ts            预演（只统计）
- *       npx tsx scripts/backfill-no-company-store.ts --apply    写入旁库
- *       可加 --adapter swanson|gnc|dtc 只做一个渠道
+ * 用法（在 mini 上 source .env.worker 后；baseEnv 要求 NODE_ID，运维脚本随便给一个即可）：
+ *   NODE_ID=ops-backfill NODE_NAME=ops-backfill npx tsx scripts/backfill-no-company-store.ts            预演（只统计）
+ *   NODE_ID=ops-backfill NODE_NAME=ops-backfill npx tsx scripts/backfill-no-company-store.ts --apply    写入旁库
+ *   可加 --adapter swanson|gnc|dtc 只做一个渠道
  */
 import fs from "node:fs/promises";
 import path from "node:path";
@@ -36,6 +37,10 @@ async function collect(hooks: ChannelHooks<any, any, any>, runId: string, source
     ocrConcurrency: 1, forcePartialScope: true, runModel: async () => { throw new Error("回填不调模型"); },
   });
   const root = runRoot(env.WORK_ROOT, runId);
+  // 整个 run 目录都不在（09-02 误删或已被 cleanup_run 回收）→ 原文没了，明确记为丢失，
+  // 不能混进"没有可回填产品"里静默跳过。
+  const rootExists = await fs.stat(root).then((stat) => stat.isDirectory()).catch(() => false);
+  if (!rootExists) return { entries: [] as NoCompanyProductEntry[], missingCapture: true, finalized: false };
   const unifyRoot = path.join(root, "unify");
   const batches = await listReadyDirectories(unifyRoot, READY.unify).catch(() => [] as string[]);
   const entries: NoCompanyProductEntry[] = [];
