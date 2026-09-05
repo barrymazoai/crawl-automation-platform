@@ -26,16 +26,17 @@
 </head>
 <body>
 <main class="page" id="architecture">
-<header class="top"><div class="brand"><span class="mark"></span>CRAWLER / SYSTEM DESIGN</div><div class="top-meta">V3 · Temporal edition<br>2026.09.05 / 设计评审稿</div></header>
+<header class="top"><div class="brand"><span class="mark"></span>CRAWLER / SYSTEM DESIGN</div><div class="top-meta">V3 · Temporal edition<br>2026.09.05 / 讨论收口评审稿</div></header>
 <div class="hero"><div><p class="eyebrow">INDEPENDENT MODULES · DURABLE WORKFLOWS</p><h1>流程统一，能力独立。</h1><p class="lead">Temporal 管执行；Worker 做一件事；机器可以换，证据不能丢。</p></div><div class="hero-aside"><span class="status">设计目标，不是运行状态</span><p>本页不连接生产，不提交任务。<br>只更新计划与架构，实施从评审后的 P0 开始。</p></div></div>
-<div class="principles"><span class="pill green">单文件 OCR</span><span class="pill green">同机复用 · 跨机 R2</span><span class="pill green">成功产品独立入库</span><span class="pill red">业务不自动重跑</span><span class="pill red">Review 被动留存</span><span class="pill">R2 不随任务删除</span></div>
+<div class="principles"><span class="pill green">单文件 OCR</span><span class="pill green">同机复用 · 跨机 R2</span><span class="pill green">Formula + Ingredients</span><span class="pill">共享限额按需启用</span><span class="pill red">业务不自动重跑</span><span class="pill red">Review 被动留存</span><span class="pill">R2 不随任务删除</span></div>
 <nav class="tabs" role="tablist" aria-label="架构视图">
 <button class="tab" id="tab-overview" role="tab" aria-selected="true" aria-controls="view-overview" type="button"><span>01</span>总体职责</button>
 <button class="tab" id="tab-deployment" role="tab" aria-selected="false" aria-controls="view-deployment" tabindex="-1" type="button"><span>02</span>多机与模块</button>
 <button class="tab" id="tab-pipeline" role="tab" aria-selected="false" aria-controls="view-pipeline" tabindex="-1" type="button"><span>03</span>产品流水线</button>
 <button class="tab" id="tab-handoff" role="tab" aria-selected="false" aria-controls="view-handoff" tabindex="-1" type="button"><span>04</span>交接与 Review</button>
 <button class="tab" id="tab-network" role="tab" aria-selected="false" aria-controls="view-network" tabindex="-1" type="button"><span>05</span>网络与资源</button>
-<button class="tab" id="tab-plan" role="tab" aria-selected="false" aria-controls="view-plan" tabindex="-1" type="button"><span>06</span>重构计划</button>
+<button class="tab" id="tab-code" role="tab" aria-selected="false" aria-controls="view-code" tabindex="-1" type="button"><span>06</span>代码与契约</button>
+<button class="tab" id="tab-plan" role="tab" aria-selected="false" aria-controls="view-plan" tabindex="-1" type="button"><span>07</span>重构计划</button>
 </nav>
 
 <section class="view" id="view-overview" role="tabpanel" aria-labelledby="tab-overview">
@@ -49,23 +50,23 @@
 <div class="arrow-label">Workflow 安排 Activity；Service 持久化待执行任务</div>
 <div class="queue-bus"><b>Temporal Task Queues · 按能力分开</b><div class="queue-chips"><code>capture.*</code><code>pdf.file</code><code>ocr.file</code><code>text / vision</code><code>validate</code><code>ingest / verify</code></div><p>不是第二套自研业务队列；同队列消费者必须具有一致处理能力</p></div>
 <div class="arrow-label"><b>↓ Worker 主动拉取任务 / ↑ 上报结果</b> · 有执行容量才领取</div>
-<div class="worker-row"><div class="worker-box"><b>抓取 Worker</b><p>Amazon / GNC / Swanson / DTC<br>来源规则各自独立</p></div><div class="worker-box"><b>文件 / OCR Worker</b><p>下载校验 / PDF / 单图 OCR<br>每种职责独立进程</p></div><div class="worker-box"><b>Codex Worker</b><p>文本 / 图片 / 标准化<br>共享账号额度</p></div><div class="worker-box"><b>校验 / 入库 Worker</b><p>确定性校验 / 写入 / 回读<br>写入全局串行</p></div></div>
-<div class="underlay"><div class="block archive"><h3>业务库 + R2 证据</h3><p>结果、Review、身份、写入凭证 → 业务库<br>原件、派生文件、完成清单 → R2</p></div><div class="block resource"><h3>资源管理 + 主机运行层</h3><p>额度 / 会话 / 出口许可 → 资源服务<br>安装 / 启停 / 进程监督 → 主机工具</p></div></div>
+<div class="worker-row"><div class="worker-box"><b>抓取 Worker</b><p>Amazon / GNC / Swanson / DTC<br>来源规则各自独立</p></div><div class="worker-box"><b>文件 / OCR Worker</b><p>下载校验 / PDF / 单图 OCR<br>每种职责独立进程</p></div><div class="worker-box"><b>Codex Worker</b><p>文本 / 图片 / 标准化<br>各角色独立，实际共享才限总额</p></div><div class="worker-box"><b>校验 / 入库 Worker</b><p>确定性校验 / 写入 / 回读<br>写入全局串行</p></div></div>
+<div class="underlay"><div class="block archive"><h3>业务库 + R2 证据</h3><p>结果、Review、身份、写入凭证 → 业务库<br>原件、派生文件、完成清单 → R2</p></div><div class="block resource"><h3>并发配置与共享资源控制（按需启用）</h3><p>每模块容量；实际共享才共同限额<br>安装 / 启停 / 进程监督 → 主机运行层</p></div></div>
 <div class="legend"><span><i class="dot"></i>Temporal 执行底座</span><span><i class="dot blue"></i>我们编写的流程与模块</span><span><i class="dot violet"></i>资源与运行条件</span><span><i class="dot amber"></i>独立业务数据与证据</span></div>
 </div>
 <aside class="surface aside"><h3>不是“全部交给 Temporal”</h3><div class="entry"><b>执行真源只有一个</b><p>不复制 claim / renew / retry_wait；业务库的结果投影不是另一套调度器。</p></div><div class="entry"><b>完成 ≠ 成功入库</b><p>Workflow 可以正常完成“转入 Review”。Dashboard 以业务结果和回读凭证统计。</p></div><div class="entry"><b>模块与主机解耦</b><p>把 OCR 从 Mac 移到服务器，不需要重写产品流程；运行环境仍需验证。</p></div></aside>
 </div>
-<div class="rule">已确认方向：重写核心 · Temporal UI 复用 · 独立 Worker · 不自动重跑 · 首版不自动下架。选择托管 / 自建、锁定版本和生产切换属于后续准入门。</div>
+<div class="rule">独立建设 V3；旧组件经审查和新契约测试才复用，不携带旧 Job、重试、批处理或清理逻辑。托管 / 自建、候选库锁定和生产切换属于后续准入门。</div>
 </section>
 
 <section class="view" id="view-deployment" role="tabpanel" aria-labelledby="tab-deployment" hidden>
 <div class="intro"><div><h2>一台机器，可以启动很多独立模块</h2><p>下方每一个 Tag 都是可独立配置、启动、停止和部署的角色。点击查看输入、输出与依赖。</p></div><span class="tagline">示意部署，不是在线节点清单</span></div>
-<div class="surface cloud-strip"><div><h3>常驻服务环境</h3><p>Temporal Cloud 或自建服务；生产方式在 P0 后单独批准</p></div><div class="cloud-parts"><span>Temporal Service</span><span>编排 Worker</span><span>入口 API</span><span>资源服务</span><span>业务库</span><span>Dashboard</span></div></div>
+<div class="surface cloud-strip"><div><h3>常驻服务环境</h3><p>Temporal Cloud 或自建服务；共享资源协调不默认独立部署</p></div><div class="cloud-parts"><span>Temporal Service</span><span>编排 Worker</span><span>入口 API</span><span>业务库</span><span>Dashboard</span><span>资源协调（按需）</span></div></div>
 <div class="arrow-label">每个 Worker 主动连接同一个逻辑 Temporal 服务 · 机器不需要暴露接单端口</div>
 <div class="hosts">
 <article class="surface host"><div class="host-title"><h3>Mac mini</h3><span>首批现有主机</span></div><p>按角色各自启动，不是一个“大处理 Worker”。</p><div class="modules" id="mac-modules"></div><div class="host-foot">系统服务负责进程监督；本地缓存通过统一 Resolver 使用。业务代码不依赖 Mac 专有 PDF 框架。</div></article>
-<article class="surface host"><div class="host-title"><h3>美国 Windows</h3><span>首批现有主机</span></div><p>浏览器任务保持会话、规格和出口隔离。</p><div class="modules" id="windows-modules"></div><div class="host-foot">独立浏览器 Lane / Profile；启动前验证 SDK、Codex、CDP 与桌面会话可用性。不自动修改共享 Clash 组。</div></article>
-<article class="surface host future"><div class="host-title"><h3>未来服务器</h3><span>按能力扩容</span></div><p>接入同一能力队列即可承担相应任务。</p><div class="modules" id="server-modules"></div><div class="host-foot">可以只部署一个模块。相同能力可有多个实例；跨机器共享额度仍由资源服务约束。</div></article>
+<article class="surface host"><div class="host-title"><h3>美国 Windows</h3><span>首批现有主机</span></div><p>DTC 浏览器默认不管理网络，继承主机环境。</p><div class="modules" id="windows-modules"></div><div class="host-foot">独立 Lane / Profile；启动前验证 SDK、Codex、CDP 与桌面会话。以后可配置网络 Adapter；关闭管理不是强制直连。</div></article>
+<article class="surface host future"><div class="host-title"><h3>未来服务器</h3><span>按能力扩容</span></div><p>接入同一能力队列即可承担相应任务。</p><div class="modules" id="server-modules"></div><div class="host-foot">可只部署一个模块。独立账号 / 资源独立运行；若仍共用真实配额池则共同限额，约束不按机器数量推断。</div></article>
 </div>
 <div class="surface detail-grid spaced" id="module-detail" aria-live="polite"></div>
 <div class="grid2 spaced"><div class="surface pad"><h3>Temporal 管什么？</h3><ul class="note-list"><li>持久待执行任务与跨机分发</li><li>流程依赖、结果、超时和执行历史</li><li>Worker 版本路由与执行查询</li></ul></div><div class="surface pad"><h3>主机运行层管什么？</h3><ul class="note-list"><li>安装、开机启动、部署、退出后拉起进程</li><li>schema / 凭证 / 浏览器 / 磁盘健康检查</li><li>提供 hostId 与 workerInstanceId，不另造任务调度</li></ul></div></div>
@@ -73,7 +74,7 @@
 
 <section class="view" id="view-pipeline" role="tabpanel" aria-labelledby="tab-pipeline" hidden>
 <div class="intro"><div><h2>一个产品有依赖，不同产品持续流水</h2><p>目录发现与产品处理分开；文件粒度执行；汇合屏障不占业务 Worker。</p></div><span class="tagline">Workflow 管顺序 · Activity 执行原子模块</span></div>
-<div class="flow-entry"><div class="block flow"><p class="section-label">CatalogWorkflow</p><h3>品牌 / 站点目录发现</h3><p>分页可靠发布产品请求 → 生成最终目录清单。<br>目录结束不取消已启动产品；产品不等品牌处理完。</p></div><div class="block"><p class="section-label">ProductWorkflow</p><h3>一个挂牌 / 变体的一次观察</h3><p>固定 observationId、来源身份、策略和输入版本。<br>单品链接可直接提交，进入同一条产品流程。</p></div></div>
+<div class="flow-entry"><div class="block flow"><p class="section-label">CatalogWorkflow</p><h3>品牌 / 站点目录发现</h3><p>Sales Channel / DTC 持续可靠发布，不等全站大 JSON。<br>拿到产品链接即可抓详情，目录关闭不取消产品。</p></div><div class="block"><p class="section-label">ProductWorkflow</p><h3>一个挂牌 / 变体的一次观察</h3><p>固定 observationId、来源身份、策略和输入版本。<br>新一轮采集建立新观察，不因同 URL 就跳过。</p></div></div>
 <div class="arrow-label">为每个独立产品建立流程 ↓ 已发布的产品可以立即推进</div>
 <div class="surface product-stage">
 <div class="capture-bar"><div><h3>产品抓取 · Amazon / GNC / Swanson / DTC</h3><p>发布同一次观察的页面与文件来源；浏览器导航、切规格、读取在同一会话内完成</p></div><span class="pill green">独立抓取模块</span></div>
@@ -84,10 +85,11 @@
 <div class="lane"><p class="lane-title">C / 可选视觉路径</p><div class="block optional-box"><h3>读取 B 线已验证的图片</h3><p>使用相同 ArtifactRef，不重新猜路径或混入其他规格图片</p></div><div class="down">↓</div><div class="block optional-box"><h3>Codex 图片理解</h3><p>只在证据计划要求时执行</p></div><p class="lane-note">图片就绪后，可与 OCR 并行。若是已声明的证据补充分支，则等待其前置结果；不是 OCR 失败后的自动重跑替代。</p></div>
 </div>
 <div class="arrow-label">各支线独立保存结果 ↓ 只有依赖齐备的产品才能进入下一步</div>
-<div class="gate"><h3>必要证据 + 按需封闭的 family 上下文</h3><p>这是 Workflow 等待条件，不是一个空等的 Worker。缺失、冲突与“尚未完成”必须区分。</p></div>
-<div class="tail"><div class="block"><span class="k">01 / NORMALIZE</span><h3>产品标准化</h3><p>单 SKU + 必要系列上下文</p></div><div class="block"><span class="k">02 / VALIDATE</span><h3>确定性校验</h3><p>失败不暗中调模型修复</p></div><div class="block"><span class="k">03 / IDENTITY</span><h3>公司 / 品牌归属</h3><p>失败仍保留完整候选</p></div><div class="block engine"><span class="k">04 / INGEST</span><h3>全局串行写入</h3><p>每 SKU 独立 · partial</p></div><div class="block engine"><span class="k">05 / VERIFY</span><h3>独立只读回读</h3><p>核验凭证 → 业务结果</p></div></div>
+<div class="gate"><h3>确认核心数据所需证据 + 按需 family 上下文</h3><p>Workflow 等待，不占业务 Worker。未完成 ≠ 缺失；可选字段或可选支线失败不额外阻塞。</p></div>
+<div class="tail"><div class="block"><span class="k">01 / NORMALIZE</span><h3>产品标准化</h3><p>单 SKU + 必要系列上下文</p></div><div class="block"><span class="k">02 / VALIDATE</span><h3>Formula + Ingredients</h3><p>真实齐全；价格等非必填</p></div><div class="block"><span class="k">03 / IDENTITY</span><h3>公司归属确认</h3><p>唯一可信匹配，不猜关联</p></div><div class="block engine"><span class="k">04 / INGEST</span><h3>全局串行写入</h3><p>每 SKU 独立 · partial</p></div><div class="block engine"><span class="k">05 / VERIFY</span><h3>独立只读回读</h3><p>核验凭证 → 业务结果</p></div></div>
 <div class="branch-footer"><div class="result"><b>通过：</b>登记成功入库；不等整个品牌、不删除 R2。</div><div class="result review"><b>失败 / 未知：</b>先核验证据；不能确认则被动 Review，关联受阻下游。</div></div>
 </div>
+<div class="grid2 spaced"><div class="surface pad"><h3>数据完整性门槛只有两项</h3><p class="small">Formula 与 Ingredients 都有本产品 / 变体的真实证据。不用占位符、串规格标签或模型编造；缺哪项记哪项，已知核心冲突不覆盖。</p><div class="rule">价格、评分、库存、营销文案缺失不阻塞入库；外部 API 契约若不兼容，在 P0 明确解决，不伪造字段。</div></div><div class="surface pad"><h3>公司归属是独立安全边界</h3><p class="small">未匹配 / 歧义 / 冲突 → 被动 Review；不自动新建公司。Formula、Ingredients、图片、模型输出及匹配理由完整保存。</p><div class="rule">只隔离该产品的正式写入；其他产品继续。进入写入队列不等于已经写入成功。</div></div></div>
 <div class="surface pad spaced"><p class="section-label">独立分支 / PresenceWorkflow</p><h3>下线查询，不接在成功入库后面</h3><div class="line-chain spaced"><div class="block"><h3>完整同范围目录</h3><p>目录发现集合 − 历史 Listing<br>不是成功入库集合</p></div><div class="bridge">→</div><div class="block"><h3>逐链接独立核查</h3><p>也允许单链接独立提交<br>验证码 / 缺货 ≠ 下架</p></div><div class="bridge">→</div><div class="block archive"><h3>记录观察与证据</h3><p>存在 / 确认缺席 / 未知<br>首版不写 inactive 或全局停产</p></div></div></div>
 <div class="rule warn">目录不完整时不自动推断缺席。某个产品 OCR 失败，但它已出现在目录中，仍应算“本轮发现”。</div>
 </section>
@@ -107,28 +109,42 @@
 </section>
 
 <section class="view" id="view-network" role="tabpanel" aria-labelledby="tab-network" hidden>
-<div class="intro"><div><h2>站点、网络模式、资源许可分开</h2><p>替换出口不重写站点解析；增加机器不放大账号额度；任务不擅自修改共享 Clash 配置。</p></div><span class="tagline">Adapter + 明确能力 + 会话隔离</span></div>
-<div class="surface pad">
+<div class="intro"><div><h2>网络可以不管理，共享才需要协调</h2><p>开关按模块 / 部署配置；同机固定出口也可并发。轮动只影响明确隔离且授权的抓取组。</p></div><span class="tagline">Adapter + 能力匹配 + 会话边界</span></div>
+<div class="grid3"><div class="block engine"><p class="section-label">CODEX</p><h3>沿用默认网络</h3><p>使用 Clash 的主机走其默认路径。系统不为 Codex 切节点，不参与抓取组轮动。</p></div><div class="block flow"><p class="section-label">WINDOWS / DTC</p><h3>默认关闭网络管理</h3><p><code>managed: false</code> 继承主机 / 浏览器环境，不是断网或强制 DIRECT。以后可开启。</p></div><div class="block archive"><p class="section-label">SERVICE / STORAGE</p><h3>服务流量单独配置</h3><p>OCR、Temporal、产品服务、R2 不自动随抓取出口变动；源文件下载保留必要来源会话。</p></div></div>
+<div class="surface pad spaced">
 <div class="provider-top"><p class="section-label">NETWORK ACCESS CONTRACT</p><h3>先声明需要什么能力，再选择如何访问</h3><p class="small">HTTP / 文件下载 / 渲染 HTML / 交互浏览器 + 地区 + 会话要求</p></div>
-<div class="provider-chain"><div class="block flow"><h3>站点模块</h3><p>Amazon / GNC / Swanson / DTC<br>只关心页面操作与提取规则</p></div><div class="bridge">→</div><div class="block resource"><h3>访问策略 + 资源许可</h3><p>匹配 Provider 能力与授权范围<br>固定会话出口，记录配置版本</p></div><div class="bridge">→</div><div class="block"><h3>Network Adapter</h3><p>执行已选网络模式<br>失败不自动换 Provider 重跑</p></div></div>
+<div class="provider-chain"><div class="block flow"><h3>站点模块</h3><p>Amazon / GNC / Swanson / DTC<br>只关心页面操作与提取规则</p></div><div class="bridge">→</div><div class="block resource"><h3>部署配置 + 访问策略</h3><p>不管理，或选授权且匹配的能力<br>需要共享限制时才申请许可</p></div><div class="bridge">→</div><div class="block"><h3>Network Adapter</h3><p>执行已选网络模式<br>失败不自动换 Provider 重跑</p></div></div>
 <div class="provider-cards"><div class="block"><p class="section-label">STATIC PROXY</p><h3>静态 IP / 代理池</h3><p>显式 endpoint、凭证引用、地区与会话绑定。分配可用出口，不混用不同产品的浏览器上下文。</p></div><div class="block"><p class="section-label">CLASH</p><h3>Clash 控制适配</h3><p>兼容实际核心的节点 / 组查询与授权操作；节点、订阅和共享组选点由操作者管理。</p></div><div class="block"><p class="section-label">SCRAPER API</p><h3>ScraperAPI</h3><p>按实际接口声明能力。渲染 HTML 不等于交互浏览器；提供商内部可能重试，不承诺源站只访问一次。</p></div></div>
-<div class="rule warn">Clash 并发隔离：独立核心，或经验证的独立监听器 + 独立绑定策略组。不同端口共享同一个可变 selector，不算隔离。</div>
+<div class="rule">静态代理可以由 Clash 路由，两者不必互斥。共享固定出口也能并发抓取，前提是浏览器状态独立且遵守该出口限额。</div>
 </div>
-<div class="isolation spaced"><div class="surface pad"><p class="section-label">跨机资源约束</p><h3>许可服务，不是第二套业务队列</h3><p class="small">Codex 文本、视觉与 DTC 驱动共用账号预算；OCR、浏览器和出口各自限额。</p><div class="queue-mini">短申请 → 无许可立即返回 → Workflow 持久等待<br>有许可 → 安排业务 Activity → 开始前再次校验</div><ul class="note-list"><li>不在 Worker 内先领几十项再排本地 semaphore。</li><li>过期许可且尚未执行：回到资源等待，不记业务失败。</li><li>未知的在途副作用：先核验，不自动转交许可。</li></ul></div><div class="surface pad"><p class="section-label">运行与安全约束</p><h3>主机健康与写入保护</h3><ul class="note-list"><li>磁盘 / R2 / 积压触发背压；流水不是无限接单。</li><li>首版仅一个激活写入部署 + 全局写许可。</li><li>写者失联且请求未知：只读核验，不能自动启用第二写者。</li><li>Clash API 仅本机 / 私网鉴权；保持 TLS 校验。</li><li>本次不更改现有代理节点、共享策略组或系统代理。</li></ul></div></div>
+<div class="surface pad spaced"><p class="section-label">CLASH / 独立轮动的示意绑定</p><h3>分组隔离，要看最终共享了什么</h3><div class="grid3 spaced"><div class="block"><h3>Codex → 默认组</h3><p>沿用现状，不由爬虫系统修改</p></div><div class="block flow"><h3>抓取 Lane A → 专用组 A</h3><p>明确监听器绑定，仅该 Lane 使用</p></div><div class="block flow"><h3>抓取 Lane B → 专用组 B</h3><p>可以独立准备下一次抓取的出口</p></div></div><div class="rule warn">不同端口共享可变 selector，或不同组最终指向同一个可变上游，都不算独立。实际绑定需在授权测试资源验证。</div><ul class="note-list"><li>同组所有使用者完成当前产品抓取及依赖其会话的文件下载后，才到轮动安全边界。</li><li>只操作明确授权的爬虫组与节点集合；切后核验实际出口，不能假定旧连接立即换路。</li><li>不全局断连接或重载；不影响 Codex / OCR / R2；轮动不等于重跑失败产品。</li></ul></div>
+<div class="isolation spaced"><div class="surface pad"><p class="section-label">按实际资源池约束</p><h3>并发配置与共享资源控制（按需启用）</h3><p class="small">不预设所有 Codex / OCR 共用账号，不要求独立中央资源服务。单实例本地容量；同机跨进程或跨机真实共享时，再协调总限额。</p><div class="queue-mini">实际共享 → 短申请 → 无许可返回，Workflow 等待<br>独立资源 → 各自容量，不因同模块而互锁</div><ul class="note-list"><li>移机但仍用同账号，不自动增加外部配额。</li><li>许可预留与预取有界，不占昂贵槽位长期等资源。</li><li>未知的在途副作用先核验；资源层不存第二份业务待办。</li></ul></div><div class="surface pad"><p class="section-label">运行与安全约束</p><h3>主机健康与写入保护</h3><ul class="note-list"><li>路由已知不可用时停接相关新任务，不能把未执行任务批量变成 Review。</li><li>磁盘 / R2 / 积压触发背压；流水不是无限接单。</li><li>全局写入保护独立保留，不随可选资源协调关闭。</li><li>写者失联且请求未知：只读核验，不能自动启用第二写者。</li><li>Clash API 仅本机 / 私网鉴权；保持 TLS 校验。</li><li>本次不更改现有节点、共享策略组或系统代理。</li></ul></div></div>
 <div class="rule">PDF 模块首选 PDFium / pypdfium2，文字提取与页图渲染是明确操作，不依赖 Swift / PDFKit。PDFium 并发用隔离进程；实际平台兼容在 P0 验证。</div>
+</section>
+
+<section class="view" id="view-code" role="tabpanel" aria-labelledby="tab-code" hidden>
+<div class="intro"><div><h2>模块只做业务，组装留在启动边界</h2><p>函数优先 · TypeScript strict · 显式 ports · 独立 Worker。以下是代码组织设计，尚未实现。</p></div><span class="tagline">Awilix：候选，验证后锁定</span></div>
+<div class="surface pad"><p class="section-label">每个独立 Worker 的组装过程，不是产品流水线</p><div class="line-chain"><div class="block"><h3>① 配置校验</h3><p>环境变量 / 部署配置<br>固定版本，凭证只在本进程解析</p></div><div class="bridge">→</div><div class="block resource"><h3>② 工厂 + DI</h3><p>创建并显式注册本角色依赖<br>不执行抓取、不自动切节点</p></div><div class="bridge">→</div><div class="block flow"><h3>③ 薄 Activity 外壳</h3><p>注入依赖，管理交接与作用域<br>业务函数：run(input, ports)</p></div></div><div class="rule">Temporal 管跨模块执行；DI 只组装本 Worker 的对象。Workflow 不导入容器，业务模块不调用 container.resolve，也不直接启动下游 Worker。</div></div>
+<div class="grid3 spaced"><div class="surface pad"><h3>模块层</h3><p class="small">输入 / 输出 schema、业务函数、窄 ports、错误与测试。按复杂度拆文件，不要求每个辅助函数一个包。</p></div><div class="surface pad"><h3>适配与组装层</h3><p class="small">Adapter 接外部接口；Factory 根据配置创建实现；DI 传依赖；Repository 管窄数据访问；Strategy 只用于真正变化的规则。</p></div><div class="surface pad"><h3>编排与运行层</h3><p class="small">Workflow 组织依赖；runner 管 Activity / Worker；bootstrap 管依赖生命周期；deploy 管平台启动，不把主机细节带进核心。</p></div></div>
+<div class="grid2 spaced"><div class="surface pad"><h3>容器的边界</h3><ul class="note-list"><li>每 Worker 进程一个根容器，显式注册，不自动扫目录。</li><li>并发安全客户端可复用；产品 / 页签状态按操作或隔离 Lane 管理。</li><li>singleton 不是跨机器单例；任务 scope 不是持久 Workflow 内存。</li><li>显式注册并调用释放逻辑，不能指望容器自动关掉所有资源。</li></ul></div><div class="surface pad"><h3>统一质量规则</h3><ul class="note-list"><li>外部输入运行时校验，不用 any 掩盖不完整数据。</li><li>不可变结果与证据追加保存，不共享可变产品对象。</li><li>无隐藏重试、模型修复、自动换 Provider 或清理。</li><li>类型 / 静态 / 格式检查 + 正常、缺失、冲突、故障测试；单测不调生产。</li></ul></div></div>
+<div class="surface pad spaced"><h3>统一契约：数据能跨机器，依赖对象不跨机器</h3><div class="grid3 spaced"><div class="block"><h3>输入</h3><p>requestId / observationId / operationId<br>契约版本、输入指纹、文件与结果引用</p></div><div class="block"><h3>输出</h3><p>明确结果 + 来源与产物引用<br>实际代码 / 配置版本 + 完成凭证</p></div><div class="block"><h3>错误</h3><p>阶段、分类、错误码、证据<br>未执行 / 已执行 / 未知 + blockedBy</p></div></div></div>
+<div class="grid2 spaced"><div class="surface pad"><p class="section-label">同一次操作</p><h3>重复投递：先核验，不重复做</h3><p class="small">同 operation + 同指纹：完整结果只补交接；在途或未知先核验；同标识不同输入报冲突。同操作并发到达也不能重复提交。</p></div><div class="surface pad"><p class="section-label">新的采集请求</p><h3>同 URL：仍然是新观察</h3><p class="small">新建 request / observation / operation。本次证据取得后，可按文件 hash 和处理版本显式复用，保留 reusedFrom；不拿旧抓取冒充新采集。</p></div></div>
+<div class="surface pad spaced"><h3>正常退出与升级</h3><div class="line-chain spaced"><div class="block"><h3>先停止接单</h3><p>不兼容配置 / 版本不接单<br>部署故障先告警，不批量 Review</p></div><div class="bridge">→</div><div class="block"><h3>有界收尾交接</h3><p>完成当前操作、保存证据<br>突然退出后核验未知副作用</p></div><div class="bridge">→</div><div class="block"><h3>释放所属资源</h3><p>关闭本角色连接和会话<br>不关他人页签，不删除证据</p></div></div></div>
+<div class="rule warn">V3 独立建设。旧组件先审核隐藏依赖并通过新契约测试；旧成功不是正确性证明。Awilix 的构建、任务隔离和退出释放在最小 Worker 验证，本页不安装依赖。</div>
 </section>
 
 <section class="view" id="view-plan" role="tabpanel" aria-labelledby="tab-plan" hidden>
 <div class="intro"><div><h2>先验证底座，再逐步接入业务</h2><p>六个交付门，全部是待执行计划；没有安装框架、启动新 Worker 或迁移生产任务。</p></div><span class="tagline">每阶段都有可检查的退出条件</span></div>
 <div class="phases" id="phase-list"></div>
-<div class="surface pad spaced"><h3>用过去真实出过的问题验收新系统</h3><p class="small">这里是关键场景摘要；完整设计列出 A01–A22。通过测试才进入下一阶段。</p><div class="check-grid" id="check-list"></div></div>
+<div class="surface pad spaced"><p class="section-label">P0 / 第一个验证切片</p><h3>一个文件，先证明独立处理与可靠交接</h3><div class="line-chain spaced"><div class="block"><h3>文件引用</h3><p>带 observation / operation</p></div><div class="bridge">→</div><div class="block flow"><h3>模拟 OCR</h3><p>注入 fake，不调用付费服务</p></div><div class="bridge">→</div><div class="block archive"><h3>模拟结果与凭证</h3><p>测试重复投递、退出与回执丢失</p></div><div class="bridge">→</div><div class="block"><h3>下游读取</h3><p>上游不等下游处理完</p></div></div><div class="rule">P1 换成测试 R2 / 业务登记，P2 经批准接真实 OCR；模拟通过不等于真实服务验收。本轮只更新文档。</div></div>
+<div class="surface pad spaced"><h3>用过去真实出过的问题验收新系统</h3><p class="small">这里是关键场景摘要；完整设计列出 A01–A32。通过测试才进入下一阶段。</p><div class="check-grid" id="check-list"></div></div>
 <div class="grid2 spaced"><div class="surface pad"><h3>第一版明确不做</h3><ul class="note-list"><li>第二套调度器、通用 DAG 编辑器、另一个执行看板。</li><li>自动 Review 修复、自动换 Provider 重跑。</li><li>成功清理 R2、自动下架 / 全局停产。</li><li>新增所有渠道、完整远程节点控制平台。</li></ul></div><div class="surface pad"><h3>需要通过的生产准入门</h3><ul class="note-list"><li>托管 / 自建选择和生产资源开通单独批准。</li><li>SDK / Windows 浏览器 / PDF 版本实机锁定。</li><li>实际产品服务的逐 SKU partial 契约通过。</li><li>旧系统停接单、在途核验与 V3 切换另行批准。</li></ul></div></div>
 <div class="doc-links"><a href="../CRAWLER_V3_PLAN.md">阅读分阶段计划 ↗</a><a href="spark/2026-09-05-crawler-v3-temporal-design.md">阅读完整设计与验收 ↗</a></div>
 <div class="rule warn">本轮停在文档评审。旧任务不转换成 V3 的运行任务，历史失败不自动重跑。生产切换只在 P5 验收及授权后进行。</div>
 </section>
 
 <footer class="footer"><p>V3 / Temporal · 原子模块 · 多机执行 · 证据保留 · 被动 Review</p><p>离线设计文档 · 非生产控制台 · <a href="../CRAWLER_V3_PLAN.md">计划</a> / <a href="spark/2026-09-05-crawler-v3-temporal-design.md">完整规范</a></p></footer>
-<details class="sources"><summary>官方依据与设计边界</summary><ul><li><a href="https://docs.temporal.io/workers">Temporal Workers</a> / <a href="https://docs.temporal.io/task-queue">Task Queues</a>：Worker 主动接单，部署与主机管理由我们负责。</li><li><a href="https://docs.temporal.io/workflow-execution">执行历史与恢复</a> / <a href="https://docs.temporal.io/encyclopedia/retry-policies">重试策略</a>：恢复不等于重跑业务；业务最大尝试次数设为 1。</li><li><a href="https://docs.temporal.io/web-ui">Temporal UI</a> / <a href="https://docs.temporal.io/visibility">Visibility</a>：执行查询不是精确、永久的业务账本。</li><li><a href="https://pypdfium2.readthedocs.io/en/stable/python_api.html#incompatibility-with-threading">PDFium 线程边界</a> / <a href="https://wiki.metacubex.one/en/api/">mihomo API</a>：实际平台 / 核心版本仍需验证。</li></ul></details>
+<details class="sources"><summary>官方依据与设计边界</summary><ul><li><a href="https://docs.temporal.io/workers">Temporal Workers</a> / <a href="https://docs.temporal.io/task-queue">Task Queues</a>：Worker 主动接单，部署与主机管理由我们负责。</li><li><a href="https://docs.temporal.io/workflow-execution">执行历史与恢复</a> / <a href="https://docs.temporal.io/encyclopedia/retry-policies">重试策略</a>：恢复不等于重跑业务；业务最大尝试次数设为 1。</li><li><a href="https://docs.temporal.io/web-ui">Temporal UI</a> / <a href="https://docs.temporal.io/visibility">Visibility</a>：执行查询不是精确、永久的业务账本。</li><li><a href="https://pypdfium2.readthedocs.io/en/stable/python_api.html#incompatibility-with-threading">PDFium 线程边界</a> / <a href="https://wiki.metacubex.one/en/api/">mihomo API</a>：实际平台 / 核心版本仍需验证。</li><li><a href="https://github.com/jeffijoe/awilix">Awilix</a>：函数 / 类注册、作用域与显式释放；作为组装层候选，未安装。</li><li><a href="https://wiki.metacubex.one/en/config/inbound/listeners/">监听器绑定</a> / <a href="https://wiki.metacubex.one/en/config/proxy-groups/select/">select 分组</a>：独立轮动取决于实际共享关系；不代表授权修改现有代理。</li></ul></details>
 <noscript><div class="rule warn">请启用 JavaScript 以切换视图和查看模块详情；完整规则也可通过上方计划与规范链接阅读。</div></noscript>
 </main>
 <script id="architecture-script">
@@ -143,16 +159,16 @@
     amazon:['Amazon 抓取','capture-amazon','一个挂牌 / ASIN 变体观察任务','原始页面、结构化字段、图片与文件来源','单次浏览器会话内导航、切规格、读取串行；不内部串接 OCR 或入库。','Amazon Adapter、浏览器、专用网络会话'],
     gnc:['GNC 抓取','capture-gnc','一个 GNC 挂牌 / 变体与访问能力要求','页面与来源证据，关联本次 observationId','Browser 与 ScraperAPI 按能力区分队列，不把渲染 HTML 当完整交互浏览器。','GNC Adapter、显式 Network Provider'],
     swanson:['Swanson 抓取','capture-swanson','一个 Swanson 挂牌 / 变体观察任务','页面、渠道字段、文件来源与规格关系','不等待下游处理；已有证据可靠发布后即可推进。','Swanson Adapter、HTTP / 浏览器能力'],
-    dtc:['DTC 浏览器抓取','capture-dtc','一个独立站产品 / 变体观察与会话要求','原始页面证据、SKU / 变体身份、文件来源','Codex 驱动浏览器属于抓取会话；不承担下游业务文本解析。每个 Lane 隔离页签、Profile 和出口。','Codex 浏览器驱动、CDP、账号 / 会话许可'],
+    dtc:['DTC 浏览器抓取','capture-dtc','一个独立站产品 / 变体观察与会话要求','原始页面证据、SKU / 变体身份、文件来源','Codex 驱动只负责抓取，不承担下游解析；Windows 默认不管理网络。每 Lane 隔离状态，固定出口也可并发。','Codex 浏览器驱动、CDP、部署网络配置；共享限制按需'],
     page:['页面证据整理','page-extract','一份已发布页面 ArtifactRef','可追溯原文、HTML 表格、结构化字段','与图片线并行；标签仍在处理时，不提前作最终排除判断。','页面解析器、Artifact Resolver'],
     files:['单文件获取','artifact-fetch','一个来源文件引用 + 产品 / 变体绑定','真实媒体类型、校验值、稳定 ArtifactRef','一次一个文件；不凭扩展名猜格式，不依赖其他模块的本地路径。','Network Adapter、R2、Artifact Resolver'],
     pdf:['PDF 处理','pdf-process','一个 PDF + 提取文字或渲染页图的明确操作','文字产物或逐页图片引用；保留 parentArtifactId / pageIndex','不使用 Swift / PDFKit；PDFium 并发采用隔离进程，不在 PDF 模块里继续跑 OCR。','PDFium / pypdfium2、文件解析、资源限制'],
-    ocr:['OCR 单文件','ocr-file','一张已验证图片、operationId、observationId、输入指纹','原始 OCR 文字、来源、识别元数据与完成凭证','不传图片批次，不解析业务，不入库。失败不自动重试；有完整证据只补交接。','OCR Adapter、共享配额、Artifact Resolver'],
-    text:['Codex 文本理解','text-interpret','一份明确范围的文字证据集 + 策略版本','Facts / 成分等候选结果及来源引用','页面路径可并行；OCR 文字必须等待对应 OCR 结果。与视觉 / DTC 驱动共享账号预算。','Codex 文本 Adapter、schema、账号许可'],
-    vision:['Codex 图片理解','image-interpret','一张图片 + 证据计划中声明的处理意图','视觉候选、来源与无法判断的原因','按计划启用，不默认所有图片双跑；OCR 请求失败不自动切换到视觉再试。','Codex 视觉 Adapter、账号许可、Artifact Resolver'],
+    ocr:['OCR 单文件','ocr-file','一张已验证图片、operationId、observationId、输入指纹','原始 OCR 文字、来源、识别元数据与完成凭证','不传图片批次，不解析业务，不入库。失败不自动重试；有完整证据只补交接。','OCR Adapter、Artifact Resolver、并发配置；共享配额按需'],
+    text:['Codex 文本理解','text-interpret','一份明确范围的文字证据集 + 策略版本','Formula / Ingredients 等候选结果及来源引用','页面路径可并行；OCR 文字须等待对应结果。Codex 沿用默认网络，不切节点；真实共享账号才共同限额。','Codex 文本 Adapter、schema、并发配置'],
+    vision:['Codex 图片理解','image-interpret','一张图片 + 证据计划中声明的处理意图','视觉候选、来源与无法判断的原因','按计划启用，不默认所有图片双跑；OCR 请求失败不自动切换到视觉。Codex 不参与出口轮动。','Codex 视觉 Adapter、Artifact Resolver；共享配额按需'],
     normalize:['产品标准化','product-normalize','单 SKU 候选 + 按需封闭的 family 上下文','规范产品候选与证据关系','共享系列上下文，但逐 SKU 验收；不等待全品牌，不自行生成产品服务身份键。','文本能力、词表与版本化标准化策略'],
-    validate:['确定性校验','product-validate','规范候选 + 证据清单 + 策略版本','通过或精确的问题列表','不在校验失败后暗中请求模型修复。必需证据未完成不能被当作缺失。','schema 与确定性业务规则'],
-    owner:['公司 / 品牌归属','owner-resolve','来源品牌身份与已保存候选','确认归属或归属冲突记录','无法匹配公司时，完整产品与 Facts 留存 Review，不丢弃处理成果。','只读身份查询 Adapter'],
+    validate:['确定性校验','product-validate','规范候选 + 证据清单 + 策略版本','Formula / Ingredients 真实齐全或具体缺失 / 冲突','价格等非必填，可选支线失败不新增门槛；必需证据未完成不当作缺失；不暗中调用模型修复。','schema 与确定性业务规则'],
+    owner:['公司 / 品牌归属','owner-resolve','来源品牌身份与已保存候选','唯一可信匹配，或未匹配 / 歧义 / 冲突','归属不明进 Review；Formula、Ingredients 和候选完整留存；不猜关联、不自动创建公司。','只读身份查询 Adapter'],
     ingest:['产品写入','product-ingest','一个已通过校验与归属检查的 SKU 观测','写入回执或 write_unknown 事实','首版一个激活写入部署 + 全局许可；partial；不自动再次写入、不触发缺席下架。','产品服务写入 Adapter、全局写许可'],
     verify:['入库回读','product-verify','稳定写入标识、预期观测与回执信息','核验凭证或具体差异','纯只读；写入未知时先核验，不能把回读失败当作重新写入的理由。','产品服务只读 Adapter、结果登记'],
     presence:['下线查询','presence-check','待核查 Listing / URL，或完整目录差集中的一项','存在 / 确认缺席 / 未知，附时间和证据','不依赖成功入库集合；缺货 / 网络错误不等于下架；首版不写 inactive。','来源 Adapter、网络会话、证据存储']
@@ -197,23 +213,23 @@
     ['RUNTIME','浏览器与环境','CDP 失效、页签冲突、schema 缺失。记录 host / worker / Lane；健康不达标先停接单。'],
     ['ARTIFACT','产物与交接','缺文件、错误类型、hash 不符、R2 传输失败。区分原件存在与完成结果存在。'],
     ['PROCESSING','OCR 与模型','调用失败、输出契约错误。保留原始输出；不自动重试或换模型。'],
-    ['VALIDATION','数据校验','必要证据缺失、配方 / 规格冲突。保留候选与规则版本，不用最后返回结果覆盖。'],
-    ['IDENTITY','身份与归属','产品来源或公司 / 品牌不确定。完整保存产品、Facts 和归属证据。'],
+    ['VALIDATION','数据校验','FORMULA_MISSING / INGREDIENTS_MISSING 精确记录；核心配方 / 规格冲突不覆盖。价格等可选缺失不阻止入库。'],
+    ['IDENTITY','身份与归属','COMPANY_UNMATCHED / COMPANY_AMBIGUOUS / COMPANY_CONFLICT。完整保存候选、Formula、Ingredients 和匹配理由。'],
     ['INGEST','写入与回读','写入失败、回执未知、回读差异。先只读核验，不自动重新写入。'],
     ['SCHEDULER','执行生命周期','重复实例、取消不生效、超时。保留事件，不凭 timeout 推断网络根因。'],
     ['UNCLASSIFIED','原因未确认','历史信息不足。记录事实和原始错误，可追加分类，不覆盖原记录。']
   ];
   $('#error-list').innerHTML=errors.map(e=>'<details><summary><code>'+escape(e[0])+'</code>'+escape(e[1])+'</summary><p>'+escape(e[2])+'</p></details>').join('');
   const phases=[
-    ['P0','环境与契约','隔离开发环境；Mac / Windows / PDF 实机验证；实际产品服务逐 SKU partial 提交测试。','跨机模拟可复现，版本与外部提交形式有验证证据。'],
-    ['P1','原子契约与可靠交接','ArtifactRef、结果清单、R2、本地 Resolver、薄 Worker、Review 与幂等登记。','回执丢失只补交接；A01、A04–A09、A15、A18。'],
-    ['P2','单产品处理闭环','文件、PDF、OCR、Codex、标准化、校验、归属；仅测试目标的写入 / 回读。','单产品到测试入库或 Review；A02、A03、A08、A14、A15。'],
-    ['P3','渠道与资源隔离','全新渠道 / DTC 模块；目录与下线查询；网络 Adapter、共享许可、背压。','两机不超额度、不互切出口、无双写；A10–A14、A16、A19、A20。'],
+    ['P0','环境与契约','先单文件模拟闭环与 DI 候选验证；Mac / Windows / PDF 实机验证；产品服务 partial 测试契约。','跨机模拟、构建、隔离与退出有证据；版本和外部提交形式经验证。'],
+    ['P1','原子契约与可靠交接','身份与版本契约、测试 R2、完成清单、Resolver、独立 Worker、Review 与幂等交接。','A01、A04–A09、A18、A24、A28–A30；只补交接，新观察不冒用旧抓取。'],
+    ['P2','单产品处理闭环','文件、PDF、OCR、Codex；Formula + Ingredients 门槛、公司归属；仅测试写入 / 回读。','A02、A03、A08、A14、A15、A23；可选字段不新增门槛。真实模型调用需批准。'],
+    ['P3','渠道、网络与按需资源','V3 渠道 / DTC 持续发现；复用审查；网络开关、专用组轮动；按需共享控制、写入保护。','A10–A14、A16、A19、A20、A25–A27、A31、A32；授权测试出口，独立资源不互锁。'],
     ['P4','历史验证与 Dashboard','成功样本副本；失败分类；Temporal UI 检索；业务汇总与故障测试。','不自动重跑历史失败，不混算业务结果；A17、A21、A22。'],
     ['P5','受控生产切换','全安全验收、保留策略、回退方案；批准后停旧接单并核验在途请求。','通过完整矩阵并获批准；有限新请求接入，无自动下架和证据删除。']
   ];
   $('#phase-list').innerHTML=phases.map(p=>'<article class="surface phase"><div class="phase-index"><b>'+p[0]+'</b><span>待执行 / 需通过交付门</span></div><h3>'+escape(p[1])+'</h3><p>'+escape(p[2])+'</p><div class="exit"><b>退出条件</b>'+escape(p[3])+'</div></article>').join('');
-  const checks=[['A01','OCR 一次只接一个文件，携带关联身份。'],['A02','A 等证据时，Worker 可接 B，不空等。'],['A03','一个坏 SKU 不阻塞其他产品入库。'],['A06','OCR 完成后掉线，不增加 OCR 调用次数。'],['A08','输入 / 版本不同不错误复用，不串规格。'],['A10','写入回执丢失，只读核验，不重写。'],['A11','两台各并发 1 不能变成两个全局写者。'],['A13','Clash 会话互不改道，不影响其他流量。'],['A16','部分目录不推断缺席，不以入库集合做差。'],['A17','历史失败只分类；复现用明确测试副本。'],['A18','任务成功后 R2 证据仍在，无自动下架。'],['A21','Review 的 Completed 不计入成功入库。']];
+  const checks=[['A01','OCR 一次只接一个文件，携带关联身份。'],['A02','A 等证据时，Worker 可接 B，不空等。'],['A03','一个坏 SKU 不阻塞其他产品入库。'],['A06','OCR 完成后掉线，不增加 OCR 调用次数。'],['A08','输入 / 版本不同不错误复用，不串规格。'],['A10','写入回执丢失，只读核验，不重写。'],['A11','两台各并发 1 不能变成两个全局写者。'],['A13','Clash 会话互不改道，不影响其他流量。'],['A16','部分目录不推断缺席，不以入库集合做差。'],['A17','历史失败只分类；复现用明确测试副本。'],['A18','任务成功后 R2 证据仍在，无自动下架。'],['A21','Review 的 Completed 不计入成功入库。'],['A23','Formula + Ingredients；可选字段不设门槛。'],['A24','重复投递先核验；同 URL 新采集建新观察。'],['A25','共享才共同限额，独立资源不互锁。'],['A26','Windows 不管理网络，Codex 默认路由不变。'],['A27','Clash 轮动等待同组安全边界并核验出口。'],['A28','依赖隔离、解析与资源释放经测试。'],['A29','先停接单再收尾；突退不重跑未知操作。'],['A30','不兼容版本不接单，不混合在途结果。'],['A31','渠道与 DTC 产品持续推进，不等全站。'],['A32','旧组件审查与新契约测试后才复用。']];
   $('#check-list').innerHTML=checks.map(c=>'<div class="check"><code>'+c[0]+'</code><span>'+escape(c[1])+'</span></div>').join('');
   const tabs=$$('[role=tab]');
   function activate(id, updateHash=true) {
