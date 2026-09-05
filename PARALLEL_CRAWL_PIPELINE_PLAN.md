@@ -1,5 +1,7 @@
 # 抓取与数据处理并行化改造计划
 
+> 历史 V2 方案（2026-09-05 标记）：V3 请以 [Temporal 重构计划](CRAWLER_V3_PLAN.md) 和 [完整设计](docs/spark/2026-09-05-crawler-v3-temporal-design.md) 为准。本文的 run 级统一入库、批次 OCR、成功清理和自研调度约定不适用于 V3；原文保留用于故障与决策回顾。
+
 ## 1. 目标
 
 把当前“一个任务从抓取一直执行到入库，全部完成后才领取下一个任务”的串行流程，改成互不等待的处理流水线，外加一次 run 级收尾入库：
@@ -571,4 +573,3 @@ GNC 是第一个验收 Adapter，但代码必须从第一天就是通用框架�
 | 8 | 磁盘背压和分线吞吐指标 100% 从零建 | 全仓库无 disk 检查；`repository.summary()` 只有状态计数 | 阶段 3/5 排期，别当成小活 |
 | 9 | discovery 静默漏抓时 `full` 误判仍可能误下架（现有防线拦不住） | `sales-channel-scope.ts` 依赖抓取端自报证据 | 向 Product Server 提下架数量熔断阈值 |
 | 10 | 幂等键嵌可变值（`capture:<jobId>:<itemCount>`）重试可绕过幂等 | `browser-node/src/index.ts:164` | 新契约不延续该写法 |
-

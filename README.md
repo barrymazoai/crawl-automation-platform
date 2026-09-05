@@ -1,5 +1,7 @@
 # Crawl Automation Platform
 
+> **V3 redesign (2026-09-05):** [Temporal plan](CRAWLER_V3_PLAN.md) · [Design specification](docs/spark/2026-09-05-crawler-v3-temporal-design.md) · [Interactive architecture](docs/crawler-v3-architecture.html). These describe the proposed replacement, not a completed migration. The implementation and operational instructions below still describe the existing system.
+
 This monorepo is the deterministic controller for distributed product crawling.
 
 - `apps/web`: Mac mini operations console (Vite, React, TanStack Router/Query, Ant Design, AG Grid, Tailwind).

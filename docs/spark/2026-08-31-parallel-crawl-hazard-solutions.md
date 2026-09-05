@@ -1,5 +1,7 @@
 # 并行化改造隐患解决方案
 
+> 历史 V2 方案（2026-09-05 标记）：故障场景可供回归验证，但批次、重试、清理和调度实现不用于 V3。新规则见 [Temporal 设计](2026-09-05-crawler-v3-temporal-design.md) 与 [V3 计划](../../CRAWLER_V3_PLAN.md)。
+
 对应 `PARALLEL_CRAWL_PIPELINE_PLAN.md` §17 隐患清单，逐条给出解决方案。
 每条按"现在的问题 → 怎么解决 → 为什么能行 → 实现要点"组织。
 隐患 1（completeCrawlRun 下架触发器）已由计划 6.4 节的 run 级一次入库方案解决，此处不再重复。

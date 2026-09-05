@@ -1,0 +1,233 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light">
+<meta name="description" content="爬虫 V3：Temporal 编排、独立原子模块、多机部署、证据交接与被动 Review。离线设计评审文档，不连接生产。">
+<title>爬虫 V3 · Temporal 架构与重构计划</title>
+<style>
+:root{--bg:#f4f5f1;--paper:#fff;--ink:#172e2d;--muted:#5e726e;--line:#dce4de;--green:#12685e;--green-bg:#eaf4ef;--blue:#315f83;--blue-bg:#edf3f9;--violet:#645485;--violet-bg:#f2eff8;--amber:#88591d;--amber-bg:#fff5e4;--red:#9b4547;--red-bg:#fbefee;--shadow:0 6px 25px #20372b06}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif}h1,h2,h3,h4,p{margin:0}a{color:var(--green);text-underline-offset:3px}button{font:inherit;color:inherit;cursor:pointer}button:disabled{opacity:.45;cursor:default}button:focus-visible,a:focus-visible,summary:focus-visible{outline:3px solid var(--blue);outline-offset:4px}[hidden]{display:none!important}button,a,summary{-webkit-tap-highlight-color:transparent}code{font:12px/1.6 ui-monospace,SFMono-Regular,Consolas,monospace;overflow-wrap:anywhere}strong,b{font-weight:650}
+.page{max-width:1460px;margin:auto;padding:24px 40px 42px}.top{display:flex;justify-content:space-between;align-items:center;gap:16px;border-bottom:1px solid var(--line);padding-bottom:15px}.brand{font-size:12px;font-weight:650;letter-spacing:.1em}.mark{display:inline-block;width:10px;height:10px;background:var(--green);border-radius:3px;margin-right:10px}.top-meta{color:var(--muted);font-size:12px}.hero{display:flex;justify-content:space-between;align-items:end;gap:25px;padding:28px 0 22px}.eyebrow{font-size:11px;letter-spacing:.13em;color:var(--green);font-weight:650;margin-bottom:7px}h1{font-size:34px;line-height:1.3;letter-spacing:-1px}h2{font-size:23px;line-height:1.4;letter-spacing:-.4px}h3{font-size:17px;line-height:1.5}h4{font-size:14px}.lead{color:var(--muted);font-size:15px;margin-top:10px}.hero-aside{font-size:12px;color:var(--muted);max-width:285px;border-left:2px solid var(--line);padding-left:16px}.status{display:inline-block;font-size:11px;color:var(--amber);background:var(--amber-bg);border:1px solid #f0ddbc;border-radius:5px;padding:3px 8px;margin-bottom:7px}.principles{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:22px}.pill{font-size:11px;background:#e9eeea;padding:4px 9px;border-radius:5px;color:var(--muted)}.pill.green{background:var(--green-bg);color:var(--green)}.pill.red{background:var(--red-bg);color:var(--red)}
+.tabs{display:flex;gap:5px;flex-wrap:wrap;border-bottom:1px solid var(--line);padding-bottom:14px;margin-bottom:22px}.tab{border:0;border-radius:7px;background:transparent;padding:11px 15px;color:var(--muted);text-align:left}.tab span{font-size:10px;margin-right:8px;opacity:.7}.tab[aria-selected=true]{background:var(--ink);color:white}.tab:hover:not([aria-selected=true]){background:#e5ece6}.intro{display:flex;justify-content:space-between;align-items:start;gap:20px;margin-bottom:20px}.intro p{font-size:13px;color:var(--muted);margin-top:5px}.tagline{font-size:12px;color:var(--green);padding-top:7px}.surface{background:var(--paper);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow)}.pad{padding:22px}.small{font-size:12px;color:var(--muted)}.mono{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:11px;letter-spacing:.02em}.section-label{font-size:11px;letter-spacing:.08em;color:var(--muted);font-weight:600;margin-bottom:8px}.rule{padding:13px 16px;background:var(--green-bg);border-left:3px solid var(--green);font-size:12px;border-radius:0 6px 6px 0;margin-top:18px}.rule.warn{background:var(--amber-bg);border-color:var(--amber);color:#754c1b}.rule.danger{background:var(--red-bg);border-color:var(--red);color:#824044}.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}.grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px}.spaced{margin-top:20px}.arrow-label{text-align:center;font-size:12px;color:var(--muted);padding:10px}.down{color:#8b9c94;font-size:18px;text-align:center;line-height:1.2;padding:7px 0}.note-list{padding:0;margin:12px 0 0;list-style:none}.note-list li{padding:7px 0;border-top:1px solid var(--line);font-size:12px}.note-list li:first-child{border-top:0}.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:11px;color:var(--muted);margin-top:14px}.legend span{display:flex;align-items:center;gap:6px}.dot{width:7px;height:7px;background:var(--green);border-radius:2px;display:inline-block}.dot.blue{background:var(--blue)}.dot.violet{background:var(--violet)}.dot.amber{background:var(--amber)}
+.overview-layout{display:grid;grid-template-columns:minmax(0,1fr) 290px;gap:22px;align-items:start}.board{padding:22px}.board-title{display:flex;justify-content:space-between;align-items:center;gap:10px;font-size:12px;color:var(--muted);padding-bottom:16px}.presentation{display:grid;grid-template-columns:1fr 1fr;gap:14px}.block{padding:15px 16px;border:1px solid var(--line);border-radius:8px;min-width:0;background:white}.block h3{font-size:16px}.block p{font-size:12px;color:var(--muted);margin-top:5px}.block.engine{background:var(--green-bg);border-color:#c4dccf}.block.flow{background:var(--blue-bg);border-color:#cfdeea}.block.resource{background:var(--violet-bg);border-color:#ded6ed}.block.archive{background:var(--amber-bg);border-color:#efdfc7}.engine-row{display:grid;grid-template-columns:1fr 32px 1fr;align-items:stretch}.bridge{align-self:center;text-align:center;color:var(--muted);font-size:20px}.queue-bus{padding:13px;background:#f4f7f4;border:1px solid var(--line);border-radius:8px;text-align:center}.queue-bus p{font-size:12px;color:var(--muted);margin-top:4px}.queue-chips{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;margin-top:9px}.queue-chips code{background:white;border:1px solid var(--line);padding:3px 7px;border-radius:5px;font-size:11px}.worker-row{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}.worker-box{border:1px solid var(--line);border-top:3px solid var(--blue);border-radius:6px;padding:12px;background:white}.worker-box b{font-size:13px}.worker-box p{font-size:11px;color:var(--muted);margin-top:6px}.underlay{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:14px}.aside{padding:20px;position:sticky;top:18px}.aside h3{margin-bottom:10px}.aside .entry{padding:12px 0;border-top:1px solid var(--line)}.aside .entry b{font-size:13px}.aside .entry p{font-size:12px;color:var(--muted);margin-top:4px}
+.cloud-strip{display:flex;align-items:center;gap:20px;justify-content:space-between;padding:18px 22px;border-top:3px solid var(--green)}.cloud-strip p{font-size:12px;color:var(--muted)}.cloud-parts{display:flex;gap:7px;flex-wrap:wrap}.cloud-parts span{padding:5px 9px;background:var(--green-bg);font-size:12px;border-radius:5px}.hosts{display:grid;grid-template-columns:1.15fr 1fr 1fr;gap:18px}.host{padding:20px;border-top:3px solid var(--blue);min-width:0}.host.future{border-top-color:var(--violet);border-style:dashed;border-top-style:solid}.host-title{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:5px}.host-title span{font-size:11px;color:var(--muted)}.host p{font-size:12px;color:var(--muted)}.modules{display:flex;gap:7px;flex-wrap:wrap;margin:16px 0}.module{background:#f4f7f4;border:1px solid var(--line);border-radius:6px;padding:8px 10px;text-align:left;font-size:12px;min-height:39px}.module:hover{border-color:var(--green)}.module[aria-pressed=true]{background:var(--green-bg);border-color:var(--green);color:var(--green)}.host-foot{border-top:1px solid var(--line);padding-top:12px;font-size:11px;color:var(--muted)}.detail-grid{display:grid;grid-template-columns:220px 1fr 1fr;gap:22px;padding:22px}.detail-grid h3{margin-top:3px}.detail-grid dt{font-size:11px;color:var(--muted);margin-bottom:3px}.detail-grid dd{margin:0 0 10px;font-size:13px}.detail-grid dl{margin:0}.detail-note{grid-column:1/-1;font-size:12px;color:var(--green);border-top:1px solid var(--line);padding-top:12px}
+.flow-entry{display:grid;grid-template-columns:1fr 1fr;gap:18px}.flow-entry .block{padding:17px 20px}.line-chain{display:flex;align-items:stretch;gap:9px}.line-chain .block{flex:1}.line-chain .bridge{flex:0 0 14px;font-size:16px}.product-stage{padding:20px}.capture-bar{background:var(--green-bg);border:1px solid #c4dccf;border-radius:8px;padding:14px 18px;display:flex;justify-content:space-between;align-items:center;gap:15px}.capture-bar h3{font-size:16px}.capture-bar p{font-size:12px;color:var(--muted)}.lanes{display:grid;grid-template-columns:1fr 1.3fr 1fr;gap:18px}.lane{border:1px solid var(--line);border-radius:8px;padding:14px;background:#fafbf8;min-width:0}.lane-title{font-size:11px;letter-spacing:.04em;color:var(--muted);margin-bottom:12px}.lane .block{padding:13px}.lane .block h3{font-size:14px}.lane .block p{font-size:11px}.optional-box{border-style:dashed;background:var(--violet-bg)}.lane-note{font-size:11px;color:var(--muted);margin-top:12px}.split-note{padding:10px 0;font-size:11px;color:var(--blue);text-align:center}.gate{padding:15px;border:1px dashed var(--blue);background:var(--blue-bg);border-radius:8px;text-align:center}.gate h3{font-size:16px}.gate p{font-size:12px;color:var(--blue);margin-top:5px}.tail{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:16px;margin-top:18px}.tail .block{position:relative;padding:12px}.tail .block:not(:last-child):after{content:"→";position:absolute;right:-15px;top:40%;font-size:13px;color:var(--muted)}.tail .block h3{font-size:13px}.tail .block p{font-size:11px}.tail .k{font-size:10px;color:var(--muted)}.branch-footer{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:18px}.result{padding:12px 15px;border-radius:6px;font-size:12px;background:var(--green-bg);color:var(--green)}.result.review{background:var(--red-bg);color:var(--red)}
+.scenario-tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px}.scenario-btn{border:1px solid var(--line);background:white;padding:9px 14px;border-radius:7px}.scenario-btn[aria-pressed=true]{border-color:var(--green);background:var(--green-bg);color:var(--green)}.receipt-steps{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}.receipt-step{border:1px solid var(--line);border-radius:8px;padding:14px;background:#f7f9f6;position:relative}.receipt-step:not(:last-child):after{content:"→";position:absolute;right:-14px;top:43%;color:var(--muted)}.receipt-step .num{font-size:11px;color:var(--muted)}.receipt-step b{display:block;font-size:14px;margin:5px 0}.receipt-step p{font-size:11px;color:var(--muted)}.receipt-step[data-state=ok]{background:var(--green-bg);border-color:#bdd9cc}.receipt-step[data-state=unknown]{background:var(--amber-bg);border-color:#e4c995}.receipt-step[data-state=blocked]{background:var(--red-bg);border-color:#e7c6c5}.scenario-detail{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px;padding-top:18px;margin-top:18px;border-top:1px solid var(--line)}.scenario-detail h4{font-size:12px;color:var(--muted);margin-bottom:7px}.scenario-detail p{font-size:13px}.history-card{padding:20px}.history-card p{font-size:12px;color:var(--muted);margin-top:7px}.errors{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:16px}.errors details{border:1px solid var(--line);border-radius:7px;background:white;padding:12px}.errors summary{font-size:12px;cursor:pointer;min-height:25px}.errors summary code{color:var(--red);margin-right:6px;font-size:10px}.errors p{font-size:12px;color:var(--muted);margin-top:8px}.storage-order{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-top:16px}.storage-order .block{background:#f8f9f6}.storage-order h3{font-size:14px}
+.provider-top{max-width:800px;margin:auto;text-align:center}.provider-chain{display:grid;grid-template-columns:1fr 36px 1fr 36px 1fr;align-items:center;margin:20px 0}.provider-chain .block{height:100%}.provider-chain .bridge{font-size:20px}.provider-cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px}.provider-cards .block{border-top:3px solid var(--violet)}.provider-cards .block p{font-size:12px}.isolation{display:grid;grid-template-columns:1fr 1fr;gap:18px}.isolation .block p{margin-top:8px}.queue-mini{padding:12px;background:#f5f7f4;border-radius:6px;font-size:12px;color:var(--muted);margin-top:12px}
+.phases{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}.phase{padding:19px}.phase-index{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}.phase-index b{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:22px;color:var(--green)}.phase-index span{font-size:10px;color:var(--muted);background:#eef2ed;padding:3px 7px;border-radius:4px}.phase p{font-size:12px;color:var(--muted);margin:8px 0 13px}.phase .exit{border-top:1px solid var(--line);padding-top:11px;font-size:12px}.phase .exit b{font-size:11px;color:var(--green);display:block;margin-bottom:4px}.check-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 25px}.check{padding:11px 0;border-bottom:1px solid var(--line);font-size:12px;display:flex;gap:12px}.check code{color:var(--green);font-size:11px;flex:0 0 31px}.doc-links{display:flex;gap:12px;flex-wrap:wrap;margin-top:18px}.doc-links a{background:white;border:1px solid var(--line);border-radius:6px;padding:9px 13px;font-size:12px;text-decoration:none}.footer{border-top:1px solid var(--line);padding-top:18px;margin-top:28px;font-size:11px;color:var(--muted);display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap}.sources{margin-top:16px;color:var(--muted);font-size:11px}.sources summary{cursor:pointer}.sources ul{padding-left:20px}.sources li{margin-top:5px}
+@media(max-width:1150px){.page{padding:24px}.overview-layout{grid-template-columns:minmax(0,1fr) 245px}.worker-row{grid-template-columns:repeat(2,minmax(0,1fr))}.hero-aside{max-width:230px}.tab{padding:10px 12px}.detail-grid{grid-template-columns:180px 1fr 1fr}.tail{gap:13px}}
+@media(max-width:900px){.overview-layout{grid-template-columns:1fr}.aside{position:static;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:15px}.aside>h3{grid-column:1/-1;margin-bottom:0}.aside .entry{border-top:0;padding:0}.hero-aside{display:none}.hosts,.phases{grid-template-columns:repeat(2,minmax(0,1fr))}.hosts .host:first-child{grid-column:1/-1}.detail-grid{grid-template-columns:1fr 1fr}.detail-grid>div:first-child{grid-column:1/-1}.cloud-strip{display:block}.cloud-parts{margin-top:12px}.tail{grid-template-columns:repeat(3,minmax(0,1fr))}.tail .block:after{display:none}.tail .block{border-top:2px solid var(--green)}}
+@media(max-width:650px){.page{padding:18px 16px 28px}.top{align-items:start}.top-meta{font-size:10px;text-align:right}.brand{font-size:10px;max-width:150px}.hero{padding:23px 0 18px}h1{font-size:28px}h2{font-size:21px}.lead{font-size:13px}.principles{gap:6px;margin-bottom:18px}.pill{font-size:10px}.tabs{gap:6px}.tab{flex:1 1 29%;padding:9px 8px;font-size:12px}.tab span{display:none}.intro{display:block}.tagline{margin-top:7px;font-size:11px}.board,.pad,.host,.phase,.product-stage,.aside{padding:16px}.board-title{font-size:11px;align-items:start}.presentation,.grid2,.grid3,.underlay,.flow-entry,.provider-cards,.isolation,.storage-order,.scenario-detail,.branch-footer{grid-template-columns:1fr}.engine-row{grid-template-columns:1fr}.engine-row .bridge{transform:rotate(90deg);line-height:1.1;padding:5px}.worker-row{gap:9px}.worker-box{padding:10px}.worker-box b{font-size:12px}.aside{grid-template-columns:1fr}.aside .entry{padding:8px 0;border-top:1px solid var(--line)}.hosts,.phases{grid-template-columns:1fr}.hosts .host:first-child{grid-column:auto}.host-title span{font-size:10px}.detail-grid{grid-template-columns:1fr;padding:18px;gap:8px}.detail-grid>div:first-child{grid-column:auto}.detail-note{margin-top:5px}.cloud-strip{padding:16px}.cloud-parts{gap:5px}.cloud-parts span{font-size:11px}.capture-bar{display:block;padding:13px}.capture-bar .pill{display:inline-block;margin-top:9px}.lanes{grid-template-columns:1fr;gap:12px}.lane{padding:13px}.lane-title{font-size:12px}.lane .block p,.lane-note{font-size:12px}.tail{grid-template-columns:1fr;gap:10px}.tail .block{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}.tail .block h3{font-size:14px}.tail .block p{font-size:12px}.line-chain{flex-direction:column}.line-chain>.bridge{transform:rotate(90deg);align-self:center;flex-basis:auto;line-height:1}.receipt-steps{grid-template-columns:1fr 1fr;gap:10px}.receipt-step:not(:last-child):after{display:none}.receipt-step b{font-size:13px}.scenario-tabs{gap:6px}.scenario-btn{flex:1 1 40%;padding:10px 8px;font-size:12px}.errors{grid-template-columns:1fr}.errors summary{min-height:30px;font-size:13px}.provider-chain{grid-template-columns:1fr;gap:6px}.provider-chain .bridge{transform:rotate(90deg);line-height:1}.check-grid{grid-template-columns:1fr}.footer{display:block}.footer p+p{margin-top:8px}.status{font-size:10px}}
+@media(prefers-reduced-motion:no-preference){button{transition:background .13s,border-color .13s}}
+@media print{body{background:white}.page{padding:0;max-width:none}.tabs,.sources,.scenario-tabs,.doc-links{display:none}.view[hidden]{display:block!important}.view{break-before:page}.view:first-of-type{break-before:auto}.surface{box-shadow:none}.hero-aside{display:block}.aside{position:static}.footer{margin-top:15px}.module{background:white}}
+</style>
+</head>
+<body>
+<main class="page" id="architecture">
+<header class="top"><div class="brand"><span class="mark"></span>CRAWLER / SYSTEM DESIGN</div><div class="top-meta">V3 · Temporal edition<br>2026.09.05 / 设计评审稿</div></header>
+<div class="hero"><div><p class="eyebrow">INDEPENDENT MODULES · DURABLE WORKFLOWS</p><h1>流程统一，能力独立。</h1><p class="lead">Temporal 管执行；Worker 做一件事；机器可以换，证据不能丢。</p></div><div class="hero-aside"><span class="status">设计目标，不是运行状态</span><p>本页不连接生产，不提交任务。<br>只更新计划与架构，实施从评审后的 P0 开始。</p></div></div>
+<div class="principles"><span class="pill green">单文件 OCR</span><span class="pill green">同机复用 · 跨机 R2</span><span class="pill green">成功产品独立入库</span><span class="pill red">业务不自动重跑</span><span class="pill red">Review 被动留存</span><span class="pill">R2 不随任务删除</span></div>
+<nav class="tabs" role="tablist" aria-label="架构视图">
+<button class="tab" id="tab-overview" role="tab" aria-selected="true" aria-controls="view-overview" type="button"><span>01</span>总体职责</button>
+<button class="tab" id="tab-deployment" role="tab" aria-selected="false" aria-controls="view-deployment" tabindex="-1" type="button"><span>02</span>多机与模块</button>
+<button class="tab" id="tab-pipeline" role="tab" aria-selected="false" aria-controls="view-pipeline" tabindex="-1" type="button"><span>03</span>产品流水线</button>
+<button class="tab" id="tab-handoff" role="tab" aria-selected="false" aria-controls="view-handoff" tabindex="-1" type="button"><span>04</span>交接与 Review</button>
+<button class="tab" id="tab-network" role="tab" aria-selected="false" aria-controls="view-network" tabindex="-1" type="button"><span>05</span>网络与资源</button>
+<button class="tab" id="tab-plan" role="tab" aria-selected="false" aria-controls="view-plan" tabindex="-1" type="button"><span>06</span>重构计划</button>
+</nav>
+
+<section class="view" id="view-overview" role="tabpanel" aria-labelledby="tab-overview">
+<div class="intro"><div><h2>一套执行底座，清晰的职责边界</h2><p>不在旧 Job 队列上再套 Temporal；不把机器管理误当成流程管理。</p></div><span class="tagline">业务核心与框架通过薄适配层连接</span></div>
+<div class="overview-layout">
+<div class="surface board">
+<div class="board-title"><b>V3 目标架构</b><span>展示 / 编排 / 执行 / 数据</span></div>
+<div class="presentation"><div class="block"><p class="section-label">执行可观察性</p><h3>Temporal UI</h3><p>流程、Activity、事件历史、等待与超时<br>复用现成执行看板</p></div><div class="block"><p class="section-label">业务结果</p><h3>我们的 Dashboard</h3><p>发现 / 入库 / Review 汇总、证据链接<br>可选轻量节点健康摘要</p></div></div>
+<div class="arrow-label">入口 API 校验请求 → 提交 Workflow；业务统计读取业务库</div>
+<div class="engine-row"><div class="block engine"><p class="section-label">持久化执行服务</p><h3>Temporal Service</h3><p>流程历史 · 任务队列 · 超时 · 执行状态<br>不安装模块，不远程启动电脑</p></div><div class="bridge" aria-label="双向通信">⇄</div><div class="block flow"><p class="section-label">独立编排进程</p><h3>Workflow Worker</h3><p>目录流程 / 产品流程 / 下线查询<br>只编排；所有外部 I/O 交给 Activity</p></div></div>
+<div class="arrow-label">Workflow 安排 Activity；Service 持久化待执行任务</div>
+<div class="queue-bus"><b>Temporal Task Queues · 按能力分开</b><div class="queue-chips"><code>capture.*</code><code>pdf.file</code><code>ocr.file</code><code>text / vision</code><code>validate</code><code>ingest / verify</code></div><p>不是第二套自研业务队列；同队列消费者必须具有一致处理能力</p></div>
+<div class="arrow-label"><b>↓ Worker 主动拉取任务 / ↑ 上报结果</b> · 有执行容量才领取</div>
+<div class="worker-row"><div class="worker-box"><b>抓取 Worker</b><p>Amazon / GNC / Swanson / DTC<br>来源规则各自独立</p></div><div class="worker-box"><b>文件 / OCR Worker</b><p>下载校验 / PDF / 单图 OCR<br>每种职责独立进程</p></div><div class="worker-box"><b>Codex Worker</b><p>文本 / 图片 / 标准化<br>共享账号额度</p></div><div class="worker-box"><b>校验 / 入库 Worker</b><p>确定性校验 / 写入 / 回读<br>写入全局串行</p></div></div>
+<div class="underlay"><div class="block archive"><h3>业务库 + R2 证据</h3><p>结果、Review、身份、写入凭证 → 业务库<br>原件、派生文件、完成清单 → R2</p></div><div class="block resource"><h3>资源管理 + 主机运行层</h3><p>额度 / 会话 / 出口许可 → 资源服务<br>安装 / 启停 / 进程监督 → 主机工具</p></div></div>
+<div class="legend"><span><i class="dot"></i>Temporal 执行底座</span><span><i class="dot blue"></i>我们编写的流程与模块</span><span><i class="dot violet"></i>资源与运行条件</span><span><i class="dot amber"></i>独立业务数据与证据</span></div>
+</div>
+<aside class="surface aside"><h3>不是“全部交给 Temporal”</h3><div class="entry"><b>执行真源只有一个</b><p>不复制 claim / renew / retry_wait；业务库的结果投影不是另一套调度器。</p></div><div class="entry"><b>完成 ≠ 成功入库</b><p>Workflow 可以正常完成“转入 Review”。Dashboard 以业务结果和回读凭证统计。</p></div><div class="entry"><b>模块与主机解耦</b><p>把 OCR 从 Mac 移到服务器，不需要重写产品流程；运行环境仍需验证。</p></div></aside>
+</div>
+<div class="rule">已确认方向：重写核心 · Temporal UI 复用 · 独立 Worker · 不自动重跑 · 首版不自动下架。选择托管 / 自建、锁定版本和生产切换属于后续准入门。</div>
+</section>
+
+<section class="view" id="view-deployment" role="tabpanel" aria-labelledby="tab-deployment" hidden>
+<div class="intro"><div><h2>一台机器，可以启动很多独立模块</h2><p>下方每一个 Tag 都是可独立配置、启动、停止和部署的角色。点击查看输入、输出与依赖。</p></div><span class="tagline">示意部署，不是在线节点清单</span></div>
+<div class="surface cloud-strip"><div><h3>常驻服务环境</h3><p>Temporal Cloud 或自建服务；生产方式在 P0 后单独批准</p></div><div class="cloud-parts"><span>Temporal Service</span><span>编排 Worker</span><span>入口 API</span><span>资源服务</span><span>业务库</span><span>Dashboard</span></div></div>
+<div class="arrow-label">每个 Worker 主动连接同一个逻辑 Temporal 服务 · 机器不需要暴露接单端口</div>
+<div class="hosts">
+<article class="surface host"><div class="host-title"><h3>Mac mini</h3><span>首批现有主机</span></div><p>按角色各自启动，不是一个“大处理 Worker”。</p><div class="modules" id="mac-modules"></div><div class="host-foot">系统服务负责进程监督；本地缓存通过统一 Resolver 使用。业务代码不依赖 Mac 专有 PDF 框架。</div></article>
+<article class="surface host"><div class="host-title"><h3>美国 Windows</h3><span>首批现有主机</span></div><p>浏览器任务保持会话、规格和出口隔离。</p><div class="modules" id="windows-modules"></div><div class="host-foot">独立浏览器 Lane / Profile；启动前验证 SDK、Codex、CDP 与桌面会话可用性。不自动修改共享 Clash 组。</div></article>
+<article class="surface host future"><div class="host-title"><h3>未来服务器</h3><span>按能力扩容</span></div><p>接入同一能力队列即可承担相应任务。</p><div class="modules" id="server-modules"></div><div class="host-foot">可以只部署一个模块。相同能力可有多个实例；跨机器共享额度仍由资源服务约束。</div></article>
+</div>
+<div class="surface detail-grid spaced" id="module-detail" aria-live="polite"></div>
+<div class="grid2 spaced"><div class="surface pad"><h3>Temporal 管什么？</h3><ul class="note-list"><li>持久待执行任务与跨机分发</li><li>流程依赖、结果、超时和执行历史</li><li>Worker 版本路由与执行查询</li></ul></div><div class="surface pad"><h3>主机运行层管什么？</h3><ul class="note-list"><li>安装、开机启动、部署、退出后拉起进程</li><li>schema / 凭证 / 浏览器 / 磁盘健康检查</li><li>提供 hostId 与 workerInstanceId，不另造任务调度</li></ul></div></div>
+</section>
+
+<section class="view" id="view-pipeline" role="tabpanel" aria-labelledby="tab-pipeline" hidden>
+<div class="intro"><div><h2>一个产品有依赖，不同产品持续流水</h2><p>目录发现与产品处理分开；文件粒度执行；汇合屏障不占业务 Worker。</p></div><span class="tagline">Workflow 管顺序 · Activity 执行原子模块</span></div>
+<div class="flow-entry"><div class="block flow"><p class="section-label">CatalogWorkflow</p><h3>品牌 / 站点目录发现</h3><p>分页可靠发布产品请求 → 生成最终目录清单。<br>目录结束不取消已启动产品；产品不等品牌处理完。</p></div><div class="block"><p class="section-label">ProductWorkflow</p><h3>一个挂牌 / 变体的一次观察</h3><p>固定 observationId、来源身份、策略和输入版本。<br>单品链接可直接提交，进入同一条产品流程。</p></div></div>
+<div class="arrow-label">为每个独立产品建立流程 ↓ 已发布的产品可以立即推进</div>
+<div class="surface product-stage">
+<div class="capture-bar"><div><h3>产品抓取 · Amazon / GNC / Swanson / DTC</h3><p>发布同一次观察的页面与文件来源；浏览器导航、切规格、读取在同一会话内完成</p></div><span class="pill green">独立抓取模块</span></div>
+<div class="arrow-label">原始证据可靠发布后 ↓ 分支按输入依赖并行</div>
+<div class="lanes">
+<div class="lane"><p class="lane-title">A / 页面文字路径</p><div class="block"><h3>页面证据整理</h3><p>原文 · HTML 表格 · 结构化字段</p></div><div class="down">↓</div><div class="block flow"><h3>Codex 文本理解</h3><p>输出带来源的候选结果</p></div><p class="lane-note">无需等待图片 OCR。此处不把“标签尚未返回”判断成“没有配方”。</p></div>
+<div class="lane"><p class="lane-title">B / 文件与 OCR 路径</p><div class="block"><h3>单文件获取与校验</h3><p>图片 / PDF → 已验证 ArtifactRef<br>同机缓存优先，否则从 R2 获取</p></div><div class="down">↓</div><div class="block"><h3>PDF 处理（仅 PDF）</h3><p>提取文字 → 进入文本理解<br>或渲染页图 → 每页独立 OCR</p></div><div class="split-note">原始图片可直接进入 OCR，跳过 PDF 步骤</div><div class="block flow"><h3>OCR · 一张图片</h3><p>文件身份 + 产品关联 → 原始识别文字</p></div><div class="down">↓</div><div class="block flow"><h3>Codex 文本理解</h3><p>等待本文件 OCR 结果，再解析业务含义</p></div></div>
+<div class="lane"><p class="lane-title">C / 可选视觉路径</p><div class="block optional-box"><h3>读取 B 线已验证的图片</h3><p>使用相同 ArtifactRef，不重新猜路径或混入其他规格图片</p></div><div class="down">↓</div><div class="block optional-box"><h3>Codex 图片理解</h3><p>只在证据计划要求时执行</p></div><p class="lane-note">图片就绪后，可与 OCR 并行。若是已声明的证据补充分支，则等待其前置结果；不是 OCR 失败后的自动重跑替代。</p></div>
+</div>
+<div class="arrow-label">各支线独立保存结果 ↓ 只有依赖齐备的产品才能进入下一步</div>
+<div class="gate"><h3>必要证据 + 按需封闭的 family 上下文</h3><p>这是 Workflow 等待条件，不是一个空等的 Worker。缺失、冲突与“尚未完成”必须区分。</p></div>
+<div class="tail"><div class="block"><span class="k">01 / NORMALIZE</span><h3>产品标准化</h3><p>单 SKU + 必要系列上下文</p></div><div class="block"><span class="k">02 / VALIDATE</span><h3>确定性校验</h3><p>失败不暗中调模型修复</p></div><div class="block"><span class="k">03 / IDENTITY</span><h3>公司 / 品牌归属</h3><p>失败仍保留完整候选</p></div><div class="block engine"><span class="k">04 / INGEST</span><h3>全局串行写入</h3><p>每 SKU 独立 · partial</p></div><div class="block engine"><span class="k">05 / VERIFY</span><h3>独立只读回读</h3><p>核验凭证 → 业务结果</p></div></div>
+<div class="branch-footer"><div class="result"><b>通过：</b>登记成功入库；不等整个品牌、不删除 R2。</div><div class="result review"><b>失败 / 未知：</b>先核验证据；不能确认则被动 Review，关联受阻下游。</div></div>
+</div>
+<div class="surface pad spaced"><p class="section-label">独立分支 / PresenceWorkflow</p><h3>下线查询，不接在成功入库后面</h3><div class="line-chain spaced"><div class="block"><h3>完整同范围目录</h3><p>目录发现集合 − 历史 Listing<br>不是成功入库集合</p></div><div class="bridge">→</div><div class="block"><h3>逐链接独立核查</h3><p>也允许单链接独立提交<br>验证码 / 缺货 ≠ 下架</p></div><div class="bridge">→</div><div class="block archive"><h3>记录观察与证据</h3><p>存在 / 确认缺席 / 未知<br>首版不写 inactive 或全局停产</p></div></div></div>
+<div class="rule warn">目录不完整时不自动推断缺席。某个产品 OCR 失败，但它已出现在目录中，仍应算“本轮发现”。</div>
+</section>
+
+<section class="view" id="view-handoff" role="tabpanel" aria-labelledby="tab-handoff" hidden>
+<div class="intro"><div><h2>证据留下，算过的不重复算</h2><p>切换下面的示意场景，查看处理完成、持久化、登记和引擎确认之间的边界。</p></div><span class="tagline">展示规则，不执行恢复操作</span></div>
+<div class="scenario-tabs" aria-label="交接场景">
+<button class="scenario-btn" type="button" data-scenario="normal" aria-pressed="true">正常完成</button>
+<button class="scenario-btn" type="button" data-scenario="receipt" aria-pressed="false">完成回执丢失</button>
+<button class="scenario-btn" type="button" data-scenario="partial" aria-pressed="false">只有原图 / 半份输出</button>
+<button class="scenario-btn" type="button" data-scenario="write" aria-pressed="false">写入结果未知</button>
+</div>
+<div class="surface pad" id="scenario-panel" aria-live="polite"><p class="section-label" id="scenario-subtitle"></p><h3 id="scenario-title"></h3><div class="receipt-steps spaced" id="receipt-steps"></div><div class="scenario-detail" id="scenario-detail"></div></div>
+<div class="surface pad spaced"><h3>文件读取不靠“对方放在哪个目录”</h3><div class="storage-order"><div class="block"><h3>① 当前环境有有效副本？</h3><p>本地可读 + hash / 大小匹配<br>同机也要确认容器挂载可见</p></div><div class="block"><h3>② 有，就直接复用</h3><p>避免重复下载<br>仍保有 R2 持久副本</p></div><div class="block"><h3>③ 没有，从 R2 解析</h3><p>稳定 artifactId / key → 授权地址<br>下载校验，签名过期可重新生成</p></div></div><div class="rule">完成凭证验证输入 hash、操作 ID、配置 / schema / 代码版本、输出 hash 与完整标记。只有原图、文件名或局部日志，不能证明 OCR 已完成。</div></div>
+<div class="grid2 spaced"><div class="surface history-card"><p class="section-label">历史成功样本</p><h3>建立隔离验证副本</h3><p>用全新实现验证；旧输出只作参考，不直接当正确答案。测试目标与生产入库隔离。</p></div><div class="surface history-card"><p class="section-label">历史失败任务</p><h3>保留原 Review，补分类</h3><p>不续跑旧 Job，不自动重跑。需要复现时另建明确的测试副本，原始错误和证据不覆盖。</p></div></div>
+<div class="spaced"><h3>Review 分类 · 只存放，不自动流转</h3><p class="small">每项保留候选产品 / Facts、输入输出、原始错误、失败阶段、执行关联与已确认根因。展开查看示例。</p><div class="errors" id="error-list"></div></div>
+</section>
+
+<section class="view" id="view-network" role="tabpanel" aria-labelledby="tab-network" hidden>
+<div class="intro"><div><h2>站点、网络模式、资源许可分开</h2><p>替换出口不重写站点解析；增加机器不放大账号额度；任务不擅自修改共享 Clash 配置。</p></div><span class="tagline">Adapter + 明确能力 + 会话隔离</span></div>
+<div class="surface pad">
+<div class="provider-top"><p class="section-label">NETWORK ACCESS CONTRACT</p><h3>先声明需要什么能力，再选择如何访问</h3><p class="small">HTTP / 文件下载 / 渲染 HTML / 交互浏览器 + 地区 + 会话要求</p></div>
+<div class="provider-chain"><div class="block flow"><h3>站点模块</h3><p>Amazon / GNC / Swanson / DTC<br>只关心页面操作与提取规则</p></div><div class="bridge">→</div><div class="block resource"><h3>访问策略 + 资源许可</h3><p>匹配 Provider 能力与授权范围<br>固定会话出口，记录配置版本</p></div><div class="bridge">→</div><div class="block"><h3>Network Adapter</h3><p>执行已选网络模式<br>失败不自动换 Provider 重跑</p></div></div>
+<div class="provider-cards"><div class="block"><p class="section-label">STATIC PROXY</p><h3>静态 IP / 代理池</h3><p>显式 endpoint、凭证引用、地区与会话绑定。分配可用出口，不混用不同产品的浏览器上下文。</p></div><div class="block"><p class="section-label">CLASH</p><h3>Clash 控制适配</h3><p>兼容实际核心的节点 / 组查询与授权操作；节点、订阅和共享组选点由操作者管理。</p></div><div class="block"><p class="section-label">SCRAPER API</p><h3>ScraperAPI</h3><p>按实际接口声明能力。渲染 HTML 不等于交互浏览器；提供商内部可能重试，不承诺源站只访问一次。</p></div></div>
+<div class="rule warn">Clash 并发隔离：独立核心，或经验证的独立监听器 + 独立绑定策略组。不同端口共享同一个可变 selector，不算隔离。</div>
+</div>
+<div class="isolation spaced"><div class="surface pad"><p class="section-label">跨机资源约束</p><h3>许可服务，不是第二套业务队列</h3><p class="small">Codex 文本、视觉与 DTC 驱动共用账号预算；OCR、浏览器和出口各自限额。</p><div class="queue-mini">短申请 → 无许可立即返回 → Workflow 持久等待<br>有许可 → 安排业务 Activity → 开始前再次校验</div><ul class="note-list"><li>不在 Worker 内先领几十项再排本地 semaphore。</li><li>过期许可且尚未执行：回到资源等待，不记业务失败。</li><li>未知的在途副作用：先核验，不自动转交许可。</li></ul></div><div class="surface pad"><p class="section-label">运行与安全约束</p><h3>主机健康与写入保护</h3><ul class="note-list"><li>磁盘 / R2 / 积压触发背压；流水不是无限接单。</li><li>首版仅一个激活写入部署 + 全局写许可。</li><li>写者失联且请求未知：只读核验，不能自动启用第二写者。</li><li>Clash API 仅本机 / 私网鉴权；保持 TLS 校验。</li><li>本次不更改现有代理节点、共享策略组或系统代理。</li></ul></div></div>
+<div class="rule">PDF 模块首选 PDFium / pypdfium2，文字提取与页图渲染是明确操作，不依赖 Swift / PDFKit。PDFium 并发用隔离进程；实际平台兼容在 P0 验证。</div>
+</section>
+
+<section class="view" id="view-plan" role="tabpanel" aria-labelledby="tab-plan" hidden>
+<div class="intro"><div><h2>先验证底座，再逐步接入业务</h2><p>六个交付门，全部是待执行计划；没有安装框架、启动新 Worker 或迁移生产任务。</p></div><span class="tagline">每阶段都有可检查的退出条件</span></div>
+<div class="phases" id="phase-list"></div>
+<div class="surface pad spaced"><h3>用过去真实出过的问题验收新系统</h3><p class="small">这里是关键场景摘要；完整设计列出 A01–A22。通过测试才进入下一阶段。</p><div class="check-grid" id="check-list"></div></div>
+<div class="grid2 spaced"><div class="surface pad"><h3>第一版明确不做</h3><ul class="note-list"><li>第二套调度器、通用 DAG 编辑器、另一个执行看板。</li><li>自动 Review 修复、自动换 Provider 重跑。</li><li>成功清理 R2、自动下架 / 全局停产。</li><li>新增所有渠道、完整远程节点控制平台。</li></ul></div><div class="surface pad"><h3>需要通过的生产准入门</h3><ul class="note-list"><li>托管 / 自建选择和生产资源开通单独批准。</li><li>SDK / Windows 浏览器 / PDF 版本实机锁定。</li><li>实际产品服务的逐 SKU partial 契约通过。</li><li>旧系统停接单、在途核验与 V3 切换另行批准。</li></ul></div></div>
+<div class="doc-links"><a href="../CRAWLER_V3_PLAN.md">阅读分阶段计划 ↗</a><a href="spark/2026-09-05-crawler-v3-temporal-design.md">阅读完整设计与验收 ↗</a></div>
+<div class="rule warn">本轮停在文档评审。旧任务不转换成 V3 的运行任务，历史失败不自动重跑。生产切换只在 P5 验收及授权后进行。</div>
+</section>
+
+<footer class="footer"><p>V3 / Temporal · 原子模块 · 多机执行 · 证据保留 · 被动 Review</p><p>离线设计文档 · 非生产控制台 · <a href="../CRAWLER_V3_PLAN.md">计划</a> / <a href="spark/2026-09-05-crawler-v3-temporal-design.md">完整规范</a></p></footer>
+<details class="sources"><summary>官方依据与设计边界</summary><ul><li><a href="https://docs.temporal.io/workers">Temporal Workers</a> / <a href="https://docs.temporal.io/task-queue">Task Queues</a>：Worker 主动接单，部署与主机管理由我们负责。</li><li><a href="https://docs.temporal.io/workflow-execution">执行历史与恢复</a> / <a href="https://docs.temporal.io/encyclopedia/retry-policies">重试策略</a>：恢复不等于重跑业务；业务最大尝试次数设为 1。</li><li><a href="https://docs.temporal.io/web-ui">Temporal UI</a> / <a href="https://docs.temporal.io/visibility">Visibility</a>：执行查询不是精确、永久的业务账本。</li><li><a href="https://pypdfium2.readthedocs.io/en/stable/python_api.html#incompatibility-with-threading">PDFium 线程边界</a> / <a href="https://wiki.metacubex.one/en/api/">mihomo API</a>：实际平台 / 核心版本仍需验证。</li></ul></details>
+<noscript><div class="rule warn">请启用 JavaScript 以切换视图和查看模块详情；完整规则也可通过上方计划与规范链接阅读。</div></noscript>
+</main>
+<script id="architecture-script">
+(() => {
+  'use strict';
+  const root = document.getElementById('architecture');
+  const $ = (selector) => root.querySelector(selector);
+  const $$ = (selector) => [...root.querySelectorAll(selector)];
+  const escape = (value) => String(value).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const modules = {
+    catalog:['目录发现','catalog-discover','品牌 / 站点范围、来源配置与本次请求 ID','可靠发现项、最终 CatalogManifest、完整性与范围','按发现项持续启动产品；目录关闭不取消已发布产品，不用成功入库数判断完整性。','来源 Adapter、网络会话、产物存储'],
+    amazon:['Amazon 抓取','capture-amazon','一个挂牌 / ASIN 变体观察任务','原始页面、结构化字段、图片与文件来源','单次浏览器会话内导航、切规格、读取串行；不内部串接 OCR 或入库。','Amazon Adapter、浏览器、专用网络会话'],
+    gnc:['GNC 抓取','capture-gnc','一个 GNC 挂牌 / 变体与访问能力要求','页面与来源证据，关联本次 observationId','Browser 与 ScraperAPI 按能力区分队列，不把渲染 HTML 当完整交互浏览器。','GNC Adapter、显式 Network Provider'],
+    swanson:['Swanson 抓取','capture-swanson','一个 Swanson 挂牌 / 变体观察任务','页面、渠道字段、文件来源与规格关系','不等待下游处理；已有证据可靠发布后即可推进。','Swanson Adapter、HTTP / 浏览器能力'],
+    dtc:['DTC 浏览器抓取','capture-dtc','一个独立站产品 / 变体观察与会话要求','原始页面证据、SKU / 变体身份、文件来源','Codex 驱动浏览器属于抓取会话；不承担下游业务文本解析。每个 Lane 隔离页签、Profile 和出口。','Codex 浏览器驱动、CDP、账号 / 会话许可'],
+    page:['页面证据整理','page-extract','一份已发布页面 ArtifactRef','可追溯原文、HTML 表格、结构化字段','与图片线并行；标签仍在处理时，不提前作最终排除判断。','页面解析器、Artifact Resolver'],
+    files:['单文件获取','artifact-fetch','一个来源文件引用 + 产品 / 变体绑定','真实媒体类型、校验值、稳定 ArtifactRef','一次一个文件；不凭扩展名猜格式，不依赖其他模块的本地路径。','Network Adapter、R2、Artifact Resolver'],
+    pdf:['PDF 处理','pdf-process','一个 PDF + 提取文字或渲染页图的明确操作','文字产物或逐页图片引用；保留 parentArtifactId / pageIndex','不使用 Swift / PDFKit；PDFium 并发采用隔离进程，不在 PDF 模块里继续跑 OCR。','PDFium / pypdfium2、文件解析、资源限制'],
+    ocr:['OCR 单文件','ocr-file','一张已验证图片、operationId、observationId、输入指纹','原始 OCR 文字、来源、识别元数据与完成凭证','不传图片批次，不解析业务，不入库。失败不自动重试；有完整证据只补交接。','OCR Adapter、共享配额、Artifact Resolver'],
+    text:['Codex 文本理解','text-interpret','一份明确范围的文字证据集 + 策略版本','Facts / 成分等候选结果及来源引用','页面路径可并行；OCR 文字必须等待对应 OCR 结果。与视觉 / DTC 驱动共享账号预算。','Codex 文本 Adapter、schema、账号许可'],
+    vision:['Codex 图片理解','image-interpret','一张图片 + 证据计划中声明的处理意图','视觉候选、来源与无法判断的原因','按计划启用，不默认所有图片双跑；OCR 请求失败不自动切换到视觉再试。','Codex 视觉 Adapter、账号许可、Artifact Resolver'],
+    normalize:['产品标准化','product-normalize','单 SKU 候选 + 按需封闭的 family 上下文','规范产品候选与证据关系','共享系列上下文，但逐 SKU 验收；不等待全品牌，不自行生成产品服务身份键。','文本能力、词表与版本化标准化策略'],
+    validate:['确定性校验','product-validate','规范候选 + 证据清单 + 策略版本','通过或精确的问题列表','不在校验失败后暗中请求模型修复。必需证据未完成不能被当作缺失。','schema 与确定性业务规则'],
+    owner:['公司 / 品牌归属','owner-resolve','来源品牌身份与已保存候选','确认归属或归属冲突记录','无法匹配公司时，完整产品与 Facts 留存 Review，不丢弃处理成果。','只读身份查询 Adapter'],
+    ingest:['产品写入','product-ingest','一个已通过校验与归属检查的 SKU 观测','写入回执或 write_unknown 事实','首版一个激活写入部署 + 全局许可；partial；不自动再次写入、不触发缺席下架。','产品服务写入 Adapter、全局写许可'],
+    verify:['入库回读','product-verify','稳定写入标识、预期观测与回执信息','核验凭证或具体差异','纯只读；写入未知时先核验，不能把回读失败当作重新写入的理由。','产品服务只读 Adapter、结果登记'],
+    presence:['下线查询','presence-check','待核查 Listing / URL，或完整目录差集中的一项','存在 / 确认缺席 / 未知，附时间和证据','不依赖成功入库集合；缺货 / 网络错误不等于下架；首版不写 inactive。','来源 Adapter、网络会话、证据存储']
+  };
+  function renderModule(key) {
+    const m = modules[key];
+    if (!m) return;
+    $$('[data-module]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.module === key)));
+    $('#module-detail').innerHTML = '<div><p class="section-label">原子模块 / 独立角色</p><h3>'+escape(m[0])+'</h3><code>'+escape(m[1])+'</code></div><dl><dt>一次输入</dt><dd>'+escape(m[2])+'</dd><dt>一次输出</dt><dd>'+escape(m[3])+'</dd></dl><dl><dt>注入依赖</dt><dd>'+escape(m[5])+'</dd><dt>运行方式</dt><dd>独立 Worker 入口 → 薄 Activity → 可单测业务函数。部署主机可更换。</dd></dl><p class="detail-note">边界：'+escape(m[4])+'</p>';
+  }
+  const hosts = {
+    'mac-modules':['catalog','amazon','gnc','swanson','page','files','pdf','ocr','text','vision','normalize','validate','owner','ingest','verify','presence'],
+    'windows-modules':['dtc','files','presence'],
+    'server-modules':['pdf','ocr','text','vision','normalize','validate','owner','verify']
+  };
+  for (const [id, keys] of Object.entries(hosts)) {
+    const target = $('#'+id);
+    keys.forEach(key => {
+      const button = document.createElement('button');
+      button.type = 'button'; button.className = 'module'; button.dataset.module = key;
+      button.textContent = modules[key][0]; button.setAttribute('aria-pressed','false');
+      button.addEventListener('click', () => renderModule(key)); target.append(button);
+    });
+  }
+
+  const scenarios = {
+    normal: {subtitle:'正常路径 / 示例产品 A',title:'本步骤完成，OCR Worker 继续处理文件 B',steps:[['计算完成','原始文字与完整输出清单已保存','ok'],['R2 持久化','产物和完成凭证已校验','ok'],['结果登记','业务库记录输入指纹与引用','ok'],['引擎确认','Temporal 已记录 Activity 完成','ok']],details:[['Worker','OCR Worker 已释放执行槽，可以处理文件 B；不是等整个产品或品牌结束。'],['产品流程','A 如果还缺页面结果，就在 Workflow 中等待；其他产品可继续解析或入库。'],['证据保留','原图、OCR 文本、派生产物和完成清单保留，不执行成功清理。']]},
+    receipt: {subtitle:'异常路径 / 已处理但完成回执未知',title:'先核验完整证据，只补交接，不再 OCR',steps:[['计算完成','有完整输出及版本 / 输入指纹','ok'],['R2 持久化','结果与完成清单可以读取','ok'],['结果登记','核对是否已经登记，幂等补齐','unknown'],['引擎确认未知','不能把回执未知当成没处理','unknown']],details:[['恢复动作','检查输入、配置 / schema / 代码版本与输出 hash；一致时只补登记 / 交接。'],['执行生命周期','若原 Activity 已超时，安排独立只读核验采用结果，不伪造原 Activity 成功。'],['无法确认时','只有本地结果则先补传；机器不可达或证据不完整则 Review，不重新调用 OCR。']]},
+    partial: {subtitle:'证据不足 / 原图存在不是完成证明',title:'保持未知或失败，分类留在 Review',steps:[['未证明计算完成','只有原图、局部日志或半份输出','blocked'],['持久结果不完整','不存在可验证的完整结果清单','blocked'],['不能登记成功','保留已知事实与候选数据','blocked'],['下游不推进','关联 blockedBy，不伪造执行失败','blocked']],details:[['不能做什么','不能仅凭文件存在、.ready 文件名或原始图片，就跳过 OCR 并认定完成。'],['保留什么','输入、部分产物、原始错误、执行身份、已确认根因都保留；原因不明不猜测。'],['其他产品','只隔离受影响产品 / 必需依赖；兄弟产品继续。原 Review 不自动流转。']]},
+    write: {subtitle:'外部副作用 / 写入请求超时',title:'写入结果未知，回读与再次写入必须分开',steps:[['候选已验证','身份、证据与请求指纹固定','ok'],['写入已发起','全局许可只有一个持有者','ok'],['回执未知','超时不代表产品库没有写入','unknown'],['只读核验','凭稳定请求标识查询实际结果','unknown']],details:[['允许的动作','保留 write_unknown，调用独立只读回读模块核验；已确认成功就登记凭证。'],['写入保护','无法确认旧写者停止 / 旧请求结束时，不自动转交全局写许可；其他抓取处理继续。'],['不能做什么','不能自动再次写入、不能启动第二个写者抢做、不能把未知结果统计成入库成功。']]}
+  };
+  function renderScenario(key) {
+    const s = scenarios[key];
+    $$('[data-scenario]').forEach(b => b.setAttribute('aria-pressed',String(b.dataset.scenario===key)));
+    $('#scenario-subtitle').textContent=s.subtitle; $('#scenario-title').textContent=s.title;
+    $('#receipt-steps').innerHTML=s.steps.map((x,i)=>'<div class="receipt-step" data-state="'+x[2]+'"><span class="num">0'+(i+1)+'</span><b>'+escape(x[0])+'</b><p>'+escape(x[1])+'</p></div>').join('');
+    $('#scenario-detail').innerHTML=s.details.map(x=>'<div><h4>'+escape(x[0])+'</h4><p>'+escape(x[1])+'</p></div>').join('');
+  }
+  $$('[data-scenario]').forEach(b=>b.addEventListener('click',()=>renderScenario(b.dataset.scenario)));
+  const errors = [
+    ['SOURCE','来源与抓取','验证码、页面不可读、目录中断。记录来源与范围；不把抓漏当缺席。'],
+    ['RUNTIME','浏览器与环境','CDP 失效、页签冲突、schema 缺失。记录 host / worker / Lane；健康不达标先停接单。'],
+    ['ARTIFACT','产物与交接','缺文件、错误类型、hash 不符、R2 传输失败。区分原件存在与完成结果存在。'],
+    ['PROCESSING','OCR 与模型','调用失败、输出契约错误。保留原始输出；不自动重试或换模型。'],
+    ['VALIDATION','数据校验','必要证据缺失、配方 / 规格冲突。保留候选与规则版本，不用最后返回结果覆盖。'],
+    ['IDENTITY','身份与归属','产品来源或公司 / 品牌不确定。完整保存产品、Facts 和归属证据。'],
+    ['INGEST','写入与回读','写入失败、回执未知、回读差异。先只读核验，不自动重新写入。'],
+    ['SCHEDULER','执行生命周期','重复实例、取消不生效、超时。保留事件，不凭 timeout 推断网络根因。'],
+    ['UNCLASSIFIED','原因未确认','历史信息不足。记录事实和原始错误，可追加分类，不覆盖原记录。']
+  ];
+  $('#error-list').innerHTML=errors.map(e=>'<details><summary><code>'+escape(e[0])+'</code>'+escape(e[1])+'</summary><p>'+escape(e[2])+'</p></details>').join('');
+  const phases=[
+    ['P0','环境与契约','隔离开发环境；Mac / Windows / PDF 实机验证；实际产品服务逐 SKU partial 提交测试。','跨机模拟可复现，版本与外部提交形式有验证证据。'],
+    ['P1','原子契约与可靠交接','ArtifactRef、结果清单、R2、本地 Resolver、薄 Worker、Review 与幂等登记。','回执丢失只补交接；A01、A04–A09、A15、A18。'],
+    ['P2','单产品处理闭环','文件、PDF、OCR、Codex、标准化、校验、归属；仅测试目标的写入 / 回读。','单产品到测试入库或 Review；A02、A03、A08、A14、A15。'],
+    ['P3','渠道与资源隔离','全新渠道 / DTC 模块；目录与下线查询；网络 Adapter、共享许可、背压。','两机不超额度、不互切出口、无双写；A10–A14、A16、A19、A20。'],
+    ['P4','历史验证与 Dashboard','成功样本副本；失败分类；Temporal UI 检索；业务汇总与故障测试。','不自动重跑历史失败，不混算业务结果；A17、A21、A22。'],
+    ['P5','受控生产切换','全安全验收、保留策略、回退方案；批准后停旧接单并核验在途请求。','通过完整矩阵并获批准；有限新请求接入，无自动下架和证据删除。']
+  ];
+  $('#phase-list').innerHTML=phases.map(p=>'<article class="surface phase"><div class="phase-index"><b>'+p[0]+'</b><span>待执行 / 需通过交付门</span></div><h3>'+escape(p[1])+'</h3><p>'+escape(p[2])+'</p><div class="exit"><b>退出条件</b>'+escape(p[3])+'</div></article>').join('');
+  const checks=[['A01','OCR 一次只接一个文件，携带关联身份。'],['A02','A 等证据时，Worker 可接 B，不空等。'],['A03','一个坏 SKU 不阻塞其他产品入库。'],['A06','OCR 完成后掉线，不增加 OCR 调用次数。'],['A08','输入 / 版本不同不错误复用，不串规格。'],['A10','写入回执丢失，只读核验，不重写。'],['A11','两台各并发 1 不能变成两个全局写者。'],['A13','Clash 会话互不改道，不影响其他流量。'],['A16','部分目录不推断缺席，不以入库集合做差。'],['A17','历史失败只分类；复现用明确测试副本。'],['A18','任务成功后 R2 证据仍在，无自动下架。'],['A21','Review 的 Completed 不计入成功入库。']];
+  $('#check-list').innerHTML=checks.map(c=>'<div class="check"><code>'+c[0]+'</code><span>'+escape(c[1])+'</span></div>').join('');
+  const tabs=$$('[role=tab]');
+  function activate(id, updateHash=true) {
+    const tab=tabs.find(t=>t.id==='tab-'+id) || tabs[0];
+    tabs.forEach(t=>{const active=t===tab;t.setAttribute('aria-selected',String(active));t.tabIndex=active?0:-1;$('#'+t.getAttribute('aria-controls')).hidden=!active;});
+    if(updateHash){try{history.replaceState(null,'','#'+tab.id.slice(4));}catch{ /* File URLs can be restricted by browser policy. */ }}
+  }
+  tabs.forEach((tab,index)=>{
+    tab.addEventListener('click',()=>activate(tab.id.slice(4)));
+    tab.addEventListener('keydown',e=>{let n;if(e.key==='ArrowRight')n=(index+1)%tabs.length;else if(e.key==='ArrowLeft')n=(index+tabs.length-1)%tabs.length;else if(e.key==='Home')n=0;else if(e.key==='End')n=tabs.length-1;else return;e.preventDefault();activate(tabs[n].id.slice(4));tabs[n].focus();});
+  });
+  window.addEventListener('hashchange',()=>activate(location.hash.slice(1),false));
+  renderModule('ocr');renderScenario('normal');activate(location.hash.slice(1),false);
+})();
+</script>
+</body>
+</html>

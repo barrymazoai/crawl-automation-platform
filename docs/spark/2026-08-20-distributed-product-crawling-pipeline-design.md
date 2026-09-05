@@ -1,5 +1,7 @@
 # 分布式商品抓取流水线 v2
 
+> 历史 V2 设计（2026-09-05 标记）：本文件不是 V3 的执行规范。V3 以 [Temporal 设计](2026-09-05-crawler-v3-temporal-design.md) 和 [重构计划](../../CRAWLER_V3_PLAN.md) 为准；下文原有状态与真源声明仅描述当时的 V2。
+
 - 日期：2026-08-26
 - 状态：实现中，代码契约已迁移
 - 真源：本仓库代码与 `docs/product-crawl-pipeline.html`
