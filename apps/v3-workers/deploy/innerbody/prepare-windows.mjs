@@ -32,7 +32,14 @@ async function main() {
   }
   const files = (await readdir(join(root, 'release'))).filter(n => n.endsWith('.js')).sort();
   async function hash(names) { const h = createHash('sha256'); for (const n of names) { const b = await readFile(join(root, 'release', n)); h.update(String(b.length)); h.update(':'); h.update(b); } return h.digest('hex'); }
-  if (await hash(files) !== handoff.activityBuild || await hash([...files, 'product-workflows.cjs'].sort()) !== handoff.workflowBuild) throw Error('DTC_RELEASE_BUILD_MISMATCH');
+  const activityBuild = await hash(files), workflowBuild = await hash([...files, 'product-workflows.cjs'].sort());
+  if (activityBuild !== handoff.activityBuild || workflowBuild !== handoff.workflowBuild) {
+    const workflow = await readFile(join(root, 'release/product-workflows.cjs'), 'utf8');
+    const executable = workflow.split('//# sourceMappingURL=data:application/json;charset=utf-8;base64,')[0];
+    console.error(JSON.stringify({ event: 'DTC_RELEASE_BUILD_MISMATCH', activityBuild, workflowBuild, expectedActivityBuild: handoff.activityBuild, expectedWorkflowBuild: handoff.workflowBuild,
+      workflowExecutableSha256: createHash('sha256').update(executable).digest('hex'), expectedWorkflowExecutableSha256: handoff.workflowExecutableSha256 }));
+    throw Error('DTC_RELEASE_BUILD_MISMATCH');
+  }
   const r = await fetch('http://127.0.0.1:9222/json/version', { signal: AbortSignal.timeout(5000) });
   if (!r.ok) throw Error('DTC_CDP_UNAVAILABLE');
   const version = await r.json(), ws = new URL(version.webSocketDebuggerUrl);

@@ -14,7 +14,7 @@ pnpm install --frozen-lockfile
 pnpm --filter @crawl-automation/v3-workers build:dtc
 ```
 
-使用本机 Node 22.17+ / 24、pnpm 10.14.0。所有下面的仓库相对路径都从仓库根执行。部署配置位于 `apps/v3-workers/deploy/innerbody/deployment.json`，包含 Mini 匹配的构建标识、队列、真实来源和站点规则。文件中的 commit 是对应运行代码基线；后续只改部署文档/旁路脚本的提交不改变 release 的 JS 构建标识。
+使用本机 Node 22.17+ / 24、pnpm 10.14.0。2026-09-11 已修正 Workflow 调试信息含构建机器绝对路径的问题；拉取这次修正后重新 build:dtc，继续保留全部 buildId 校验，不能沿用修正前的构建目录。所有下面的仓库相对路径都从仓库根执行。部署配置位于 `apps/v3-workers/deploy/innerbody/deployment.json`，包含 Mini 匹配的构建标识、队列、真实来源和站点规则。文件中的 commit 是对应运行代码基线；后续只改部署文档/旁路脚本的提交不改变 release 的 JS 构建标识。
 
 ## 2. 复用本机配置和专用 Chrome
 
