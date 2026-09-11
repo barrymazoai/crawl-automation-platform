@@ -4,6 +4,7 @@ export const DtcSitePolicySchema=z.strictObject({origin:url,brandName:z.string()
   catalogPages:z.array(url).min(1).max(10),productPathPrefix:z.string().startsWith("/").min(2).max(500),
   catalogRoot:z.string().min(1).max(500),productRoot:z.string().min(1).max(500),
   imageOrigins:z.array(url).min(1).max(20),galleryControls:z.array(z.string().min(1).max(500)).max(20),
+  galleryDismissControls:z.array(z.string().min(1).max(500)).max(10).optional(),
   maxDecisions:z.number().int().min(1).max(12),selectedUrls:z.array(url).min(1).max(100).nullable(),
 });
 export type DtcSitePolicy=z.infer<typeof DtcSitePolicySchema>;
