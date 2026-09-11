@@ -1,0 +1,21 @@
+{
+  "name": "@crawl-automation/v3-worker-runtime",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "exports": { ".": { "types": "./src/index.ts", "import": "./src/index.ts" } },
+  "scripts": {
+    "check-types": "tsc --noEmit",
+    "build": "tsc --noEmit && tsdown src/index.ts --format esm --dts",
+    "test": "vitest run src"
+  },
+  "dependencies": {
+    "@temporalio/client": "1.23.0",
+    "@temporalio/common": "1.23.0",
+    "@temporalio/worker": "1.23.0",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:", "tsdown": "catalog:", "typescript": "catalog:", "vitest": "catalog:"
+  }
+}

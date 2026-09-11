@@ -1,0 +1,17 @@
+{
+  "protocolVersion": 1,
+  "pypdfium2": "5.13.0",
+  "pdfium": "153.0.7999.0",
+  "pillow": "12.3.0",
+  "maxInputBytes": 33554432,
+  "maxOutputBytes": 33554432,
+  "maxPages": 500,
+  "maxPagePoints": 14400,
+  "maxPixels": 16000000,
+  "maxSidePixels": 10000,
+  "maxTextChars": 500000,
+  "maxTextBytes": 2097152,
+  "wallTimeoutMs": 60000,
+  "cpuSeconds": 45,
+  "linuxAddressSpaceBytes": 1073741824
+}

@@ -1,0 +1,33 @@
+{
+  "name": "@crawl-automation/v3-pilot",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "check-types": "tsc --noEmit",
+    "build": "tsc --noEmit && tsdown && node --import tsx scripts/bundle-workflows.ts",
+    "test": "vitest run src",
+    "test:integration": "pnpm build && vitest run integration --testTimeout=30000 --hookTimeout=60000",
+    "server:local": "tsx scripts/dev-server.ts",
+    "worker": "tsx src/runners/worker.ts",
+    "submit": "tsx src/runners/submit.ts"
+  },
+  "dependencies": {
+    "@crawl-automation/v3-contracts": "workspace:*",
+    "@temporalio/activity": "1.23.0",
+    "@temporalio/client": "1.23.0",
+    "@temporalio/common": "1.23.0",
+    "@temporalio/worker": "1.23.0",
+    "@temporalio/workflow": "1.23.0",
+    "awilix": "13.0.5",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@temporalio/testing": "1.23.0",
+    "@types/node": "catalog:",
+    "tsdown": "catalog:",
+    "tsx": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}

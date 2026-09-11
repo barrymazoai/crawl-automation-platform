@@ -1,0 +1,39 @@
+{
+  "name": "@crawl-automation/v3-api",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev:local": "node --import tsx src/local.ts",
+    "dev": "node --import tsx src/server.ts",
+    "delivery": "node --import tsx src/delivery-server.ts",
+    "delivery:review": "node --import tsx src/review-delivery.ts",
+    "db": "node --import tsx src/database-cli.ts",
+    "build": "tsc --noEmit && tsdown",
+    "check-types": "tsc --noEmit",
+    "test": "vitest run src",
+    "test:integration": "vitest run integration --hookTimeout=30000 --testTimeout=15000",
+    "test:temporal": "vitest run temporal-tests --hookTimeout=60000 --testTimeout=30000"
+  },
+  "dependencies": {
+    "@crawl-automation/v3-review": "workspace:*",
+    "@crawl-automation/v3-contracts": "workspace:*",
+    "@temporalio/client": "1.23.0",
+    "@temporalio/common": "1.23.0",
+    "@hono/node-server": "catalog:",
+    "hono": "catalog:",
+    "pg": "catalog:",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@temporalio/testing": "1.23.0",
+    "@temporalio/worker": "1.23.0",
+    "@temporalio/workflow": "1.23.0",
+    "@types/node": "catalog:",
+    "@types/pg": "catalog:",
+    "tsdown": "catalog:",
+    "tsx": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}

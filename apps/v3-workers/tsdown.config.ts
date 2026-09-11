@@ -1,0 +1,3 @@
+import { defineConfig } from "tsdown";
+export default defineConfig({ entry: ["src/worker.ts", "src/ocr-worker.ts", "src/text-worker.ts", "src/text-receipt-worker.ts", "src/vision-worker.ts", "src/keyword-worker.ts", "src/product-worker.ts", "src/product-workflow-worker.ts", "src/catalog-worker.ts", "src/resource-worker.ts", "src/deployment-supervisor.ts", "src/acquisition-worker.ts", "src/pdf-worker.ts", "src/live-gnc-worker.ts", "src/brand-pipeline-worker.ts", "src/brand-web.ts"], format: "esm", noExternal: [/^@crawl-automation\/v3-/],
+  external: [/^@temporalio\//, "zod", "pg", "@aws-sdk/client-s3"] });

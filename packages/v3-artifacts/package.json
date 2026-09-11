@@ -1,0 +1,26 @@
+{
+  "name": "@crawl-automation/v3-artifacts",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "exports": { ".": { "types": "./src/index.ts", "import": "./src/index.ts" } },
+  "scripts": {
+    "check-types": "tsc --noEmit",
+    "build": "tsc --noEmit && tsdown",
+    "test": "vitest run src",
+    "test:integration": "pnpm build && vitest run integration",
+    "test:live-harness": "node --test scripts/live-config.test.mjs",
+    "r2:preflight": "pnpm build && node scripts/live-r2.mjs --preflight",
+    "r2:verify": "pnpm build && node scripts/live-r2.mjs --run",
+    "r2:objects": "pnpm build && node scripts/live-r2.mjs --objects-only"
+  },
+  "dependencies": {
+    "@crawl-automation/v3-contracts": "workspace:*",
+    "@aws-sdk/client-s3": "catalog:",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@aws-sdk/s3-request-presigner": "catalog:",
+    "@types/node": "catalog:", "typescript": "catalog:", "tsdown": "catalog:", "vitest": "catalog:"
+  }
+}

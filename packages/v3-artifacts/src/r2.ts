@@ -1,0 +1,83 @@
+import { GetObjectCommand, PutObjectCommand, S3Client, type GetObjectCommandOutput, type PutObjectCommandOutput } from "@aws-sdk/client-s3";
+import { ObjectKeySchema } from "@crawl-automation/v3-contracts";
+import { z } from "zod";
+import { Readable } from "node:stream";
+import { ArtifactError, type ObjectStore } from "./ports.js";
+
+export const R2ScopeSchema = z.strictObject({
+  endpoint: z.string().regex(/^https:\/\/[a-f0-9]{32}(?:\.(?:eu|fedramp))?\.r2\.cloudflarestorage\.com$/),
+  bucket: z.string().regex(/^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$/),
+  prefix: ObjectKeySchema.refine(key => key.includes("/"), "Explicit scoped prefix required"),
+  timeoutMs: z.number().int().min(100).max(120000).default(30000),
+});
+export type R2Scope = z.infer<typeof R2ScopeSchema>;
+export interface R2ClientPort {
+  send(command: GetObjectCommand, options: { abortSignal: AbortSignal }): Promise<GetObjectCommandOutput>;
+  send(command: PutObjectCommand, options: { abortSignal: AbortSignal }): Promise<PutObjectCommandOutput>;
+}
+const status = (error: unknown) => error && typeof error === "object" && "$metadata" in error
+  ? (error.$metadata as { httpStatusCode?: number }).httpStatusCode : undefined;
+
+/** Fresh SigV4 request per read; no persisted presigned URL or URL renewal loop. */
+export class R2Objects implements ObjectStore {
+  private readonly scope: R2Scope;
+  constructor(private readonly client: R2ClientPort, scope: R2Scope) { this.scope = R2ScopeSchema.parse(scope); }
+  private key(key: string) { return ObjectKeySchema.parse(`${this.scope.prefix}/${ObjectKeySchema.parse(key)}`); }
+  private signal(signal: AbortSignal) { return AbortSignal.any([signal, AbortSignal.timeout(this.scope.timeoutMs)]); }
+  async read(key: string, maxBytes: number, signal: AbortSignal): Promise<Uint8Array | null> {
+    if (!Number.isSafeInteger(maxBytes) || maxBytes < 1) throw new ArtifactError("ARTIFACT.TOO_LARGE");
+    const scopedKey = this.key(key), bounded = this.signal(signal);
+    bounded.throwIfAborted();
+    try {
+      const response = await this.client.send(new GetObjectCommand({ Bucket: this.scope.bucket, Key: scopedKey }), { abortSignal: bounded });
+      const body = response.Body;
+      if (!(body instanceof Readable)) throw new ArtifactError("ARTIFACT.UNAVAILABLE");
+      const chunks: Buffer[] = []; let size = 0;
+      const abort = () => body.destroy(new ArtifactError("ARTIFACT.UNAVAILABLE"));
+      bounded.addEventListener("abort", abort, { once: true });
+      try {
+        if (bounded.aborted) abort();
+        if (response.ContentLength !== undefined && response.ContentLength > maxBytes) {
+          body.destroy(); throw new ArtifactError("ARTIFACT.TOO_LARGE");
+        }
+        for await (const chunk of body as AsyncIterable<unknown>) {
+          bounded.throwIfAborted();
+          if (!(chunk instanceof Uint8Array)) throw new ArtifactError("ARTIFACT.UNAVAILABLE");
+          size += chunk.byteLength;
+          if (size > maxBytes) throw new ArtifactError("ARTIFACT.TOO_LARGE");
+          chunks.push(Buffer.from(chunk));
+        }
+      } finally {
+        bounded.removeEventListener("abort", abort);
+        body.destroy();
+      }
+      return Buffer.concat(chunks, size);
+    } catch (error) {
+      signal.throwIfAborted();
+      if (error instanceof ArtifactError) throw error;
+      if (status(error) === 404 && error instanceof Error && error.name === "NoSuchKey") return null;
+      throw new ArtifactError("ARTIFACT.UNAVAILABLE"); // Never expose signed headers/credential-bearing SDK messages.
+    }
+  }
+  async create(key: string, bytes: Uint8Array, mediaType: string, signal: AbortSignal): Promise<"created" | "exists"> {
+    const scopedKey = this.key(key), bounded = this.signal(signal);
+    bounded.throwIfAborted();
+    try {
+      await this.client.send(new PutObjectCommand({ Bucket: this.scope.bucket, Key: scopedKey,
+        Body: bytes, ContentLength: bytes.byteLength, ContentType: mediaType, IfNoneMatch: "*" }), { abortSignal: bounded });
+      return "created";
+    } catch (error) {
+      signal.throwIfAborted();
+      if (status(error) === 412) return "exists";
+      throw new ArtifactError("ARTIFACT.UPLOAD_UNKNOWN");
+    }
+  }
+}
+
+export function createR2Objects(raw: R2Scope, credentials: { accessKeyId: string; secretAccessKey: string }) {
+  const scope = R2ScopeSchema.parse(raw);
+  const auth = z.strictObject({ accessKeyId: z.string().min(1), secretAccessKey: z.string().min(1) }).parse(credentials);
+  const client = new S3Client({ endpoint: scope.endpoint, region: "auto", credentials: auth, maxAttempts: 1,
+    requestChecksumCalculation: "WHEN_REQUIRED", responseChecksumValidation: "WHEN_REQUIRED", forcePathStyle: true });
+  return { store: new R2Objects(client, scope), close: () => client.destroy() };
+}

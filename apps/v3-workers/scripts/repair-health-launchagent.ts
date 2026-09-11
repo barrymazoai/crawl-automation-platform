@@ -1,0 +1,20 @@
+/** Narrow repair for the recorded plutil array insertion; reject any other current state. */
+import assert from "node:assert/strict";
+import { readFile, writeFile, rename, lstat } from "node:fs/promises";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
+const exec = promisify(execFile), root = "/Users/barry/apps/crawlv3-batch-a.UiA4dx";
+const plist = "/Users/barry/Library/LaunchAgents/com.crawlv3.batch-a.plist";
+const target = `${root}/release-health-control-20260909/deployment-supervisor.js`, manifest = `${root}/live/deployment.json`;
+const revision = `${root}/live/health-revision-ae479291-8b14-417a-991c-d1555603024d`;
+await assert.rejects(lstat(`${root}/supervisor.lock`), { code: "ENOENT" });
+const args = JSON.parse((await exec("/usr/bin/plutil", ["-extract", "ProgramArguments", "json", "-o", "-", plist])).stdout);
+assert.deepEqual(args.slice(1), [target, `${root}/release-uuid-source/deployment-supervisor.js`, manifest]);
+const next = [args[0], target, manifest], staged = `${revision}/repaired-launchagent.plist`;
+await writeFile(`${revision}/failed-launchagent.plist`, await readFile(plist), { mode: 0o600, flag: "wx" });
+await writeFile(staged, await readFile(plist), { mode: 0o600, flag: "wx" });
+await exec("/usr/bin/plutil", ["-replace", "ProgramArguments", "-json", JSON.stringify(next), staged]);
+await exec("/usr/bin/plutil", ["-lint", staged]);
+assert.deepEqual(JSON.parse((await exec("/usr/bin/plutil", ["-extract", "ProgramArguments", "json", "-o", "-", staged])).stdout), next);
+await rename(staged, plist);
+console.log(JSON.stringify({ event: "HEALTH_LAUNCHAGENT_ARGUMENTS_REPAIRED", arguments: next.length, preservedFailedPlist: true }));

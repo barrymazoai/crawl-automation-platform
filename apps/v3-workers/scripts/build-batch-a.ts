@@ -1,0 +1,15 @@
+import { build } from "tsdown";
+import { mkdir,copyFile,writeFile } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
+import { bundleWorkflowCode } from "@temporalio/worker";
+import { migrationNames } from "../../v3-api/src/bootstrap/schema.js";
+const common={config:false as const,format:"esm" as const,noExternal:[/^@crawl-automation\/v3-/],external:[/^@temporalio\//,"zod","pg","@aws-sdk/client-s3","vitest"]};
+const business=["gnc-worker","acquisition-worker","ocr-worker","text-worker","text-receipt-worker","vision-worker","keyword-worker","product-worker"];
+await build({...common,entry:{"upgrade-stopped-deployment":"scripts/upgrade-stopped-deployment.ts","inspect-batch-a":"scripts/inspect-batch-a.ts"},outDir:"dist/deployment-tools"});
+await build({...common,entry:{...Object.fromEntries(business.map(name=>[name,`src/${name}.ts`])),"resource-worker":"src/resource-worker.ts","deployment-supervisor":"src/deployment-supervisor.ts","mini-resource-proof":"scripts/mini-resource-proof.ts","health-proof-worker":"integration/health-proof-worker.ts","live-gnc-worker":"src/live-gnc-worker.ts","brand-pipeline-worker":"src/brand-pipeline-worker.ts","product-workflow-worker":"src/product-workflow-worker.ts","brand-web":"src/brand-web.ts","prepare-batch-a":"scripts/prepare-batch-a.ts","finalize-batch-a":"scripts/finalize-batch-a.ts"},outDir:"dist/batch-a"});
+await build({...common,entry:{"resource-workflow.test":"../../packages/v3-product/src/resource-workflow.test.ts","ego-navigation.test":"../../packages/v3-acquisition/src/ego-navigation.test.ts","gnc-count-proof.test":"../../packages/v3-channels/src/gnc-count-proof.test.ts","health.test":"../../packages/v3-worker-runtime/src/health.test.ts","brand-pipeline.test":"src/brand-pipeline.test.ts","brand-workflow.test":"../../packages/v3-product/src/brand-workflow.test.ts"},outDir:"dist/batch-a-tests"});
+await build({...common,entry:{"gnc-leased-workflow.test":"../../packages/v3-product/src/gnc-leased-workflow.test.ts"},outDir:"dist/batch-a-lease-tests"});
+const bundle=await bundleWorkflowCode({workflowsPath:fileURLToPath(new URL("../src/product-workflows.ts",import.meta.url))});
+await writeFile(new URL("../dist/batch-a/product-workflows.cjs",import.meta.url),bundle.code);
+await mkdir(new URL("../dist/batch-a/migrations/",import.meta.url),{recursive:true});
+for(const name of migrationNames)await copyFile(new URL(`../../../database/v3/${name}`,import.meta.url),new URL(`../dist/batch-a/migrations/${name}`,import.meta.url));

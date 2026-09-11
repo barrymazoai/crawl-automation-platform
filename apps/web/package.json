@@ -11,6 +11,9 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@crawl-automation/v3-contracts": "workspace:*",
+    "@heroui/react": "3.2.4",
+    "@heroui/styles": "3.2.4",
     "@ant-design/icons": "catalog:",
     "@crawl-automation/contracts": "workspace:*",
     "@orpc/client": "catalog:",
@@ -37,4 +40,3 @@
     "vitest": "catalog:"
   }
 }
-

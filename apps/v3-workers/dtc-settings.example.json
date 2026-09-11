@@ -1,0 +1,15 @@
+{
+  "target": "windows",
+  "root": "D:\\crawlv3-dtc",
+  "queueScope": "dtc-first-brand-20260911",
+  "baseRuntime": "D:\\crawlv3-dtc\\inputs\\runtime.private.json",
+  "baseLive": "D:\\crawlv3-dtc\\inputs\\channel.private.json",
+  "baseLabel": "D:\\crawlv3-dtc\\inputs\\label.private.json",
+  "scope": {"brandId":"REPLACE_REAL_BRAND_ID","sourceId":"REPLACE_REAL_SOURCE_ID","channel":"dtc","region":"US","rootUrl":"https://brand.example/collections/all","scopeVersion":"source-revision-REPLACE"},
+  "site": {"origin":"https://brand.example","brandName":"REPLACE_BRAND","catalogPages":["https://brand.example/collections/all"],"productPathPrefix":"/products/","catalogRoot":"main","productRoot":"main","imageOrigins":["https://brand.example"],"galleryControls":[],"maxDecisions":4,"selectedUrls":["https://brand.example/products/REPLACE"]},
+  "browser": {"endpoint":"http://127.0.0.1:9222/","instanceId":"REPLACE-FROM-json-version","pauseFile":"D:\\crawlv3-dtc\\USER-CONTROL"},
+  "browserResource":"windows-dtc-browser",
+  "browserModelResource":"mini-model-account",
+  "codex": {"settings":{"provider":"openai","model":"gpt-5.6-luna","reasoningEffort":"medium"},"executable":"C:\\REPLACE\\codex.exe","codexHome":"C:\\Users\\REPLACE\\.codex","workRoot":"D:\\crawlv3-dtc\\browser-model","runtimeProfileVersion":"gnc-persistent-auth/1","timeoutMs":240000,"disabledMcpServers":["node_repl","computer-use"]},
+  "evidencePrefix":"crawlv3-acceptance/dtc-REPLACE-UNIQUE"
+}

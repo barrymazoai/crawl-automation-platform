@@ -1,0 +1,7 @@
+{
+  "name":"@crawl-automation/v3-ocr","version":"0.0.1","private":true,"type":"module",
+  "exports":{".":{"types":"./src/index.ts","import":"./src/index.ts"}},
+  "scripts":{"build":"tsc --noEmit && tsdown","check-types":"tsc --noEmit","test":"vitest run src","build:test":"pnpm build && node --import tsx scripts/build-test.ts","test:integration":"pnpm build:test && vitest run integration --hookTimeout=60000 --testTimeout=30000"},
+  "dependencies":{"@crawl-automation/v3-contracts":"workspace:*","@crawl-automation/v3-artifacts":"workspace:*","@crawl-automation/v3-results":"workspace:*","@crawl-automation/v3-review":"workspace:*","@crawl-automation/v3-worker-runtime":"workspace:*","@temporalio/activity":"1.23.0","@temporalio/common":"1.23.0","zod":"catalog:"},
+  "devDependencies":{"@temporalio/client":"1.23.0","@temporalio/testing":"1.23.0","@temporalio/worker":"1.23.0","@temporalio/workflow":"1.23.0","@types/node":"catalog:","typescript":"catalog:","tsdown":"catalog:","tsx":"catalog:","vitest":"catalog:"}
+}

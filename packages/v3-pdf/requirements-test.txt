@@ -1,0 +1,3 @@
+-r requirements.txt
+# Fixture generation only; never imported by the runtime.
+pypdf==6.12.2

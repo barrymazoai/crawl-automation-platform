@@ -1,0 +1,36 @@
+{
+  "name": "@crawl-automation/v3-text",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "import": "./src/index.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc --noEmit && tsdown",
+    "check-types": "tsc --noEmit",
+    "test": "vitest run src",
+    "test:integration": "vitest run integration --hookTimeout=60000 --testTimeout=30000"
+  },
+  "dependencies": {
+    "@crawl-automation/v3-acquisition": "workspace:*",
+    "@crawl-automation/v3-codex": "workspace:*",
+    "@crawl-automation/v3-contracts": "workspace:*",
+    "@crawl-automation/v3-artifacts": "workspace:*",
+    "@crawl-automation/v3-results": "workspace:*",
+    "@crawl-automation/v3-review": "workspace:*",
+    "@crawl-automation/v3-worker-runtime": "workspace:*",
+    "@temporalio/activity": "1.23.0",
+    "@temporalio/common": "1.23.0",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "typescript": "catalog:",
+    "tsdown": "catalog:",
+    "vitest": "catalog:"
+  }
+}

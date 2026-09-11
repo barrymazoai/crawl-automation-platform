@@ -1,0 +1,58 @@
+{
+  "codec": "quality-fixture/1",
+  "id": "gnc-613701-citrus-yuzu/1",
+  "review": { "status": "agent-visually-checked-user-review-pending", "date": "2026-09-09", "basis": "Independent visual transcription of retained original back label; not legacy DB or model output" },
+  "brand": { "id": "acceptance-focus-fuel", "name": "FocusFuel", "legacyCompanyId": null },
+  "source": { "id": "gnc", "listingId": "613701", "variantId": null, "url": "https://www.gnc.com/energy/613701.html", "flavor": "Citrus Yuzu" },
+  "evidence": {
+    "captureOperationId": "capture-1b5c6c59-9e96-49f5-a185-41ffa9d5a5d8",
+    "sourcePlanOperationId": "ego-plan-0ccedcf2-dbf4-477b-b099-7daef0f8d7cf",
+    "observationId": "obs-1b5c6c59-9e96-49f5-a185-41ffa9d5a5d8",
+    "bucket": "supply-smart-test",
+    "prefix": "crawlv3-acceptance/ego-1b5c6c59-9e96-49f5-a185-41ffa9d5a5d8",
+    "htmlSha256": "15b8b32e4260e8c1ac59aa4b33c584d7f264f2ab45a582b42866790195c7cb7c",
+    "images": [
+      { "index": 0, "sha256": "6cc8ac9edb40810915dc941116793cbfdc483e54eb6578860f33d9ad1bd5faf6", "byteSize": 609911, "width": 2400, "height": 2400 },
+      { "index": 1, "sha256": "3c48da357255429f4e83c8b4d0e903687e1a1fe7752bd4e30c46707f2b0fe11d", "byteSize": 188598, "width": 1500, "height": 1500 },
+      { "index": 2, "sha256": "4cf4cf6353e493d19d7231c98132415bf32bad0a04d98d59bbed49dc345e5acf", "byteSize": 469516, "width": 2400, "height": 2400 },
+      { "index": 3, "sha256": "e3b475f8cd151c3b4d48c64263d59ae0b1d5128b59b04341e7010087c01e7313", "byteSize": 439872, "width": 2400, "height": 2400 }
+    ],
+    "transcribedImageIndex": 3
+  },
+  "expected": {
+    "comparisonPolicy": "label-typography/2",
+    "formula": {
+      "servingSize": "2",
+      "columns": [{ "heading": "Amount Per Serving", "rows": [
+        { "kind": "nutrient", "name": "Calories", "amount": "12", "dailyValue": null, "amountStatus": "printed", "parentRowIndex": null },
+        { "kind": "nutrient", "name": "Total Carbohydrates", "amount": "4 g", "dailyValue": "1%", "amountStatus": "printed", "parentRowIndex": null },
+        { "kind": "nutrient", "name": "Total Sugars", "amount": "2 g", "dailyValue": "**", "amountStatus": "printed", "parentRowIndex": null },
+        { "kind": "nutrient", "name": "Added Sugars", "amount": "2 g", "dailyValue": "4%", "amountStatus": "printed", "parentRowIndex": null },
+        { "kind": "group_header", "name": "FocusFuel Electrolyte Blend", "amount": null, "dailyValue": null, "amountStatus": "not_applicable", "parentRowIndex": null },
+        { "kind": "blend_component", "name": "Sodium", "amount": "200 mg", "dailyValue": "8.7%", "amountStatus": "printed", "parentRowIndex": 4 },
+        { "kind": "blend_component", "name": "Potassium", "amount": "100 mg", "dailyValue": "2.1%", "amountStatus": "printed", "parentRowIndex": 4 },
+        { "kind": "blend_component", "name": "Magnesium", "amount": "50 mg", "dailyValue": "1.9%", "amountStatus": "printed", "parentRowIndex": 4 },
+        { "kind": "blend_component", "name": "Watermelon Juice Powder", "amount": "200 mg", "dailyValue": "**", "amountStatus": "printed", "parentRowIndex": 4 },
+        { "kind": "group_header", "name": "FocusFuel Focus Blend", "amount": null, "dailyValue": null, "amountStatus": "not_applicable", "parentRowIndex": null },
+        { "kind": "blend_component", "name": "Alpha GPC", "amount": "200 mg", "dailyValue": "**", "amountStatus": "printed", "parentRowIndex": 9 },
+        { "kind": "blend_component", "name": "Lion's Mane", "amount": "200 mg", "dailyValue": "**", "amountStatus": "printed", "parentRowIndex": 9 },
+        { "kind": "blend_component", "name": "Ashwagandha", "amount": "200 mg", "dailyValue": "**", "amountStatus": "printed", "parentRowIndex": 9 },
+        { "kind": "group_header", "name": "FocusFuel Electrolyte Blend", "amount": null, "dailyValue": null, "amountStatus": "not_applicable", "parentRowIndex": null },
+        { "kind": "blend_component", "name": "Natural Caffeine (from Guarana seed and green tea blend)", "amount": "100 mg", "dailyValue": "**", "amountStatus": "printed", "parentRowIndex": 13 },
+        { "kind": "blend_component", "name": "L-Theanine", "amount": "100 mg", "dailyValue": "**", "amountStatus": "printed", "parentRowIndex": 13 },
+        { "kind": "blend_component", "name": "Black Pepper/BioPerine", "amount": "5 mg", "dailyValue": "**", "amountStatus": "printed", "parentRowIndex": 13 },
+        { "kind": "blend_component", "name": "Vitamin B12 (Methylcobalamin)", "amount": "2.4 mcg", "dailyValue": "100%", "amountStatus": "printed", "parentRowIndex": 13 }
+      ] }]
+    },
+    "otherIngredients": ["Malt Syrup", "Organic Cane Sugar", "Pectin", "Sodium Citrate", "Citric Acid", "Lactic Acid", "Natural Flavor Juice"],
+    "packaging": { "imagePrintedServingsPerContainer": "3", "collectedServingsPerContainer": null, "requiredWarningCodes": ["PACKAGING.SERVINGS_PER_CONTAINER_CONFLICT", "PACKAGING.PACK_MEANING_UNRESOLVED"] }
+  },
+  "notes": [
+    "Two separate Electrolyte Blend headers are printed. Preserve both positions; never merge groups by name.",
+    "Calories has no printed unit. Do not invent kcal. Serving Size is printed as 2 without a unit.",
+    "Vitamin B12 is under the third black group heading; do not reclassify it outside that visual group.",
+    "The image filename contains 613702 but belongs to the approved 613701 gallery. Membership is based on captured product scope, not filename substring.",
+    "The retained label reads 3; full page has conflicting packaging claims. This fixture does not resolve sales-pack meaning or assert a bundle.",
+    "Percent footnote + is normalized only by explicit typography policy. Bare ** remains printed evidence of DV not established."
+  ]
+}

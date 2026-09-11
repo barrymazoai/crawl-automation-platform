@@ -1,0 +1,27 @@
+<!doctype html><html lang="zh-CN"><meta charset="utf-8"><title>CUA Pointer Lab — 本机鼠标测试</title>
+<style>body{font:20px system-ui;background:#152033;color:#eef5ff;margin:0;padding:32px}h1{font-size:28px}p{font-size:16px;color:#c2d1e5}#pad{width:600px;height:180px;margin:35px auto;background:#357964;border:3px solid #90ffd7;border-radius:20px;display:grid;place-items:center;user-select:none;touch-action:none;font-size:28px}#state{text-align:center;font-size:24px}pre{font:15px monospace;white-space:pre-wrap}#neutral{padding:16px;border:1px dashed #b8cbe8;margin-top:24px}</style>
+<h1>本机鼠标事件测试 · 不是验证码</h1><p>测量按下前 5 秒的鼠标路径及按下到松开的时间；不访问任何第三方网站，不验证人类，不提交批准。</p>
+<div id="pad" role="button" aria-label="本机鼠标测试区域">在此区域测试点击 / 拖动 / 按住</div>
+<div id="state">当前鼠标：已松开</div><pre id="results">等待测试事件</pre><div id="neutral">中性空白区域 · 必要时在此点击释放鼠标</div>
+<script>
+const pad=document.getElementById('pad'),state=document.getElementById('state'),results=document.getElementById('results');
+let down=null,strokes=[],events=[],preMoves=[];
+function prePressMotion(now){
+  const points=preMoves.filter(p=>now-p.t<=5000&&now>=p.t);
+  let distancePx=0;
+  for(let i=1;i<points.length;i++)distancePx+=Math.hypot(points[i].x-points[i-1].x,points[i].y-points[i-1].y);
+  const step=Math.max(1,Math.ceil(points.length/24));
+  return {eventCount:points.length,distancePx:Math.round(distancePx*100)/100,
+    trusted:points.length>0&&points.every(p=>p.trusted),
+    samples:points.filter((_,i)=>i%step===0).map(p=>({x:p.x,y:p.y,t:p.t}))};
+}
+function publish(){fetch(location.pathname+'events',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({down:down!==null,strokes,events})}).catch(()=>{});}
+document.addEventListener('pointerdown',e=>{events.push({type:e.type,t:e.timeStamp,x:e.clientX,y:e.clientY,buttons:e.buttons,trusted:e.isTrusted});events=events.slice(-40);if(e.target===pad&&e.button===0&&!down){down={t:e.timeStamp,x:e.clientX,y:e.clientY,trusted:e.isTrusted,moves:0,prePress:prePressMotion(e.timeStamp)};pad.setPointerCapture(e.pointerId);}preMoves=[];publish();});
+document.addEventListener('pointermove',e=>{
+  if(down&&e.buttons===1)down.moves++;
+  if(!down&&e.buttons===0){preMoves.push({t:e.timeStamp,x:e.clientX,y:e.clientY,trusted:e.isTrusted});preMoves=preMoves.filter(p=>e.timeStamp-p.t<=5000).slice(-240);}
+});
+document.addEventListener('pointerup',e=>{events.push({type:e.type,t:e.timeStamp,x:e.clientX,y:e.clientY,buttons:e.buttons,trusted:e.isTrusted});events=events.slice(-40);if(down&&e.button===0){strokes.push({durationMs:Math.round(e.timeStamp-down.t),moves:down.moves,trusted:down.trusted&&e.isTrusted,from:[down.x,down.y],to:[e.clientX,e.clientY],prePress:down.prePress});strokes=strokes.slice(-10);down=null;results.textContent=JSON.stringify(strokes,null,2);}preMoves=[];publish();});
+document.addEventListener('pointercancel',e=>{events.push({type:e.type,t:e.timeStamp,trusted:e.isTrusted});events=events.slice(-40);down=null;preMoves=[];publish();});
+setInterval(()=>{state.textContent=down?'当前鼠标：按下中 '+Math.round(performance.now()-down.t)+' ms':'当前鼠标：已松开';},100);
+</script></html>
