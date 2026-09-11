@@ -2,12 +2,14 @@ import {hostname} from 'node:os';
 import {dirname,join} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {randomUUID} from 'node:crypto';
+import {isDeepStrictEqual} from 'node:util';
 import {expect,it} from 'vitest';
 import {TestWorkflowEnvironment} from '@temporalio/testing';
 import {Worker} from '@temporalio/worker';
 import {Context} from '@temporalio/activity';
 import {closeDtcSession,reportDtcSession} from '../src/dtc-node-session.js';
 import {DtcMiniNode} from '../src/dtc-mini-node.js';
+import {dtcExecutionIdentity} from '../src/dtc-execution.js';
 import {DtcNodeSessionSchema} from '@crawl-automation/v3-contracts';
 import {DtcBrowserConfigSchema,DtcLiveConfigSchema} from '../src/dtc-live-config.js';
 import {channelSavedFixture} from '../../../packages/v3-product/src/channel-saved.fixture.js';
@@ -83,6 +85,12 @@ it('Mini: catalog source checks route back to its owning Mini workflow, includin
   });
   await spawn(windowsQueue,{readCatalogPage:async(input:any)=>{
    const e=Context.current().info.workflowExecution!;
+   // Reproduce the real Activity-context -> page-journal JSON -> second bind
+   // boundary. The SDK object may have a protobuf prototype; its identity must not.
+   const binding={taskId:'page-'+input.page,execution:dtcExecutionIdentity(e),namespace:'fixture',browser:c.browser};
+   const persisted=JSON.parse(JSON.stringify(binding));
+   expect(isDeepStrictEqual(persisted,binding)).toBe(true);
+   expect(isDeepStrictEqual(persisted,{...binding,execution:dtcExecutionIdentity({...e,runId:randomUUID()})})).toBe(false);
    expect(await env.client.workflow.getHandle(e.workflowId,e.runId).executeUpdate('dtcBrowserControl',{args:[{action:'catalog',input,model:true}]})).toEqual({allowed:true});pages.push(input.page);
    return{codec:"catalog-page/1",input,entries:[],completion:input.page===0?'more':'unknown',nextCursor:input.page===0?'next':null,source:{...f.input.sourcePlan.source,sourceId:c.scope.sourceId},endEvidence:null};
   }});

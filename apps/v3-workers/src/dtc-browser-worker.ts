@@ -15,8 +15,9 @@ import { DtcBrowserConfigSchema } from './dtc-live-config.js';
 import { DtcCodexDecider } from './dtc-codex.js';
 import { readGncPrivateJson } from './gnc-config.js';
 import { dtcTemporal,requestDtcControl } from './dtc-temporal-control.js';
+import { dtcExecutionIdentity } from './dtc-execution.js';
 
-const execution=()=>{const e=Context.current().info.workflowExecution;if(!e)throw Error('DTC.WORKFLOW_REQUIRED');return e;};
+const execution=()=>dtcExecutionIdentity(Context.current().info.workflowExecution);
 async function main(){
  if(process.platform!=='win32'||process.env.V3_DTC_BROWSER_ENABLED!=='true'||!process.env.V3_DTC_BROWSER_CONFIG)throw Error('DTC.WINDOWS_REQUIRED');
  const config=DtcBrowserConfigSchema.parse(await readGncPrivateJson(process.env.V3_DTC_BROWSER_CONFIG));
