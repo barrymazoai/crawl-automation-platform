@@ -1,0 +1,78 @@
+@import "tailwindcss" source(none);
+@import "@heroui/styles";
+@source "./";
+
+@layer base {
+  :root,
+  .light {
+    --background: #f4f6f2;
+    --foreground: #273b2e;
+    --surface: #ffffff;
+    --surface-foreground: #273b2e;
+    --overlay: #ffffff;
+    --overlay-foreground: #273b2e;
+    --muted: #6d7b63;
+    --accent: #285b46;
+    --accent-foreground: #ffffff;
+    --success: #61864b;
+    --success-foreground: #ffffff;
+    --warning: #a67c3b;
+    --warning-foreground: #ffffff;
+    --default: #eef2e7;
+    --default-foreground: #536849;
+    --border: #e4e9df;
+    --separator: #e4e9df;
+    --field-background: #ffffff;
+    --field-foreground: #304a35;
+    --field-border: #dce3d4;
+    --field-border-width: 1px;
+    --field-placeholder: #79866e;
+    --radius: 0.65rem;
+    --field-radius: 0.6rem;
+    font-family:
+      Inter,
+      -apple-system,
+      BlinkMacSystemFont,
+      "Segoe UI",
+      "PingFang SC",
+      "Microsoft YaHei",
+      sans-serif;
+    font-synthesis: none;
+  }
+  body {
+    margin: 0;
+    min-width: 320px;
+    background: var(--background);
+    color: var(--foreground);
+  }
+  button,
+  a {
+    -webkit-tap-highlight-color: transparent;
+  }
+  button {
+    cursor: pointer;
+  }
+  svg {
+    flex-shrink: 0;
+  }
+}
+@layer components {
+  .chart-grid {
+    background: repeating-linear-gradient(
+      to top,
+      transparent 0,
+      transparent 34px,
+      #edf1e6 34px,
+      #edf1e6 35px
+    );
+  }
+  .demo-modal {
+    max-height: min(88dvh, 860px);
+  }
+  .demo-modal .modal__body {
+    min-height: 0;
+  }
+  .demo-modal .field-error {
+    font-size: 12px;
+  }
+}

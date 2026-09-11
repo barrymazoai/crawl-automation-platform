@@ -4,6 +4,10 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "dev:v3:live": "vite --config vite.v3-live.config.ts",
+    "build:v3:live": "tsc --noEmit && vite build --config vite.v3-live.config.ts",
+    "dev:v3": "vite --config vite.v3.config.ts",
+    "build:v3": "tsc --noEmit && vite build --config vite.v3.config.ts",
     "dev": "vite --host 0.0.0.0",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview --host 0.0.0.0",
