@@ -1,5 +1,7 @@
 # 给 Windows Codex：从 Git 部署 Innerbody DTC
 
+已有运行节点本次更新图库修复，请执行同目录 `WINDOWS_GALLERY_FIX_PROMPT.md`；下文保留首次部署流程。
+
 请直接从已有 Git 仓库拉取 main，构建、配置并启动 Innerbody DTC 节点。部署代码、站点配置和辅助脚本全部使用 Git 中的文件，不要求用户搬运新版 release 或私有部署包。连续完成相关步骤；普通可逆操作无需重复确认。
 
 本地凭据保留复用，不上传 GitHub、不输出正文。Windows 不连接数据库，不需要 Mini SSH 或数据库隧道。Mini 已有对应的 26 个后台 Worker；Windows 只运行目录、商品页和原图三个浏览器 Worker。
