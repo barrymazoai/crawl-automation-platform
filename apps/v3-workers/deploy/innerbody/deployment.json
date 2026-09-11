@@ -2,7 +2,7 @@
   "version": 2,
   "commit": "9846fc8db6fd5511b9510c83224758b371d16265",
   "activityBuild": "4aefac185c12264127f7c956dfa149731d28805a3b9366361f527076142bfa47",
-  "workflowBuild": "05ee358c158ac5f985aa9d0bdaccfddba244f43cf63f38954fafb2cd13b2d746",
+  "workflowBuild": "22f4056196e52705fc12c50a9a59c07bc31a7f604160cc63ec65a4eb8466b83f",
   "jsCount": 18,
   "queueScope": "dtc-innerbody-v2-20260911",
   "evidencePrefix": "crawlv3-acceptance/dtc-innerbody-v2-20260911",
@@ -151,8 +151,8 @@
       "taskQueue": "v3.dtc.control.v1.dtc-live-v2.session.dtc-innerbody-v2-20260911"
     },
     "activityBuild": "4aefac185c12264127f7c956dfa149731d28805a3b9366361f527076142bfa47",
-    "workflowBuild": "05ee358c158ac5f985aa9d0bdaccfddba244f43cf63f38954fafb2cd13b2d746"
+    "workflowBuild": "22f4056196e52705fc12c50a9a59c07bc31a7f604160cc63ec65a4eb8466b83f"
   },
   "workflowExecutableSha256": "dd0599866c5647b2b15236db8c4654267e11268b3c4e2aa4a754b86e3b3c29b3",
-  "workflowSourceMapFormat": "portable-paths/1"
+  "workflowSourceMapFormat": "generated-js-lines/1"
 }

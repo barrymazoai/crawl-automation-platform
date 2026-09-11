@@ -1,4 +1,4 @@
-import { canonicalWorkflowSourceMap } from './workflow-source-map.js';
+import { portableWorkflowBundle } from './workflow-source-map.js';
 import{build}from'tsdown';import{bundleWorkflowCode}from'@temporalio/worker';import{writeFile,mkdir,cp,readFile}from'node:fs/promises';import{resolve}from'node:path';
 const common={config:false as const,format:'esm' as const,noExternal:[/^@crawl-automation\/v3-/],external:[/^@temporalio\//,'zod','pg','vitest','@aws-sdk/client-s3']};
 await build({...common,entry:Object.fromEntries(['dtc-browser-worker','dtc-live-worker','channel-label-worker','channel-plan-worker','product-workflow-worker','dtc-node','dtc-prepare','dtc-recover','deployment-supervisor'].map(n=>[n,`src/${n}.ts`])),outDir:'dist/dtc-windows'});
@@ -12,7 +12,10 @@ async function browserGraph(file:string){
  }
 }
 for(const entry of ['dtc-browser-worker','dtc-node','dtc-recover'])await browserGraph(resolve('dist/dtc-windows',entry+'.js'));
-await writeFile('dist/dtc-windows/product-workflows.cjs',canonicalWorkflowSourceMap((await bundleWorkflowCode({workflowsPath:resolve('src/product-workflows.ts')})).code,resolve('../..')));
+const workflowBundle=portableWorkflowBundle((await bundleWorkflowCode({workflowsPath:resolve('src/product-workflows.ts')})).code);
+await writeFile('dist/dtc-windows/product-workflows.cjs',workflowBundle.code);
+// Offline TypeScript debugging aid; never loaded by the Worker or counted as executable code.
+await writeFile('dist/dtc-windows/product-workflows.compiler.map',workflowBundle.compilerSourceMap);
 await build({...common,entry:Object.fromEntries([
  ['dtc-node-control','integration/dtc-node-control.test.ts'],['cdp-task-pages','../../packages/v3-acquisition/src/cdp-task-pages.test.ts'],['dtc-cdp','../../packages/v3-channels/src/dtc-cdp.test.ts'],['dtc-live','../../packages/v3-channels/src/dtc-live.test.ts'],['dtc-catalog-workflow','../../packages/v3-product/src/dtc-catalog-workflow.test.ts'],
  ['amazon-live','../../packages/v3-channels/src/amazon-live.test.ts'],['amazon-catalog-workflow','../../packages/v3-product/src/amazon-catalog-workflow.test.ts'],['swanson-live','../../packages/v3-channels/src/swanson-live.test.ts'],['catalog-workflow','../../packages/v3-product/src/catalog-workflow.test.ts'],['channel-stream','integration/channel-stream.test.ts'],['dtc-stream','integration/dtc-stream.test.ts'],['cdp-wire','../../packages/v3-acquisition/src/cdp-wire.test.ts'],['cdp-file','../../packages/v3-acquisition/src/cdp-file.test.ts'],['ego-task-pages','../../packages/v3-acquisition/src/ego-task-pages.test.ts']

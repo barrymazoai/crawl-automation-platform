@@ -1,5 +1,7 @@
 # DTC Workflow buildId 的构建路径差异
 
+后续 Windows 复核确认本次修正不完整；当前修复及限制见 [行尾和调试映射修正](2026-09-11-dtc-workflow-build-lf.md)。以下保留第一次修正的历史记录。
+
 Windows 在 main `6044b27` 连续两次构建出相同的 Activity build，但 Workflow build 与 Mini 的发布配置不同。核查 Temporal SDK 1.23.0 本地打包代码，默认使用 inline-source-map、带 fullhash 的调试文件名，以及 `[absolute-resource-path]`。
 
 实际 Mac 产物的 source map 有 166 个 source，其中包含构建目录 `/Users/...` 的绝对路径；SDK 自动生成入口的 source content 还含绝对 require 路径。因此不能直接把这份未规范化产物的完整字节 hash 当作不同机器重建的统一标识。Windows 拒绝部署符合现有校验要求，凭据无需修改。
