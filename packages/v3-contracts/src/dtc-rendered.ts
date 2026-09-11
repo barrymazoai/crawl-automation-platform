@@ -15,6 +15,7 @@ export type DtcSnapshot=z.infer<typeof DtcSnapshotSchema>;
 export const DtcDecisionSchema=z.strictObject({action:z.enum(["capture","click","review"]),title:index.nullable(),sections:z.array(index).max(20),links:z.array(index).max(100),images:z.array(index).max(100),control:index.nullable(),reason:z.enum(["none","challenge","identity_uncertain","not_product","insufficient_evidence"])});
 export const DtcRenderedProductSchema=z.strictObject({codec:z.literal("dtc-rendered/1"),url,listingId:z.string().regex(/^dtc-[a-f0-9]{64}$/),brandName:z.string().min(1),title:z.string().min(1).max(4000),
   sections:z.array(z.string().min(1).max(6000)).max(20),images:z.array(url).min(1).max(100),
+  legacy:z.strictObject({manifestKey:z.string().min(1),detailsHtml:z.string().max(2*1024*1024),fields:z.record(z.string(),z.unknown()),variants:z.array(z.record(z.string(),z.unknown())).max(1000),selectedVariant:z.record(z.string(),z.unknown()).nullable()}).optional(),
   selectedOnly:z.literal(true),snapshotKeys:z.array(z.string().min(1)).min(1).max(12),
 });
 export const DtcRenderedCatalogSchema=z.strictObject({codec:z.literal("dtc-catalog-rendered/1"),url,brandName:z.string().min(1),

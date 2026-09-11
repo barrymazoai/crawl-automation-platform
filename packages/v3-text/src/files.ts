@@ -7,15 +7,16 @@ import type { ObjectStore } from "@crawl-automation/v3-artifacts";
 import { TextError } from "./ports.js";
 /** Node-local immutable evidence. Shared invocation guards MUST use the shared ObjectStore, not this cache. */
 export class TextLocalStore implements ObjectStore {
-    private constructor(private readonly root: string) { }
-    static async open(root: string) {
+    private constructor(private readonly root: string, private readonly maxBytes = 8388608) { }
+    static async open(root: string, maxBytes = 8388608) {
+        if (!Number.isSafeInteger(maxBytes) || maxBytes < 1 || maxBytes > 32 * 1024 * 1024) throw new TextError("TEXT.LOCAL_CONFIG");
         if (!isAbsolute(root))
             throw new TextError("TEXT.LOCAL_CONFIG");
         await mkdir(root, { recursive: true, mode: 0o700 });
         const stat = await lstat(root);
         if (!stat.isDirectory() || stat.isSymbolicLink())
             throw new TextError("TEXT.LOCAL_CONFIG");
-        return new TextLocalStore(await realpath(root));
+        return new TextLocalStore(await realpath(root), maxBytes);
     }
     private async path(key: string, create: boolean) {
         const path = join(this.root, ObjectKeySchema.parse(key)), parent = dirname(path);
@@ -43,7 +44,7 @@ export class TextLocalStore implements ObjectStore {
         return path;
     }
     async read(key: string, max: number, signal: AbortSignal): Promise<Uint8Array | null> {
-        if (!Number.isSafeInteger(max) || max < 1 || max > 8388608)
+        if (!Number.isSafeInteger(max) || max < 1 || max > this.maxBytes)
             throw new TextError("TEXT.OUTPUT_LIMIT");
         signal.throwIfAborted();
         let file;
@@ -80,7 +81,7 @@ export class TextLocalStore implements ObjectStore {
     }
     async create(key: string, bytes: Uint8Array, _mediaType: string, signal: AbortSignal) {
         signal.throwIfAborted();
-        if (bytes.length > 8388608)
+        if (bytes.length > this.maxBytes)
             throw new TextError("TEXT.OUTPUT_LIMIT");
         const path = await this.path(key, true), pending = join(dirname(path), `.pending-${randomUUID()}`), file = await open(pending, "wx", 0o600);
         try {

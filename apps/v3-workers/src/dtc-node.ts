@@ -1,5 +1,5 @@
 import{fork,type ChildProcess}from'node:child_process';import{open,readFile,readdir,writeFile,unlink,mkdir,statfs}from'node:fs/promises';import{dirname,isAbsolute,join}from'node:path';import{hostname}from'node:os';import{fileURLToPath}from'node:url';import{z}from'zod';import{randomUUID}from'node:crypto';
-import{artifactBuildId,parseWorkerConfig,connectTemporal}from'@crawl-automation/v3-worker-runtime';import{LoopbackCdp}from'@crawl-automation/v3-acquisition';import{createR2Objects}from'@crawl-automation/v3-artifacts';import{DtcBrowserConfigSchema}from'./dtc-live-config.js';import{DtcCodexDecider}from'./dtc-codex.js';import{readGncPrivateJson}from'./gnc-config.js';import{readWorkerReady}from'./worker-readiness.js';import{validateDtcSite}from'@crawl-automation/v3-channels';
+import{artifactBuildId,parseWorkerConfig,connectTemporal}from'@crawl-automation/v3-worker-runtime';import{LoopbackCdp}from'@crawl-automation/v3-acquisition';import{createR2Objects}from'@crawl-automation/v3-artifacts';import{DtcBrowserConfigSchema}from'./dtc-live-config.js';import{DtcLegacyCapture}from'./dtc-legacy-capture.js';import{readGncPrivateJson}from'./gnc-config.js';import{readWorkerReady}from'./worker-readiness.js';import{validateDtcSite}from'@crawl-automation/v3-channels';
 import{DtcNodeSessionSchema}from'@crawl-automation/v3-contracts';
 import{dtcTemporal}from'./dtc-temporal-control.js';
 import{preflightDtcMini,openDtcSession,reportDtcSession,closeDtcSession}from'./dtc-node-session.js';
@@ -12,7 +12,7 @@ export async function doctor(file:string){const {node,config}=await loadDtcNode(
  for(const [role,path]of Object.entries(node.runtimes)){const r=parseWorkerConfig(await readGncPrivateJson(path));if(r.role!==`dtc-${role}`||r.capability!==`dtc.${role}`||r.compatibility!=='dtc-live-v2'||r.expectedBuildId!==buildId||r.concurrency!==1)throw Error('DTC.RUNTIME_MISMATCH');const conn=await connectTemporal(r);await conn.close();}
  if((await pendingDtcPages(config.pageJournalRoot)).length)throw Error('DTC.PAGE_RECOVERY_REQUIRED');
  await new LoopbackCdp(config.browser).list(AbortSignal.timeout(10000));
- const codex=await DtcCodexDecider.open(config.codex,process.env);try{await codex.check(AbortSignal.timeout(60000));}finally{await codex.close();}
+ const codex=new DtcLegacyCapture(config.codex,process.env);try{await codex.check(AbortSignal.timeout(60000));}finally{await codex.close();}
  const temporal=await dtcTemporal(parseWorkerConfig(await readGncPrivateJson(node.runtimes.capture)));
  try{await preflightDtcMini(temporal,config);}finally{await temporal.connection.close();}
  const r2=createR2Objects(config.r2,config.r2Credentials);try{await r2.store.read('v3/dtc-doctor/read-only-probe.json',1024,AbortSignal.timeout(15000));}finally{r2.close();}

@@ -2,24 +2,19 @@ import { createHash, randomUUID } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import { spawn } from "node:child_process";
 import fsp from "node:fs/promises";
 import { pipeline } from "node:stream/promises";
 import archiver from "archiver";
 import unzipper from "unzipper";
 import type { JobStage, NodeCapability, SalesChannelAdapter } from "@crawl-automation/contracts";
-import type { CodexRunInput, CodexRunner } from "./codex-runner";
 
 export { CodexAppServerError, CodexAppServerRunner, type CodexAppServerOptions } from "./codex-app-server";
 export { hasReadyMarker, listReadyDirectories, publishReadyMarker, readReadyMarker, writeJsonAtomic } from "./ready-marker";
 export { allocateLoopbackPort, chromeExecutableCandidates, resolveChromeExecutable, startChromeLane, type ChromeLane } from "./chrome-lane";
 export type { CodexRunInput, CodexRunner, CodexSession } from "./codex-runner";
 
-export class ApiError extends Error {
-  constructor(public code: string, message: string, public status = 400) {
-    super(message);
-  }
-}
+import { ApiError } from "./api-error";
+export { ApiError } from "./api-error";
 
 export function sha256(input: string | Buffer) {
   return createHash("sha256").update(input).digest("hex");
@@ -43,14 +38,7 @@ export function classifyUrl(raw: string) {
   };
 }
 
-export function buildBrowserCapturePrompt(input: { url: string; runId: string; jobDirectory: string; nodeId: string; laneId?: number; cdpUrl?: string; profileDir?: string }) {
-  // 站点 profile：Skill 学到的探索路线（seeds/分页/字段/变体 selector），只存方法不存商品值。
-  // 有 profile 就走复跑（加载→校验→回放），没有才做首轮视觉旅程；两种情况结束都要保存。
-  const profileSection = input.profileDir
-    ? `Profile 目录：${input.profileDir}\n\n站点 profile 规则：把 profileDir=${JSON.stringify(input.profileDir)} 传给 crawlSite 等入口（reuseProfile 保持默认 true，saveProfile 保持默认 true），并把 globalThis.profileDir 设为它。开始前先 crawl.loadSiteProfile(profileDir, 入口URL)：命中且校验通过（版本一致、模板指纹一致）就按 Skill 的"复跑"路径——加载 profile → 代表商品结构校验 → 回放 selector/URL/CDP 规则 → 全量，**不要再做首轮视觉旅程**；校验只有个别字段失败就按"局部重学"只修那些字段，保留已映射导航。没有 profile 或版本不符才做完整首轮。无论首轮还是复跑，抓取通过质量门后必须保存 profile 到 profileDir（控制器会把它同步到对象存储供其他节点复用）。profile 只能存 selector 与动作语义，禁止存本次的商品值。\n\n`
-    : "";
-  return `你是 Browser Node 上的单站点抓取 Worker，只处理当前任务。\n\n任务 ID：${input.runId}\n节点：${input.nodeId}\nLane：${input.laneId ?? 1}\n网站：${input.url}\n任务目录：${input.jobDirectory}\n${profileSection}\n开始前拉取 crawl-products Skill 的最新代码，然后完整读取并使用该 Skill。当前是 worker_cdp 自动化模式：必须读取 Skill 的 worker-cdp-browser reference，使用 crawl-products/lib/worker-cdp-browser.mjs 连接环境变量 CRAWL_BROWSER_CDP_URL。禁止调用 agent.browsers、@Chrome 或 In-App Browser，也不要启动另一个 Chrome；控制器已经为本 Lane 启动并通过门禁的独立 Chrome（${input.cdpUrl ?? "见环境变量"}）。\n\n先建立 worker_cdp binding、tab 和 workerHooks，再探测 Shopify。主机 HTTP 探测返回 null 时不代表非 Shopify：先打开入口页，再用 createBrowserJsonFetcher(tab) 重试同源 products.json，并把同一 fetchJson 传给 createShopifyHarvestHooks。所有原始图片和平台变体 JSON 必须使用 workerHooks 通过 Chrome 获取，禁止在主机 fetch 失败后静默留下缺图或缺 SKU。只有两个通道都没有 Shopify 正信号时才进入浏览器 Preflight。\n\n控制器负责并发、租约、重试和上传；不要访问控制面或业务数据库。每个可售变体必须作为独立候选项，保留真实 SKU；没有 SKU 时写 sku=null、skuMissing=true，禁止编造。保存清洗后的正文、关键 DOM/JSON、原始图片和必要截图，把语义判断、OCR、最终规范化和入库留给 Mac Worker。\n\n每完成 25–50 个变体生成一个不可变 EvidenceBundleV1 批次并立即发布。遇到登录墙、验证码、站点范围歧义或证据冲突时返回 needs_review。目录耗尽并完成 Manifest 对账后才返回 complete。`;
-}
+export { buildBrowserCapturePrompt } from "./browser-capture-prompt";
 
 export class LocalCheckpointStore {
   private db: DatabaseSync;
@@ -264,44 +252,7 @@ export async function extractZipSafe(filename: string, destination: string) {
   await directory.extract({ path: root });
 }
 
-export function codexExecutionPolicyArgs(unattendedFullAccess = false) {
-  return unattendedFullAccess
-    ? ["--skip-git-repo-check", "--dangerously-bypass-approvals-and-sandbox"]
-    : ["--skip-git-repo-check", "--approve-for-me"];
-}
-
-export class CodexProcessRunner implements CodexRunner {
-  /**
-   * serviceTier：Codex 的服务档位。"fast" 会映射成请求里的 priority（Fast mode）。
-   * 只在显式给了值时才传 -c service_tier=…；不传则沿用 Codex 自己的默认档。
-   * 09-04 实测（codex-cli 0.147）：gpt-5.6-luna 接受 "fast"，不支持的档位会被 Codex 拒绝并从请求里省略。
-   */
-  constructor(private options: { executable?: string; model?: string; reasoningEffort?: string; serviceTier?: string; unattendedFullAccess?: boolean; persistSession?: boolean; env?: NodeJS.ProcessEnv } = {}) {}
-  /** 纯函数：拼 codex exec 的参数，方便测试（spawn 不好 mock）。 */
-  static buildArgs(options: { model?: string; reasoningEffort?: string; serviceTier?: string; unattendedFullAccess?: boolean; persistSession?: boolean }, input: Pick<CodexRunInput, "cwd" | "schemaPath" | "outputPath" | "addDirectories" | "imagePaths" | "persistSession">) {
-    const args = ["exec", ...(options.persistSession || input.persistSession ? [] : ["--ephemeral"]), "-", "--model", options.model ?? "gpt-5.6-luna", "-c", `model_reasoning_effort=${JSON.stringify(options.reasoningEffort ?? "medium")}`,
-      ...(options.serviceTier ? ["-c", `service_tier=${JSON.stringify(options.serviceTier)}`] : []),
-      "--cd", input.cwd, "--output-schema", input.schemaPath, "--output-last-message", input.outputPath, "--json", "--color", "never"];
-    for (const directory of input.addDirectories ?? []) args.push("--add-dir", directory);
-    if (input.imagePaths?.length) args.push("--image", ...input.imagePaths);
-    args.push(...codexExecutionPolicyArgs(options.unattendedFullAccess));
-    return args;
-  }
-  async run(input: CodexRunInput) {
-    await fsp.mkdir(path.dirname(input.outputPath), { recursive: true });
-    const args = CodexProcessRunner.buildArgs(this.options, input);
-    const log = fs.createWriteStream(input.eventLogPath, { flags: "a" });
-    const child = spawn(this.options.executable ?? "codex", args, { cwd: input.cwd, stdio: ["pipe", "pipe", "pipe"], windowsHide: true, env: { ...process.env, ...this.options.env } });
-    child.stdout.pipe(log, { end: false }); child.stderr.pipe(log, { end: false }); child.stdin.end(input.prompt);
-    const abort = () => child.kill("SIGTERM"); input.signal?.addEventListener("abort", abort, { once: true });
-    const code = await new Promise<number | null>((resolve, reject) => { child.once("error", reject); child.once("close", resolve); })
-      .finally(() => { input.signal?.removeEventListener("abort", abort); log.end(); });
-    if (input.signal?.aborted) throw new ApiError("codex_aborted", "Codex 任务被终止");
-    if (code !== 0) throw new ApiError("codex_failed", `Codex 退出码 ${code}`);
-    try { return JSON.parse(await fsp.readFile(input.outputPath, "utf8")); }
-    catch { throw new ApiError("codex_output_invalid", "Codex 未生成合法结构化输出"); }
-  }
-}
+export { CodexProcessRunner, codexExecutionPolicyArgs } from "./codex-process";
 
 export async function withLeaseHeartbeat(
   input: { client: NodeApiClient; jobId: string; leaseToken: string; signal?: AbortSignal; intervalMs?: number; maxFailures?: number; onRenewError?: (error: unknown, consecutiveFailures: number) => void },

@@ -50,7 +50,7 @@ async function main() {
   try { servers = JSON.parse(execFileSync(executable, ['mcp', 'list', '--json'], { env: { ...process.env, CODEX_HOME: codexHome }, encoding: 'utf8', timeout: 30000, maxBuffer: 4 * 1024 * 1024, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true })); }
   catch { throw Error('DTC_MCP_INVENTORY_FAILED'); }
   if (!Array.isArray(servers) || servers.some(s => typeof s.name !== 'string' || !/^[A-Za-z0-9_-]{1,200}$/.test(s.name))) throw Error('DTC_MCP_INVENTORY_INVALID');
-  const codex = { settings: { provider: 'openai', model: 'gpt-5.6-luna', reasoningEffort: 'medium' }, executable, codexHome, workRoot: join(root, 'browser-model'), runtimeProfileVersion: 'gnc-persistent-auth/1', timeoutMs: 240000, disabledMcpServers: [...new Set(servers.map(s => s.name))].sort() };
+  const codex = { settings: { provider: 'openai', model: 'gpt-5.6-luna', reasoningEffort: 'medium' }, executable, codexHome, workRoot: join(root, 'browser-model'), runtimeProfileVersion: 'dtc-legacy-agent/1', timeoutMs: 900000, disabledMcpServers: [...new Set(servers.map(s => s.name))].sort() };
   await mkdir(join(root, 'inputs'), { recursive: true });
   const runtimePath = join(root, 'inputs/runtime.local.json'), channelPath = join(root, 'inputs/channel.browser.json');
   await put(runtimePath, runtime);

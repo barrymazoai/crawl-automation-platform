@@ -1,4 +1,4 @@
-import { proxyActivities, startChild, continueAsNew, ParentClosePolicy, workflowInfo, isCancellation, ApplicationFailure, WorkflowIdReusePolicy } from "@temporalio/workflow";
+import { patched, proxyActivities, startChild, continueAsNew, ParentClosePolicy, workflowInfo, isCancellation, ApplicationFailure, WorkflowIdReusePolicy } from "@temporalio/workflow";
 import { CatalogWorkflowInputSchema, CatalogPageSchema, CatalogCommitSchema, PresenceInputSchema,
   CatalogDiscoverySchema, GncStreamingLabelWorkflowInputSchema,CatalogProductBindingSchema,
   type CatalogPage, type CatalogPageInput, type CatalogCommit, type CatalogDiscovery, type CatalogWorkflowInput, type PresenceInput, type PresenceResult } from "@crawl-automation/v3-contracts";
@@ -14,7 +14,7 @@ export async function CatalogWorkflow(raw: unknown): Promise<unknown> {
   const input = CatalogWorkflowInputSchema.parse(raw), ledger = proxyActivities<Ledger>(options(input.queues.ledger));
   if ((input.productWorkflow === "SwansonCatalogProductWorkflow" && input.scope.channel !== "swanson") || (input.productWorkflow === "AmazonCatalogProductWorkflow" && input.scope.channel !== "amazon") || (["DtcCatalogProductWorkflow", "DtcCatalogProductV2Workflow"].includes(input.productWorkflow ?? '') && input.scope.channel !== "dtc"))
     throw ApplicationFailure.nonRetryable("Foreign channel route", "CATALOG.PRODUCT_ROUTE");
-  const source = proxyActivities<{ readCatalogPage(input: CatalogPageInput): Promise<CatalogPage> }>(options(input.queues.source));
+  const source = proxyActivities<{ readCatalogPage(input: CatalogPageInput): Promise<CatalogPage> }>(input.scope.channel==="dtc"&&patched("dtc-legacy-catalog-timeout/1")?{...options(input.queues.source),startToCloseTimeout:"20 minutes",scheduleToCloseTimeout:"30 minutes",heartbeatTimeout:"10 seconds"}:options(input.queues.source));
   let pageIndex = input.page, cursor = input.cursor;
   const gate=resourceGate(input.resources);
   for (let count = 0; count < input.pagesPerRun; count++) {

@@ -24,17 +24,17 @@ function withTimeout(operation, timeoutMs, label) {
   ]).finally(() => clearTimeout(timer));
 }
 
-function wrapLocator(locator) {
+function wrapLocator(locator, guard = async () => {}) {
   return {
-    count: () => locator.count(),
-    first: () => wrapLocator(locator.first()),
-    nth: (index) => wrapLocator(locator.nth(index)),
-    isVisible: (options) => locator.isVisible(timeoutOptions(options)),
-    click: (options) => locator.click(timeoutOptions(options)),
-    press: (key, options) => locator.press(key, timeoutOptions(options)),
-    getByRole: (role, options) => wrapLocator(locator.getByRole(role, options)),
-    getByText: (text, options) => wrapLocator(locator.getByText(text, options)),
-    locator: (selector, options) => wrapLocator(locator.locator(selector, options)),
+    count: async () => { await guard(); return locator.count(); },
+    first: () => wrapLocator(locator.first(), guard),
+    nth: (index) => wrapLocator(locator.nth(index), guard),
+    isVisible: async (options) => { await guard(); return locator.isVisible(timeoutOptions(options)); },
+    click: async (options) => { await guard(); return locator.click(timeoutOptions(options)); },
+    press: async (key, options) => { await guard(); return locator.press(key, timeoutOptions(options)); },
+    getByRole: (role, options) => wrapLocator(locator.getByRole(role, options), guard),
+    getByText: (text, options) => wrapLocator(locator.getByText(text, options), guard),
+    locator: (selector, options) => wrapLocator(locator.locator(selector, options), guard),
   };
 }
 
@@ -91,30 +91,34 @@ function createEventBuffer(session) {
   };
 }
 
-async function wrapPage(context, page) {
+async function wrapPage(context, page, guard = async () => {}, controllerOwned = false) {
+  await guard();
   const session = await context.newCDPSession(page);
   const eventBuffer = createEventBuffer(session);
   const id = `worker-cdp-${randomUUID()}`;
 
   const playwright = {
-    evaluate(fn, arg, options = {}) {
+    async evaluate(fn, arg, options = {}) {
+      await guard();
       return withTimeout(page.evaluate(fn, arg), options.timeoutMs, "evaluate");
     },
     locator(selector, options) {
-      return wrapLocator(page.locator(selector, options));
+      return wrapLocator(page.locator(selector, options), guard);
     },
     getByText(text, options) {
-      return wrapLocator(page.getByText(text, options));
+      return wrapLocator(page.getByText(text, options), guard);
     },
     waitForTimeout(timeoutMs) {
       return page.waitForTimeout(timeoutMs);
     },
-    waitForLoadState(options = {}) {
+    async waitForLoadState(options = {}) {
+      await guard();
       return page.waitForLoadState(options.state ?? "load", {
         timeout: options.timeoutMs,
       });
     },
     async domSnapshot() {
+      await guard();
       const body = page.locator("body");
       if (typeof body.ariaSnapshot === "function") return body.ariaSnapshot();
       return page.content();
@@ -124,13 +128,15 @@ async function wrapPage(context, page) {
   return {
     id,
     playwright,
-    goto(url, options = {}) {
+    async goto(url, options = {}) {
+      await guard();
       return page.goto(url, {
         waitUntil: options.waitUntil ?? "domcontentloaded",
         timeout: options.timeoutMs ?? 30_000,
       });
     },
-    reload(options = {}) {
+    async reload(options = {}) {
+      await guard();
       return page.reload({
         waitUntil: options.waitUntil ?? "domcontentloaded",
         timeout: options.timeoutMs ?? 30_000,
@@ -139,13 +145,14 @@ async function wrapPage(context, page) {
     async url() {
       return page.url();
     },
-    screenshot(options = {}) {
+    async screenshot(options = {}) {
+      await guard();
       return page.screenshot(options);
     },
     async close() {
       eventBuffer.close();
       await session.detach().catch(() => {});
-      await page.close();
+      if (!controllerOwned) { await guard(); await page.close(); }
     },
     capabilities: {
       async list() {
@@ -154,18 +161,34 @@ async function wrapPage(context, page) {
       async get(capabilityId) {
         if (capabilityId !== "cdp") return null;
         return {
-          send: (method, params = {}) => session.send(method, params),
+          send: async (method, params = {}) => {
+            await guard();
+            if (controllerOwned && /^(Browser|Target)\./.test(method)) throw new Error("SOURCE.TARGET_SCOPE");
+            return session.send(method, params);
+          },
           readEvents: (options) => eventBuffer.read(options),
         };
       },
     },
-    _page: page,
+    ...(controllerOwned ? {} : { _page: page }),
   };
 }
 
 export async function connectWorkerBrowser(options = {}) {
   const cdpUrl = options.cdpUrl ?? process.env.CRAWL_BROWSER_CDP_URL;
   if (!cdpUrl) throw new Error("CRAWL_BROWSER_CDP_URL is required for worker_cdp");
+  const taskFile = process.env.CRAWL_BROWSER_TASK_FILE;
+  const { readFile, stat } = await import("node:fs/promises");
+  const task = taskFile ? JSON.parse(await readFile(taskFile, "utf8")) : null;
+  const guard = async () => {
+    if (!task) return;
+    const live = JSON.parse(await readFile(taskFile, "utf8").catch(() => { throw new Error("SOURCE.SESSION_UNAVAILABLE"); }));
+    if (JSON.stringify(live) !== JSON.stringify(task) || Date.now() >= task.expiresAt || task.endpoint !== cdpUrl) throw new Error("SOURCE.SESSION_UNAVAILABLE");
+    try { await stat(task.pauseFile); throw new Error("SOURCE.BROWSER_USER_CONTROL"); } catch (e) { if (e.code !== "ENOENT") throw e; }
+    const version = await (await fetch(new URL("/json/version", cdpUrl), { signal: AbortSignal.timeout(5000) })).json();
+    if (version.webSocketDebuggerUrl !== cdpUrl.replace("http:", "ws:").replace(/\/$/, "") + "/devtools/browser/" + task.instanceId) throw new Error("SOURCE.BROWSER_INSTANCE_CHANGED");
+  };
+  await guard();
   const chromium = options.chromium
     ?? (await import("playwright-core")).chromium;
   const browser = await chromium.connectOverCDP(cdpUrl, {
@@ -180,12 +203,20 @@ export async function connectWorkerBrowser(options = {}) {
   const getTab = async (page) => {
     let tab = wrapped.get(page);
     if (!tab) {
-      tab = await wrapPage(context, page);
+      tab = await wrapPage(context, page, guard, !!task);
       wrapped.set(page, tab);
     }
     return tab;
   };
 
+  let ownedPage;
+  if (task) {
+    for (const page of context.pages()) {
+      const session = await context.newCDPSession(page);
+      try { const result = await session.send("Target.getTargetInfo"); if (result.targetInfo.targetId === task.targetId) ownedPage = page; } finally { await session.detach(); }
+    }
+    if (!ownedPage) { await browser.close(); throw new Error("SOURCE.TARGET_MISSING"); }
+  }
   return {
     mode: "worker_cdp",
     cdpUrl,
@@ -195,10 +226,12 @@ export async function connectWorkerBrowser(options = {}) {
     },
     tabs: {
       async new() {
-        return getTab(await context.newPage());
+        await guard();
+        return getTab(ownedPage ?? await context.newPage());
       },
       async list() {
-        return Promise.all(context.pages().map(getTab));
+        await guard();
+        return Promise.all((ownedPage ? [ownedPage] : context.pages()).map(getTab));
       },
     },
     async disconnect() {

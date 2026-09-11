@@ -1,4 +1,4 @@
-import { proxyActivities, workflowInfo, startChild, ParentClosePolicy, WorkflowIdReusePolicy, ApplicationFailure, CancellationScope, isCancellation } from "@temporalio/workflow";
+import { patched, proxyActivities, workflowInfo, startChild, ParentClosePolicy, WorkflowIdReusePolicy, ApplicationFailure, CancellationScope, isCancellation } from "@temporalio/workflow";
 import { CatalogDiscoverySchema, DtcProductJobSchema, DtcProductCaptureSchema, DtcProductHandoffSchema,
   ChannelPlanOutcomeSchema, FileAcquireOutcomeSchema, AcquisitionReviewSchema, imageActivityOptions, assertArtifactBelongsTo, type DtcProductJob } from "@crawl-automation/v3-contracts";
 import { resourceGate } from "./resource-workflow.js";
@@ -19,7 +19,7 @@ function failureCode(error: unknown): string {
 export async function DtcCatalogProductWorkflow(raw: unknown): Promise<unknown> {
  const discovery=CatalogDiscoverySchema.parse(raw),info=workflowInfo();
  if(info.workflowId!==discovery.workflowId||discovery.scope.channel!=="dtc")invalid();
- const call=(queue:string,name:string,value:unknown)=>proxyActivities<Record<string,(raw:unknown)=>Promise<unknown>>>(imageActivityOptions(queue))[name]!(value);
+ const call=(queue:string,name:string,value:unknown)=>proxyActivities<Record<string,(raw:unknown)=>Promise<unknown>>>(name==="captureDtcProduct"&&patched("dtc-legacy-capture-timeout/1")?{...imageActivityOptions(queue),startToCloseTimeout:"20 minutes",scheduleToCloseTimeout:"30 minutes"}:imageActivityOptions(queue))[name]!(value);
  const job=DtcProductJobSchema.parse(await call(info.taskQueue,"prepareDtcProduct",discovery));
  if(!same(job.discovery,discovery))invalid();return streamProduct(job,info.taskQueue,call);
 }

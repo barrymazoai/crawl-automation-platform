@@ -110,3 +110,23 @@ describe("worker CDP browser adapter", () => {
     });
   });
 });
+
+it('V3 binding exposes only the owned target, leaves physical closure to the host, and stops on pause/revocation', async () => {
+  const {mkdtemp,writeFile,unlink,rm}=await import('node:fs/promises');
+  const {tmpdir}=await import('node:os');const {join}=await import('node:path');
+  const dir=await mkdtemp(join(tmpdir(),'worker-task-')),taskFile=join(dir,'task.json'),pauseFile=join(dir,'pause');
+  const previous=process.env.CRAWL_BROWSER_TASK_FILE;process.env.CRAWL_BROWSER_TASK_FILE=taskFile;
+  const fake=fakePlaywright(),other={...fake.page};fake.context.pages.mockReturnValue([other,fake.page]);
+  fake.context.newCDPSession.mockImplementation(async p=>p===other?{...fake.session,send:async()=>({targetInfo:{targetId:'OTHER'}})}:fake.session);
+  fake.session.send.mockResolvedValue({targetInfo:{targetId:'OWNED'}});
+  const fetchSpy=vi.spyOn(globalThis,'fetch').mockResolvedValue({json:async()=>({webSocketDebuggerUrl:'ws://127.0.0.1:9222/devtools/browser/instance'})});
+  try{
+    await writeFile(taskFile,JSON.stringify({endpoint:'http://127.0.0.1:9222/',instanceId:'instance',targetId:'OWNED',pauseFile,expiresAt:Date.now()+60000}));
+    const binding=await connectWorkerBrowser({cdpUrl:'http://127.0.0.1:9222/',chromium:fake.chromium});
+    const tab=await binding.tabs.new();expect(await binding.tabs.list()).toEqual([tab]);expect(await binding.tabs.new()).toBe(tab);expect(fake.context.newPage).not.toHaveBeenCalled();expect(tab._page).toBeUndefined();
+    await tab.close();expect(fake.page.close).not.toHaveBeenCalled();
+    await expect((await tab.capabilities.get('cdp')).send('Browser.close')).rejects.toThrow('SOURCE.TARGET_SCOPE');
+    await writeFile(pauseFile,'pause');await expect(tab.goto('https://shop.test/')).rejects.toThrow('SOURCE.BROWSER_USER_CONTROL');expect(fake.page.goto).not.toHaveBeenCalled();
+    await unlink(pauseFile);await unlink(taskFile);await expect(tab.screenshot()).rejects.toThrow('SOURCE.SESSION_UNAVAILABLE');await binding.disconnect();
+  }finally{fetchSpy.mockRestore();if(previous===undefined)delete process.env.CRAWL_BROWSER_TASK_FILE;else process.env.CRAWL_BROWSER_TASK_FILE=previous;await rm(dir,{recursive:true,force:true});}
+});
