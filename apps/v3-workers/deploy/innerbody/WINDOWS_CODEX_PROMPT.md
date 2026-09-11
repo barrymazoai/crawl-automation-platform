@@ -1,3 +1,5 @@
+> 已部署节点本次更新请使用 [旧版完整采集器更新步骤](WINDOWS_LEGACY_CAPTURE_PROMPT.md)，复用现有凭据。
+
 # 给 Windows Codex：从 Git 部署 Innerbody DTC
 
 已有运行节点本次更新图库修复，请执行同目录 `WINDOWS_GALLERY_FIX_PROMPT.md`；下文保留首次部署流程。
