@@ -32,7 +32,7 @@ export const CatalogCommitSchema = z.strictObject({ input: CatalogPageInputSchem
   discoveries: z.array(CatalogDiscoverySchema).max(100), nextCursor: z.string().min(1).max(4096).nullable(), completion: z.enum(["more", "complete", "unknown"]) });
 export type CatalogCommit = z.infer<typeof CatalogCommitSchema>;
 export const CatalogWorkflowInputSchema = z.strictObject({ catalogId: id, scope: CatalogScopeSchema,
-  productWorkflow: z.enum(["CatalogProductWorkflow", "SwansonCatalogProductWorkflow", "AmazonCatalogProductWorkflow", "DtcCatalogProductWorkflow"]).optional(),
+  productWorkflow: z.enum(["CatalogProductWorkflow", "SwansonCatalogProductWorkflow", "AmazonCatalogProductWorkflow", "DtcCatalogProductWorkflow", "DtcCatalogProductV2Workflow"]).optional(),
   resources:ResourceGateSchema.optional(),maxPages:z.number().int().min(1).max(100001).optional(),
   page: z.number().int().min(0).max(100000).default(0), cursor: z.string().min(1).max(4096).nullable().default(null),
   queues: z.strictObject({ source: VersionTagSchema, ledger: VersionTagSchema, product: VersionTagSchema }), pagesPerRun: z.number().int().min(1).max(10).default(5) });

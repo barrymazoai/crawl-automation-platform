@@ -7,11 +7,11 @@ import { Context } from "@temporalio/activity";
 import { ApplicationFailure } from "@temporalio/common";
 import { Client, Connection } from "@temporalio/client";
 import { CatalogPageInputSchema, CollectionWorkflowInput, BrandCollectionPlanSchema, BrandCollectionProgressSchema,
-  DtcProductCaptureSchema, DtcProductHandoffSchema, ChannelLabelInputSchema, ReviewRecordSchema, observationIdentity } from "@crawl-automation/v3-contracts";
+  DtcProductCaptureSchema, DtcProductHandoffSchema, ChannelLabelInputSchema, ReviewRecordSchema, observationIdentity, DtcBrowserControlSchema } from "@crawl-automation/v3-contracts";
 import { createR2Objects, RetainedPublication, ArtifactResolver, FileCopies, sha256 } from "@crawl-automation/v3-artifacts";
-import { CdpTaskPages, LoopbackCdp, CdpOwnedFileTransport, AcquireFileModule, FileEvidence, systemDns, type SourceAccess } from "@crawl-automation/v3-acquisition";
-import { DtcCatalogSource, DtcCdpReader, DtcLiveProduct, ChannelProductPlans } from "@crawl-automation/v3-channels";
-import { DtcCodexDecider } from "./dtc-codex.js";
+import { FileEvidence } from "@crawl-automation/v3-acquisition";
+import { DtcCatalogSource, DtcLiveProduct, ChannelProductPlans } from "@crawl-automation/v3-channels";
+import { DtcMiniNode } from "./dtc-mini-node.js";
 import { TextLocalStore } from "@crawl-automation/v3-text";
 import { PostgresReviews } from "@crawl-automation/v3-review";
 import { RoleRegistry, artifactBuildId, workerProcess } from "@crawl-automation/v3-worker-runtime";
@@ -27,47 +27,23 @@ async function main() {
   if (process.env.V3_DTC_LIVE_ENABLED !== "true" || !process.env.V3_DTC_LIVE_CONFIG) throw Error("Explicit config required");
   const config = DtcLiveConfigSchema.parse(await readGncPrivateJson(process.env.V3_DTC_LIVE_CONFIG));
   const root = dirname(fileURLToPath(import.meta.url)), buildId = await artifactBuildId((await readdir(root)).filter(n => n.endsWith(".js")).sort().map(n => join(root, n)));
-  const roles = ["control", "catalog-source", "catalog-ledger", "product-input", "capture", "file", "review"];
-  await workerProcess(new RoleRegistry("business", roles.map(role => ({ role: `dtc-${role}`, capability: `dtc.${role}`, compatibility: "dtc-live-v1",
+  const roles = ["control", "catalog-ledger", "product-input", "review"];
+  await workerProcess(new RoleRegistry("business", roles.map(role => ({ role: `dtc-${role}`, capability: `dtc.${role}`, compatibility: "dtc-live-v2",
     contractVersion: 1, kind: "activity" as const, buildId, testOnly: false, sessionScoped:true as const, async prepare(runtime) {
-      if(["catalog-source","capture","file"].includes(role)&&process.platform!=="win32")throw Error("DTC.WINDOWS_REQUIRED");
+      if(process.platform!=="darwin")throw Error("DTC.MINI_REQUIRED");
       const db = new pg.Pool({ connectionString: config.database.connectionString, ssl: config.database.tls ? { rejectUnauthorized: true } : false,
         max: 4, connectionTimeoutMillis: 5000, statement_timeout: 5000 });
-      const r2 = createR2Objects(config.r2, config.r2Credentials); let connection: Connection | undefined;let driver:DtcCodexDecider|undefined;
+      const r2 = createR2Objects(config.r2, config.r2Credentials); let connection: Connection | undefined;
       const resourceDb=config.resourceDatabase?new pg.Pool({connectionString:config.resourceDatabase.connectionString,ssl:config.resourceDatabase.tls?{rejectUnauthorized:true}:false,max:2,connectionTimeoutMillis:5000,statement_timeout:5000}):db;
-      const dispose = async () => { await driver?.close();r2.close(); await connection?.close();if(resourceDb!==db)await resourceDb.end(); await db.end(); };
+      const dispose = async () => { r2.close(); await connection?.close();if(resourceDb!==db)await resourceDb.end(); await db.end(); };
       try {
         await db.query("SELECT discovery_id FROM catalog_discovery LIMIT 0");
         const local = await TextLocalStore.open(config.journalRoot), copies = await FileCopies.open(config.cacheRoot);
         const publication = new RetainedPublication(local, r2.store), reviews = new PostgresReviews(db), admission = new PostgresResourceAdmission(resourceDb);
-        const pageStore=await TextLocalStore.open(config.pageJournalRoot),port=new LoopbackCdp(config.browser),pages=new CdpTaskPages(config.browser,pageStore,port);
-        const captureRole=["catalog-source","capture"].includes(role);
-        const decider=driver=captureRole?await DtcCodexDecider.open(config.codex,process.env):undefined;
-        if(decider)await decider.check(AbortSignal.timeout(60000));
-        const bindPage=async(taskId:string,s:AbortSignal)=>{
-          const binding={taskId,execution:execution(),namespace:runtime.namespace,browser:config.browser};
-          const key=`v3/dtc-page-executions/${sha256(Buffer.from(taskId))}.json`,old=await pageStore.read(key,65536,s);
-          if(old&&!equal(JSON.parse(Buffer.from(old).toString()),binding))throw Error("DTC.PAGE_EXECUTION_CONFLICT");
-          await pageStore.create(key,Buffer.from(JSON.stringify(binding)),"application/json",s);
-        };
-        const ownPage=async(taskId:string,s:AbortSignal)=>{await bindPage(taskId,s);return pages.open(taskId,s);};
-        const reader=async(taskId:string,operationId:string,s:AbortSignal)=>new DtcCdpReader(await ownPage(taskId,s),port,config.site,{decide:async(snapshot,mode,signal)=>{
-          await admission.requireHeld(config.browserModelResource,execution().workflowId,execution().runId);
-          if(!decider)throw Error("DTC.DRIVER_UNAVAILABLE");return decider.decide(snapshot,mode,signal);
-        }},async(step,snapshot,decision,screenshot,signal)=>{
-          const key=`v3/dtc-browser/${operationId}/step-${step}`;
-          await publication.publish(key+".png",screenshot,"image/png",signal);
-          await publication.publish(key+".json",Buffer.from(JSON.stringify(snapshot)),"application/json",signal);
-          if(decision)await publication.publish(key+"-decision.json",Buffer.from(JSON.stringify(decision)),"application/json",signal);
-          return key+".json";
-        });
-        const requireBrowser = async () => { const e = execution(); await admission.requireHeld(config.browserResource, e.workflowId, e.runId); };
+        const requireBrowser = async () => { const e=execution();await admission.requireHeld(config.browserResource,e.workflowId,e.runId); };
         const jobs = new DtcProductJobs(db, publication, { scope: config.scope, queues: config.productQueues, resources: config.productResources });
         const verifyJob = (raw: unknown, s: AbortSignal) => jobs.verify(raw, execution().workflowId, s);
-        const products = new DtcLiveProduct(publication, { text: config.sourceText, ocr: config.ocr,
-          visionConfigFingerprint: config.sourceVisionConfigFingerprint, egressId: config.egressId }, {
-          capture: async (job, signal) => { await requireBrowser(); return (await reader(job.sessionId,job.operationId,signal)).read(job.discovery.entry.url,"product",signal); },
-        });
+        const products = new DtcLiveProduct(publication, { text:config.sourceText,ocr:config.ocr,visionConfigFingerprint:config.sourceVisionConfigFingerprint,egressId:config.egressId });
         const plans = new ChannelProductPlans(publication, new ArtifactResolver(copies, r2.store), reviews);
         const files = new FileEvidence({ local, remote: r2.store, copies, reviews });
         const submission = async (id: string) => {
@@ -77,15 +53,7 @@ async function main() {
           if (!equal(scopeForSubmission(input), config.scope)) throw Error("DTC.SCOPE_CONFLICT");
           return input;
         };
-        const catalog = new DtcCatalogSource(publication, {brandName:config.site.brandName,pages:config.site.catalogPages,selectedUrls:config.site.selectedUrls}, { capture: async (input, signal, retain) => {
-          await requireBrowser();
-          const taskId=`dtc-catalog-${sha256(Buffer.from(JSON.stringify(input)))}`;await bindPage(taskId,signal);return pages.using(taskId, signal,
-            async browser => {
-              const projection = await (await reader(browser.taskId,`catalog-${sha256(Buffer.from(JSON.stringify(input)))}`,signal)).read(config.site.catalogPages[input.page]!,"catalog",signal);
-              await retain(projection); // Preserve evidence before the exact owned page is closed.
-              return projection;
-            });
-        } });
+        const catalog = new DtcCatalogSource(publication,{brandName:config.site.brandName,pages:config.site.catalogPages,selectedUrls:config.site.selectedUrls});
         const catalogIdentity = async (id: string, scope: unknown) => {
           await submission(id);
           if (!equal(scope, config.scope) || execution().workflowId !== `v3-collection-${id}-catalog`) throw Error("DTC.SCOPE_CONFLICT");
@@ -95,18 +63,10 @@ async function main() {
           const input = CollectionWorkflowInput.parse(raw);
           if (!equal(await submission(input.requestId), input) || execution().workflowId !== `v3-collection-${input.requestId}`) throw Error("DTC.WORKFLOW_IDENTITY");
           return BrandCollectionPlanSchema.parse({ catalogQueue: config.catalogQueue, catalog: { catalogId: input.requestId, scope: config.scope,
-            productWorkflow: "DtcCatalogProductWorkflow", queues: config.catalogQueues, resources: config.catalogResources, maxPages: config.maxPages??config.site.catalogPages.length } });
+            productWorkflow: "DtcCatalogProductV2Workflow", queues: config.catalogQueues, resources: config.catalogResources, maxPages: config.maxPages??config.site.catalogPages.length } });
         };
         let handlers: Record<string, (raw: any, signal: AbortSignal) => Promise<unknown>>;
-        if (role === "catalog-source") handlers = { readCatalogPage: async (raw, s) => {
-          const input = CatalogPageInputSchema.parse(raw); await submission(input.catalogId);
-          if (!equal(input.scope, config.scope) || execution().workflowId !== `v3-collection-${input.catalogId}-catalog`) throw Error("DTC.SCOPE_CONFLICT");
-          if(input.page>=(config.maxPages??config.site.catalogPages.length))throw Error("DTC.PAGINATION_LIMIT");
-          if(input.page>0){const previous=(await db.query("SELECT record FROM catalog_page WHERE catalog_id=$1 AND page_index=$2",[input.catalogId,input.page-1])).rows[0];
-            if(previous?.record.completion!=="more"||previous.record.nextCursor!==input.cursor)throw Error("DTC.PAGINATION_CONFLICT");}
-          return catalog.read(input, s);
-        } };
-        else if (role === "catalog-ledger") handlers = { commitCatalogPage: raw => ledger.commit(raw),
+        if (role === "catalog-ledger") handlers = { commitCatalogPage: raw => ledger.commit(raw),
           recordCatalogDispatch: async raw => { await catalogIdentity(raw.discovery.catalogId, raw.discovery.scope); return ledger.dispatch(raw); },
           closeCatalog: async raw => { await catalogIdentity(raw.catalogId, raw.scope); return ledger.close(raw); } };
         else if (role === "product-input") {
@@ -127,23 +87,6 @@ async function main() {
           };
           handlers={prepareDtcProduct:(raw,s)=>jobs.prepare(raw,execution().workflowId,s),prepareDtcLabel:(raw,s)=>prepareLabel(raw,s,false),prepareDtcStreamingLabel:(raw,s)=>prepareLabel(raw,s,true)};
         }
-        else if (role === "capture") handlers = {
-          captureDtcProduct: async (raw, s) => products.capture(await verifyJob(raw, s), s),
-          closeDtcProductPage: async (raw, s) => { const job = await verifyJob(raw, s); await requireBrowser(); return pages.close(job.sessionId, s); },
-        };
-        else if (role === "file") handlers = { acquireDtcFile: async (raw, s) => {
-          const captured = DtcProductCaptureSchema.parse({ job: raw.job, sourcePlan: raw.sourcePlan }), job = await verifyJob(captured.job, s);
-          if (!equal(await products.inspect(job, s), captured)) throw Error("DTC.CAPTURE_UNVERIFIED");
-          const url = await plans.fileSource(captured.sourcePlan, raw.input, s);
-          const access: SourceAccess = { acquire: async input => {
-            if (!equal(input, raw.input)) throw Error("SOURCE.SESSION_MISMATCH");
-            await requireBrowser(); const browser = await ownPage(job.sessionId, s); let released = false;
-            return { owner: observationIdentity(input), sourceId: input.sourceId, resourceId: input.resourceId, binding: input.binding, url,
-              allowedOrigins: config.site.imageOrigins, transport: new CdpOwnedFileTransport(browser,port,captured.sourcePlan.expectedUrl,[url],config.egressId),
-              headersFor: () => ({}), assertActive: () => { if (released) throw Error("SOURCE.SESSION_UNAVAILABLE"); }, release: async () => { released = true; } };
-          } };
-          return new AcquireFileModule(files, { access, dns: systemDns }).run(raw.input, s);
-        } };
         else if (role === "review") handlers = { reviewDtcProduct: async (raw, s) => {
           const job = await verifyJob(raw.job, s); if (raw.code !== "DTC.BROWSER_PHASE_UNRESOLVED") throw Error("DTC.REVIEW_CODE");
           if (typeof raw.causeCode !== "string" || !/^(SOURCE|DTC|ARTIFACT|RESOURCE)\.[A-Z_]+$/.test(raw.causeCode)) throw Error("DTC.REVIEW_CODE");
@@ -175,18 +118,48 @@ async function main() {
             for (const d of rows) if (d.execution) {
               const e = await client.workflow.getHandle(d.record.workflowId).describe();
               const held = await resourceDb.query("SELECT 1 FROM resource_permit WHERE request->>'workflowId'=ANY($1::text[]) AND released_at IS NULL", [[d.record.workflowId, `${d.record.workflowId}-label`]]);
-              if (e.runId === d.execution.runId && e.status.name === "COMPLETED" && e.type === "DtcCatalogProductWorkflow" && !held.rowCount) finished++;
+              if (e.runId === d.execution.runId && e.status.name === "COMPLETED" && e.type === "DtcCatalogProductV2Workflow" && !held.rowCount) finished++;
             }
             const held = await resourceDb.query("SELECT 1 FROM resource_permit WHERE request->>'workflowId'=$1 AND released_at IS NULL", [`v3-collection-${id}-catalog`]);
             return BrandCollectionProgressSchema.parse({ catalogId: id, settled: Boolean(closure) && finished === rows.length && !held.rowCount,
               catalog: closure?.status ?? "unknown", discovered: rows.length, finished });
           } };
         }
+        if(role==='catalog-ledger'||role==='product-input')handlers.dtcBrowserControl=async(raw,s)=>{
+          const request=DtcBrowserControlSchema.parse(raw),e=execution(),workflowType=Context.current().info.workflowType;
+          if(request.action==='catalog'){
+            if(role!=='catalog-ledger'||workflowType!=='DtcCatalogWorkflow')throw Error('DTC.CONTROL_ROUTE');
+            const input=request.input;await catalogIdentity(input.catalogId,input.scope);await requireBrowser();
+            if(input.page>=config.site.catalogPages.length||input.page>=(config.maxPages??config.site.catalogPages.length))throw Error('DTC.PAGINATION_LIMIT');
+            if(input.page===0&&input.cursor!==null)throw Error('DTC.PAGINATION_CONFLICT');
+            if(input.page>0){const previous=(await db.query('SELECT record FROM catalog_page WHERE catalog_id=$1 AND page_index=$2',[input.catalogId,input.page-1])).rows[0];
+              if(previous?.record.completion!=='more'||previous.record.nextCursor!==input.cursor)throw Error('DTC.PAGINATION_CONFLICT');}
+            if(request.model)await admission.requireHeld(config.browserModelResource,e.workflowId,e.runId);
+            return{allowed:true};
+          }
+          if(role!=='product-input'||workflowType!=='DtcCatalogProductV2Workflow')throw Error('DTC.CONTROL_ROUTE');
+          if(request.action==='product'){
+            await verifyJob(request.job,s);await requireBrowser();if(request.model)await admission.requireHeld(config.browserModelResource,e.workflowId,e.runId);return{allowed:true};
+          }
+          const {capture,input}=request;const job=await verifyJob(capture.job,s);await requireBrowser();
+          if(!equal(await products.inspect(job,s),capture))throw Error('DTC.CAPTURE_UNVERIFIED');
+          const url=await plans.fileSource(capture.sourcePlan,input,s);
+          if(request.action==='file')return{url};
+          const valid=(record:unknown)=>{const r=ReviewRecordSchema.parse(record);
+            if(!equal(r.observation,observationIdentity(input))||r.failure.operationId!==input.operationId||r.failure.inputFingerprint!==input.inputFingerprint||r.failure.stage!=='file.acquire'||!equal(r.rawError.details,{input})||r.failure.evidenceKey!==`acquisition-reviews/${r.reviewId}.json`)throw Error('DTC.REVIEW_UNVERIFIED');return r;};
+          if(request.action==='file-review-read'){const r=await reviews.read(request.reviewId);return r?valid(r):null;}
+          const record=valid(request.record);await publication.publish(record.failure.evidenceKey,Buffer.from(JSON.stringify(record)),'application/json',s);
+          await reviews.append(record);if(!equal(await reviews.read(record.reviewId),record))throw Error('DTC.REVIEW_UNVERIFIED');return{registered:true};
+        };
+        if(role==='control'){
+          const node=new DtcMiniNode(resourceDb,config);
+          handlers.dtcNodeControl=raw=>node.run(raw,{...execution(),workflowType:Context.current().info.workflowType??''});
+        }
         return { kind: "activity" as const, dispose, activities: Object.fromEntries(Object.entries(handlers).map(([name, fn]) => [name, async (raw: unknown) => {
           const ctx = Context.current(); if (ctx.info.attempt !== 1 && !["prepareBrandCollection", "inspectBrandCollection"].includes(name)) throw ApplicationFailure.nonRetryable("Inspect existing evidence", "DTC.RETRY_DENIED");
           const timer = setInterval(() => ctx.heartbeat(), 2000);
           try { return await fn(raw, ctx.cancellationSignal); }
-          catch (error) { ctx.cancellationSignal.throwIfAborted(); const code = error instanceof Error && /^(DTC|SOURCE|CATALOG|ARTIFACT)\.[A-Z_]+$/.test(error.message) ? error.message : "DTC.ACTIVITY_UNRESOLVED";
+          catch (error) { ctx.cancellationSignal.throwIfAborted(); const code = error instanceof Error && /^(DTC|SOURCE|CATALOG|ARTIFACT|RESOURCE)\.[A-Z_]+$/.test(error.message) ? error.message : "DTC.ACTIVITY_UNRESOLVED";
             throw ApplicationFailure.nonRetryable("Inspect retained Dtc evidence", code); }
           finally { clearInterval(timer); }
         }])) };

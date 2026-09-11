@@ -8,7 +8,7 @@ export async function BrandCollectionWorkflow(raw:unknown){
   const plan=BrandCollectionPlanSchema.parse(await ports.prepareBrandCollection(input));
   if(plan.catalog.catalogId!==input.requestId||plan.catalog.scope.brandId!==input.snapshot.brandId||plan.catalog.scope.sourceId!==input.snapshot.sourceId||plan.catalog.scope.rootUrl!==input.snapshot.url)
     throw ApplicationFailure.nonRetryable("Foreign catalog plan","BRAND.IDENTITY");
-  const child=await startChild("CatalogWorkflow",{workflowId:`${info.workflowId}-catalog`,taskQueue:plan.catalogQueue,args:[plan.catalog],parentClosePolicy:ParentClosePolicy.ABANDON,workflowIdReusePolicy:WorkflowIdReusePolicy.REJECT_DUPLICATE,retry:{maximumAttempts:1}});
+  const child=await startChild(plan.catalog.productWorkflow==='DtcCatalogProductV2Workflow'?'DtcCatalogWorkflow':"CatalogWorkflow",{workflowId:`${info.workflowId}-catalog`,taskQueue:plan.catalogQueue,args:[plan.catalog],parentClosePolicy:ParentClosePolicy.ABANDON,workflowIdReusePolicy:WorkflowIdReusePolicy.REJECT_DUPLICATE,retry:{maximumAttempts:1}});
   await child.result();
   for(;;){
     const progress=BrandCollectionProgressSchema.parse(await ports.inspectBrandCollection(input));

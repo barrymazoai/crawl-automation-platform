@@ -12,7 +12,7 @@ type Ledger = {
 /** One bounded page at a time; children outlive catalog failure, closure and Continue-As-New. */
 export async function CatalogWorkflow(raw: unknown): Promise<unknown> {
   const input = CatalogWorkflowInputSchema.parse(raw), ledger = proxyActivities<Ledger>(options(input.queues.ledger));
-  if ((input.productWorkflow === "SwansonCatalogProductWorkflow" && input.scope.channel !== "swanson") || (input.productWorkflow === "AmazonCatalogProductWorkflow" && input.scope.channel !== "amazon") || (input.productWorkflow === "DtcCatalogProductWorkflow" && input.scope.channel !== "dtc"))
+  if ((input.productWorkflow === "SwansonCatalogProductWorkflow" && input.scope.channel !== "swanson") || (input.productWorkflow === "AmazonCatalogProductWorkflow" && input.scope.channel !== "amazon") || (["DtcCatalogProductWorkflow", "DtcCatalogProductV2Workflow"].includes(input.productWorkflow ?? '') && input.scope.channel !== "dtc"))
     throw ApplicationFailure.nonRetryable("Foreign channel route", "CATALOG.PRODUCT_ROUTE");
   const source = proxyActivities<{ readCatalogPage(input: CatalogPageInput): Promise<CatalogPage> }>(options(input.queues.source));
   let pageIndex = input.page, cursor = input.cursor;

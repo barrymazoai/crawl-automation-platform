@@ -6,7 +6,7 @@ import { CatalogScopeSchema, ChannelPlanInputSchema, ChannelLabelInputSchema, Ch
   DtcProductJobSchema, ResourceGateSchema, VersionTagSchema } from "@crawl-automation/v3-contracts";
 import { R2ScopeSchema } from "@crawl-automation/v3-artifacts";
 import { CdpTaskConfigSchema } from "@crawl-automation/v3-acquisition";
-export const DtcLiveConfigSchema = z.strictObject({
+const DtcConfigFields = {
   clusterId: VersionTagSchema,
   database: z.strictObject({ connectionString: z.string().min(1), tls: z.boolean() }),
   resourceDatabase: z.strictObject({ connectionString: z.string().min(1), tls: z.boolean() }).optional(),
@@ -24,11 +24,18 @@ export const DtcLiveConfigSchema = z.strictObject({
   labelText: ChannelLabelInputSchema.shape.text, visionConfigFingerprint: ChannelLabelInputSchema.shape.visionConfigFingerprint,
   evidencePolicy: ChannelLabelInputSchema.shape.evidencePolicy,
   labelQueues: ChannelSavedLabelWorkflowInputSchema.shape.queues, labelResources: ResourceGateSchema,
-}).superRefine((c, ctx) => {
+  nodeControl: z.strictObject({nodeId:VersionTagSchema,workflowQueue:VersionTagSchema,activityQueue:VersionTagSchema}),
+};
+const {database: _database, resourceDatabase: _resourceDatabase, ...browserFields}=DtcConfigFields;
+// Windows is deliberately unable to parse a configuration carrying DB credentials.
+export const DtcBrowserConfigSchema=z.strictObject(browserFields).superRefine(validate);
+export const DtcLiveConfigSchema=z.strictObject(DtcConfigFields).superRefine(validate);
+function validate(c:z.infer<ReturnType<typeof z.strictObject<typeof browserFields>>>,ctx:z.RefinementCtx) {
   if(c.brandName!==c.site.brandName||c.scope.rootUrl!==c.site.catalogPages[0]||new URL(c.scope.rootUrl).origin!==c.site.origin)
     ctx.addIssue({code:"custom",message:"DTC site, brand and source must match"});
   const catalog = c.catalogResources.activities.readCatalogPage, product = c.productResources.activities.browserSession;
   if (!c.productResources.activities.captureDtcProduct?.some(n=>n.resourceId===c.browserModelResource) || !catalog?.some(n=>n.resourceId===c.browserModelResource) || !catalog?.some(n => n.resourceId === c.browserResource) || !product?.some(n => n.resourceId === c.browserResource))
     ctx.addIssue({ code: "custom", message: "Shared browser admission and label core queue required" });
-});
+}
 export type DtcLiveConfig = z.infer<typeof DtcLiveConfigSchema>;
+export type DtcBrowserConfig = z.infer<typeof DtcBrowserConfigSchema>;

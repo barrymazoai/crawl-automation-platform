@@ -13,3 +13,4 @@ export { ChannelStreamingLabelWorkflow } from "../../../packages/v3-product/src/
 export {AmazonCatalogProductWorkflow} from '../../../packages/v3-product/src/amazon-catalog-workflow.js';
 
 export { DtcCatalogProductWorkflow } from "../../../packages/v3-product/src/dtc-catalog-workflow.js";
+export { DtcCatalogWorkflow, DtcCatalogProductV2Workflow, DtcNodePreflightWorkflow, DtcNodeSessionWorkflow } from "../../../packages/v3-product/src/dtc-control-workflow.js";

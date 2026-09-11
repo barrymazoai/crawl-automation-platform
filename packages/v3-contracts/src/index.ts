@@ -47,3 +47,4 @@ export * from './amazon-live.js';
 export * from "./dtc-live.js";
 
 export * from "./dtc-rendered.js";
+export * from "./dtc-control.js";

@@ -23,13 +23,11 @@ Windows 需要当前用户自己的 Codex 登录及可执行文件；保持交�
 
 `http://127.0.0.1:9222/json/version` 的 `webSocketDebuggerUrl` 尾段就是 `browser.instanceId`。重启 Chrome 会变更实例 ID；不要直接改旧任务日志或删除证据来跨实例恢复。
 
-两端必须连接同一 Temporal namespace、同一业务/资源库、同一新 R2 prefix。沿用现有全局模型账号和 OCR 资源编号；**不得为同一账号另建一份额度**。Windows supervisor 仅管理自己的独占浏览器资源，容量为 1。Mini 的新标签角色继续从原全局资源表领取额度。
+两端连接同一 Temporal namespace、同一新 R2 prefix。**Windows 不连接数据库、不需要数据库凭据、Mini SSH 或数据库隧道。**业务库和资源记录仅由 Mini 访问；沿用已有数据库，不新增数据库。沿用现有全局模型账号和 OCR 资源编号；**不得为同一账号另建一份额度**。Windows supervisor 仅管理自己的独占浏览器资源，容量为 1。Mini 的新标签角色继续从原全局资源表领取额度。
 
-将现有已验证渠道的以下三个私有 JSON 安全复制到目标机私有目录（不放入 release、不提交 Git）：
+Windows 只接收 mTLS runtime/证书，以及经过字段筛选的浏览器私有配置（R2 凭据和已验证的来源/解析参数）。配置中出现 `database` 或 `resourceDatabase` 会直接拒绝；不要把旧渠道完整配置复制到 Windows。Windows 无需 `baseLabel`。
 
-1. 一个 mTLS Worker runtime，证书路径改为该机器真实路径。
-2. 对应渠道的完整 `*.private.json`（含 sourceText、labelText、OCR、vision 指纹及资源配置）。
-3. **同一渠道**的完整 label 私有配置（含 Codex 与 OCR provider）；Mini 路径必须有效。Windows 只用其配置准备，不运行标签 provider。
+Mini 的 `baseLive` 继续引用现有完整渠道配置，`baseLabel` 引用同渠道的标签私有配置（Codex 和 OCR provider）。这些文件留在 Mini。26 个角色指 26 个各有分工的后台 Worker 进程，不是 26 台机器。
 
 Windows 的私有目录通过 NTFS ACL 限制到部署账号；不要放共享可写目录。Mini 私有 JSON 使用 chmod 600、目录 chmod 700。生成器不迁移数据库、不新建品牌、不启用来源、不替换现有 Web 路由，也不启动工作流。
 
@@ -52,7 +50,7 @@ Mini 同样安装依赖并执行 `node ./dtc-prepare.js /绝对路径/settings.p
 node .\dtc-node.js start D:\crawlv3-dtc\private\node.json
 ```
 
-`doctor` 只读检查：固定 Chrome 实例、未清理的页面记录、Codex 环境、Temporal namespace 和原生 SDK、模型资源存在、R2 读取。它不调用模型推理、不打开站点、不提交任务。`start` 再次执行 doctor，并在已有 STOP 文件时拒绝启动。
+`doctor` 检查固定 Chrome 实例、待清理页面、Codex 环境、Temporal namespace/原生 SDK 和 R2 读取，并通过一个 `DtcNodePreflightWorkflow` 请 Mini 只读核验已有资源。它会创建这条基础设施检查工作流，不提交业务采集、不调用模型推理、不打开站点。`start` 再次执行 doctor，并在已有 STOP 文件时拒绝启动。
 
 Windows `status.json` 必须三个角色 ready、healthy=true。两端 `private/routing.json` 队列必须一致。最后把现有 Web DTC delivery target 的 **taskQueue** 配置为 `routing.json.brandTarget.taskQueue`，保留其其余连接/身份字段；通过正常 Brand 入口提交一个配置内的商品试单。此前不能据进程存在宣称端到端通了。
 
@@ -62,7 +60,7 @@ Windows `status.json` 必须三个角色 ready、healthy=true。两端 `private/
 node .\dtc-node.js stop D:\crawlv3-dtc\private\node.json
 ```
 
-这是 STOP 请求；父进程先撤销新浏览器准入，再通过 IPC 通知精确的三个子进程优雅退出。核对进程已退出和 status/log；不强杀整个浏览器，也不自动重新拉起失败 Worker。正常关闭后才移除 supervisor.lock。确认全部退出后才删除自己创建的 STOP 文件，以允许下一次启动。
+这是 STOP 请求；父进程先撤销新浏览器准入，再通过 IPC 通知精确的三个子进程优雅退出。核对进程已退出和 status/log；不强杀整个浏览器，也不自动重新拉起失败 Worker。Mini 确认节点会话关闭、三个子进程退出后才移除 supervisor.lock 和 node-session.json。确认全部退出后才删除自己创建的 STOP 文件，以允许下一次启动。
 
 在配置的 `browser.pauseFile` 创建空文件可明确交还用户控制；所有浏览器动作包括 cleanup 均拒绝继续。只有用户交回控制且移除该文件后，才能恢复。
 
@@ -72,19 +70,25 @@ node .\dtc-node.js stop D:\crawlv3-dtc\private\node.json
 node .\dtc-recover.js D:\crawlv3-dtc\private\node.json
 ```
 
-恢复命令独占 supervisor.lock，检查三个旧 Worker PID 不存在，核对页面绑定的 Temporal run 已终止，只关闭记录的目标及其后代并复查消失，写 R2 恢复证据。工作流仍运行、实例改变、用户接管、身份不明时拒绝。失败保留 lock，继续人工检查。**页面关闭证明不等于模型执行停止证明，恢复命令不释放隔离的资源许可。**许可恢复仍走已有资源证据流程。
+恢复命令独占 supervisor.lock，检查三个旧 Worker PID 不存在，核对页面绑定的 Temporal run 已终止，只关闭记录的目标及其后代并复查消失，写 R2 恢复证据。它还核对 node-session.json 的 supervisor/Worker PID 全部退出，通过 Temporal 关闭该节点会话；未知启动状态保留记录。工作流仍运行、实例改变、用户接管、身份不明时拒绝。失败保留 lock，继续人工检查。**页面关闭证明不等于模型执行停止证明，恢复命令不释放隔离的资源许可。**许可恢复仍走已有资源证据流程。
 
 ## 现场验收
 
 先单个 selected URL，再扩目录范围。检查：Windows 网络下抓到公开页面 → R2 有截图/DOM/选择/投影与原图 → Mini 接收 plan/文件流并执行 OCR/标签 → Saved 或终态 Review → 任务 target 和弹窗不在清单中，原用户页面仍在。再验失败、取消、用户接管、Worker 异常退出恢复；最后确认没有新增重试/重复记录、旧 Review 与 R2 未改动。用户接管保留 pending 是预期结果。
 
+## 两端通信
+
+Windows 三个浏览器 Worker 使用独立入口 `dtc-browser-worker.js`，兼容版本 `dtc-live-v2`。Mini 的 `dtc-live-worker.js` 只提供控制、目录记录、产品输入和 Review 角色。构建会检查 Windows 入口的整个导入图，发现 PostgreSQL 客户端或 Mini Worker 引用即失败。
+
+浏览器 Activity 用当前 workflowId/runId 向拥有它的工作流发送 `dtcBrowserControl` Update；工作流转给 Mini 做任务身份、已有资源许可和文件计划核验。请求只允许具体采集动作及绑定的 Review 记录，没有 SQL 或任意数据库操作接口。任务额度的含义是控制同一浏览器/模型账号的并发，仍由 Mini 统一管理。
+
+Windows supervisor 通过 `DtcNodeSessionWorkflow` 上报浏览器、磁盘和三个 Worker 的就绪状态。Mini 将记录有效期设置为 20 秒；停止或失联后不再准入新任务。旧会话不能覆盖新会话；停止会话不会释放未查清的任务许可。会话定期 Continue-As-New，避免历史无限增长。异常退出必须通过现有证据恢复流程处理，不能删除锁强行重启。
+
 ## 源码构建与验证证据
 
-源码构建：`pnpm --filter @crawl-automation/v3-workers build:dtc`。产物位于 `apps/v3-workers/dist/dtc-windows`；测试产物是相邻的 `dtc-windows-tests`。测试包必须同步到 Mac mini 执行，勿在 MacBook 运行浏览器/provider/integration 测试。
+源码构建：`pnpm --filter @crawl-automation/v3-workers build:dtc`。产物为 `apps/v3-workers/dist/dtc-windows`，测试产物为相邻 `dtc-windows-tests`。TypeScript/构建可在 MacBook 执行；浏览器/provider/integration 测试只在 Mac mini 运行。
 
-2026-09-11 最终验证：MacBook TypeScript 检查/构建通过；Mini 13 个测试文件共 109 项通过（DTC 44 项、旧渠道 65 项），含有界 HTTP/WebSocket CDP 协议 fixture、原图字节保真、用户控制、取消/失败/冷恢复、DTC 及原渠道两组真实本地 Temporal 流水与共 12 份历史重放。模型、OCR、真实站点调用均为 0；不能将 fixture 的处理计数解释为实际付费调用。Mini 另验证三个 CLI 入口拒绝缺失参数、26 个角色构建匹配与配置生成幂等。Windows 真机验收仍待部署。
-
-完整报告：仓库 `docs/quality/2026-09-11-dtc-windows-code.md`；原始测试证明在相邻 `evidence/2026-09-11-dtc-windows/`。上述是源端验收记录；Git 发布状态以仓库提交为准。尚未替换现有部署、未修改历史 R2/Review。
+旧版测试记录见 `docs/quality/2026-09-11-dtc-windows-code.md`。V2 改动增加 Windows 配置边界、Mini 节点会话和分机队列通信测试；Windows 实机与真实网站采集仍需现场验收。
 
 ## 从 Git 部署
 
