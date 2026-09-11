@@ -83,4 +83,16 @@ node .\dtc-recover.js D:\crawlv3-dtc\private\node.json
 
 2026-09-11 最终验证：MacBook TypeScript 检查/构建通过；Mini 13 个测试文件共 109 项通过（DTC 44 项、旧渠道 65 项），含有界 HTTP/WebSocket CDP 协议 fixture、原图字节保真、用户控制、取消/失败/冷恢复、DTC 及原渠道两组真实本地 Temporal 流水与共 12 份历史重放。模型、OCR、真实站点调用均为 0；不能将 fixture 的处理计数解释为实际付费调用。Mini 另验证三个 CLI 入口拒绝缺失参数、26 个角色构建匹配与配置生成幂等。Windows 真机验收仍待部署。
 
-完整报告：仓库 `docs/quality/2026-09-11-dtc-windows-code.md`；原始测试证明在相邻 `evidence/2026-09-11-dtc-windows/`。本轮未提交 Git、未替换现有部署、未修改历史 R2/Review。
+完整报告：仓库 `docs/quality/2026-09-11-dtc-windows-code.md`；原始测试证明在相邻 `evidence/2026-09-11-dtc-windows/`。上述是源端验收记录；Git 发布状态以仓库提交为准。尚未替换现有部署、未修改历史 R2/Review。
+
+## 从 Git 部署
+
+确认本地修改已妥善保留后，拉取远端 `main`。仓库使用 Node.js 22.17+ 和 pnpm 10.14.0。在仓库根目录安装**完整工作区**依赖，再构建 DTC；Worker 有对 V3 API 源码的直接引用，仅安装 Worker 的过滤依赖不足以构建。
+
+```powershell
+git pull --ff-only origin main
+pnpm install --frozen-lockfile
+pnpm --filter @crawl-automation/v3-workers build:dtc
+```
+
+发布前已将暂存源码导出到干净目录，使用锁文件重新安装依赖，DTC 构建及 V3 live 界面构建均通过。这不代替 Windows 原生环境和真实站点的现场验收。

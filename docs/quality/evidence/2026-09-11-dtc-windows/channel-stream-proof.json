@@ -1,0 +1,323 @@
+{
+  "passed": true,
+  "at": "2026-09-11T03:36:41.873Z",
+  "proofs": [
+    {
+      "mode": "success",
+      "counts": {
+        "capture": 1,
+        "download": 2,
+        "ocr": 2,
+        "text": 1,
+        "vision": 1
+      },
+      "fileCalls": 2,
+      "closed": true,
+      "held": false,
+      "events": [
+        {
+          "name": "file-start",
+          "at": 1789097796300,
+          "operationId": "gncp-35c1c2e445059f649629c2de04c5f1ef03a10ce7f066141acfad4dd4749d7d52"
+        },
+        {
+          "name": "file-ready",
+          "at": 1789097796313,
+          "operationId": "gncp-35c1c2e445059f649629c2de04c5f1ef03a10ce7f066141acfad4dd4749d7d52"
+        },
+        {
+          "name": "file-start",
+          "at": 1789097796325,
+          "operationId": "gncp-6a4a266aa0a9736a37d22f757931460f037fb64a4e65b6e51fb600052323def0"
+        },
+        {
+          "name": "loadChannelLabelPlan",
+          "at": 1789097796365,
+          "operationId": "channel-label"
+        },
+        {
+          "name": "prepareImageOcr",
+          "at": 1789097796374
+        },
+        {
+          "name": "prepareHtmlPage",
+          "at": 1789097796376,
+          "operationId": "gncp-924827a7bb40385ca36c5f077149d43a159c034094cd631abf5f75d9ced978c3"
+        },
+        {
+          "name": "ocrFile",
+          "at": 1789097796380,
+          "operationId": "gncp-3ee4c694c2cbb8780cc6c018377f78bd9e9471687c09fef13b09f730bdeb8601"
+        },
+        {
+          "name": "preparePageText",
+          "at": 1789097796404
+        },
+        {
+          "name": "resolveOcrReceipt",
+          "at": 1789097796504
+        },
+        {
+          "name": "prepareChannelLabelSource",
+          "at": 1789097796505
+        },
+        {
+          "name": "screenImageKeywords",
+          "at": 1789097796605
+        },
+        {
+          "name": "interpretText",
+          "at": 1789097796607,
+          "operationId": "chl-864d93c9668670ac03f1c45dbc831fe5720c3613ecff6433a97d8766cc605ff4"
+        },
+        {
+          "name": "prepareChannelLabelSource",
+          "at": 1789097796705
+        },
+        {
+          "name": "resolveTextReceipt",
+          "at": 1789097796755
+        },
+        {
+          "name": "interpretImage",
+          "at": 1789097796805
+        },
+        {
+          "name": "file-ready",
+          "at": 1789097796970,
+          "operationId": "gncp-6a4a266aa0a9736a37d22f757931460f037fb64a4e65b6e51fb600052323def0"
+        },
+        {
+          "name": "close",
+          "at": 1789097797106
+        },
+        {
+          "name": "prepareImageOcr",
+          "at": 1789097797155
+        },
+        {
+          "name": "release",
+          "at": 1789097797204
+        },
+        {
+          "name": "ocrFile",
+          "at": 1789097797254,
+          "operationId": "gncp-2c70510b6d9cde12b42e6a79818fb6c210fb097591444e34b288d4d4f04ee1d3"
+        },
+        {
+          "name": "resolveOcrReceipt",
+          "at": 1789097797355
+        },
+        {
+          "name": "screenImageKeywords",
+          "at": 1789097797458
+        },
+        {
+          "name": "prepareChannelLabelSource",
+          "at": 1789097797558
+        },
+        {
+          "name": "prepareChannelLabelManifest",
+          "at": 1789097797657,
+          "operationId": "channel-label"
+        },
+        {
+          "name": "assembleLabelProduct",
+          "at": 1789097797759
+        },
+        {
+          "name": "collectLabelProduct",
+          "at": 1789097797858
+        }
+      ],
+      "realProviderCalls": 0,
+      "realBrowserCalls": 0
+    },
+    {
+      "mode": "failure",
+      "counts": {
+        "capture": 1,
+        "download": 1,
+        "ocr": 1,
+        "text": 1,
+        "vision": 1
+      },
+      "fileCalls": 2,
+      "closed": true,
+      "held": true,
+      "events": [
+        {
+          "name": "file-start",
+          "at": 1789097798805,
+          "operationId": "gncp-35c1c2e445059f649629c2de04c5f1ef03a10ce7f066141acfad4dd4749d7d52"
+        },
+        {
+          "name": "file-ready",
+          "at": 1789097798817,
+          "operationId": "gncp-35c1c2e445059f649629c2de04c5f1ef03a10ce7f066141acfad4dd4749d7d52"
+        },
+        {
+          "name": "loadChannelLabelPlan",
+          "at": 1789097798854,
+          "operationId": "channel-label"
+        },
+        {
+          "name": "prepareHtmlPage",
+          "at": 1789097798955,
+          "operationId": "gncp-924827a7bb40385ca36c5f077149d43a159c034094cd631abf5f75d9ced978c3"
+        },
+        {
+          "name": "prepareImageOcr",
+          "at": 1789097798956
+        },
+        {
+          "name": "file-start",
+          "at": 1789097799005,
+          "operationId": "gncp-6a4a266aa0a9736a37d22f757931460f037fb64a4e65b6e51fb600052323def0"
+        },
+        {
+          "name": "preparePageText",
+          "at": 1789097799058
+        },
+        {
+          "name": "ocrFile",
+          "at": 1789097799061,
+          "operationId": "gncp-3ee4c694c2cbb8780cc6c018377f78bd9e9471687c09fef13b09f730bdeb8601"
+        },
+        {
+          "name": "prepareChannelLabelSource",
+          "at": 1789097799158
+        },
+        {
+          "name": "resolveOcrReceipt",
+          "at": 1789097799161
+        },
+        {
+          "name": "screenImageKeywords",
+          "at": 1789097799259
+        },
+        {
+          "name": "interpretText",
+          "at": 1789097799261,
+          "operationId": "chl-864d93c9668670ac03f1c45dbc831fe5720c3613ecff6433a97d8766cc605ff4"
+        },
+        {
+          "name": "prepareChannelLabelSource",
+          "at": 1789097799359
+        },
+        {
+          "name": "resolveTextReceipt",
+          "at": 1789097799361
+        },
+        {
+          "name": "interpretImage",
+          "at": 1789097799460
+        },
+        {
+          "name": "close",
+          "at": 1789097799610
+        },
+        {
+          "name": "reviewChannelProduct",
+          "at": 1789097799809
+        }
+      ],
+      "realProviderCalls": 0,
+      "realBrowserCalls": 0
+    },
+    {
+      "mode": "cancel",
+      "counts": {
+        "capture": 1,
+        "download": 2,
+        "ocr": 1,
+        "text": 1,
+        "vision": 1
+      },
+      "fileCalls": 2,
+      "closed": true,
+      "held": true,
+      "events": [
+        {
+          "name": "file-start",
+          "at": 1789097800756,
+          "operationId": "gncp-35c1c2e445059f649629c2de04c5f1ef03a10ce7f066141acfad4dd4749d7d52"
+        },
+        {
+          "name": "file-ready",
+          "at": 1789097800766,
+          "operationId": "gncp-35c1c2e445059f649629c2de04c5f1ef03a10ce7f066141acfad4dd4749d7d52"
+        },
+        {
+          "name": "loadChannelLabelPlan",
+          "at": 1789097800805,
+          "operationId": "channel-label"
+        },
+        {
+          "name": "prepareHtmlPage",
+          "at": 1789097800905,
+          "operationId": "gncp-924827a7bb40385ca36c5f077149d43a159c034094cd631abf5f75d9ced978c3"
+        },
+        {
+          "name": "prepareImageOcr",
+          "at": 1789097800907
+        },
+        {
+          "name": "file-start",
+          "at": 1789097800954,
+          "operationId": "gncp-6a4a266aa0a9736a37d22f757931460f037fb64a4e65b6e51fb600052323def0"
+        },
+        {
+          "name": "ocrFile",
+          "at": 1789097801006,
+          "operationId": "gncp-3ee4c694c2cbb8780cc6c018377f78bd9e9471687c09fef13b09f730bdeb8601"
+        },
+        {
+          "name": "preparePageText",
+          "at": 1789097801007
+        },
+        {
+          "name": "resolveOcrReceipt",
+          "at": 1789097801107
+        },
+        {
+          "name": "prepareChannelLabelSource",
+          "at": 1789097801109
+        },
+        {
+          "name": "interpretText",
+          "at": 1789097801211,
+          "operationId": "chl-864d93c9668670ac03f1c45dbc831fe5720c3613ecff6433a97d8766cc605ff4"
+        },
+        {
+          "name": "screenImageKeywords",
+          "at": 1789097801213
+        },
+        {
+          "name": "resolveTextReceipt",
+          "at": 1789097801308
+        },
+        {
+          "name": "prepareChannelLabelSource",
+          "at": 1789097801310
+        },
+        {
+          "name": "interpretImage",
+          "at": 1789097801407
+        },
+        {
+          "name": "file-ready",
+          "at": 1789097801486,
+          "operationId": "gncp-6a4a266aa0a9736a37d22f757931460f037fb64a4e65b6e51fb600052323def0"
+        },
+        {
+          "name": "close",
+          "at": 1789097801560
+        }
+      ],
+      "realProviderCalls": 0,
+      "realBrowserCalls": 0
+    }
+  ],
+  "replays": 6
+}

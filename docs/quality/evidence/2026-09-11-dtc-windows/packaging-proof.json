@@ -1,0 +1,10 @@
+{
+  "passed": true,
+  "roles": 26,
+  "configIdempotent": true,
+  "entrypoints": 3,
+  "registeredBuildMatches": 26,
+  "realProviderCalls": 0,
+  "realBrowserCalls": 0,
+  "businessDbCalls": 0
+}
