@@ -1,5 +1,7 @@
 # Windows DTC 节点：代码交付与部署
 
+Innerbody 的当前部署入口：[Windows Codex 执行说明](deploy/innerbody/WINDOWS_CODEX_PROMPT.md)。代码、站点配置和部署辅助脚本统一从 Git 获取；复用目标机私有凭据，无需搬运新版 release 包。
+
 本包是 Crawler V3 DTC 的独立增量。Windows 只运行 `dtc-catalog-source`、`dtc-capture`、`dtc-file` 三个浏览器 Activity Worker；Mini 运行 26 个控制、Workflow、计划及标签处理 Worker。不替换旧 `apps/browser-node`，不修改其控制平面，不把 OCR 或标签模型塞进浏览器节点。新队列使用同一个独立 `dtc-*` queueScope。
 
 **交付状态：代码和测试交付；Windows 原生依赖、Codex 登录、专用 Chrome、现场网络及真实 DTC 商品尚待部署验收。不能据此把 Plane #35/#39 标为真实验收完成。**

@@ -1,0 +1,156 @@
+{
+  "version": 2,
+  "commit": "9846fc8db6fd5511b9510c83224758b371d16265",
+  "activityBuild": "4aefac185c12264127f7c956dfa149731d28805a3b9366361f527076142bfa47",
+  "workflowBuild": "7ab2b9a92b2b3a623508493ca2e613c3fce3228916ba796b170478aa5c96854c",
+  "jsCount": 18,
+  "queueScope": "dtc-innerbody-v2-20260911",
+  "evidencePrefix": "crawlv3-acceptance/dtc-innerbody-v2-20260911",
+  "browserResource": "windows-dtc-browser",
+  "browserModelResource": "mini-model-account",
+  "scope": {
+    "brandId": "a0a15d55-adec-43aa-8b59-36aaa40f9d99",
+    "sourceId": "ebe15930-f065-42ed-b6a4-8df959bfad50",
+    "channel": "dtc",
+    "region": "US",
+    "rootUrl": "https://shop.innerbody.com/collections/all",
+    "scopeVersion": "source-revision-1"
+  },
+  "site": {
+    "origin": "https://shop.innerbody.com",
+    "brandName": "Innerbody Labs",
+    "catalogPages": [
+      "https://shop.innerbody.com/collections/all"
+    ],
+    "productPathPrefix": "/products/",
+    "catalogRoot": "#MainContent",
+    "productRoot": "product-info[id^=\"MainProduct-\"]",
+    "imageOrigins": [
+      "https://shop.innerbody.com",
+      "https://cdn.shopify.com"
+    ],
+    "galleryControls": [
+      "media-gallery button[aria-label=\"Load image 2 in gallery view\"]",
+      "media-gallery button[aria-label=\"Load image 3 in gallery view\"]"
+    ],
+    "maxDecisions": 6,
+    "selectedUrls": [
+      "https://shop.innerbody.com/products/astaxanthin?variant=44807968882774"
+    ]
+  },
+  "channelDefaults": {
+    "clusterId": "railway-temporal",
+    "sourceText": {
+      "schemaVersion": 1,
+      "module": "codex.text",
+      "implementationVersion": "codex-text/2",
+      "policyVersion": "anchored/2",
+      "resultSchemaVersion": 2,
+      "configFingerprint": "549857a18a4ff72c8b3656eab23ae6bcaca35503c9ab7f14db53017063a4e3b7"
+    },
+    "ocr": {
+      "module": "ocr.file",
+      "schemaVersion": 1,
+      "implementationVersion": "multipart-ocr/2",
+      "policyVersion": "single-call/1",
+      "resultSchemaVersion": 2,
+      "configFingerprint": "1eb0512f1c8d69cbb161e8058e88d1055895398f41036dc45fc47b60d5b7ab14"
+    },
+    "sourceVisionConfigFingerprint": "98795c45b9a516214587a26668b51629772d9636f9cfdbddd1ac2a6149d154de",
+    "labelText": {
+      "schemaVersion": 1,
+      "module": "codex.text",
+      "implementationVersion": "codex-text/3",
+      "policyVersion": "label-text/4",
+      "resultSchemaVersion": 3,
+      "configFingerprint": "fb7e14c6b914d68459da21f3a895ffe7eb064486babd0b62fd7500e93e7d4ac4"
+    },
+    "visionConfigFingerprint": "98795c45b9a516214587a26668b51629772d9636f9cfdbddd1ac2a6149d154de",
+    "evidencePolicy": "label-image-first/3",
+    "labelResources": {
+      "queue": "v3.channel.label.resources.v1.channel-label-v1.session.swanson-acg-resident-v1",
+      "reviewStopCheck": true,
+      "activities": {
+        "interpretText": [
+          {
+            "resourceId": "mini-model-account",
+            "units": 1
+          },
+          {
+            "resourceId": "mini-cpu",
+            "units": 1
+          }
+        ],
+        "interpretImage": [
+          {
+            "resourceId": "mini-model-account",
+            "units": 1
+          },
+          {
+            "resourceId": "mini-cpu",
+            "units": 1
+          }
+        ],
+        "ocrFile": [
+          {
+            "resourceId": "windows-ocr",
+            "units": 1
+          }
+        ]
+      },
+      "maxWaitSeconds": 900
+    }
+  },
+  "routing": {
+    "queueScope": "dtc-innerbody-v2-20260911",
+    "scope": {
+      "brandId": "a0a15d55-adec-43aa-8b59-36aaa40f9d99",
+      "sourceId": "ebe15930-f065-42ed-b6a4-8df959bfad50",
+      "channel": "dtc",
+      "region": "US",
+      "rootUrl": "https://shop.innerbody.com/collections/all",
+      "scopeVersion": "source-revision-1"
+    },
+    "queues": {
+      "plan": "v3.channel.label.plan.v1.channel-label-v1.session.dtc-innerbody-v2-20260911",
+      "page": "v3.channel.label.page.v1.channel-label-v1.session.dtc-innerbody-v2-20260911",
+      "pageText": "v3.channel.label.page-text.v1.channel-label-v1.session.dtc-innerbody-v2-20260911",
+      "imagePrepare": "v3.channel.label.image-prepare.v1.channel-label-v1.session.dtc-innerbody-v2-20260911",
+      "ocr": "v3.channel.label.ocr.v1.channel-label-v1.session.dtc-innerbody-v2-20260911",
+      "ocrReceipts": "v3.channel.label.ocr-receipts.v1.channel-label-v1.session.dtc-innerbody-v2-20260911",
+      "keywords": "v3.channel.label.keywords.v1.channel-label-v1.session.dtc-innerbody-v2-20260911",
+      "source": "v3.channel.label.source.v1.channel-label-v1.session.dtc-innerbody-v2-20260911",
+      "manifest": "v3.channel.label.manifest.v1.channel-label-v1.session.dtc-innerbody-v2-20260911",
+      "text": "v3.channel.label.text.v1.channel-label-v1.session.dtc-innerbody-v2-20260911",
+      "textReceipts": "v3.channel.label.text-receipts.v1.channel-label-v1.session.dtc-innerbody-v2-20260911",
+      "vision": "v3.channel.label.vision.v1.channel-label-v1.session.dtc-innerbody-v2-20260911",
+      "core": "v3.channel.label.core.v1.channel-label-v1.session.dtc-innerbody-v2-20260911",
+      "assembly": "v3.channel.label.assembly.v1.channel-label-v1.session.dtc-innerbody-v2-20260911",
+      "collection": "v3.channel.label.collection.v1.channel-label-v1.session.dtc-innerbody-v2-20260911",
+      "review": "v3.channel.label.review.v1.channel-label-v1.session.dtc-innerbody-v2-20260911",
+      "resources": "v3.channel.label.resources.v1.channel-label-v1.session.dtc-innerbody-v2-20260911",
+      "dtc-control": "v3.dtc.control.v1.dtc-live-v2.session.dtc-innerbody-v2-20260911",
+      "dtc-catalog-source": "v3.dtc.catalog-source.v1.dtc-live-v2.session.dtc-innerbody-v2-20260911",
+      "dtc-catalog-ledger": "v3.dtc.catalog-ledger.v1.dtc-live-v2.session.dtc-innerbody-v2-20260911",
+      "dtc-product-input": "v3.dtc.product-input.v1.dtc-live-v2.session.dtc-innerbody-v2-20260911",
+      "dtc-capture": "v3.dtc.capture.v1.dtc-live-v2.session.dtc-innerbody-v2-20260911",
+      "dtc-file": "v3.dtc.file.v1.dtc-live-v2.session.dtc-innerbody-v2-20260911",
+      "dtc-review": "v3.dtc.review.v1.dtc-live-v2.session.dtc-innerbody-v2-20260911",
+      "productPlan": "v3.channel.product-input.v1.channel-plan-v1.session.dtc-innerbody-v2-20260911",
+      "brandWorkflow": "v3.dtc.control.v1.dtc-live-v2.session.dtc-innerbody-v2-20260911",
+      "productWorkflow": "v3.dtc.product-input.v1.dtc-live-v2.session.dtc-innerbody-v2-20260911",
+      "catalogWorkflow": "v3.catalog.workflow.v1.catalog-v1.session.dtc-innerbody-v2-20260911",
+      "labelWorkflow": "v3.channel.saved-label.v1.channel-label-v1.session.dtc-innerbody-v2-20260911"
+    },
+    "nodeControl": {
+      "nodeId": "dtc-innerbody-v2-20260911",
+      "workflowQueue": "v3.dtc.control.v1.dtc-live-v2.session.dtc-innerbody-v2-20260911",
+      "activityQueue": "v3.dtc.control.v1.dtc-live-v2.session.dtc-innerbody-v2-20260911"
+    },
+    "brandTarget": {
+      "taskQueue": "v3.dtc.control.v1.dtc-live-v2.session.dtc-innerbody-v2-20260911"
+    },
+    "activityBuild": "4aefac185c12264127f7c956dfa149731d28805a3b9366361f527076142bfa47",
+    "workflowBuild": "7ab2b9a92b2b3a623508493ca2e613c3fce3228916ba796b170478aa5c96854c"
+  }
+}
