@@ -34,9 +34,7 @@
       "media-gallery button[aria-label=\"Load image 3 in gallery view\"]"
     ],
     "maxDecisions": 6,
-    "selectedUrls": [
-      "https://shop.innerbody.com/products/astaxanthin?variant=44807968882774"
-    ],
+    "selectedUrls": null,
     "galleryDismissControls": [
       "#productModal > span.close"
     ]
