@@ -40,3 +40,27 @@ it.each(['no-terminal','missing-dom','missing-api','duplicate','wrong-endpoint',
  if(mode==='redirect')proof.dom.url='https://brand.example/login';if(mode==='filtered-root')proof.catalogUrl+='?filter=1';
  Object.assign(f.projection,{coverage:proof});await expect(f.catalog.read(f.input,signal())).rejects.toThrow();
 });
+
+it('named collection completion retains its exact category scope and supports cold verification',async()=>{
+ const f=dtcFixture(),store='https://brand.example/collections/wellness';
+ f.input.scope.rootUrl=store;f.policy.pages[0]=store;f.projection.url=store;
+ const proof=coverage(f);Object.assign(proof,{version:'shopify-collection-products/1',catalogUrl:store,dom:{url:store,links:['https://brand.example/collections/wellness/products/one']}});
+ proof.responses.forEach((r,i)=>{r.url=`${store}/products.json?limit=100&page=${i+1}`;});
+ Object.assign(f.projection,{coverage:proof});
+ const page=await f.catalog.read(f.input,signal());expect(page.completion).toBe('complete');expect(page.input.scope.rootUrl).toBe(store);
+ const cold=new DtcCatalogSource(new RetainedPublication(new DtcMemory(),f.remote),f.policy);
+ await expect(cold.verify(page,signal())).resolves.toBeUndefined();expect(await cold.read(f.input,signal())).toEqual(page);
+});
+it.each(['store-wide-endpoint','other-category','wrong-version','outside-category','missing-terminal','query','hash'])('named collection rejects %s proof',async mode=>{
+ const f=dtcFixture(),store='https://brand.example/collections/wellness';
+ f.input.scope.rootUrl=store;f.policy.pages[0]=store;f.projection.url=store;
+ const proof=coverage(f);Object.assign(proof,{version:'shopify-collection-products/1',catalogUrl:store,dom:{url:store,links:[f.url]}});
+ proof.responses.forEach((r,i)=>{r.url=`${store}/products.json?limit=100&page=${i+1}`;});
+ if(mode==='store-wide-endpoint')proof.responses[0]!.url='https://brand.example/products.json?limit=100&page=1';
+ if(mode==='other-category')proof.responses[0]!.url='https://brand.example/collections/beauty/products.json?limit=100&page=1';
+ if(mode==='wrong-version')proof.version='shopify-all-products/1';
+ if(mode==='outside-category'){const outside='https://brand.example/products/outside';proof.dom.links.push(outside);f.projection.entries.push({...f.projection.entries[0]!,...dtcAddress(outside)});}
+ if(mode==='missing-terminal')proof.responses.pop();
+ if(mode==='query'||mode==='hash'){const changed=store+(mode==='query'?'?filter=1':'#other');f.input.scope.rootUrl=changed;f.policy.pages[0]=changed;f.projection.url=changed;proof.catalogUrl=changed;proof.dom.url=changed;}
+ Object.assign(f.projection,{coverage:proof});await expect(f.catalog.read(f.input,signal())).rejects.toThrow();
+});

@@ -18,7 +18,7 @@ export const DtcRenderedProductSchema=z.strictObject({codec:z.literal("dtc-rende
   legacy:z.strictObject({manifestKey:z.string().min(1),detailsHtml:z.string().max(2*1024*1024),fields:z.record(z.string(),z.unknown()),variants:z.array(z.record(z.string(),z.unknown())).max(1000),selectedVariant:z.record(z.string(),z.unknown()).nullable()}).optional(),
   selectedOnly:z.literal(true),snapshotKeys:z.array(z.string().min(1)).min(1).max(12),
 });
-export const DtcCatalogCoverageSchema=z.strictObject({version:z.literal('shopify-all-products/1'),catalogUrl:url,
+export const DtcCatalogCoverageSchema=z.strictObject({version:z.enum(['shopify-all-products/1','shopify-collection-products/1']),catalogUrl:url,
   dom:z.strictObject({url,links:z.array(url).max(1000)}),
   responses:z.array(z.strictObject({url,status:z.literal(200),contentType:z.string().max(200),body:z.string().max(512*1024)})).min(1).max(2),
 });

@@ -130,3 +130,22 @@ it('Runner retains separate actual stdout, stderr and child close metadata witho
  expect(await readFile(log+'.stdout','utf8')).toBe('actual-out\n');expect(await readFile(log+'.stderr','utf8')).toBe('actual-error\n');
  expect(JSON.parse(await readFile(log+'.process.json','utf8')).close).toMatchObject({exitCode:0,aborted:false});
 });
+
+it.each(['all','wellness'])('host catalog probe binds %s to its own endpoint and preserves terminal evidence',async collection=>{
+ const {captureDtcCatalogCoverage}=await import('../src/dtc-catalog-coverage.js'),{runInNewContext}=await import('node:vm');
+ const catalogUrl=`https://shop.example.com/collections/${collection}`,productUrl='https://shop.example.com/products/a';
+ const endpoint=collection==='all'?'https://shop.example.com/products.json':catalogUrl+'/products.json',requests:string[]=[];
+ await writeFile(join(root,'capture/catalog.json'),JSON.stringify({entries:[{url:productUrl,title:'A'}],navigation:[]}));
+ const policy={...site,catalogPages:[catalogUrl],catalogRoot:'main',selectedUrls:null};
+ const port:any={guard:async()=>{},call:async(_target:string,method:string,params:{expression:string})=>{
+  expect(method).toBe('Runtime.evaluate');
+  const value=await runInNewContext(params.expression,{
+   document:{querySelector:()=>({querySelectorAll:()=>[{href:productUrl}]})},location:{href:catalogUrl},AbortController,setTimeout,clearTimeout,
+   fetch:async(request:string)=>{requests.push(request);return{url:request,status:200,headers:{get:()=> 'application/json'},text:async()=>JSON.stringify({products:requests.length===1?[{id:1,handle:'a'}]:[]})};},
+  });return{result:{value}};
+ }};
+ const proof=await captureDtcCatalogCoverage(join(root,'capture'),catalogUrl,policy,{taskId:'catalog-probe',targetId:'CATALOG',config:{endpoint:'http://127.0.0.1:9222/',instanceId:'instance',pauseFile:join(root,'pause')}},port,signal());
+ expect(requests).toEqual([endpoint+'?limit=100&page=1',endpoint+'?limit=100&page=2']);
+ expect(proof).toMatchObject({version:collection==='all'?'shopify-all-products/1':'shopify-collection-products/1',catalogUrl});
+ expect(proof!.responses[1]!.body).toBe('{"products":[]}');
+});
