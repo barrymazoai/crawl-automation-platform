@@ -25,6 +25,15 @@ it.each(['missing-image','path-escape','wrong-variant','wrong-product','missing-
  const r=raw();if(mode==='missing-image')r[0]!.gallery[0]!.localPath='evidence/img/missing.jpg';if(mode==='path-escape')r[0]!.gallery[0]!.localPath='../outside.jpg';if(mode==='wrong-variant')r[0]!.variants=[];if(mode==='wrong-product')r[0]!.productUrl='https://elsewhere.example/products/a';if(mode==='missing-html')r[0]!.pageHtml='missing.html';await writeFile(join(root,'capture/evidence/records.json'),JSON.stringify(r));await expect(legacyProductProjection(join(root,'capture'),'v3/dtc-legacy/op',url,site,publication,signal())).rejects.toThrow();
 });
 it('rejects symlink evidence rather than reading outside task output',async()=>{await symlink(join(root,'remote'),join(root,'capture/outside'));await expect(legacyProductProjection(join(root,'capture'),'v3/dtc-legacy/op',url,site,publication,signal())).rejects.toThrow('DTC.EVIDENCE_PATH');});
+it('write context records a missing target without creating it and refuses escaped or linked paths',async()=>{
+ const {dtcWriteContext}=await import('../src/dtc-write-context.js'),{access}=await import('node:fs/promises');
+ const target=join(root,'capture','run-catalog.mjs'),context=await dtcWriteContext(root,target);
+ expect(context.entries.at(-1)).toMatchObject({path:target,status:'ENOENT'});await expect(access(target)).rejects.toThrow();
+ await expect(dtcWriteContext(root,join(root,'..','outside'))).rejects.toThrow('DTC.DIAGNOSTIC_PATH_OUTSIDE_TASK');
+ await symlink(join(root,'remote'),join(root,'capture','linked'));
+ const linked=await dtcWriteContext(root,join(root,'capture','linked','anything'));
+ expect(linked.entries.at(-2)?.status).toBe('symlink_not_followed');expect(linked.entries.at(-1)?.status).toBe('not_inspected_after_path_boundary');
+});
 it('refuses a file URL not in this captured product',async()=>{await legacyProductProjection(join(root,'capture'),'v3/dtc-legacy/op',url,site,publication,signal());await expect(new DtcLegacyFileTransport(publication,'op',url,imageUrl,'test').get(new URL(imageUrl+'?other'),undefined,{},signal())).rejects.toThrow('SOURCE.SESSION_MISMATCH');});
 
 it('retains an original larger than the text evidence default limit',async()=>{await writeFile(join(root,'capture/evidence/img/a.jpg'),Buffer.alloc(9*1024*1024,7));const p=await legacyProductProjection(join(root,'capture'),'v3/dtc-legacy/large',url,site,publication,signal());expect(p.images).toEqual([imageUrl]);});

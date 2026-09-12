@@ -1,7 +1,7 @@
 import { portableWorkflowBundle } from './workflow-source-map.js';
 import{build}from'tsdown';import{bundleWorkflowCode}from'@temporalio/worker';import{writeFile,mkdir,cp,readFile}from'node:fs/promises';import{resolve,join}from'node:path';import{readdir}from'node:fs/promises';import{createHash}from'node:crypto';
 const common={config:false as const,format:'esm' as const,noExternal:[/^@crawl-automation\/v3-/],external:[/^@temporalio\//,'zod','pg','vitest','@aws-sdk/client-s3']};
-await build({...common,entry:Object.fromEntries(['dtc-browser-worker','dtc-live-worker','channel-label-worker','channel-plan-worker','product-workflow-worker','dtc-node','dtc-prepare','dtc-recover','deployment-supervisor'].map(n=>[n,`src/${n}.ts`])),outDir:'dist/dtc-windows'});
+await build({...common,entry:Object.fromEntries(['dtc-browser-worker','dtc-live-worker','channel-label-worker','channel-plan-worker','product-workflow-worker','dtc-node','dtc-prepare','dtc-recover','dtc-write-context','deployment-supervisor'].map(n=>[n,`src/${n}.ts`])),outDir:'dist/dtc-windows'});
 // Pinned legacy Skill is runtime code. Normalize text bytes across Git Windows/macOS
 // and bind their hashes into a root JS artifact covered by the existing build ID.
 const skillFiles:Record<string,string>={};
