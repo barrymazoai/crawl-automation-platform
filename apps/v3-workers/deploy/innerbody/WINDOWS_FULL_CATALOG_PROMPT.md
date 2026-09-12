@@ -1,5 +1,7 @@
 # Innerbody 全目录测试：仅更新范围配置并重启
 
+> 历史步骤：后续整站测试发现了商品范围问题，更新部署请使用同目录 `WINDOWS_FULL_CATALOG_FIX_PROMPT.md`，不要再按本文件复用旧 release。
+
 用户已授权测试整个 Innerbody 官网目录。上次单商品成功请求为 31fc31f2-75a8-43f9-b72e-4b932ce23039，已正常结束、关页、释放占用。现在只取消 Windows 本地的单商品白名单，不改采集器、不换模型、不换 release、不重新上传凭据。
 
 1. 在 D:\crawl-automation 检查工作区，保留用户文件和未跟踪证据，执行 `git pull --ff-only origin main`。读取 `apps/v3-workers/deploy/innerbody/deployment.json`，确认 `site.selectedUrls === null`。现有 release 应仍是 20 个根目录 JS，Activity build 为 `63ad1c890b96df25cc25050ec86b8e9e98b0cd9cbef874668c381999f9524f72`，Workflow build 为 `54cdbea7f81421e897c378993a257c6c785f7e766214d9a9c30cedf60f26a72e`；按现有构建算法核对，不能改预期值。本次无需 pnpm install/build、替换 release 或重装依赖。
