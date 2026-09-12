@@ -19,7 +19,10 @@ export class TemporalGateway implements WorkflowGateway {
       workflowIdReusePolicy: "REJECT_DUPLICATE",
       workflowIdConflictPolicy: "FAIL",
       // No workflow retry/cron or automatic terminate-and-replace policy.
-      workflowExecutionTimeout: "30 minutes",
+      // A brand waits for its entire catalog, including resource queues and label
+      // processing. A fixed execution deadline abandons live descendants before
+      // their settlement receipt. Individual Activities retain bounded timeouts.
+      ...(this.target.workflowType === "BrandCollectionWorkflow" ? {} : { workflowExecutionTimeout: "30 minutes" }),
     }));
   }
   async inspect(submission: CollectionSubmission): Promise<ExecutionProof> {
