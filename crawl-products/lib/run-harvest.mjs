@@ -313,10 +313,11 @@ export async function runHarvest(browser, tab, planInput, opts = {}) {
     /*
      * 商品页 HTML：独立站的成分表常在页面里、不在接口里，所以每个商品都"去页面看一眼"。
      * 不依赖调用方传 —— 调用方（Codex 写的脚本）可能忘了传，那样会静默退化成全靠 OCR。
-     * 优先级：调用方给的 > 用本次的 tab 页面内同源 fetch > 宿主机 fetch。
+     * Worker 固定使用任务 tab，不能被 Shopify 默认的主机 fetch 钩子覆盖。
      */
-    fetchPageHtml: opts.hooks?.fetchPageHtml
-      || (tabRef.tab?.playwright?.evaluate ? createBrowserHtmlFetcher(tabRef.tab) : null)
+    fetchPageHtml: (process.env.CRAWL_BROWSER_PROVIDER === "worker_cdp" ? (url => createBrowserHtmlFetcher(tabRef.tab)(url)) : null)
+      || opts.hooks?.fetchPageHtml
+      || (tabRef.tab?.playwright?.evaluate ? (url => createBrowserHtmlFetcher(tabRef.tab)(url)) : null)
       || (async (url) => {
         try {
           const response = await fetch(url, { headers: { accept: "text/html" } });
@@ -742,7 +743,7 @@ async function capturePageHtml(url, outDir, hooks, log, pageHtmlStats) {
   pageHtmlStats.attempted += 1;
   try {
     const html = await hooks.fetchPageHtml(url);
-    if (!html || html.length <= 500) { pageHtmlStats.empty += 1; return { pageHtml: null, html: null }; }
+    if (!html || html.length <= 500) { pageHtmlStats.empty += 1; pageHtmlStats.lastError = `html_empty_or_short:bytes=${html?.length ?? 0}`; log("page_html_empty", { url, bytes: html?.length ?? 0 }); return { pageHtml: null, html: null }; }
     const fileName = `${createHash("sha256").update(url).digest("hex").slice(0, 16)}.html`;
     const relative = path.join(HARVEST_FILE_LAYOUT.evidenceHtmlDir, fileName);
     await mkdir(path.join(outDir, HARVEST_FILE_LAYOUT.evidenceHtmlDir), { recursive: true });
@@ -756,8 +757,9 @@ async function capturePageHtml(url, outDir, hooks, log, pageHtmlStats) {
     return { pageHtml: relative, html };
   } catch (error) {
     pageHtmlStats.failed += 1;
-    pageHtmlStats.lastError = String(error).slice(0, 200);
+    pageHtmlStats.lastError = String(error).slice(0, 1200);
     log("page_html_failed", { url, error: String(error) });
+    if (/SOURCE\.|EACCES|EPERM|EROFS/.test(String(error))) throw error;
     return { pageHtml: null, html: null };
   }
 }

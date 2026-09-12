@@ -268,13 +268,17 @@ export function createBrowserJsonFetcher(tab) {
 }
 
 /**
- * 页面内同源 fetch 商品页 HTML（不导航、不渲染整页）：独立站的成分表经常只在页面里、不在接口里，
- * Shopify HTTP 通道枚举完后用它"去页面看一眼"。返回 HTML 字符串，非 HTML/失败返回 null。
+ * Same task tab only. Retain HTML before image navigation and page cleanup.
+ * Ordinary fetch failures allow one DOM capture; access/control boundaries never do.
  */
 export function createBrowserHtmlFetcher(tab) {
   if (!tab?.playwright?.evaluate) throw new Error("worker_cdp_tab_required");
   return async (url, timeoutMs = 15_000) => {
-    const result = await tab.playwright.evaluate(async ({ target, timeout }) => {
+    const expected = new URL(url);
+    const samePage = raw => { const u = new URL(raw); return u.origin === expected.origin && u.pathname === expected.pathname && u.search === expected.search; };
+    let fetchError;
+    try {
+      const result = await tab.playwright.evaluate(async ({ target, timeout }) => {
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), timeout);
       try {
@@ -283,13 +287,29 @@ export function createBrowserHtmlFetcher(tab) {
           headers: { accept: "text/html,application/xhtml+xml" },
           signal: controller.signal,
         });
-        return { ok: response.ok, contentType: response.headers.get("content-type") || "", body: await response.text() };
+        return { ok: response.ok, status: response.status, url: response.url, contentType: response.headers.get("content-type") || "", body: await response.text() };
       } finally {
         clearTimeout(timer);
       }
     }, { target: url, timeout: timeoutMs }, { timeoutMs: timeoutMs + 2_000 });
-    if (!result?.ok || !/html/i.test(result.contentType || "")) return null;
-    return typeof result.body === "string" && result.body.length > 0 ? result.body : null;
+      if ([401, 403, 429].includes(result?.status)) throw new Error(`SOURCE.HTML_ACCESS_BLOCKED:${result.status}`);
+      if (result?.ok && samePage(result.url) && /html/i.test(result.contentType || "") && typeof result.body === "string" && result.body.length > 500) return result.body;
+      throw new Error(`html_fetch_invalid:status=${result?.status ?? 0};type=${result?.contentType ?? ""};bytes=${result?.body?.length ?? 0}`);
+    } catch (error) {
+      if (/SOURCE\.|EACCES|EPERM|EROFS/.test(String(error))) throw error;
+      fetchError = String(error).slice(0, 500);
+    }
+    try {
+      const response = await tab.goto(url, { waitUntil: "domcontentloaded", timeoutMs });
+      if ([401, 403, 429].includes(response?.status?.())) throw new Error(`SOURCE.HTML_ACCESS_BLOCKED:${response.status()}`);
+      if (!response?.ok?.()) throw new Error(`html_dom_http:${response?.status?.() ?? 0}`);
+      const dom = await tab.playwright.evaluate(() => ({ url: location.href, type: document.contentType, body: document.documentElement.outerHTML }), undefined, { timeoutMs });
+      if (!samePage(dom.url) || !/html/i.test(dom.type || "") || typeof dom.body !== "string" || dom.body.length <= 500) throw new Error(`html_dom_invalid:bytes=${dom?.body?.length ?? 0}`);
+      return dom.body;
+    } catch (error) {
+      if (/SOURCE\.|EACCES|EPERM|EROFS/.test(String(error))) throw error;
+      throw new Error(`html_capture_failed:fetch=${fetchError};dom=${String(error).slice(0, 500)}`);
+    }
   };
 }
 

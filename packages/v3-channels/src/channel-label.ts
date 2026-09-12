@@ -83,7 +83,7 @@ export class ChannelLabelPlans {
       if(source.kind==="file-image"&&!await this.inspection.file(source,signal))throw Error("CHANNEL.LABEL_FILE_UNVERIFIED");
       if(state.status==="unresolved"||state.status==="rejected")throw Error("CHANNEL.LABEL_PREPARATION_UNVERIFIED");
       if(state.status==="not_started"){
-        if(source.kind!=="file-image"||selectedIndex<0||order.indexOf(source.id)<=selectedIndex)throw Error("CHANNEL.LABEL_SELECTION_UNVERIFIED");
+        if(selectedIndex<0||(source.kind!=="page"&&(source.kind!=="file-image"||order.indexOf(source.id)<=selectedIndex)))throw Error("CHANNEL.LABEL_SELECTION_UNVERIFIED");
         skipped.push(source.id);decisions.push({id:source.id,reason:"complete_label_already_selected"});continue;
       }
       if(source.kind==="file-image"&&selectedIndex>=0&&order.indexOf(source.id)>selectedIndex)throw Error("CHANNEL.LABEL_SELECTION_UNVERIFIED");

@@ -5,3 +5,14 @@ export const DtcProductCaptureSchema=z.strictObject({job:DtcProductJobSchema,sou
 export const DtcProductHandoffSchema=z.strictObject({job:DtcProductJobSchema,input:ChannelSavedLabelWorkflowInputSchema});
 
 export const DtcScopeSkipSchema=z.strictObject({status:z.literal('skipped'),operationId:ExecutionIdSchema,url:z.url(),reason:z.literal('bundle_or_pack'),policy:z.literal('nutrition-single-product/1'),evidenceKey:z.string().min(1),evidenceSha256:z.string().regex(/^[a-f0-9]{64}$/)});
+
+// Host receipt, never a model-generated claim. Mini verifies retained bytes before
+// either resource gate is allowed to treat this as a completed browser phase.
+export const DtcStoppedCaptureReviewSchema=z.strictObject({status:z.literal('capture_review'),operationId:ExecutionIdSchema,url:z.url(),
+  evidenceKey:z.string().min(1),evidenceSha256:z.string().regex(/^[a-f0-9]{64}$/)});
+export const DtcCaptureStopProofSchema=z.strictObject({version:z.literal('dtc-capture-stop/1'),operationId:ExecutionIdSchema,url:z.url(),
+  execution:z.strictObject({workflowId:ExecutionIdSchema,runId:z.uuid()}),runnerExitCode:z.literal(0),
+  closure:z.strictObject({taskId:ExecutionIdSchema,targetId:z.string().min(1),status:z.literal('closed')}),
+  result:z.strictObject({status:z.enum(['needs_review','failed']),summary:z.string(),reasonCode:z.string().nullable()}),
+  resultSha256:z.string().regex(/^[a-f0-9]{64}$/),files:z.array(z.strictObject({path:z.string(),objectKey:z.string(),sha256:z.string().regex(/^[a-f0-9]{64}$/),byteSize:z.number().int().positive(),mediaType:z.string()})).max(1000),
+});

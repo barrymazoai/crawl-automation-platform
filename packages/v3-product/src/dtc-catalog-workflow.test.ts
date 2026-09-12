@@ -79,3 +79,16 @@ it("scope skip cannot register if exact page closure is unverified",async()=>{
  env.activities.capture.closeDtcProductPage.mockResolvedValue({taskId:f.job.sessionId,status:"pending"});env.activities.review.recordDtcScopeSkip=vi.fn();
  expect(await DtcCatalogProductWorkflow(f.job.discovery)).toEqual(f.review);expect(env.activities.review.recordDtcScopeSkip).not.toHaveBeenCalled();expect(env.release).not.toHaveBeenCalled();
 });
+
+it.each(['verified','unverified','close-unknown'])('normal capture Review %s releases only after Mini verification and exact close',async mode=>{
+ const f=await setup(),stop={status:'capture_review',operationId:f.job.operationId,url:f.job.discovery.entry.url,evidenceKey:`v3/dtc-legacy/${f.job.operationId}/capture-stop.json`,evidenceSha256:'a'.repeat(64)};
+ env.activities.capture.captureDtcProduct.mockResolvedValue(stop);
+ env.activities.input.verifyDtcCaptureReview=vi.fn(async()=>{expect(env.held).toBe(true);expect(env.permits.size).toBe(1);env.events.push('verify');if(mode==='unverified')throw Error('stop unverified');return stop;});
+ if(mode==='close-unknown')env.activities.capture.closeDtcProductPage.mockResolvedValue({taskId:f.job.sessionId,status:'pending'});
+ env.activities.review.reviewDtcProduct.mockImplementation(async(raw:any)=>{
+  if(mode==='verified'){expect(env.held).toBe(false);expect(env.permits.size).toBe(0);expect(env.events).toEqual(['verify','model-release','close','release']);expect(raw.stop).toEqual(stop);}
+  return {...f.review,code:raw.code};
+ });
+ expect(await DtcCatalogProductWorkflow(f.job.discovery)).toMatchObject({status:'review',code:mode==='verified'?'DTC.CAPTURE_INCOMPLETE':'DTC.BROWSER_PHASE_UNRESOLVED'});
+ expect(env.start).not.toHaveBeenCalled();if(mode!=='verified')expect(env.held).toBe(true);if(mode==='unverified')expect(env.permits.size).toBe(1);
+});

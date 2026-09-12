@@ -99,7 +99,11 @@ describe("runHarvest lifecycle engine", () => {
     ]);
     hooks.fetchPageHtml = async () => "<main>Product details</main>";
     const extract = vi.fn(hooks.extract);
-    const result = await runHarvest(null, null, plan(), { outDir, hooks: { ...hooks, extract } });
+    const tab = { playwright: { evaluate: async (_fn, {target}) => ({ok:true,status:200,url:target,contentType:"text/html",body:"<main>"+"Product details".repeat(60)+"</main>"}) } };
+    hooks.fetchPageHtml = vi.fn(async () => { throw Error("host hook must not run"); });
+    const result = await runHarvest(null, tab, plan(), { outDir, hooks: { ...hooks, extract } });
+    expect(hooks.fetchPageHtml).not.toHaveBeenCalled();
+    expect(result.pageHtml.captured).toBe(1);
     expect(result.status).toBe("complete");
     expect(result.counts.discovered).toBe(1);
     const selected = exactVariant ? target : "https://shop.test/products/sleep";

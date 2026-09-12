@@ -42,7 +42,7 @@ async function main(){
     const ownPage=async(taskId:string,s:AbortSignal)=>{await bindPage(taskId,s);return pages.open(taskId,s);};
     const capture=async(taskId:string,operationId:string,url:string,mode:'catalog'|'product',authorization:DtcBrowserControl,s:AbortSignal)=>{
       if(!driver)throw Error('DTC.DRIVER_UNAVAILABLE');
-      return driver.capture({page:await ownPage(taskId,s),operationId,url,mode,site:config.site,publication,port,authorize:signal=>requireAllowed(authorization,signal),finishBrowser:()=>pages.close(taskId,AbortSignal.timeout(15000))},s);
+      return driver.capture({page:await ownPage(taskId,s),operationId,url,mode,site:config.site,publication,port,execution:execution(),authorize:signal=>requireAllowed(authorization,signal),finishBrowser:()=>pages.close(taskId,AbortSignal.timeout(15000))},s);
     };
     const products=new DtcLiveProduct(publication,{text:config.sourceText,ocr:config.ocr,visionConfigFingerprint:config.sourceVisionConfigFingerprint,egressId:config.egressId},{capture:async(job,s)=>capture(job.sessionId,job.operationId,job.discovery.entry.url,'product',{action:'product',job,model:true},s)});
     const catalog=new DtcCatalogSource(publication,{brandName:config.site.brandName,pages:config.site.catalogPages,selectedUrls:config.site.selectedUrls},{capture:async(input,s,retain)=>{

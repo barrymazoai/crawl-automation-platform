@@ -1,7 +1,7 @@
 import { beforeEach, expect, it, vi } from "vitest";
-const runtime=vi.hoisted(()=>({activities:{} as Record<string,Record<string,(raw:any)=>Promise<any>>>,handlers:{} as Record<string,(raw:any)=>void>}));
+const runtime=vi.hoisted(()=>({skipPage:true,activities:{} as Record<string,Record<string,(raw:any)=>Promise<any>>>,handlers:{} as Record<string,(raw:any)=>void>}));
 vi.mock("@temporalio/workflow",()=>({proxyActivities:({taskQueue}:{taskQueue:string})=>runtime.activities[taskQueue],
-  patched:()=>true,
+  patched:(id:string)=>id==="channel-complete-image-skip-page-v1"?runtime.skipPage:true,
   defineSignal:(name:string)=>name,setHandler:(name:string,fn:(raw:any)=>void)=>{runtime.handlers[name]=fn;},
   condition:async(predicate:()=>boolean)=>{await vi.waitFor(()=>expect(predicate()).toBe(true),{timeout:15000,interval:5});},
   isCancellation:(e:unknown)=>e instanceof Error&&e.message==="cancelled",
@@ -10,7 +10,7 @@ import { ApplicationFailure } from "@temporalio/workflow";
 import { ChannelSavedLabelWorkflow } from "./channel-saved-workflow.js";
 import { ChannelStreamingLabelWorkflow } from "./channel-stream-workflow.js";
 import { channelSavedFixture } from "./channel-saved.fixture.js";
-beforeEach(()=>{runtime.activities={};runtime.handlers={};});
+beforeEach(()=>{runtime.activities={};runtime.handlers={};runtime.skipPage=true;});
 async function setup(){const f=await channelSavedFixture();runtime.activities=f.activityQueues;return f;}
 
 it("saved evidence advances without capture/download; label protocol collects and replay does not call providers",async()=>{
@@ -110,7 +110,7 @@ it.each(["foreign-owner","foreign-file","conflicting-duplicate"])("stream: %s ca
 it("single label stops OCR and vision after the first complete image, preserves skipped originals and replay",async()=>{
  const f=await setup();f.input.evidencePolicy="label-image-first/5";f.nonmatch.clear();
  expect(await ChannelSavedLabelWorkflow(f.entry)).toMatchObject({status:"collected"});
- expect(f.counts).toMatchObject({ocr:1,vision:1,text:1});
+ expect(f.counts).toMatchObject({ocr:1,vision:1,text:0});
  const record=[...f.collected.values()][0]!;expect(record.provenance.filter(p=>p.kind==="image")).toHaveLength(1);
  const decision=JSON.parse(Buffer.from((await f.remote.read(`v3/channel-labels/${f.input.operationId}/selection.json`,100000))!).toString());
  expect(decision.decisions).toContainEqual({id:"image-1",reason:"complete_label_already_selected"});
@@ -159,4 +159,13 @@ it("single label retries another image after a verified executed quality Review,
  expect(await ChannelSavedLabelWorkflow(f.entry)).toMatchObject({status:"collected"});expect(f.counts.vision).toBe(2);
  const decision=JSON.parse(Buffer.from((await f.remote.read(`v3/channel-labels/${f.input.operationId}/selection.json`,100000))!).toString());
  const prior=decision.decisions.find((d:any)=>d.id==="image-0");expect(prior.state.status).toBe("review");expect(await f.reviews.read(prior.state.reviewId)).not.toBeNull();
+});
+
+it("old histories retain their page interpretation command when the skip patch is absent",async()=>{
+ const f=await setup();f.input.evidencePolicy="label-image-first/5";f.nonmatch.clear();runtime.skipPage=false;
+ expect(await ChannelSavedLabelWorkflow(f.entry)).toMatchObject({status:"collected"});expect(f.counts.text).toBe(1);
+});
+it("a page cannot be skipped without a verified complete image",async()=>{
+ const f=await setup();f.input.evidencePolicy="label-image-first/5";
+ await expect(f.bridge.singleManifest({input:f.input,selectedImageId:null,states:f.manifest.sources.map(s=>({id:s.id,status:"not_started"}))},new AbortController().signal)).rejects.toThrow();
 });

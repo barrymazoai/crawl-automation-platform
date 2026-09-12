@@ -21,6 +21,7 @@ globalThis.tab = crawlProductsTab;
 globalThis.workerHooks = {
   fetchImage: workerBrowser.createBrowserImageFetcher(tab),
   fetchProductData: workerBrowser.createBrowserProductDataFetcher(tab),
+  fetchPageHtml: workerBrowser.createBrowserHtmlFetcher(tab),
 };
 ```
 
@@ -39,9 +40,9 @@ if (!probe) {
   probe = await shopify.probeShopifyCatalog(entryUrl, { fetchJson });
 }
 const built = probe && !probe.multiBrandRetailer
-  ? await shopify.createShopifyHarvestHooks(entryUrl, { ...(fetchJson ? { fetchJson } : {}) })
+  ? await shopify.createShopifyHarvestHooks(entryUrl, { ...(fetchJson ? { fetchJson } : {}), fetchHtml: workerHooks.fetchPageHtml })
   : null;
-if (built) built.hooks.fetchImage = workerHooks.fetchImage;
+if (built) Object.assign(built.hooks, workerHooks);
 ```
 
 两个通道都没有 Shopify 正信号时才进入视觉 Preflight。浏览器同源探测出现 challenge、登录墙或明确拒绝时，按站点访问证据分类，不能伪装成普通 `null`。
@@ -53,3 +54,5 @@ if (built) built.hooks.fetchImage = workerHooks.fetchImage;
 Browser Node 任务只生成 EvidenceBundleV1：展开每个可售变体、保留真实 SKU、保存正文/DOM/JSON/原始图片/必要截图并发布不可变批次。OCR、图片语义、最终 `productForm`/`healthFunctions`/`mainIngredients`、规范化和数据库入库全部留给 Mac Worker；不得在 Windows capture 阶段运行最终 enrich 导出。
 
 结束前关闭本任务创建的 tab 并断开 Playwright CDP 客户端；不要关闭控制器拥有的 Chrome 进程。
+
+V3 中，HTML 获取由 runHarvest 固定使用当前任务 tab；普通请求失败时最多导航回商品页一次，核对实际 URL 后保存 DOM。访问拒绝和用户接管不触发补采。主采集脚本保存在 Runner cwd；capture 只放证据。实际关页与目标消失复查由 V3 宿主完成。

@@ -18,7 +18,12 @@ export const DtcRenderedProductSchema=z.strictObject({codec:z.literal("dtc-rende
   legacy:z.strictObject({manifestKey:z.string().min(1),detailsHtml:z.string().max(2*1024*1024),fields:z.record(z.string(),z.unknown()),variants:z.array(z.record(z.string(),z.unknown())).max(1000),selectedVariant:z.record(z.string(),z.unknown()).nullable()}).optional(),
   selectedOnly:z.literal(true),snapshotKeys:z.array(z.string().min(1)).min(1).max(12),
 });
+export const DtcCatalogCoverageSchema=z.strictObject({version:z.literal('shopify-all-products/1'),catalogUrl:url,
+  dom:z.strictObject({url,links:z.array(url).max(1000)}),
+  responses:z.array(z.strictObject({url,status:z.literal(200),contentType:z.string().max(200),body:z.string().max(512*1024)})).min(1).max(2),
+});
 export const DtcRenderedCatalogSchema=z.strictObject({codec:z.literal("dtc-catalog-rendered/1"),url,brandName:z.string().min(1),
   entries:z.array(z.strictObject({listingId:z.string().regex(/^dtc-[a-f0-9]{64}$/),variantId:z.null(),url,title:z.string().max(4000).nullable()})).max(100),
   navigation:z.array(url).max(100),snapshotKeys:z.array(z.string().min(1)).min(1).max(12),
+  coverage:DtcCatalogCoverageSchema.optional(),
 });

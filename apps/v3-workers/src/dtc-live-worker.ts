@@ -12,6 +12,7 @@ import { createR2Objects, RetainedPublication, ArtifactResolver, FileCopies, sha
 import { FileEvidence } from "@crawl-automation/v3-acquisition";
 import { DtcCatalogSource, DtcLiveProduct, ChannelProductPlans } from "@crawl-automation/v3-channels";
 import { recordDtcScopeSkip } from "./dtc-scope-skip.js";
+import { verifyDtcCaptureReview } from "./dtc-capture-review.js";
 import { DtcMiniNode } from "./dtc-mini-node.js";
 import { TextLocalStore } from "@crawl-automation/v3-text";
 import { PostgresReviews } from "@crawl-automation/v3-review";
@@ -86,14 +87,19 @@ async function main() {
             if (!equal(stored?.execution, e)) throw Error("DTC.EXECUTION_CONFLICT");
             return binding;
           };
-          handlers={prepareDtcProduct:(raw,s)=>jobs.prepare(raw,execution().workflowId,s),prepareDtcLabel:(raw,s)=>prepareLabel(raw,s,false),prepareDtcStreamingLabel:(raw,s)=>prepareLabel(raw,s,true)};
+          handlers={prepareDtcProduct:(raw,s)=>jobs.prepare(raw,execution().workflowId,s),prepareDtcLabel:(raw,s)=>prepareLabel(raw,s,false),prepareDtcStreamingLabel:(raw,s)=>prepareLabel(raw,s,true),verifyDtcCaptureReview:async(raw,s)=>{
+            const job=await verifyJob(raw.job,s);await requireBrowser();const e=execution();await admission.requireHeld(config.browserModelResource,e.workflowId,e.runId);
+            return verifyDtcCaptureReview(job,raw.receipt,e,publication,s);
+          }};
         }
         else if (role === "review") handlers = { recordDtcScopeSkip:async(raw,s)=>{
           const job=await verifyJob(raw.job,s),e=execution();
           if((await resourceDb.query("SELECT 1 FROM resource_permit WHERE request->>'workflowId'=$1 AND released_at IS NULL",[e.workflowId])).rowCount)throw Error("DTC.SCOPE_EXCLUSION_UNVERIFIED");
           return recordDtcScopeSkip({job,receipt:raw.receipt},r2.store,db,s);
         }, reviewDtcProduct: async (raw, s) => {
-          const job = await verifyJob(raw.job, s); if (raw.code !== "DTC.BROWSER_PHASE_UNRESOLVED") throw Error("DTC.REVIEW_CODE");
+          const job = await verifyJob(raw.job, s); if (!["DTC.BROWSER_PHASE_UNRESOLVED","DTC.CAPTURE_INCOMPLETE"].includes(raw.code)) throw Error("DTC.REVIEW_CODE");
+          const stopped=raw.code==='DTC.CAPTURE_INCOMPLETE'?await verifyDtcCaptureReview(job,raw.stop,execution(),publication,s):null;
+          if(stopped&&(await resourceDb.query("SELECT 1 FROM resource_permit WHERE request->>'workflowId'=$1 AND released_at IS NULL",[execution().workflowId])).rowCount)throw Error('DTC.CAPTURE_STOP_UNVERIFIED');
           if (typeof raw.causeCode !== "string" || !/^(SOURCE|DTC|ARTIFACT|RESOURCE)\.[A-Z_]+$/.test(raw.causeCode)) throw Error("DTC.REVIEW_CODE");
           const id = `dtc-review-${sha256(Buffer.from(JSON.stringify(job)))}`, key = `v3/dtc-reviews/${id}.json`;
           let record = await reviews.read(id);
@@ -104,8 +110,8 @@ async function main() {
                 sourceId: job.discovery.scope.sourceId, listingId: job.discovery.entry.listingId, variantId: null },
               failure: { schemaVersion: 1, requestId: job.discovery.catalogId, observationId: job.operationId, operationId: job.operationId,
                 inputFingerprint: sha256(Buffer.from(JSON.stringify(job))), stage: "dtc.browser", category: "PROCESSING", code: raw.code,
-                executionFact: "unknown", evidenceKey: key, blockedBy: null, automaticRetry: false },
-              rawError: { name: "DtcBrowserPhase", message: raw.code, stack: null, details: { job, causeCode: raw.causeCode } }, candidate: null, inspection: { kind: "none" } });
+                executionFact: stopped?"executed":"unknown", evidenceKey: key, blockedBy: null, automaticRetry: false },
+              rawError: { name: "DtcBrowserPhase", message: raw.code, stack: null, details: { job, causeCode: raw.causeCode,...(stopped?{stop:stopped}:{}) } }, candidate: null, inspection: { kind: "none" } });
             await publication.publish(key, Buffer.from(JSON.stringify(record)), "application/json", s); await reviews.append(record);
           }
           return { status: "review", operationId: job.operationId, reviewId: id, code: record.failure.code, evidenceKey: key, automaticRetry: false };

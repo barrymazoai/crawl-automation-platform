@@ -165,7 +165,7 @@ describe("createShopifyHarvestHooks driving runHarvest with no browser", () => {
     const products = Array.from({ length: 6 }, (_, i) =>
       product(`p${i}`, `P${i}`, [{ id: i, option1: "1ct", sku: `P${i}`, price: "5.00" }]));
     const built = await createShopifyHarvestHooks("shop.test", {
-      fetchJson: fakeCatalog(products, 3), pageSize: 3, maxPages: 2,
+      fetchJson: fakeCatalog(products, 3), pageSize: 3, maxPages: 2, fetchHtml: async () => null,
     });
     built.hooks.fetchImage = async () => ({ bytes: Buffer.from("img"), mime: "image/jpeg" });
     const result = await runHarvest(null, null, plan(), { outDir, hooks: built.hooks });

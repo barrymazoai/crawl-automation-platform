@@ -25,3 +25,18 @@ it('an observed variant cannot authorize a different selected variant',async()=>
 });
 it('DTC reuses saved page and original file plans without recapture',async()=>{const f=dtcFixture(),j=await f.job(),capture=await f.live.capture(j,signal());expect(capture.sourcePlan).toMatchObject({channel:'dtc',owner:{listingId:f.listingId,variantId:null}});expect(await f.plans.run(capture.sourcePlan,signal())).toMatchObject({status:'prepared'});const p=await f.plans.inspect(capture.sourcePlan,signal());expect(p!.files).toHaveLength(2);expect(p!.manifest.sources).toHaveLength(3);const cold=new DtcLiveProduct(new RetainedPublication(new DtcMemory(),f.remote),f.settings);expect(await cold.capture(j,signal())).toEqual(capture);expect(f.productBrowser.capture).toHaveBeenCalledOnce();expect(ChannelPlanInputSchema.safeParse({...capture.sourcePlan,parserVersion:'swanson-rendered/1'}).success).toBe(false);});
 it('capture loss preserves intent and denies a second model/browser call',async()=>{const f=dtcFixture(),j=await f.job();f.productBrowser.capture.mockRejectedValue(Error('lost'));await expect(f.live.capture(j,signal())).rejects.toThrow('lost');await expect(f.live.capture(j,signal())).rejects.toThrow('CAPTURE_UNRESOLVED');expect(f.productBrowser.capture).toHaveBeenCalledOnce();});
+
+function coverage(f:ReturnType<typeof dtcFixture>){return {version:'shopify-all-products/1',catalogUrl:f.store,dom:{url:f.store,links:[f.url]},responses:[{url:'https://brand.example/products.json?limit=100&page=1',status:200,contentType:'application/json',body:JSON.stringify({products:[{id:1,handle:'one'}]})},{url:'https://brand.example/products.json?limit=100&page=2',status:200,contentType:'application/json',body:'{"products":[]}'}]};}
+it('catalog completion needs matching DOM, all API products and a retained empty terminal page',async()=>{
+ const f=dtcFixture();Object.assign(f.projection,{coverage:coverage(f)});
+ const p=await f.catalog.read(f.input,signal());expect(p.completion).toBe('complete');expect(p.endEvidence).toEqual(p.source);
+ const cold=new DtcCatalogSource(new RetainedPublication(new DtcMemory(),f.remote),f.policy);await expect(cold.verify(p,signal())).resolves.toBeUndefined();expect(await cold.read(f.input,signal())).toEqual(p);
+});
+it.each(['no-terminal','missing-dom','missing-api','duplicate','wrong-endpoint','redirect','filtered-root'])('catalog end proof rejects %s',async mode=>{
+ const f=dtcFixture(),proof=coverage(f);
+ if(mode==='no-terminal')proof.responses.pop();if(mode==='missing-dom')proof.dom.links=[];if(mode==='missing-api')proof.responses[0]!.body='{"products":[]}';
+ if(mode==='duplicate')proof.responses[0]!.body=JSON.stringify({products:[{id:1,handle:'one'},{id:1,handle:'one'}]});
+ if(mode==='wrong-endpoint')proof.responses[1]!.url='https://brand.example/products.json?limit=100&page=99';
+ if(mode==='redirect')proof.dom.url='https://brand.example/login';if(mode==='filtered-root')proof.catalogUrl+='?filter=1';
+ Object.assign(f.projection,{coverage:proof});await expect(f.catalog.read(f.input,signal())).rejects.toThrow();
+});

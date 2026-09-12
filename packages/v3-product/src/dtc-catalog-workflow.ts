@@ -1,5 +1,5 @@
 import { patched, proxyActivities, workflowInfo, startChild, ParentClosePolicy, WorkflowIdReusePolicy, ApplicationFailure, CancellationScope, isCancellation } from "@temporalio/workflow";
-import { DtcScopeSkipSchema, CatalogDiscoverySchema, DtcProductJobSchema, DtcProductCaptureSchema, DtcProductHandoffSchema,
+import { DtcStoppedCaptureReviewSchema, DtcScopeSkipSchema, CatalogDiscoverySchema, DtcProductJobSchema, DtcProductCaptureSchema, DtcProductHandoffSchema,
   ChannelPlanOutcomeSchema, FileAcquireOutcomeSchema, AcquisitionReviewSchema, imageActivityOptions, assertArtifactBelongsTo, type DtcProductJob } from "@crawl-automation/v3-contracts";
 import { resourceGate } from "./resource-workflow.js";
 import type {ChildWorkflowHandle} from "@temporalio/workflow";
@@ -32,7 +32,16 @@ async function streamProduct(job:DtcProductJob,inputQueue:string,call:(queue:str
     phase=await gate("browserSession",async()=>{
       let cleanupAllowed=true;
       try{
-        const raw=await gate("captureDtcProduct",()=>call(job.queues.capture,"captureDtcProduct",job)),review=AcquisitionReviewSchema.safeParse(raw);
+        const raw=await gate("captureDtcProduct",async()=>{
+          const result=await call(job.queues.capture,"captureDtcProduct",job),stopped=DtcStoppedCaptureReviewSchema.safeParse(result);
+          if(stopped.success){
+            if(!patched("dtc-capture-review-release-v1"))invalid();
+            const verified=await call(inputQueue,"verifyDtcCaptureReview",{job,receipt:stopped.data});
+            if(!same(verified,stopped.data))invalid();return verified;
+          }
+          return result;
+        }),review=AcquisitionReviewSchema.safeParse(raw);
+        const stopped=DtcStoppedCaptureReviewSchema.safeParse(raw);if(stopped.success)return stopped.data;
         const skipped=DtcScopeSkipSchema.safeParse(raw);
         if(skipped.success){if(skipped.data.operationId!==job.operationId||skipped.data.url!==job.discovery.entry.url||skipped.data.evidenceKey!==`v3/dtc-legacy/${job.operationId}/scope-skip.json`)invalid();return skipped.data;}
         if(review.success){if(review.data.operationId!==job.operationId)invalid();if(review.data.code==="SOURCE.BROWSER_USER_CONTROL")cleanupAllowed=false;return review.data;}
@@ -74,6 +83,11 @@ async function streamProduct(job:DtcProductJob,inputQueue:string,call:(queue:str
     if(child)await child.result();return r;
   }
   if(!child){
+    const stopped=DtcStoppedCaptureReviewSchema.safeParse(phase);
+    if(stopped.success){
+      const receipt=AcquisitionReviewSchema.parse(await call(job.queues.review,"reviewDtcProduct",{job,code:"DTC.CAPTURE_INCOMPLETE",causeCode:"DTC.EVIDENCE_REVIEW",stop:stopped.data}));
+      if(receipt.operationId!==job.operationId||receipt.code!=="DTC.CAPTURE_INCOMPLETE")invalid();return receipt;
+    }
     const skipped=DtcScopeSkipSchema.safeParse(phase);
     if(skipped.success){const receipt=DtcScopeSkipSchema.parse(await call(job.queues.review,"recordDtcScopeSkip",{job,receipt:skipped.data}));if(!same(receipt,skipped.data))invalid();return receipt;}
     return phase;

@@ -130,3 +130,20 @@ it('V3 binding exposes only the owned target, leaves physical closure to the hos
     await unlink(pauseFile);await unlink(taskFile);await expect(tab.screenshot()).rejects.toThrow('SOURCE.SESSION_UNAVAILABLE');await binding.disconnect();
   }finally{fetchSpy.mockRestore();if(previous===undefined)delete process.env.CRAWL_BROWSER_TASK_FILE;else process.env.CRAWL_BROWSER_TASK_FILE=previous;await rm(dir,{recursive:true,force:true});}
 });
+
+it.each(['empty','transport'])("HTML %s failure captures the expected DOM once on the same tab",async mode=>{
+ const {createBrowserHtmlFetcher}=await import('./worker-cdp-browser.mjs'),url='https://shop.test/products/a',body='<html>'+'details'.repeat(100)+'</html>';
+ const evaluate=vi.fn().mockImplementationOnce(async()=>{if(mode==='transport')throw Error('fetch failed');return {ok:true,status:200,url,contentType:'text/html',body:''};}).mockResolvedValueOnce({url,type:'text/html',body});
+ const tab={playwright:{evaluate},goto:vi.fn(async()=>({ok:()=>true,status:()=>200}))};
+ expect(await createBrowserHtmlFetcher(tab)(url)).toBe(body);expect(tab.goto).toHaveBeenCalledOnce();
+});
+it.each(['SOURCE.BROWSER_USER_CONTROL','EPERM','http-403'])("HTML never navigates to bypass %s",async reason=>{
+ const {createBrowserHtmlFetcher}=await import('./worker-cdp-browser.mjs');
+ const tab={playwright:{evaluate:vi.fn(async()=>{if(reason==='http-403')return {status:403};throw Error(reason);})},goto:vi.fn()};
+ await expect(createBrowserHtmlFetcher(tab)('https://shop.test/products/a')).rejects.toThrow();expect(tab.goto).not.toHaveBeenCalled();
+});
+it('HTML fallback rejects another page and preserves both failure stages',async()=>{
+ const {createBrowserHtmlFetcher}=await import('./worker-cdp-browser.mjs');
+ const evaluate=vi.fn().mockRejectedValueOnce(Error('fetch failed')).mockResolvedValueOnce({url:'https://shop.test/login',type:'text/html',body:'x'.repeat(600)});
+ await expect(createBrowserHtmlFetcher({playwright:{evaluate},goto:async()=>({ok:()=>true,status:()=>200})})('https://shop.test/products/a')).rejects.toThrow('html_capture_failed:fetch=Error: fetch failed;dom=Error: html_dom_invalid');
+});

@@ -58,3 +58,32 @@ it("Mini: DTC real Temporal per-file streaming, delayed sibling, replay/restart,
  await writeFile(join(dir,"dtc-stream-proof.json"),JSON.stringify({passed:true,at:new Date().toISOString(),proofs,replays:12},null,2));
  }finally{await env.teardown();}
 },360000);
+
+it('Mini: returned capture Review verifies stop, releases in order, and preserves quarantine on failure',async()=>{
+ expect(hostname()).toMatch(/^barrydeMac-mini(?:\.|$)/);
+ const {dtcFixture}=await import('../../../packages/v3-channels/src/dtc-live.fixture.js'),{ApplicationFailure}=await import('@temporalio/common');
+ const dir=dirname(fileURLToPath(import.meta.url)),bundle=join(dir,'product-workflows.cjs');
+ const env=await TestWorkflowEnvironment.createLocal({server:{ip:'127.0.0.1',ui:false,executable:{type:'cached-download',version:'v1.8.3'}}});
+ try{for(const mode of ['verified','unverified','close-unknown']){
+  const id='stop-review-'+randomUUID(),base=await dtcFixture().job(),queue=id+'-queue';
+  const job={...base,discovery:{...base.discovery,workflowId:id},queues:Object.fromEntries(Object.keys(base.queues).map(k=>[k,queue])),resources:{...base.resources,queue}};
+  const receipt={status:'capture_review',operationId:job.operationId,url:job.discovery.entry.url,evidenceKey:`v3/dtc-legacy/${job.operationId}/capture-stop.json`,evidenceSha256:'a'.repeat(64)};
+  const held=new Set<string>(),events:string[]=[];
+  const worker=await Worker.create({connection:env.nativeConnection,taskQueue:queue,workflowBundle:{codePath:bundle},activities:{
+   prepareDtcProduct:async()=>job,
+   reserveResources:async(r:any)=>{held.add(r.permitId);return {permitId:r.permitId,status:'granted',reason:'available'};},
+   releaseResources:async(r:any)=>{events.push(r.needs[0].resourceId==='model'?'model-release':'browser-release');held.delete(r.permitId);return {permitId:r.permitId,status:'released',reason:'released'};},
+   captureDtcProduct:async()=>receipt,
+   verifyDtcCaptureReview:async()=>{expect(held.size).toBe(2);events.push('verify');if(mode==='unverified')throw ApplicationFailure.nonRetryable('fixture','DTC.CAPTURE_STOP_UNVERIFIED');return receipt;},
+   closeDtcProductPage:async()=>{events.push('close');return {taskId:job.sessionId,status:mode==='close-unknown'?'pending':'closed'};},
+   reviewDtcProduct:async(raw:any)=>({status:'review',operationId:job.operationId,reviewId:'fixture-review',code:raw.code,evidenceKey:'fixture/review.json',automaticRetry:false}),
+  }});
+  const h=await env.client.workflow.start('DtcCatalogProductV2Workflow',{workflowId:id,taskQueue:queue,args:[job.discovery],workflowExecutionTimeout:'1 minute'});
+  const outcome=await worker.runUntil(h.result());
+  expect(outcome).toMatchObject({status:'review',code:mode==='verified'?'DTC.CAPTURE_INCOMPLETE':'DTC.BROWSER_PHASE_UNRESOLVED'});
+  expect(held.size).toBe(mode==='verified'?0:mode==='unverified'?2:1);
+  if(mode==='verified')expect(events).toEqual(['verify','model-release','close','browser-release']);
+  const history=await h.fetchHistory();await Worker.runReplayHistory({workflowBundle:{codePath:bundle}},history,id);
+  await writeFile(join(dir,id+'.json'),JSON.stringify(history));
+ }}finally{await env.teardown();}
+},120000);

@@ -104,10 +104,13 @@ export async function runChannelLabelWorkflow(raw:unknown,progress?:ChannelSourc
       }
       if(["unresolved","rejected"].includes(state.status))break;
     }
-    for(const source of loaded.manifest.sources.filter(s=>s.kind!=="file-image"))states.push(await processSource(source));
+    for(const source of loaded.manifest.sources.filter(s=>s.kind!=="file-image")){
+      if(selectedImageId&&source.kind==="page"&&patched("channel-complete-image-skip-page-v1"))notStarted.push({id:source.id,status:"not_started"});
+      else states.push(await processSource(source));
+    }
     if(states.length+notStarted.length!==loaded.manifest.sources.length){
       // Unknown execution never authorizes another model call or successful assembly.
-      for(const source of images.filter(s=>!states.some(r=>r.id===s.id))){if(progress)await progress.ready(source);states.push({id:source.id,status:"unresolved"});}
+      for(const source of images.filter(s=>!states.some(r=>r.id===s.id)&&!notStarted.some(r=>r.id===s.id))){if(progress)await progress.ready(source);states.push({id:source.id,status:"unresolved"});}
     }
   }else states=await Promise.all(loaded.manifest.sources.map(processSource));
   if(progress&&!await progress.finish()){

@@ -47,13 +47,13 @@ export async function legacyProductProjection(root:string,key:string,url:string,
  const sections=Object.entries(r.fields).filter(([k,v])=>typeof v==='string'&&!['title','sku','price','currency'].includes(k)).map(([,v])=>String(v)).flatMap(v=>v.match(/[\s\S]{1,6000}/g)??[]).slice(0,20);
  return DtcRenderedProductSchema.parse({codec:'dtc-rendered/1',url,listingId:address(url),brandName:site.brandName,title:r.fields.title,sections,images:images.map(i=>i.url),selectedOnly:true,snapshotKeys:[`${key}/manifest.json`],legacy:{manifestKey:`${key}/manifest.json`,detailsHtml:html,fields:r.fields,variants:r.variants??[],selectedVariant:variant??null}});
 }
-export async function legacyCatalogProjection(root:string,key:string,url:string,site:DtcSitePolicy,publication:RetainedPublication,s:AbortSignal){
+export async function legacyCatalogProjection(root:string,key:string,url:string,site:DtcSitePolicy,publication:RetainedPublication,s:AbortSignal,coverage?:unknown){
  const files=await retainLegacyDirectory(root,key,publication,s),raw=JSON.parse(await readFile(join(root,'catalog.json'),'utf8'));
  const data=z.object({entries:z.array(z.object({url:z.string().url(),title:z.string().nullable()})).max(100),navigation:z.array(z.string().url()).max(100)}).parse(raw);
  for(const e of data.entries){const u=new URL(e.url);if(u.origin!==site.origin||!u.pathname.startsWith(site.productPathPrefix))throw Error('DTC.IDENTITY_UNVERIFIED');}
  if(!files.some(f=>f.mediaType==='text/html')||!files.some(f=>f.mediaType==='image/png'))throw Error('DTC.EVIDENCE_INCOMPLETE');
  await publication.publish(`${key}/catalog-manifest.json`,json({version:'dtc-legacy/1',url,files}),'application/json',s);
- return DtcRenderedCatalogSchema.parse({codec:'dtc-catalog-rendered/1',url,brandName:site.brandName,entries:data.entries.map(e=>({...e,listingId:address(e.url),variantId:null})),navigation:data.navigation,snapshotKeys:[`${key}/catalog-manifest.json`]});
+ return DtcRenderedCatalogSchema.parse({codec:'dtc-catalog-rendered/1',url,brandName:site.brandName,entries:data.entries.map(e=>({...e,listingId:address(e.url),variantId:null})),navigation:data.navigation,snapshotKeys:[`${key}/catalog-manifest.json`],...(coverage?{coverage}:{})});
 }
 /** File Activities consume the exact retained original. No Chrome or website request. */
 export class DtcLegacyFileTransport implements FileTransport{

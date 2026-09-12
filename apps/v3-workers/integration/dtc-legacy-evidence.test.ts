@@ -97,3 +97,32 @@ it.each(['foreign-url','nonempty-records','missing-harvest','different-reason'])
  if(mode!=='missing-harvest')await writeFile(join(root,'capture/harvest-result.json'),JSON.stringify({excluded:[{url:mode==='foreign-url'?'https://other.example/product':url,reason:mode==='different-reason'?'unknown':'bundle_or_pack'}],failed:[]}));
  await expect(legacyScopeSkip(join(root,'capture'),'v3/dtc-legacy/op','op',url,publication,signal())).rejects.toThrow();
 });
+
+it('normal returned Review retains partial evidence and a host stop proof verifiable only for this execution',async()=>{
+ const {DtcLegacyCapture}=await import('../src/dtc-legacy-capture.js'),{verifyDtcCaptureReview}=await import('../src/dtc-capture-review.js'),{dtcFixture}=await import('../../../packages/v3-channels/src/dtc-live.fixture.js');
+ const job=await dtcFixture().job(),execution={workflowId:job.discovery.workflowId,runId:'00000000-0000-4000-8000-000000000001'};
+ const config={settings:{provider:'openai',model:'gpt-5.6-luna',reasoningEffort:'medium'},executable:'/test/codex',codexHome:join(root,'auth'),workRoot:join(root,'work'),runtimeProfileVersion:'test/1',timeoutMs:10000};
+ const driver=new DtcLegacyCapture(config,{},root,()=>({run:async input=>{await writeFile(join(input.cwd,'capture','partial.html'),'<html>partial</html>');return {status:'needs_review',summary:'HTML incomplete',reasonCode:'missing_html_evidence'};}}));
+ const receipt=await driver.capture({page:{taskId:job.sessionId,targetId:'TARGET',config:{endpoint:'http://127.0.0.1:9222/',instanceId:'instance',pauseFile:join(root,'pause')}},operationId:job.operationId,url:job.discovery.entry.url,mode:'product',site,publication,execution,port:{guard:async()=>{},list:async()=>[],create:async()=>'',close:async()=>{},call:async()=>null},authorize:async()=>{},finishBrowser:async()=>({taskId:job.sessionId,targetId:'TARGET',status:'closed'})},signal());
+ expect(receipt).toMatchObject({status:'capture_review'});
+ expect(await verifyDtcCaptureReview(job,receipt,execution,publication,signal())).toEqual(receipt);
+ await expect(verifyDtcCaptureReview(job,receipt,{...execution,runId:'00000000-0000-4000-8000-000000000002'},publication,signal())).rejects.toThrow('UNVERIFIED');
+ await expect(verifyDtcCaptureReview({...job,sessionId:'foreign'},receipt,execution,publication,signal())).rejects.toThrow('UNVERIFIED');
+ await expect(verifyDtcCaptureReview(job,{...receipt,evidenceSha256:'0'.repeat(64)},execution,publication,signal())).rejects.toThrow('UNVERIFIED');
+});
+it('bundle alias uses the verified raw harvest exclusion rather than creating a capture Review',async()=>{
+ const {DtcLegacyCapture}=await import('../src/dtc-legacy-capture.js');
+ const config={settings:{provider:'openai',model:'gpt-5.6-luna',reasoningEffort:'medium'},executable:'/test/codex',codexHome:join(root,'auth'),workRoot:join(root,'work'),runtimeProfileVersion:'test/1',timeoutMs:10000};
+ const driver=new DtcLegacyCapture(config,{},root,()=>({run:async input=>{await mkdir(join(input.cwd,'capture/evidence'));await writeFile(join(input.cwd,'capture/evidence/records.json'),'[]');await writeFile(join(input.cwd,'capture/harvest-result.json'),JSON.stringify({excluded:[{url,reason:'bundle_or_pack'}],failed:[]}));return {status:'needs_review',summary:'bundle',reasonCode:'bundle_or_pack'};}}));
+ const receipt=await driver.capture({page:{taskId:'test',targetId:'TARGET',config:{endpoint:'http://127.0.0.1:9222/',instanceId:'instance',pauseFile:join(root,'pause')}},operationId:'bundle',url,mode:'product',site,publication,port:{guard:async()=>{},list:async()=>[],create:async()=>'',close:async()=>{},call:async()=>null},authorize:async()=>{},finishBrowser:async()=>({taskId:'test',targetId:'TARGET',status:'closed'})},signal());
+ expect(receipt).toMatchObject({status:'skipped',reason:'bundle_or_pack'});
+});
+
+it('Runner retains separate actual stdout, stderr and child close metadata without model narration',async()=>{
+ const {CodexProcessRunner}=await import('../../../packages/runtime/src/codex-process.js');
+ await writeFile(join(root,'exec'),"const fs=require('node:fs');process.stdin.resume();process.stdin.on('end',()=>{process.stdout.write('actual-out\\n');process.stderr.write('actual-error\\n');fs.writeFileSync(process.argv[process.argv.indexOf('--output-last-message')+1],JSON.stringify({status:'needs_review'}));});");
+ const runner=new CodexProcessRunner({executable:process.execPath,processDiagnostics:true});
+ const log=join(root,'runner.jsonl');expect(await runner.run({cwd:root,prompt:'fixture',schemaPath:join(root,'schema.json'),outputPath:join(root,'output.json'),eventLogPath:log,signal:signal()})).toEqual({status:'needs_review'});
+ expect(await readFile(log+'.stdout','utf8')).toBe('actual-out\n');expect(await readFile(log+'.stderr','utf8')).toBe('actual-error\n');
+ expect(JSON.parse(await readFile(log+'.process.json','utf8')).close).toMatchObject({exitCode:0,aborted:false});
+});

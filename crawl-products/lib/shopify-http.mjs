@@ -232,14 +232,10 @@ export async function createShopifyHarvestHooks(input, opts = {}) {
       // 接口里没有成分表：每个商品再取一次渲染后的页面 HTML（页面内同源 fetch，一次请求，不导航），
       // Mac 侧从里面抠成分表/指认成分表图，抠不到才 OCR。opts.fetchHtml 缺省时退化为主机 fetch。
       fetchPageHtml: async (url) => {
-        try {
           if (opts.fetchHtml) return await opts.fetchHtml(url);
           const response = await fetch(url, { headers: { accept: "text/html" } });
-          if (!response.ok || !/html/i.test(response.headers.get("content-type") || "")) return null;
+          if (!response.ok || !/html/i.test(response.headers.get("content-type") || "")) throw new Error(`html_http_invalid:${response.status}`);
           return await response.text();
-        } catch {
-          return null;
-        }
       },
     },
   };
