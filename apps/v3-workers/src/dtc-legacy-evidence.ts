@@ -70,6 +70,14 @@ export class DtcLegacyFileTransport implements FileTransport{
 }
 
 /** A model's reason string alone is insufficient: require the exact harvest exclusion and empty records. */
+export async function legacyScopeSkipIfExcluded(root:string,key:string,operationId:string,url:string,publication:RetainedPublication,s:AbortSignal){
+ const bytes=await readFile(join(root,'harvest-result.json'),'utf8').catch(error=>{if(error.code==='ENOENT')return null;throw error;});
+ if(bytes===null)return null;
+ const result=z.object({excluded:z.array(z.object({url:z.string(),reason:z.string()}))}).safeParse(JSON.parse(bytes));
+ if(!result.success||!result.data.excluded.some(e=>e.url===url&&e.reason==='bundle_or_pack'))return null;
+ // A matching exclusion is only a candidate; mixed/failed output still fails the full proof below.
+ return legacyScopeSkip(root,key,operationId,url,publication,s);
+}
 export async function legacyScopeSkip(root:string,key:string,operationId:string,url:string,publication:RetainedPublication,s:AbortSignal){
  const result=JSON.parse(await readFile(join(root,'harvest-result.json'),'utf8'));
  const records=JSON.parse(await readFile(join(root,'evidence','records.json'),'utf8'));

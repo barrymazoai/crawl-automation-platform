@@ -3,6 +3,8 @@ import{expect,it,vi}from"vitest";import{TestWorkflowEnvironment}from"@temporalio
 import{requestDtcControl}from'../src/dtc-temporal-control.js';
 import{DtcProductJobSchema}from"@crawl-automation/v3-contracts";
 import{channelSavedFixture}from"../../../packages/v3-product/src/channel-saved.fixture.js";
+import{sha256,type RetainedPublication}from'@crawl-automation/v3-artifacts';
+import{verifyDtcCaptureReview}from'../src/dtc-capture-review.js';
 
 it("Mini: DTC real Temporal per-file streaming, delayed sibling, replay/restart, acquisition failure and cancellation",async()=>{
  expect(hostname()).toMatch(/^barrydeMac-mini(?:\.|$)/);
@@ -66,15 +68,26 @@ it('Mini: returned capture Review verifies stop, releases in order, and preserve
  const env=await TestWorkflowEnvironment.createLocal({server:{ip:'127.0.0.1',ui:false,executable:{type:'cached-download',version:'v1.8.3'}}});
  try{for(const mode of ['verified','unverified','close-unknown']){
   const id='stop-review-'+randomUUID(),base=await dtcFixture().job(),queue=id+'-queue';
-  const job={...base,discovery:{...base.discovery,workflowId:id},queues:Object.fromEntries(Object.keys(base.queues).map(k=>[k,queue])),resources:{...base.resources,queue}};
+  const job=DtcProductJobSchema.parse({...base,discovery:{...base.discovery,workflowId:id},queues:Object.fromEntries(Object.keys(base.queues).map(k=>[k,queue])),resources:{...base.resources,queue}});
   const receipt={status:'capture_review',operationId:job.operationId,url:job.discovery.entry.url,evidenceKey:`v3/dtc-legacy/${job.operationId}/capture-stop.json`,evidenceSha256:'a'.repeat(64)};
-  const held=new Set<string>(),events:string[]=[];
+  const held=new Set<string>(),events:string[]=[],objects=new Map<string,Buffer>();
+  const publication={remote:{read:async(key:string)=>objects.get(key)??null}} as unknown as RetainedPublication;
   const worker=await Worker.create({connection:env.nativeConnection,taskQueue:queue,workflowBundle:{codePath:bundle},activities:{
    prepareDtcProduct:async()=>job,
    reserveResources:async(r:any)=>{held.add(r.permitId);return {permitId:r.permitId,status:'granted',reason:'available'};},
    releaseResources:async(r:any)=>{events.push(r.needs[0].resourceId==='model'?'model-release':'browser-release');held.delete(r.permitId);return {permitId:r.permitId,status:'released',reason:'released'};},
-   captureDtcProduct:async()=>receipt,
-   verifyDtcCaptureReview:async()=>{expect(held.size).toBe(2);events.push('verify');if(mode==='unverified')throw ApplicationFailure.nonRetryable('fixture','DTC.CAPTURE_STOP_UNVERIFIED');return receipt;},
+   captureDtcProduct:async()=>{
+    const {workflowId,runId}=Context.current().info.workflowExecution!,result={status:'needs_review',reasonCode:'missing_html_evidence',summary:'partial fixture'},resultBytes=Buffer.from(JSON.stringify(result));
+    const proof=Buffer.from(JSON.stringify({version:'dtc-capture-stop/1',operationId:job.operationId,url:job.discovery.entry.url,execution:{workflowId,runId:mode==='unverified'?randomUUID():runId},runnerExitCode:0,closure:{taskId:job.sessionId,targetId:'TARGET',status:'closed'},result,resultSha256:sha256(resultBytes),files:[]}));
+    objects.set(`v3/dtc-legacy/${job.operationId}/result.json`,resultBytes);objects.set(receipt.evidenceKey,proof);receipt.evidenceSha256=sha256(proof);return receipt;
+   },
+   verifyDtcCaptureReview:async()=>{
+    expect(held.size).toBe(2);events.push('verify');const execution=Context.current().info.workflowExecution!;
+    // Exercise the real SDK protobuf instance that production Activities receive.
+    expect(Object.getPrototypeOf(execution)).not.toBe(Object.prototype);
+    try{return await verifyDtcCaptureReview(job,receipt,execution,publication,Context.current().cancellationSignal);}
+    catch(error){throw ApplicationFailure.nonRetryable(String(error),'DTC.CAPTURE_STOP_UNVERIFIED');}
+   },
    closeDtcProductPage:async()=>{events.push('close');return {taskId:job.sessionId,status:mode==='close-unknown'?'pending':'closed'};},
    reviewDtcProduct:async(raw:any)=>({status:'review',operationId:job.operationId,reviewId:'fixture-review',code:raw.code,evidenceKey:'fixture/review.json',automaticRetry:false}),
   }});

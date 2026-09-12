@@ -10,7 +10,7 @@ import { type CdpOwnedPage, type CdpTaskPort } from '@crawl-automation/v3-acquis
 import { DtcCaptureStopProofSchema, DtcStoppedCaptureReviewSchema, type DtcSitePolicy } from '@crawl-automation/v3-contracts';
 import { CodexProcessRunner } from '../../../packages/runtime/src/codex-process.js';
 import { buildBrowserCapturePrompt } from '../../../packages/runtime/src/browser-capture-prompt.js';
-import { legacyProductProjection, legacyCatalogProjection, retainLegacyDirectory, legacyScopeSkip } from './dtc-legacy-evidence.js';
+import { legacyProductProjection, legacyCatalogProjection, retainLegacyDirectory, legacyScopeSkipIfExcluded } from './dtc-legacy-evidence.js';
 import { dtcWriteContext } from './dtc-write-context.js';
 import { captureDtcCatalogCoverage } from './dtc-catalog-coverage.js';
 
@@ -78,9 +78,13 @@ export class DtcLegacyCapture {
    const closure=await input.finishBrowser();browserFinished=true;clearInterval(timer);
    const resultBytes=Buffer.from(JSON.stringify(result));
    await publication.publish(`${key}/result.json`,resultBytes,'application/json',signal);
-   if(mode==='product'&&['target_product_excluded_by_scope_policy','bundle_or_pack'].includes(result.reasonCode??''))return legacyScopeSkip(out,key,operationId,url,publication,signal);
+   if(/user.?control|permission|sandbox|session_unavailable/i.test(result.reasonCode??''))throw Error('DTC.EVIDENCE_REVIEW');
+   if(mode==='product'){
+    const skip=await legacyScopeSkipIfExcluded(out,key,operationId,url,publication,signal);
+    if(skip)return skip;
+   }
    if(result.status!=='complete'){
-    if(mode!=='product'||!input.execution||/user.?control|permission|sandbox|session_unavailable/i.test(result.reasonCode??''))throw Error('DTC.EVIDENCE_REVIEW');
+    if(mode!=='product'||!input.execution)throw Error('DTC.EVIDENCE_REVIEW');
     const proof=DtcCaptureStopProofSchema.parse({version:'dtc-capture-stop/1',operationId,url,execution:input.execution,runnerExitCode:0,closure,result,resultSha256:sha256(resultBytes),files:await retainLegacyDirectory(out,key,publication,signal)});
     if(proof.closure.taskId!==page.taskId||proof.closure.targetId!==page.targetId)throw Error('DTC.CAPTURE_STOP_UNVERIFIED');
     const evidence=Buffer.from(JSON.stringify(proof)),evidenceKey=`${key}/capture-stop.json`;
