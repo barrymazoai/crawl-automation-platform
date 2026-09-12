@@ -1,3 +1,5 @@
+> 已由 [真实采集写入日志部署说明](WINDOWS_WRITE_LOGGING_PROMPT.md) 取代。请执行新说明，下面保留历史版本记录。
+
 # Windows Codex：待审修复后的统一部署
 
 把本文完整交给 Windows Codex 执行。代码从 main 获取，不需要新的凭据附件。

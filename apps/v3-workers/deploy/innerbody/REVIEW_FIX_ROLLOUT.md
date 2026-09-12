@@ -29,3 +29,16 @@ Mini 部署包含：
 Mini 最终核验记录保存在本机部署目录的 review-fix-20260912.json；数据库备份在 backup-review-fix-20260912/database。真实凭据、数据库备份和执行原始日志不进入 Git。
 
 下一步：将 [WINDOWS_REVIEW_FIX_DEPLOY_PROMPT.md](WINDOWS_REVIEW_FIX_DEPLOY_PROMPT.md) 完整交给 Windows Codex，从 main 构建并更新，复用现有凭据。除了换 release，还须复制基础配置并同步三个公开策略字段，生成新的 private，核对 routing、doctor、Skill 和四个健康周期。本轮尚未提交新采集；历史待审不自动改成通过。
+
+
+## 2026-09-12：真实采集写入日志
+
+Windows c81fe79 的新目录任务仍在 file_change/add 创建 capture/run-catalog.mjs 时失败，尚未进入采集；原始工具未保留补丁输入，也没有明确权限拒绝信息。同工具在另一个诊断目录创建文本成功，不能据此判断任务目录的失败原因。
+
+上次请求 a6927780-fee0-41ae-ac68-11425be391b6 的精确关页记录由用户转交 Windows 核验结果；Mini 核对任务身份、终态和对应占用后留存恢复证据并正常释放，父任务结算为目录未完成、发现 0 个商品。没有修改历史 Review，没有将失败算作采集通过。
+
+源码 3498f6a 增加真实执行前后路径状态，以及 Windows 只读身份/ACL 检查；代理写入前记录 DTC_WRITE_INTENT，写入后记录 DTC_WRITE_RESULT，失败后再只读检查一次。宿主单独保留 write-diagnostic.json 并尝试发布 R2。实际补丁输入的收集依赖代理执行指令，尚未现场验收；没有认定或修复某个未经证实的权限根因。
+
+Mini 上 30 项采集宿主、节点控制和目录 Workflow 回归通过；build:dtc 通过，22 个 JS。Workflow bundle 与此前 14 份历史回放通过的文件逐字节一致。2026-09-12 06:54 UTC 仅切换 DTC 26 个角色到日志版本；基础 90 个角色保持原进程。随后四个周期均 90/90、26/26 ready，5 项资源心跳健康，零占用、零来源锁。Mini 部署证据为私有部署目录的 write-logging-roll.json、write-logging-health.json。
+
+Windows 尚未更新本次日志版本，也未发新任务。下一步执行 [WINDOWS_WRITE_LOGGING_PROMPT.md](WINDOWS_WRITE_LOGGING_PROMPT.md)：正常停机，精确归档已结束任务的本地工作目录，保留关页账本原路径和所有原始证据，更新 release 后核对并后台启动。Windows 报告新版本 ready 后，由主会话通过 Brand 创建新的全目录请求。用户已改用真实任务日志方案，不执行之前建议的写入矩阵诊断。
