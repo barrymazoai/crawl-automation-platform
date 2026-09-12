@@ -52,3 +52,5 @@ Start-Process -FilePath $dtcNodeExe `
 报告 Git commit、JS 数量、两个 build ID、Skill 完整性、routing/doctor 结果、supervisor/三个 Worker PID、sessionId、日志目录。节点保持后台运行。真实业务链及 Windows 取消/冷启动行为，未实测的不要声称已通过。凭据不输出、不上传 Git。
 
 源码至少包含 deployment.json 中 commit 指定的祖先；使用最新 main 构建。以 deployment.json 的两个 build ID、20 个 JS 和 Skill 完整性为准。不要手动添加全局 CRAWL_WORKER_PRODUCT_URL；它由每个任务的宿主单独注入。不要自行重跑历史失败任务或释放 Mini 的隔离许可。
+
+本轮 Testosterone Support 的采集代理曾报告 `filesystem_write_permission_required`。更新时在 Windows 本地核对该任务目录的权限、启动参数与日志，区分“实际写入被拒绝”和“代理只读完说明就自行停止”。只回报是否发生写入尝试、非敏感错误码和证据路径，不发送凭据或整段执行日志。普通 Node 的写入检查不等于 Codex 子会话有写权限。若确有权限边界，沿用已有审批机制；不能增加 bypass 参数、关闭 sandbox 或修改全局安全策略。本次部署检查不能冒充该商品已经补采成功。
