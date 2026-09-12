@@ -1,0 +1,153 @@
+{
+  "version": 2,
+  "commit": "b1b7f865df14b50b7cd059f430ddb8aea5210ccd",
+  "activityBuild": "3b705195988155f01befac765ec9708ba236d30c3dce88827cd0477aca017371",
+  "workflowBuild": "22f5c2817fa37833cbd7cb7fe60687d8eef9fe35240a95b0acc1e7cabbcd4644",
+  "jsCount": 23,
+  "queueScope": "dtc-innerbody-v2-20260911",
+  "evidencePrefix": "crawlv3-acceptance/dtc-bellagrace-wellness-20260912",
+  "browserResource": "windows-dtc-browser",
+  "browserModelResource": "mini-model-account",
+  "scope": {
+    "brandId": "901e4604-30e5-48b0-a55f-3c2d0e70ab1a",
+    "sourceId": "180b41c1-1f92-4fa1-9672-b8025ca2a47b",
+    "channel": "dtc",
+    "region": "US",
+    "rootUrl": "https://shopbellagrace.com/collections/wellness",
+    "scopeVersion": "source-revision-2"
+  },
+  "site": {
+    "origin": "https://shopbellagrace.com",
+    "brandName": "Bella Grace",
+    "catalogPages": [
+      "https://shopbellagrace.com/collections/wellness"
+    ],
+    "productPathPrefix": "/products/",
+    "catalogRoot": "#MainContent",
+    "productRoot": "#MainContent",
+    "imageOrigins": [
+      "https://shopbellagrace.com",
+      "https://cdn.shopify.com"
+    ],
+    "galleryControls": [],
+    "maxDecisions": 6,
+    "selectedUrls": null
+  },
+  "channelDefaults": {
+    "clusterId": "railway-temporal",
+    "sourceText": {
+      "schemaVersion": 1,
+      "module": "codex.text",
+      "implementationVersion": "codex-text/2",
+      "policyVersion": "anchored/2",
+      "resultSchemaVersion": 2,
+      "configFingerprint": "549857a18a4ff72c8b3656eab23ae6bcaca35503c9ab7f14db53017063a4e3b7"
+    },
+    "ocr": {
+      "module": "ocr.file",
+      "schemaVersion": 1,
+      "implementationVersion": "multipart-ocr/2",
+      "policyVersion": "single-call/1",
+      "resultSchemaVersion": 2,
+      "configFingerprint": "1eb0512f1c8d69cbb161e8058e88d1055895398f41036dc45fc47b60d5b7ab14"
+    },
+    "sourceVisionConfigFingerprint": "623632994ec3090b741c8e67fc1abb9962bcb8d38b04dc371ec4798075bedaba",
+    "labelText": {
+      "schemaVersion": 1,
+      "module": "codex.text",
+      "implementationVersion": "codex-text/3",
+      "policyVersion": "label-text/4",
+      "resultSchemaVersion": 3,
+      "configFingerprint": "fb7e14c6b914d68459da21f3a895ffe7eb064486babd0b62fd7500e93e7d4ac4"
+    },
+    "visionConfigFingerprint": "623632994ec3090b741c8e67fc1abb9962bcb8d38b04dc371ec4798075bedaba",
+    "evidencePolicy": "label-image-first/5",
+    "labelResources": {
+      "queue": "v3.channel.label.resources.v1.channel-label-v1.session.swanson-acg-resident-v1",
+      "reviewStopCheck": true,
+      "activities": {
+        "interpretText": [
+          {
+            "resourceId": "mini-model-account",
+            "units": 1
+          },
+          {
+            "resourceId": "mini-cpu",
+            "units": 1
+          }
+        ],
+        "interpretImage": [
+          {
+            "resourceId": "mini-model-account",
+            "units": 1
+          },
+          {
+            "resourceId": "mini-cpu",
+            "units": 1
+          }
+        ],
+        "ocrFile": [
+          {
+            "resourceId": "windows-ocr",
+            "units": 1
+          }
+        ]
+      },
+      "maxWaitSeconds": 900
+    }
+  },
+  "routing": {
+    "queueScope": "dtc-innerbody-v2-20260911",
+    "scope": {
+      "brandId": "901e4604-30e5-48b0-a55f-3c2d0e70ab1a",
+      "sourceId": "180b41c1-1f92-4fa1-9672-b8025ca2a47b",
+      "channel": "dtc",
+      "region": "US",
+      "rootUrl": "https://shopbellagrace.com/collections/wellness",
+      "scopeVersion": "source-revision-2"
+    },
+    "queues": {
+      "plan": "v3.channel.label.plan.v1.channel-label-v1.session.dtc-innerbody-v2-20260911",
+      "page": "v3.channel.label.page.v1.channel-label-v1.session.dtc-innerbody-v2-20260911",
+      "pageText": "v3.channel.label.page-text.v1.channel-label-v1.session.dtc-innerbody-v2-20260911",
+      "imagePrepare": "v3.channel.label.image-prepare.v1.channel-label-v1.session.dtc-innerbody-v2-20260911",
+      "ocr": "v3.channel.label.ocr.v1.channel-label-v1.session.dtc-innerbody-v2-20260911",
+      "ocrReceipts": "v3.channel.label.ocr-receipts.v1.channel-label-v1.session.dtc-innerbody-v2-20260911",
+      "keywords": "v3.channel.label.keywords.v1.channel-label-v1.session.dtc-innerbody-v2-20260911",
+      "source": "v3.channel.label.source.v1.channel-label-v1.session.dtc-innerbody-v2-20260911",
+      "manifest": "v3.channel.label.manifest.v1.channel-label-v1.session.dtc-innerbody-v2-20260911",
+      "text": "v3.channel.label.text.v1.channel-label-v1.session.dtc-innerbody-v2-20260911",
+      "textReceipts": "v3.channel.label.text-receipts.v1.channel-label-v1.session.dtc-innerbody-v2-20260911",
+      "vision": "v3.channel.label.vision.v1.channel-label-v1.session.dtc-innerbody-v2-20260911",
+      "core": "v3.channel.label.core.v1.channel-label-v1.session.dtc-innerbody-v2-20260911",
+      "assembly": "v3.channel.label.assembly.v1.channel-label-v1.session.dtc-innerbody-v2-20260911",
+      "collection": "v3.channel.label.collection.v1.channel-label-v1.session.dtc-innerbody-v2-20260911",
+      "review": "v3.channel.label.review.v1.channel-label-v1.session.dtc-innerbody-v2-20260911",
+      "resources": "v3.channel.label.resources.v1.channel-label-v1.session.dtc-innerbody-v2-20260911",
+      "dtc-control": "v3.dtc.control.v1.dtc-live-v2.session.dtc-innerbody-v2-20260911",
+      "dtc-catalog-source": "v3.dtc.catalog-source.v1.dtc-live-v2.session.dtc-innerbody-v2-20260911",
+      "dtc-catalog-ledger": "v3.dtc.catalog-ledger.v1.dtc-live-v2.session.dtc-innerbody-v2-20260911",
+      "dtc-product-input": "v3.dtc.product-input.v1.dtc-live-v2.session.dtc-innerbody-v2-20260911",
+      "dtc-capture": "v3.dtc.capture.v1.dtc-live-v2.session.dtc-innerbody-v2-20260911",
+      "dtc-file": "v3.dtc.file.v1.dtc-live-v2.session.dtc-innerbody-v2-20260911",
+      "dtc-review": "v3.dtc.review.v1.dtc-live-v2.session.dtc-innerbody-v2-20260911",
+      "productPlan": "v3.channel.product-input.v1.channel-plan-v1.session.dtc-innerbody-v2-20260911",
+      "brandWorkflow": "v3.dtc.control.v1.dtc-live-v2.session.dtc-innerbody-v2-20260911",
+      "productWorkflow": "v3.dtc.product-input.v1.dtc-live-v2.session.dtc-innerbody-v2-20260911",
+      "catalogWorkflow": "v3.catalog.workflow.v1.catalog-v1.session.dtc-innerbody-v2-20260911",
+      "labelWorkflow": "v3.channel.saved-label.v1.channel-label-v1.session.dtc-innerbody-v2-20260911"
+    },
+    "nodeControl": {
+      "nodeId": "dtc-innerbody-v2-20260911",
+      "workflowQueue": "v3.dtc.control.v1.dtc-live-v2.session.dtc-innerbody-v2-20260911",
+      "activityQueue": "v3.dtc.control.v1.dtc-live-v2.session.dtc-innerbody-v2-20260911"
+    },
+    "brandTarget": {
+      "taskQueue": "v3.dtc.control.v1.dtc-live-v2.session.dtc-innerbody-v2-20260911"
+    },
+    "activityBuild": "3b705195988155f01befac765ec9708ba236d30c3dce88827cd0477aca017371",
+    "workflowBuild": "22f5c2817fa37833cbd7cb7fe60687d8eef9fe35240a95b0acc1e7cabbcd4644"
+  },
+  "workflowExecutableSha256": "c7f794cf6ddc4dd995f71aa03fe2c78a6a943254f88b788e135d61b94617f4ec",
+  "workflowSourceMapFormat": "generated-js-lines/1"
+}
