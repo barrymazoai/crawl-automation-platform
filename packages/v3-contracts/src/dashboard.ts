@@ -4,6 +4,7 @@ import { ReviewSchema } from "./processing.js";
 const count = z.number().int().nonnegative();
 export const DashboardSummarySchema = z.strictObject({ asOf: z.iso.datetime(), basis: z.literal("business-database"),
   discoveries: count, dispatchedProducts: count, pendingDispatches: count, processingResults: count, processedObservations: count,
+  skippedProducts: count.default(0),
   collectedProducts: count, collectedObservations: count, reviews: count, reviewObservations: count,
   formalWrites: z.null(), formalWriteStatus: z.literal("not-connected"),
   catalogs: z.strictObject({ open: count, complete: count, incomplete: count }),

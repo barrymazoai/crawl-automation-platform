@@ -2,7 +2,7 @@ import { lstat, readFile, readdir } from 'node:fs/promises';
 import { join, resolve, relative, isAbsolute } from 'node:path';
 import { z } from 'zod';
 import { sha256, type RetainedPublication } from '@crawl-automation/v3-artifacts';
-import { DtcRenderedProductSchema, DtcRenderedCatalogSchema, type DtcSitePolicy } from '@crawl-automation/v3-contracts';
+import { DtcScopeSkipSchema, DtcRenderedProductSchema, DtcRenderedCatalogSchema, type DtcSitePolicy } from '@crawl-automation/v3-contracts';
 import { type FileTransport, type Address, type Response } from '@crawl-automation/v3-acquisition';
 
 const json=(v:unknown)=>Buffer.from(JSON.stringify(v));
@@ -67,4 +67,15 @@ export class DtcLegacyFileTransport implements FileTransport{
   const body=await this.publication.remote.read(f.objectKey,f.byteSize,s);if(!body||body.length!==f.byteSize||sha256(body)!==f.sha256)throw Error('ARTIFACT.INTEGRITY');let closed=false;
   return {status:200,headers:{'content-type':f.mediaType,'content-length':String(f.byteSize)},body:(async function*(){s.throwIfAborted();if(!closed)yield body;})(),close(){closed=true;}};
  }
+}
+
+/** A model's reason string alone is insufficient: require the exact harvest exclusion and empty records. */
+export async function legacyScopeSkip(root:string,key:string,operationId:string,url:string,publication:RetainedPublication,s:AbortSignal){
+ const result=JSON.parse(await readFile(join(root,'harvest-result.json'),'utf8'));
+ const records=JSON.parse(await readFile(join(root,'evidence','records.json'),'utf8'));
+ if(!Array.isArray(records)||records.length||!Array.isArray(result.excluded)||result.excluded.length!==1||result.excluded[0].url!==url||result.excluded[0].reason!=='bundle_or_pack'||!Array.isArray(result.failed)||result.failed.length)throw Error('DTC.SCOPE_EXCLUSION_UNVERIFIED');
+ const files=await retainLegacyDirectory(root,key,publication,s),evidenceKey=`${key}/scope-skip.json`;
+ const evidence=json({version:'dtc-scope-skip/1',operationId,url,reason:'bundle_or_pack',policy:'nutrition-single-product/1',files});
+ await publication.publish(evidenceKey,evidence,'application/json',s);
+ return DtcScopeSkipSchema.parse({status:'skipped',operationId,url,reason:'bundle_or_pack',policy:'nutrition-single-product/1',evidenceKey,evidenceSha256:sha256(evidence)});
 }

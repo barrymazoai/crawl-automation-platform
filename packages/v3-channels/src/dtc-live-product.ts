@@ -1,5 +1,5 @@
 import { isDeepStrictEqual as equal } from "node:util";
-import { DtcProductJobSchema, DtcProductCaptureSchema, DtcRenderedProductSchema, ChannelPlanInputSchema,
+import { DtcScopeSkipSchema, DtcProductJobSchema, DtcProductCaptureSchema, DtcRenderedProductSchema, ChannelPlanInputSchema,
   type ChannelPlanInput, type DtcProductJob } from "@crawl-automation/v3-contracts";
 import { RetainedPublication, sha256 } from "@crawl-automation/v3-artifacts";
 import { parseDtcRenderedProduct, dtcAddress } from "./dtc-rendered.js";
@@ -45,7 +45,9 @@ export class DtcLiveProduct {
     const key = this.key(job);
     if (await this.publication.remote.create(`${key}/intent.json`, bytes({ job, settings: this.settings }), "application/json", signal) !== "created")
       throw Error("DTC.CAPTURE_UNRESOLVED");
-    const projection = productProjection(await this.browser.capture(job, signal));
+    const rawCapture=await this.browser.capture(job,signal),skipped=DtcScopeSkipSchema.safeParse(rawCapture);
+    if(skipped.success){if(skipped.data.operationId!==job.operationId||skipped.data.url!==job.discovery.entry.url||skipped.data.evidenceKey!==`v3/dtc-legacy/${job.operationId}/scope-skip.json`)throw Error("DTC.IDENTITY_UNVERIFIED");return skipped.data;}
+    const projection = productProjection(rawCapture);
     const result = this.derive(job, projection);
     await this.publication.publish(result.sourcePlan.source.objectKey, bytes(projection), "application/json", signal);
     const confirmed = await this.inspect(job, signal);

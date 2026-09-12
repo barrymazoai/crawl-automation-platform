@@ -49,6 +49,7 @@ export function Dashboard({ reviewsOnly = false }: { reviewsOnly?: boolean }) {
           ["已有处理结果", summary.processedObservations, `${summary.processingResults} 条模块结果，非完成产品`],
           ["采集已保存", summary.collectedObservations, `${summary.collectedProducts} 条保存记录`],
           ["正式产品库", "未接入", "不把采集保存冒充正式写入"],
+          ["按规则跳过", summary.skippedProducts, "组合装排除，单独统计"],
           ["业务 Review", summary.reviews, `${summary.reviewObservations} 个关联观察`],
           ["待发布产品", summary.pendingDispatches, "已发现、尚无子流程启动回执"],
         ].map(([label, value, caption]) => <div key={label} className="rounded-2xl border border-border bg-surface p-4"><p className="text-xs text-muted">{label}</p><p className="my-3 text-3xl font-semibold">{value}</p><p className="text-[11px] text-muted">{caption}</p></div>)}</div>

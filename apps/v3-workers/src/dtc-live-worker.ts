@@ -11,6 +11,7 @@ import { CatalogPageInputSchema, CollectionWorkflowInput, BrandCollectionPlanSch
 import { createR2Objects, RetainedPublication, ArtifactResolver, FileCopies, sha256 } from "@crawl-automation/v3-artifacts";
 import { FileEvidence } from "@crawl-automation/v3-acquisition";
 import { DtcCatalogSource, DtcLiveProduct, ChannelProductPlans } from "@crawl-automation/v3-channels";
+import { recordDtcScopeSkip } from "./dtc-scope-skip.js";
 import { DtcMiniNode } from "./dtc-mini-node.js";
 import { TextLocalStore } from "@crawl-automation/v3-text";
 import { PostgresReviews } from "@crawl-automation/v3-review";
@@ -87,7 +88,11 @@ async function main() {
           };
           handlers={prepareDtcProduct:(raw,s)=>jobs.prepare(raw,execution().workflowId,s),prepareDtcLabel:(raw,s)=>prepareLabel(raw,s,false),prepareDtcStreamingLabel:(raw,s)=>prepareLabel(raw,s,true)};
         }
-        else if (role === "review") handlers = { reviewDtcProduct: async (raw, s) => {
+        else if (role === "review") handlers = { recordDtcScopeSkip:async(raw,s)=>{
+          const job=await verifyJob(raw.job,s),e=execution();
+          if((await resourceDb.query("SELECT 1 FROM resource_permit WHERE request->>'workflowId'=$1 AND released_at IS NULL",[e.workflowId])).rowCount)throw Error("DTC.SCOPE_EXCLUSION_UNVERIFIED");
+          return recordDtcScopeSkip({job,receipt:raw.receipt},r2.store,db,s);
+        }, reviewDtcProduct: async (raw, s) => {
           const job = await verifyJob(raw.job, s); if (raw.code !== "DTC.BROWSER_PHASE_UNRESOLVED") throw Error("DTC.REVIEW_CODE");
           if (typeof raw.causeCode !== "string" || !/^(SOURCE|DTC|ARTIFACT|RESOURCE)\.[A-Z_]+$/.test(raw.causeCode)) throw Error("DTC.REVIEW_CODE");
           const id = `dtc-review-${sha256(Buffer.from(JSON.stringify(job)))}`, key = `v3/dtc-reviews/${id}.json`;

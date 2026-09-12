@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { RetainedPublication, sha256 } from '@crawl-automation/v3-artifacts';
 import { TextLocalStore } from '@crawl-automation/v3-text';
 import { parseDtcRenderedProduct } from '@crawl-automation/v3-channels';
-import { legacyProductProjection, DtcLegacyFileTransport } from '../src/dtc-legacy-evidence.js';
+import { legacyScopeSkip, legacyProductProjection, DtcLegacyFileTransport } from '../src/dtc-legacy-evidence.js';
 let root:string,publication:RetainedPublication;
 const signal=()=>AbortSignal.timeout(10000),url='https://shop.example.com/products/a?variant=2',imageUrl='https://shop.example.com/cdn/a.jpg';
 const site:any={origin:'https://shop.example.com',brandName:'Example',imageOrigins:['https://shop.example.com']};
@@ -45,4 +45,20 @@ it.each(['complete','needs_review','failed','cancelled','user-control'])('host f
  if(status==='complete')await pending;else await expect(pending).rejects.toThrow();
  if(status==='user-control')expect(events).not.toContain('close');else expect(events[0]).toBe('close');
  await expect(access(taskFile)).rejects.toThrow();
+});
+
+it('scope skip requires exact retained harvest exclusion and empty records, then records a separate idempotent outcome',async()=>{
+ const {dtcFixture}=await import('../../../packages/v3-channels/src/dtc-live.fixture.js'),{recordDtcScopeSkip}=await import('../src/dtc-scope-skip.js');
+ const job=await dtcFixture().job(),target=job.discovery.entry.url,key=`v3/dtc-legacy/${job.operationId}`;
+ await writeFile(join(root,'capture/evidence/records.json'),'[]');await writeFile(join(root,'capture/harvest-result.json'),JSON.stringify({excluded:[{url:target,reason:'bundle_or_pack'}],failed:[]}));
+ const receipt=await legacyScopeSkip(join(root,'capture'),key,job.operationId,target,publication,signal());let saved:any;const sqls:string[]=[];
+ const db={query:async(sql:string,args?:unknown[])=>{sqls.push(sql);if(sql.startsWith('INSERT'))saved??={record:args![1],record_hash:args![2]};return{rows:saved?[saved]:[]};}};
+ expect(await recordDtcScopeSkip({job,receipt},publication.remote,db,signal())).toEqual(receipt);expect(await recordDtcScopeSkip({job,receipt},publication.remote,db,signal())).toEqual(receipt);
+ expect(sqls.every(sql=>sql.includes('catalog_product_skip'))).toBe(true);
+ await expect(recordDtcScopeSkip({job,receipt:{...receipt,evidenceSha256:'0'.repeat(64)}},publication.remote,db,signal())).rejects.toThrow('UNVERIFIED');
+});
+it.each(['foreign-url','nonempty-records','missing-harvest','different-reason'])('scope skip rejects %s rather than trusting model summary',async mode=>{
+ await writeFile(join(root,'capture/evidence/records.json'),mode==='nonempty-records'?JSON.stringify(raw()):'[]');
+ if(mode!=='missing-harvest')await writeFile(join(root,'capture/harvest-result.json'),JSON.stringify({excluded:[{url:mode==='foreign-url'?'https://other.example/product':url,reason:mode==='different-reason'?'unknown':'bundle_or_pack'}],failed:[]}));
+ await expect(legacyScopeSkip(join(root,'capture'),'v3/dtc-legacy/op','op',url,publication,signal())).rejects.toThrow();
 });

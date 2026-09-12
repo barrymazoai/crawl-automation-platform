@@ -10,7 +10,7 @@ import { type CdpOwnedPage, type CdpTaskPort } from '@crawl-automation/v3-acquis
 import { type DtcSitePolicy } from '@crawl-automation/v3-contracts';
 import { CodexProcessRunner } from '../../../packages/runtime/src/codex-process.js';
 import { buildBrowserCapturePrompt } from '../../../packages/runtime/src/browser-capture-prompt.js';
-import { legacyProductProjection, legacyCatalogProjection, retainLegacyDirectory } from './dtc-legacy-evidence.js';
+import { legacyProductProjection, legacyCatalogProjection, retainLegacyDirectory, legacyScopeSkip } from './dtc-legacy-evidence.js';
 
 const resultSchema=z.strictObject({status:z.enum(['complete','needs_review','failed']),summary:z.string(),reasonCode:z.string().nullable()});
 export class DtcLegacyCapture {
@@ -54,6 +54,7 @@ export class DtcLegacyCapture {
    if(guardError)throw guardError;signal.throwIfAborted();await port.guard(signal);await input.authorize(signal);
    await input.finishBrowser();browserFinished=true;clearInterval(timer);
    await publication.publish(`${key}/result.json`,Buffer.from(JSON.stringify(result)),'application/json',signal);
+   if(mode==='product'&&result.reasonCode==='target_product_excluded_by_scope_policy')return legacyScopeSkip(out,key,operationId,url,publication,signal);
    if(result.status!=='complete')throw Error('DTC.EVIDENCE_REVIEW');
    return mode==='product'?await legacyProductProjection(out,key,url,site,publication,signal):await legacyCatalogProjection(out,key,url,site,publication,signal);
   }catch(e){

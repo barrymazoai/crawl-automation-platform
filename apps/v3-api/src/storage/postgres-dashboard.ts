@@ -18,6 +18,7 @@ export class PostgresDashboard implements DashboardReader {
       (SELECT count(*)::int FROM processing_result) AS results,
       (SELECT count(DISTINCT coalesce(record->'input'->>'observationId',record->'input'->'input'->'selection'->'observation'->>'observationId'))::int FROM processing_result) AS processed,
       (SELECT count(*)::int FROM collected_product) AS collected,
+      (SELECT count(*)::int FROM catalog_product_skip) AS skipped,
       (SELECT count(DISTINCT observation_id)::int FROM collected_product) AS collected_observations,
       (SELECT count(*)::int FROM review_record) AS reviews,
       (SELECT count(DISTINCT record->'failure'->>'observationId')::int FROM review_record) AS review_observations,
@@ -37,7 +38,7 @@ export class PostgresDashboard implements DashboardReader {
     const r = rows[0];
     return DashboardSummarySchema.parse({ asOf: r.at.toISOString(), basis: "business-database", discoveries: r.discoveries,
       dispatchedProducts: r.dispatched, pendingDispatches: r.pending, processingResults: r.results, processedObservations: r.processed,
-      collectedProducts: r.collected, collectedObservations: r.collected_observations, reviews: r.reviews, reviewObservations: r.review_observations,
+      skippedProducts:r.skipped, collectedProducts: r.collected, collectedObservations: r.collected_observations, reviews: r.reviews, reviewObservations: r.review_observations,
       formalWrites: null, formalWriteStatus: "not-connected", catalogs: { open: r.open, complete: r.complete, incomplete: r.incomplete },
       handoff: { waiting: r.waiting, unknown: r.unknown }, errors: r.errors, sources: r.sources });
   }

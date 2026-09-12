@@ -67,3 +67,15 @@ it("stream cancellation closes the exact page and seals downstream without creat
   await expect(DtcCatalogProductWorkflow(f.job.discovery)).rejects.toThrow("cancelled");expect(f.signals.at(-1)).toMatchObject({status:"failed"});
   expect(env.activities.capture.closeDtcProductPage).toHaveBeenCalledOnce();expect(env.activities.review.reviewDtcProduct).not.toHaveBeenCalled();
 });
+
+it("scope exclusion closes page and releases leases before skip registration without creating Review",async()=>{
+ const f=await setup(),skip={status:"skipped",operationId:f.job.operationId,url:f.job.discovery.entry.url,reason:"bundle_or_pack",policy:"nutrition-single-product/1",evidenceKey:`v3/dtc-legacy/${f.job.operationId}/scope-skip.json`,evidenceSha256:"a".repeat(64)};
+ env.activities.capture.captureDtcProduct.mockResolvedValue(skip);
+ env.activities.review.recordDtcScopeSkip=vi.fn(async({receipt}:any)=>{expect(env.held).toBe(false);expect(env.permits.size).toBe(0);expect(env.events).toContain("close");return receipt;});
+ expect(await DtcCatalogProductWorkflow(f.job.discovery)).toEqual(skip);expect(env.activities.review.recordDtcScopeSkip).toHaveBeenCalledOnce();expect(env.activities.review.reviewDtcProduct).not.toHaveBeenCalled();expect(env.start).not.toHaveBeenCalled();
+});
+it("scope skip cannot register if exact page closure is unverified",async()=>{
+ const f=await setup();env.activities.capture.captureDtcProduct.mockResolvedValue({status:"skipped",operationId:f.job.operationId,url:f.job.discovery.entry.url,reason:"bundle_or_pack",policy:"nutrition-single-product/1",evidenceKey:`v3/dtc-legacy/${f.job.operationId}/scope-skip.json`,evidenceSha256:"a".repeat(64)});
+ env.activities.capture.closeDtcProductPage.mockResolvedValue({taskId:f.job.sessionId,status:"pending"});env.activities.review.recordDtcScopeSkip=vi.fn();
+ expect(await DtcCatalogProductWorkflow(f.job.discovery)).toEqual(f.review);expect(env.activities.review.recordDtcScopeSkip).not.toHaveBeenCalled();expect(env.release).not.toHaveBeenCalled();
+});

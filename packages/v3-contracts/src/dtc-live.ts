@@ -3,3 +3,5 @@ export const DtcProductJobSchema=z.strictObject({codec:z.literal('dtc-product-jo
 export type DtcProductJob=z.infer<typeof DtcProductJobSchema>;
 export const DtcProductCaptureSchema=z.strictObject({job:DtcProductJobSchema,sourcePlan:ChannelPlanInputSchema.refine(i=>i.channel==='dtc')});
 export const DtcProductHandoffSchema=z.strictObject({job:DtcProductJobSchema,input:ChannelSavedLabelWorkflowInputSchema});
+
+export const DtcScopeSkipSchema=z.strictObject({status:z.literal('skipped'),operationId:ExecutionIdSchema,url:z.url(),reason:z.literal('bundle_or_pack'),policy:z.literal('nutrition-single-product/1'),evidenceKey:z.string().min(1),evidenceSha256:z.string().regex(/^[a-f0-9]{64}$/)});

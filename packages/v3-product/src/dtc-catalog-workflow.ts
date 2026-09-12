@@ -1,5 +1,5 @@
 import { patched, proxyActivities, workflowInfo, startChild, ParentClosePolicy, WorkflowIdReusePolicy, ApplicationFailure, CancellationScope, isCancellation } from "@temporalio/workflow";
-import { CatalogDiscoverySchema, DtcProductJobSchema, DtcProductCaptureSchema, DtcProductHandoffSchema,
+import { DtcScopeSkipSchema, CatalogDiscoverySchema, DtcProductJobSchema, DtcProductCaptureSchema, DtcProductHandoffSchema,
   ChannelPlanOutcomeSchema, FileAcquireOutcomeSchema, AcquisitionReviewSchema, imageActivityOptions, assertArtifactBelongsTo, type DtcProductJob } from "@crawl-automation/v3-contracts";
 import { resourceGate } from "./resource-workflow.js";
 import type {ChildWorkflowHandle} from "@temporalio/workflow";
@@ -33,6 +33,8 @@ async function streamProduct(job:DtcProductJob,inputQueue:string,call:(queue:str
       let cleanupAllowed=true;
       try{
         const raw=await gate("captureDtcProduct",()=>call(job.queues.capture,"captureDtcProduct",job)),review=AcquisitionReviewSchema.safeParse(raw);
+        const skipped=DtcScopeSkipSchema.safeParse(raw);
+        if(skipped.success){if(skipped.data.operationId!==job.operationId||skipped.data.url!==job.discovery.entry.url||skipped.data.evidenceKey!==`v3/dtc-legacy/${job.operationId}/scope-skip.json`)invalid();return skipped.data;}
         if(review.success){if(review.data.operationId!==job.operationId)invalid();if(review.data.code==="SOURCE.BROWSER_USER_CONTROL")cleanupAllowed=false;return review.data;}
         const captured=DtcProductCaptureSchema.parse(raw),p=captured.sourcePlan,o=p.owner,d=job.discovery;
         if(!same(captured.job,job)||o.requestId!==d.catalogId||o.brandId!==d.scope.brandId||o.sourceId!==d.scope.sourceId||o.listingId!==d.entry.listingId||o.variantId!==d.entry.variantId||p.expectedUrl!==d.entry.url||p.binding.sessionId!==job.sessionId||p.source.producer.operationId!==job.operationId)invalid();
@@ -71,7 +73,11 @@ async function streamProduct(job:DtcProductJob,inputQueue:string,call:(queue:str
     if(r.operationId!==job.operationId)invalid();
     if(child)await child.result();return r;
   }
-  if(!child)return phase;
+  if(!child){
+    const skipped=DtcScopeSkipSchema.safeParse(phase);
+    if(skipped.success){const receipt=DtcScopeSkipSchema.parse(await call(job.queues.review,"recordDtcScopeSkip",{job,receipt:skipped.data}));if(!same(receipt,skipped.data))invalid();return receipt;}
+    return phase;
+  }
   // Final collection is gated on exact page closure and browser lease release.
   await seal(phase?"failed":"closed");
   const result=await child.result();return phase??result;
