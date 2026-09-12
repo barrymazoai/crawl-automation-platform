@@ -1,0 +1,396 @@
+{
+  "requestId": "eaeca30d-0b75-42d7-bce4-7b5f98fd87fa",
+  "startedAt": "2026-09-12T13:45:40.818Z",
+  "finishedAt": "2026-09-12T14:31:49.444Z",
+  "scope": {
+    "region": "US",
+    "brandId": "901e4604-30e5-48b0-a55f-3c2d0e70ab1a",
+    "channel": "dtc",
+    "rootUrl": "https://shopbellagrace.com/collections/wellness",
+    "sourceId": "180b41c1-1f92-4fa1-9672-b8025ca2a47b",
+    "scopeVersion": "source-revision-2"
+  },
+  "workflowCount": 13,
+  "allWorkflowsCompleted": true,
+  "products": [
+    {
+      "url": "https://shopbellagrace.com/products/elixir",
+      "result": {
+        "status": "review",
+        "operationId": "dtc-capture-ec8e93d588feb02526427c114a7520d75e52f868c9ba3d1e6a02e26ae9658f84",
+        "reviewId": "dtc-review-07b0410263fe35e2e2f646559ab651acf4d980ad43a5eb45cd35be3e6db672db",
+        "code": "DTC.CAPTURE_INCOMPLETE",
+        "evidenceKey": "v3/dtc-reviews/dtc-review-07b0410263fe35e2e2f646559ab651acf4d980ad43a5eb45cd35be3e6db672db.json",
+        "automaticRetry": false
+      },
+      "captureKind": "capture_review",
+      "images": 9,
+      "variants": 1,
+      "files": 18,
+      "runner": {
+        "pid": 15788,
+        "startedAt": "2026-09-12T13:48:31.461Z",
+        "closedAt": "2026-09-12T13:53:45.942Z",
+        "exitCode": 0,
+        "signal": null,
+        "aborted": false
+      },
+      "closure": {
+        "taskId": "dtc-page-ec8e93d588feb02526427c114a7520d75e52f868c9ba3d1e6a02e26ae9658f84",
+        "status": "closed",
+        "targetId": "93B5247A9755DEE35B8CD82D4A658224"
+      }
+    },
+    {
+      "url": "https://shopbellagrace.com/products/restorative-sleep-gummies",
+      "result": {
+        "status": "review",
+        "evidenceKey": "v3/label-products/label-cda348175c5e5e08d9088f86e03d037e8ccf13a6e0bd9ac1f1edef4c4cf0cd03/assembly.json",
+        "reviewId": "label-2de0e00459630a57458534c73073e62a4a149402d5db49662ece79f95ed6de38",
+        "codes": [
+          "TEXT.CITATION_INVALID",
+          "VALIDATION.FORMULA_MISSING",
+          "VALIDATION.INGREDIENTS_MISSING",
+          "VISION.LABEL_AMOUNT_STATE_CONFLICT"
+        ],
+        "automaticRetry": false
+      },
+      "captureKind": "captured",
+      "images": 3,
+      "variants": 1,
+      "files": 12,
+      "runner": {
+        "pid": 5592,
+        "startedAt": "2026-09-12T14:19:55.814Z",
+        "closedAt": "2026-09-12T14:23:27.708Z",
+        "exitCode": 0,
+        "signal": null,
+        "aborted": false
+      },
+      "closure": {
+        "taskId": "dtc-page-186d3653f9935db47cd204da9a65502c50a665eb1185ca09180cba7e5473a958",
+        "status": "closed",
+        "targetId": "5F550ED914529D26388CD436B6F1CD54"
+      }
+    },
+    {
+      "url": "https://shopbellagrace.com/products/bellamelt",
+      "result": {
+        "status": "review",
+        "evidenceKey": "v3/label-products/label-f192372e4cce63fd772bafeef8381416a21a56df8d3b13285e534f1db55137be/assembly.json",
+        "reviewId": "label-76b3a2682c0d48ed4ff1383fee4e4397fd770c516d29a828c7cbaa8c8496cf86",
+        "codes": [
+          "TEXT.CITATION_INVALID",
+          "VALIDATION.FORMULA_MISSING",
+          "VALIDATION.INGREDIENTS_MISSING"
+        ],
+        "automaticRetry": false
+      },
+      "captureKind": "captured",
+      "images": 1,
+      "variants": 1,
+      "files": 10,
+      "runner": {
+        "pid": 5020,
+        "startedAt": "2026-09-12T13:59:53.295Z",
+        "closedAt": "2026-09-12T14:05:41.948Z",
+        "exitCode": 0,
+        "signal": null,
+        "aborted": false
+      },
+      "closure": {
+        "taskId": "dtc-page-3e0c24f856d721ff6ea47f61fef460d50811d4a4cf6c937e33c0d251dd5b5e2f",
+        "status": "closed",
+        "targetId": "8B41B316A6F5175BBE14521ECA5F0278"
+      }
+    },
+    {
+      "url": "https://shopbellagrace.com/products/bellatrim",
+      "result": {
+        "status": "collected",
+        "operationId": "label-50033dcc3077914f5db6062fcd768c9642418f93d0b0d048e2c4a5534ae74a00",
+        "observationId": "dtc-9f542f1776c6f24b4807aec10f47df1429bead79554324d9cb9a276ad3b448a2",
+        "evidenceKey": "v3/label-products/label-50033dcc3077914f5db6062fcd768c9642418f93d0b0d048e2c4a5534ae74a00/assembly.json",
+        "recordHash": "491a2daacd2e57f7d43e2ac953ebc81f26b2f29f147fef3b2b4b34f8ba262f6d"
+      },
+      "captureKind": "captured",
+      "images": 7,
+      "variants": 1,
+      "files": 16,
+      "runner": {
+        "pid": 5764,
+        "startedAt": "2026-09-12T14:06:36.073Z",
+        "closedAt": "2026-09-12T14:12:25.326Z",
+        "exitCode": 0,
+        "signal": null,
+        "aborted": false
+      },
+      "closure": {
+        "taskId": "dtc-page-e7e26c11f206f6d9d960ead2790474e93431d76c6d04c98482f18fd726544959",
+        "status": "closed",
+        "targetId": "0D11EDA2A3B219D7BCE8CE6BB997578F"
+      }
+    },
+    {
+      "url": "https://shopbellagrace.com/products/bellamelt-bundle",
+      "result": {
+        "status": "skipped",
+        "operationId": "dtc-capture-256719765ecd738333427c80b4e878d787c93a0e43bc0d62a87eb126fc1a3ff6",
+        "url": "https://shopbellagrace.com/products/bellamelt-bundle",
+        "reason": "bundle_or_pack",
+        "policy": "nutrition-single-product/1",
+        "evidenceKey": "v3/dtc-legacy/dtc-capture-256719765ecd738333427c80b4e878d787c93a0e43bc0d62a87eb126fc1a3ff6/scope-skip.json",
+        "evidenceSha256": "81190a7699ab34181a3c07b18978af1945ecc527c368bbd4e7efa4bae4d67b95"
+      },
+      "captureKind": "skipped",
+      "images": 0,
+      "variants": 0,
+      "files": 7,
+      "runner": {
+        "pid": 944,
+        "startedAt": "2026-09-12T13:54:30.996Z",
+        "closedAt": "2026-09-12T13:59:24.878Z",
+        "exitCode": 0,
+        "signal": null,
+        "aborted": false
+      },
+      "closure": {
+        "taskId": "dtc-page-256719765ecd738333427c80b4e878d787c93a0e43bc0d62a87eb126fc1a3ff6",
+        "status": "closed",
+        "targetId": "5B215C9560EA60EC01E14795DB738F96"
+      }
+    },
+    {
+      "url": "https://shopbellagrace.com/products/bellamelt-launch-pack",
+      "result": {
+        "status": "skipped",
+        "operationId": "dtc-capture-592e7d6cb072425a64749841dc1761743925ea7ace00762692537aa7b8dc8707",
+        "url": "https://shopbellagrace.com/products/bellamelt-launch-pack",
+        "reason": "bundle_or_pack",
+        "policy": "nutrition-single-product/1",
+        "evidenceKey": "v3/dtc-legacy/dtc-capture-592e7d6cb072425a64749841dc1761743925ea7ace00762692537aa7b8dc8707/scope-skip.json",
+        "evidenceSha256": "6f7c731de2dcf076ab6f530baa5bb16aff189787aec485c34316cd37cb79c9f0"
+      },
+      "captureKind": "skipped",
+      "images": 0,
+      "variants": 0,
+      "files": 7,
+      "runner": {
+        "pid": 6300,
+        "startedAt": "2026-09-12T14:24:40.906Z",
+        "closedAt": "2026-09-12T14:28:13.897Z",
+        "exitCode": 0,
+        "signal": null,
+        "aborted": false
+      },
+      "closure": {
+        "taskId": "dtc-page-592e7d6cb072425a64749841dc1761743925ea7ace00762692537aa7b8dc8707",
+        "status": "closed",
+        "targetId": "85E06FA0AE0795509054EA84082E7D78"
+      }
+    },
+    {
+      "url": "https://shopbellagrace.com/products/the-confidence-reset",
+      "result": {
+        "status": "review",
+        "evidenceKey": "v3/label-products/label-a9cc18eac7118066613a63f474368784c2999ef629f4f469344916a73e3eef3b/assembly.json",
+        "reviewId": "label-30653f443a097c857930d45c296f28b69f813a0950c2125bdbec61b1e2e0d3ca",
+        "codes": [
+          "TEXT.CITATION_INVALID",
+          "VALIDATION.FORMULA_MISSING",
+          "VALIDATION.INGREDIENTS_MISSING"
+        ],
+        "automaticRetry": false
+      },
+      "captureKind": "captured",
+      "images": 1,
+      "variants": 1,
+      "files": 10,
+      "runner": {
+        "pid": 9632,
+        "startedAt": "2026-09-12T14:14:07.333Z",
+        "closedAt": "2026-09-12T14:18:28.501Z",
+        "exitCode": 0,
+        "signal": null,
+        "aborted": false
+      },
+      "closure": {
+        "taskId": "dtc-page-8a1ad971291f83496861c2d48ab6b2d420d3c56c97b5afd6142c279c055f820d",
+        "status": "closed",
+        "targetId": "567144C4A06BDBC92EE42097A5A06FBA"
+      }
+    }
+  ],
+  "labels": [
+    {
+      "workflowId": "catalog-product-1ea15d8e4719abecf5a364b292c5346b33c752815b552bafd747c1180de66caa-label",
+      "result": {
+        "status": "review",
+        "evidenceKey": "v3/label-products/label-cda348175c5e5e08d9088f86e03d037e8ccf13a6e0bd9ac1f1edef4c4cf0cd03/assembly.json",
+        "reviewId": "label-2de0e00459630a57458534c73073e62a4a149402d5db49662ece79f95ed6de38",
+        "codes": [
+          "TEXT.CITATION_INVALID",
+          "VALIDATION.FORMULA_MISSING",
+          "VALIDATION.INGREDIENTS_MISSING",
+          "VISION.LABEL_AMOUNT_STATE_CONFLICT"
+        ],
+        "automaticRetry": false
+      },
+      "calls": {
+        "ocrFile": 3,
+        "interpretImage": 1,
+        "interpretText": 1
+      }
+    },
+    {
+      "workflowId": "catalog-product-9b9e62e3a5d4a9a44da007384a7f7f50b9522f85da4fd7ea7b352578f4cccb96-label",
+      "result": {
+        "status": "review",
+        "evidenceKey": "v3/label-products/label-f192372e4cce63fd772bafeef8381416a21a56df8d3b13285e534f1db55137be/assembly.json",
+        "reviewId": "label-76b3a2682c0d48ed4ff1383fee4e4397fd770c516d29a828c7cbaa8c8496cf86",
+        "codes": [
+          "TEXT.CITATION_INVALID",
+          "VALIDATION.FORMULA_MISSING",
+          "VALIDATION.INGREDIENTS_MISSING"
+        ],
+        "automaticRetry": false
+      },
+      "calls": {
+        "ocrFile": 1,
+        "interpretText": 1
+      }
+    },
+    {
+      "workflowId": "catalog-product-4061f313ee94fd0ed58cc2db14f44c2d47ab8c129afb540ee7cac5c3b7805c3a-label",
+      "result": {
+        "status": "collected",
+        "operationId": "label-50033dcc3077914f5db6062fcd768c9642418f93d0b0d048e2c4a5534ae74a00",
+        "observationId": "dtc-9f542f1776c6f24b4807aec10f47df1429bead79554324d9cb9a276ad3b448a2",
+        "evidenceKey": "v3/label-products/label-50033dcc3077914f5db6062fcd768c9642418f93d0b0d048e2c4a5534ae74a00/assembly.json",
+        "recordHash": "491a2daacd2e57f7d43e2ac953ebc81f26b2f29f147fef3b2b4b34f8ba262f6d"
+      },
+      "calls": {
+        "ocrFile": 4,
+        "interpretImage": 1
+      }
+    },
+    {
+      "workflowId": "catalog-product-85abd8c493c128da3a6224ff7051bec27fe1861fc5af3715a4cef58fd0e00eae-label",
+      "result": {
+        "status": "review",
+        "evidenceKey": "v3/label-products/label-a9cc18eac7118066613a63f474368784c2999ef629f4f469344916a73e3eef3b/assembly.json",
+        "reviewId": "label-30653f443a097c857930d45c296f28b69f813a0950c2125bdbec61b1e2e0d3ca",
+        "codes": [
+          "TEXT.CITATION_INVALID",
+          "VALIDATION.FORMULA_MISSING",
+          "VALIDATION.INGREDIENTS_MISSING"
+        ],
+        "automaticRetry": false
+      },
+      "calls": {
+        "ocrFile": 1,
+        "interpretText": 1
+      }
+    }
+  ],
+  "counts": {
+    "collected_product": 1,
+    "review_record": 8,
+    "processing_result": 10,
+    "catalog_product_skip": 2
+  },
+  "rawFiles": {
+    "files": 84,
+    "images": 21,
+    "html": 6,
+    "productRecords": 5,
+    "allRunnerExitZero": true,
+    "aborted": 0,
+    "failedFileChanges": 0
+  },
+  "verifiedBusinessArtifacts": 48,
+  "resources": {
+    "held": 0,
+    "sourceGuards": 0,
+    "activeSubmission": null,
+    "healthy": true
+  },
+  "windows": {
+    "runId": "01a095bd-afb7-7dc7-afc9-7ac332a3d855",
+    "pollerIdentitiesUnchanged": true
+  },
+  "reviews": [
+    {
+      "reviewId": "dtc-review-07b0410263fe35e2e2f646559ab651acf4d980ad43a5eb45cd35be3e6db672db",
+      "code": "DTC.CAPTURE_INCOMPLETE",
+      "stage": "dtc.browser",
+      "observationId": "dtc-capture-ec8e93d588feb02526427c114a7520d75e52f868c9ba3d1e6a02e26ae9658f84"
+    },
+    {
+      "reviewId": "text-ae44e332-b23a-4a60-9c92-b94a668c441b",
+      "code": "TEXT.CITATION_INVALID",
+      "stage": "codex.text",
+      "observationId": "dtc-6076c13d992ec84ae5a897b09716ad26aef547a9fcac8d18b24d5f20050200b7"
+    },
+    {
+      "reviewId": "label-76b3a2682c0d48ed4ff1383fee4e4397fd770c516d29a828c7cbaa8c8496cf86",
+      "code": "TEXT.CITATION_INVALID",
+      "stage": "product.label.assembly",
+      "observationId": "dtc-6076c13d992ec84ae5a897b09716ad26aef547a9fcac8d18b24d5f20050200b7"
+    },
+    {
+      "reviewId": "text-f82e6090-d45b-411e-bdc0-5aa37d2ff182",
+      "code": "TEXT.CITATION_INVALID",
+      "stage": "codex.text",
+      "observationId": "dtc-d4446e3575d19b5b5058969ab4bcc5d6a69929beca8d63bd1d0451b6e3ae175f"
+    },
+    {
+      "reviewId": "label-30653f443a097c857930d45c296f28b69f813a0950c2125bdbec61b1e2e0d3ca",
+      "code": "TEXT.CITATION_INVALID",
+      "stage": "product.label.assembly",
+      "observationId": "dtc-d4446e3575d19b5b5058969ab4bcc5d6a69929beca8d63bd1d0451b6e3ae175f"
+    },
+    {
+      "reviewId": "vision-24f75671-ed74-4ed7-aabf-ce75e3bbfee1",
+      "code": "VISION.LABEL_AMOUNT_STATE_CONFLICT",
+      "stage": "codex.vision",
+      "observationId": "dtc-7c5801504b4ca0ebbff5bd296eb60f910bc895294efb32ad09a582b3f730a1ff"
+    },
+    {
+      "reviewId": "text-64383cb5-9c19-4179-a41c-dc42a33d6377",
+      "code": "TEXT.CITATION_INVALID",
+      "stage": "codex.text",
+      "observationId": "dtc-7c5801504b4ca0ebbff5bd296eb60f910bc895294efb32ad09a582b3f730a1ff"
+    },
+    {
+      "reviewId": "label-2de0e00459630a57458534c73073e62a4a149402d5db49662ece79f95ed6de38",
+      "code": "TEXT.CITATION_INVALID",
+      "stage": "product.label.assembly",
+      "observationId": "dtc-7c5801504b4ca0ebbff5bd296eb60f910bc895294efb32ad09a582b3f730a1ff"
+    }
+  ],
+  "policy": [
+    {
+      "workflowId": "catalog-product-4061f313ee94fd0ed58cc2db14f44c2d47ab8c129afb540ee7cac5c3b7805c3a-label",
+      "selectedImageId": "image-3",
+      "ocrCalls": 4,
+      "visionCalls": 1,
+      "checks": [
+        {
+          "sourceId": "image-3",
+          "complete": true
+        }
+      ],
+      "skippedSourceIds": [
+        "image-4",
+        "image-5",
+        "image-6",
+        "page"
+      ],
+      "postSelectionModelCalls": 0,
+      "textCalls": 0,
+      "skippedPage": true,
+      "recordHashMatched": true
+    }
+  ]
+}
