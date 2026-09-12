@@ -42,3 +42,18 @@ Windows c81fe79 的新目录任务仍在 file_change/add 创建 capture/run-cata
 Mini 上 30 项采集宿主、节点控制和目录 Workflow 回归通过；build:dtc 通过，22 个 JS。Workflow bundle 与此前 14 份历史回放通过的文件逐字节一致。2026-09-12 06:54 UTC 仅切换 DTC 26 个角色到日志版本；基础 90 个角色保持原进程。随后四个周期均 90/90、26/26 ready，5 项资源心跳健康，零占用、零来源锁。Mini 部署证据为私有部署目录的 write-logging-roll.json、write-logging-health.json。
 
 Windows 尚未更新本次日志版本，也未发新任务。下一步执行 [WINDOWS_WRITE_LOGGING_PROMPT.md](WINDOWS_WRITE_LOGGING_PROMPT.md)：正常停机，精确归档已结束任务的本地工作目录，保留关页账本原路径和所有原始证据，更新 release 后核对并后台启动。Windows 报告新版本 ready 后，由主会话通过 Brand 创建新的全目录请求。用户已改用真实任务日志方案，不执行之前建议的写入矩阵诊断。
+
+
+## 2026-09-12：主采集脚本固定到任务根目录
+
+用户转交 Windows Codex 0.153.4 的局部复现：同一无害 .mjs 经 file_change/add 在任务根目录成功，在已有 capture 子目录失败，相对路径也失败；三次自动审批均 allow。日志没有底层 Win32 错误，尚未确定具体 CLI 缺陷。该复现使用保留会话的诊断执行，不能冒充完整生产重放。
+
+用户同意先采用任务根目录方案。源码 0178961 统一 cwd、Prompt 的任务目录、CRAWL_WORKER_SCRIPT_PATH 和宿主前后诊断目标；主程序固定为根目录 run-catalog.mjs / run-capture.mjs，旧采集器的 outDir 仍为 capture，HTML/图片/商品证据保持原交付路径。没有更改模型、审批参数、ACL 或 CLI 版本，也没有迁移 Worker 或新建 D 盘顶层目录。原始工具输入的留存问题仍单独保留，不能将代理复述当成原始补丁。
+
+build:dtc（含 TypeScript 检查）通过，22 个 JS。Mini 上 32 项隔离回归通过，涵盖目录/商品脚本位置与实际前后诊断、原始证据交付、失败/取消/用户接管关页边界及节点控制。首次运行缺测试夹具环境参数，补充现有 V3_CHANNEL_FIXTURE_ROOT 后全通过。Workflow bundle 与已通过 14 份历史回放的版本逐字节一致。
+
+d58c30f6 本轮 Windows 关页证明经身份核对留存 R2 后，仅释放对应许可；父任务正常结算，目录未完成、发现 0 商品。没有重发旧任务或修改历史 Review。Mini 07:59 UTC 正常切换 DTC 26 个角色至新构建，基础 90 个角色保持原进程。部署证明在私有目录 root-script-roll.json，连续健康核验在 root-script-health.json。
+
+Windows 尚未更新本次版本。执行 [WINDOWS_TASK_ROOT_SCRIPT_PROMPT.md](WINDOWS_TASK_ROOT_SCRIPT_PROMPT.md)，就绪后再由主会话从正常 Brand 入口发新的全目录请求，验证真实程序创建、执行、证据写入和关页。不能把根目录最小写入成功或 Mini 隔离回归当成 Windows 整条业务链通过。
+
+最终四周期：基础 90/90、DTC 26/26 ready，其余四项配套资源健康，held=0、source guard=0；Windows 旧会话在 Mini 维护期间报告 dtc_node_stopped，待本机核对进程并更新启动，不能算作新 Windows 版本已就绪。

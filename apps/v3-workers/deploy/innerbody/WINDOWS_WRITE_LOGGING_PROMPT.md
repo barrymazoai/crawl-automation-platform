@@ -1,3 +1,5 @@
+> 已由 [任务根目录脚本部署说明](WINDOWS_TASK_ROOT_SCRIPT_PROMPT.md) 取代；本文件保留历史记录。
+
 # Windows Codex：归档已结束任务并部署真实采集写入日志
 
 把本文完整交给 Windows Codex 执行。代码从 main 获取，不需要新的凭据附件。
