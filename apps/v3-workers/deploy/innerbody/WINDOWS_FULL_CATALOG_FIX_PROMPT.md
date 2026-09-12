@@ -1,5 +1,7 @@
 # Windows Codex：整站测试后的商品范围与退出证明修复
 
+> 2026-09-12 阶段更新：当前先执行同目录的 `WINDOWS_WRITE_DIAGNOSTIC_PROMPT.md`，不要按本文立即部署。用户要求先检查 Testosterone 的实际写入问题，主会话根据结果完成修复后，再统一部署并开启下一轮。本版 main 已增加单图策略和组合装跳过记录；最终部署还需 Mini 应用 017 迁移，并同步新的识别指纹与 evidencePolicy。本文原有步骤不能直接代替该同步。
+
 连续完成这次更新。代码从现有 Git 仓库 main 拉取，复用现有凭据、专用 Chrome 和 `D:\crawlv3-dtc-v2`。不用新版凭据包，不重新部署数据库，不由 Windows 连接 Mini 业务库。禁止提交真实采集请求；启动后由主会话从 Brand 入口发新单。
 
 本次保持旧版完整采集器及 gpt-5.6-luna / medium，增加宿主给出的单商品范围：Shopify 即使枚举整个目录，runHarvest 也只处理当前派发的商品，保留其全部规格和图库。采集范围仍是整个目录（site.selectedUrls=null），各商品分别执行。另包含 Mini 的引用待审退出证明修复；内容待审继续保留，不把它改成成功。

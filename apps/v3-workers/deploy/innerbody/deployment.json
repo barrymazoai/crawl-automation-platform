@@ -1,8 +1,8 @@
 {
   "version": 2,
-  "commit": "bdaccfbc433a2d64702a56997f6f0bdec414788e",
-  "activityBuild": "457f8ad33e601c91d2870f9ba56fe29dfa2a61e7f1bf1a86770c6841a2f45959",
-  "workflowBuild": "311c612fa3940fed8fd38b2595cec50e29d21e1247ee886388fbd5e95bf5805f",
+  "commit": "8ec4d9dae57df54274958865ab7c5bad7df32049",
+  "activityBuild": "4f6f1e895df9944a1760d0195b82502b3b46fd4bb5094c3492a5fccca61cc50b",
+  "workflowBuild": "ba76b66e2605654c8069c94174852868eeb3ccd8789b1abb8913f343688577c4",
   "jsCount": 20,
   "queueScope": "dtc-innerbody-v2-20260911",
   "evidencePrefix": "crawlv3-acceptance/dtc-innerbody-v2-20260911",
@@ -57,7 +57,7 @@
       "resultSchemaVersion": 2,
       "configFingerprint": "1eb0512f1c8d69cbb161e8058e88d1055895398f41036dc45fc47b60d5b7ab14"
     },
-    "sourceVisionConfigFingerprint": "98795c45b9a516214587a26668b51629772d9636f9cfdbddd1ac2a6149d154de",
+    "sourceVisionConfigFingerprint": "623632994ec3090b741c8e67fc1abb9962bcb8d38b04dc371ec4798075bedaba",
     "labelText": {
       "schemaVersion": 1,
       "module": "codex.text",
@@ -66,8 +66,8 @@
       "resultSchemaVersion": 3,
       "configFingerprint": "fb7e14c6b914d68459da21f3a895ffe7eb064486babd0b62fd7500e93e7d4ac4"
     },
-    "visionConfigFingerprint": "98795c45b9a516214587a26668b51629772d9636f9cfdbddd1ac2a6149d154de",
-    "evidencePolicy": "label-image-first/3",
+    "visionConfigFingerprint": "623632994ec3090b741c8e67fc1abb9962bcb8d38b04dc371ec4798075bedaba",
+    "evidencePolicy": "label-image-first/5",
     "labelResources": {
       "queue": "v3.channel.label.resources.v1.channel-label-v1.session.swanson-acg-resident-v1",
       "reviewStopCheck": true,
@@ -151,9 +151,9 @@
     "brandTarget": {
       "taskQueue": "v3.dtc.control.v1.dtc-live-v2.session.dtc-innerbody-v2-20260911"
     },
-    "activityBuild": "457f8ad33e601c91d2870f9ba56fe29dfa2a61e7f1bf1a86770c6841a2f45959",
-    "workflowBuild": "311c612fa3940fed8fd38b2595cec50e29d21e1247ee886388fbd5e95bf5805f"
+    "activityBuild": "4f6f1e895df9944a1760d0195b82502b3b46fd4bb5094c3492a5fccca61cc50b",
+    "workflowBuild": "ba76b66e2605654c8069c94174852868eeb3ccd8789b1abb8913f343688577c4"
   },
-  "workflowExecutableSha256": "c23f16cf5b382193116ba03503ac3d24ac34874d76bae9a97576644b7f736ad7",
+  "workflowExecutableSha256": "fd964525c32eff23aa678c261514a340cc907a253e0ae3c8225e054e1705eed8",
   "workflowSourceMapFormat": "generated-js-lines/1"
 }
