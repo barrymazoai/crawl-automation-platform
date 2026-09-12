@@ -266,6 +266,28 @@ export async function runHarvest(browser, tab, planInput, opts = {}) {
   const file = (key) => path.join(outDir, layout[key]);
   const log = opts.log || (() => {});
   const acceptLimit = opts.acceptProductLimit === true;
+  // V3 dispatches one observed product per task. Shopify hooks can enumerate the
+  // whole store, so enforce the host scope before any detail/image acquisition.
+  // Standalone legacy harvests retain their existing full-catalog behavior.
+  const workerProduct = process.env.CRAWL_BROWSER_PROVIDER === "worker_cdp"
+    && process.env.CRAWL_WORKER_PRODUCT_URL
+    ? new URL(process.env.CRAWL_WORKER_PRODUCT_URL) : null;
+  if (workerProduct && (workerProduct.protocol !== "https:"
+    || workerProduct.username || workerProduct.password || workerProduct.hash
+    || workerProduct.origin !== new URL(plan.site.origin).origin)) {
+    throw new Error("harvest_worker_product_scope_invalid");
+  }
+  const inWorkerScope = (value) => {
+    if (!workerProduct) return true;
+    try {
+      const candidate = new URL(value);
+      return candidate.href === workerProduct.href
+        || (candidate.origin === workerProduct.origin
+          && candidate.pathname === workerProduct.pathname
+          && !candidate.search && !candidate.hash
+          && !candidate.username && !candidate.password);
+    } catch { return false; }
+  };
   // Tainted-tab replacements inside upgradeProducts must propagate to every
   // later browser call, so the default hooks read the tab through this ref.
   const tabRef = { tab };
@@ -326,7 +348,6 @@ export async function runHarvest(browser, tab, planInput, opts = {}) {
     updatedAtMs: nowMs(opts),
     ...extra,
   });
-  await writeJsonAtomic(file("plan"), plan);
 
   // Resumable bookkeeping. `processed` maps url → terminal state.
   const checkpoint = (opts.resume && await readJsonIfExists(file("checkpoint"))) || {};
@@ -339,6 +360,13 @@ export async function runHarvest(browser, tab, planInput, opts = {}) {
   const packagesByUrl = new Map(
     evidencePackages.map((pkg) => [pkg.productUrl, pkg]),
   );
+  if (workerProduct && (discovered.size > 1 || processed.size > 1
+    || packagesByUrl.size > 1 || [...discovered, ...processed.keys(), ...packagesByUrl.keys()]
+      .some((url) => !inWorkerScope(url))
+    || new Set([...discovered, ...processed.keys(), ...packagesByUrl.keys()]).size > 1)) {
+    throw new Error("harvest_worker_product_checkpoint_conflict");
+  }
+  await writeJsonAtomic(file("plan"), plan);
 
   const persistCheckpoint = () => writeJsonAtomic(file("checkpoint"), {
     discovered: [...discovered],
@@ -433,7 +461,14 @@ export async function runHarvest(browser, tab, planInput, opts = {}) {
       log,
     });
     seedReports = round.coverage?.seedReports || [];
-    for (const url of round.productUrls || []) discovered.add(url);
+    if (workerProduct) {
+      const candidates = (round.productUrls || []).filter(inWorkerScope);
+      const selected = candidates.find((url) => new URL(url).href === workerProduct.href)
+        ?? candidates[0];
+      if (selected && discovered.size === 0) discovered.add(selected);
+    } else {
+      for (const url of round.productUrls || []) discovered.add(url);
+    }
     const growth = discovered.size - before;
     if (growth > 0) progressed();
     log("enumerate_round", { discovered: discovered.size, growth });
@@ -455,6 +490,10 @@ export async function runHarvest(browser, tab, planInput, opts = {}) {
     }
     if (growth === 0) zeroGrowthRounds += 1;
     else zeroGrowthRounds = 0;
+  }
+
+  if (workerProduct && discovered.size === 0) {
+    return finalize("incomplete", ["worker_product_not_discovered"]);
   }
 
   // -- EXTRACT: drain the queue ---------------------------------------------

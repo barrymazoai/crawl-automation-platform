@@ -35,6 +35,7 @@ it.each(['complete','needs_review','failed','cancelled','user-control'])('host f
  const config={settings:{provider:'openai',model:'gpt-5.6-luna',reasoningEffort:'medium'},executable:'/test/codex',codexHome:join(root,'auth'),workRoot:join(root,'work'),runtimeProfileVersion:'test/1',timeoutMs:10000};
  const capture=new DtcLegacyCapture(config,{PATH:'/test',DATABASE_URL:'do-not-pass',R2_SECRET:'do-not-pass'},root,options=>({run:async input=>{
   expect(options?.env?.DATABASE_URL).toBeUndefined();expect(options?.env?.R2_SECRET).toBeUndefined();expect(options?.inheritEnv).toBe(false);taskFile=options!.env!.CRAWL_BROWSER_TASK_FILE!;
+  expect(options?.env?.CRAWL_WORKER_PRODUCT_URL).toBe(url);
   await cp(join(root,'capture'),join(input.cwd,'capture'),{recursive:true});
   if(status==='user-control')throw Error('SOURCE.BROWSER_USER_CONTROL');if(status==='cancelled')throw Error('codex_aborted');
   return{status,summary:'test',reasonCode:null};

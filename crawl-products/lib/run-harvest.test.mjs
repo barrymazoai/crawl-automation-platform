@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { runHarvest, updateRunState } from "./run-harvest.mjs";
 import { filterHarvestStageRecords } from "./product-scope.mjs";
@@ -16,6 +16,7 @@ async function makeOutDir() {
 }
 
 afterEach(async () => {
+  vi.unstubAllEnvs();
   while (tmpDirs.length > 0) {
     await fs.rm(tmpDirs.pop(), { recursive: true, force: true });
   }
@@ -83,6 +84,54 @@ function baseHooks(urls) {
 }
 
 describe("runHarvest lifecycle engine", () => {
+  it.each([true, false])("confines whole-store enumeration (exact variant observed: %s)", async (exactVariant) => {
+    const target = "https://shop.test/products/sleep?variant=2";
+    vi.stubEnv("CRAWL_BROWSER_PROVIDER", "worker_cdp");
+    vi.stubEnv("CRAWL_WORKER_PRODUCT_URL", target);
+    const outDir = await makeOutDir();
+    const hooks = baseHooks([
+      "https://shop.test/products/focus",
+      "https://shop.test/products/sleep?variant=1",
+      "https://fake@shop.test/products/sleep",
+      "https://shop.test/products/sleep",
+      ...(exactVariant ? [target] : []),
+      "https://other.test/products/sleep",
+    ]);
+    hooks.fetchPageHtml = async () => "<main>Product details</main>";
+    const extract = vi.fn(hooks.extract);
+    const result = await runHarvest(null, null, plan(), { outDir, hooks: { ...hooks, extract } });
+    expect(result.status).toBe("complete");
+    expect(result.counts.discovered).toBe(1);
+    const selected = exactVariant ? target : "https://shop.test/products/sleep";
+    expect(extract.mock.calls.map(([urls]) => urls)).toEqual([[selected]]);
+    const records = JSON.parse(await fs.readFile(path.join(outDir, "evidence/records.json"), "utf8"));
+    expect(records.map((r) => r.productUrl)).toEqual([selected]);
+  });
+
+  it("does not substitute an unobserved Worker product or another variant", async () => {
+    vi.stubEnv("CRAWL_BROWSER_PROVIDER", "worker_cdp");
+    vi.stubEnv("CRAWL_WORKER_PRODUCT_URL", "https://shop.test/products/sleep?variant=2");
+    const extract = vi.fn();
+    const result = await runHarvest(null, null, plan(), {
+      outDir: await makeOutDir(),
+      hooks: { ...baseHooks(["https://shop.test/products/sleep?variant=1"]), extract },
+    });
+    expect(result.status).toBe("incomplete");
+    expect(result.reasons).toContain("worker_product_not_discovered");
+    expect(extract).not.toHaveBeenCalled();
+  });
+
+  it("rejects foreign resumed evidence without replacing the checkpoint", async () => {
+    vi.stubEnv("CRAWL_BROWSER_PROVIDER", "worker_cdp");
+    vi.stubEnv("CRAWL_WORKER_PRODUCT_URL", "https://shop.test/products/sleep");
+    const outDir = await makeOutDir();
+    const checkpoint = JSON.stringify({ discovered: ["https://shop.test/products/focus"] });
+    await fs.writeFile(path.join(outDir, "checkpoint.json"), checkpoint);
+    await expect(runHarvest(null, null, plan(), { outDir, resume: true, hooks: baseHooks([]) }))
+      .rejects.toThrow("harvest_worker_product_checkpoint_conflict");
+    expect(await fs.readFile(path.join(outDir, "checkpoint.json"), "utf8")).toBe(checkpoint);
+  });
+
   it("refuses an invalid plan before touching anything", async () => {
     const bad = plan();
     bad.termination.perSeed = [];
