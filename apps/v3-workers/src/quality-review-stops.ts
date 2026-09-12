@@ -4,6 +4,9 @@ import { ResourceRequestSchema, TextInputSchema, VisionTaskSchema, observationId
 import { visionFingerprint } from "@crawl-automation/v3-vision";
 import { RetainedPublication, sha256 } from "@crawl-automation/v3-artifacts";
 type Invocation={workflowId:string;runId:string;activityId:string;activityName:string;operationId:string;inputFingerprint:string;owner:unknown;returned?:string};
+// Citation validation runs after provider return just like label validation.
+// This only authorizes a stop proof; the invalid result remains in Review.
+const qualityFailure=(code:string)=>/^(TEXT|VISION)\.LABEL_[A-Z_]+$/.test(code)||code==="TEXT.CITATION_INVALID";
 /** No inference from Review status: returned() is
  * called only AFTER the owned provider has returned AND confirmed process close.
  * Durable mode publishes a return attestation for a separate verifier process. */
@@ -25,7 +28,7 @@ export class QualityReviewStops {
       const out=result as {status?:string;reviewId?:string;code?:string};
       if(this.durable&&invocation.returned&&out?.status==="review"&&out.reviewId){
         const review=await this.reviews.read(out.reviewId);
-        if(review&&review.failure.code===out.code&&/^(TEXT|VISION)\.LABEL_[A-Z_]+$/.test(review.failure.code)&&review.failure.executionFact==="executed"&&
+        if(review&&review.failure.code===out.code&&qualityFailure(review.failure.code)&&review.failure.executionFact==="executed"&&
           review.failure.operationId===invocation.operationId&&review.failure.inputFingerprint===invocation.inputFingerprint&&isDeepStrictEqual(review.observation,invocation.owner))
           await this.publication.publish(this.returnKey(invocation),Buffer.from(JSON.stringify({codec:"model-return-attestation/1",invocation,reviewId:out.reviewId})),"application/json",AbortSignal.timeout(10000));
       }
@@ -50,7 +53,7 @@ export class QualityReviewStops {
     if(raw.activityName==="interpretText"&&out.operationId!==known.operationId)return unknown;
     // Restrict this proof to quality validation; unknown executions and handoff
     // failures continue through the existing separate evidence recovery path.
-    if(!/^(TEXT|VISION)\.LABEL_[A-Z_]+$/.test(review.failure.code)||review.failure.executionFact!=="executed")return unknown;
+    if(!qualityFailure(review.failure.code)||review.failure.executionFact!=="executed")return unknown;
     const key=`v3/resource-stop/${request.permitId}.json`,evidence={codec:"owned-model-review-stop/1",request,invocation:known,reviewId:review.reviewId,reviewPreserved:true};
     await this.publication.publish(key,Buffer.from(JSON.stringify(evidence)),"application/json",signal);
     return {permitId:request.permitId,status:"stopped",evidenceKey:key};

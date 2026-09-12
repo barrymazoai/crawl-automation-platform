@@ -20,6 +20,13 @@ it("a separate cold verifier releases only the attested operation without callin
  const verifier=new QualityReviewStops(new RetainedPublication(f.local,f.remote),{read:async()=>f.review},true);
  expect((await verifier.verify({request:f.request,activityName:"interpretText",outcome:f.outcome},AbortSignal.timeout(1000))).status).toBe("stopped");
 });
+it.each([true,false])("citation Review requires an actual provider stop attestation (returned=%s)",async returned=>{
+ const f=setup(true);f.review.failure.code=f.outcome.code="TEXT.CITATION_INVALID";
+ await f.stops.run(f.context,"interpretText",f.input,async()=>{if(returned)f.stops.returned("invalid citation response");return f.outcome;});
+ const verifier=new QualityReviewStops(new RetainedPublication(f.local,f.remote),{read:async()=>f.review},true);
+ expect((await verifier.verify({request:f.request,activityName:"interpretText",outcome:f.outcome},AbortSignal.timeout(1000))).status).toBe(returned?"stopped":"unknown");
+ expect(f.review.failure.code).toBe("TEXT.CITATION_INVALID");
+});
 it.each(["no-return","throws","foreign-operation","foreign-run","handoff","unknown"])("cold verifier rejects %s",async mode=>{
  const f=setup(true);
  if(mode==="handoff")f.review.failure.code=f.outcome.code="TEXT.HANDOFF_UNKNOWN";
