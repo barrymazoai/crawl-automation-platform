@@ -205,3 +205,27 @@ it("v3 complete images retain priority and conflicting complete images still blo
   const g=await fixture([gncLabelFixture(),c]);g.join.manifest.evidencePolicy="label-image-first/3";
   expect(mergeLabelProduct(g.join.manifest,g.entries).status).toBe("review");
 });
+
+it("single-image policy treats an executed supplementary citation failure as a warning only with complete image",async()=>{
+ const f=await fixture();f.join.manifest.evidencePolicy="label-image-first/5";
+ const images=f.entries.filter(e=>e.kind==="image"),failure={id:f.text.id,code:"TEXT.CITATION_INVALID",verifiedExecuted:true};
+ expect(mergeLabelProduct(f.join.manifest,images,[failure])).toMatchObject({status:"ready",warnings:expect.arrayContaining([{id:f.text.id,code:"TEXT.CITATION_INVALID"}])});
+ expect(mergeLabelProduct(f.join.manifest,images,[{...failure,verifiedExecuted:false}]).status).toBe("review");
+ const image=images[0]!;image.candidate.formulaComplete=false;
+ expect(mergeLabelProduct(f.join.manifest,images,[failure]).status).toBe("review");
+});
+it("single-image policy keeps foreign identity and unresolved text evidence blocking",async()=>{
+ const f=await fixture();f.join.manifest.evidencePolicy="label-image-first/5";
+ expect(mergeLabelProduct(f.join.manifest,f.entries.filter(e=>e.kind==="image"),[{id:f.text.id,code:"LABEL_PRODUCT.TEXT_UNVERIFIED"}]).status).toBe("review");
+ f.entries.find(e=>e.kind==="text")!.record.input.observationId="foreign";expect(()=>mergeLabelProduct(f.join.manifest,f.entries)).toThrow();
+});
+
+it("single-image collection preserves an executed citation Review as warning and verifies cold readback",async()=>{
+ const f=await fixture(),task=f.text.record.input;f.join.manifest.evidencePolicy="label-image-first/5";
+ const review:any={schemaVersion:1,reviewId:"citation-review",occurredAt:"2026-09-12T00:00:00Z",observation:f.join.manifest.observation,
+ failure:{schemaVersion:1,requestId:task.requestId,observationId:task.observationId,operationId:task.operationId,inputFingerprint:task.inputFingerprint,stage:"codex.text",category:"PROCESSING",code:"TEXT.CITATION_INVALID",executionFact:"executed",evidenceKey:"text-intents/original.json",blockedBy:null,automaticRetry:false},rawError:{name:"citation",message:"TEXT.CITATION_INVALID",stack:null,details:{}},candidate:null,inspection:{kind:"none"}};
+ f.records.set(review.reviewId,review);f.join.states=f.join.states.map(s=>s.id===f.text.id?{id:s.id,status:"review",reviewId:review.reviewId}:s);
+ const out=await f.assembly.run(f.join,signal());expect(out.status).toBe("ready");const input={join:f.join,evidenceKey:out.evidenceKey};
+ expect((await f.collector.run(input,signal())).status).toBe("collected");expect((await f.cold().collector.run(input,signal())).status).toBe("collected");
+ expect(f.records.get(review.reviewId)).toEqual(review);expect([...f.collected.values()][0]!.warnings).toContainEqual({id:f.text.id,code:"TEXT.CITATION_INVALID"});
+});

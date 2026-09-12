@@ -1,5 +1,5 @@
 import { proxyActivities, ApplicationFailure, isCancellation, patched } from "@temporalio/workflow";
-import { ChannelSavedLabelWorkflowInputSchema, ChannelLabelPlanResultSchema, ChannelLabelSourceResultSchema, ChannelLabelManifestResultSchema,
+import { ChannelSavedLabelWorkflowInputSchema, ChannelLabelPlanResultSchema, ChannelLabelSourceResultSchema, ChannelLabelManifestResultSchema, ChannelLabelImageCheckSchema,
   PagePrepareOutcomeSchema, PageTextPrepareOutcomeSchema, ImageOcrPrepareOutcomeSchema, OcrActivityOutcomeSchema, OcrReceiptOutcomeSchema,
   KeywordReceiptSchema, AcquisitionReviewSchema, ExecutionIdSchema, observationIdentity, imageActivityOptions, ocrActivityOptions,
   LabelCoreOutcomeSchema,type LabelProductJoin, type OcrActivityOutcome, type SavedProductWorkflowInput } from "@crawl-automation/v3-contracts";
@@ -17,14 +17,15 @@ export interface ChannelSourceProgress {
   finish():Promise<boolean>;
 }
 export async function runChannelLabelWorkflow(raw:unknown,progress?:ChannelSourceProgress){
-  const {input,queues,resources}=ChannelSavedLabelWorkflowInputSchema.parse(raw),owner=input.sourcePlan.owner,gate=resourceGate(resources);
+  const {input,queues,resources}=ChannelSavedLabelWorkflowInputSchema.parse(raw),owner=input.sourcePlan.owner,gate=resourceGate(resources,{requireReviewStop:input.evidencePolicy==="label-image-first/5"});
   const skipUnstarted=patched("channel-resource-wait-no-receipt-v1"),waitingSources:string[]=[];
   const call=(queue:string,name:string,value:unknown)=>gate(name,()=>proxyActivities<Record<string,(raw:unknown)=>Promise<unknown>>>(
     name==="ocrFile"?ocrActivityOptions(queue):imageActivityOptions(queue))[name]!(value));
   const loaded=ChannelLabelPlanResultSchema.parse(await call(queues.plan,"loadChannelLabelPlan",input));
   if(!same(loaded.input,input)||!same(loaded.manifest.observation,owner)||loaded.manifest.operationId!==input.sourcePlan.operationId)invalid();
   const issued=new Map<string,unknown>();
-  const states=await Promise.all(loaded.manifest.sources.map(async(source):Promise<LabelProductJoin["states"][number]>=>{
+  const single=input.evidencePolicy==="label-image-first/5";
+  const processSource=async(source:typeof loaded.manifest.sources[number]):Promise<LabelProductJoin["states"][number]>=>{
     const state=(status:"unresolved"|"rejected"|"registered"|"not_matched")=>({id:source.id,status});
     let document:unknown,range:unknown,selection:unknown;
     try{
@@ -78,7 +79,37 @@ export async function runChannelLabelWorkflow(raw:unknown,progress?:ChannelSourc
       if(skipUnstarted&&error instanceof ApplicationFailure&&error.type==="RESOURCE.WAIT_LIMIT")waitingSources.push(source.id);
       return state("unresolved");
     }
-  }));
+  };
+  let selectedImageId:string|null=null;
+  const notStarted:{id:string;status:"not_started"}[]=[];
+  let states:LabelProductJoin["states"];
+  if(single){
+    const images=loaded.manifest.sources.filter(s=>s.kind==="file-image"),order=loaded.imageOrder;
+    if(!order||new Set(order).size!==images.length||order.length!==images.length||images.some(s=>!order.includes(s.id)))invalid();
+    states=[];
+    for(const id of order!){
+      const source=images.find(s=>s.id===id)!;
+      if(selectedImageId){
+        // Every original file must still become durable; only OCR/model work is skipped.
+        if(progress&&!await progress.ready(source))states.push({id,status:"unresolved"});
+        else notStarted.push({id,status:"not_started"});
+        continue;
+      }
+      const state=await processSource(source);states.push(state);
+      if(state.status==="registered"){
+        try{
+          const request={input,sourceId:id},check=ChannelLabelImageCheckSchema.parse(await call(queues.source,"inspectChannelLabelImage",request));
+          if(!same(check.input,request))invalid();if(check.complete)selectedImageId=id;
+        }catch(error){if(isCancellation(error))throw error;states[states.length-1]={id,status:"unresolved"};break;}
+      }
+      if(["unresolved","rejected"].includes(state.status))break;
+    }
+    for(const source of loaded.manifest.sources.filter(s=>s.kind!=="file-image"))states.push(await processSource(source));
+    if(states.length+notStarted.length!==loaded.manifest.sources.length){
+      // Unknown execution never authorizes another model call or successful assembly.
+      for(const source of images.filter(s=>!states.some(r=>r.id===s.id))){if(progress)await progress.ready(source);states.push({id:source.id,status:"unresolved"});}
+    }
+  }else states=await Promise.all(loaded.manifest.sources.map(processSource));
   if(progress&&!await progress.finish()){
     const r=AcquisitionReviewSchema.parse(await call(queues.review,"reviewChannelProduct",{input,states,code:"CHANNEL.LABEL_PREPARATION_UNVERIFIED"}));
     if(r.operationId!==input.operationId)invalid();return r;
@@ -89,7 +120,7 @@ export async function runChannelLabelWorkflow(raw:unknown,progress?:ChannelSourc
     if(r.operationId!==input.operationId||r.code!=="CHANNEL.DEPENDENCY_UNAVAILABLE")invalid();return r;
   }
   let result;
-  try{result=ChannelLabelManifestResultSchema.parse(await call(queues.manifest,"prepareChannelLabelManifest",input));}
+  try{result=ChannelLabelManifestResultSchema.parse(await call(queues.manifest,single?"prepareChannelSingleLabelManifest":"prepareChannelLabelManifest",single?{input,states:[...states,...notStarted],selectedImageId}:input));}
   catch(error){
     if(isCancellation(error))throw error;
     const r=AcquisitionReviewSchema.parse(await call(queues.review,"reviewChannelProduct",{input,states,code:"CHANNEL.LABEL_PREPARATION_UNVERIFIED"}));
@@ -97,9 +128,9 @@ export async function runChannelLabelWorkflow(raw:unknown,progress?:ChannelSourc
   }
   if(!same(result.input,input)||!same(result.manifest.observation,owner)||result.manifest.operationId!==input.operationId||result.manifest.evidencePolicy!==input.evidencePolicy)invalid();
   const selected=new Set(result.manifest.sources.map(s=>s.id)),skipped=new Set(result.skipped);
-  if(skipped.size!==result.skipped.length||[...skipped].some(s=>selected.has(s))||selected.size+skipped.size!==states.length||
-    states.some(s=>!selected.has(s.id)&&!skipped.has(s.id))||result.manifest.sources.some(s=>issued.has(s.id)&&!same(issued.get(s.id),s)))invalid();
+  if(skipped.size!==result.skipped.length||[...skipped].some(s=>selected.has(s))||selected.size+skipped.size!==states.length+notStarted.length||
+    [...states,...notStarted].some(s=>!selected.has(s.id)&&!skipped.has(s.id))||result.manifest.sources.some(s=>issued.has(s.id)&&!same(issued.get(s.id),s)))invalid();
   return finishLabelProduct({manifest:result.manifest,states:states
-    .filter(s=>selected.has(s.id)||!["not_matched","unresolved"].includes(s.status))
+    .filter(s=>selected.has(s.id)||!single&&!["not_matched","unresolved"].includes(s.status))
     .map(s=>selected.has(s.id)&&s.status==="not_matched"?{id:s.id,status:"rejected" as const}:s)},queues);
 }

@@ -12,7 +12,7 @@ import { OcrFileModule, OcrIntents } from "../../v3-ocr/src/index.js";
 import { TextEvidence, TextHandoff, TextModule, ResolveTextReceipt } from "../../v3-text/src/index.js";
 import { MemoryTextRegistry } from "../../v3-text/src/testing.fixture.js";
 import { labelExecutionFixture } from "../../v3-text/src/label-execution.fixture.js";
-import { RegisteredOcrEvidence, KeywordPublication, VisionHandoff, VisionModule } from "../../v3-vision/src/index.js";
+import { RegisteredOcrEvidence, visionReviewWriter, KeywordPublication, VisionHandoff, VisionModule } from "../../v3-vision/src/index.js";
 import { gncLabelFixture } from "../../v3-contracts/src/label.fixture.js";
 import { SavedSourceEvidence } from "./saved-sources.js";
 import { ResolveOcrReceipt } from "./ocr-receipt.js";
@@ -69,7 +69,8 @@ export async function gncStreamFixture(coreEnabled = false, variantId?: string) 
   const textReceipt = new ResolveTextReceipt({ results: textHandoff, local, reviews }), visionRecords = new Map<string, VisionRecord>();
   const visionHandoff = new VisionHandoff(local, remote, { read: async id => visionRecords.get(id) ?? null, register: async r => { visionRecords.set(r.input.operationId, r); } }, "fixture-r2/1",
     async (task, abort) => { await screen.verifiedText(task.input.selection, abort); });
-  const vision = new VisionModule({ provider: { fingerprint: input.visionConfigFingerprint, extractionProtocol: "label-extraction/1", interpret: async () => { counts.vision++; return JSON.stringify(gncLabelFixture()); } },
+  const imageCandidate={value:gncLabelFixture()};
+  const vision = new VisionModule({ provider: { fingerprint: input.visionConfigFingerprint, extractionProtocol: "label-extraction/1", interpret: async () => { counts.vision++; return JSON.stringify(imageCandidate.value); } },
     store: remote, localEvidence: local, verifiedOcrText: (selected, abort) => screen.verifiedText(selected, abort), resolve: async (file, abort, owner) => (await artifacts.resolve(file, owner, abort)).bytes });
   const saved = new SavedSourceEvidence({ remote, files: fileEvidence, pages, reviews, ocr: ocrRegistry, screen });
   const core = new PrepareLabelCore(artifacts, new LabelCorePreparation(artifacts, remote)), packaging = new PackagingEvidence(artifacts);
@@ -94,7 +95,7 @@ export async function gncStreamFixture(coreEnabled = false, variantId?: string) 
     prepareGncLabelSource: raw => labelPlans.source(raw, signal()), prepareGncLabel: raw => labelPlans.run(raw, signal()),
     interpretText: raw => text.run(raw, signal()), resolveTextReceipt: raw => textReceipt.run(raw, signal()),
     interpretImage: async raw => { if (!await visionHandoff.inspect(raw, signal())) {
-      const out = await vision.run(raw.input, signal()); if (out.status === "review") throw Error(out.code!); await visionHandoff.complete(raw, signal());
+      const out = await vision.run(raw.input, signal()); if (out.status === "review") return {status:"review",code:out.code,...await visionReviewWriter(local,reviews)(raw,out,signal())}; await visionHandoff.complete(raw, signal());
     } return { status: "registered", operationId: raw.input.operationId }; },
     assembleLabelProduct: raw => assembly.run(raw, signal()), collectLabelProduct: raw => collector.run(raw, signal()),
   };
@@ -102,5 +103,5 @@ export async function gncStreamFixture(coreEnabled = false, variantId?: string) 
     page: "prepareHtmlPage", pageText: "preparePageText", acquire: "acquireSourceFile", imagePrepare: "prepareImageOcr", ocr: "ocrFile", ocrReceipts: "resolveOcrReceipt", keywords: "screenImageKeywords",
     text: "interpretText", textReceipts: "resolveTextReceipt", vision: "interpretImage", assembly: "assembleLabelProduct", collection: "collectLabelProduct" };
   const routed = { ...route, ...(coreEnabled ? { core: "prepareLabelCore" } : {}) };
-  return { input, activities, route: routed, queues: Object.fromEntries(Object.keys(routed).map(k => [k, k])), counts, collected, reviews, remote, local, labelPlans, fileEvidence, plans, textRegistry, visionRecords, saved };
+  return { input, activities, route: routed, queues: Object.fromEntries(Object.keys(routed).map(k => [k, k])), counts, collected, reviews, remote, local, labelPlans, fileEvidence, plans, textRegistry, visionRecords, visionHandoff, nonmatch, imageCandidate, saved };
 }

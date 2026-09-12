@@ -30,7 +30,7 @@ async function claim(remote: ObjectStore, key: string, hash: string, signal: Abo
 }
 async function review(deps: Stores, input: LabelProductJoin, codes: string[], key: string, stage: "assembly" | "collect", candidate: unknown, existingCollection?: {operationId:string;observationId:string;recordHash:string}): Promise<ProductImageOutcome> {
   const observation = input.manifest.observation, signal = AbortSignal.timeout(10000);
-  const stable = ["label-image-first/2","label-image-first/3","label-image-first/4"].includes(input.manifest.evidencePolicy??"");
+  const stable = ["label-image-first/2","label-image-first/3","label-image-first/4","label-image-first/5"].includes(input.manifest.evidencePolicy??"");
   const identity = stable ? sha256(encode([stage, input, codes, key, candidate, ...(existingCollection ? [existingCollection] : [])])) : randomUUID();
   let r = ReviewRecordSchema.parse({ schemaVersion: 1, reviewId: `label-${identity}`, occurredAt: new Date().toISOString(), observation,
     failure: { schemaVersion: 1, requestId: observation.requestId, observationId: observation.observationId, operationId: input.manifest.operationId,

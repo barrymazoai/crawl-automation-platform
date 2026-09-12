@@ -44,19 +44,19 @@ export function mergeLabelProduct(raw: LabelProductManifest, entries: VerifiedLa
       : { id: e.id, kind: "image", record: e.record, candidate: LabelImageCandidateSchema.parse(c) });
   }
   // Verify ALL sources first. Priority must never bypass identity, citations or required barriers.
-  const quality = manifest.evidencePolicy === "label-image-first/4";
+  const quality = ["label-image-first/4", "label-image-first/5"].includes(manifest.evidencePolicy??"");
   const integrity = (p: typeof provenance[number]) => quality && p.kind === "image" ? labelImageIntegrityCodes(p.candidate) : [];
   const eligible = provenance.filter(p => !integrity(p).length);
   const imageFirst = !!manifest.evidencePolicy && eligible.some(isCompleteLabelImage);
-  const textFallback = ["label-image-first/3","label-image-first/4"].includes(manifest.evidencePolicy??"") && !imageFirst && eligible.some(isCompleteLabelText);
-  if(quality && labelNumericSourceConflict(eligible))codes.add("LABEL_PRODUCT.SOURCE_NUMERIC_CONFLICT");
+  const textFallback = ["label-image-first/3","label-image-first/4","label-image-first/5"].includes(manifest.evidencePolicy??"") && !imageFirst && eligible.some(isCompleteLabelText);
+  if(manifest.evidencePolicy === "label-image-first/4" && labelNumericSourceConflict(eligible))codes.add("LABEL_PRODUCT.SOURCE_NUMERIC_CONFLICT");
   if(textFallback)warnings.push({id:manifest.operationId,code:"LABEL_PRODUCT.COMPLETE_TEXT_FALLBACK"});
   for (const failure of failures) {
     // /1 keeps its required-source barrier. /2 permits only an already-verified
     // text quality Review to be secondary to a COMPLETE verified image. Unknown
     // execution, missing receipts, identity failures and failed images still block.
-    if (["label-image-first/2","label-image-first/3","label-image-first/4"].includes(manifest.evidencePolicy??"") && imageFirst && failure.verifiedExecuted===true && sources.get(failure.id)!.kind === "text" &&
-      /^TEXT\.LABEL_(?:GROUP_EMPTY|GROUP_INVALID|ROW_ORDER_INVALID|COVERAGE_UNCERTAIN|EXTRACTION_INCOMPLETE|FORMULA_INCOMPLETE|INGREDIENTS_INCOMPLETE|INVALID_OUTPUT|INGREDIENT_BOUNDARY)$/.test(failure.code))
+    if (["label-image-first/2","label-image-first/3","label-image-first/4","label-image-first/5"].includes(manifest.evidencePolicy??"") && imageFirst && failure.verifiedExecuted===true && sources.get(failure.id)!.kind === "text" &&
+      (manifest.evidencePolicy === "label-image-first/5" && failure.code === "TEXT.CITATION_INVALID" || /^TEXT\.LABEL_(?:GROUP_EMPTY|GROUP_INVALID|ROW_ORDER_INVALID|COVERAGE_UNCERTAIN|EXTRACTION_INCOMPLETE|FORMULA_INCOMPLETE|INGREDIENTS_INCOMPLETE|INVALID_OUTPUT|INGREDIENT_BOUNDARY)$/.test(failure.code)))
       warnings.push({ id: failure.id, code: failure.code });
     else if(textFallback && failure.verifiedExecuted===true && sources.get(failure.id)!.kind==="image" &&
       (/^VISION\.LABEL_(?:INGREDIENTS_INCOMPLETE|FORMULA_INCOMPLETE|AMOUNT_UNREADABLE|CORE_MISSING|EVIDENCE_UNCERTAIN)$/.test(failure.code) || quality && /^VISION\.LABEL_(?:AMOUNT_EVIDENCE_CONFLICT|INGREDIENT_BOUNDARY)$/.test(failure.code)))warnings.push({id:failure.id,code:failure.code});

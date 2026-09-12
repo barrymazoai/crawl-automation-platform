@@ -1,5 +1,6 @@
 import { isDeepStrictEqual as equal } from "node:util";
-import { ChannelLabelInputSchema, ChannelLabelSourceRequestSchema, ChannelLabelSourceResultSchema, ChannelLabelManifestResultSchema,
+import { ChannelLabelInputSchema, ChannelLabelSourceRequestSchema, ChannelLabelSourceResultSchema, ChannelLabelManifestResultSchema, ChannelSingleLabelSelectionSchema, LabelImageCandidateSchema, isCompleteLabelImage, labelImageIntegrityCodes, ReviewRecordSchema,
+  type LabelImageCandidate, type LabelProductManifest,
   TextInputSchema, LabelCoreOutcomeSchema, textFingerprint, observationIdentity, type SavedEvidenceSource, type ProductResolvedEvidenceSource, type ChannelProductPlan } from "@crawl-automation/v3-contracts";
 import { RetainedPublication, sha256 } from "@crawl-automation/v3-artifacts";
 type Resolution = { status: "resolved"; source: ProductResolvedEvidenceSource } | { status: "not_matched" } | { status: "review"; code: string };
@@ -8,11 +9,21 @@ const bytes = (v: unknown) => Buffer.from(JSON.stringify(v));
 export class ChannelLabelPlans {
   constructor(private readonly plans: { inspect(raw: unknown, signal: AbortSignal): Promise<Pick<ChannelProductPlan,"manifest"> | null> }, private readonly publication: RetainedPublication,
     private readonly resolve: (source: SavedEvidenceSource, signal: AbortSignal) => Promise<Resolution>,
-    private readonly core?:{inspect(raw:unknown,signal:AbortSignal):Promise<unknown>}) {}
+    private readonly core?:{inspect(raw:unknown,signal:AbortSignal):Promise<unknown>},
+    private readonly inspection?:{file(source:SavedEvidenceSource,signal:AbortSignal):Promise<boolean>;image(source:LabelProductManifest["sources"][number],signal:AbortSignal):Promise<LabelImageCandidate>;review(id:string):Promise<unknown>}) {}
   async load(raw: unknown, signal: AbortSignal) {
     const input=ChannelLabelInputSchema.parse(raw), plan=await this.plans.inspect(input.sourcePlan,signal);
     if(!plan)throw Error("CHANNEL.LABEL_SOURCE_UNVERIFIED");
     if(plan.manifest.operationId!==input.sourcePlan.operationId||!equal(plan.manifest.observation,input.sourcePlan.owner))throw Error("CHANNEL.LABEL_IDENTITY_CONFLICT");
+    const imageOrder=plan.manifest.sources.filter(s=>s.kind==="file-image").map(s=>s.id);
+    if(input.evidencePolicy==="label-image-first/5"){
+      // Filename hints choose an attempt order only; verified extraction decides completeness.
+      const files=(plan as Partial<ChannelProductPlan>).files??[];
+      const rank=(id:string)=>{const s=plan.manifest.sources.find(s=>s.id===id);const url=s?.kind==="file-image"?files.find(f=>f.resourceId===s.plan.acquire.resourceId)?.url??"":"";
+        return /supplement.?facts|nutrition.?facts|flat.?label|label.?flat/i.test(url)?0:/label|facts/i.test(url)?1:/front/i.test(url)?3:2;};
+      imageOrder.sort((a,b)=>rank(a)-rank(b));
+      return {input,manifest:plan.manifest,imageOrder};
+    }
     return {input,manifest:plan.manifest};
   }
   async source(raw: unknown, signal: AbortSignal) {
@@ -51,8 +62,59 @@ export class ChannelLabelPlans {
     await this.publication.publish(`v3/channel-labels/${input.operationId}/sources/${source.id}.json`,bytes(result),"application/json",signal);
     return result;
   }
+  async imageCheck(raw:unknown,signal:AbortSignal){
+    const request=ChannelLabelSourceRequestSchema.parse(raw);
+    if(request.input.evidencePolicy!=="label-image-first/5"||!this.inspection)throw Error("CHANNEL.LABEL_SELECTION_UNAVAILABLE");
+    const r=await this.source(request,signal);
+    if(r.status!=="prepared"||r.source.kind!=="image")throw Error("CHANNEL.LABEL_IDENTITY_CONFLICT");
+    const candidate=await this.inspection.image(r.source,signal);
+    return {input:request,complete:isCompleteLabelImage({kind:"image",candidate})&&!labelImageIntegrityCodes(candidate).length};
+  }
+  async singleManifest(raw:unknown,signal:AbortSignal){
+    const request=ChannelSingleLabelSelectionSchema.parse(raw),{input,states,selectedImageId}=request,loaded=await this.load(input,signal);
+    if(!this.inspection)throw Error("CHANNEL.LABEL_SELECTION_UNAVAILABLE");
+    const byId=new Map(states.map(s=>[s.id,s]));
+    if(byId.size!==states.length||states.length!==loaded.manifest.sources.length||loaded.manifest.sources.some(s=>!byId.has(s.id)))throw Error("CHANNEL.LABEL_IDENTITY_CONFLICT");
+    const order=loaded.imageOrder!,selectedIndex=selectedImageId===null?-1:order.indexOf(selectedImageId);
+    if(selectedImageId!==null&&(selectedIndex<0||byId.get(selectedImageId)?.status!=="registered"||!(await this.imageCheck({input,sourceId:selectedImageId},signal)).complete))throw Error("CHANNEL.LABEL_SELECTION_UNVERIFIED");
+    const sources:LabelProductManifest["sources"]=[],skipped:string[]=[],decisions:unknown[]=[];
+    for(const source of loaded.manifest.sources){
+      const state=byId.get(source.id)!;
+      if(source.kind==="file-image"&&!await this.inspection.file(source,signal))throw Error("CHANNEL.LABEL_FILE_UNVERIFIED");
+      if(state.status==="unresolved"||state.status==="rejected")throw Error("CHANNEL.LABEL_PREPARATION_UNVERIFIED");
+      if(state.status==="not_started"){
+        if(source.kind!=="file-image"||selectedIndex<0||order.indexOf(source.id)<=selectedIndex)throw Error("CHANNEL.LABEL_SELECTION_UNVERIFIED");
+        skipped.push(source.id);decisions.push({id:source.id,reason:"complete_label_already_selected"});continue;
+      }
+      if(source.kind==="file-image"&&selectedIndex>=0&&order.indexOf(source.id)>selectedIndex)throw Error("CHANNEL.LABEL_SELECTION_UNVERIFIED");
+      const resolved=await this.source({input,sourceId:source.id},signal);
+      if(resolved.status==="not_matched"){
+        if(state.status!=="not_matched")throw Error("CHANNEL.LABEL_IDENTITY_CONFLICT");
+        skipped.push(source.id);decisions.push({id:source.id,reason:"keyword_not_matched"});continue;
+      }
+      if(state.status==="not_matched")throw Error("CHANNEL.LABEL_IDENTITY_CONFLICT");
+      if(source.kind==="file-image"&&selectedImageId!==null&&source.id!==selectedImageId){
+        if(state.status==="registered"){
+          if((await this.imageCheck({input,sourceId:source.id},signal)).complete)throw Error("CHANNEL.LABEL_SELECTION_UNVERIFIED");
+        }else if(state.status==="review"){
+          const r=ReviewRecordSchema.parse(await this.inspection.review(state.reviewId)),task=resolved.source;
+          if(task.kind!=="image"||r.reviewId!==state.reviewId||r.failure.operationId!==task.task.input.operationId||r.failure.inputFingerprint!==sha256(bytes(["vision-input/1",task.task.input,task.task.configFingerprint]))||r.failure.stage!=="codex.vision"||r.failure.executionFact!=="executed"||!equal(r.observation,input.sourcePlan.owner)||!equal(r.rawError.details,{task:task.task,evidenceKey:r.failure.evidenceKey}))throw Error("CHANNEL.LABEL_SELECTION_UNVERIFIED");
+          if(!/^VISION\.LABEL_[A-Z_]+$/.test(r.failure.code))throw Error("CHANNEL.LABEL_SELECTION_UNVERIFIED");
+          const candidate=LabelImageCandidateSchema.parse(r.candidate?.value);
+          if(isCompleteLabelImage({kind:"image",candidate})&&!labelImageIntegrityCodes(candidate).length)throw Error("CHANNEL.LABEL_SELECTION_UNVERIFIED");
+        }else throw Error("CHANNEL.LABEL_SELECTION_UNVERIFIED");
+        skipped.push(source.id);decisions.push({id:source.id,reason:"incomplete_label",state});continue;
+      }
+      sources.push(resolved.source);
+    }
+    const result=ChannelLabelManifestResultSchema.parse({input,manifest:{operationId:input.operationId,observation:input.sourcePlan.owner,evidencePolicy:input.evidencePolicy,sources},skipped});
+    await this.publication.publish(`v3/channel-labels/${input.operationId}/selection.json`,bytes({request,decisions}),"application/json",signal);
+    await this.publication.publish(`v3/channel-labels/${input.operationId}/manifest.json`,bytes(result),"application/json",signal);
+    return result;
+  }
   async manifest(raw: unknown, signal: AbortSignal) {
     const {input,manifest}=await this.load(raw,signal),sources=[],skipped=[];
+    if(input.evidencePolicy==="label-image-first/5")throw Error("CHANNEL.LABEL_SELECTION_REQUIRED");
     for(const source of manifest.sources){
       const result=await this.source({input,sourceId:source.id},signal);
       if(result.status==="prepared")sources.push(result.source);else skipped.push(source.id);

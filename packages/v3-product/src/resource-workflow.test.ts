@@ -82,3 +82,8 @@ it.each(["foreign","released"])("rejects %s admission without starting provider"
   env.reserve.mockImplementation(async r=>({permitId:mode==="foreign"?"other":r.permitId,status:mode==="released"?"released":"granted",reason:mode==="released"?"released":"available"}));
   const fn=vi.fn();await expect(resourceGate(config)("ocr",fn)).rejects.toThrow("RESOURCE.IDENTITY_CONFLICT");expect(fn).not.toHaveBeenCalled();
 });
+
+it("single-label fallback cannot advance while a prior Review execution stop is unverified",async()=>{
+ env.verify.mockRejectedValue(Error("unknown"));
+ await expect(resourceGate({...config,reviewStopCheck:true},{requireReviewStop:true})("ocr",async()=>({status:"review"}))).rejects.toThrow("RESOURCE.REVIEW_STOP_UNVERIFIED");expect(env.release).not.toHaveBeenCalled();
+});

@@ -18,15 +18,20 @@ export async function channelSavedFixture(prepareFiles=true,channel:"swanson"|"d
       source:{schemaVersion:1,artifactId:"synthetic",observationId:owner.observationId,sourceId:owner.sourceId,listingId:owner.listingId,variantId:owner.variantId,
         kind:"result-json",mediaType:"application/json",objectKey:"fixture/synthetic.json",sha256:"f".repeat(64),byteSize:1,
         producer:{operationId:"synthetic-capture",module:`${channel}.browser-projection`,implementationVersion:`${channel}-rendered/1`}}}});
-  const bridge=new ChannelLabelPlans({inspect:async()=>plan},new RetainedPublication(f.local,f.remote),(s,abort)=>f.saved.resolve(s,{id:s.id,status:"unresolved"},abort));
+  const bridge=new ChannelLabelPlans({inspect:async()=>plan},new RetainedPublication(f.local,f.remote),(s,abort)=>f.saved.resolve(s,{id:s.id,status:"unresolved"},abort),undefined,{file:async(source,s)=>source.kind==="file-image"&&!!await f.fileEvidence.inspect(source.plan.acquire,s),image:async(source,s)=>{
+    if(source.kind!=="image")throw Error("not image");return (await f.visionHandoff.readLabelCandidate(source.task,s)).candidate;
+  },review:id=>f.reviews.read(id)});
   const activities={...f.activities,acquireSourceFile:f.activities.acquireSourceFile!,interpretText:f.activities.interpretText!,ocrFile:f.activities.ocrFile!,loadChannelLabelPlan:(raw:unknown)=>bridge.load(raw,signal()),
     resolveOcrReceipt:f.activities.resolveOcrReceipt!,resolveTextReceipt:f.activities.resolveTextReceipt!,
+    inspectChannelLabelImage:(raw:unknown)=>bridge.imageCheck(raw,signal()),prepareChannelSingleLabelManifest:(raw:unknown)=>bridge.singleManifest(raw,signal()),
     prepareChannelLabelSource:(raw:unknown)=>bridge.source(raw,signal()),prepareChannelLabelManifest:(raw:unknown)=>bridge.manifest(raw,signal()),
     reviewChannelProduct:async(raw:any)=>({status:"review",operationId:raw.input.operationId,reviewId:"review-channel",evidenceKey:"fixture/review.json",code:raw.code,automaticRetry:false})};
   const route={...f.route,plan:"loadChannelLabelPlan",source:"prepareChannelLabelSource",manifest:"prepareChannelLabelManifest",review:"reviewChannelProduct"};
   const {capture,captureReceipts,productPlan,acquire,...savedRoute}=route;
   const activityQueues:Record<string,Record<string,(raw:any)=>Promise<any>>>={};
   for(const [queue,name]of Object.entries(savedRoute))activityQueues[queue]={[name]:raw=>(activities as any)[name](raw)};
+  activityQueues.source!.inspectChannelLabelImage=raw=>activities.inspectChannelLabelImage(raw);
+  activityQueues.manifest!.prepareChannelSingleLabelManifest=raw=>activities.prepareChannelSingleLabelManifest(raw);
   const queues=Object.fromEntries(Object.keys(savedRoute).map(k=>[k,k]));
   return{...f,input,activities,activityQueues,bridge,manifest:plan.manifest,entry:{input,queues}};
 }

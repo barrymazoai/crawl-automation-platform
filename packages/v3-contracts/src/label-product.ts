@@ -10,7 +10,7 @@ import { ProductEvidenceJoinSchema } from "./product-evidence.js";
 import { labelTypographyStructure, labelNameForComparison } from "./label-typography.js";
 import { labelFormulaStructure } from "./label-extraction.js";
 import { labelImageIntegrityCodes, labelNumericSourceConflict } from "./label-quality.js";
-export const LabelEvidencePolicySchema = z.enum(["label-image-first/1", "label-image-first/2", "label-image-first/3", "label-image-first/4"]);
+export const LabelEvidencePolicySchema = z.enum(["label-image-first/1", "label-image-first/2", "label-image-first/3", "label-image-first/4", "label-image-first/5"]);
 /** Priority is earned by a complete, structurally valid image, never merely its media type. */
 export function isCompleteLabelImage(p: { kind: string; candidate: LabelImageCandidate | TextCandidateV3 }) {
   return p.kind === "image" && p.candidate.formulaComplete && p.candidate.ingredientsComplete && assessLabelCandidate(p.candidate).status === "candidate";
@@ -94,13 +94,14 @@ export const LabelCollectedProductSchema = z.discriminatedUnion("schemaVersion",
     ...r.formula.columns.flatMap(c => [c.heading, ...c.rows.flatMap(row => [row.name, row.amount, row.dailyValue])]),
     ...(r.otherIngredients ? [r.otherIngredients.heading, ...r.otherIngredients.items] : []), ...r.ingredients.flatMap(i => [i.name, i.amount])];
   for (const f of fields) if (f && sources.get(f.sourceId)?.kind !== f.citation.kind) invalid();
-  const quality = r.evidencePolicy === "label-image-first/4";
+  const quality = ["label-image-first/4", "label-image-first/5"].includes(r.evidencePolicy??"");
   const accepted = r.provenance.filter(p => assessLabelCandidate(p.candidate).status !== "review" && !(quality && p.kind === "image" && labelImageIntegrityCodes(p.candidate).length));
-  if (quality && labelNumericSourceConflict(accepted)) invalid();
+  if (r.evidencePolicy === "label-image-first/4" && labelNumericSourceConflict(accepted)) invalid();
   const imageFirst = !!r.evidencePolicy && accepted.some(isCompleteLabelImage);
-  const textFallback = ["label-image-first/3","label-image-first/4"].includes(r.evidencePolicy??"") && !imageFirst && accepted.some(isCompleteLabelText);
+  const textFallback = ["label-image-first/3","label-image-first/4", "label-image-first/5"].includes(r.evidencePolicy??"") && !imageFirst && accepted.some(isCompleteLabelText);
   const authoritative = accepted.filter(p => imageFirst ? p.kind === "image" : !textFallback || p.kind === "text");
   if(textFallback && !r.warnings.some(w=>w.code==="LABEL_PRODUCT.COMPLETE_TEXT_FALLBACK"))invalid();
+  if(r.evidencePolicy==="label-image-first/5" && imageFirst && authoritative.length!==1)invalid();
   const projectedSources = authoritative.map(p => projectLabelProductCandidate(p.id, p.candidate));
   if (imageFirst) {
     // A forged persisted record cannot switch back to text or hide disagreeing images.

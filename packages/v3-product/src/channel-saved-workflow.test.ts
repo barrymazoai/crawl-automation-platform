@@ -106,3 +106,57 @@ it.each(["foreign-owner","foreign-file","conflicting-duplicate"])("stream: %s ca
   runtime.handlers.channelSourceReady!(hint);runtime.handlers.channelStreamSealed!({operationId:f.input.operationId,status:"failed"});
   expect(await run).toMatchObject({status:"review"});expect(f.counts.ocr).toBe(0);expect(f.collected.size).toBe(0);
 });
+
+it("single label stops OCR and vision after the first complete image, preserves skipped originals and replay",async()=>{
+ const f=await setup();f.input.evidencePolicy="label-image-first/5";f.nonmatch.clear();
+ expect(await ChannelSavedLabelWorkflow(f.entry)).toMatchObject({status:"collected"});
+ expect(f.counts).toMatchObject({ocr:1,vision:1,text:1});
+ const record=[...f.collected.values()][0]!;expect(record.provenance.filter(p=>p.kind==="image")).toHaveLength(1);
+ const decision=JSON.parse(Buffer.from((await f.remote.read(`v3/channel-labels/${f.input.operationId}/selection.json`,100000))!).toString());
+ expect(decision.decisions).toContainEqual({id:"image-1",reason:"complete_label_already_selected"});
+ const counts={...f.counts};expect(await ChannelSavedLabelWorkflow(f.entry)).toMatchObject({status:"collected"});expect(f.counts).toEqual(counts);
+});
+it("single label tries the next image when a registered candidate is incomplete",async()=>{
+ const f=await setup();f.input.evidencePolicy="label-image-first/5";f.nonmatch.clear();
+ const original=f.activities.interpretImage!,complete=structuredClone(f.imageCandidate.value);let n=0;
+ f.activities.interpretImage=async raw=>{f.imageCandidate.value=structuredClone(complete);if(n++===0){f.imageCandidate.value.formula=null;f.imageCandidate.value.formulaComplete=false;}return original(raw);};
+ expect(await ChannelSavedLabelWorkflow(f.entry)).toMatchObject({status:"collected"});expect(f.counts).toMatchObject({ocr:2,vision:2});
+ expect([...f.collected.values()][0]!.provenance.filter(p=>p.kind==="image").map(p=>p.id)).toEqual(["image-1"]);
+});
+it("single label cannot use an unverified image receipt as completeness proof",async()=>{
+ const f=await setup();f.input.evidencePolicy="label-image-first/5";
+ f.activities.interpretImage=async(raw:any)=>({status:"registered",operationId:raw.input.operationId});
+ expect(await ChannelSavedLabelWorkflow(f.entry)).toMatchObject({status:"review"});expect(f.collected.size).toBe(0);expect(f.counts.vision).toBe(0);
+});
+it("single label rejects a forged selection of an unprocessed image",async()=>{
+ const f=await setup();f.input.evidencePolicy="label-image-first/5";
+ await expect(f.bridge.singleManifest({input:f.input,selectedImageId:"image-1",states:f.manifest.sources.map(s=>({id:s.id,status:"registered"}))},new AbortController().signal)).rejects.toThrow();
+ expect(f.collected.size).toBe(0);
+});
+it("single label stream still waits for every original and page closure after model success",async()=>{
+ const f=await setup();f.input.evidencePolicy="label-image-first/5";f.nonmatch.clear();const sources=f.manifest.sources.filter(s=>s.kind==="file-image"),run=ChannelStreamingLabelWorkflow(f.entry);
+ const first=await f.activities.acquireSourceFile!(sources[0]!.plan.acquire);runtime.handlers.channelSourceReady!({operationId:f.input.operationId,sourceId:sources[0]!.id,file:first.file});
+ await vi.waitFor(()=>expect(f.counts.vision).toBe(1),{timeout:10000});expect(f.collected.size).toBe(0);
+ const second=await f.activities.acquireSourceFile!(sources[1]!.plan.acquire);runtime.handlers.channelSourceReady!({operationId:f.input.operationId,sourceId:sources[1]!.id,file:second.file});
+ runtime.handlers.channelStreamSealed!({operationId:f.input.operationId,status:"closed"});expect(await run).toMatchObject({status:"collected"});expect(f.counts.ocr).toBe(1);expect(f.counts.vision).toBe(1);
+});
+
+it("single label falls back to complete page text if all images fail the keyword screen",async()=>{
+ const f=await setup();f.input.evidencePolicy="label-image-first/5";for(const image of f.manifest.sources)if(image.kind==="file-image")f.nonmatch.add(image.plan.imageId);
+ expect(await ChannelSavedLabelWorkflow(f.entry)).toMatchObject({status:"collected"});expect(f.counts.vision).toBe(0);
+ expect([...f.collected.values()][0]!.warnings).toContainEqual({id:f.input.operationId,code:"LABEL_PRODUCT.COMPLETE_TEXT_FALLBACK"});
+});
+it("single label keeps missing later originals blocking even after complete first image",async()=>{
+ const f=await setup();f.input.evidencePolicy="label-image-first/5";const source=f.manifest.sources.find(s=>s.kind==="file-image")!,run=ChannelStreamingLabelWorkflow(f.entry);
+ const file=await f.activities.acquireSourceFile!((source as any).plan.acquire);runtime.handlers.channelSourceReady!({operationId:f.input.operationId,sourceId:source.id,file:file.file});
+ await vi.waitFor(()=>expect(f.counts.vision).toBe(1),{timeout:10000});runtime.handlers.channelStreamSealed!({operationId:f.input.operationId,status:"failed"});
+ expect(await run).toMatchObject({status:"review"});expect(f.collected.size).toBe(0);expect(f.counts.vision).toBe(1);
+});
+
+it("single label retries another image after a verified executed quality Review, preserving that Review",async()=>{
+ const f=await setup();f.input.evidencePolicy="label-image-first/5";f.nonmatch.clear();const complete=structuredClone(f.imageCandidate.value),original=f.activities.interpretImage!;let n=0;
+ f.activities.interpretImage=async raw=>{f.imageCandidate.value=structuredClone(complete);if(n++===0)f.imageCandidate.value.formulaComplete=false;return original(raw);};
+ expect(await ChannelSavedLabelWorkflow(f.entry)).toMatchObject({status:"collected"});expect(f.counts.vision).toBe(2);
+ const decision=JSON.parse(Buffer.from((await f.remote.read(`v3/channel-labels/${f.input.operationId}/selection.json`,100000))!).toString());
+ const prior=decision.decisions.find((d:any)=>d.id==="image-0");expect(prior.state.status).toBe("review");expect(await f.reviews.read(prior.state.reviewId)).not.toBeNull();
+});

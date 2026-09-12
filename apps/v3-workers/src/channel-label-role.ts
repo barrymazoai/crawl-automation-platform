@@ -15,8 +15,8 @@ import { QualityReviewStops } from "./quality-review-stops.js";
 
 export const channelLabelRoutes:Record<string,string[]>={
  plan:["loadChannelLabelPlan"],page:["prepareHtmlPage"],"page-text":["preparePageText"],"image-prepare":["prepareImageOcr"],
- ocr:["ocrFile"],"ocr-receipts":["resolveOcrReceipt"],keywords:["screenImageKeywords"],source:["prepareChannelLabelSource"],
- manifest:["prepareChannelLabelManifest"],text:["interpretText"],"text-receipts":["resolveTextReceipt"],vision:["interpretImage"],
+ ocr:["ocrFile"],"ocr-receipts":["resolveOcrReceipt"],keywords:["screenImageKeywords"],source:["prepareChannelLabelSource","inspectChannelLabelImage"],
+ manifest:["prepareChannelLabelManifest","prepareChannelSingleLabelManifest"],text:["interpretText"],"text-receipts":["resolveTextReceipt"],vision:["interpretImage"],
  core:["prepareSwansonLabelCore"],assembly:["assembleLabelProduct"],collection:["collectLabelProduct"],review:["reviewChannelProduct"],
  resources:["reserveResources","releaseResources","verifyResourceReviewStopped"],
 };
@@ -46,7 +46,10 @@ export async function channelLabelRole(o:{role:string;hostId:string;root:string;
  const core=once("label-core",async()=>new PrepareSwansonLabelCore(await artifacts(),remote));
  const saved=once("saved-source",async()=>new SavedSourceEvidence({remote,files:await files(),pages:await pages(),reviews,ocr:await registry(),screen:await screen()}));
  const labels=once("label-plans",async()=>new ChannelLabelPlans(new ChannelProductPlans(publication,await artifacts(),reviews),publication,
-   async(source,s)=>(await saved()).resolve(source,{id:source.id,status:"unresolved"},s),await core()));
+   async(source,s)=>(await saved()).resolve(source,{id:source.id,status:"unresolved"},s),await core(),{file:async(source,s)=>source.kind==="file-image"&&!!await(await files()).inspect(source.plan.acquire,s),image:async(source,s)=>{
+     if(source.kind!=="image")throw Error("CHANNEL.LABEL_IDENTITY_CONFLICT");
+     return (await(await visionHandoff()).readLabelCandidate(source.task,s)).candidate;
+   },review:id=>reviews.read(id)}));
  const assembly=once("label-assembly",async()=>new LabelProductAssembly({local,remote,reviews,readSource:async(source,s)=>{
    if(source.kind==="image")return{id:source.id,kind:"image",...await(await visionHandoff()).readLabelCandidate(source.task,s)};
    const facts=await(await textHandoff()).inspect(source.task,s);
@@ -59,8 +62,8 @@ export async function channelLabelRole(o:{role:string;hostId:string;root:string;
  try{
  switch(o.role){
  case "plan":{const m=await labels();activities.loadChannelLabelPlan=(r,s)=>m.load(r,s);break;}
- case "source":{const m=await labels();activities.prepareChannelLabelSource=(r,s)=>m.source(r,s);break;}
- case "manifest":{const m=await labels();activities.prepareChannelLabelManifest=(r,s)=>m.manifest(r,s);break;}
+ case "source":{const m=await labels();activities.prepareChannelLabelSource=(r,s)=>m.source(r,s);activities.inspectChannelLabelImage=(r,s)=>m.imageCheck(r,s);break;}
+ case "manifest":{const m=await labels();activities.prepareChannelLabelManifest=(r,s)=>m.manifest(r,s);activities.prepareChannelSingleLabelManifest=(r,s)=>m.singleManifest(r,s);break;}
  case "page":{const m=new PreparePageModule(await pages());activities.prepareHtmlPage=(r,s)=>m.run(r,s);break;}
  case "page-text":{const m=new PreparePageText(await pages());activities.preparePageText=(r,s)=>m.run(r,s);break;}
  case "image-prepare":{const m=new PrepareImageOcr(await files());activities.prepareImageOcr=(r,s)=>m.run(r,s);break;}
