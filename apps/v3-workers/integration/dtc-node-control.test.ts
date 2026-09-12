@@ -6,6 +6,7 @@ import {isDeepStrictEqual} from 'node:util';
 import {expect,it} from 'vitest';
 import {TestWorkflowEnvironment} from '@temporalio/testing';
 import {Worker} from '@temporalio/worker';
+import {WorkflowUpdateRPCTimeoutOrCancelledError} from '@temporalio/client';
 import {Context} from '@temporalio/activity';
 import {closeDtcSession,reportDtcSession} from '../src/dtc-node-session.js';
 import {DtcMiniNode} from '../src/dtc-mini-node.js';
@@ -45,7 +46,8 @@ it('Mini: node ownership, health reports, stale sessions, shutdown and replay us
  const mini=new DtcMiniNode(db as any,DtcLiveConfigSchema.parse({...c,database:{connectionString:'postgres://fixture',tls:false}}));
  const env=await TestWorkflowEnvironment.createLocal({server:{ip:'127.0.0.1',ui:false,executable:{type:'cached-download',version:'v1.8.3'}}});
  const bundle={codePath:join(dirname(fileURLToPath(import.meta.url)),'product-workflows.cjs')};
- const w=await Worker.create({connection:env.nativeConnection,taskQueue:q,workflowBundle:bundle,activities:{dtcNodeControl:(raw:unknown)=>{const i=Context.current().info;return mini.run(raw,{workflowId:i.workflowExecution!.workflowId,workflowType:i.workflowType!});}}});
+ const healthSequences:number[]=[];
+ const w=await Worker.create({connection:env.nativeConnection,taskQueue:q,workflowBundle:bundle,activities:{dtcNodeControl:async(raw:any)=>{if(raw.action==='health'){healthSequences.push(raw.report.sequence);if(raw.report.sequence===1)await new Promise(r=>setTimeout(r,120));}const i=Context.current().info;return mini.run(raw,{workflowId:i.workflowExecution!.workflowId,workflowType:i.workflowType!});}}});
  const running=w.run();running.catch(()=>{});
  try{
   const preflight=()=>env.client.workflow.execute('DtcNodePreflightWorkflow',{workflowId:'v3-dtc-doctor-'+randomUUID(),taskQueue:q,args:[{nodeId:c.nodeControl.nodeId,controlQueue:q}]});
@@ -55,13 +57,28 @@ it('Mini: node ownership, health reports, stale sessions, shutdown and replay us
   const h=await env.client.workflow.start('DtcNodeSessionWorkflow',{workflowId:'v3-dtc-node-'+c.nodeControl.nodeId,taskQueue:q,args:[session]});
   const report=(seq:number,id=session.sessionId,on=true)=>h.executeUpdate('dtcNodeHealth',{args:[{sessionId:id,sequence:seq,healthy:on}]});
   await reportDtcSession({client:env.client,connection:env.connection},session,0,true);expect(healthy).toBe(true);
+  // Real SDK/server: one reply lost after acceptance, then one request lost before acceptance.
+  for(const sequence of [1,2]){
+   let injected=false;const events:any[]=[];
+   const transport={connection:env.connection,client:{workflow:{getHandle:(id:string,runId?:string)=>{
+    const handle=env.client.workflow.getHandle(id,runId);
+    return {...handle,executeUpdate:async(name:string,options:any)=>{
+     if(name==='dtcNodeHealth'&&!injected){injected=true;if(sequence===1)await handle.startUpdate(name,{...options,waitForStage:'ACCEPTED'});throw new WorkflowUpdateRPCTimeoutOrCancelledError('injected lost reply',{cause:Object.assign(Error('fixture deadline'),{code:4})});}
+     return handle.executeUpdate(name,options);
+    }};
+   }}}} as unknown as Parameters<typeof reportDtcSession>[0];
+   await reportDtcSession(transport,session,sequence,true,{rpcTimeoutMs:2000,log:async e=>{events.push(e);}});
+   expect(healthSequences.filter(s=>s===sequence)).toHaveLength(1);expect(healthy).toBe(true);
+   expect(events.at(-1)).toMatchObject({event:'DTC_NODE_HEALTH_ACKNOWLEDGED',reconciled:true,sequence});
+   if(sequence===2)expect(events.some(e=>e.event==='DTC_NODE_HEALTH_RESUBMIT')).toBe(true);
+  }
   const owned=controller;await expect(report(1,randomUUID())).rejects.toThrow();await expect(report(0)).rejects.toThrow();expect(controller).toBe(owned);
   // A second controller may neither claim nor disable this resource.
   const foreign={...session,sessionId:randomUUID()},identity={workflowId:h.workflowId,workflowType:'DtcNodeSessionWorkflow'};
   await expect(mini.run({action:'open',session:foreign},identity)).rejects.toThrow('RESOURCE_CONFLICT');
   await expect(mini.run({action:'close',session:foreign},identity)).rejects.toThrow('SESSION_CONFLICT');
   await expect(mini.run({action:'open',session},{...identity,workflowId:'foreign'})).rejects.toThrow('NODE_IDENTITY');
-  expect(await report(2,session.sessionId,false)).toMatchObject({status:'acknowledged'});expect(healthy).toBe(false);
+  expect(await report(3,session.sessionId,false)).toMatchObject({status:'acknowledged'});expect(healthy).toBe(false);
   await closeDtcSession({client:env.client,connection:env.connection},session);
   expect(await h.result()).toEqual({status:'stopped',sessionId:session.sessionId});expect(controller).toBe(null);expect(healthy).toBe(false);
   expect(queries.some(sql=>/^(UPDATE|DELETE|INSERT).*resource_permit/.test(sql))).toBe(false);
