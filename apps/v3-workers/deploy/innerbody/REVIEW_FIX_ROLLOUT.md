@@ -1,6 +1,6 @@
-# Innerbody 待审修复：检查后再部署
+# Innerbody 待审修复：统一部署记录
 
-用户于 2026-09-12 明确要求：先完成代码修改，再由 Windows Codex 检查写入问题；主会话根据诊断结果继续修复，最后统一部署并开始下一轮。当前没有授权立即提交新一轮业务采集。
+用户于 2026-09-12 明确要求：先完成代码修改，再由 Windows Codex 检查写入问题；主会话根据诊断结果继续修复，最后统一部署并开始下一轮。Windows 更新完成并核对就绪后，才开始下一轮真实业务采集。
 
 当前实现：
 
@@ -12,13 +12,20 @@
 
 已验证：Mini 隔离回归 122 项通过；14 份真实历史（上一批完整父子链及 Windows 节点会话）回放通过；Worker/API/Web TypeScript 检查、build:dtc 通过。测试提供方为模拟或无网络子进程；数据库验证使用独立临时 PostgreSQL 容器，测试后删除该容器。未修改运行中 release，未执行真实补采。
 
-下一步：把 `WINDOWS_WRITE_DIAGNOSTIC_PROMPT.md` 交给 Windows Codex，只检查旧任务及同环境最小写入，不部署、不改权限、不发单。取得结果后，由主会话判断是否需要修改启动方式或采集指令。
+Windows 写入诊断已完成：旧任务确实尝试创建 capture/run-capture.mjs，工具只报 Failed to write file，没有明确权限错误；同一 Runner 最小写入、读回、删除成功。根因仍未复现，不能归因为全盘只读。源码 072a916 增加任务路径核对与有边界的写入失败处理指令：只读核对已写文件，确认路径问题才能纠正后重试一次；明确拒绝立即停止；未证实的失败单独报告。没有改模型、审批参数或 ACL，也没有自动重跑整个采集。该指令的现场效果仍待下一轮真实任务验证。
 
-最终部署必须一起处理：
+本次追加验证：Mini 上采集宿主、节点控制和目录 Workflow 共 29 项通过；build:dtc 与前端构建通过。最终 Workflow 可执行文件与已通过 14 份回放的候选文件逐字节一致。本次 build ID、源码祖先和策略字段见 deployment.json。
 
-1. 以最终 main 构建，两端核对 deployment.json 的两个 build ID、JS 数量与识别指纹。
-2. Mini 通过原有迁移工具备份并应用 `017_catalog_product_skip.sql`。仅是同一个业务库增加跳过结果表；Windows 不连接该库。Brand API/Web 的跳过统计同时更新，Brand 入口独立部署，不能覆盖其他 Worker 的共用构建目录。
-3. Mini 和 Windows 各自 settings 指向的 baseLive 中，将 `evidencePolicy`、`visionConfigFingerprint`、`sourceVisionConfigFingerprint` 同步为 deployment.json.channelDefaults 的新值。只原子更新这三个公开策略字段，备份原文件，其他路径、模型配置和凭据原样复用。Mini 的实际 CodexVisionProvider.describe 指纹必须再次与公开值一致；不凭手填指纹绕过校验。
-4. 按正常流程停止旧节点、确认精确 PID 退出及无 pending 页面；完整替换 release，生成新 private，完成 routing/doctor、健康采样。全部条件齐备后，再从正常 Brand 入口提交新任务。
+Mini 部署包含：
 
-本轮候选代码的部署标识记录于 deployment.json；若诊断后再改代码，必须重新构建、验证并更新标识。当前主会话的旧部署回执不能证明本候选版已经上线。
+- 使用现有 migrate 事务/迁移账本实现，先保存数据库快照备份，再应用 017_catalog_product_skip.sql；仍是原有业务库。
+- DTC 从共享的 Swanson 基础配置复制出自己的私有输入，只更新 evidencePolicy、visionConfigFingerprint、sourceVisionConfigFingerprint，Swanson 原文件保留。实际 CodexVisionProvider.describe 指纹已与公开值核对。
+- Brand API 与新前端独立部署；没有覆盖 Amazon 共用的构建目录。
+- 首次两组进程并发启动触发 PostgreSQL “too many clients already”，9 个基础角色启动失败。随后正常停机，改为基础 90 个角色先就绪，等待空闲连接回收，再启动 DTC 26 个角色。没有修改连接上限。
+- Windows 旧节点在 Mini 维护期间报告 dtc_node_stopped；不得将它算作新版本已就绪。Windows 部署说明要求本机先核对精确 PID、会话、锁和页面账本，再更新启动。
+
+最终核验通过：基础 90/90、DTC 26/26 连续四周期就绪，其余四项配套资源健康；零占用、零来源锁。数据库原有 17 条 collected_product、47 条 review_record、121 条 processing_result 的数量和内容摘要逐项一致。新 Dashboard 跳过统计及前端资源均可读取；Windows 旧会话以 stopped 结果正常结束。
+
+Mini 最终核验记录保存在本机部署目录的 review-fix-20260912.json；数据库备份在 backup-review-fix-20260912/database。真实凭据、数据库备份和执行原始日志不进入 Git。
+
+下一步：将 [WINDOWS_REVIEW_FIX_DEPLOY_PROMPT.md](WINDOWS_REVIEW_FIX_DEPLOY_PROMPT.md) 完整交给 Windows Codex，从 main 构建并更新，复用现有凭据。除了换 release，还须复制基础配置并同步三个公开策略字段，生成新的 private，核对 routing、doctor、Skill 和四个健康周期。本轮尚未提交新采集；历史待审不自动改成通过。

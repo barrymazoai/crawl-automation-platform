@@ -1,5 +1,7 @@
 # Windows Codex：只核查 Testosterone 的写入问题，暂不部署或发单
 
+> 本次诊断已于 2026-09-12 完成，保留本文用于追溯，不需要重跑。后续部署使用 [WINDOWS_REVIEW_FIX_DEPLOY_PROMPT.md](WINDOWS_REVIEW_FIX_DEPLOY_PROMPT.md)。
+
 本阶段只检查上一轮采集的文件写入问题。代码可从现有仓库 main 拉取，保留全部 tracked 修改、untracked 文件和历史证据。不要替换 release、生成新 private、重启 Worker、重启 Chrome、提交采集任务或重跑历史任务。等待主会话根据诊断结果完成最终修复后，再统一部署并测试。
 
 目标信息：
