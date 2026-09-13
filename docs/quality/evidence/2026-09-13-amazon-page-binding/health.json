@@ -1,0 +1,43 @@
+{
+  "at": "2026-09-13T15:45:59.226Z",
+  "monitorPid": 68275,
+  "ready": 90,
+  "unrelatedPidsUnchanged": true,
+  "workers": [
+    {
+      "id": "amazon-control",
+      "pid": 89055,
+      "buildId": "b3bb8e7bd190c0bb05e9fee157da692a042c8fb940c71b3d7224f069f650bb15"
+    },
+    {
+      "id": "amazon-catalog-source",
+      "pid": 89107,
+      "buildId": "b3bb8e7bd190c0bb05e9fee157da692a042c8fb940c71b3d7224f069f650bb15"
+    },
+    {
+      "id": "amazon-catalog-ledger",
+      "pid": 89146,
+      "buildId": "b3bb8e7bd190c0bb05e9fee157da692a042c8fb940c71b3d7224f069f650bb15"
+    },
+    {
+      "id": "amazon-product-input",
+      "pid": 89185,
+      "buildId": "b3bb8e7bd190c0bb05e9fee157da692a042c8fb940c71b3d7224f069f650bb15"
+    },
+    {
+      "id": "amazon-capture",
+      "pid": 89234,
+      "buildId": "b3bb8e7bd190c0bb05e9fee157da692a042c8fb940c71b3d7224f069f650bb15"
+    },
+    {
+      "id": "amazon-file",
+      "pid": 89274,
+      "buildId": "b3bb8e7bd190c0bb05e9fee157da692a042c8fb940c71b3d7224f069f650bb15"
+    },
+    {
+      "id": "amazon-review",
+      "pid": 89313,
+      "buildId": "b3bb8e7bd190c0bb05e9fee157da692a042c8fb940c71b3d7224f069f650bb15"
+    }
+  ]
+}

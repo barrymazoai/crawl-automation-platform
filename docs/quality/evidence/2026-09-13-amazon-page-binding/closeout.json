@@ -1,0 +1,192 @@
+{
+  "at": "2026-09-13T15:44:39.616Z",
+  "requestId": "9d2ae9d0-f953-49fb-bdbe-28a560177f93",
+  "root": {
+    "workflowId": "v3-collection-9d2ae9d0-f953-49fb-bdbe-28a560177f93",
+    "runId": "01a09b6c-7d82-7436-bba6-3170b3806806",
+    "status": "COMPLETED"
+  },
+  "products": [
+    {
+      "asin": "B0GBX7416D",
+      "workflowId": "catalog-product-30b2894ca44635e077a8ae9c03aa59fd02237ee3f3e38b819814deecf697463d",
+      "runId": "01a09b6c-9b97-72ef-9c09-e74c6da0aee8",
+      "status": "COMPLETED",
+      "pending": [],
+      "captures": 1,
+      "files": [
+        {
+          "status": "durable",
+          "operationId": "chp-78001878a8627b5e9b820cfe7b18e5e8610d31a56a64336e63eda331e5df1d02",
+          "byteSize": 176130,
+          "sha256": "a9ed8ab8446cb47a7541a1b427a693c2ce5e71c4d7b9ecdf3c5bdde98cd8b4be"
+        },
+        {
+          "status": "durable",
+          "operationId": "chp-bd81d207a215a57e27f8b1b07954b55db2df914727b6c15fbca86315374a58c9",
+          "byteSize": 160676,
+          "sha256": "7422a261f67ab310b552edb2885495d009669709e4287b1bd33a51b13a2ed352"
+        },
+        {
+          "status": "durable",
+          "operationId": "chp-d3614d8c9a53db043eddef8b6be2eb4c8a8969d541ea0d9c0e01cbbe74ffbaab",
+          "byteSize": 222258,
+          "sha256": "4755e95ba8968092f6187d192243d6c3d14dc74153e4f1d9a65a0420c8bffeb6"
+        },
+        {
+          "status": "durable",
+          "operationId": "chp-629ef28908225dacff72ddce203a9bdc1ca4e7daf1e0812e14aa680ddea4988b",
+          "byteSize": 92413,
+          "sha256": "344dbca3c627532adf958b2f4741e7330650f3e6f7396757a0491057cbffd80c"
+        },
+        {
+          "status": "durable",
+          "operationId": "chp-2f14f8e3b31c7e20c22fa5e3604cc6e8b4c98fb9955ce55e76b0056979966967",
+          "byteSize": 243287,
+          "sha256": "95bcc76329b8a65f6d135c5b1876f449c7b75a6813e248e69684dff320bd19d9"
+        },
+        {
+          "status": "durable",
+          "operationId": "chp-2100845a06d840a9800c4f91efd01b2da2e57f95b377e32d7f75961c0c413ae4",
+          "byteSize": 180029,
+          "sha256": "bc2036eac1de0e7e9cc5a17172fb470579d2b491ef3edcf4538e3125a1ab0227"
+        },
+        {
+          "status": "durable",
+          "operationId": "chp-34270862fd2dc0c3faf607e2d438a7503c2c3ac960094f9b6e08fe34f729452c",
+          "byteSize": 59933,
+          "sha256": "e057ab35be7bade660e79b291eeea7a13fddee3ee2c9f7ab15eaec2ea9b1ce6e"
+        }
+      ],
+      "pageClose": [
+        {
+          "status": "closed",
+          "taskId": "amazon-page-5f130029ecd5cfb0a6a8f2975d3b3b401937508a2c066432c24a0aaa152fc580",
+          "targetId": "416598160D336FD9D18C4CAE6FD8F4A9"
+        }
+      ],
+      "children": [
+        {
+          "workflowId": "catalog-product-30b2894ca44635e077a8ae9c03aa59fd02237ee3f3e38b819814deecf697463d-label",
+          "status": "COMPLETED",
+          "pending": [],
+          "result": {
+            "status": "review",
+            "evidenceKey": "v3/label-products/label-dc34bf5b15038ea61a44e4eebcf9585300484d807e5a888ac8d1c3fde8d7aa41/assembly.json",
+            "reviewId": "label-41e4a23b89289ab0f9dc7b69f5f5d5d4921415f4d2801759d862b8a8380de0fc",
+            "codes": [
+              "LABEL_PRODUCT.FORMULA_CONFLICT",
+              "TEXT.CITATION_INVALID"
+            ],
+            "automaticRetry": false
+          }
+        }
+      ],
+      "result": {
+        "status": "review",
+        "evidenceKey": "v3/label-products/label-dc34bf5b15038ea61a44e4eebcf9585300484d807e5a888ac8d1c3fde8d7aa41/assembly.json",
+        "reviewId": "label-41e4a23b89289ab0f9dc7b69f5f5d5d4921415f4d2801759d862b8a8380de0fc",
+        "codes": [
+          "LABEL_PRODUCT.FORMULA_CONFLICT",
+          "TEXT.CITATION_INVALID"
+        ],
+        "automaticRetry": false
+      },
+      "actualUrl": "https://www.amazon.com/dp/B0GBX7416D?th=1",
+      "expectedUrl": "https://www.amazon.com/dp/B0GBX7416D",
+      "galleryCount": 7,
+      "images": [
+        {
+          "objectKey": "v3/amazon-10484ddb5cb0a6c3296629db9207725b7b8c4c10a9344225994b82a71cd77c18/chp-78001878a8627b5e9b820cfe7b18e5e8610d31a56a64336e63eda331e5df1d02/source",
+          "byteSize": 176130,
+          "sha256": "a9ed8ab8446cb47a7541a1b427a693c2ce5e71c4d7b9ecdf3c5bdde98cd8b4be",
+          "dimensions": {
+            "width": 1393,
+            "height": 1500
+          }
+        },
+        {
+          "objectKey": "v3/amazon-10484ddb5cb0a6c3296629db9207725b7b8c4c10a9344225994b82a71cd77c18/chp-bd81d207a215a57e27f8b1b07954b55db2df914727b6c15fbca86315374a58c9/source",
+          "byteSize": 160676,
+          "sha256": "7422a261f67ab310b552edb2885495d009669709e4287b1bd33a51b13a2ed352",
+          "dimensions": {
+            "width": 1445,
+            "height": 1500
+          }
+        },
+        {
+          "objectKey": "v3/amazon-10484ddb5cb0a6c3296629db9207725b7b8c4c10a9344225994b82a71cd77c18/chp-d3614d8c9a53db043eddef8b6be2eb4c8a8969d541ea0d9c0e01cbbe74ffbaab/source",
+          "byteSize": 222258,
+          "sha256": "4755e95ba8968092f6187d192243d6c3d14dc74153e4f1d9a65a0420c8bffeb6",
+          "dimensions": {
+            "width": 1499,
+            "height": 1500
+          }
+        },
+        {
+          "objectKey": "v3/amazon-10484ddb5cb0a6c3296629db9207725b7b8c4c10a9344225994b82a71cd77c18/chp-629ef28908225dacff72ddce203a9bdc1ca4e7daf1e0812e14aa680ddea4988b/source",
+          "byteSize": 92413,
+          "sha256": "344dbca3c627532adf958b2f4741e7330650f3e6f7396757a0491057cbffd80c",
+          "dimensions": {
+            "width": 1499,
+            "height": 1500
+          }
+        },
+        {
+          "objectKey": "v3/amazon-10484ddb5cb0a6c3296629db9207725b7b8c4c10a9344225994b82a71cd77c18/chp-2f14f8e3b31c7e20c22fa5e3604cc6e8b4c98fb9955ce55e76b0056979966967/source",
+          "byteSize": 243287,
+          "sha256": "95bcc76329b8a65f6d135c5b1876f449c7b75a6813e248e69684dff320bd19d9",
+          "dimensions": {
+            "width": 1500,
+            "height": 1500
+          }
+        },
+        {
+          "objectKey": "v3/amazon-10484ddb5cb0a6c3296629db9207725b7b8c4c10a9344225994b82a71cd77c18/chp-2100845a06d840a9800c4f91efd01b2da2e57f95b377e32d7f75961c0c413ae4/source",
+          "byteSize": 180029,
+          "sha256": "bc2036eac1de0e7e9cc5a17172fb470579d2b491ef3edcf4538e3125a1ab0227",
+          "dimensions": {
+            "width": 1499,
+            "height": 1500
+          }
+        },
+        {
+          "objectKey": "v3/amazon-10484ddb5cb0a6c3296629db9207725b7b8c4c10a9344225994b82a71cd77c18/chp-34270862fd2dc0c3faf607e2d438a7503c2c3ac960094f9b6e08fe34f729452c/source",
+          "byteSize": 59933,
+          "sha256": "e057ab35be7bade660e79b291eeea7a13fddee3ee2c9f7ab15eaec2ea9b1ce6e",
+          "dimensions": {
+            "width": 1500,
+            "height": 1500
+          }
+        }
+      ],
+      "closedJournalSha256": "8892c99e4bfed7d1c5e556792a2f6a99da4e0f59e518a0cdcc238dfad393f566",
+      "absenceChecks": [
+        {
+          "at": "2026-09-13T15:44:45.974Z",
+          "targetsAbsent": true
+        },
+        {
+          "at": "2026-09-13T15:44:46.054Z",
+          "targetsAbsent": true
+        },
+        {
+          "at": "2026-09-13T15:44:46.134Z",
+          "targetsAbsent": true
+        }
+      ]
+    }
+  ],
+  "heldPermits": 0,
+  "intakeGuards": 0,
+  "reviews": [
+    {
+      "review_id": "text-b6fbd9cc-bfb9-4d31-bad2-eb5112c42c6d",
+      "code": "TEXT.CITATION_INVALID"
+    },
+    {
+      "review_id": "label-41e4a23b89289ab0f9dc7b69f5f5d5d4921415f4d2801759d862b8a8380de0fc",
+      "code": "LABEL_PRODUCT.FORMULA_CONFLICT"
+    }
+  ]
+}

@@ -1,0 +1,54 @@
+{
+  "at": "2026-09-13T15:38:39.911Z",
+  "buildId": "b3bb8e7bd190c0bb05e9fee157da692a042c8fb940c71b3d7224f069f650bb15",
+  "release": "/Users/barry/apps/crawlv3-batch-a.UiA4dx/release-amazon-page-binding-20260913",
+  "workers": [
+    {
+      "id": "amazon-control",
+      "pid": 89055,
+      "buildId": "b3bb8e7bd190c0bb05e9fee157da692a042c8fb940c71b3d7224f069f650bb15",
+      "taskQueue": "v3.amazon.control.v1.amazon-live-v1.session.sw-00be82ef-f7cb-47"
+    },
+    {
+      "id": "amazon-catalog-source",
+      "pid": 89107,
+      "buildId": "b3bb8e7bd190c0bb05e9fee157da692a042c8fb940c71b3d7224f069f650bb15",
+      "taskQueue": "v3.amazon.catalog-source.v1.amazon-live-v1.session.sw-00be82ef-f7cb-47"
+    },
+    {
+      "id": "amazon-catalog-ledger",
+      "pid": 89146,
+      "buildId": "b3bb8e7bd190c0bb05e9fee157da692a042c8fb940c71b3d7224f069f650bb15",
+      "taskQueue": "v3.amazon.catalog-ledger.v1.amazon-live-v1.session.sw-00be82ef-f7cb-47"
+    },
+    {
+      "id": "amazon-product-input",
+      "pid": 89185,
+      "buildId": "b3bb8e7bd190c0bb05e9fee157da692a042c8fb940c71b3d7224f069f650bb15",
+      "taskQueue": "v3.amazon.product-input.v1.amazon-live-v1.session.sw-00be82ef-f7cb-47"
+    },
+    {
+      "id": "amazon-capture",
+      "pid": 89234,
+      "buildId": "b3bb8e7bd190c0bb05e9fee157da692a042c8fb940c71b3d7224f069f650bb15",
+      "taskQueue": "v3.amazon.capture.v1.amazon-live-v1.session.sw-00be82ef-f7cb-47"
+    },
+    {
+      "id": "amazon-file",
+      "pid": 89274,
+      "buildId": "b3bb8e7bd190c0bb05e9fee157da692a042c8fb940c71b3d7224f069f650bb15",
+      "taskQueue": "v3.amazon.file.v1.amazon-live-v1.session.sw-00be82ef-f7cb-47"
+    },
+    {
+      "id": "amazon-review",
+      "pid": 89313,
+      "buildId": "b3bb8e7bd190c0bb05e9fee157da692a042c8fb940c71b3d7224f069f650bb15",
+      "taskQueue": "v3.amazon.review.v1.amazon-live-v1.session.sw-00be82ef-f7cb-47"
+    }
+  ],
+  "monitorPid": 68275,
+  "unrelatedPidsUnchanged": true,
+  "ready": 90,
+  "trialRequestId": "9d2ae9d0-f953-49fb-bdbe-28a560177f93",
+  "trialSubmitted": false
+}
