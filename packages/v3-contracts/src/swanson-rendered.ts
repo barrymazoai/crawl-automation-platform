@@ -1,9 +1,11 @@
 import { z } from "zod";
+import {CommerceEvidenceSchema} from "./commerce.js";
 // Whitelisted DOM projection, never a serialized window/Shopify object or raw page scripts.
 // A capture adapter must collect these fields together from one settled product page.
 export const SwansonRenderedProductSchema = z.strictObject({
   url: z.string().url().max(4096), canonicalUrl: z.string().url().max(4096),
   title: z.string().trim().min(1).max(4000), capturedAt: z.iso.datetime(),
+  commerce:CommerceEvidenceSchema.optional(),
   selectedForms: z.array(z.strictObject({ productId: z.string().regex(/^\d+$/),
     variantIds: z.array(z.string().regex(/^\d+$/)).min(1).max(10) })).min(1).max(10),
   gallery: z.array(z.strictObject({ url: z.string().url().max(4096), alt: z.string().max(4000) })).max(100),

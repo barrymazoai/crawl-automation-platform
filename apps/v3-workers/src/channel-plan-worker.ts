@@ -11,6 +11,7 @@ import { createR2Objects, R2ScopeSchema, ArtifactResolver, FileCopies, RetainedP
 import { ChannelProductPlans } from "@crawl-automation/v3-channels";
 import { TextLocalStore } from "@crawl-automation/v3-text";
 import { PostgresReviews } from "@crawl-automation/v3-review";
+import {historyObservations} from "./history-observations.js";
 
 const Config = z.strictObject({ cacheRoot: z.string().refine(isAbsolute), journalRoot: z.string().refine(isAbsolute), r2: R2ScopeSchema,
   r2Credentials: z.strictObject({ accessKeyId: z.string().min(1), secretAccessKey: z.string().min(1) }),
@@ -37,11 +38,13 @@ async function main() {
         await db.query("SELECT review_id,record_hash,record FROM public.review_record LIMIT 0");
         const publication = new RetainedPublication(await TextLocalStore.open(config.journalRoot), r2.store);
         const module = new ChannelProductPlans(publication, new ArtifactResolver(await FileCopies.open(config.cacheRoot), r2.store), new PostgresReviews(db));
+        const history=historyObservations(db,r2.store);
+        await history?.check();
         return { kind: "activity", dispose, activities: { prepareChannelProduct: async (...args: unknown[]) => {
           const context = Context.current();
           if (args.length !== 1 || context.info.attempt !== 1) throw ApplicationFailure.nonRetryable("Automatic retry denied", "CHANNEL.RETRY_DENIED");
           const timer = setInterval(() => context.heartbeat(), 2000);
-          try { const result = await module.run(args[0], context.cancellationSignal); context.cancellationSignal.throwIfAborted(); return result; }
+          try { await history?.attempt("channel",args[0],context.cancellationSignal);const result = await module.run(args[0], context.cancellationSignal); context.cancellationSignal.throwIfAborted(); return result; }
           catch { context.cancellationSignal.throwIfAborted(); throw ApplicationFailure.nonRetryable("Inspect retained channel evidence", "CHANNEL.UNRESOLVED"); }
           finally { clearInterval(timer); }
         } } };

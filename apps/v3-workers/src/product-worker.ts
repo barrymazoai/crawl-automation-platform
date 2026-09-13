@@ -117,7 +117,9 @@ async function main() {
               const constraint = await db.query("SELECT pg_get_constraintdef(oid) AS definition FROM pg_constraint WHERE conrelid='public.collected_product'::regclass AND conname='collected_product_codec'");
               if (!constraint.rows.some(r => String(r.definition).includes(packagingEnabled ? "collected-product/4" : "collected-product/3"))) throw Error("Label collection migration required");
               const collector = new CollectLabelProduct({ assembly: labels, registry: new PostgresLabelCollectedProducts(db), local, remote, reviews });
-              run = (raw, signal) => collector.run(raw, signal);
+              const history=historyObservations(db,remote);
+              await history?.check();
+              run = async(raw, signal) => {const result=await collector.run(raw, signal);if(result.status==="collected")await history?.attempt("collected",result.operationId,signal);return result;};
             }
             const execute = run;
             run = (raw, signal) => {
@@ -174,3 +176,4 @@ async function main() {
   await workerProcess(new RoleRegistry("business", definitions));
 }
 main().catch(() => { console.error(JSON.stringify({ event: "PRODUCT_WORKER_STARTUP_REJECTED", message: "Check opt-in, private config, dependency capabilities" })); process.exitCode = 1; });
+import {historyObservations} from "./history-observations.js";

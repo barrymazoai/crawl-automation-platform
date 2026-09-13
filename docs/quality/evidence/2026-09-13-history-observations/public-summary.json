@@ -1,0 +1,1099 @@
+{
+  "date": "2026-09-13",
+  "task": "CRAWLV3-59",
+  "legacyImport": [
+    {
+      "command": "import",
+      "records": 38128,
+      "inserted": 38128,
+      "unchanged": 0,
+      "listings": 38422,
+      "metrics": 58440,
+      "formulas": 32056,
+      "undated": 0,
+      "datasets": {
+        "mini:product_staging": 38128
+      },
+      "issues": {
+        "HISTORY.FORMULA_ROWS_MISSING": 6651
+      }
+    },
+    {
+      "command": "import",
+      "records": 7668,
+      "inserted": 7668,
+      "unchanged": 0,
+      "listings": 7668,
+      "metrics": 0,
+      "formulas": 0,
+      "undated": 0,
+      "datasets": {
+        "mini:railway_local_new": 7668
+      },
+      "issues": {
+        "HISTORY.FORMULA_ROWS_MISSING": 7668,
+        "HISTORY.LISTING_UNRESOLVED": 485
+      }
+    },
+    {
+      "command": "import",
+      "records": 1625,
+      "inserted": 1625,
+      "unchanged": 0,
+      "listings": 1625,
+      "metrics": 1625,
+      "formulas": 1616,
+      "undated": 0,
+      "datasets": {
+        "mini:no-company-products": 1625
+      },
+      "issues": {
+        "HISTORY.FORMULA_ROWS_MISSING": 9
+      }
+    }
+  ],
+  "legacyReadback": [
+    {
+      "command": "verify",
+      "records": 38128,
+      "inserted": 0,
+      "unchanged": 0,
+      "verified": 38128,
+      "listings": 38422,
+      "metrics": 58440,
+      "formulas": 32056,
+      "undated": 0,
+      "datasets": {
+        "mini:product_staging": 38128
+      },
+      "issues": {
+        "HISTORY.FORMULA_ROWS_MISSING": 6651
+      }
+    },
+    {
+      "command": "verify",
+      "records": 7668,
+      "inserted": 0,
+      "unchanged": 0,
+      "verified": 7668,
+      "listings": 7668,
+      "metrics": 0,
+      "formulas": 0,
+      "undated": 0,
+      "datasets": {
+        "mini:railway_local_new": 7668
+      },
+      "issues": {
+        "HISTORY.FORMULA_ROWS_MISSING": 7668,
+        "HISTORY.LISTING_UNRESOLVED": 485
+      }
+    },
+    {
+      "command": "verify",
+      "records": 1625,
+      "inserted": 0,
+      "unchanged": 0,
+      "verified": 1625,
+      "listings": 1625,
+      "metrics": 1625,
+      "formulas": 1616,
+      "undated": 0,
+      "datasets": {
+        "mini:no-company-products": 1625
+      },
+      "issues": {
+        "HISTORY.FORMULA_ROWS_MISSING": 9
+      }
+    }
+  ],
+  "legacyInventory": {
+    "at": "2026-09-13T09:07:50.853Z",
+    "tables": {
+      "sources": 47421,
+      "listings": 44561,
+      "metricobservations": 60065,
+      "formulaobservations": 33672,
+      "unresolvedlistings": 485
+    },
+    "channels": [
+      {
+        "channel": "amazon",
+        "listings": 32181,
+        "unresolved": 0
+      },
+      {
+        "channel": "dtc",
+        "listings": 1319,
+        "unresolved": 0
+      },
+      {
+        "channel": "gnc",
+        "listings": 2744,
+        "unresolved": 4
+      },
+      {
+        "channel": "swanson",
+        "listings": 8317,
+        "unresolved": 481
+      }
+    ],
+    "issues": [
+      {
+        "issue": "HISTORY.FORMULA_ROWS_MISSING",
+        "records": 14328
+      },
+      {
+        "issue": "HISTORY.LISTING_UNRESOLVED",
+        "records": 485
+      }
+    ],
+    "original": {
+      "collected_product": {
+        "count": 30,
+        "digest": "66760cbd317bb15445276b0365863d55"
+      },
+      "review_record": {
+        "count": 74,
+        "digest": "998f01a0f6b1c6ce127510ff3c7ff322"
+      },
+      "processing_result": {
+        "count": 176,
+        "digest": "d246201967522032f3a04653aea50eab"
+      }
+    },
+    "state": {
+      "guards": 0,
+      "held": 0,
+      "migrations": 19
+    }
+  },
+  "reparseCandidates": {
+    "records": 43642,
+    "counts": {
+      "amazon": 32181,
+      "dtc": 1224,
+      "gnc": 2401,
+      "swanson": 7836
+    },
+    "sha256": "a50c60608d1b7fbf83bba2df78125cad7c5b4301553ee745a64ab7c460de776d"
+  },
+  "miniTests": {
+    "numTotalTests": 112,
+    "numPassedTests": 112,
+    "numFailedTests": 0,
+    "success": true
+  },
+  "preflight": {
+    "rows": [
+      {
+        "scope": "main",
+        "role": "gnc-product-input",
+        "metadataMatched": true,
+        "emptyQueueStart": false,
+        "reason": "non-session-role"
+      },
+      {
+        "scope": "main",
+        "role": "product-core-collect",
+        "metadataMatched": true,
+        "emptyQueueStart": false,
+        "reason": "non-session-role"
+      },
+      {
+        "scope": "main",
+        "role": "brand-web",
+        "ready": true,
+        "normalExit": true,
+        "pid": 22524
+      },
+      {
+        "scope": "main",
+        "role": "channel-label-plan",
+        "ready": true,
+        "normalExit": true,
+        "pid": 22525
+      },
+      {
+        "scope": "main",
+        "role": "channel-label-source",
+        "ready": true,
+        "normalExit": true,
+        "pid": 22540
+      },
+      {
+        "scope": "main",
+        "role": "channel-label-manifest",
+        "ready": true,
+        "normalExit": true,
+        "pid": 22541
+      },
+      {
+        "scope": "main",
+        "role": "swanson-product-input",
+        "ready": true,
+        "normalExit": true,
+        "pid": 22557
+      },
+      {
+        "scope": "main",
+        "role": "channel-label-collection",
+        "ready": true,
+        "normalExit": true,
+        "pid": 22556
+      },
+      {
+        "scope": "main",
+        "role": "swanson-file",
+        "ready": true,
+        "normalExit": true,
+        "pid": 22578
+      },
+      {
+        "scope": "main",
+        "role": "swanson-capture",
+        "ready": true,
+        "normalExit": true,
+        "pid": 22579
+      },
+      {
+        "scope": "main",
+        "role": "amazon-channel-label-plan",
+        "ready": true,
+        "normalExit": true,
+        "pid": 22606
+      },
+      {
+        "scope": "main",
+        "role": "channel-product-input",
+        "ready": true,
+        "normalExit": true,
+        "pid": 22607
+      },
+      {
+        "scope": "main",
+        "role": "amazon-channel-label-manifest",
+        "ready": true,
+        "normalExit": true,
+        "pid": 22610
+      },
+      {
+        "scope": "main",
+        "role": "amazon-channel-label-source",
+        "ready": true,
+        "normalExit": true,
+        "pid": 22611
+      },
+      {
+        "scope": "main",
+        "role": "amazon-channel-label-collection",
+        "ready": true,
+        "normalExit": true,
+        "pid": 22624
+      },
+      {
+        "scope": "main",
+        "role": "amazon-product-input",
+        "ready": true,
+        "normalExit": true,
+        "pid": 22625
+      },
+      {
+        "scope": "main",
+        "role": "amazon-capture",
+        "ready": true,
+        "normalExit": true,
+        "pid": 22639
+      },
+      {
+        "scope": "main",
+        "role": "amazon-file",
+        "ready": true,
+        "normalExit": true,
+        "pid": 22638
+      },
+      {
+        "scope": "main",
+        "role": "amazon-channel-product-input",
+        "ready": true,
+        "normalExit": true,
+        "pid": 22651
+      },
+      {
+        "scope": "dtc",
+        "role": "channel-product-input",
+        "ready": true,
+        "normalExit": true,
+        "pid": 22664
+      },
+      {
+        "scope": "dtc",
+        "role": "channel-label-collection",
+        "ready": true,
+        "normalExit": true,
+        "pid": 22665
+      }
+    ],
+    "passed": true,
+    "businessCalls": 0
+  },
+  "deployment": {
+    "roles": [
+      {
+        "scope": "main",
+        "id": "product-core-collect",
+        "event": "WORKER_RUNNING",
+        "buildId": "516632973c32512230d1eb2b09f2406ec7e7a0f9b78be4d696749d6a0a5354be"
+      },
+      {
+        "scope": "main",
+        "id": "gnc-product-input",
+        "event": "WORKER_RUNNING",
+        "buildId": "516632973c32512230d1eb2b09f2406ec7e7a0f9b78be4d696749d6a0a5354be"
+      },
+      {
+        "scope": "main",
+        "id": "channel-label-plan",
+        "event": "WORKER_RUNNING",
+        "buildId": "516632973c32512230d1eb2b09f2406ec7e7a0f9b78be4d696749d6a0a5354be"
+      },
+      {
+        "scope": "main",
+        "id": "channel-label-source",
+        "event": "WORKER_RUNNING",
+        "buildId": "516632973c32512230d1eb2b09f2406ec7e7a0f9b78be4d696749d6a0a5354be"
+      },
+      {
+        "scope": "main",
+        "id": "channel-label-manifest",
+        "event": "WORKER_RUNNING",
+        "buildId": "516632973c32512230d1eb2b09f2406ec7e7a0f9b78be4d696749d6a0a5354be"
+      },
+      {
+        "scope": "main",
+        "id": "channel-label-collection",
+        "event": "WORKER_RUNNING",
+        "buildId": "516632973c32512230d1eb2b09f2406ec7e7a0f9b78be4d696749d6a0a5354be"
+      },
+      {
+        "scope": "main",
+        "id": "swanson-product-input",
+        "event": "WORKER_RUNNING",
+        "buildId": "516632973c32512230d1eb2b09f2406ec7e7a0f9b78be4d696749d6a0a5354be"
+      },
+      {
+        "scope": "main",
+        "id": "swanson-capture",
+        "event": "WORKER_RUNNING",
+        "buildId": "516632973c32512230d1eb2b09f2406ec7e7a0f9b78be4d696749d6a0a5354be"
+      },
+      {
+        "scope": "main",
+        "id": "swanson-file",
+        "event": "WORKER_RUNNING",
+        "buildId": "516632973c32512230d1eb2b09f2406ec7e7a0f9b78be4d696749d6a0a5354be"
+      },
+      {
+        "scope": "main",
+        "id": "channel-product-input",
+        "event": "WORKER_RUNNING",
+        "buildId": "516632973c32512230d1eb2b09f2406ec7e7a0f9b78be4d696749d6a0a5354be"
+      },
+      {
+        "scope": "main",
+        "id": "amazon-channel-label-plan",
+        "event": "WORKER_RUNNING",
+        "buildId": "516632973c32512230d1eb2b09f2406ec7e7a0f9b78be4d696749d6a0a5354be"
+      },
+      {
+        "scope": "main",
+        "id": "amazon-channel-label-source",
+        "event": "WORKER_RUNNING",
+        "buildId": "516632973c32512230d1eb2b09f2406ec7e7a0f9b78be4d696749d6a0a5354be"
+      },
+      {
+        "scope": "main",
+        "id": "amazon-channel-label-manifest",
+        "event": "WORKER_RUNNING",
+        "buildId": "516632973c32512230d1eb2b09f2406ec7e7a0f9b78be4d696749d6a0a5354be"
+      },
+      {
+        "scope": "main",
+        "id": "amazon-channel-label-collection",
+        "event": "WORKER_RUNNING",
+        "buildId": "516632973c32512230d1eb2b09f2406ec7e7a0f9b78be4d696749d6a0a5354be"
+      },
+      {
+        "scope": "main",
+        "id": "amazon-product-input",
+        "event": "WORKER_RUNNING",
+        "buildId": "516632973c32512230d1eb2b09f2406ec7e7a0f9b78be4d696749d6a0a5354be"
+      },
+      {
+        "scope": "main",
+        "id": "amazon-capture",
+        "event": "WORKER_RUNNING",
+        "buildId": "516632973c32512230d1eb2b09f2406ec7e7a0f9b78be4d696749d6a0a5354be"
+      },
+      {
+        "scope": "main",
+        "id": "amazon-file",
+        "event": "WORKER_RUNNING",
+        "buildId": "516632973c32512230d1eb2b09f2406ec7e7a0f9b78be4d696749d6a0a5354be"
+      },
+      {
+        "scope": "main",
+        "id": "amazon-channel-product-input",
+        "event": "WORKER_RUNNING",
+        "buildId": "516632973c32512230d1eb2b09f2406ec7e7a0f9b78be4d696749d6a0a5354be"
+      },
+      {
+        "scope": "dtc",
+        "id": "channel-label-collection",
+        "event": "WORKER_RUNNING",
+        "buildId": "516632973c32512230d1eb2b09f2406ec7e7a0f9b78be4d696749d6a0a5354be"
+      },
+      {
+        "scope": "dtc",
+        "id": "channel-product-input",
+        "event": "WORKER_RUNNING",
+        "buildId": "516632973c32512230d1eb2b09f2406ec7e7a0f9b78be4d696749d6a0a5354be"
+      }
+    ],
+    "workflowEntriesUnchanged": true,
+    "main": {
+      "pid": 23059,
+      "at": "2026-09-13T10:18:40.993Z",
+      "ready": 90,
+      "total": 90
+    },
+    "dtc": {
+      "pid": 23433,
+      "at": "2026-09-13T10:18:40.739Z",
+      "ready": 26,
+      "total": 26
+    },
+    "passed": true
+  },
+  "nativeBackfill": {
+    "at": "2026-09-13T09:46:48.882Z",
+    "passed": true,
+    "before": {
+      "collected_product": {
+        "n": 30,
+        "digest": "836749c2ebc317dac738de0bb5fe4320"
+      },
+      "review_record": {
+        "n": 74,
+        "digest": "0f0338bf84034182dcd76548d2240cc3"
+      },
+      "processing_result": {
+        "n": 176,
+        "digest": "6298246b1c7e48cb3e29b87f7eb78a54"
+      }
+    },
+    "after": {
+      "collected_product": {
+        "n": 30,
+        "digest": "836749c2ebc317dac738de0bb5fe4320"
+      },
+      "review_record": {
+        "n": 74,
+        "digest": "0f0338bf84034182dcd76548d2240cc3"
+      },
+      "processing_result": {
+        "n": 176,
+        "digest": "6298246b1c7e48cb3e29b87f7eb78a54"
+      }
+    }
+  },
+  "recapture": {
+    "at": "2026-09-13T10:14:37.124Z",
+    "requestId": "da5e599e-d69f-4709-9df0-e24379c2e4ae",
+    "states": [
+      {
+        "id": "v3-collection-da5e599e-d69f-4709-9df0-e24379c2e4ae",
+        "status": "COMPLETED",
+        "closedAt": "2026-09-13T10:11:33.817Z"
+      },
+      {
+        "id": "v3-collection-da5e599e-d69f-4709-9df0-e24379c2e4ae-catalog",
+        "status": "COMPLETED",
+        "closedAt": "2026-09-13T10:05:49.187Z"
+      },
+      {
+        "id": "catalog-product-12c61215cd330eee400b33fe4cc26fb1132695ea19eed7e6111456bdf2388a8d",
+        "status": "COMPLETED",
+        "closedAt": "2026-09-13T10:10:06.561Z"
+      },
+      {
+        "id": "swanson-variant-d7fefaa1b5a5eea1ac0b52c0c1787dc44fa48d418b80cad1a32a07af10b72cb2",
+        "status": "COMPLETED",
+        "closedAt": "2026-09-13T10:09:59.854Z"
+      },
+      {
+        "id": "swanson-variant-d7fefaa1b5a5eea1ac0b52c0c1787dc44fa48d418b80cad1a32a07af10b72cb2-label",
+        "status": "COMPLETED",
+        "closedAt": "2026-09-13T10:09:59.524Z"
+      },
+      {
+        "id": "catalog-product-d5dc34f552ae6e351ed5d939894ff8437977321fe3ac2ed351e09674351f52ee",
+        "status": "COMPLETED",
+        "closedAt": "2026-09-13T10:11:21.949Z"
+      },
+      {
+        "id": "swanson-variant-32bf8957540685f1d59705bf191aec3b0d46605d84bcc103b1ef97b98f839dc9",
+        "status": "COMPLETED",
+        "closedAt": "2026-09-13T10:11:19.905Z"
+      },
+      {
+        "id": "swanson-variant-32bf8957540685f1d59705bf191aec3b0d46605d84bcc103b1ef97b98f839dc9-label",
+        "status": "COMPLETED",
+        "closedAt": "2026-09-13T10:11:19.600Z"
+      }
+    ],
+    "tables": {
+      "collected_product": {
+        "before": 30,
+        "after": 32,
+        "oldRecordsUnchanged": true
+      },
+      "processing_result": {
+        "before": 176,
+        "after": 184,
+        "oldRecordsUnchanged": true
+      },
+      "review_record": {
+        "before": 74,
+        "after": 76,
+        "oldRecordsUnchanged": true
+      }
+    },
+    "pages": [
+      {
+        "taskId": "swanson-page-32bf8957540685f1d59705bf191aec3b0d46605d84bcc103b1ef97b98f839dc9",
+        "targetId": "9CC44753D2EF4BDF3767312EED78E135",
+        "closedPath": "/Users/barry/apps/crawlv3-batch-a.UiA4dx/live/channel-resident-20260910-v2/browser-pages/v3/browser-pages/6986631809550b354a4c9ac064d0976d9de0b39cdc098f30d99e311c08c2b2c3/closed.json",
+        "closedSha256": "61265f6895ef984dafc22f348f71fcfd9c275a7c8ead44021509c4fc5de30083",
+        "matchingReceipt": true
+      },
+      {
+        "taskId": "swanson-page-d7fefaa1b5a5eea1ac0b52c0c1787dc44fa48d418b80cad1a32a07af10b72cb2",
+        "targetId": "D70EE0FBAFC7ACFA0EEDE1A22519F932",
+        "closedPath": "/Users/barry/apps/crawlv3-batch-a.UiA4dx/live/channel-resident-20260910-v2/browser-pages/v3/browser-pages/8f45160f42fb99f1766353c79b84559b11cad6ad58e0b45dd71ad7d61a75f6c9/closed.json",
+        "closedSha256": "ea5b07bc39af3c2ef5adafcbf797be8eef688bbfd1d0fe30901575f785aea6c7",
+        "matchingReceipt": true
+      }
+    ],
+    "history": [
+      {
+        "sourceRecordId": "0e22d723d29b269344b214ccce8c7c9a9860f6e42fa021774b114758e148d88e",
+        "codec": "v3-capture-history/1",
+        "observationId": "swanson-1e23ab296c704f127a8a01fa30c4bc77195f3a711da80ad924bed1245f14d52e",
+        "capturedAt": "2026-09-13T10:07:10.937Z",
+        "externalId": "ACG009",
+        "price": "43.59",
+        "currency": null
+      },
+      {
+        "sourceRecordId": "a24a5c17e8a98fb8574fb6f67fc09f19942ac69b3ce07efff828d76ac913c25c",
+        "codec": "v3-capture-history/1",
+        "observationId": "swanson-a64e48387a83fb035359de38321cb41461534903dbdc6d2dc2a57fb13745d215",
+        "capturedAt": "2026-09-13T10:08:33.915Z",
+        "externalId": "ACG002",
+        "price": "47.29",
+        "currency": null
+      },
+      {
+        "sourceRecordId": "a431c08e5dd4906160eb242016a3dfe52769cc5e953c60133d8fef5fc58a9e25",
+        "codec": "v3-formula-history/1",
+        "observationId": "swanson-1e23ab296c704f127a8a01fa30c4bc77195f3a711da80ad924bed1245f14d52e",
+        "capturedAt": "2026-09-13T10:07:10.937Z",
+        "externalId": "ACG009",
+        "formulaRows": 3
+      },
+      {
+        "sourceRecordId": "4755d6617e8464637bb96fac62faddde117d4741db52d4fbfa3bfa2eff6ecdc3",
+        "codec": "v3-formula-history/1",
+        "observationId": "swanson-a64e48387a83fb035359de38321cb41461534903dbdc6d2dc2a57fb13745d215",
+        "capturedAt": "2026-09-13T10:08:33.915Z",
+        "externalId": "ACG002",
+        "formulaRows": 3
+      }
+    ],
+    "trends": [
+      {
+        "external_id": "ACG002",
+        "kind": "formula",
+        "first_seen": "2026-09-01T15:15:16.612Z",
+        "last_seen": "2026-09-13T10:08:33.915Z",
+        "points": 2
+      },
+      {
+        "external_id": "ACG002",
+        "kind": "metrics",
+        "first_seen": "2026-09-01T15:15:16.612Z",
+        "last_seen": "2026-09-13T10:08:33.915Z",
+        "points": 2
+      },
+      {
+        "external_id": "ACG009",
+        "kind": "formula",
+        "first_seen": "2026-09-01T15:15:19.057Z",
+        "last_seen": "2026-09-13T10:07:10.937Z",
+        "points": 2
+      },
+      {
+        "external_id": "ACG009",
+        "kind": "metrics",
+        "first_seen": "2026-09-01T15:15:19.057Z",
+        "last_seen": "2026-09-13T10:07:10.937Z",
+        "points": 2
+      }
+    ],
+    "held": 0,
+    "guards": 0,
+    "resources": [
+      {
+        "resource_id": "windows-dtc-browser",
+        "healthy": true,
+        "fresh": true
+      },
+      {
+        "resource_id": "mini-ego-space-1",
+        "healthy": true,
+        "fresh": true
+      },
+      {
+        "resource_id": "mini-cpu",
+        "healthy": true,
+        "fresh": true
+      },
+      {
+        "resource_id": "mini-model-account",
+        "healthy": true,
+        "fresh": true
+      },
+      {
+        "resource_id": "windows-ocr",
+        "healthy": true,
+        "fresh": true
+      }
+    ],
+    "counts": [
+      {
+        "kind": "source",
+        "n": 47429
+      },
+      {
+        "kind": "metrics",
+        "n": 60069
+      },
+      {
+        "kind": "formula",
+        "n": 33676
+      }
+    ],
+    "businessComplete": true
+  },
+  "recaptureEvidence": {
+    "at": "2026-09-13T10:17:14.714Z",
+    "requestId": "da5e599e-d69f-4709-9df0-e24379c2e4ae",
+    "passed": true,
+    "pages": [
+      {
+        "taskId": "swanson-page-32bf8957540685f1d59705bf191aec3b0d46605d84bcc103b1ef97b98f839dc9",
+        "targetId": "9CC44753D2EF4BDF3767312EED78E135",
+        "closedPath": "/Users/barry/apps/crawlv3-batch-a.UiA4dx/live/channel-resident-20260910-v2/browser-pages/v3/browser-pages/6986631809550b354a4c9ac064d0976d9de0b39cdc098f30d99e311c08c2b2c3/closed.json",
+        "sha256": "61265f6895ef984dafc22f348f71fcfd9c275a7c8ead44021509c4fc5de30083"
+      },
+      {
+        "taskId": "swanson-page-8affcf9caf0d253280a1b9b2baf033dcfa4ce22f50b122b87ef3dcbe7f6d1557-family",
+        "targetId": "772C598BB6422C9D916A6391DA45BDE5",
+        "closedPath": "/Users/barry/apps/crawlv3-batch-a.UiA4dx/live/channel-resident-20260910-v2/browser-pages/v3/browser-pages/778eafcd782162c74d4283c7acaadd66a8a43cb3ea89313e383f536a861fbe1c/closed.json",
+        "sha256": "e963756c4acc8f28dede79d05235f28fdc33a4d5060d6f6e7fa26fa793b7a20b"
+      },
+      {
+        "taskId": "swanson-page-d7fefaa1b5a5eea1ac0b52c0c1787dc44fa48d418b80cad1a32a07af10b72cb2",
+        "targetId": "D70EE0FBAFC7ACFA0EEDE1A22519F932",
+        "closedPath": "/Users/barry/apps/crawlv3-batch-a.UiA4dx/live/channel-resident-20260910-v2/browser-pages/v3/browser-pages/8f45160f42fb99f1766353c79b84559b11cad6ad58e0b45dd71ad7d61a75f6c9/closed.json",
+        "sha256": "ea5b07bc39af3c2ef5adafcbf797be8eef688bbfd1d0fe30901575f785aea6c7"
+      },
+      {
+        "taskId": "swanson-catalog-bc85fa02abeb8d6aed88d660599c8bf59feb4cb20a6d15426f5117a2e690a082",
+        "targetId": "49A5AA87367458C3A6B6A011B6E50606",
+        "closedPath": "/Users/barry/apps/crawlv3-batch-a.UiA4dx/live/channel-resident-20260910-v2/browser-pages/v3/browser-pages/91c54fcb724e2fde5d38ba06bfd3607b0e4f9f36ca8494fafdab448d89c36c8a/closed.json",
+        "sha256": "4ec94073d7dda4609f9846aa79719d32440dcaa1f091885b159d5db440ab3e5f"
+      },
+      {
+        "taskId": "swanson-page-bfab5e550648c9b236fc881647a695cb3496425e4a1a3badba1ed6d91c9c632d-family",
+        "targetId": "D128C68AEC41ABD073FAFF38FC162275",
+        "closedPath": "/Users/barry/apps/crawlv3-batch-a.UiA4dx/live/channel-resident-20260910-v2/browser-pages/v3/browser-pages/d617dae1ef818b0ca98f4db93c94b63a38c170bbe1fadc7f92b8a5306d46ce18/closed.json",
+        "sha256": "aa438482ec9f7c0bf23417eb4bd795a3bb6546eba8d410714917a904f33fbd20"
+      }
+    ],
+    "rechecks": [
+      {
+        "at": "2026-09-13T10:17:03.590Z",
+        "targetsAbsent": true
+      },
+      {
+        "at": "2026-09-13T10:17:03.671Z",
+        "targetsAbsent": true
+      },
+      {
+        "at": "2026-09-13T10:17:03.748Z",
+        "targetsAbsent": true
+      }
+    ],
+    "evidenceCount": 37,
+    "evidence": [
+      {
+        "objectKey": "v3/swanson-catalog/bc85fa02abeb8d6aed88d660599c8bf59feb4cb20a6d15426f5117a2e690a082/projection.json",
+        "sha256": "1913cc2e362896d523d3ec836d1087657d0f4f9ab72e6fb1f565b543602655d6",
+        "byteSize": 3768,
+        "readbackBytes": 3768
+      },
+      {
+        "objectKey": "v3/swanson-families/discovery-12c61215cd330eee400b33fe4cc26fb1132695ea19eed7e6111456bdf2388a8d/projection.json",
+        "sha256": "cc1f39a3d539a818f5695007533357b235b63814a002a0e762b510f39aed4c81",
+        "byteSize": 3619,
+        "readbackBytes": 3619
+      },
+      {
+        "objectKey": "v3/swanson-families/discovery-d5dc34f552ae6e351ed5d939894ff8437977321fe3ac2ed351e09674351f52ee/projection.json",
+        "sha256": "22ea813cd9b07dfe51e4de492e50466da4e1d03c72b8b460cff818facbca3fe4",
+        "byteSize": 3625,
+        "readbackBytes": 3625
+      },
+      {
+        "objectKey": "v3/swanson-products/swanson-capture-32bf8957540685f1d59705bf191aec3b0d46605d84bcc103b1ef97b98f839dc9/projection.json",
+        "sha256": "dd725ab842991c2ddcfda98d6dd6316eab0b9b7c451af38f6a08339d9b2cbf2e",
+        "readbackBytes": 3581
+      },
+      {
+        "objectKey": "v3/channel-plans/plan-6979219112ee54c424dc37cfa115f824ccde8fc0de39dc016c55f551b06dfb13/derived.html",
+        "sha256": "c097aae62fdbe077b8db8ede464ea6e2d61e631f296ad0e4f7c3803d0053e4d8",
+        "byteSize": 1696,
+        "readbackBytes": 1696
+      },
+      {
+        "objectKey": "v3/swanson-a64e48387a83fb035359de38321cb41461534903dbdc6d2dc2a57fb13745d215/chp-d788e13f0e870e0dd0be9399760360060f585b7d8d682e6a6e975de0f43a023e/source",
+        "sha256": "abebda595c1eefb73597ab6604debe5cd81186ead7564e9136721fd67d1e6f59",
+        "byteSize": 44342,
+        "readbackBytes": 44342
+      },
+      {
+        "objectKey": "v3/pages/chp-bae3a358cf15e0c31a33d837036cb500432a776f949c8f27923781665b01c222/document.json",
+        "sha256": "ee0a4b152f1790a568801d4ca038307f66c178dd6adb096203904a28b42fba20",
+        "byteSize": 2810,
+        "readbackBytes": 2810
+      },
+      {
+        "objectKey": "v3/pages/chp-bae3a358cf15e0c31a33d837036cb500432a776f949c8f27923781665b01c222/tables.json",
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "byteSize": 2,
+        "readbackBytes": 2
+      },
+      {
+        "objectKey": "v3/label-core/core-d128cad51887e11d62492bf70e88ce01766feee0d83f0ba65167fff360554451/document.json",
+        "sha256": "8e9354860562ae99bc0a7b38c329485784820fbaa86d846ea2d39b8828266ce0",
+        "byteSize": 1564,
+        "readbackBytes": 1564
+      },
+      {
+        "objectKey": "v3/swanson-a64e48387a83fb035359de38321cb41461534903dbdc6d2dc2a57fb13745d215/chp-1c3233cbccfb7e622b3a67e238f560cf332d0eb35e85e576016be4e6eddb173d/source",
+        "sha256": "94535c0be8743b54cb038a89f50d7bc4866212ad7789d2c2b9829953be2b3b37",
+        "byteSize": 34028,
+        "readbackBytes": 34028
+      },
+      {
+        "objectKey": "operations/chp-b39e8025918453397609d600ca3b2cd5ca9a94c8f46d278338b994e3281053c5/e3fab0a6855da2379bba8d269b0d09b2988d90b3dc3e30d18d5dae1721f32aa9/result.json",
+        "sha256": "40da5aebe5e61c12f308770d671eb0d3afbe6cb6ffe00e1a0d6b135fe5a6a33b",
+        "byteSize": 3358,
+        "readbackBytes": 3358
+      },
+      {
+        "objectKey": "operations/chp-b39e8025918453397609d600ca3b2cd5ca9a94c8f46d278338b994e3281053c5/e3fab0a6855da2379bba8d269b0d09b2988d90b3dc3e30d18d5dae1721f32aa9/completion.json",
+        "sha256": "b73ac3b72f9d73affdb13dd763b28a88a86d25a7010bc3659bc4d923ae009b8c",
+        "byteSize": 828,
+        "readbackBytes": 828
+      },
+      {
+        "objectKey": "v3/swanson-a64e48387a83fb035359de38321cb41461534903dbdc6d2dc2a57fb13745d215/chp-c7e878a9997070bad1f1dac8071ab3a26f85f73934d345c63d57045b05739d47/source",
+        "sha256": "ce0ffff4b94ae503bc5b42eab524521776a99591d2c0f70a78a943c1f02f7e20",
+        "byteSize": 40134,
+        "readbackBytes": 40134
+      },
+      {
+        "objectKey": "operations/chp-7860429243f2a151c169b6db8c2558ab9589ca2b0c5535f5b0acb67df6703c4f/7e5e6e69874ebee3854d8b61b8249e6f8ca8bbcf76dc5952b7ca7c91d0ad51c3/result.json",
+        "sha256": "0e9d5ef3df14be690b5be7fab73ba7c2c8b766e6a95498020ba3cd33e7c8a33e",
+        "byteSize": 4051,
+        "readbackBytes": 4051
+      },
+      {
+        "objectKey": "operations/chp-7860429243f2a151c169b6db8c2558ab9589ca2b0c5535f5b0acb67df6703c4f/7e5e6e69874ebee3854d8b61b8249e6f8ca8bbcf76dc5952b7ca7c91d0ad51c3/completion.json",
+        "sha256": "4a8edef8f3a28f6cc1f37113b4090f339c72828ece08531471a5331ff92d9c2c",
+        "byteSize": 828,
+        "readbackBytes": 828
+      },
+      {
+        "objectKey": "operations/chp-27e410c46ee0dcd6fa7f08bf3733da3d2a4e9a4ff45e018942ee4e96edbd54c9/b57ce4e860dee3c0af3178e97cb67b78e68aded62e10b9bbff3b01d883065a6b/result.json",
+        "sha256": "e345f4403e9e57273291e8ed6024d5c6991c7d65f8b9eb1957dd96899058d895",
+        "byteSize": 1830,
+        "readbackBytes": 1830
+      },
+      {
+        "objectKey": "operations/chp-27e410c46ee0dcd6fa7f08bf3733da3d2a4e9a4ff45e018942ee4e96edbd54c9/b57ce4e860dee3c0af3178e97cb67b78e68aded62e10b9bbff3b01d883065a6b/completion.json",
+        "sha256": "614cf9c71b20f3245c69dab7c6231c1e925087e42a735c823998a43ab6eb3289",
+        "byteSize": 828,
+        "readbackBytes": 828
+      },
+      {
+        "objectKey": "v3/swanson-products/swanson-capture-d7fefaa1b5a5eea1ac0b52c0c1787dc44fa48d418b80cad1a32a07af10b72cb2/projection.json",
+        "sha256": "26c7b370525a982c93b4e76f286b585a1ce841030b07556744a6b6afad631ec7",
+        "readbackBytes": 3575
+      },
+      {
+        "objectKey": "v3/channel-plans/plan-912d2c21d34a27c649ad1274b25bd6f7ef738ca7eba1dae155116ef8c5cdf86d/derived.html",
+        "sha256": "e92d2bb9a388e432cd1f3446ee50aad83498ba997e99c85d9073286dcd3baab3",
+        "byteSize": 1666,
+        "readbackBytes": 1666
+      },
+      {
+        "objectKey": "v3/swanson-1e23ab296c704f127a8a01fa30c4bc77195f3a711da80ad924bed1245f14d52e/chp-c228ca5d2a275394ba15dd2d585854c32b4572dbe92420fcb504260c03c1b859/source",
+        "sha256": "ac47a274e94c1b097617ba2805fd9383c098b3160dac4fb793e1bd0091c5892b",
+        "byteSize": 42889,
+        "readbackBytes": 42889
+      },
+      {
+        "objectKey": "v3/pages/chp-dead1fbaeb014cf55282ffa486908e81a416e1120fbf2cbc7cef484c7e7fd4a7/document.json",
+        "sha256": "739fe5546b0e80d67f4c2e8c0a6859a4cf22194d19e86f6979570c1fafc01657",
+        "byteSize": 2771,
+        "readbackBytes": 2771
+      },
+      {
+        "objectKey": "v3/pages/chp-dead1fbaeb014cf55282ffa486908e81a416e1120fbf2cbc7cef484c7e7fd4a7/tables.json",
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "byteSize": 2,
+        "readbackBytes": 2
+      },
+      {
+        "objectKey": "v3/swanson-1e23ab296c704f127a8a01fa30c4bc77195f3a711da80ad924bed1245f14d52e/chp-69016ebcba7d9e3684f58a09d01a6a5dceb298175cbef372c5048c7a102352ea/source",
+        "sha256": "0c6f547cfdcf85242bcbd7137543545860884376a6cd0ffc908cb55da8d19d1a",
+        "byteSize": 36561,
+        "readbackBytes": 36561
+      },
+      {
+        "objectKey": "v3/label-core/core-366bb9b4d401d519398b899f5e0591e5f4ffd2398fcf9b208c1a6d247cc1be25/document.json",
+        "sha256": "1a492ee788260d04f67f646f7384cf96049798dbf1b5f900cbf42fb5193979ee",
+        "byteSize": 1527,
+        "readbackBytes": 1527
+      },
+      {
+        "objectKey": "operations/chp-12fbeb26927bf6fd1b9f0b7084677164461f4e4b7630b1084d9a093a463a3f11/581d6194c75426c22c82d1c8cd5287a014c24f65866471230f74774fc6001875/result.json",
+        "sha256": "231b7825df0565a87b4504afffb44a655a35ce2bff35e24645c10621a45a0593",
+        "byteSize": 3913,
+        "readbackBytes": 3913
+      },
+      {
+        "objectKey": "operations/chp-12fbeb26927bf6fd1b9f0b7084677164461f4e4b7630b1084d9a093a463a3f11/581d6194c75426c22c82d1c8cd5287a014c24f65866471230f74774fc6001875/completion.json",
+        "sha256": "ac7f47579893d8d8434a94ae4ac1144aa08c584af587cd36e695bd73f05e0c3a",
+        "byteSize": 828,
+        "readbackBytes": 828
+      },
+      {
+        "objectKey": "v3/swanson-1e23ab296c704f127a8a01fa30c4bc77195f3a711da80ad924bed1245f14d52e/chp-dbe8a9f544ecaf3e2a0f6fe0f28c8075bf80cafec76607eddfaf2e26b767a734/source",
+        "sha256": "fa20748fe2c761758a65c4d868065167cbfd0c331175da3077bfc0670e4d86d9",
+        "byteSize": 46381,
+        "readbackBytes": 46381
+      },
+      {
+        "objectKey": "operations/chp-6f10189e99ae97f7ab9086c4d9fc21bdf863f197fdfb9a980e3092a5ba5bc32e/e89ba938f2c5aee6a1bbc4c1bee20cff778aaa48120930321d8e2bee4a4bcfa3/result.json",
+        "sha256": "b8022fea98c88ca22cead7719f45706e181825951d80432e2d6977e33beb55b7",
+        "byteSize": 4145,
+        "readbackBytes": 4145
+      },
+      {
+        "objectKey": "operations/chp-6f10189e99ae97f7ab9086c4d9fc21bdf863f197fdfb9a980e3092a5ba5bc32e/e89ba938f2c5aee6a1bbc4c1bee20cff778aaa48120930321d8e2bee4a4bcfa3/completion.json",
+        "sha256": "2ca2a23c5d69870b3ccc843027edbf8a8ec81471c50fe7d8042a40bee355e99b",
+        "byteSize": 828,
+        "readbackBytes": 828
+      },
+      {
+        "objectKey": "operations/chp-f2c420a9ce42e663bba44269f400570cd84b031e88890d8510f4ba7cc14e0edf/a01b36c4f6c3ff7f34b3b5f5fea6a675aa5ce45e267dfdd9ca5ecb19f40f16b0/result.json",
+        "sha256": "48efd5d68689b368bf08798a311e3dbf8129bf41cc1c12df365cd35d2a229a49",
+        "byteSize": 2776,
+        "readbackBytes": 2776
+      },
+      {
+        "objectKey": "operations/chp-f2c420a9ce42e663bba44269f400570cd84b031e88890d8510f4ba7cc14e0edf/a01b36c4f6c3ff7f34b3b5f5fea6a675aa5ce45e267dfdd9ca5ecb19f40f16b0/completion.json",
+        "sha256": "2d84c2570b1d305daf16c9949fdf4812f78bf86c709796701c36459738bf229d",
+        "byteSize": 828,
+        "readbackBytes": 828
+      },
+      {
+        "objectKey": "v3/label-products/label-912d2c21d34a27c649ad1274b25bd6f7ef738ca7eba1dae155116ef8c5cdf86d/assembly.json",
+        "sha256": "15895c24fee346d786208384e3780fd98fccf959616289fffb45dd2b5ef2ed77",
+        "byteSize": 12163,
+        "readbackBytes": 12163
+      },
+      {
+        "objectKey": "v3/vision/chl-4974c7bd51bdb0abd95257ef29d09a38073430c86bfb148dd2fc44a8822ac7e5/response.json",
+        "sha256": "2a07d0c3f232b8d4c5f47c71fcc59d1f0fe437307a0875d699c6689064d78334",
+        "byteSize": 1838,
+        "readbackBytes": 1838
+      },
+      {
+        "objectKey": "v3/vision/chl-4974c7bd51bdb0abd95257ef29d09a38073430c86bfb148dd2fc44a8822ac7e5/completion.json",
+        "sha256": "d409166d5493c412b018dfb54535fd444fdd11ff031feb092876450e51c93623",
+        "byteSize": 2646,
+        "readbackBytes": 2646
+      },
+      {
+        "objectKey": "v3/label-products/label-6979219112ee54c424dc37cfa115f824ccde8fc0de39dc016c55f551b06dfb13/assembly.json",
+        "sha256": "0f4a0fade41922b46bfd9373f1396360e073590097ddaa524493cb1eaf65d76a",
+        "byteSize": 12305,
+        "readbackBytes": 12305
+      },
+      {
+        "objectKey": "v3/vision/chl-12d323c9adc516aa7f24ff778a0fe623f2e8d25eb211cbda7ef1dff8839443b5/response.json",
+        "sha256": "ff5fbbd0afddaf516137c2b36721885285cf1df1d6eda444acce3e645cf8bd89",
+        "byteSize": 2055,
+        "readbackBytes": 2055
+      },
+      {
+        "objectKey": "v3/vision/chl-12d323c9adc516aa7f24ff778a0fe623f2e8d25eb211cbda7ef1dff8839443b5/completion.json",
+        "sha256": "f9059e30ffde64fe983d90eb46f9b9d7e57955436d34a37d6645407cd6641c50",
+        "byteSize": 2612,
+        "readbackBytes": 2612
+      }
+    ],
+    "browserCloseCalls": 0
+  },
+  "idempotency": {
+    "at": "2026-09-13T10:17:56.781Z",
+    "before": {
+      "sources": 47429,
+      "observations": 93745
+    },
+    "after": {
+      "sources": 47429,
+      "observations": 93745
+    },
+    "passed": true,
+    "runs": [
+      {
+        "sourceRecordId": "0e22d723d29b269344b214ccce8c7c9a9860f6e42fa021774b114758e148d88e",
+        "mode": "channel",
+        "exitCode": 0,
+        "output": [
+          {
+            "event": "HISTORY_CAPTURE_SAVED",
+            "observationId": "swanson-1e23ab296c704f127a8a01fa30c4bc77195f3a711da80ad924bed1245f14d52e",
+            "evidenceKey": "v3/history-observations/649fc9b898e39ca1153f0f1c30d665e10020d3f9885d22d358d4462eb0cfaa51/capture.json",
+            "inserted": false
+          },
+          {
+            "event": "HISTORY_RECONCILED",
+            "mode": "channel",
+            "status": "saved"
+          }
+        ]
+      },
+      {
+        "sourceRecordId": "a24a5c17e8a98fb8574fb6f67fc09f19942ac69b3ce07efff828d76ac913c25c",
+        "mode": "channel",
+        "exitCode": 0,
+        "output": [
+          {
+            "event": "HISTORY_CAPTURE_SAVED",
+            "observationId": "swanson-a64e48387a83fb035359de38321cb41461534903dbdc6d2dc2a57fb13745d215",
+            "evidenceKey": "v3/history-observations/99af5ee04333148edea713dda14acf809cd8e19fd66fd12403b8269ca0b62586/capture.json",
+            "inserted": false
+          },
+          {
+            "event": "HISTORY_RECONCILED",
+            "mode": "channel",
+            "status": "saved"
+          }
+        ]
+      },
+      {
+        "sourceRecordId": "a431c08e5dd4906160eb242016a3dfe52769cc5e953c60133d8fef5fc58a9e25",
+        "mode": "collected",
+        "exitCode": 0,
+        "output": [
+          {
+            "event": "HISTORY_FORMULA_SAVED",
+            "observationId": "swanson-1e23ab296c704f127a8a01fa30c4bc77195f3a711da80ad924bed1245f14d52e",
+            "operationId": "label-912d2c21d34a27c649ad1274b25bd6f7ef738ca7eba1dae155116ef8c5cdf86d",
+            "inserted": false
+          },
+          {
+            "event": "HISTORY_RECONCILED",
+            "mode": "collected",
+            "status": "saved"
+          }
+        ]
+      },
+      {
+        "sourceRecordId": "4755d6617e8464637bb96fac62faddde117d4741db52d4fbfa3bfa2eff6ecdc3",
+        "mode": "collected",
+        "exitCode": 0,
+        "output": [
+          {
+            "event": "HISTORY_FORMULA_SAVED",
+            "observationId": "swanson-a64e48387a83fb035359de38321cb41461534903dbdc6d2dc2a57fb13745d215",
+            "operationId": "label-6979219112ee54c424dc37cfa115f824ccde8fc0de39dc016c55f551b06dfb13",
+            "inserted": false
+          },
+          {
+            "event": "HISTORY_RECONCILED",
+            "mode": "collected",
+            "status": "saved"
+          }
+        ]
+      }
+    ],
+    "reviews": [
+      {
+        "review_id": "text-e62b824b-2846-40ef-a7be-91aa53b57aee",
+        "code": "TEXT.LABEL_COVERAGE_UNCERTAIN"
+      },
+      {
+        "review_id": "text-2edf303e-ce62-44d1-bf6f-53e41cb13c7f",
+        "code": "TEXT.LABEL_EXTRACTION_INCOMPLETE"
+      }
+    ],
+    "browserOrModelCalls": 0
+  },
+  "productServiceExport": {
+    "at": "2026-09-13T10:12:07.378Z",
+    "records": 47429,
+    "metricRequests": 60069,
+    "metricSchemaPassed": 60069,
+    "labelDrafts": 4,
+    "labelSchemaPassed": 4,
+    "labelExact": 4,
+    "retainedSources": 47429,
+    "pendingReasons": {
+      "retained-with-original-schema": 33093
+    },
+    "issues": [],
+    "companyResolution": "deferred",
+    "productServiceWrites": 0,
+    "contract": "Jakarta 9ec4a665 current source schemas; label request checked with company omitted",
+    "uncompressedSha256": "587d001b37571af9d18574e8ae14d234b75db48a5adf9507330d259705ca93bf",
+    "bytes": 179987985,
+    "passed": true
+  },
+  "testCleanup": {
+    "stopped": [
+      "crawlv3-history-final-observations-20260913",
+      "crawlv3-history-observations-20260913-v2",
+      "crawlv3-history-observations-20260913",
+      "crawlv3-history-isolated-20260913"
+    ],
+    "removed": false
+  }
+}

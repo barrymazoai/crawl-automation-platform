@@ -5,6 +5,7 @@ import { ChannelError } from "./html-evidence.js";
 import { SWANSON_BRANDS_URL } from "./channel-brand.js";
 import { swansonProductAddress } from "./swanson-rendered.js";
 import { SwansonCatalogProjectionSchema,swansonCatalogAddress,swansonCatalogProjectionExpression,parseSwansonRenderedCatalog } from "./swanson-catalog-rendered.js";
+import {commerceDomExpression} from "./commerce-dom.js";
 
 const common = `url:location.href,capturedAt:new Date().toISOString()`;
 const directory = `(() => { const search=document.querySelector('#brands-search-input');if(!search)throw Error('SWANSON_DIRECTORY_TEMPLATE');
@@ -15,7 +16,7 @@ entries:[...document.querySelectorAll('.brand-item a')].map(a=>({name:a.innerTex
 export const swansonCanonicalExpression = `(document.querySelector('link[rel="canonical"]')?.href||(document.querySelector('meta[property="og:type"]')?.content==='product'?document.querySelector('meta[property="og:url"]')?.content:undefined))`;
 const canonical=swansonCanonicalExpression;
 const product = `(() => { const headings=[...document.querySelectorAll('h1')];if(headings.length!==1)throw Error('SWANSON_PRODUCT_TEMPLATE');
-return {${common},canonicalUrl:${canonical},title:headings[0].innerText.trim(),
+return {${common},canonicalUrl:${canonical},title:headings[0].innerText.trim(),commerce:${commerceDomExpression("swanson")},
 selectedForms:[...document.querySelectorAll('product-form-component[data-product-id]')].map(f=>({productId:f.getAttribute('data-product-id'),variantIds:[...f.querySelectorAll('input[name="id"]')].map(i=>i.value)})),
 gallery:[...document.querySelectorAll('slideshow-slide .product-media img')].map(i=>({url:i.currentSrc||i.src,alt:i.alt||''})),
 variantPicker:{unmapped:[...document.querySelectorAll('input[role="radio"]')].filter(i=>!i.hasAttribute('data-connected-product-url')||!i.hasAttribute('data-variant-id')).length,

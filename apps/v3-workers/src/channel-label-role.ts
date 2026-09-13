@@ -12,6 +12,7 @@ import { PostgresReviews } from "@crawl-automation/v3-review";
 import { SavedSourceEvidence, ResolveOcrReceipt, LabelProductAssembly, CollectLabelProduct, PostgresLabelCollectedProducts } from "@crawl-automation/v3-product";
 import { PostgresResourceAdmission } from "../../../packages/v3-product/src/resource-admission.js";
 import { QualityReviewStops } from "./quality-review-stops.js";
+import {historyObservations} from "./history-observations.js";
 
 export const channelLabelRoutes:Record<string,string[]>={
  plan:["loadChannelLabelPlan"],page:["prepareHtmlPage"],"page-text":["preparePageText"],"image-prepare":["prepareImageOcr"],
@@ -93,7 +94,7 @@ export async function channelLabelRole(o:{role:string;hostId:string;root:string;
     return{status:"review",code:outcome.code,automaticRetry:false,...await record(task,outcome,AbortSignal.timeout(10000))};};break;
  }
  case "assembly":{const m=await assembly();activities.assembleLabelProduct=(r,s)=>m.run(r,s);break;}
- case "collection":{const m=new CollectLabelProduct({local,remote,reviews,assembly:await assembly(),registry:new PostgresLabelCollectedProducts(db)});activities.collectLabelProduct=(r,s)=>m.run(r,s);break;}
+ case "collection":{const m=new CollectLabelProduct({local,remote,reviews,assembly:await assembly(),registry:new PostgresLabelCollectedProducts(db)}),history=historyObservations(db,remote);await history?.check();activities.collectLabelProduct=async(r,s)=>{const result=await m.run(r,s);if(result.status==="collected")await history?.attempt("collected",result.operationId,s);return result;};break;}
  case "resources":{const m=new PostgresResourceAdmission(o.resourceDb??db);activities.reserveResources=r=>m.reserve(r);activities.releaseResources=r=>m.release(r);activities.verifyResourceReviewStopped=(r,s)=>stops.verify(r,s);break;}
  case "review":{activities.reviewChannelProduct=async(raw,s)=>{
    if(!["CHANNEL.LABEL_PREPARATION_UNVERIFIED","CHANNEL.DEPENDENCY_UNAVAILABLE"].includes(raw.code))throw Error("CHANNEL.REVIEW_CODE_REJECTED");

@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import type pg from "pg";
 
-export const migrationNames = ["001_brand_sources.sql", "002_api_receipts.sql", "003_collection_submissions.sql", "004_workflow_delivery.sql", "005_delivery_scan.sql", "006_processing_results.sql", "007_review_records.sql", "008_collected_products.sql", "009_mixed_collected_products.sql", "010_label_collected_products.sql", "011_label_processing_results.sql", "012_packaging_collected_products.sql", "013_catalog_presence.sql", "014_catalog_product_input.sql", "015_resource_admission.sql", "016_visual_wire_v2.sql", "017_catalog_product_skip.sql"];
+export const migrationNames = ["001_brand_sources.sql", "002_api_receipts.sql", "003_collection_submissions.sql", "004_workflow_delivery.sql", "005_delivery_scan.sql", "006_processing_results.sql", "007_review_records.sql", "008_collected_products.sql", "009_mixed_collected_products.sql", "010_label_collected_products.sql", "011_label_processing_results.sql", "012_packaging_collected_products.sql", "013_catalog_presence.sql", "014_catalog_product_input.sql", "015_resource_admission.sql", "016_visual_wire_v2.sql", "017_catalog_product_skip.sql", "018_product_history.sql", "019_history_provenance_index.sql"];
 export type Migration = { name: string; sha256: string; sql: string };
 export const digest = (data: string | Buffer) => createHash("sha256").update(data).digest("hex");
 export async function loadMigrations(): Promise<Migration[]> {
@@ -55,6 +55,12 @@ export async function assertSchemaReady(db: Query) {
   await db.query("SELECT operation_id,record_hash,record,registered_at FROM public.processing_result LIMIT 0");
   await db.query("SELECT review_id,record_hash,record,registered_at FROM public.review_record LIMIT 0");
   await db.query("SELECT operation_id,observation_id,record_hash,record,collected_at FROM public.collected_product LIMIT 0");
+  for(const table of ["product_history_source","product_history_listing","product_history_listing_source","product_history_observation","product_history_observation_source"]){
+    // Existing API/delivery roles do not consume history. Check its integrity
+    // metadata without silently expanding their privileges to imported raw data.
+    const trigger=await db.query("SELECT 1 FROM pg_trigger WHERE tgrelid=to_regclass($1) AND tgname=$2 AND tgenabled IN ('O','A') AND NOT tgisinternal",[`public.${table}`,`${table}_immutable`]);
+    if(!trigger.rowCount)throw Error("Required history integrity trigger missing");
+  }
   await db.query("SELECT resource_id,capacity,healthy,health_until,reason,controller FROM public.resource_capacity LIMIT 0");
   await db.query("SELECT permit_id,request,released_at,granted_at FROM public.resource_permit LIMIT 0");
   await db.query("SELECT permit_id,resource_id,units FROM public.resource_permit_need LIMIT 0");

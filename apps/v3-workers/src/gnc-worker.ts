@@ -72,6 +72,8 @@ async function main() {
       try {
         await db.query("SELECT review_id,record_hash,record FROM public.review_record LIMIT 0");
         const evidence = new GncCaptureEvidence({ local: await TextLocalStore.open(config.journalRoot), remote: r2.store, reviews: new PostgresReviews(db) });
+        const history=config.role==="gnc-product-input"?historyObservations(db,r2.store):undefined;
+        await history?.check();
         if (config.role === "gnc-product" && config.nativeMouse) {
           if ("engine" in config.browser) throw Error("Ego cannot use native mouse fallback");
           if (config.grants.length !== 1 || config.grants[0]!.task.capture.url !== "https://www.gnc.com/energy/613701.html") throw Error("Native mouse requires exact single product grant");
@@ -94,6 +96,8 @@ async function main() {
           }
           const timer = setInterval(() => context.heartbeat(), 2000);
           try {
+            const historical=args[0] as {input?:{task?:unknown}};
+            if(history&&historical?.input?.task)await history.attempt("gnc",historical.input.task,context.cancellationSignal);
             const result = await module.run(args[0], context.cancellationSignal);
             context.cancellationSignal.throwIfAborted();
             if (config.role === "gnc-file") return result; // AcquireFileModule validates its shared outcome contract.
@@ -107,3 +111,4 @@ async function main() {
   await workerProcess(new RoleRegistry("business", roles));
 }
 main().catch(() => { console.error(JSON.stringify({ event: "GNC_WORKER_STARTUP_REJECTED" })); process.exitCode = 1; });
+import {historyObservations} from "./history-observations.js";
