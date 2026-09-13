@@ -1,5 +1,28 @@
+/** Amazon displays multiple purchase offers and duplicates IDs. Read the visible
+ * main price, retaining its selected-offer context; never combine subscription,
+ * unit, recommended-item or hidden prices. */
+export const amazonCommerceDomExpression=`(()=>{
+ const root=document.querySelector('#ppd');
+ const visible=e=>!!e.getClientRects().length&&getComputedStyle(e).visibility!=='hidden';
+ const unique=values=>{const a=[...new Set(values.map(s=>s.trim()).filter(Boolean))];return a.length===1?a[0].slice(0,1000):null;};
+ const elements=(selector,scope=root)=>scope?[...scope.querySelectorAll(selector)]:[];
+ const value=(selector,scope=root,visibleOnly=false)=>unique(elements(selector,scope).filter(e=>!visibleOnly||visible(e)).map(e=>e.getAttribute('content')||e.getAttribute('value')||e.getAttribute('data-product-sku')||e.innerText||''));
+ const amount=e=>{const accessible=e.querySelector('.a-offscreen')?.textContent?.trim();if(accessible)return accessible;
+  const symbol=e.querySelector('.a-price-symbol')?.textContent?.trim(),whole=e.querySelector('.a-price-whole')?.textContent?.trim(),fraction=e.querySelector('.a-price-fraction')?.textContent?.trim();
+  if(!symbol||!whole||!/^\\d[\\d,]*\\.?$/.test(whole)||!/^\\d{2}$/.test(fraction||''))return '';return symbol+whole+(whole.endsWith('.')?'':'.')+fraction;};
+ const main=elements('#corePriceDisplay_desktop_feature_div .priceToPay').filter(visible);
+ const selected=elements('#buyBoxAccordion .a-accordion-active #corePrice_feature_div .apex-pricetopay-value').filter(visible);
+ const price=unique((main.length?main:selected).map(amount));
+ const mainRegions=elements('#corePriceDisplay_desktop_feature_div').filter(visible);
+ const selectedOffers=elements('#buyBoxAccordion .a-accordion-active');
+ return {codec:'public-product-commerce/1',sku:value('[itemprop="sku"], [data-product-sku]'),price,
+ currency:value('meta[property="product:price:currency"]',document)||value('[itemprop="priceCurrency"]')||value('input[id="currencyOfPreference"]',document),
+ listPrice:unique(mainRegions.flatMap(e=>elements('.apex-basisprice-value',e).filter(visible).map(amount))),
+ rating:value('#acrPopover .a-icon-alt'),reviewCount:value('#acrCustomerReviewText'),availability:value('#availability',root,true),
+ context:[document.querySelector('#nav-global-location-popover-link')?.innerText||'',...mainRegions.map(e=>'main offer: '+e.innerText.slice(0,1200)),...selectedOffers.map(e=>'selected offer: '+e.innerText.slice(0,2500))].filter(Boolean)};
+})()`;
 /** Whitelisted DOM values only. Ambiguous distinct values remain unknown. */
-export const commerceDomExpression=(channel:"amazon"|"swanson")=>`(()=>{
+const legacyCommerceDomExpression=(channel:"amazon"|"swanson")=>`(()=>{
  const root=document.querySelector(${JSON.stringify(channel==="amazon"?"#ppd":"main")});
  const value=(selector,scope=root)=>{if(!scope)return null;const a=[...scope.querySelectorAll(selector)].map(e=>(e.getAttribute('content')||e.getAttribute('data-product-sku')||e.getAttribute('value')||e.innerText||'').trim()).filter(Boolean);const u=[...new Set(a)];return u.length===1?u[0].slice(0,1000):null;};
  const meta=selector=>value(selector,document);
@@ -13,3 +36,5 @@ export const commerceDomExpression=(channel:"amazon"|"swanson")=>`(()=>{
  availability:value(${JSON.stringify(channel==="amazon"?"#availability":"[itemprop=availability]")}),
  context:${channel==="amazon"?"[document.querySelector('#nav-global-location-popover-link')?.innerText||''].filter(Boolean)":"[...root.querySelectorAll('.product-form-plan-option')].slice(0,20).map(e=>(e.classList.contains('selected')?'selected: ':'unselected: ')+e.innerText.slice(0,3900))"}
  };})()`;
+
+export const commerceDomExpression=(channel:"amazon"|"swanson")=>channel==="amazon"?amazonCommerceDomExpression:legacyCommerceDomExpression(channel);

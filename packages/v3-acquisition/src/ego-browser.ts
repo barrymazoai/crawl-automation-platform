@@ -64,9 +64,14 @@ if(typeof cliLog==='function')cliLog(${JSON.stringify(marker)}+receipt);else con
       child.on("close", code => {
         signal.removeEventListener("abort", cancel);
         if (failure) return reject(failure);
-        if (code !== 0) return reject(new BrowserError(
+        if (code !== 0) {
+          // Preserve bounded adapter error codes, never browser output or page contents.
+          const adapterCode = (err + "\n" + out).match(/\bAMAZON\.(?:PRODUCT_UNVERIFIED|ASIN_CONFLICT|GALLERY_UNVERIFIED|TARGET_AMBIGUOUS|TARGET_HIDDEN|DELIVERY_CONTEXT_CONFLICT)\b/)?.[0];
+          if (adapterCode && !/user is controlling|inactive|not assigned to an agent|user-owned/i.test(err + out)) return reject(new Error(adapterCode));
+          return reject(new BrowserError(
           /user is controlling|inactive|not assigned to an agent|user-owned/i.test(err + out)
             ? "SOURCE.BROWSER_USER_CONTROL" : "SOURCE.BROWSER_UNAVAILABLE"));
+        }
         const lines = (out + "\n" + err).split(/\r?\n/).filter(line => line.startsWith(marker));
         if (lines.length !== 1) return reject(new BrowserError("SOURCE.BROWSER_PROTOCOL"));
         try { resolve(JSON.parse(lines[0]!.slice(marker.length))); }

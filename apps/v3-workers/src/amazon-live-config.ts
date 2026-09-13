@@ -4,6 +4,7 @@ import { CatalogScopeSchema, ChannelPlanInputSchema, ChannelLabelInputSchema, Ch
   AmazonProductJobSchema, ResourceGateSchema, VersionTagSchema } from "@crawl-automation/v3-contracts";
 import { R2ScopeSchema } from "@crawl-automation/v3-artifacts";
 import { EgoTaskSpaceSchema } from "@crawl-automation/v3-acquisition";
+import { AmazonLinkBatchesSchema } from "./amazon-link-batches.js";
 export const AmazonLiveConfigSchema = z.strictObject({
   clusterId: VersionTagSchema,
   database: z.strictObject({ connectionString: z.string().min(1), tls: z.boolean() }),
@@ -16,6 +17,8 @@ export const AmazonLiveConfigSchema = z.strictObject({
   catalogResources: ResourceGateSchema,
   catalogPages: z.array(z.string().url()).min(1).max(10), selectedAsins: z.array(z.string().regex(/^[A-Z0-9]{10}$/)).min(1).max(100).nullable(),
   maxPages: z.number().int().min(1).max(10).optional(),
+  linkBatches: AmazonLinkBatchesSchema.optional(),
+  deliveryPostalCode: z.string().regex(/^\d{5}$/).optional(),
   productQueues: AmazonProductJobSchema.shape.queues, productResources: ResourceGateSchema,
   sourceText: ChannelPlanInputSchema.shape.text, ocr: ChannelPlanInputSchema.shape.ocr,
   sourceVisionConfigFingerprint: ChannelPlanInputSchema.shape.visionConfigFingerprint,

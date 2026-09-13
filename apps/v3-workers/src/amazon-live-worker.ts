@@ -6,7 +6,7 @@ import pg from "pg";
 import { Context } from "@temporalio/activity";
 import { ApplicationFailure } from "@temporalio/common";
 import { Client, Connection } from "@temporalio/client";
-import { CatalogPageInputSchema, CollectionWorkflowInput, BrandCollectionPlanSchema, BrandCollectionProgressSchema,
+import { CatalogPageInputSchema, CatalogDiscoverySchema, AmazonProductJobSchema, CollectionWorkflowInput, BrandCollectionPlanSchema, BrandCollectionProgressSchema,
   AmazonProductCaptureSchema, AmazonProductHandoffSchema, ChannelLabelInputSchema, ReviewRecordSchema, observationIdentity } from "@crawl-automation/v3-contracts";
 import { createR2Objects, RetainedPublication, ArtifactResolver, FileCopies, sha256 } from "@crawl-automation/v3-artifacts";
 import { EgoTaskPages, EgoFileTransport, AcquireFileModule, FileEvidence, systemDns, type SourceAccess } from "@crawl-automation/v3-acquisition";
@@ -20,6 +20,7 @@ import { PostgresResourceAdmission } from "../../../packages/v3-product/src/reso
 import { scopeForSubmission } from "./brand-pipeline.js";
 import { AmazonLiveConfigSchema } from "./amazon-live-config.js";
 import { readGncPrivateJson } from "./gnc-config.js";
+import { AmazonLinkCatalog } from "./amazon-link-batches.js";
 
 const execution = () => { const e = Context.current().info.workflowExecution; if (!e) throw Error("AMAZON.WORKFLOW_REQUIRED"); return e; };
 async function main() {
@@ -40,19 +41,29 @@ async function main() {
         const publication = new RetainedPublication(local, r2.store), reviews = new PostgresReviews(db), admission = new PostgresResourceAdmission(resourceDb);
         const pages = new EgoTaskPages(config.browser, await TextLocalStore.open(config.pageJournalRoot));
         const requireBrowser = async () => { const e = execution(); await admission.requireHeld(config.browserResource, e.workflowId, e.runId); };
-        const jobs = new AmazonProductJobs(db, publication, { scope: config.scope, queues: config.productQueues, resources: config.productResources });
-        const verifyJob = (raw: unknown, s: AbortSignal) => jobs.verify(raw, execution().workflowId, s);
+        const links = new Map((config.linkBatches ?? []).map(b => [b.requestId, b]));
+        const jobsFor = async (raw: unknown) => {
+          const discovery = CatalogDiscoverySchema.parse(raw);
+          await submission(discovery.catalogId);
+          const batch = links.get(discovery.catalogId), scope = batch?.scope ?? config.scope;
+          if (batch && !batch.entries.some(x => equal(x.entry, discovery.entry))) throw Error("AMAZON.LINK_ENTRY_CONFLICT");
+          return new AmazonProductJobs(db, publication, { scope, queues: config.productQueues, resources: config.productResources });
+        };
+        const verifyJob = async (raw: unknown, s: AbortSignal) => {
+          const job = AmazonProductJobSchema.parse(raw);
+          return (await jobsFor(job.discovery)).verify(job, execution().workflowId, s);
+        };
         const products = new AmazonLiveProduct(publication, { text: config.sourceText, ocr: config.ocr,
           visionConfigFingerprint: config.sourceVisionConfigFingerprint, egressId: config.egressId }, {
-          capture: async (job, signal) => { await requireBrowser(); return new AmazonEgoReader(await pages.open(job.sessionId, signal)).product(job.discovery.entry.url, signal); },
-        });
+          capture: async (job, signal) => { await requireBrowser(); return new AmazonEgoReader(await pages.open(job.sessionId, signal)).product(job.discovery.entry.url, signal, undefined, config.deliveryPostalCode); },
+        }, [...links.keys()]);
         const plans = new ChannelProductPlans(publication, new ArtifactResolver(copies, r2.store), reviews);
         const files = new FileEvidence({ local, remote: r2.store, copies, reviews });
         const submission = async (id: string) => {
           const row = (await db.query("SELECT snapshot FROM collection_submission WHERE request_id=$1", [id])).rows[0];
           if (!row) throw Error("AMAZON.SUBMISSION_REQUIRED");
           const input = CollectionWorkflowInput.parse({ version: 1, requestId: id, snapshot: row.snapshot });
-          if (!equal(scopeForSubmission(input), config.scope)) throw Error("AMAZON.SCOPE_CONFLICT");
+          if (!equal(scopeForSubmission(input), links.get(id)?.scope ?? config.scope)) throw Error("AMAZON.SCOPE_CONFLICT");
           return input;
         };
         const catalog = new AmazonCatalogSource(publication, {brandName:config.brandName,pages:config.catalogPages,asins:config.selectedAsins}, { capture: async (input, signal, retain) => {
@@ -64,21 +75,25 @@ async function main() {
               return projection;
             });
         } });
+        const catalogFor = (id: string) => links.has(id) ? new AmazonLinkCatalog(publication, links.get(id)) : catalog;
         const catalogIdentity = async (id: string, scope: unknown) => {
           await submission(id);
-          if (!equal(scope, config.scope) || execution().workflowId !== `v3-collection-${id}-catalog`) throw Error("AMAZON.SCOPE_CONFLICT");
+          if (!equal(scope, links.get(id)?.scope ?? config.scope) || execution().workflowId !== `v3-collection-${id}-catalog`) throw Error("AMAZON.SCOPE_CONFLICT");
         };
-        const ledger = new PostgresCatalog(db, async p => { await catalogIdentity(p.input.catalogId, p.input.scope); await catalog.verify(p, AbortSignal.timeout(30000)); });
+        const ledger = new PostgresCatalog(db, async p => { await catalogIdentity(p.input.catalogId, p.input.scope); await catalogFor(p.input.catalogId).verify(p, AbortSignal.timeout(30000)); });
         const prepareBrand = async (raw: unknown) => {
           const input = CollectionWorkflowInput.parse(raw);
           if (!equal(await submission(input.requestId), input) || execution().workflowId !== `v3-collection-${input.requestId}`) throw Error("AMAZON.WORKFLOW_IDENTITY");
-          return BrandCollectionPlanSchema.parse({ catalogQueue: config.catalogQueue, catalog: { catalogId: input.requestId, scope: config.scope,
-            productWorkflow: "AmazonCatalogProductWorkflow", queues: config.catalogQueues, resources: config.catalogResources, maxPages: config.maxPages??1 } });
+          const batch = links.get(input.requestId);
+          return BrandCollectionPlanSchema.parse({ catalogQueue: config.catalogQueue, catalog: { catalogId: input.requestId, scope: batch?.scope ?? config.scope,
+            productWorkflow: "AmazonCatalogProductWorkflow", queues: config.catalogQueues,
+            resources: batch ? { ...config.catalogResources, activities: {} } : config.catalogResources, maxPages: batch ? 1 : config.maxPages??1 } });
         };
         let handlers: Record<string, (raw: any, signal: AbortSignal) => Promise<unknown>>;
         if (role === "catalog-source") handlers = { readCatalogPage: async (raw, s) => {
           const input = CatalogPageInputSchema.parse(raw); await submission(input.catalogId);
-          if (!equal(input.scope, config.scope) || execution().workflowId !== `v3-collection-${input.catalogId}-catalog`) throw Error("AMAZON.SCOPE_CONFLICT");
+          await catalogIdentity(input.catalogId, input.scope);
+          if (links.has(input.catalogId)) return catalogFor(input.catalogId).read(input, s);
           if(input.page>=(config.maxPages??1))throw Error("AMAZON.PAGINATION_LIMIT");
           if(input.page>0){const previous=(await db.query("SELECT record FROM catalog_page WHERE catalog_id=$1 AND page_index=$2",[input.catalogId,input.page-1])).rows[0];
             if(previous?.record.completion!=="more"||previous.record.nextCursor!==input.cursor)throw Error("AMAZON.PAGINATION_CONFLICT");}
@@ -103,7 +118,7 @@ async function main() {
             if (!equal(stored?.execution, e)) throw Error("AMAZON.EXECUTION_CONFLICT");
             return binding;
           };
-          handlers={prepareAmazonProduct:(raw,s)=>jobs.prepare(raw,execution().workflowId,s),prepareAmazonLabel:(raw,s)=>prepareLabel(raw,s,false),prepareAmazonStreamingLabel:(raw,s)=>prepareLabel(raw,s,true)};
+          handlers={prepareAmazonProduct:async(raw,s)=>(await jobsFor(raw)).prepare(raw,execution().workflowId,s),prepareAmazonLabel:(raw,s)=>prepareLabel(raw,s,false),prepareAmazonStreamingLabel:(raw,s)=>prepareLabel(raw,s,true)};
         }
         else if (role === "capture") handlers = {
           captureAmazonProduct: async (raw, s) => products.capture(await verifyJob(raw, s), s),

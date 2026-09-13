@@ -1,6 +1,6 @@
 import{AmazonRenderedProductSchema,AmazonRenderedCatalogSchema,ChannelProductEvidenceSchema,type Observation}from'@crawl-automation/v3-contracts';
 import{ChannelError,channelUrl}from'./html-evidence.js';
-export function amazonProductAddress(raw:string){const u=channelUrl(raw,'amazon'),asin=u.pathname.match(/^\/(?:-\/[a-z]{2}\/)?(?:dp|gp\/product)\/([A-Z0-9]{10})(?:\/|$)/)?.[1];if(!asin)throw new ChannelError('AMAZON.ASIN_CONFLICT');return{asin,url:`${u.origin}/dp/${asin}`};}
+export function amazonProductAddress(raw:string){const u=channelUrl(raw,'amazon'),asin=u.pathname.match(/^\/(?:-\/[a-z]{2}\/)?(?:(?:[^/]+\/)?dp|gp\/product)\/([A-Z0-9]{10})(?:\/|$)/)?.[1];if(!asin)throw new ChannelError('AMAZON.ASIN_CONFLICT');return{asin,url:`${u.origin}/dp/${asin}`};}
 export function amazonStoreAddress(raw:string){const u=channelUrl(raw,'amazon'),id=u.pathname.match(/^\/(?:-\/[a-z]{2}\/)?stores\/(?:[^/]+\/)?page\/([A-F0-9-]{36})\/?$/i)?.[1];if(!id)throw new ChannelError('AMAZON.STORE_REQUIRED');return{id:id.toUpperCase(),url:`${u.origin}/stores/page/${id.toUpperCase()}`};}
 const esc=(s:string)=>'<pre>'+s.replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;')+'</pre>';
 export function parseAmazonRenderedProduct(raw:unknown,expectedUrl:string,owner:Pick<Observation,'listingId'|'variantId'>){

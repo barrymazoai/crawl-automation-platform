@@ -11,11 +11,13 @@ export interface AmazonProductPort { capture(job: AmazonProductJob, signal: Abor
 
 /** Capture only. Planning, each image transfer and browser close are other atomic calls. */
 export class AmazonLiveProduct {
-  constructor(readonly publication: RetainedPublication, readonly settings: Settings, readonly browser?: AmazonProductPort) {}
+  constructor(readonly publication: RetainedPublication, readonly settings: Settings, readonly browser?: AmazonProductPort,
+    readonly linkRequestIds: readonly string[] = []) {}
   private key(job: AmazonProductJob) { return `v3/amazon-products/${job.operationId}`; }
   private derive(job: AmazonProductJob, raw: unknown) {
     const p = productProjection(raw), d = job.discovery;
-    if (amazonProductAddress(d.entry.url).asin !== d.entry.listingId || p.asin !== d.entry.listingId || d.entry.variantId !== null || amazonStoreAddress(p.storeUrl).id !== amazonStoreAddress(d.scope.rootUrl).id)
+    const imported = this.linkRequestIds.includes(d.catalogId) && d.source.producer.module === "amazon.link-list" && d.source.producer.implementationVersion === "amazon-link-batch/1";
+    if (amazonProductAddress(d.entry.url).asin !== d.entry.listingId || p.asin !== d.entry.listingId || d.entry.variantId !== null || (!imported && amazonStoreAddress(p.storeUrl).id !== amazonStoreAddress(d.scope.rootUrl).id))
       throw Error("AMAZON.IDENTITY_UNVERIFIED");
     const identity = { listingId: p.asin, variantId: null };
     parseAmazonRenderedProduct(p, d.entry.url, identity);

@@ -1,5 +1,13 @@
 import{it,expect}from'vitest';import{ChannelPlanInputSchema}from'@crawl-automation/v3-contracts';import{parseAmazonRenderedProduct,parseAmazonRenderedCatalog,amazonProductAddress,amazonStoreAddress}from'./amazon-rendered.js';import{AmazonCatalogSource}from'./amazon-catalog-source.js';import{AmazonLiveProduct}from'./amazon-live-product.js';import{amazonFixture,AmazonMemory,RetainedPublication}from'./amazon-live.fixture.js';
 const signal=()=>AbortSignal.timeout(3000);
+it('observed titled canonical URLs preserve the selected ASIN',()=>{
+ const f=amazonFixture();f.product.canonicalUrl='https://www.amazon.com/UNIQUE-E-Softgels/dp/B000REPUY0';
+ expect(parseAmazonRenderedProduct(f.product,f.url,{listingId:f.product.asin,variantId:null}).listingId).toBe('B000REPUY0');
+ expect(amazonProductAddress(f.product.canonicalUrl).url).toBe(f.url);
+ f.product.canonicalUrl='https://www.amazon.com/UNIQUE-E-Softgels/dp/B000000002';
+ expect(()=>parseAmazonRenderedProduct(f.product,f.url,{listingId:f.product.asin,variantId:null})).toThrow('ASIN_CONFLICT');
+});
+it.each(['https://evil.example/title/dp/B000REPUY0','https://www.amazon.com/title/extra/dp/B000REPUY0','https://www.amazon.com/title/dp/B000REPUY0X'])('does not loosen ASIN route or origin validation for %s',url=>{expect(()=>amazonProductAddress(url)).toThrow();});
 it('accepts localized public store/ASIN links and rejects other origins',()=>{expect(amazonProductAddress('https://www.amazon.com/-/zh/dp/B000REPUY0?ref=x').asin).toBe('B000REPUY0');expect(amazonStoreAddress(amazonFixture().store).id).toBe('7B3902F7-D6C8-4226-97B1-BEB72807BEB3');expect(()=>amazonProductAddress('https://evil.example/dp/B000REPUY0')).toThrow();});
 it.each(['asin','canonical','owner','missing','index','host','section'])('rejects %s identity or gallery corruption',mode=>{const f=amazonFixture(),p=structuredClone(f.product),owner={listingId:p.asin,variantId:null};if(mode==='asin')p.asin='B000000002';if(mode==='canonical')p.canonicalUrl='https://www.amazon.com/dp/B000000002';if(mode==='owner')owner.listingId='B000000002';if(mode==='missing')p.gallery.pop();if(mode==='index')p.gallery[1]!.index=0;if(mode==='host')p.gallery[0]!.url='https://evil.example/label.jpg';if(mode==='section')p.sections.push(p.sections[0]!);expect(()=>parseAmazonRenderedProduct(p,f.url,owner)).toThrow();});
 it('keeps complete gallery selection evidence while deduplicating repeated original bytes URLs',()=>{const f=amazonFixture();f.product.gallery[1]!.url=f.product.gallery[0]!.url;const p=parseAmazonRenderedProduct(f.product,f.url,{listingId:f.product.asin,variantId:null});expect(p.imageCandidates).toHaveLength(1);expect(p.warnings).toContain('AMAZON.SELECTED_ASIN_ONLY');});

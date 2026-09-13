@@ -93,6 +93,10 @@ describe("Ego private large snapshot handoff", () => {
     const cli=await fakeCli("#!/bin/sh\necho CRAWLV3_EGO_SNAPSHOT:not-json\n");
     await expect(new EgoCliRunner().run(cli,"",signal())).rejects.toThrow("SOURCE.BROWSER_PROTOCOL");
   });
+  it("preserves a bounded Amazon failure code without exposing page output", async () => {
+    const cli=await fakeCli("#!/bin/sh\necho 'Error: AMAZON.GALLERY_UNVERIFIED' >&2\nexit 1\n");
+    await expect(new EgoCliRunner().run(cli,"",signal())).rejects.toThrow("AMAZON.GALLERY_UNVERIFIED");
+  });
   it("preserves user-control refusal instead of taking over", async () => {
     const cli=await fakeCli("#!/bin/sh\necho 'user is controlling' >&2\nexit 1\n");
     await expect(new EgoCliRunner().run(cli,"",signal())).rejects.toThrow("SOURCE.BROWSER_USER_CONTROL");
