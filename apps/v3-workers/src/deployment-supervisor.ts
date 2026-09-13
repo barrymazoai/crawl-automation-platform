@@ -10,6 +10,7 @@ import { readWorkerReady } from "./worker-readiness.js";
 
 const path=z.string().refine(isAbsolute), token=z.string().regex(/^[a-z][a-z0-9-]{0,63}$/);
 export const DeploymentSchema=z.strictObject({platform:z.literal("darwin"),host:z.string().min(1),root:path,node:path,
+  startupIntervalMs:z.number().int().min(0).max(5000).optional(),
   jobs:z.array(z.strictObject({id:token,entry:path,env:z.record(z.string().regex(/^V3_[A-Z_]+$/),z.string())})).min(1).max(128),
   resources:z.array(z.strictObject({resourceId:token,capacity:z.number().int().min(1).max(64),jobs:z.array(token).min(1),minFreeBytes:z.number().int().nonnegative(),dependencies:z.array(token).max(20).optional()})).max(20),
   dependencyProbes:z.array(DependencyProbeSchema).max(20).optional(),
@@ -62,6 +63,7 @@ export async function runDeployment(raw:unknown,signal:AbortSignal) {
       const file=await open(log,"a",0o600);
       const child=spawn(c.node,[job.entry],{env:{...process.env,...job.env,V3_WORKER_HEALTH_FILE:health},stdio:["ignore",file.fd,file.fd]});
       child.on("error",()=>{});await file.close();jobs.set(job.id,{child,health,log});
+      if(c.startupIntervalMs)await new Promise(r=>setTimeout(r,c.startupIntervalMs));
     }
     const tick=()=>{if(!sampling)sampling=sample().catch(()=>{}).finally(()=>{sampling=undefined;});};
     tick();await sampling;
