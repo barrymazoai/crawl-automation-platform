@@ -1,0 +1,349 @@
+{
+  "at": "2026-09-13T15:02:23.575Z",
+  "campaignId": "amazon-history-5-us-10001-20260913",
+  "report": {
+    "at": "2026-09-13T15:01:31.568Z",
+    "requested": 5,
+    "submittedProducts": 5,
+    "submittedAttempts": 5,
+    "captures": 5,
+    "capturedProducts": 5,
+    "savedProducts": 0,
+    "moduleReviewRecords": 14,
+    "pricePoints": 5,
+    "comparablePricePoints": 4,
+    "priceChangeExamples": [
+      {
+        "asin": "B00IG0MJKA",
+        "title": "Nature's Bounty Vitamin B-12 500 mcg, 100 ea (Pack of 4)",
+        "url": "https://www.amazon.com/dp/B00IG0MJKA",
+        "oldAt": "2026-08-18T03:24:01.516Z",
+        "oldPrice": "19.57",
+        "oldCurrency": "USD",
+        "newAt": "2026-09-13T14:35:20.033Z",
+        "newPrice": "16.99",
+        "newCurrency": "USD",
+        "delivery": "New York 10001",
+        "difference": -2.58,
+        "changePercent": -13.18,
+        "comparisonNote": "页面报价观测；旧购买条件未完整记录，不代表同条件成交价格变化",
+        "observationId": "amazon-fa0768e461bdfdf61c90c0dce9d7bfb7d5499f34ec02e7fd44166c3bb325976f"
+      },
+      {
+        "asin": "B0GBX7416D",
+        "title": "Nature's Bounty Co Q-10 400mg, 39 Rapid Release Softgels (Pack of 2)",
+        "url": "https://www.amazon.com/dp/B0GBX7416D",
+        "oldAt": "2026-08-17T10:16:51.364Z",
+        "oldPrice": "37.34",
+        "oldCurrency": "USD",
+        "newAt": "2026-09-13T14:48:57.353Z",
+        "newPrice": "37.22",
+        "newCurrency": "USD",
+        "delivery": "New York 10001",
+        "difference": -0.12,
+        "changePercent": -0.32,
+        "comparisonNote": "页面报价观测；旧购买条件未完整记录，不代表同条件成交价格变化",
+        "observationId": "amazon-f5320a633d373e6b252206c739fce5c4011ac4f317c8647a3e4f766e8bf18f55"
+      }
+    ]
+  },
+  "products": [
+    {
+      "asin": "B00IG0MJKA",
+      "workflowId": "catalog-product-9816d24c5a5335434b034c69a9edc0cef1ee8eefa23cd673bc38a90df0812f08",
+      "status": "review",
+      "code": null,
+      "reviewId": "label-dee74170e00efc985c1ca089dc2d01f26499ec56f100231b2381ffe2c502ec00"
+    },
+    {
+      "asin": "B0GBX7416D",
+      "workflowId": "catalog-product-e3fd4a20a708c3bae3fb72e27d8559810b1055d0fab47cf8c4863a817af5a407",
+      "status": "review",
+      "code": "SOURCE.NETWORK_UNAVAILABLE",
+      "reviewId": "acquire-116d98d5-db8e-4363-85a8-cd0fc6291fc3"
+    },
+    {
+      "asin": "B0013LAQS6",
+      "workflowId": "catalog-product-cd291a10e836ec87e15a885936432fa94a142195688fbd37acea0390fc879843",
+      "status": "review",
+      "code": "SOURCE.NETWORK_UNAVAILABLE",
+      "reviewId": "acquire-5cffb59a-8cbc-41b9-ba14-16f3e0d79ade"
+    },
+    {
+      "asin": "B0G963NB8Q",
+      "workflowId": "catalog-product-6c8dcea71c14f03572cba92e0c592b6027fbc1d09e20f3654fac096ce5f36999",
+      "status": "review",
+      "code": null,
+      "reviewId": "label-67d7f0a0ee2ad2e64d26c53da107b63cec25ba71377fe3d6b0505c38d6017e2b"
+    },
+    {
+      "asin": "B0FRWTLCMP",
+      "workflowId": "catalog-product-4c12857b6176de764c9075c1122057fe7a9e7e9b320291ceb0d7ff1f7804f9a6",
+      "status": "review",
+      "code": "SOURCE.NETWORK_UNAVAILABLE",
+      "reviewId": "acquire-41e7410b-6d97-4375-bcd3-984f505e98ca"
+    }
+  ],
+  "reviews": [
+    {
+      "asin": "B0013LAQS6",
+      "code": "CHANNEL.LABEL_PREPARATION_UNVERIFIED",
+      "review_id": "chl-review-0239bec03d45a042475b3a0723abc7c2858f488815a8f88b24eed350322d7a7b"
+    },
+    {
+      "asin": "B0G963NB8Q",
+      "code": "VISION.LABEL_CORE_MISSING",
+      "review_id": "vision-624f9525-5e1d-448d-af6a-a91cfc342c9f"
+    },
+    {
+      "asin": "B0G963NB8Q",
+      "code": "TEXT.LABEL_INGREDIENT_HEADING_INVALID",
+      "review_id": "label-67d7f0a0ee2ad2e64d26c53da107b63cec25ba71377fe3d6b0505c38d6017e2b"
+    },
+    {
+      "asin": "B00IG0MJKA",
+      "code": "TEXT.LABEL_INGREDIENT_HEADING_INVALID",
+      "review_id": "text-68b6ed1a-3189-42ea-8c9a-09f4e473a8e0"
+    },
+    {
+      "asin": "B00IG0MJKA",
+      "code": "LABEL_PRODUCT.EVIDENCE_UNRESOLVED",
+      "review_id": "label-dee74170e00efc985c1ca089dc2d01f26499ec56f100231b2381ffe2c502ec00"
+    },
+    {
+      "asin": "B0GBX7416D",
+      "code": "SOURCE.NETWORK_UNAVAILABLE",
+      "review_id": "acquire-116d98d5-db8e-4363-85a8-cd0fc6291fc3"
+    },
+    {
+      "asin": "B0GBX7416D",
+      "code": "TEXT.CITATION_INVALID",
+      "review_id": "text-b132ce16-3d6f-46da-af5b-325e7dd46776"
+    },
+    {
+      "asin": "B0GBX7416D",
+      "code": "CHANNEL.LABEL_PREPARATION_UNVERIFIED",
+      "review_id": "chl-review-106d354eff5a163719c34b057f99067b9f4bfd4486a0c165845b139cad6a9982"
+    },
+    {
+      "asin": "B0013LAQS6",
+      "code": "SOURCE.NETWORK_UNAVAILABLE",
+      "review_id": "acquire-5cffb59a-8cbc-41b9-ba14-16f3e0d79ade"
+    },
+    {
+      "asin": "B0013LAQS6",
+      "code": "TEXT.LABEL_INGREDIENT_HEADING_INVALID",
+      "review_id": "text-27a06033-7463-47ec-8e53-e4ab329531a9"
+    },
+    {
+      "asin": "B0G963NB8Q",
+      "code": "TEXT.LABEL_INGREDIENT_HEADING_INVALID",
+      "review_id": "text-799f3126-f3f7-4d3b-a712-27735ee21d84"
+    },
+    {
+      "asin": "B0FRWTLCMP",
+      "code": "SOURCE.NETWORK_UNAVAILABLE",
+      "review_id": "acquire-41e7410b-6d97-4375-bcd3-984f505e98ca"
+    },
+    {
+      "asin": "B0FRWTLCMP",
+      "code": "TEXT.LABEL_INGREDIENT_HEADING_INVALID",
+      "review_id": "text-8e5bc130-8c97-42bb-8e1b-50ea33c3cff0"
+    },
+    {
+      "asin": "B0FRWTLCMP",
+      "code": "CHANNEL.LABEL_PREPARATION_UNVERIFIED",
+      "review_id": "chl-review-37d238e451d16b1c7471ecb30abd34866beeea27575c0033e5138dfe3b2532a5"
+    }
+  ],
+  "prices": [
+    {
+      "asin": "B00IG0MJKA",
+      "title": "Nature's Bounty Vitamin B-12 500 mcg, 100 ea (Pack of 4)",
+      "url": "https://www.amazon.com/dp/B00IG0MJKA",
+      "oldAt": "2026-08-18T03:24:01.516Z",
+      "oldPrice": "19.57",
+      "oldCurrency": "USD",
+      "newAt": "2026-09-13T14:35:20.033Z",
+      "newPrice": "16.99",
+      "newCurrency": "USD",
+      "delivery": "New York 10001",
+      "difference": -2.58,
+      "changePercent": -13.18,
+      "comparisonNote": "页面报价观测；旧购买条件未完整记录，不代表同条件成交价格变化",
+      "observationId": "amazon-fa0768e461bdfdf61c90c0dce9d7bfb7d5499f34ec02e7fd44166c3bb325976f"
+    },
+    {
+      "asin": "B0GBX7416D",
+      "title": "Nature's Bounty Co Q-10 400mg, 39 Rapid Release Softgels (Pack of 2)",
+      "url": "https://www.amazon.com/dp/B0GBX7416D",
+      "oldAt": "2026-08-17T10:16:51.364Z",
+      "oldPrice": "37.34",
+      "oldCurrency": "USD",
+      "newAt": "2026-09-13T14:48:57.353Z",
+      "newPrice": "37.22",
+      "newCurrency": "USD",
+      "delivery": "New York 10001",
+      "difference": -0.12,
+      "changePercent": -0.32,
+      "comparisonNote": "页面报价观测；旧购买条件未完整记录，不代表同条件成交价格变化",
+      "observationId": "amazon-f5320a633d373e6b252206c739fce5c4011ac4f317c8647a3e4f766e8bf18f55"
+    },
+    {
+      "asin": "B0013LAQS6",
+      "title": "Nature's Bounty Fish Oil 300mg Omega-3, 120 Softgels",
+      "url": "https://www.amazon.com/dp/B0013LAQS6",
+      "oldAt": null,
+      "oldPrice": null,
+      "oldCurrency": null,
+      "newAt": "2026-09-13T14:51:50.298Z",
+      "newPrice": "10.45",
+      "newCurrency": "USD",
+      "delivery": "New York 10001",
+      "difference": null,
+      "changePercent": null,
+      "comparisonNote": "页面报价观测；旧购买条件未完整记录，不代表同条件成交价格变化",
+      "observationId": "amazon-8ac08b8b25686825ba6c0a60e8fabd6940ef06f568f037bfa0caf4902e38d70f"
+    },
+    {
+      "asin": "B0G963NB8Q",
+      "title": "Horbäach Collagen Peptides | 90 Caplets | Skin and Nail Health",
+      "url": "https://www.amazon.com/dp/B0G963NB8Q",
+      "oldAt": "2026-08-16T08:22:33.744Z",
+      "oldPrice": "9.99",
+      "oldCurrency": "USD",
+      "newAt": "2026-09-13T14:54:43.407Z",
+      "newPrice": "9.99",
+      "newCurrency": "USD",
+      "delivery": "New York 10001",
+      "difference": 0,
+      "changePercent": 0,
+      "comparisonNote": "页面报价观测；旧购买条件未完整记录，不代表同条件成交价格变化",
+      "observationId": "amazon-b020763fa6cb1f098c1ddda962625760c95b4788ec0440b30add7edf9333362b"
+    },
+    {
+      "asin": "B0FRWTLCMP",
+      "title": "Best Naturals Cinnamon 2000 mg Equivalent with Chromium 400 mcg per Serving - Metabolism Support - 180 Capsules (Pack of 2)",
+      "url": "https://www.amazon.com/dp/B0FRWTLCMP",
+      "oldAt": "2026-08-18T10:28:28.725Z",
+      "oldPrice": "19.98",
+      "oldCurrency": "USD",
+      "newAt": "2026-09-13T14:59:07.918Z",
+      "newPrice": "19.98",
+      "newCurrency": "USD",
+      "delivery": "New York 10001",
+      "difference": 0,
+      "changePercent": 0,
+      "comparisonNote": "页面报价观测；旧购买条件未完整记录，不代表同条件成交价格变化",
+      "observationId": "amazon-73bf38e27f4699b877182c1050ce26517969aa5e75e0cdc1b6991a40931d04f8"
+    }
+  ],
+  "pages": [
+    {
+      "asin": "B00IG0MJKA",
+      "taskId": "amazon-page-0177d39c5b7410cd77651880007320cc2e6a4f8adf607e4dad34cc29708743a8",
+      "targetId": "615F60EFBF9DA2A34226BF17784FD93B",
+      "closedSha256": "6f20a37ad22a2a040619aec21b5fb51f6e786e2aa08fbb266f718399fdea2af4"
+    },
+    {
+      "asin": "B0GBX7416D",
+      "taskId": "amazon-page-f4457935fdc143e0673a8fd8db9ff152742191ead6e4c8467f6c141e70e656f2",
+      "targetId": "D53746AA3418AAE2F6780854F51FE769",
+      "closedSha256": "d55074108743b3dc84fce0341b5489bb053f161b93f096a2e474836a08aa0f4e"
+    },
+    {
+      "asin": "B0013LAQS6",
+      "taskId": "amazon-page-9e9faa62c14b3df65b74845edb964f9287b8ac160311a646efe6e1d3c9c4b779",
+      "targetId": "24683812B71A4F579790865C282D0B60",
+      "closedSha256": "400e09e518199afad39bd3c503fafba63f45048d0b3e1649c17d5166009190a1"
+    },
+    {
+      "asin": "B0G963NB8Q",
+      "taskId": "amazon-page-8d9e570cfb968cd118ef634a962dded9c22f206cd8a4609f341cabf19d771b9d",
+      "targetId": "EA087F32C46EEFD15FE83379F357DB33",
+      "closedSha256": "75d9bb63960d92ea3093301606a20be84e60c46d3bddf788764462a9f77ed4a6"
+    },
+    {
+      "asin": "B0FRWTLCMP",
+      "taskId": "amazon-page-a3a4d0eeb9f12deb658e32a2e5dd401225ff987222312c3300530085f622101d",
+      "targetId": "2A85E95E6470C90498901BB88894662F",
+      "closedSha256": "970ed19b4dfa2c7c739a9f6a4fe414823b764283f240258d551b9456fc6c5727"
+    }
+  ],
+  "checks": [
+    {
+      "at": "2026-09-13T15:02:23.380Z",
+      "targetsAbsent": true
+    },
+    {
+      "at": "2026-09-13T15:02:23.468Z",
+      "targetsAbsent": true
+    },
+    {
+      "at": "2026-09-13T15:02:23.544Z",
+      "targetsAbsent": true
+    }
+  ],
+  "heldPermits": 0,
+  "intakeGuards": 0,
+  "trendRows": [
+    {
+      "asin": "B0013LAQS6",
+      "kind": "metrics",
+      "observedAt": "2026-09-13T14:51:50.298Z",
+      "price": "10.45",
+      "currency": "USD"
+    },
+    {
+      "asin": "B00IG0MJKA",
+      "kind": "metrics",
+      "observedAt": "2026-09-13T14:35:20.033Z",
+      "price": "16.99",
+      "currency": "USD"
+    },
+    {
+      "asin": "B0FRWTLCMP",
+      "kind": "metrics",
+      "observedAt": "2026-09-13T14:59:07.918Z",
+      "price": "19.98",
+      "currency": "USD"
+    },
+    {
+      "asin": "B0G963NB8Q",
+      "kind": "metrics",
+      "observedAt": "2026-09-13T14:54:43.407Z",
+      "price": "9.99",
+      "currency": "USD"
+    },
+    {
+      "asin": "B0GBX7416D",
+      "kind": "metrics",
+      "observedAt": "2026-09-13T14:48:57.353Z",
+      "price": "37.22",
+      "currency": "USD"
+    }
+  ],
+  "finalWorkerHealth": [
+    {
+      "scope": "main",
+      "monitorPid": 68275,
+      "ready": 90,
+      "at": "2026-09-13T15:03:14.375Z",
+      "mode": "independent"
+    },
+    {
+      "scope": "dtc",
+      "monitorPid": 69191,
+      "ready": 26,
+      "at": "2026-09-13T15:03:19.175Z",
+      "mode": "independent"
+    },
+    {
+      "scope": "pilot",
+      "monitorPid": 67816,
+      "ready": 2,
+      "at": "2026-09-13T15:03:19.277Z",
+      "mode": "independent"
+    }
+  ]
+}
