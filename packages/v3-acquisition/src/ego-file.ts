@@ -36,7 +36,7 @@ export class EgoFileTransport implements FileTransport {
     this.busy = true;
     const signal = AbortSignal.any([abort,AbortSignal.timeout(30000)]);
     const expression = `(async () => {
-      if(location.href!==${JSON.stringify(c.pageUrl)})throw Error('EGO_PAGE_CHANGED');
+      if(location.href!==${JSON.stringify(c.pageUrl)})return {failure:'SOURCE.SESSION_MISMATCH'};
       const controller=new AbortController();const timer=setTimeout(()=>controller.abort(),25000);
       try {
         const response=await fetch(${JSON.stringify(url.href)},{method:'GET',credentials:'same-origin',redirect:'error',signal:controller.signal});
@@ -49,17 +49,18 @@ export class EgoFileTransport implements FileTransport {
         let binary='';for(let i=0;i<bytes.length;i+=16384)binary+=String.fromCharCode(...bytes.subarray(i,i+16384));
         if(location.href!==${JSON.stringify(c.pageUrl)})throw Error('EGO_PAGE_CHANGED');
         return {pageUrl:location.href,url:response.url,status:response.status,contentType:response.headers.get('content-type')||'',body:btoa(binary),byteSize:length};
-      }catch(error){return {failure:error?.message==='EGO_FILE_LIMIT'?'ARTIFACT.TOO_LARGE':error?.message==='EGO_PAGE_CHANGED'?'SOURCE.SESSION_MISMATCH':'SOURCE.NETWORK_UNAVAILABLE'};}
+      }catch(error){return {failure:error?.message==='EGO_FILE_LIMIT'?'ARTIFACT.TOO_LARGE':error?.message==='EGO_PAGE_CHANGED'?'SOURCE.SESSION_MISMATCH':error?.message==='EGO_RESPONSE_UNVERIFIED'?'ARTIFACT.INTEGRITY':'SOURCE.NETWORK_UNAVAILABLE'};}
       finally{clearTimeout(timer);controller.abort();}
     })()`;
-    const selection = `const selected=tabs.filter(t=>t.targetId===${JSON.stringify(b.targetId)}&&t.url===${JSON.stringify(c.pageUrl)}${b.sdk==="2"?"&&t.label":""});
-if(selected.length!==1)throw Error('EGO_TARGET_MISMATCH');`;
+    const selection = `const selected=tabs.filter(t=>t.targetId===${JSON.stringify(b.targetId)}&&t.url===${JSON.stringify(c.pageUrl)}${b.sdk==="2"?"&&t.label":""});`;
+    // Return a typed failure before switching/evaluating a mismatched page. A CLI
+    // exception here used to be flattened into a misleading network error.
     const script = b.sdk === "1" ? `await useOrCreateTaskSpace(${b.taskSpaceId});const tabs=await listTabs();${selection}
-await switchTab(selected[0].targetId);const value=await js(${JSON.stringify(expression)});
-const snapshot={taskSpaceId:${b.taskSpaceId},targetId:selected[0].targetId,...value};` :
+const value=selected.length===1?await(async()=>{await switchTab(selected[0].targetId);return await js(${JSON.stringify(expression)});})():{failure:'SOURCE.SESSION_MISMATCH'};
+const snapshot={taskSpaceId:${b.taskSpaceId},targetId:${JSON.stringify(b.targetId)},...value};` :
       `const task=await taskSpace(${b.taskSpaceId});const tabs=await task.tabs();${selection}
-const value=await task.page(selected[0].label).evaluate(${JSON.stringify(expression)});
-const snapshot={taskSpaceId:${b.taskSpaceId},targetId:selected[0].targetId,...value};`;
+const value=selected.length===1?await task.page(selected[0].label).evaluate(${JSON.stringify(expression)}):{failure:'SOURCE.SESSION_MISMATCH'};
+const snapshot={taskSpaceId:${b.taskSpaceId},targetId:${JSON.stringify(b.targetId)},...value};`;
     try {
       const raw = await this.runner.run(b.cliPath,script,signal).catch(error=>{
         if(error instanceof Error && (error.message==="SOURCE.BROWSER_USER_CONTROL" ||
@@ -68,7 +69,7 @@ const snapshot={taskSpaceId:${b.taskSpaceId},targetId:selected[0].targetId,...va
       });
       signal.throwIfAborted();
       const failure = z.strictObject({taskSpaceId:z.literal(b.taskSpaceId),targetId:z.literal(b.targetId),
-        failure:z.enum(["ARTIFACT.TOO_LARGE","SOURCE.SESSION_MISMATCH","SOURCE.NETWORK_UNAVAILABLE"])}).safeParse(raw);
+        failure:z.enum(["ARTIFACT.TOO_LARGE","ARTIFACT.INTEGRITY","SOURCE.SESSION_MISMATCH","SOURCE.NETWORK_UNAVAILABLE"])}).safeParse(raw);
       if(failure.success)throw new AcquisitionError(failure.data.failure);
       const parsed=Snapshot.safeParse(raw);
       if(!parsed.success)throw new AcquisitionError("ARTIFACT.INTEGRITY");

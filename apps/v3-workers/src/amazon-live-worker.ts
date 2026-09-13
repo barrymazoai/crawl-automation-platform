@@ -127,13 +127,13 @@ async function main() {
         };
         else if (role === "file") handlers = { acquireAmazonFile: async (raw, s) => {
           const captured = AmazonProductCaptureSchema.parse({ job: raw.job, sourcePlan: raw.sourcePlan }), job = await verifyJob(captured.job, s);
-          if (!equal(await products.inspect(job, s), captured)) throw Error("AMAZON.CAPTURE_UNVERIFIED");
+          const pageUrl = await products.filePageUrl(captured, s);
           const url = await plans.fileSource(captured.sourcePlan, raw.input, s);
           const access: SourceAccess = { acquire: async input => {
             if (!equal(input, raw.input)) throw Error("SOURCE.SESSION_MISMATCH");
             await requireBrowser(); const browser = await pages.open(job.sessionId, s); let released = false;
             return { owner: observationIdentity(input), sourceId: input.sourceId, resourceId: input.resourceId, binding: input.binding, url,
-              allowedOrigins: ["https://m.media-amazon.com"], transport: new EgoFileTransport({ browser, pageUrl: captured.sourcePlan.expectedUrl, allowedUrls: [url] }, config.egressId),
+              allowedOrigins: ["https://m.media-amazon.com"], transport: new EgoFileTransport({ browser, pageUrl, allowedUrls: [url] }, config.egressId),
               headersFor: () => ({}), assertActive: () => { if (released) throw Error("SOURCE.SESSION_UNAVAILABLE"); }, release: async () => { released = true; } };
           } };
           return new AcquireFileModule(files, { access, dns: systemDns }).run(raw.input, s);

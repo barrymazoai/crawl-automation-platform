@@ -21,3 +21,27 @@ it('foreign selected ASIN cannot create an observation',async()=>{const f=amazon
 
 it('observed localized clp canonical is an identity alias, never a product navigation route',()=>{const f=amazonFixture();f.product.canonicalUrl='https://www.amazon.com/-/zh/clp/B000REPUY0';expect(parseAmazonRenderedProduct(f.product,f.url,{listingId:f.product.asin,variantId:null}).listingId).toBe('B000REPUY0');expect(()=>amazonProductAddress(f.product.canonicalUrl)).toThrow();});
 it('loading placeholders must not be retained as original gallery images',()=>{const f=amazonFixture();f.product.gallery[1]!.url='https://m.media-amazon.com/images/G/01/loading.gif';expect(()=>parseAmazonRenderedProduct(f.product,f.url,{listingId:f.product.asin,variantId:null})).toThrow('IMAGE_URL_REJECTED');});
+
+it('binds files to the retained observed URL without changing historical capture inputs',async()=>{
+ const f=amazonFixture(),job=await f.job();f.product.url=f.url+'?th=1';
+ const captured=await f.live.capture(job,signal()),before=JSON.stringify(captured);
+ const cold=new AmazonLiveProduct(new RetainedPublication(new AmazonMemory(),f.remote),f.settings);
+ expect(await cold.filePageUrl(captured,signal())).toBe(f.url+'?th=1');
+ expect(await cold.inspect(job,signal())).toEqual(captured);
+ expect(captured.sourcePlan.expectedUrl).toBe(f.url);expect(JSON.stringify(captured)).toBe(before);
+ expect(f.productBrowser.capture).toHaveBeenCalledOnce();
+});
+it.each(['hash','owner','session','projection','missing','intent'])('rejects a %s conflict before issuing a file page binding',async mode=>{
+ const f=amazonFixture(),captured=await f.live.capture(await f.job(),signal());
+ if(mode==='hash')captured.sourcePlan.source.sha256='0'.repeat(64);
+ if(mode==='owner')captured.sourcePlan.owner.observationId='foreign-observation';
+ if(mode==='session')captured.sourcePlan.binding.sessionId='foreign-session';
+ if(mode==='projection')f.remote.data.set(captured.sourcePlan.source.objectKey,Buffer.from(JSON.stringify({...f.product,url:f.url+'?th=1'})));
+ if(mode==='missing')f.remote.data.delete(captured.sourcePlan.source.objectKey);
+ if(mode==='intent')f.remote.data.delete(`v3/amazon-products/${captured.job.operationId}/intent.json`);
+ await expect(f.live.filePageUrl(captured,signal())).rejects.toThrow();
+});
+it.each(['https://evil.example/dp/B000REPUY0','https://www.amazon.com/dp/B000000002'])('rejects an observed foreign product/origin %s',async url=>{
+ const f=amazonFixture(),job=await f.job();f.product.url=url;
+ await expect(f.live.capture(job,signal())).rejects.toThrow();
+});

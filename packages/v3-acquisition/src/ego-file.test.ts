@@ -2,6 +2,8 @@ import { describe,it,expect,vi } from "vitest";
 import { EgoFileTransport,EGO_FILE_MAX_BYTES } from "./ego-file.js";
 import { transportAddress } from "./network.js";
 import { runInNewContext } from "node:vm";
+import { acquireFile } from "./file.js";
+import { fileInput, lease } from "./testing.fixture.js";
 const pageUrl="https://www.gnc.com/energy/613701.html",url="https://www.gnc.com/image.jpg";
 const config={browser:{engine:"ego-lite",sdk:"1",cliPath:"/usr/local/bin/ego-browser",taskSpaceId:1,targetId:"target",sessionId:"session"},pageUrl,allowedUrls:[url]} as const;
 const signal=()=>new AbortController().signal;
@@ -45,9 +47,9 @@ describe("Ego single file transport",()=>{
 });
 
 describe("actual generated browser fetch script",()=>{
-  function pageRunner(fetch:typeof globalThis.fetch){return {run:async(_cli:string,script:string,_signal:AbortSignal)=>{
-    const context={useOrCreateTaskSpace:async()=>{},listTabs:async()=>[{targetId:"target",url:pageUrl}],switchTab:async()=>{},
-      js:async(expression:string)=>runInNewContext(expression,{location:{href:pageUrl},fetch,AbortController,setTimeout,clearTimeout,btoa})};
+  function pageRunner(fetch:typeof globalThis.fetch, tabs=[{targetId:"target",url:pageUrl}], currentUrl=pageUrl){return {run:async(_cli:string,script:string,_signal:AbortSignal)=>{
+    const context={useOrCreateTaskSpace:async()=>{},listTabs:async()=>tabs,switchTab:async()=>{},
+      js:async(expression:string)=>runInNewContext(expression,{location:{href:currentUrl},fetch,AbortController,setTimeout,clearTimeout,btoa})};
     return runInNewContext(`(async()=>{${script};return snapshot;})()`,context);
   }};}
   it("returns byte-exact response and rejects automatic redirect configuration",async()=>{
@@ -68,5 +70,22 @@ describe("actual generated browser fetch script",()=>{
     const fetch=vi.fn(async()=>{throw TypeError("Failed to fetch");});
     const transport=new EgoFileTransport({...config,allowedUrls:[url]},"ego-host/1",pageRunner(fetch));
     await expect(transport.get(new URL(url),undefined,{},signal())).rejects.toThrow("SOURCE.NETWORK_UNAVAILABLE");expect(fetch).toHaveBeenCalledTimes(1);
+  });
+  it.each(['query','target','missing','duplicate','navigation'])('keeps %s mismatch distinct from a network error through file acquisition',async mode=>{
+    const input=fileInput(),base=lease(),fetch=vi.fn(async()=>new Response());
+    const tabs=mode==='missing'?[]:mode==='duplicate'?[{targetId:'target',url:pageUrl},{targetId:'target',url:pageUrl}]:[{targetId:mode==='target'?'foreign':'target',url:mode==='query'?pageUrl+'?th=1':pageUrl}];
+    const transport=new EgoFileTransport({...config,allowedUrls:[base.url]},base.binding.egressId,pageRunner(fetch,tabs,mode==='navigation'?pageUrl+'?changed=1':pageUrl));
+    const dns={resolve:vi.fn()};
+    await expect(acquireFile(input,{access:{acquire:async()=>({...base,transport,headersFor:()=>({})})},dns},signal())).rejects.toThrow('SOURCE.SESSION_MISMATCH');
+    expect(fetch).not.toHaveBeenCalled();expect(dns.resolve).not.toHaveBeenCalled();
+  });
+  it('does not silently strip query parameters when binding the verified observed URL',async()=>{
+    const observed=pageUrl+'?th=1',fetch=vi.fn(async()=>{const r=new Response(Uint8Array.from([1,2,3]));Object.defineProperty(r,'url',{value:url});return r;});
+    const transport=new EgoFileTransport({...config,pageUrl:observed,allowedUrls:[url]},'ego-host/1',pageRunner(fetch,[{targetId:'target',url:observed}],observed));
+    expect((await transport.get(new URL(url),undefined,{},signal())).status).toBe(200);expect(fetch).toHaveBeenCalledOnce();
+  });
+  it('reports an unverified response URL as integrity failure',async()=>{
+    const transport=new EgoFileTransport({...config,allowedUrls:[url]},'ego-host/1',pageRunner(async()=>{const r=new Response();Object.defineProperty(r,'url',{value:url+'?other'});return r;}));
+    await expect(transport.get(new URL(url),undefined,{},signal())).rejects.toThrow('ARTIFACT.INTEGRITY');
   });
 });

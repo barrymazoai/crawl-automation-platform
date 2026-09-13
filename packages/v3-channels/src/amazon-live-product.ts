@@ -31,14 +31,28 @@ export class AmazonLiveProduct {
         producer: { operationId: job.operationId, module: "amazon.browser-projection", implementationVersion: "amazon-rendered/1" } } });
     return AmazonProductCaptureSchema.parse({ job, sourcePlan });
   }
-  async inspect(raw: unknown, signal: AbortSignal) {
+  private async inspectProduct(raw: unknown, signal: AbortSignal) {
     const job = AmazonProductJobSchema.parse(raw), key = this.key(job);
     const intent = await this.publication.remote.read(`${key}/intent.json`, 65536, signal);
     if (intent && !equal(JSON.parse(Buffer.from(intent).toString()), { job, settings: this.settings })) throw Error("AMAZON.PRODUCT_POLICY_CONFLICT");
     const p = await this.publication.remote.read(`${key}/projection.json`, 4 * 1024 * 1024, signal);
     if (!p) return null;
     if (!intent) throw Error("AMAZON.PRODUCT_INTENT_MISSING");
-    return this.derive(job, JSON.parse(Buffer.from(p).toString()));
+    const product = productProjection(JSON.parse(Buffer.from(p).toString()));
+    return { captured: this.derive(job, product), product };
+  }
+  async inspect(raw: unknown, signal: AbortSignal) {
+    return (await this.inspectProduct(raw, signal))?.captured ?? null;
+  }
+  /** Read the exact observed page URL from verified retained evidence. The original
+   * expectedUrl and all historical input fingerprints stay unchanged. */
+  async filePageUrl(raw: unknown, signal: AbortSignal) {
+    const captured = AmazonProductCaptureSchema.parse(raw);
+    const saved = await this.inspectProduct(captured.job, signal);
+    // derive validates Amazon origin/ASIN and regenerates the source size/hash and
+    // owner/session binding; equality ties this URL to this exact capture input.
+    if (!saved || !equal(saved.captured, captured)) throw Error("AMAZON.CAPTURE_UNVERIFIED");
+    return saved.product.url;
   }
   async capture(raw: unknown, signal: AbortSignal) {
     const job = AmazonProductJobSchema.parse(raw), old = await this.inspect(job, signal);

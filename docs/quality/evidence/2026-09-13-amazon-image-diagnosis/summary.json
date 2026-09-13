@@ -1,0 +1,172 @@
+{
+  "at": "2026-09-13T15:26:21.974272+00:00",
+  "scope": "Retained records plus one product reproduction. No business submissions, provider calls, business code/config changes or Worker restarts. Diagnostic owner is not a Temporal business Workflow.",
+  "originalProjections": [
+    {
+      "asin": "B00IG0MJKA",
+      "expectedUrl": "https://www.amazon.com/dp/B00IG0MJKA",
+      "actualCapturedUrl": "https://www.amazon.com/dp/B00IG0MJKA",
+      "canonicalUrl": "https://www.amazon.com/clp/B00IG0MJKA",
+      "capturedAt": "2026-09-13T14:35:20.033Z",
+      "sourceKey": "v3/amazon-products/amazon-capture-0177d39c5b7410cd77651880007320cc2e6a4f8adf607e4dad34cc29708743a8/projection.json",
+      "sourceSha256": "3dbb199b041c5ec10b011af93b1b7dc505d4ad1a454be4efa522e9b408043949",
+      "firstImage": {
+        "index": 0,
+        "url": "https://m.media-amazon.com/images/I/71+-gMIQywL._AC_SL1500_.jpg",
+        "alt": ""
+      },
+      "originalOutcome": "durable"
+    },
+    {
+      "asin": "B0GBX7416D",
+      "expectedUrl": "https://www.amazon.com/dp/B0GBX7416D",
+      "actualCapturedUrl": "https://www.amazon.com/dp/B0GBX7416D?th=1",
+      "canonicalUrl": "https://www.amazon.com/clp/B0GBX7416D",
+      "capturedAt": "2026-09-13T14:48:57.353Z",
+      "sourceKey": "v3/amazon-products/amazon-capture-f4457935fdc143e0673a8fd8db9ff152742191ead6e4c8467f6c141e70e656f2/projection.json",
+      "sourceSha256": "6edd6aef2b9138606b6bb7b2361de87b2f6e9c27ca0ca1f1a7e26e1bb5d32f68",
+      "firstImage": {
+        "index": 0,
+        "url": "https://m.media-amazon.com/images/I/81hZ9Ohv1kL._AC_SL1500_.jpg",
+        "alt": ""
+      },
+      "originalOutcome": "review"
+    },
+    {
+      "asin": "B0013LAQS6",
+      "expectedUrl": "https://www.amazon.com/dp/B0013LAQS6",
+      "actualCapturedUrl": "https://www.amazon.com/dp/B0013LAQS6?th=1",
+      "canonicalUrl": "https://www.amazon.com/clp/B0013LAQS6",
+      "capturedAt": "2026-09-13T14:51:50.298Z",
+      "sourceKey": "v3/amazon-products/amazon-capture-9e9faa62c14b3df65b74845edb964f9287b8ac160311a646efe6e1d3c9c4b779/projection.json",
+      "sourceSha256": "e87e8f652442b3aef8da42b82b905d7543cefe404638eed515d3c8470459d7f3",
+      "firstImage": {
+        "index": 0,
+        "url": "https://m.media-amazon.com/images/I/71m62G2Sr3L._AC_SL1500_.jpg",
+        "alt": ""
+      },
+      "originalOutcome": "review"
+    },
+    {
+      "asin": "B0G963NB8Q",
+      "expectedUrl": "https://www.amazon.com/dp/B0G963NB8Q",
+      "actualCapturedUrl": "https://www.amazon.com/dp/B0G963NB8Q",
+      "canonicalUrl": "https://www.amazon.com/Horb%C3%A4ach-Collagen-Peptides-Hyaluronic-Supplement/dp/B0G963NB8Q",
+      "capturedAt": "2026-09-13T14:54:43.407Z",
+      "sourceKey": "v3/amazon-products/amazon-capture-8d9e570cfb968cd118ef634a962dded9c22f206cd8a4609f341cabf19d771b9d/projection.json",
+      "sourceSha256": "af489284897deb5dd547242e3fdf6664f547c7b23b9d59fa66905b6c745e505f",
+      "firstImage": {
+        "index": 0,
+        "url": "https://m.media-amazon.com/images/I/718ZuvhraGL._AC_SL1500_.jpg",
+        "alt": ""
+      },
+      "originalOutcome": "durable"
+    },
+    {
+      "asin": "B0FRWTLCMP",
+      "expectedUrl": "https://www.amazon.com/dp/B0FRWTLCMP",
+      "actualCapturedUrl": "https://www.amazon.com/dp/B0FRWTLCMP?th=1",
+      "canonicalUrl": "https://www.amazon.com/Best-Naturals-Cinnamon-Equivalent-Chromium/dp/B0FRWTLCMP",
+      "capturedAt": "2026-09-13T14:59:07.918Z",
+      "sourceKey": "v3/amazon-products/amazon-capture-a3a4d0eeb9f12deb658e32a2e5dd401225ff987222312c3300530085f622101d/projection.json",
+      "sourceSha256": "e420dd93b5cd7fcfec3c2c85e1a9cffa2d847b9847a31052ef82b7275efe0dd0",
+      "firstImage": {
+        "index": 0,
+        "url": "https://m.media-amazon.com/images/I/81w0+fcAx2L._AC_SL1500_.jpg",
+        "alt": ""
+      },
+      "originalOutcome": "review"
+    }
+  ],
+  "transportComparison": {
+    "asin": "B0GBX7416D",
+    "targetId": "579B56C9F6135EB0E1A231A3819AC8DA",
+    "imageUrl": "https://m.media-amazon.com/images/I/81hZ9Ohv1kL._AC_SL1500_.jpg",
+    "results": [
+      {
+        "pageUrl": "https://www.amazon.com/dp/B0GBX7416D",
+        "ok": false,
+        "error": {
+          "name": "BrowserError",
+          "message": "SOURCE.BROWSER_UNAVAILABLE",
+          "code": "SOURCE.BROWSER_UNAVAILABLE"
+        },
+        "elapsedMs": 129
+      },
+      {
+        "pageUrl": "https://www.amazon.com/dp/B0GBX7416D?th=1",
+        "ok": true,
+        "status": 200,
+        "byteSize": 176130,
+        "sha256": "a9ed8ab8446cb47a7541a1b427a693c2ce5e71c4d7b9ecdf3c5bdde98cd8b4be",
+        "elapsedMs": 96
+      }
+    ]
+  },
+  "browserProbe": {
+    "at": "2026-09-13T15:24:32.195Z",
+    "pageUrl": "https://www.amazon.com/dp/B0GBX7416D?th=1",
+    "result": {
+      "ok": true,
+      "bytes": 176130,
+      "sha256": "a9ed8ab8446cb47a7541a1b427a693c2ce5e71c4d7b9ecdf3c5bdde98cd8b4be",
+      "responseInfo": {
+        "url": "https://m.media-amazon.com/images/I/81hZ9Ohv1kL._AC_SL1500_.jpg",
+        "type": "cors",
+        "status": 200,
+        "redirected": false,
+        "headers": {
+          "cache-control": "max-age=630720000,public",
+          "content-length": "176130",
+          "content-type": "image/jpeg"
+        }
+      },
+      "elapsedMs": 2.799999952316284
+    },
+    "events": [
+      {
+        "method": "Network.responseReceived",
+        "requestId": "85299.600",
+        "response": {
+          "url": "https://m.media-amazon.com/images/I/81hZ9Ohv1kL._AC_SL1500_.jpg",
+          "status": 200,
+          "mimeType": "image/jpeg",
+          "fromDiskCache": true,
+          "fromServiceWorker": false,
+          "fromPrefetchCache": false,
+          "protocol": "h2"
+        }
+      },
+      {
+        "method": "Network.loadingFinished",
+        "params": {
+          "requestId": "85299.600",
+          "encodedDataLength": 0
+        }
+      }
+    ]
+  },
+  "cleanup": {
+    "closed": {
+      "status": "closed",
+      "taskId": "image-diagnostic-B0GBX7416D-c7e330f7-c3a3-48ff-8f95-56e8d4db08df",
+      "targetId": "579B56C9F6135EB0E1A231A3819AC8DA"
+    },
+    "checks": [
+      {
+        "at": "2026-09-13T15:24:48.120Z",
+        "targetsAbsent": true
+      },
+      {
+        "at": "2026-09-13T15:24:48.204Z",
+        "targetsAbsent": true
+      },
+      {
+        "at": "2026-09-13T15:24:48.287Z",
+        "targetsAbsent": true
+      }
+    ]
+  },
+  "privateEvidenceDirectory": "/Users/barry/apps/crawlv3-history-20260913/amazon-image-network-diagnostic-20260913",
+  "privateProbeSha256": "00cdeb3f68c3c9e850ab847a0259bfa6206c8de637a30ac88f6fbab5c02f52c9"
+}
