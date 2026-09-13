@@ -33,7 +33,9 @@
     "provision:gnc-file": "node dist/gnc/gnc-file-grant.js",
     "worker:gnc-workflow": "node dist/gnc/gnc-workflow-worker.js",
     "test:integration": "pnpm build:test && vitest run integration --hookTimeout=60000 --testTimeout=30000",
-    "build:dtc": "tsc --noEmit && node --import tsx scripts/build-dtc-windows.ts"
+    "build:dtc": "tsc --noEmit && node --import tsx scripts/build-dtc-windows.ts",
+    "build:amazon-batch": "tsc --noEmit && node --import tsx scripts/build-amazon-batch.ts",
+    "worker:amazon-batch": "node dist/amazon-batch/amazon-batch-worker.js"
   },
   "dependencies": {
     "@crawl-automation/v3-worker-runtime": "workspace:*",

@@ -1,7 +1,7 @@
 import fs from 'node:fs/promises';import {execFile} from 'node:child_process';import {promisify} from 'node:util';import assert from 'node:assert/strict';import pg from 'pg';
 const root='/Users/barry/apps/crawlv3-history-20260913',dir=root+'/amazon-2000-us-20260913';
 const read=async p=>JSON.parse(await fs.readFile(p,'utf8')),sleep=ms=>new Promise(r=>setTimeout(r,ms));
-assert.equal(process.platform,'darwin');const mode=process.argv[2]??'pilot';assert.ok(['pilot','run','status'].includes(mode));
+assert.equal(process.platform,'darwin');const mode=process.argv[2]??'status';assert.equal(mode,'status','Batch execution moved to AmazonHistoryBatchWorkflow; this legacy command is read-only');
 const plan=await read(dir+'/selection.json'),originalBatches=await read(dir+'/link-batches.json'),baseline=await read(dir+'/price-baseline.json');
 let retries=[];try{retries=await read(dir+'/retry-batches.json');}catch(e){if(e.code!=='ENOENT')throw e;}
 const batches=[...originalBatches.slice(0,2),...retries,...originalBatches.slice(2)];assert.equal(new Set(batches.map(b=>b.requestId)).size,batches.length);
