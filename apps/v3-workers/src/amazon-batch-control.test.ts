@@ -6,12 +6,12 @@ import {expect,it,vi} from 'vitest';
 import {sha256} from '@crawl-automation/v3-artifacts';
 import {AmazonBatchController} from './amazon-batch-control.js';
 
-async function fixture(){
+async function fixture(count=2000){
  const root=await fs.mkdtemp(join(tmpdir(),'amazon-batch-test-')),campaignId='batch-test';
- const products=Array.from({length:2000},(_,n)=>({asin:'B'+String(n).padStart(9,'0')}));
+ const products=Array.from({length:count},(_,n)=>({asin:'B'+String(n).padStart(9,'0')}));
  const scope={brandId:randomUUID(),sourceId:randomUUID(),channel:'amazon',region:'US',rootUrl:'https://www.amazon.com/',scopeVersion:'source-revision-2'};
- const batches=Array.from({length:500},(_,n)=>({codec:'amazon-link-batch/1',requestId:randomUUID(),scope,candidateManifestSha256:'a'.repeat(64),entries:products.slice(n*4,n*4+4).map(p=>({candidateId:'b'.repeat(64),historyListingId:'c'.repeat(64),entry:{listingId:p.asin,url:'https://www.amazon.com/dp/'+p.asin,kind:'product',variantId:null}}))}));
- const bytes=Buffer.from(JSON.stringify({codec:'amazon-history-campaign/1',campaignId,region:'US',postalCode:'10001',productCount:2000,products,batches}));
+ const batches=Array.from({length:Math.ceil(count/4)},(_,n)=>({codec:'amazon-link-batch/1',requestId:randomUUID(),scope,candidateManifestSha256:'a'.repeat(64),entries:products.slice(n*4,n*4+4).map(p=>({candidateId:'b'.repeat(64),historyListingId:'c'.repeat(64),entry:{listingId:p.asin,url:'https://www.amazon.com/dp/'+p.asin,kind:'product',variantId:null}}))}));
+ const bytes=Buffer.from(JSON.stringify({codec:'amazon-history-campaign/1',campaignId,region:'US',postalCode:'10001',productCount:count,products,batches}));
  await fs.writeFile(root+'/plan.json',bytes);await fs.writeFile(root+'/price-baseline.json','[]');
  const config={campaignId,manifestPath:root+'/plan.json',manifestSha256:sha256(bytes),dataRoot:root,adminFile:root+'/admin.json',recoveryHelper:root+'/recovery.js',controlQueue:'queue'};
  let healthy=true,held=0;
@@ -32,6 +32,17 @@ it('lost intake reply reconciles the same request; unhealthy dependencies and fo
   expect(await f.controller.submitAmazonHistoryChunk(f.call,AbortSignal.timeout(1000))).toMatchObject({accepted:true});expect(posts).toBe(1);
   f.submission.snapshot.sourceRevision=3;await expect(f.controller.submitAmazonHistoryChunk(f.call,AbortSignal.timeout(1000))).rejects.toThrow('SUBMISSION_CONFLICT');expect(posts).toBe(1);
   await expect(f.controller.submitAmazonHistoryChunk({...f.call,requestId:randomUUID()},AbortSignal.timeout(1000))).rejects.toThrow('BATCH_REQUEST');
+ }finally{vi.unstubAllGlobals();await fs.rm(f.root,{recursive:true,force:true});}
+});
+it('a ten-product pilot has a finite plan and rejects an eleventh product before intake',async()=>{
+ const f=await fixture(10),fetch=vi.fn();vi.stubGlobal('fetch',fetch);
+ try{
+  expect(await f.controller.loadAmazonHistoryBatch(f.call)).toMatchObject({totalProducts:10,requestIds:expect.any(Array)});
+  expect((await f.controller.loadAmazonHistoryBatch(f.call)).requestIds).toHaveLength(3);
+  await expect(f.controller.submitAmazonHistoryChunk({...f.call,requestId:randomUUID()},AbortSignal.timeout(1000))).rejects.toThrow('BATCH_REQUEST');expect(fetch).not.toHaveBeenCalled();
+  const raw=JSON.parse(await fs.readFile(f.config.manifestPath,'utf8'));raw.products.push({asin:'B000000010'});
+  const altered=Buffer.from(JSON.stringify(raw));await fs.writeFile(f.config.manifestPath,altered);
+  await expect(AmazonBatchController.open({...f.config,manifestSha256:sha256(altered)},{} as any,{} as any)).rejects.toThrow('BATCH_SELECTION');
  }finally{vi.unstubAllGlobals();await fs.rm(f.root,{recursive:true,force:true});}
 });
 it('closed delivery requires exact discoveries and released permits; changed manifest fails before use',async()=>{

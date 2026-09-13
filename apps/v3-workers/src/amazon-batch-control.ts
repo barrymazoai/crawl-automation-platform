@@ -15,9 +15,9 @@ export class AmazonBatchController{
  private constructor(readonly config:AmazonBatchConfig,private db:pg.Pool,private client:Client,private batches:AmazonLinkBatch[],private products:Map<string,any>,private baseline:any[]){}
  static async open(config:AmazonBatchConfig,db:pg.Pool,client:Client){
   const bytes=await fs.readFile(config.manifestPath);if(sha256(bytes)!==config.manifestSha256)throw Error('AMAZON.BATCH_MANIFEST_CHANGED');
-  const raw=JSON.parse(bytes.toString());if(raw.codec!=='amazon-history-campaign/1'||raw.campaignId!==config.campaignId||raw.region!=='US'||raw.postalCode!=='10001'||raw.productCount!==2000)throw Error('AMAZON.BATCH_POLICY');
+  const raw=JSON.parse(bytes.toString());if(raw.codec!=='amazon-history-campaign/1'||raw.campaignId!==config.campaignId||raw.region!=='US'||raw.postalCode!=='10001'||!Number.isInteger(raw.productCount)||raw.productCount<1||raw.productCount>2000)throw Error('AMAZON.BATCH_POLICY');
   const batches=AmazonLinkBatchesSchema.parse(raw.batches),products=new Map<string,any>(raw.products.map((p:any)=>[p.asin,p]));
-  if(products.size!==2000||new Set(batches.flatMap(b=>b.entries.map(e=>e.entry.listingId))).size!==2000||batches.some(b=>b.scope.region!=='US'||b.entries.some(e=>!products.has(e.entry.listingId))))throw Error('AMAZON.BATCH_SELECTION');
+  if(products.size!==raw.productCount||raw.products.length!==raw.productCount||new Set(batches.flatMap(b=>b.entries.map(e=>e.entry.listingId))).size!==raw.productCount||batches.some(b=>b.scope.region!=='US'||b.entries.some(e=>!products.has(e.entry.listingId))))throw Error('AMAZON.BATCH_SELECTION');
   if((await db.query('select current_database() name')).rows[0].name!=='crawler_v3_test')throw Error('AMAZON.BATCH_DATABASE');
   const baseline=JSON.parse(await fs.readFile(config.dataRoot+'/price-baseline.json','utf8'));
   return new AmazonBatchController(config,db,client,batches,products,baseline);
