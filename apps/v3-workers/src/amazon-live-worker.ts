@@ -21,6 +21,7 @@ import { scopeForSubmission } from "./brand-pipeline.js";
 import { AmazonLiveConfigSchema } from "./amazon-live-config.js";
 import { readGncPrivateJson } from "./gnc-config.js";
 import { AmazonLinkCatalog } from "./amazon-link-batches.js";
+import { recoveredAmazonFailure } from './amazon-terminal-proof.js';
 
 const execution = () => { const e = Context.current().info.workflowExecution; if (!e) throw Error("AMAZON.WORKFLOW_REQUIRED"); return e; };
 async function main() {
@@ -168,7 +169,9 @@ async function main() {
             for (const d of rows) if (d.execution) {
               const e = await client.workflow.getHandle(d.record.workflowId).describe();
               const held = await resourceDb.query("SELECT 1 FROM resource_permit WHERE request->>'workflowId'=ANY($1::text[]) AND released_at IS NULL", [[d.record.workflowId, `${d.record.workflowId}-label`]]);
-              if (e.runId === d.execution.runId && e.status.name === "COMPLETED" && e.type === "AmazonCatalogProductWorkflow" && !held.rowCount) finished++;
+              if (e.runId === d.execution.runId && e.type === "AmazonCatalogProductWorkflow" && !held.rowCount &&
+                (e.status.name === "COMPLETED" || links.has(id) && e.status.name === "FAILED" &&
+                  await recoveredAmazonFailure(d.record,e.runId,db,resourceDb,r2.store,AbortSignal.timeout(30000)))) finished++;
             }
             const held = await resourceDb.query("SELECT 1 FROM resource_permit WHERE request->>'workflowId'=$1 AND released_at IS NULL", [`v3-collection-${id}-catalog`]);
             return BrandCollectionProgressSchema.parse({ catalogId: id, settled: Boolean(closure) && finished === rows.length && !held.rowCount,
