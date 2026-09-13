@@ -1,0 +1,20 @@
+{
+  "at": "2026-09-13T15:51:45.142Z",
+  "campaignId": "amazon-history-100-us-10001-20260913",
+  "products": 100,
+  "chunks": 100,
+  "manifestSha256": "5430415d294ea96af1fe3ab9b42eba3894b800629e7f71c62ef732cfc5136ae9",
+  "withOldUsdPrice": 100,
+  "priorAttemptedExcluded": 11,
+  "policy": "Original 2,000-product candidate order; exclude prior discovered ASINs; prefer existing USD price observations; one immutable request per product",
+  "groups": [
+    "Nature's Bounty"
+  ],
+  "firstAsins": [
+    "B0C296MRW4",
+    "B01IAI2MB8",
+    "B0D1LQLV1P",
+    "B0GHZDFNP8",
+    "B07VLV4HMF"
+  ]
+}

@@ -1,0 +1,54 @@
+{
+  "at": "2026-09-13T15:52:27.358Z",
+  "campaignId": "amazon-history-100-us-10001-20260913",
+  "runId": "01a09b78-4a5f-7047-b670-48d4ca5e4781",
+  "productCount": 100,
+  "chunks": 100,
+  "manifestSha256": "5430415d294ea96af1fe3ab9b42eba3894b800629e7f71c62ef732cfc5136ae9",
+  "workflowQueue": "v3.amazon.batch.workflow.v1.amazon-batch-v1.session.amazon-history-10-us-10001",
+  "controlQueue": "v3.amazon.batch.control.v1.amazon-batch-v1.session.amazon-history-10-us-10001",
+  "ready": [
+    {
+      "id": "amazon-control",
+      "pid": 92174
+    },
+    {
+      "id": "amazon-catalog-source",
+      "pid": 92219
+    },
+    {
+      "id": "amazon-catalog-ledger",
+      "pid": 92255
+    },
+    {
+      "id": "amazon-product-input",
+      "pid": 92283
+    },
+    {
+      "id": "amazon-capture",
+      "pid": 92320
+    },
+    {
+      "id": "amazon-file",
+      "pid": 92357
+    },
+    {
+      "id": "amazon-review",
+      "pid": 92392
+    },
+    {
+      "id": "amazon-batch-workflow",
+      "pid": 92428
+    },
+    {
+      "id": "amazon-batch-control",
+      "pid": 92456
+    }
+  ],
+  "mainMonitorPid": 68275,
+  "batchMonitorPid": 67816,
+  "unrelatedPidsUnchanged": true,
+  "businessReleaseUnchanged": true,
+  "region": "US",
+  "postalCode": "10001"
+}

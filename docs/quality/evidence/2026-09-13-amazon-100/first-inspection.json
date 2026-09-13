@@ -1,0 +1,67 @@
+{
+  "at": "2026-09-13T15:53:59.781Z",
+  "campaignId": "amazon-history-100-us-10001-20260913",
+  "runId": "01a09b78-4a5f-7047-b670-48d4ca5e4781",
+  "status": "RUNNING",
+  "phase": "waiting-for-products",
+  "cursor": 0,
+  "total": 100,
+  "error": null,
+  "submissions": 1,
+  "captures": 1,
+  "prices": [
+    {
+      "asin": "B0C296MRW4",
+      "price": "7.99",
+      "currency": "USD",
+      "captured_at": "2026-09-13T15:53:05.608Z"
+    }
+  ],
+  "reviewCount": 0,
+  "current": [
+    {
+      "asin": "B0C296MRW4",
+      "workflowId": "catalog-product-0aafbe691050e5150ac25ffd7f9db584a581269262bc115f26b1b2b355a225b0",
+      "status": "RUNNING",
+      "pending": [
+        "acquireAmazonFile"
+      ]
+    }
+  ],
+  "report": {
+    "at": "2026-09-13T15:53:34.593Z",
+    "requested": 100,
+    "submittedProducts": 1,
+    "submittedAttempts": 1,
+    "captures": 1,
+    "capturedProducts": 1,
+    "savedProducts": 0,
+    "moduleReviewRecords": 0,
+    "pricePoints": 1,
+    "comparablePricePoints": 1,
+    "priceChangeExamples": [
+      {
+        "asin": "B0C296MRW4",
+        "title": "Horb\u00e4ach Moringa Oleifera | 300 Powder Capsules | Complete Green Superfood",
+        "url": "https://www.amazon.com/dp/B0C296MRW4",
+        "oldAt": "2026-08-18T07:37:57.718Z",
+        "oldPrice": "8.99",
+        "oldCurrency": "USD",
+        "newAt": "2026-09-13T15:53:05.608Z",
+        "newPrice": "7.99",
+        "newCurrency": "USD",
+        "delivery": "New York 10001",
+        "difference": -1,
+        "changePercent": -11.12,
+        "comparisonNote": "\u9875\u9762\u62a5\u4ef7\u89c2\u6d4b\uff1b\u65e7\u8d2d\u4e70\u6761\u4ef6\u672a\u5b8c\u6574\u8bb0\u5f55\uff0c\u4e0d\u4ee3\u8868\u540c\u6761\u4ef6\u6210\u4ea4\u4ef7\u683c\u53d8\u5316",
+        "observationId": "amazon-3c98417a90283bcb288aac226287701adbf2670bb333a11b8eae307b16dade5d"
+      }
+    ]
+  },
+  "workers": {
+    "mainReady": 90,
+    "mainTotal": 90,
+    "batchReady": 2,
+    "batchTotal": 2
+  }
+}
