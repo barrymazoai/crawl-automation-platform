@@ -9,6 +9,8 @@ import {ProductHistory} from "../../v3-api/src/history/store.js";
 import {convertHistoryInput,convertLegacyProduct,hash} from "../../v3-api/src/history/model.js";
 import {labelProductFixture} from "../../../packages/v3-product/src/label-product.fixture.js";
 import {labelCollectedHash} from "@crawl-automation/v3-product";
+import {purchaseFixture} from '../../../packages/v3-channels/src/purchase-conditions.fixture.js';
+import {productServiceMaterial} from '../../v3-api/src/history/product-service.js';
 
 const address=process.env.V3_HISTORY_TEST_URL,s=()=>AbortSignal.timeout(10000);
 describe.skipIf(!address)("Mini capture history integration",()=>{
@@ -80,6 +82,15 @@ describe.skipIf(!address)("Mini capture history integration",()=>{
   const bytes=Buffer.from(JSON.stringify(projection)),objectKey="v3/dtc-products/dtc-history/projection.json";remote.data.set(objectKey,bytes);
   const i={...base,channel:"dtc",parserVersion:"dtc-rendered/1",expectedUrl:url,owner,source:{...base.source,observationId:owner.observationId,listingId,variantId:null,objectKey,sha256:sha256(bytes),byteSize:bytes.length,producer:{operationId:"dtc-history",module:"dtc.browser-projection",implementationVersion:"dtc-rendered/1"}}};
   const result=await history.channel(i,s());expect(result.metrics.price).toBe("34.50");expect(result.metrics.currency).toBeNull();expect(result.capturedAt).toBe("2026-09-13T02:00:05.000Z");expect(result.listing.externalId).toBe("brand.example:shopify_variant:12345");
+ });
+ it("persists structured purchase conditions through database readback and immutable receipt replay",async()=>{
+  const i=input('purchase-conditions','7.99'),raw=JSON.parse(Buffer.from(remote.data.get(i.source.objectKey)!).toString()),conditions=purchaseFixture();
+  raw.commerce.purchaseConditions=conditions;const bytes=Buffer.from(JSON.stringify(raw));remote.data.set(i.source.objectKey,bytes);i.source.byteSize=bytes.length;i.source.sha256=sha256(bytes);
+  const captured=await history.channel(i,s()),key=`v3/history-observations/${hash(['v3:swanson','purchase-conditions'])}/capture.json`;
+  expect(await history.replay(key,s())).toEqual({inserted:false});
+  const saved=(await db.query("SELECT record FROM product_history_source WHERE source_key=$1",['purchase-conditions'])).rows[0].record;
+  expect(saved.metrics.extras.purchaseConditions).toEqual(conditions);expect(saved).toEqual(captured);
+  const output=productServiceMaterial(convertHistoryInput(saved));expect((output.metrics[0] as any).items[0].extras.purchaseConditions).toEqual(conditions);
  });
  it("reads only the exact GNC SKU offer from retained HTML",async()=>{
   const owner={schemaVersion:1,requestId:"gnc-metric",observationId:"gnc-metric",brandId:"brand",sourceId:"source",listingId:"123456",variantId:null};

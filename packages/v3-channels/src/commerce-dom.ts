@@ -1,3 +1,4 @@
+import {amazonPurchaseConditionsDomExpression} from './purchase-conditions-dom.js';
 /** Amazon displays multiple purchase offers and duplicates IDs. Read the visible
  * main price, retaining its selected-offer context; never combine subscription,
  * unit, recommended-item or hidden prices. */
@@ -19,7 +20,8 @@ export const amazonCommerceDomExpression=`(()=>{
  currency:value('meta[property="product:price:currency"]',document)||value('[itemprop="priceCurrency"]')||value('input[id="currencyOfPreference"]',document),
  listPrice:unique(mainRegions.flatMap(e=>elements('.apex-basisprice-value',e).filter(visible).map(amount))),
  rating:value('#acrPopover .a-icon-alt'),reviewCount:value('#acrCustomerReviewText'),availability:value('#availability',root,true),
- context:[document.querySelector('#nav-global-location-popover-link')?.innerText||'',...mainRegions.map(e=>'main offer: '+e.innerText.slice(0,1200)),...selectedOffers.map(e=>'selected offer: '+e.innerText.slice(0,2500))].filter(Boolean)};
+ context:[document.querySelector('#nav-global-location-popover-link')?.innerText||'',...mainRegions.map(e=>'main offer: '+e.innerText.slice(0,1200)),...selectedOffers.map(e=>'selected offer: '+e.innerText.slice(0,2500))].filter(Boolean),
+ purchaseConditions:${amazonPurchaseConditionsDomExpression}};
 })()`;
 /** Whitelisted DOM values only. Ambiguous distinct values remain unknown. */
 const legacyCommerceDomExpression=(channel:"amazon"|"swanson")=>`(()=>{

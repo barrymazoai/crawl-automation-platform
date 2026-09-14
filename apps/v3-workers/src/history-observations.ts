@@ -2,7 +2,7 @@ import {isDeepStrictEqual as equal} from "node:util";
 import type pg from "pg";
 import {z} from "zod";
 import {ChannelPlanInputSchema,GncAcquireInputSchema,GncReceivedRecordSchema,LabelCollectedProductSchema,assertArtifactBelongsTo,
-  type ArtifactRef} from "@crawl-automation/v3-contracts";
+  PurchaseConditionsSchema,type ArtifactRef} from "@crawl-automation/v3-contracts";
 import {sha256,type ObjectStore} from "@crawl-automation/v3-artifacts";
 import {parseAmazonRenderedProduct,parseSwansonRenderedProduct,parseDtcRenderedProduct} from "@crawl-automation/v3-channels";
 import {labelCollectedHash} from "@crawl-automation/v3-product";
@@ -20,7 +20,11 @@ export function commerceMetrics(raw:unknown){
   m.price=amount(r.price);m.listPrice=amount(r.listPrice);m.currency=currency(r.currency);
   m.rating=decimal(r.rating)??decimal(text(r.rating)?.match(/^(\d+(?:\.\d+)?)\s+out of\s+5\s+stars$/i)?.[1]);
   m.reviewCount=decimal(r.reviewCount)??decimal(text(r.reviewCount)?.match(/^([\d,]+)\s+(?:ratings|reviews)$/i)?.[1]?.replaceAll(",",""));
-  m.inStock=stock(r.availability);m.extras={commerce:r};return m;
+  m.inStock=stock(r.availability);m.extras={commerce:r};
+  // Only new, explicitly versioned observations gain structured conditions.
+  // Do not enrich old immutable receipts during replay or change their hashes.
+  if(r.purchaseConditions!==undefined)m.extras.purchaseConditions=PurchaseConditionsSchema.parse(r.purchaseConditions);
+  return m;
 }
 
 /** Mini-only projection of retained evidence. Does not navigate or call OCR/models. */

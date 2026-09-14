@@ -26,7 +26,8 @@ export function productServiceMaterial(value: ConvertedProduct, relatedCapture?:
     const r = observation.record, item: Row = { ...listingFields(listing), clientRef: observation.id, capturedAt: observation.observedAt, images: [],
       // Preserve all raw decimals, purchase conditions, evidence and unknowns even
       // where the destination's numeric field cannot represent them safely.
-      extras: { historySourceId: value.id, historyObservationId: observation.id, retainedMetrics: r } };
+      extras: { historySourceId: value.id, historyObservationId: observation.id, retainedMetrics: r,
+        ...(row(r.extras).purchaseConditions!==undefined?{purchaseConditions:row(r.extras).purchaseConditions}:{}) } };
     for (const key of ["price", "currency", "listPrice"] as const) if (r[key] !== null && r[key] !== undefined) item[key] = r[key];
     for (const key of ["rating", "reviewCount", "salesRank", "unitsSold"] as const) {
       if (r[key] === null || r[key] === undefined) continue;

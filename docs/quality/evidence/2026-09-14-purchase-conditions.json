@@ -1,0 +1,196 @@
+{
+  "tests": {
+    "numTotalTests": 94,
+    "numPassedTests": 94,
+    "numFailedTests": 0,
+    "numPendingTests": 0,
+    "success": true
+  },
+  "acceptance": {
+    "at": "2026-09-14T04:27:46.813Z",
+    "passed": true,
+    "oldSourcesUnchanged": 39,
+    "oldDurablePlansVerified": 39,
+    "productionReadOnly": true,
+    "realBrowserSamples": [
+      {
+        "asin": "B0GHZ3X54Z",
+        "price": "16.69",
+        "currency": "USD",
+        "purchaseType": "unknown",
+        "seller": "Amazon.com",
+        "shipsFrom": "Amazon.com",
+        "quantity": 1,
+        "postalCode": "10001",
+        "promotions": 1,
+        "isolatedDatabaseReadback": true,
+        "exportPreserved": true
+      },
+      {
+        "asin": "B0C296MRW4",
+        "price": "7.99",
+        "currency": "USD",
+        "purchaseType": "one_time",
+        "seller": "Carlyle",
+        "shipsFrom": "Amazon",
+        "quantity": 1,
+        "postalCode": "10001",
+        "promotions": 1,
+        "isolatedDatabaseReadback": true,
+        "exportPreserved": true
+      }
+    ],
+    "targetsAbsent": true,
+    "productionObservationsSubmitted": 0
+  },
+  "deployment": {
+    "at": "2026-09-14T04:30:59.542Z",
+    "passed": true,
+    "workers": [
+      {
+        "deployment": 0,
+        "id": "amazon-channel-product-input",
+        "pid": 40385,
+        "buildId": "aa79e3c6be72f75e51c5c0538f29444b5469805f59af77ddc4ee730d9347b7c7"
+      },
+      {
+        "deployment": 0,
+        "id": "amazon-channel-label-plan",
+        "pid": 40439,
+        "buildId": "8583f9edbca17811edaf806917b044f58214fccb271f0f07eb75f8a3ab0cb5c3"
+      },
+      {
+        "deployment": 0,
+        "id": "amazon-channel-label-source",
+        "pid": 40476,
+        "buildId": "8583f9edbca17811edaf806917b044f58214fccb271f0f07eb75f8a3ab0cb5c3"
+      },
+      {
+        "deployment": 0,
+        "id": "amazon-channel-label-manifest",
+        "pid": 40514,
+        "buildId": "8583f9edbca17811edaf806917b044f58214fccb271f0f07eb75f8a3ab0cb5c3"
+      },
+      {
+        "deployment": 0,
+        "id": "amazon-product-input",
+        "pid": 40551,
+        "buildId": "5aacaada7c2ee0341f49b6358da3770404fd41639fa6390041c5b09a6096e054"
+      },
+      {
+        "deployment": 0,
+        "id": "amazon-file",
+        "pid": 40590,
+        "buildId": "5aacaada7c2ee0341f49b6358da3770404fd41639fa6390041c5b09a6096e054"
+      },
+      {
+        "deployment": 1,
+        "id": "amazon-batch-control",
+        "pid": 40629,
+        "buildId": "64af041e9f5494f86839b539e5f27af96dc37444c8b7681870dc707cb4042610"
+      },
+      {
+        "deployment": 0,
+        "id": "amazon-capture",
+        "pid": 40676,
+        "buildId": "5aacaada7c2ee0341f49b6358da3770404fd41639fa6390041c5b09a6096e054"
+      }
+    ],
+    "samples": [
+      {
+        "at": "2026-09-14T04:30:44.637Z",
+        "ready": [
+          90,
+          2,
+          26
+        ]
+      },
+      {
+        "at": "2026-09-14T04:30:50.641Z",
+        "ready": [
+          90,
+          2,
+          26
+        ]
+      },
+      {
+        "at": "2026-09-14T04:30:56.646Z",
+        "ready": [
+          90,
+          2,
+          26
+        ]
+      }
+    ],
+    "pollers": [
+      {
+        "id": "amazon-channel-product-input",
+        "taskQueue": "v3.channel.product-input.v1.channel-plan-v1.session.sw-00be82ef-f7cb-47",
+        "identity": "mini-amazon-channel-product-input/channel-product-input/ee2e2fcf-6e29-428a-8e7c-e9d8b24246b0/aa79e3c6be72f75e51c5c0538f29444b5469805f59af77ddc4ee730d9347b7c7"
+      },
+      {
+        "id": "amazon-channel-label-plan",
+        "taskQueue": "v3.channel.label.plan.v1.channel-label-v1.session.sw-00be82ef-f7cb-47",
+        "identity": "mini-amazon-channel-label-plan/channel-label-plan/403f9c09-c227-45e0-a97f-c1e5b39cd2ba/8583f9edbca17811edaf806917b044f58214fccb271f0f07eb75f8a3ab0cb5c3"
+      },
+      {
+        "id": "amazon-channel-label-source",
+        "taskQueue": "v3.channel.label.source.v1.channel-label-v1.session.sw-00be82ef-f7cb-47",
+        "identity": "mini-amazon-channel-label-source/channel-label-source/51c222d3-cf2c-4715-8e57-1bab75961eb2/8583f9edbca17811edaf806917b044f58214fccb271f0f07eb75f8a3ab0cb5c3"
+      },
+      {
+        "id": "amazon-channel-label-manifest",
+        "taskQueue": "v3.channel.label.manifest.v1.channel-label-v1.session.sw-00be82ef-f7cb-47",
+        "identity": "mini-amazon-channel-label-manifest/channel-label-manifest/7163de6b-75ec-4a26-856c-5eb3e71df23c/8583f9edbca17811edaf806917b044f58214fccb271f0f07eb75f8a3ab0cb5c3"
+      },
+      {
+        "id": "amazon-product-input",
+        "taskQueue": "v3.amazon.product-input.v1.amazon-live-v1.session.sw-00be82ef-f7cb-47",
+        "identity": "mini-amazon-amazon-product-input/amazon-product-input/0bec7ebf-0f32-47d8-84b4-99f8801e0f2a/5aacaada7c2ee0341f49b6358da3770404fd41639fa6390041c5b09a6096e054"
+      },
+      {
+        "id": "amazon-file",
+        "taskQueue": "v3.amazon.file.v1.amazon-live-v1.session.sw-00be82ef-f7cb-47",
+        "identity": "mini-amazon-amazon-file/amazon-file/0ce57ea3-fde7-4480-ac9e-fd6e9314021c/5aacaada7c2ee0341f49b6358da3770404fd41639fa6390041c5b09a6096e054"
+      },
+      {
+        "id": "amazon-batch-control",
+        "taskQueue": "v3.amazon.batch.control.v1.amazon-batch-v1.session.amazon-history-10-us-10001",
+        "identity": "mini-amazon-batch-control/amazon-batch-control/42d37add-5102-4af2-94e6-699da21c51b7/64af041e9f5494f86839b539e5f27af96dc37444c8b7681870dc707cb4042610"
+      },
+      {
+        "id": "amazon-capture",
+        "taskQueue": "v3.amazon.capture.v1.amazon-live-v1.session.sw-00be82ef-f7cb-47",
+        "identity": "mini-amazon-amazon-capture/amazon-capture/48ba1d01-2c57-40c3-85f4-85cab3661c04/5aacaada7c2ee0341f49b6358da3770404fd41639fa6390041c5b09a6096e054"
+      }
+    ],
+    "unrelatedPidsUnchanged": true,
+    "monitorsUnchanged": true,
+    "workflowExecutablesUnchanged": true,
+    "windowsDtcRestarted": false,
+    "exportEntry": "/Users/barry/apps/crawlv3-batch-a.UiA4dx/release-purchase-conditions-20260914/export/history-cli.js",
+    "campaign": {
+      "id": "amazon-history-100-us-10001-20260913",
+      "phase": "paused",
+      "cursor": 24,
+      "stopAfter": 24,
+      "total": 100
+    },
+    "productionObservationsSubmitted": 0
+  },
+  "campaign": {
+    "at": "2026-09-14T04:32:01.410Z",
+    "phase": "paused",
+    "cursor": 24,
+    "stopAfter": 24,
+    "submissions": 24,
+    "captures": 23,
+    "reviewCount": 65,
+    "workers": {
+      "mainReady": 90,
+      "mainTotal": 90,
+      "batchReady": 2,
+      "batchTotal": 2
+    }
+  }
+}

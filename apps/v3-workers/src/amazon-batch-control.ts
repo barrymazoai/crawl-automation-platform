@@ -1,4 +1,5 @@
 import fs from 'node:fs/promises';
+import {comparePurchaseConditions} from './price-conditions.js';
 import {isAbsolute} from 'node:path';
 import {isDeepStrictEqual as equal,promisify} from 'node:util';
 import {execFile} from 'node:child_process';
@@ -101,10 +102,12 @@ export class AmazonBatchController{
   const reviews=(await this.db.query("select count(*)::int n from review_record where record->'observation'->>'requestId'=ANY($1)",[ids])).rows[0].n;
   const prices=captures.map(c=>{const asin=c.listing.externalId,p=this.products.get(asin),old=this.baseline.filter(x=>x.asin===asin&&x.observed_at&&x.record.price!==null&&x.record.price!==undefined&&String(x.record.price).trim()!==''&&Number.isFinite(Number(x.record.price))&&Date.parse(x.observed_at)<Date.parse(c.capturedAt)).sort((a,b)=>Date.parse(b.observed_at)-Date.parse(a.observed_at))[0];
    const oldPrice=old?.record.price??null,newPrice=c.metrics.price,oldCurrency=old?.record.currency??null,newCurrency=c.metrics.currency,comparable=oldPrice!==null&&newPrice!==null&&oldCurrency!==null&&oldCurrency===newCurrency;
-   return{asin,title:c.capture?.projection?.title??p?.title,url:p?.url,oldAt:old?.observed_at??null,oldPrice,oldCurrency,newAt:c.capturedAt,newPrice,newCurrency,delivery:'New York 10001',difference:comparable?Number((Number(newPrice)-Number(oldPrice)).toFixed(4)):null,changePercent:comparable&&Number(oldPrice)>0?Number(((Number(newPrice)/Number(oldPrice)-1)*100).toFixed(2)):null,comparisonNote:'页面报价观测；旧购买条件未完整记录，不代表同条件成交价格变化',newContext:c.metrics.extras,observationId:c.observationId};
+   const conditions=comparePurchaseConditions(old?.record.extras?.purchaseConditions,c.metrics.extras?.purchaseConditions);
+   const comparisonNote=conditions.status==='different'?'页面报价观测；已记录的购买条件不同':conditions.status==='recorded_conditions_match'?'已记录的购买条件一致；仍非含税运费的结算总价对比':'页面报价观测；购买条件不完整，不代表同条件成交价格变化';
+   return{asin,title:c.capture?.projection?.title??p?.title,url:p?.url,oldAt:old?.observed_at??null,oldPrice,oldCurrency,newAt:c.capturedAt,newPrice,newCurrency,delivery:'New York 10001',difference:comparable?Number((Number(newPrice)-Number(oldPrice)).toFixed(4)):null,changePercent:comparable&&Number(oldPrice)>0?Number(((Number(newPrice)/Number(oldPrice)-1)*100).toFixed(2)):null,conditions,comparisonNote,newContext:c.metrics.extras,observationId:c.observationId};
   });
   const accepted=this.batches.filter(b=>submitted.has(b.requestId));
-  const report={at:new Date().toISOString(),requested:this.products.size,submittedProducts:new Set(accepted.flatMap(b=>b.entries.map(e=>e.entry.listingId))).size,submittedAttempts:accepted.reduce((n,b)=>n+b.entries.length,0),captures:captures.length,capturedProducts:new Set(captures.map(c=>c.listing.externalId)).size,savedProducts:new Set(saved.map(r=>r.asin)).size,moduleReviewRecords:reviews,pricePoints:prices.filter(p=>p.newPrice!==null).length,comparablePricePoints:prices.filter(p=>p.difference!==null).length,priceChangeExamples:prices.filter(p=>p.difference!==null&&p.difference!==0).slice(0,10)};
+  const report={at:new Date().toISOString(),requested:this.products.size,submittedProducts:new Set(accepted.flatMap(b=>b.entries.map(e=>e.entry.listingId))).size,submittedAttempts:accepted.reduce((n,b)=>n+b.entries.length,0),captures:captures.length,capturedProducts:new Set(captures.map(c=>c.listing.externalId)).size,savedProducts:new Set(saved.map(r=>r.asin)).size,moduleReviewRecords:reviews,pricePoints:prices.filter(p=>p.newPrice!==null).length,quoteComparisonPoints:prices.filter(p=>p.difference!==null).length,comparablePricePoints:prices.filter(p=>p.difference!==null&&p.conditions.status==='recorded_conditions_match').length,priceChangeExamples:prices.filter(p=>p.difference!==null&&p.difference!==0).slice(0,10)};
   await this.save('temporal-prices.json',prices);await this.save('temporal-progress.json',report);return report;
  }
 }
