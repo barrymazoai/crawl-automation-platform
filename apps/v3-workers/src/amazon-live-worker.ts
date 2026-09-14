@@ -1,6 +1,7 @@
 import { readFile, readdir } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { hostname } from "node:os";
 import { isDeepStrictEqual as equal } from "node:util";
 import pg from "pg";
 import { Context } from "@temporalio/activity";
@@ -9,7 +10,7 @@ import { Client, Connection } from "@temporalio/client";
 import { CatalogPageInputSchema, CatalogDiscoverySchema, AmazonProductJobSchema, CollectionWorkflowInput, BrandCollectionPlanSchema, BrandCollectionProgressSchema,
   AmazonProductCaptureSchema, AmazonProductHandoffSchema, ChannelLabelInputSchema, ReviewRecordSchema, observationIdentity } from "@crawl-automation/v3-contracts";
 import { createR2Objects, RetainedPublication, ArtifactResolver, FileCopies, sha256, ActivityObjectReads } from "@crawl-automation/v3-artifacts";
-import { EgoTaskPages, EgoFileTransport, AcquireFileModule, FileEvidence, systemDns, type SourceAccess } from "@crawl-automation/v3-acquisition";
+import { EgoTaskPages, EgoFileTransport, AcquireFileModule, FileEvidence, acquireFile, systemDns, type SourceAccess } from "@crawl-automation/v3-acquisition";
 import { AmazonCatalogSource, AmazonEgoReader, AmazonLiveProduct, ChannelProductPlans } from "@crawl-automation/v3-channels";
 import { TextLocalStore } from "@crawl-automation/v3-text";
 import { PostgresReviews } from "@crawl-automation/v3-review";
@@ -22,6 +23,7 @@ import { AmazonLiveConfigSchema } from "./amazon-live-config.js";
 import { readGncPrivateJson } from "./gnc-config.js";
 import { AmazonLinkCatalog } from "./amazon-link-batches.js";
 import { recoveredAmazonFailure } from './amazon-terminal-proof.js';
+import { AmazonStagedFiles } from './amazon-staged-files.js';
 
 const execution = () => { const e = Context.current().info.workflowExecution; if (!e) throw Error("AMAZON.WORKFLOW_REQUIRED"); return e; };
 async function main() {
@@ -61,6 +63,19 @@ async function main() {
         }, [...links.keys()]);
         const plans = new ChannelProductPlans(publication, new ArtifactResolver(copies, remote), reviews);
         const files = new FileEvidence({ local, remote, copies, reviews });
+        const staging = new AmazonStagedFiles({publication,copies,files,storageId:sha256(Buffer.from(JSON.stringify([hostname(),config.journalRoot,config.cacheRoot]))),
+          describe:async(c,s)=>{await verifyJob(c.job,s);const pageUrl=await products.filePageUrl(c,s),plan=await plans.inspect(c.sourcePlan,s);if(!plan)throw Error('AMAZON.PLAN_UNVERIFIED');return{plan,pageUrl};},
+          closed:async(c,s)=>{
+            await verifyJob(c.job,s);const e=execution(),proof=await pages.closedProof(c.job.sessionId,s);
+            const held=await resourceDb.query("SELECT p.released_at FROM resource_permit p JOIN resource_permit_need n USING(permit_id) WHERE n.resource_id=$1 AND p.request->>'workflowId'=$2 AND p.request->>'runId'=$3",[config.browserResource,e.workflowId,e.runId]);
+            if(held.rowCount!==1||held.rows[0].released_at===null)throw Error('AMAZON.STAGE_BROWSER_NOT_RELEASED');return proof;
+          },
+          ...(role==='capture'?{download:async(c:ReturnType<typeof AmazonProductCaptureSchema.parse>,input:Parameters<typeof acquireFile>[0],url:string,pageUrl:string,s:AbortSignal)=>{
+            const access:SourceAccess={acquire:async raw=>{if(!equal(raw,input))throw Error('SOURCE.SESSION_MISMATCH');await requireBrowser();const browser=await pages.open(c.job.sessionId,s);let released=false;
+              return{owner:observationIdentity(input),sourceId:input.sourceId,resourceId:input.resourceId,binding:input.binding,url,allowedOrigins:['https://m.media-amazon.com'],transport:new EgoFileTransport({browser,pageUrl,allowedUrls:[url]},config.egressId),headersFor:()=>({}),assertActive:()=>{if(released)throw Error('SOURCE.SESSION_UNAVAILABLE');},release:async()=>{released=true;}};}};
+            return acquireFile(input,{access,dns:systemDns},s);
+          }}:{}),
+          timing:(phase,milliseconds)=>console.log(JSON.stringify({event:'AMAZON_FILE_PHASE',phase,milliseconds,workflowId:execution().workflowId,activityId:Context.current().info.activityId}))});
         const submission = async (id: string) => {
           const row = (await db.query("SELECT snapshot FROM collection_submission WHERE request_id=$1", [id])).rows[0];
           if (!row) throw Error("AMAZON.SUBMISSION_REQUIRED");
@@ -124,6 +139,7 @@ async function main() {
         }
         else if (role === "capture") handlers = {
           captureAmazonProduct: async (raw, s) => products.capture(await verifyJob(raw, s), s),
+          stageAmazonProductFiles: (raw,s) => staging.stage(raw,s),
           closeAmazonProductPage: async (raw, s) => { const job = await verifyJob(raw, s); await requireBrowser(); return pages.close(job.sessionId, s); },
         };
         else if (role === "file") handlers = { acquireAmazonFile: async (raw, s) => {
@@ -138,10 +154,10 @@ async function main() {
               headersFor: () => ({}), assertActive: () => { if (released) throw Error("SOURCE.SESSION_UNAVAILABLE"); }, release: async () => { released = true; } };
           } };
           return new AcquireFileModule(files, { access, dns: systemDns }).run(raw.input, s);
-        } };
+        },publishAmazonStagedFile:(raw,s)=>staging.publish(raw,s) };
         else if (role === "review") handlers = { reviewAmazonProduct: async (raw, s) => {
-          const job = await verifyJob(raw.job, s); if (raw.code !== "AMAZON.BROWSER_PHASE_UNRESOLVED") throw Error("AMAZON.REVIEW_CODE");
-          if (typeof raw.causeCode !== "string" || !/^(SOURCE|AMAZON|ARTIFACT|RESOURCE)\.[A-Z_]+$/.test(raw.causeCode)) throw Error("AMAZON.REVIEW_CODE");
+          const job = await verifyJob(raw.job, s); if (!["AMAZON.BROWSER_PHASE_UNRESOLVED","AMAZON.FILE_PUBLICATION_UNRESOLVED"].includes(raw.code)) throw Error("AMAZON.REVIEW_CODE");
+          if (typeof raw.causeCode !== "string" || !/^(SOURCE|AMAZON|ACQUIRE|ARTIFACT|RESOURCE)\.[A-Z_]+$/.test(raw.causeCode)) throw Error("AMAZON.REVIEW_CODE");
           const id = `amazon-review-${sha256(Buffer.from(JSON.stringify(job)))}`, key = `v3/amazon-reviews/${id}.json`;
           let record = await reviews.read(id);
           if (!record) {
@@ -150,7 +166,7 @@ async function main() {
               observation: { schemaVersion: 1, requestId: job.discovery.catalogId, observationId: job.operationId, brandId: job.discovery.scope.brandId,
                 sourceId: job.discovery.scope.sourceId, listingId: job.discovery.entry.listingId, variantId: null },
               failure: { schemaVersion: 1, requestId: job.discovery.catalogId, observationId: job.operationId, operationId: job.operationId,
-                inputFingerprint: sha256(Buffer.from(JSON.stringify(job))), stage: "amazon.browser", category: "PROCESSING", code: raw.code,
+                inputFingerprint: sha256(Buffer.from(JSON.stringify(job))), stage: raw.code==="AMAZON.FILE_PUBLICATION_UNRESOLVED"?"amazon.file-publication":"amazon.browser", category: "PROCESSING", code: raw.code,
                 executionFact: "unknown", evidenceKey: key, blockedBy: null, automaticRetry: false },
               rawError: { name: "AmazonBrowserPhase", message: raw.code, stack: null, details: { job, causeCode: raw.causeCode } }, candidate: null, inspection: { kind: "none" } });
             await publication.publish(key, Buffer.from(JSON.stringify(record)), "application/json", s); await reviews.append(record);

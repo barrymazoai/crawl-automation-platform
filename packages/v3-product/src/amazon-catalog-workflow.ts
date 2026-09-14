@@ -1,8 +1,9 @@
-import { proxyActivities, workflowInfo, startChild, ParentClosePolicy, WorkflowIdReusePolicy, ApplicationFailure, CancellationScope, isCancellation } from "@temporalio/workflow";
+import { proxyActivities, workflowInfo, startChild, ParentClosePolicy, WorkflowIdReusePolicy, ApplicationFailure, CancellationScope, isCancellation, patched } from "@temporalio/workflow";
 import { CatalogDiscoverySchema, AmazonProductJobSchema, AmazonProductCaptureSchema, AmazonProductHandoffSchema,
   ChannelPlanOutcomeSchema, FileAcquireOutcomeSchema, AcquisitionReviewSchema, imageActivityOptions, assertArtifactBelongsTo, type AmazonProductJob } from "@crawl-automation/v3-contracts";
 import { resourceGate } from "./resource-workflow.js";
 import type {ChildWorkflowHandle} from "@temporalio/workflow";
+import { detachedAmazonProduct } from './amazon-detached-files-workflow.js';
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
 const invalid = () => { throw ApplicationFailure.nonRetryable("Amazon product identity conflict", "AMAZON.PRODUCT_IDENTITY"); };
 function failureCode(error: unknown): string {
@@ -21,7 +22,8 @@ export async function AmazonCatalogProductWorkflow(raw: unknown): Promise<unknow
  if(info.workflowId!==discovery.workflowId||discovery.scope.channel!=="amazon")invalid();
  const call=(queue:string,name:string,value:unknown)=>proxyActivities<Record<string,(raw:unknown)=>Promise<unknown>>>(imageActivityOptions(queue))[name]!(value);
  const job=AmazonProductJobSchema.parse(await call(info.taskQueue,"prepareAmazonProduct",discovery));
- if(!same(job.discovery,discovery))invalid();return streamProduct(job,info.taskQueue,call);
+ if(!same(job.discovery,discovery))invalid();
+ return patched('amazon-detached-file-publication-v1')?detachedAmazonProduct(job,info.taskQueue,call):streamProduct(job,info.taskQueue,call);
 }
 
 async function streamProduct(job:AmazonProductJob,inputQueue:string,call:(queue:string,name:string,value:unknown)=>Promise<unknown>){

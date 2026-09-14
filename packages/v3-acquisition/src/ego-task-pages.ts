@@ -95,6 +95,13 @@ const snapshot={taskId:${JSON.stringify(taskId)},targetId:${JSON.stringify(page.
     await this.retain(taskId, "closed", page, signal);
     return { status: "closed" as const, taskId, targetId: page.targetId };
   }
+  /** Read the already verified close journal without selecting or touching a browser. */
+  async closedProof(taskId: string, signal: AbortSignal) {
+    const closed = await this.read(taskId, "closed", signal), opened = await this.read(taskId, "opened", signal);
+    if (!closed || !opened || !equal(closed, opened)) throw new BrowserError("SOURCE.PAGE_CLOSE_UNKNOWN");
+    const page = Page.parse(closed); this.validate(page, taskId);
+    return { status: "closed" as const, taskId, targetId: page.targetId };
+  }
   /** For a whole browser phase, not a single HTML read when later file tasks still need the page. */
   async using<T>(taskId: string, signal: AbortSignal, work: (page: ReturnType<EgoTaskPages["validate"]>) => Promise<T>): Promise<T> {
     const page = await this.open(taskId, signal);

@@ -60,3 +60,13 @@ it("successful business work is not reported as a fully cleaned task if cleanup 
   f.run.mockImplementation(async (...args) => { if (!args[1].includes("EGO_MARKER_COLLISION")) throw Error("close failed"); return run(...args); });
   await expect(f.pages.using("test-page", signal(), async () => "saved")).rejects.toThrow("PAGE_CLEANUP_PENDING");
 });
+
+it('cold cloud publisher reads the exact verified close proof without a browser call',async()=>{
+ const f=setup();await f.pages.open('test-page',signal());
+ await expect(f.pages.closedProof('test-page',signal())).rejects.toThrow('PAGE_CLOSE_UNKNOWN');
+ await f.pages.close('test-page',signal());f.run.mockClear();
+ const cold=new EgoTaskPages(space,f.journal,{run:f.run});expect(await cold.closedProof('test-page',signal())).toMatchObject({status:'closed',targetId:'owned-target'});expect(f.run).not.toHaveBeenCalled();
+ const key=[...f.journal.data.keys()].find(k=>k.endsWith('/closed.json'))!;
+ const bad=JSON.parse(Buffer.from(f.journal.data.get(key)!).toString());bad.targetId='foreign-target';f.journal.data.set(key,Buffer.from(JSON.stringify(bad)));
+ await expect(cold.closedProof('test-page',signal())).rejects.toThrow('PAGE_CLOSE_UNKNOWN');expect(f.run).not.toHaveBeenCalled();
+});
