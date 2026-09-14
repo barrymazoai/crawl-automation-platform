@@ -8,7 +8,7 @@ vi.mock("@temporalio/workflow",()=>({
 }));
 import { resourceGate } from "./resource-workflow.js";
 const config={queue:"resources",activities:{ocr:[{resourceId:"ocr-cpu",units:1}]},maxWaitSeconds:10};
-beforeEach(()=>{vi.clearAllMocks();env.patched.mockReturnValue(true);vi.useFakeTimers();vi.setSystemTime(100000);
+beforeEach(()=>{vi.clearAllMocks();env.patched.mockImplementation(id=>id!=='resource-recovery-bounds-v1');vi.useFakeTimers();vi.setSystemTime(100000);
   env.reserve.mockImplementation(async r=>({permitId:r.permitId,status:"granted",reason:"available"}));
   env.release.mockImplementation(async r=>({permitId:r.permitId,status:"released",reason:"released"}));
   env.sleep.mockImplementation(async()=>{vi.setSystemTime(Date.now()+10000);});});
@@ -86,4 +86,26 @@ it.each(["foreign","released"])("rejects %s admission without starting provider"
 it("single-label fallback cannot advance while a prior Review execution stop is unverified",async()=>{
  env.verify.mockRejectedValue(Error("unknown"));
  await expect(resourceGate({...config,reviewStopCheck:true},{requireReviewStop:true})("ocr",async()=>({status:"review"}))).rejects.toThrow("RESOURCE.REVIEW_STOP_UNVERIFIED");expect(env.release).not.toHaveBeenCalled();
+});
+
+it('new histories stop sibling admission when a completed Review cannot publish stop proof',async()=>{
+ env.patched.mockReturnValue(true);let granted=false;
+ env.reserve.mockImplementation(async r=>{if(!granted){granted=true;return{permitId:r.permitId,status:'granted',reason:'available'};}return{permitId:r.permitId,status:'waiting',reason:'capacity'};});
+ env.verify.mockRejectedValue(Error('proof unavailable'));
+ const gate=resourceGate({...config,maxWaitSeconds:900,reviewStopCheck:true}),first=vi.fn(async()=>({status:'review'})),second=vi.fn(async()=>1);
+ const results=await Promise.allSettled([gate('ocr',first),gate('ocr',second)]);
+ expect(results.every(r=>r.status==='rejected')).toBe(true);expect(first).toHaveBeenCalledOnce();expect(second).not.toHaveBeenCalled();expect(env.release).not.toHaveBeenCalled();
+ expect(env.reserve.mock.calls.length).toBeLessThan(5);
+});
+it('new histories bound healthy capacity waits without starting a provider or releasing another owner',async()=>{
+ env.patched.mockReturnValue(true);env.reserve.mockImplementation(async r=>({permitId:r.permitId,status:'waiting',reason:'capacity'}));
+ const fn=vi.fn();await expect(resourceGate(config)('ocr',fn)).rejects.toThrow('RESOURCE.WAIT_LIMIT');expect(fn).not.toHaveBeenCalled();expect(env.release).not.toHaveBeenCalled();
+});
+it('returns a newly granted but unused sibling permit after quarantine wins the race',async()=>{
+ env.patched.mockReturnValue(true);let pending!:(v:any)=>void,calls=0;
+ env.reserve.mockImplementation(async r=>++calls===1?{permitId:r.permitId,status:'granted',reason:'available'}:new Promise(resolve=>{pending=()=>resolve({permitId:r.permitId,status:'granted',reason:'available'});}));
+ env.verify.mockRejectedValue(Error('unknown'));const gate=resourceGate({...config,reviewStopCheck:true}),fn=vi.fn();
+ const first=gate('ocr',async()=>({status:'review'})),checked=expect(first).rejects.toThrow('RESOURCE.REVIEW_STOP_UNVERIFIED'),second=gate('ocr',fn),secondChecked=expect(second).rejects.toThrow('RESOURCE.OWNER_QUARANTINED');
+ await checked;pending(undefined);await secondChecked;expect(fn).not.toHaveBeenCalled();expect(env.release).toHaveBeenCalledOnce();
+ expect(env.release.mock.calls[0]![0].permitId).toMatch(/-1$/);
 });

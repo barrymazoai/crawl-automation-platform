@@ -1,0 +1,446 @@
+{
+  "collectedOn": "2026-09-14",
+  "mode": "read-only",
+  "records": [
+    {
+      "kind": "permitRows",
+      "data": [
+        {
+          "permit_id": "permit-01a09b9c-83f3-7dfc-8b5a-5f48266a9beb-0",
+          "request": {
+            "needs": [
+              {
+                "units": 1,
+                "resourceId": "windows-ocr"
+              }
+            ],
+            "runId": "01a09b9c-83f3-7dfc-8b5a-5f48266a9beb",
+            "permitId": "permit-01a09b9c-83f3-7dfc-8b5a-5f48266a9beb-0",
+            "workflowId": "catalog-product-96658469cc38bd3fce3ca48e0546b320ac7330b4cb60660af48d10fb48e8efb2-label"
+          },
+          "released_at": "2026-09-13T16:32:19.516Z"
+        },
+        {
+          "permit_id": "permit-01a09b9c-83f3-7dfc-8b5a-5f48266a9beb-1",
+          "request": {
+            "needs": [
+              {
+                "units": 1,
+                "resourceId": "windows-ocr"
+              }
+            ],
+            "runId": "01a09b9c-83f3-7dfc-8b5a-5f48266a9beb",
+            "permitId": "permit-01a09b9c-83f3-7dfc-8b5a-5f48266a9beb-1",
+            "workflowId": "catalog-product-96658469cc38bd3fce3ca48e0546b320ac7330b4cb60660af48d10fb48e8efb2-label"
+          },
+          "released_at": "2026-09-13T16:32:27.897Z"
+        },
+        {
+          "permit_id": "permit-01a09b9c-83f3-7dfc-8b5a-5f48266a9beb-2",
+          "request": {
+            "needs": [
+              {
+                "units": 1,
+                "resourceId": "mini-model-account"
+              },
+              {
+                "units": 1,
+                "resourceId": "mini-cpu"
+              }
+            ],
+            "runId": "01a09b9c-83f3-7dfc-8b5a-5f48266a9beb",
+            "permitId": "permit-01a09b9c-83f3-7dfc-8b5a-5f48266a9beb-2",
+            "workflowId": "catalog-product-96658469cc38bd3fce3ca48e0546b320ac7330b4cb60660af48d10fb48e8efb2-label"
+          },
+          "released_at": null
+        },
+        {
+          "permit_id": "permit-01a09b9c-83f3-7dfc-8b5a-5f48266a9beb-3",
+          "request": {
+            "needs": [
+              {
+                "units": 1,
+                "resourceId": "windows-ocr"
+              }
+            ],
+            "runId": "01a09b9c-83f3-7dfc-8b5a-5f48266a9beb",
+            "permitId": "permit-01a09b9c-83f3-7dfc-8b5a-5f48266a9beb-3",
+            "workflowId": "catalog-product-96658469cc38bd3fce3ca48e0546b320ac7330b4cb60660af48d10fb48e8efb2-label"
+          },
+          "released_at": "2026-09-13T16:32:36.459Z"
+        },
+        {
+          "permit_id": "permit-01a09b9c-83f3-7dfc-8b5a-5f48266a9beb-4",
+          "request": {
+            "needs": [
+              {
+                "units": 1,
+                "resourceId": "windows-ocr"
+              }
+            ],
+            "runId": "01a09b9c-83f3-7dfc-8b5a-5f48266a9beb",
+            "permitId": "permit-01a09b9c-83f3-7dfc-8b5a-5f48266a9beb-4",
+            "workflowId": "catalog-product-96658469cc38bd3fce3ca48e0546b320ac7330b4cb60660af48d10fb48e8efb2-label"
+          },
+          "released_at": "2026-09-13T16:32:43.767Z"
+        },
+        {
+          "permit_id": "permit-01a09b9c-83f3-7dfc-8b5a-5f48266a9beb-5",
+          "request": {
+            "needs": [
+              {
+                "units": 1,
+                "resourceId": "windows-ocr"
+              }
+            ],
+            "runId": "01a09b9c-83f3-7dfc-8b5a-5f48266a9beb",
+            "permitId": "permit-01a09b9c-83f3-7dfc-8b5a-5f48266a9beb-5",
+            "workflowId": "catalog-product-96658469cc38bd3fce3ca48e0546b320ac7330b4cb60660af48d10fb48e8efb2-label"
+          },
+          "released_at": "2026-09-13T16:32:59.605Z"
+        },
+        {
+          "permit_id": "permit-01a09b9c-83f3-7dfc-8b5a-5f48266a9beb-7",
+          "request": {
+            "needs": [
+              {
+                "units": 1,
+                "resourceId": "windows-ocr"
+              }
+            ],
+            "runId": "01a09b9c-83f3-7dfc-8b5a-5f48266a9beb",
+            "permitId": "permit-01a09b9c-83f3-7dfc-8b5a-5f48266a9beb-7",
+            "workflowId": "catalog-product-96658469cc38bd3fce3ca48e0546b320ac7330b4cb60660af48d10fb48e8efb2-label"
+          },
+          "released_at": "2026-09-13T16:32:51.454Z"
+        },
+        {
+          "permit_id": "permit-01a09b9c-83f3-7dfc-8b5a-5f48266a9beb-9",
+          "request": {
+            "needs": [
+              {
+                "units": 1,
+                "resourceId": "windows-ocr"
+              }
+            ],
+            "runId": "01a09b9c-83f3-7dfc-8b5a-5f48266a9beb",
+            "permitId": "permit-01a09b9c-83f3-7dfc-8b5a-5f48266a9beb-9",
+            "workflowId": "catalog-product-96658469cc38bd3fce3ca48e0546b320ac7330b4cb60660af48d10fb48e8efb2-label"
+          },
+          "released_at": "2026-09-13T16:33:08.235Z"
+        }
+      ]
+    },
+    {
+      "kind": "capacity",
+      "data": [
+        {
+          "resource_id": "mini-cpu",
+          "capacity": 2,
+          "healthy": true,
+          "health_until": "2026-09-14T00:50:22.533Z"
+        },
+        {
+          "resource_id": "mini-model-account",
+          "capacity": 1,
+          "healthy": true,
+          "health_until": "2026-09-14T00:50:22.536Z"
+        }
+      ]
+    },
+    {
+      "kind": "allHeld",
+      "data": [
+        {
+          "permit_id": "permit-01a09b9c-83f3-7dfc-8b5a-5f48266a9beb-2",
+          "request": {
+            "needs": [
+              {
+                "units": 1,
+                "resourceId": "mini-model-account"
+              },
+              {
+                "units": 1,
+                "resourceId": "mini-cpu"
+              }
+            ],
+            "runId": "01a09b9c-83f3-7dfc-8b5a-5f48266a9beb",
+            "permitId": "permit-01a09b9c-83f3-7dfc-8b5a-5f48266a9beb-2",
+            "workflowId": "catalog-product-96658469cc38bd3fce3ca48e0546b320ac7330b4cb60660af48d10fb48e8efb2-label"
+          }
+        }
+      ]
+    },
+    {
+      "kind": "reviews",
+      "data": [
+        {
+          "review_id": "text-fddb298f-2db8-404d-80ae-8a128a9eef0b",
+          "occurred_at": "2026-09-13T16:33:03.882Z",
+          "failure": {
+            "code": "TEXT.LABEL_INGREDIENT_HEADING_INVALID",
+            "stage": "codex.text",
+            "category": "PROCESSING",
+            "blockedBy": null,
+            "requestId": "24e1a133-c988-41a4-9143-2a8814645b8c",
+            "evidenceKey": "text-intents/chl-7193c10ac575bc5c78c8d93887a3cc47dba36bb2d2213516d3fe3995204fdc43.json",
+            "operationId": "chl-7193c10ac575bc5c78c8d93887a3cc47dba36bb2d2213516d3fe3995204fdc43",
+            "executionFact": "executed",
+            "observationId": "amazon-d75db4e39e38bd303050776a63c25272879853454309469c9527084f9c3c78c5",
+            "schemaVersion": 1,
+            "automaticRetry": false,
+            "inputFingerprint": "ea7a443824b311ed1f47104986194a4a6049065b3bb6f53de2c9f5a75c2927f9"
+          },
+          "name": "TextStageError",
+          "message": "TEXT.LABEL_INGREDIENT_HEADING_INVALID",
+          "cause": null
+        }
+      ]
+    },
+    {
+      "kind": "workflowInput",
+      "data": {
+        "keys": [
+          "input",
+          "resources",
+          "queues"
+        ],
+        "resources": {
+          "queue": "v3.channel.label.resources.v1.channel-label-v1.session.sw-00be82ef-f7cb-47",
+          "reviewStopCheck": true,
+          "activities": {
+            "interpretText": [
+              {
+                "resourceId": "mini-model-account",
+                "units": 1
+              },
+              {
+                "resourceId": "mini-cpu",
+                "units": 1
+              }
+            ],
+            "interpretImage": [
+              {
+                "resourceId": "mini-model-account",
+                "units": 1
+              },
+              {
+                "resourceId": "mini-cpu",
+                "units": 1
+              }
+            ],
+            "ocrFile": [
+              {
+                "resourceId": "windows-ocr",
+                "units": 1
+              }
+            ]
+          },
+          "maxWaitSeconds": 900
+        },
+        "queues": {
+          "plan": "v3.channel.label.plan.v1.channel-label-v1.session.sw-00be82ef-f7cb-47",
+          "page": "v3.channel.label.page.v1.channel-label-v1.session.sw-00be82ef-f7cb-47",
+          "pageText": "v3.channel.label.page-text.v1.channel-label-v1.session.sw-00be82ef-f7cb-47",
+          "imagePrepare": "v3.channel.label.image-prepare.v1.channel-label-v1.session.sw-00be82ef-f7cb-47",
+          "ocr": "v3.channel.label.ocr.v1.channel-label-v1.session.sw-00be82ef-f7cb-47",
+          "ocrReceipts": "v3.channel.label.ocr-receipts.v1.channel-label-v1.session.sw-00be82ef-f7cb-47",
+          "keywords": "v3.channel.label.keywords.v1.channel-label-v1.session.sw-00be82ef-f7cb-47",
+          "core": "v3.channel.label.core.v1.channel-label-v1.session.sw-00be82ef-f7cb-47",
+          "source": "v3.channel.label.source.v1.channel-label-v1.session.sw-00be82ef-f7cb-47",
+          "manifest": "v3.channel.label.manifest.v1.channel-label-v1.session.sw-00be82ef-f7cb-47",
+          "text": "v3.channel.label.text.v1.channel-label-v1.session.sw-00be82ef-f7cb-47",
+          "textReceipts": "v3.channel.label.text-receipts.v1.channel-label-v1.session.sw-00be82ef-f7cb-47",
+          "vision": "v3.channel.label.vision.v1.channel-label-v1.session.sw-00be82ef-f7cb-47",
+          "assembly": "v3.channel.label.assembly.v1.channel-label-v1.session.sw-00be82ef-f7cb-47",
+          "collection": "v3.channel.label.collection.v1.channel-label-v1.session.sw-00be82ef-f7cb-47",
+          "review": "v3.channel.label.review.v1.channel-label-v1.session.sw-00be82ef-f7cb-47"
+        },
+        "evidencePolicy": "label-image-first/3"
+      }
+    },
+    {
+      "kind": "history",
+      "data": {
+        "events": 1912,
+        "first": "2026-09-13T16:32:01.011Z",
+        "last": "2026-09-13T16:45:12.167Z",
+        "counts": {
+          "loadChannelLabelPlan": 1,
+          "prepareImageOcr": 7,
+          "reserveResources": 148,
+          "prepareHtmlPage": 1,
+          "preparePageText": 1,
+          "ocrFile": 7,
+          "releaseResources": 7,
+          "resolveOcrReceipt": 7,
+          "prepareChannelLabelSource": 8,
+          "screenImageKeywords": 7,
+          "interpretText": 1,
+          "resolveTextReceipt": 1
+        },
+        "timeline": [
+          {
+            "id": "92",
+            "at": "2026-09-13T16:32:21.229Z",
+            "event": "scheduled",
+            "name": "reserveResources",
+            "queue": "v3.channel.label.resources.v1.channel-label-v1.session.sw-00be82ef-f7cb-47",
+            "args": [
+              {
+                "permitId": "permit-01a09b9c-83f3-7dfc-8b5a-5f48266a9beb-2",
+                "workflowId": "catalog-product-96658469cc38bd3fce3ca48e0546b320ac7330b4cb60660af48d10fb48e8efb2-label",
+                "runId": "01a09b9c-83f3-7dfc-8b5a-5f48266a9beb",
+                "needs": [
+                  {
+                    "resourceId": "mini-model-account",
+                    "units": 1
+                  },
+                  {
+                    "resourceId": "mini-cpu",
+                    "units": 1
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "94",
+            "at": "2026-09-13T16:32:21.532Z",
+            "event": "completed",
+            "scheduled": "92",
+            "name": "reserveResources",
+            "result": [
+              {
+                "permitId": "permit-01a09b9c-83f3-7dfc-8b5a-5f48266a9beb-2",
+                "status": "granted",
+                "reason": "available"
+              }
+            ]
+          },
+          {
+            "id": "98",
+            "at": "2026-09-13T16:32:21.829Z",
+            "event": "scheduled",
+            "name": "interpretText",
+            "queue": "v3.channel.label.text.v1.channel-label-v1.session.sw-00be82ef-f7cb-47",
+            "args": [
+              {
+                "sourceId": "0126ec87-b2f5-4696-9474-b1d5bbe28b39",
+                "operationId": "chl-7193c10ac575bc5c78c8d93887a3cc47dba36bb2d2213516d3fe3995204fdc43"
+              }
+            ]
+          },
+          {
+            "id": "395",
+            "at": "2026-09-13T16:33:05.899Z",
+            "event": "completed",
+            "scheduled": "98",
+            "name": "interpretText",
+            "result": [
+              {
+                "status": "review",
+                "operationId": "chl-7193c10ac575bc5c78c8d93887a3cc47dba36bb2d2213516d3fe3995204fdc43",
+                "reviewId": "text-fddb298f-2db8-404d-80ae-8a128a9eef0b",
+                "code": "TEXT.LABEL_INGREDIENT_HEADING_INVALID",
+                "automaticRetry": false
+              }
+            ]
+          },
+          {
+            "id": "401",
+            "at": "2026-09-13T16:33:06.195Z",
+            "event": "scheduled",
+            "name": "verifyResourceReviewStopped",
+            "queue": "v3.channel.label.resources.v1.channel-label-v1.session.sw-00be82ef-f7cb-47",
+            "args": [
+              {
+                "activityName": "interpretText",
+                "request": {
+                  "permitId": "permit-01a09b9c-83f3-7dfc-8b5a-5f48266a9beb-2",
+                  "workflowId": "catalog-product-96658469cc38bd3fce3ca48e0546b320ac7330b4cb60660af48d10fb48e8efb2-label",
+                  "runId": "01a09b9c-83f3-7dfc-8b5a-5f48266a9beb",
+                  "needs": [
+                    {
+                      "resourceId": "mini-model-account",
+                      "units": 1
+                    },
+                    {
+                      "resourceId": "mini-cpu",
+                      "units": 1
+                    }
+                  ]
+                },
+                "outcome": {
+                  "status": "review",
+                  "operationId": "chl-7193c10ac575bc5c78c8d93887a3cc47dba36bb2d2213516d3fe3995204fdc43",
+                  "reviewId": "text-fddb298f-2db8-404d-80ae-8a128a9eef0b",
+                  "code": "TEXT.LABEL_INGREDIENT_HEADING_INVALID",
+                  "automaticRetry": false
+                }
+              }
+            ]
+          },
+          {
+            "id": "481",
+            "at": "2026-09-13T16:33:27.542Z",
+            "event": "activityTaskFailedEventAttributes",
+            "attributes": {
+              "failure": {
+                "message": "Inspect retained channel evidence",
+                "source": "TypeScriptSDK",
+                "stackTrace": "ApplicationFailure: Inspect retained channel evidence\n    at ApplicationFailure.nonRetryable (/Users/barry/apps/crawlv3-closeout.hNfBcg/temporal-check/node_modules/@temporalio/common/lib/failure.js:208:16)\n    at runChannelLabelActivity (file:///Users/barry/apps/crawlv3-batch-a.UiA4dx/release-selective-89318fe-20260913/channel-label-worker.js:517:28)\n    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async Activity.execute (/Users/barry/apps/crawlv3-closeout.hNfBcg/temporal-check/node_modules/@temporalio/worker/lib/activity.js:104:20)\n    at async NativeConnection.withAbortSignal (/Users/barry/apps/crawlv3-closeout.hNfBcg/temporal-check/node_modules/@temporalio/worker/lib/connection.js:172:16)\n    at async Client.withAbortSignal (/Users/barry/apps/crawlv3-closeout.hNfBcg/temporal-check/node_modules/@temporalio/client/lib/base-client.js:65:16)\n    at async /Users/barry/apps/crawlv3-closeout.hNfBcg/temporal-check/node_modules/@temporalio/worker/lib/activity.js:164:32\n    at async /Users/barry/apps/crawlv3-closeout.hNfBcg/temporal-check/node_modules/@temporalio/worker/lib/worker.js:811:30",
+                "applicationFailureInfo": {
+                  "type": "CHANNEL.ACTIVITY_UNRESOLVED",
+                  "nonRetryable": true
+                }
+              },
+              "scheduledEventId": "401",
+              "startedEventId": "480",
+              "identity": "mini-amazon-channel-label-resources/channel-label-resources/6a90c186-ab4a-4c25-b403-260a1261a6f6/31f23cdb6a146cef6b3168f72ab3e327a92fcb5d5a0b5e851a752682fddb3514",
+              "retryState": "RETRY_STATE_NON_RETRYABLE_FAILURE"
+            }
+          },
+          {
+            "id": "485",
+            "at": "2026-09-13T16:33:27.841Z",
+            "event": "scheduled",
+            "name": "resolveTextReceipt",
+            "queue": "v3.channel.label.text-receipts.v1.channel-label-v1.session.sw-00be82ef-f7cb-47",
+            "args": [
+              {
+                "outcome": {
+                  "status": "review",
+                  "operationId": "chl-7193c10ac575bc5c78c8d93887a3cc47dba36bb2d2213516d3fe3995204fdc43",
+                  "reviewId": "text-fddb298f-2db8-404d-80ae-8a128a9eef0b",
+                  "code": "TEXT.LABEL_INGREDIENT_HEADING_INVALID",
+                  "automaticRetry": false
+                },
+                "input": {
+                  "sourceId": "0126ec87-b2f5-4696-9474-b1d5bbe28b39",
+                  "operationId": "chl-7193c10ac575bc5c78c8d93887a3cc47dba36bb2d2213516d3fe3995204fdc43"
+                }
+              }
+            ]
+          },
+          {
+            "id": "487",
+            "at": "2026-09-13T16:33:28.174Z",
+            "event": "completed",
+            "scheduled": "485",
+            "name": "resolveTextReceipt",
+            "result": [
+              {
+                "status": "review",
+                "operationId": "chl-7193c10ac575bc5c78c8d93887a3cc47dba36bb2d2213516d3fe3995204fdc43",
+                "reviewId": "text-fddb298f-2db8-404d-80ae-8a128a9eef0b",
+                "code": "TEXT.LABEL_INGREDIENT_HEADING_INVALID",
+                "automaticRetry": false
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

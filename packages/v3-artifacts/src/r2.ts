@@ -17,6 +17,14 @@ export interface R2ClientPort {
 }
 const status = (error: unknown) => error && typeof error === "object" && "$metadata" in error
   ? (error.$metadata as { httpStatusCode?: number }).httpStatusCode : undefined;
+// Do not retain SDK messages, endpoints, headers, credentials or arbitrary cause objects.
+function diagnostics(raw:unknown){
+  const e=raw as {name?:unknown;code?:unknown;$metadata?:{httpStatusCode?:unknown;requestId?:unknown}};
+  const token=(v:unknown,re:RegExp)=>typeof v==='string'&&re.test(v)?v:undefined;
+  return Object.fromEntries(Object.entries({name:token(e?.name,/^[A-Za-z]{1,50}$/),code:token(e?.code,/^[A-Z_0-9]{1,50}$/),
+    status:typeof e?.$metadata?.httpStatusCode==='number'?e.$metadata.httpStatusCode:undefined,
+    requestId:token(e?.$metadata?.requestId,/^[a-zA-Z0-9-]{1,128}$/)}).filter(([,value])=>value!==undefined));
+}
 
 /** Fresh SigV4 request per read; no persisted presigned URL or URL renewal loop. */
 export class R2Objects implements ObjectStore {
@@ -56,7 +64,7 @@ export class R2Objects implements ObjectStore {
       signal.throwIfAborted();
       if (error instanceof ArtifactError) throw error;
       if (status(error) === 404 && error instanceof Error && error.name === "NoSuchKey") return null;
-      throw new ArtifactError("ARTIFACT.UNAVAILABLE"); // Never expose signed headers/credential-bearing SDK messages.
+      throw new ArtifactError("ARTIFACT.UNAVAILABLE",diagnostics(error));
     }
   }
   async create(key: string, bytes: Uint8Array, mediaType: string, signal: AbortSignal): Promise<"created" | "exists"> {
@@ -69,7 +77,7 @@ export class R2Objects implements ObjectStore {
     } catch (error) {
       signal.throwIfAborted();
       if (status(error) === 412) return "exists";
-      throw new ArtifactError("ARTIFACT.UPLOAD_UNKNOWN");
+      throw new ArtifactError("ARTIFACT.UPLOAD_UNKNOWN",diagnostics(error));
     }
   }
 }

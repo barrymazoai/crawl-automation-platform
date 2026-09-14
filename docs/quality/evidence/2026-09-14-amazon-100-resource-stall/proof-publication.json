@@ -1,0 +1,447 @@
+{
+  "collectedOn": "2026-09-14",
+  "mode": "read-only",
+  "records": [
+    {
+      "kind": "deployment",
+      "data": {
+        "role": "text",
+        "jobId": "amazon-channel-label-text",
+        "entry": "/Users/barry/apps/crawlv3-batch-a.UiA4dx/release-selective-89318fe-20260913/channel-label-worker.js",
+        "root": "/Users/barry/apps/crawlv3-batch-a.UiA4dx/live/amazon-mainflow-20260911/release-amazon-mainflow-20260911-v2/label",
+        "configPath": "/Users/barry/apps/crawlv3-batch-a.UiA4dx/live/amazon-mainflow-20260911/release-amazon-mainflow-20260911-v2/label-text.private.json",
+        "health": {
+          "event": "WORKER_RUNNING",
+          "role": "channel-label-text",
+          "kind": "activity",
+          "taskQueue": "v3.channel.label.text.v1.channel-label-v1.session.sw-00be82ef-f7cb-47",
+          "identity": "mini-amazon-channel-label-text/channel-label-text/bc2231fd-2331-4306-a221-585e08254d92/31f23cdb6a146cef6b3168f72ab3e327a92fcb5d5a0b5e851a752682fddb3514",
+          "buildId": "31f23cdb6a146cef6b3168f72ab3e327a92fcb5d5a0b5e851a752682fddb3514",
+          "contractVersion": 1,
+          "mode": "business",
+          "pid": 70083,
+          "reportedAt": "2026-09-14T00:48:58.862Z"
+        },
+        "timeoutMs": 20000,
+        "codex": {
+          "workRoot": "/Users/barry/apps/crawlv3-batch-a.UiA4dx/live/amazon-mainflow-20260911/release-amazon-mainflow-20260911-v2/model-work"
+        }
+      }
+    },
+    {
+      "kind": "localEvidence",
+      "data": {
+        "role": "text",
+        "key": "v3/model-returns/d0ece8680907c05e03508580b24e606bec6af6e0d4c3128db3a252309720a92f.json",
+        "path": "/Users/barry/apps/crawlv3-batch-a.UiA4dx/live/amazon-mainflow-20260911/release-amazon-mainflow-20260911-v2/label/text/journal/v3/model-returns/d0ece8680907c05e03508580b24e606bec6af6e0d4c3128db3a252309720a92f.json",
+        "bytes": 865,
+        "sha256": "4b8dc589311c0100525fd524ca13c6ecad418a6541f95f81357f594a16905fc9",
+        "mtime": "2026-09-13T16:33:03.894Z",
+        "record": {
+          "codec": "model-return-attestation/1",
+          "invocation": {
+            "workflowId": "catalog-product-96658469cc38bd3fce3ca48e0546b320ac7330b4cb60660af48d10fb48e8efb2-label",
+            "runId": "01a09b9c-83f3-7dfc-8b5a-5f48266a9beb",
+            "activityId": "16",
+            "activityName": "interpretText",
+            "operationId": "chl-7193c10ac575bc5c78c8d93887a3cc47dba36bb2d2213516d3fe3995204fdc43",
+            "inputFingerprint": "ea7a443824b311ed1f47104986194a4a6049065b3bb6f53de2c9f5a75c2927f9",
+            "owner": {
+              "schemaVersion": 1,
+              "requestId": "24e1a133-c988-41a4-9143-2a8814645b8c",
+              "observationId": "amazon-d75db4e39e38bd303050776a63c25272879853454309469c9527084f9c3c78c5",
+              "brandId": "551e82a3-9a9d-4fbb-8752-4ad7048330df",
+              "sourceId": "0126ec87-b2f5-4696-9474-b1d5bbe28b39",
+              "listingId": "B0D94RTZGR",
+              "variantId": null
+            },
+            "returned": "953ed13371f95a86e7b166432e4389e8a605fbcc0976646ae3c5f952eaa30c99"
+          },
+          "reviewId": "text-fddb298f-2db8-404d-80ae-8a128a9eef0b"
+        }
+      }
+    },
+    {
+      "kind": "localMissing",
+      "data": {
+        "role": "text",
+        "key": "v3/resource-stop/permit-01a09b9c-83f3-7dfc-8b5a-5f48266a9beb-2.json"
+      }
+    },
+    {
+      "kind": "localEvidence",
+      "data": {
+        "role": "text",
+        "key": "v3/publication-claims/73070c7e9742b6a4c54bdf6befd1836b2a820e341fc9bc691d9be82b98e4225c.json",
+        "path": "/Users/barry/apps/crawlv3-batch-a.UiA4dx/live/amazon-mainflow-20260911/release-amazon-mainflow-20260911-v2/label/text/journal/v3/publication-claims/73070c7e9742b6a4c54bdf6befd1836b2a820e341fc9bc691d9be82b98e4225c.json",
+        "bytes": 219,
+        "sha256": "0538ac4f40b655e0742149c8e82072905a2385bc064b610e496e9df78042be08",
+        "mtime": "2026-09-13T16:33:04.165Z",
+        "record": {
+          "key": "v3/model-returns/d0ece8680907c05e03508580b24e606bec6af6e0d4c3128db3a252309720a92f.json",
+          "sha256": "4b8dc589311c0100525fd524ca13c6ecad418a6541f95f81357f594a16905fc9",
+          "nonce": "a0bbef10-6428-4016-ae93-5c25ccc483c7"
+        }
+      }
+    },
+    {
+      "kind": "localMissing",
+      "data": {
+        "role": "text",
+        "key": "v3/publication-claims/3b8a2305e9faaf59cccec949eae23f1d0402df451897aedb7d714e5e66c67b3b.json"
+      }
+    },
+    {
+      "kind": "log",
+      "data": {
+        "role": "text",
+        "path": "/Users/barry/apps/crawlv3-batch-a.UiA4dx/amazon-channel-label-text.log",
+        "lines": []
+      }
+    },
+    {
+      "kind": "deployment",
+      "data": {
+        "role": "resources",
+        "jobId": "amazon-channel-label-resources",
+        "entry": "/Users/barry/apps/crawlv3-batch-a.UiA4dx/release-selective-89318fe-20260913/channel-label-worker.js",
+        "root": "/Users/barry/apps/crawlv3-batch-a.UiA4dx/live/amazon-mainflow-20260911/release-amazon-mainflow-20260911-v2/label",
+        "configPath": "/Users/barry/apps/crawlv3-batch-a.UiA4dx/live/amazon-mainflow-20260911/release-amazon-mainflow-20260911-v2/label-resources.private.json",
+        "health": {
+          "event": "WORKER_RUNNING",
+          "role": "channel-label-resources",
+          "kind": "activity",
+          "taskQueue": "v3.channel.label.resources.v1.channel-label-v1.session.sw-00be82ef-f7cb-47",
+          "identity": "mini-amazon-channel-label-resources/channel-label-resources/6a90c186-ab4a-4c25-b403-260a1261a6f6/31f23cdb6a146cef6b3168f72ab3e327a92fcb5d5a0b5e851a752682fddb3514",
+          "buildId": "31f23cdb6a146cef6b3168f72ab3e327a92fcb5d5a0b5e851a752682fddb3514",
+          "contractVersion": 1,
+          "mode": "business",
+          "pid": 68813,
+          "reportedAt": "2026-09-14T00:49:01.302Z"
+        },
+        "timeoutMs": 20000
+      }
+    },
+    {
+      "kind": "localMissing",
+      "data": {
+        "role": "resources",
+        "key": "v3/model-returns/d0ece8680907c05e03508580b24e606bec6af6e0d4c3128db3a252309720a92f.json"
+      }
+    },
+    {
+      "kind": "localEvidence",
+      "data": {
+        "role": "resources",
+        "key": "v3/resource-stop/permit-01a09b9c-83f3-7dfc-8b5a-5f48266a9beb-2.json",
+        "path": "/Users/barry/apps/crawlv3-batch-a.UiA4dx/live/amazon-mainflow-20260911/release-amazon-mainflow-20260911-v2/label/resources/journal/v3/resource-stop/permit-01a09b9c-83f3-7dfc-8b5a-5f48266a9beb-2.json",
+        "bytes": 1199,
+        "sha256": "92939914341c314a9c98ed04f68bafad00358df95961b6aa1dea5da4b31e6207",
+        "mtime": "2026-09-13T16:33:06.642Z",
+        "record": {
+          "codec": "owned-model-review-stop/1",
+          "request": {
+            "permitId": "permit-01a09b9c-83f3-7dfc-8b5a-5f48266a9beb-2",
+            "workflowId": "catalog-product-96658469cc38bd3fce3ca48e0546b320ac7330b4cb60660af48d10fb48e8efb2-label",
+            "runId": "01a09b9c-83f3-7dfc-8b5a-5f48266a9beb",
+            "needs": [
+              {
+                "resourceId": "mini-model-account",
+                "units": 1
+              },
+              {
+                "resourceId": "mini-cpu",
+                "units": 1
+              }
+            ]
+          },
+          "invocation": {
+            "workflowId": "catalog-product-96658469cc38bd3fce3ca48e0546b320ac7330b4cb60660af48d10fb48e8efb2-label",
+            "runId": "01a09b9c-83f3-7dfc-8b5a-5f48266a9beb",
+            "activityId": "16",
+            "activityName": "interpretText",
+            "operationId": "chl-7193c10ac575bc5c78c8d93887a3cc47dba36bb2d2213516d3fe3995204fdc43",
+            "inputFingerprint": "ea7a443824b311ed1f47104986194a4a6049065b3bb6f53de2c9f5a75c2927f9",
+            "owner": {
+              "schemaVersion": 1,
+              "requestId": "24e1a133-c988-41a4-9143-2a8814645b8c",
+              "observationId": "amazon-d75db4e39e38bd303050776a63c25272879853454309469c9527084f9c3c78c5",
+              "brandId": "551e82a3-9a9d-4fbb-8752-4ad7048330df",
+              "sourceId": "0126ec87-b2f5-4696-9474-b1d5bbe28b39",
+              "listingId": "B0D94RTZGR",
+              "variantId": null
+            },
+            "returned": "953ed13371f95a86e7b166432e4389e8a605fbcc0976646ae3c5f952eaa30c99"
+          },
+          "reviewId": "text-fddb298f-2db8-404d-80ae-8a128a9eef0b",
+          "reviewPreserved": true
+        }
+      }
+    },
+    {
+      "kind": "localMissing",
+      "data": {
+        "role": "resources",
+        "key": "v3/publication-claims/73070c7e9742b6a4c54bdf6befd1836b2a820e341fc9bc691d9be82b98e4225c.json"
+      }
+    },
+    {
+      "kind": "localEvidence",
+      "data": {
+        "role": "resources",
+        "key": "v3/publication-claims/3b8a2305e9faaf59cccec949eae23f1d0402df451897aedb7d714e5e66c67b3b.json",
+        "path": "/Users/barry/apps/crawlv3-batch-a.UiA4dx/live/amazon-mainflow-20260911/release-amazon-mainflow-20260911-v2/label/resources/journal/v3/publication-claims/3b8a2305e9faaf59cccec949eae23f1d0402df451897aedb7d714e5e66c67b3b.json",
+        "bytes": 200,
+        "sha256": "2546c9afd0c733c9e5dece11fe890fc3c0543f532adb0ea73f27b5117842c28c",
+        "mtime": "2026-09-13T16:33:06.968Z",
+        "record": {
+          "key": "v3/resource-stop/permit-01a09b9c-83f3-7dfc-8b5a-5f48266a9beb-2.json",
+          "sha256": "92939914341c314a9c98ed04f68bafad00358df95961b6aa1dea5da4b31e6207",
+          "nonce": "362bbcf4-b9f7-43cb-aef3-5ecb28663ca4"
+        }
+      }
+    },
+    {
+      "kind": "log",
+      "data": {
+        "role": "resources",
+        "path": "/Users/barry/apps/crawlv3-batch-a.UiA4dx/amazon-channel-label-resources.log",
+        "lines": [
+          {
+            "line": 667,
+            "text": "  taskQueue: 'v3.channel.label.resources.v1.channel-label-v1.session.sw-00be82ef-f7cb-47'"
+          },
+          {
+            "line": 668,
+            "text": "}"
+          },
+          {
+            "line": 669,
+            "text": "{\"event\":\"WORKER_RUNNING\",\"role\":\"channel-label-resources\",\"kind\":\"activity\",\"taskQueue\":\"v3.channel.label.resources.v1.channel-label-v1.session.sw-00be82ef-f7cb-47\",\"identity\":\"mini-amazon-channel-label-resources/channel-label-resources/6a90c186-ab4a-4c25-b403-260a1261a6f6/31f23cdb6a146cef6b3168f72ab3e327a92fcb5d5a0b5e851a752682fddb3514\",\"buildId\":\"31f23cdb6a146cef6b3168f72ab3e327a92fcb5d5a0b5e851a752682fddb3514\",\"contractVersion\":1,\"mode\":\"business\"}"
+          },
+          {
+            "line": 670,
+            "text": "2026-09-13T16:33:27.366Z [WARN] Activity failed {"
+          },
+          {
+            "line": 671,
+            "text": "  sdkComponent: 'worker',"
+          },
+          {
+            "line": 672,
+            "text": "  taskQueue: 'v3.channel.label.resources.v1.channel-label-v1.session.sw-00be82ef-f7cb-47',"
+          },
+          {
+            "line": 673,
+            "text": "  isLocal: false,"
+          },
+          {
+            "line": 674,
+            "text": "  attempt: 1,"
+          },
+          {
+            "line": 675,
+            "text": "  namespace: 'batch-a-845a2138-c29d-4dbc-aea7-ef57b2d813a1',"
+          },
+          {
+            "line": 677,
+            "text": "  activityId: '59',"
+          },
+          {
+            "line": 678,
+            "text": "  activityType: 'verifyResourceReviewStopped',"
+          },
+          {
+            "line": 679,
+            "text": "  workflowId: 'catalog-product-96658469cc38bd3fce3ca48e0546b320ac7330b4cb60660af48d10fb48e8efb2-label',"
+          },
+          {
+            "line": 680,
+            "text": "  workflowRunId: '01a09b9c-83f3-7dfc-8b5a-5f48266a9beb',"
+          },
+          {
+            "line": 681,
+            "text": "  workflowType: 'ChannelStreamingLabelWorkflow',"
+          },
+          {
+            "line": 682,
+            "text": "  error: ApplicationFailure: Inspect retained channel evidence"
+          },
+          {
+            "line": 683,
+            "text": "      at ApplicationFailure.nonRetryable (/Users/barry/apps/crawlv3-closeout.hNfBcg/temporal-check/node_modules/@temporalio/common/lib/failure.js:208:16)"
+          },
+          {
+            "line": 684,
+            "text": "      at runChannelLabelActivity (file:///Users/barry/apps/crawlv3-batch-a.UiA4dx/release-selective-89318fe-20260913/channel-label-worker.js:517:28)"
+          },
+          {
+            "line": 685,
+            "text": "      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)"
+          },
+          {
+            "line": 686,
+            "text": "      at async Activity.execute (/Users/barry/apps/crawlv3-closeout.hNfBcg/temporal-check/node_modules/@temporalio/worker/lib/activity.js:104:20)"
+          },
+          {
+            "line": 687,
+            "text": "      at async NativeConnection.withAbortSignal (/Users/barry/apps/crawlv3-closeout.hNfBcg/temporal-check/node_modules/@temporalio/worker/lib/connection.js:172:16)"
+          },
+          {
+            "line": 688,
+            "text": "      at async Client.withAbortSignal (/Users/barry/apps/crawlv3-closeout.hNfBcg/temporal-check/node_modules/@temporalio/client/lib/base-client.js:65:16)"
+          },
+          {
+            "line": 689,
+            "text": "      at async /Users/barry/apps/crawlv3-closeout.hNfBcg/temporal-check/node_modules/@temporalio/worker/lib/activity.js:164:32"
+          },
+          {
+            "line": 690,
+            "text": "      at async /Users/barry/apps/crawlv3-closeout.hNfBcg/temporal-check/node_modules/@temporalio/worker/lib/worker.js:811:30 {"
+          },
+          {
+            "line": 691,
+            "text": "    cause: undefined,"
+          },
+          {
+            "line": 692,
+            "text": "    failure: undefined,"
+          },
+          {
+            "line": 693,
+            "text": "    type: 'CHANNEL.ACTIVITY_UNRESOLVED',"
+          }
+        ]
+      }
+    },
+    {
+      "kind": "deployment",
+      "data": {
+        "role": "vision",
+        "jobId": "amazon-channel-label-vision",
+        "entry": "/Users/barry/apps/crawlv3-batch-a.UiA4dx/release-selective-89318fe-20260913/channel-label-worker.js",
+        "root": "/Users/barry/apps/crawlv3-batch-a.UiA4dx/live/amazon-mainflow-20260911/release-amazon-mainflow-20260911-v2/label",
+        "configPath": "/Users/barry/apps/crawlv3-batch-a.UiA4dx/live/amazon-mainflow-20260911/release-amazon-mainflow-20260911-v2/label-vision.private.json",
+        "health": {
+          "event": "WORKER_RUNNING",
+          "role": "channel-label-vision",
+          "kind": "activity",
+          "taskQueue": "v3.channel.label.vision.v1.channel-label-v1.session.sw-00be82ef-f7cb-47",
+          "identity": "mini-amazon-channel-label-vision/channel-label-vision/3188ba2e-d712-4b35-848a-2bad2ee89cd3/31f23cdb6a146cef6b3168f72ab3e327a92fcb5d5a0b5e851a752682fddb3514",
+          "buildId": "31f23cdb6a146cef6b3168f72ab3e327a92fcb5d5a0b5e851a752682fddb3514",
+          "contractVersion": 1,
+          "mode": "business",
+          "pid": 68773,
+          "reportedAt": "2026-09-14T00:48:58.692Z"
+        },
+        "timeoutMs": 20000
+      }
+    },
+    {
+      "kind": "localMissing",
+      "data": {
+        "role": "vision",
+        "key": "v3/model-returns/d0ece8680907c05e03508580b24e606bec6af6e0d4c3128db3a252309720a92f.json"
+      }
+    },
+    {
+      "kind": "localMissing",
+      "data": {
+        "role": "vision",
+        "key": "v3/resource-stop/permit-01a09b9c-83f3-7dfc-8b5a-5f48266a9beb-2.json"
+      }
+    },
+    {
+      "kind": "localMissing",
+      "data": {
+        "role": "vision",
+        "key": "v3/publication-claims/73070c7e9742b6a4c54bdf6befd1836b2a820e341fc9bc691d9be82b98e4225c.json"
+      }
+    },
+    {
+      "kind": "localMissing",
+      "data": {
+        "role": "vision",
+        "key": "v3/publication-claims/3b8a2305e9faaf59cccec949eae23f1d0402df451897aedb7d714e5e66c67b3b.json"
+      }
+    },
+    {
+      "kind": "log",
+      "data": {
+        "role": "vision",
+        "path": "/Users/barry/apps/crawlv3-batch-a.UiA4dx/amazon-channel-label-vision.log",
+        "lines": []
+      }
+    },
+    {
+      "kind": "remoteEvidence",
+      "data": {
+        "key": "v3/model-returns/d0ece8680907c05e03508580b24e606bec6af6e0d4c3128db3a252309720a92f.json",
+        "bytes": 865,
+        "sha256": "4b8dc589311c0100525fd524ca13c6ecad418a6541f95f81357f594a16905fc9",
+        "mtime": "2026-09-13T16:33:05.000Z",
+        "ms": 1358,
+        "record": {
+          "codec": "model-return-attestation/1",
+          "invocation": {
+            "workflowId": "catalog-product-96658469cc38bd3fce3ca48e0546b320ac7330b4cb60660af48d10fb48e8efb2-label",
+            "runId": "01a09b9c-83f3-7dfc-8b5a-5f48266a9beb",
+            "activityId": "16",
+            "activityName": "interpretText",
+            "operationId": "chl-7193c10ac575bc5c78c8d93887a3cc47dba36bb2d2213516d3fe3995204fdc43",
+            "inputFingerprint": "ea7a443824b311ed1f47104986194a4a6049065b3bb6f53de2c9f5a75c2927f9",
+            "owner": {
+              "schemaVersion": 1,
+              "requestId": "24e1a133-c988-41a4-9143-2a8814645b8c",
+              "observationId": "amazon-d75db4e39e38bd303050776a63c25272879853454309469c9527084f9c3c78c5",
+              "brandId": "551e82a3-9a9d-4fbb-8752-4ad7048330df",
+              "sourceId": "0126ec87-b2f5-4696-9474-b1d5bbe28b39",
+              "listingId": "B0D94RTZGR",
+              "variantId": null
+            },
+            "returned": "953ed13371f95a86e7b166432e4389e8a605fbcc0976646ae3c5f952eaa30c99"
+          },
+          "reviewId": "text-fddb298f-2db8-404d-80ae-8a128a9eef0b"
+        }
+      }
+    },
+    {
+      "kind": "remoteReadError",
+      "data": {
+        "key": "v3/resource-stop/permit-01a09b9c-83f3-7dfc-8b5a-5f48266a9beb-2.json",
+        "name": "NoSuchKey",
+        "status": 404
+      }
+    },
+    {
+      "kind": "remoteEvidence",
+      "data": {
+        "key": "v3/publication-claims/73070c7e9742b6a4c54bdf6befd1836b2a820e341fc9bc691d9be82b98e4225c.json",
+        "bytes": 219,
+        "sha256": "0538ac4f40b655e0742149c8e82072905a2385bc064b610e496e9df78042be08",
+        "mtime": "2026-09-13T16:33:04.000Z",
+        "ms": 333,
+        "record": {
+          "key": "v3/model-returns/d0ece8680907c05e03508580b24e606bec6af6e0d4c3128db3a252309720a92f.json",
+          "sha256": "4b8dc589311c0100525fd524ca13c6ecad418a6541f95f81357f594a16905fc9",
+          "nonce": "a0bbef10-6428-4016-ae93-5c25ccc483c7"
+        }
+      }
+    },
+    {
+      "kind": "remoteEvidence",
+      "data": {
+        "key": "v3/publication-claims/3b8a2305e9faaf59cccec949eae23f1d0402df451897aedb7d714e5e66c67b3b.json",
+        "bytes": 200,
+        "sha256": "2546c9afd0c733c9e5dece11fe890fc3c0543f532adb0ea73f27b5117842c28c",
+        "mtime": "2026-09-13T16:33:07.000Z",
+        "ms": 535,
+        "record": {
+          "key": "v3/resource-stop/permit-01a09b9c-83f3-7dfc-8b5a-5f48266a9beb-2.json",
+          "sha256": "92939914341c314a9c98ed04f68bafad00358df95961b6aa1dea5da4b31e6207",
+          "nonce": "362bbcf4-b9f7-43cb-aef3-5ecb28663ca4"
+        }
+      }
+    }
+  ]
+}

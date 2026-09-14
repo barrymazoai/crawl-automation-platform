@@ -9,7 +9,7 @@ import {sha256} from '@crawl-automation/v3-artifacts';
 import {AmazonLinkBatchesSchema,type AmazonLinkBatch} from './amazon-link-batches.js';
 import type {BatchCall,BatchReport} from './amazon-batch-contract.js';
 const path=z.string().refine(isAbsolute);
-export const AmazonBatchConfigSchema=z.strictObject({campaignId:z.string(),manifestPath:path,manifestSha256:z.string().regex(/^[a-f0-9]{64}$/),dataRoot:path,adminFile:path,recoveryHelper:path,controlQueue:z.string()});
+export const AmazonBatchConfigSchema=z.strictObject({campaignId:z.string(),manifestPath:path,manifestSha256:z.string().regex(/^[a-f0-9]{64}$/),dataRoot:path,adminFile:path,recoveryHelper:path,modelRecoveryHelper:path.optional(),controlQueue:z.string()});
 export type AmazonBatchConfig=z.infer<typeof AmazonBatchConfigSchema>;
 export class AmazonBatchController{
  private constructor(readonly config:AmazonBatchConfig,private db:pg.Pool,private client:Client,private batches:AmazonLinkBatch[],private products:Map<string,any>,private baseline:any[]){}
@@ -57,6 +57,30 @@ export class AmazonBatchController{
  }
  async recoverAmazonHistoryChunk(raw:BatchCall,signal:AbortSignal){
   const batch=this.validate(raw,true);
+  // A stopped label child may be the only remaining owner. Looking only for a
+  // parent's browser permit misses this case after the browser closed normally.
+  const discoveries=(await this.db.query('select record from catalog_discovery where catalog_id=$1',[batch.requestId])).rows.map(r=>r.record);
+  for(const d of discoveries){
+   const state=await this.client.workflow.getHandle(d.workflowId).describe();
+   if(state.status.name==='RUNNING'){
+    const held=(await this.db.query("select request from resource_permit where released_at is null and request->>'workflowId'=$1",[d.workflowId+'-label'])).rows;
+    if(held.length){
+     const child=await this.client.workflow.getHandle(d.workflowId+'-label').describe();
+     if(child.status.name!=='RUNNING')throw Error('AMAZON.BATCH_LABEL_OWNER_STOPPED');
+    }
+    continue;
+   }
+   const held=(await this.db.query("select count(*)::int n from resource_permit where released_at is null and request->>'workflowId'=$1",[d.workflowId+'-label'])).rows[0].n;
+   if(state.status.name==='COMPLETED'&&!held)continue;
+   const parentHeld=(await this.db.query("select count(*)::int n from resource_permit where released_at is null and request->>'workflowId'=$1",[d.workflowId])).rows[0].n;
+   if(this.config.modelRecoveryHelper&&(held||!parentHeld&&state.status.name!=='COMPLETED')){
+    signal.throwIfAborted();
+    const out=await promisify(execFile)(process.execPath,[this.config.modelRecoveryHelper,'--release-request',batch.requestId],{timeout:150000,maxBuffer:1024*1024,signal});
+    const proof=JSON.parse(out.stdout.trim());if(proof.status!=='settled'||proof.requestId!==batch.requestId)throw Error('AMAZON.BATCH_LABEL_RECOVERY_UNVERIFIED');
+    await this.event({event:'LABEL_STOP_RECOVERED',requestId:batch.requestId,proofKey:proof.proofKey});return{status:'released'};
+   }
+   if(held)throw Error('AMAZON.BATCH_LABEL_RECOVERY_REQUIRED');
+  }
   const permits=(await this.db.query("select p.permit_id,p.request from resource_permit p join catalog_discovery d on d.record->>'workflowId'=p.request->>'workflowId' where p.released_at is null and d.catalog_id=$1",[batch.requestId])).rows;
   if(!permits.length)return{status:'not-needed'};
   const browser=permits.filter(p=>equal(p.request.needs,[{resourceId:'mini-ego-space-1',units:1}]));if(!browser.length)return{status:'waiting'};if(browser.length!==1)throw Error('AMAZON.BATCH_PERMIT_AMBIGUOUS');

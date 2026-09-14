@@ -1,5 +1,5 @@
-import { expect,it } from "vitest";
-import { RetainedPublication } from "@crawl-automation/v3-artifacts";
+import { expect,it,vi } from "vitest";
+import { RetainedPublication,sha256 } from "@crawl-automation/v3-artifacts";
 import { fixture } from "../../../packages/v3-text/src/testing.fixture.js";
 import { QualityReviewStops } from "./quality-review-stops.js";
 function setup(durable=false){
@@ -44,4 +44,31 @@ it.each(["no-return","activity-throws","foreign-owner","foreign-input","unknown-
  if(mode==="unknown-execution")f.review.failure.executionFact="unknown";
  if(mode==="handoff")f.review.failure.code=f.outcome.code="TEXT.HANDOFF_UNKNOWN";
  expect((await f.verify()).status).toBe("unknown");expect(f.remote.data.has("v3/resource-stop/permit-1.json")).toBe(false);
+});
+
+it('resumes a stop proof whose claim exists after a failed upload, without another model call',async()=>{
+ const f=setup(true),model=vi.fn(async()=>{f.stops.returned('response');return f.outcome;}),log=vi.spyOn(console,'error').mockImplementation(()=>{});
+ try{
+  await f.stops.run(f.context,'interpretText',f.input,model);
+  const key='v3/resource-stop/permit-1.json',create=f.remote.create.bind(f.remote);let failed=true;
+  f.remote.create=async(k,b)=>{if(k===key&&failed)throw Error('synthetic upload unavailable');return create(k,b);};
+  await expect(f.verify()).rejects.toThrow('RESOURCE.STOP_PUBLICATION_UNAVAILABLE');
+  expect(f.remote.data.has(key)).toBe(false);const claimKey='v3/publication-claims/'+sha256(Buffer.from(key))+'.json',claim=f.remote.data.get(claimKey);expect(claim).toBeDefined();
+  failed=false;const verifier=new QualityReviewStops(new RetainedPublication(f.local,f.remote),{read:async()=>f.review},true);
+  expect(await verifier.verify({request:f.request,activityName:'interpretText',outcome:f.outcome},AbortSignal.timeout(3000))).toMatchObject({status:'stopped'});
+  expect(f.remote.data.get(claimKey)).toEqual(claim);expect(model).toHaveBeenCalledOnce();expect(f.review.failure.code).toBe('TEXT.LABEL_GROUP_EMPTY');
+ }finally{log.mockRestore();}
+});
+it('reconciles lost conditional PUT replies by exact readback',async()=>{
+ const f=setup(true),log=vi.spyOn(console,'error').mockImplementation(()=>{});f.remote.unknown=true;
+ try{await f.stops.run(f.context,'interpretText',f.input,async()=>{f.stops.returned('response');return f.outcome;});
+  expect(await f.verify()).toMatchObject({status:'stopped'});expect(f.remote.data.has('v3/resource-stop/permit-1.json')).toBe(true);
+ }finally{log.mockRestore();}
+});
+it('never replaces a conflicting publication claim or restarts the model',async()=>{
+ const f=setup(true),log=vi.spyOn(console,'error').mockImplementation(()=>{});
+ try{await f.stops.run(f.context,'interpretText',f.input,async()=>{f.stops.returned('response');return f.outcome;});
+  const key='v3/resource-stop/permit-1.json',claimKey='v3/publication-claims/'+sha256(Buffer.from(key))+'.json',foreign=Buffer.from(JSON.stringify({key,sha256:'0'.repeat(64),nonce:'00000000-0000-4000-8000-000000000001'}));
+  f.remote.data.set(claimKey,foreign);await expect(f.verify()).rejects.toThrow('RESOURCE.STOP_EVIDENCE_CONFLICT');expect(f.remote.data.get(claimKey)).toBe(foreign);expect(f.remote.data.has(key)).toBe(false);
+ }finally{log.mockRestore();}
 });

@@ -44,6 +44,12 @@ describe("R2 adapter with actual AWS SDK serialization and fake transport",()=>{
     await expect(store.create("x/file",Buffer.from("a"),"text/plain",new AbortController().signal)).rejects.toMatchObject({message:"ARTIFACT.UPLOAD_UNKNOWN"});
     expect(calls).toBe(1);
   });
+  it('retains safe transport diagnostics without raw messages or headers',async()=>{
+    const store=setup(async()=>{throw Object.assign(Error('Authorization=private-secret'),{name:'TimeoutError',code:'ETIMEDOUT',headers:{authorization:'private-secret'},$metadata:{httpStatusCode:503,requestId:'safe-request-id'}});});
+    const e=await store.create('x/file',Buffer.from('a'),'text/plain',new AbortController().signal).catch(e=>e);
+    expect(e.diagnostics).toMatchObject({name:'TimeoutError',code:'ETIMEDOUT',status:503,requestId:'safe-request-id'});
+    expect(JSON.stringify(e)).not.toContain('private-secret');
+  });
   it("expired credentials do not cause a URL/provider retry loop",async()=>{
     let calls=0;const store=setup(async()=>{calls++;return reply('<Error><Code>ExpiredToken</Code></Error>',403);});
     await expect(store.read("x/file",10,new AbortController().signal)).rejects.toMatchObject({code:"ARTIFACT.UNAVAILABLE"});expect(calls).toBe(1);

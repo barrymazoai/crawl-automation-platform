@@ -12,7 +12,8 @@ export async function PreparedTextWorkflow(raw: unknown, gate: <T>(name:string, 
   let outcome: TextActivityOutcome | null = null;
   try { outcome = TextActivityOutcomeSchema.parse(await gate("interpretText",()=>text.interpretText(task))); }
   catch (error) {
-    if (isCancellation(error) || propagateAdmissionFailure && error instanceof ApplicationFailure && error.type === "RESOURCE.WAIT_LIMIT") throw error;
+    if (isCancellation(error) || propagateAdmissionFailure && error instanceof ApplicationFailure &&
+      ["RESOURCE.WAIT_LIMIT","RESOURCE.OWNER_QUARANTINED","RESOURCE.REVIEW_STOP_UNVERIFIED"].includes(error.type??'')) throw error;
     /* Read-only reconciliation only when execution may have started; never execute twice. */
   }
   const decoded = TextReceiptOutcomeSchema.safeParse(await receipts.resolveTextReceipt({ input: task, outcome }));

@@ -14,11 +14,11 @@ async function fixture(count=2000){
  const bytes=Buffer.from(JSON.stringify({codec:'amazon-history-campaign/1',campaignId,region:'US',postalCode:'10001',productCount:count,products,batches}));
  await fs.writeFile(root+'/plan.json',bytes);await fs.writeFile(root+'/price-baseline.json','[]');
  const config={campaignId,manifestPath:root+'/plan.json',manifestSha256:sha256(bytes),dataRoot:root,adminFile:root+'/admin.json',recoveryHelper:root+'/recovery.js',controlQueue:'queue'};
- let healthy=true,held=0;
+ let healthy=true,held=0,state='COMPLETED';
  const db={query:async(sql:string)=>({rows:sql.includes('current_database')?[{name:'crawler_v3_test'}]:sql.includes('resource_capacity')?[1,2,3].map(()=>({healthy,fresh:true})):sql.includes('catalog_discovery')?batches[0]!.entries.map(e=>({record:{entry:e.entry,workflowId:e.entry.listingId}})):[{n:held}]})};
- const controller=await AmazonBatchController.open(config,db as any,{} as any),batch=batches[0]!,call={campaignId,manifestSha256:config.manifestSha256,requestId:batch.requestId};
+ const controller=await AmazonBatchController.open(config,db as any,{workflow:{getHandle:()=>({describe:async()=>({status:{name:state}})})}} as any),batch=batches[0]!,call={campaignId,manifestSha256:config.manifestSha256,requestId:batch.requestId};
  const submission={requestId:batch.requestId,workflowId:'v3-collection-'+batch.requestId,snapshot:{...scope,url:scope.rootUrl,sourceRevision:2}};
- return{root,controller,config,batch,call,submission,setHealthy:(v:boolean)=>healthy=v,setHeld:(v:number)=>held=v};
+ return{root,controller,config,batch,call,submission,setHealthy:(v:boolean)=>healthy=v,setHeld:(v:number)=>held=v,setState:(v:string)=>state=v};
 }
 it('lost intake reply reconciles the same request; unhealthy dependencies and foreign revisions cannot submit',async()=>{
  const f=await fixture();let accepted=false,posts=0;
@@ -52,4 +52,9 @@ it('closed delivery requires exact discoveries and released permits; changed man
   f.setHeld(0);expect(await f.controller.inspectAmazonHistoryChunk(f.call,AbortSignal.timeout(1000))).toMatchObject({settled:true});
   await fs.appendFile(f.config.manifestPath,' ');await expect(AmazonBatchController.open(f.config,{} as any,{} as any)).rejects.toThrow('MANIFEST_CHANGED');
  }finally{vi.unstubAllGlobals();await fs.rm(f.root,{recursive:true,force:true});}
+});
+it('reports a stopped child model permit as recovery-required instead of waiting forever',async()=>{
+ const f=await fixture(1);f.setHeld(1);f.setState('FAILED');
+ try{await expect(f.controller.recoverAmazonHistoryChunk(f.call,AbortSignal.timeout(1000))).rejects.toThrow('AMAZON.BATCH_LABEL_RECOVERY_REQUIRED');}
+ finally{await fs.rm(f.root,{recursive:true,force:true});}
 });

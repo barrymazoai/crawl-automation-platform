@@ -4,8 +4,14 @@ import { ResourceGateSchema, ResourceDecisionSchema, type ResourceRequest } from
 export function resourceGate(raw: unknown, options:{requireReviewStop?:boolean}={}) {
   const config = raw === undefined ? undefined : ResourceGateSchema.parse(raw);
   let sequence = 0;
+  // Keep historical command sequences unchanged. A new gate shares its quarantine
+  // state across sibling sources, but never cancels external work already running.
+  const bounded=config?patched('resource-recovery-bounds-v1'):false;
+  let quarantined=false,waits=0;
   return async <T>(name: string, run: () => Promise<T>): Promise<T> => {
     const needs = config?.activities[name]; if (!config || !needs) return run();
+    const checkOwner=()=>{if(bounded&&quarantined)throw ApplicationFailure.nonRetryable('Sibling execution requires recovery','RESOURCE.OWNER_QUARANTINED');};
+    checkOwner();
     const info = workflowInfo();
     const request: ResourceRequest = { permitId: `permit-${info.runId}-${sequence++}`, workflowId: info.workflowId, runId: info.runId, needs };
     const ports = proxyActivities<{ reserveResources(r: ResourceRequest): Promise<unknown>; releaseResources(r: ResourceRequest): Promise<unknown> }>({
@@ -15,9 +21,21 @@ export function resourceGate(raw: unknown, options:{requireReviewStop?:boolean}=
     const waitForCapacity = patched("resource-capacity-wait-v1");
     let unhealthySince: number | undefined;
     for (;;) {
-      const result = ResourceDecisionSchema.parse(await ports.reserveResources(request));
+      checkOwner();
+      let result;
+      try{result=ResourceDecisionSchema.parse(await ports.reserveResources(request));}catch(error){quarantined=true;throw error;}
       if (result.permitId !== request.permitId || result.status === "released") throw ApplicationFailure.nonRetryable("Resource identity conflict", "RESOURCE.IDENTITY_CONFLICT");
-      if (result.status === "granted") break;
+      if (result.status === "granted") {
+        if(bounded&&quarantined){
+          // This sibling acquired capacity while another sibling became quarantined.
+          // No external work has started under this new permit, so return it exactly.
+          const returned=ResourceDecisionSchema.parse(await ports.releaseResources(request));
+          if(returned.permitId!==request.permitId||returned.status!=='released')throw ApplicationFailure.nonRetryable('Unused permit release unverified','RESOURCE.RELEASE_UNKNOWN');
+          checkOwner();
+        }
+        break;
+      }
+      if(bounded&&(++waits>=400||Date.now()>=until))throw ApplicationFailure.nonRetryable('Resource wait budget exhausted; no business execution started','RESOURCE.WAIT_LIMIT');
       // Occupied but healthy capacity is normal scheduling, not a product failure.
       // Preserve the old deadline on replay; only consecutive unhealthy time counts
       // against the new dependency budget. No business Activity has started yet.
@@ -31,23 +49,25 @@ export function resourceGate(raw: unknown, options:{requireReviewStop?:boolean}=
     }
     // An Activity timeout/cancel may leave external work alive. Do NOT release in finally.
     // Such permits remain quarantined until a separate evidence-based recovery proves the owner stopped.
-    const value = await run();
+    let value:T;
+    try{value=await run();}catch(error){quarantined=true;throw error;}
     // A Review receipt proves classification, not that external execution has stopped.
     // Preserve the result for downstream Review handling, but quarantine its permit.
     // Old histories retain their original command sequence during replay.
     if (patched("resource-review-quarantine-v1") && value && typeof value === "object" && "status" in value && value.status === "review") {
-      const unverified=()=>{if(options.requireReviewStop)throw ApplicationFailure.nonRetryable("Review execution stop unverified","RESOURCE.REVIEW_STOP_UNVERIFIED");return value;};
+      const unverified=()=>{quarantined=true;if(bounded||options.requireReviewStop)throw ApplicationFailure.nonRetryable("Review execution stop unverified","RESOURCE.REVIEW_STOP_UNVERIFIED");return value;};
       if (!config.reviewStopCheck || !patched("resource-review-stop-proof-v1")) return unverified();
       // Only an explicit verifier may attest to a stopped execution. A Review
       // boolean, error code, timeout or missing receipt alone is never sufficient.
       const verifier = proxyActivities<{ verifyResourceReviewStopped(raw: unknown): Promise<unknown> }>({
-        taskQueue: config.queue, startToCloseTimeout: "30 seconds", scheduleToCloseTimeout: "45 seconds", retry: { maximumAttempts: 1 } });
+        taskQueue: config.queue, startToCloseTimeout: bounded?"90 seconds":"30 seconds", scheduleToCloseTimeout: bounded?"2 minutes":"45 seconds", retry: { maximumAttempts: 1 } });
       try {
         const proof = await verifier.verifyResourceReviewStopped({request,activityName:name,outcome:value}) as {permitId?:string;status?:string;evidenceKey?:string};
         if (proof?.permitId!==request.permitId || proof.status!=="stopped" || !proof.evidenceKey?.startsWith("v3/resource-stop/")) return unverified();
       } catch { return unverified(); }
     }
-    const released = ResourceDecisionSchema.parse(await ports.releaseResources(request));
+    let released;
+    try{released=ResourceDecisionSchema.parse(await ports.releaseResources(request));}catch(error){quarantined=true;throw error;}
     if (released.permitId !== request.permitId || released.status !== "released") throw ApplicationFailure.nonRetryable("Resource release unverified", "RESOURCE.RELEASE_UNKNOWN");
     return value;
   };

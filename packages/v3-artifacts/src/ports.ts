@@ -4,7 +4,7 @@ export type ArtifactCode = "ARTIFACT.MISSING" | "ARTIFACT.INTEGRITY" | "ARTIFACT
   "ARTIFACT.TOO_LARGE" | "ARTIFACT.UNAVAILABLE" | "ARTIFACT.UPLOAD_UNKNOWN" |
   "ARTIFACT.KEY_CONFLICT" | "ARTIFACT.CACHE_UNAVAILABLE" | "ARTIFACT.SCOPE";
 export class ArtifactError extends Error {
-  constructor(readonly code: ArtifactCode) { super(code); this.name = "ArtifactError"; }
+  constructor(readonly code: ArtifactCode,readonly diagnostics?:{name?:string;code?:string;status?:number;requestId?:string}) { super(code); this.name = "ArtifactError"; }
 }
 
 // No delete, list, overwrite, URLs, or implicit retry in either port.

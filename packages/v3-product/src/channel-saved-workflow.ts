@@ -18,7 +18,7 @@ export interface ChannelSourceProgress {
 }
 export async function runChannelLabelWorkflow(raw:unknown,progress?:ChannelSourceProgress){
   const {input,queues,resources}=ChannelSavedLabelWorkflowInputSchema.parse(raw),owner=input.sourcePlan.owner,gate=resourceGate(resources,{requireReviewStop:input.evidencePolicy==="label-image-first/5"});
-  const skipUnstarted=patched("channel-resource-wait-no-receipt-v1"),waitingSources:string[]=[];
+  const skipUnstarted=patched("channel-resource-wait-no-receipt-v1"),waitingSources:string[]=[],quarantinedSources:string[]=[];
   const call=(queue:string,name:string,value:unknown)=>gate(name,()=>proxyActivities<Record<string,(raw:unknown)=>Promise<unknown>>>(
     name==="ocrFile"?ocrActivityOptions(queue):imageActivityOptions(queue))[name]!(value));
   const loaded=ChannelLabelPlanResultSchema.parse(await call(queues.plan,"loadChannelLabelPlan",input));
@@ -48,7 +48,7 @@ export async function runChannelLabelWorkflow(raw:unknown,progress?:ChannelSourc
         if(p.task.operationId!==source.plan.ocrOperationId||p.task.file.artifactId!==source.plan.imageId||!same(observationIdentity(p.task),owner))return state("rejected");
         let outcome:OcrActivityOutcome|null=null;
         try{outcome=OcrActivityOutcomeSchema.parse(await call(queues.ocr,"ocrFile",p.task));}catch(e){
-          if(isCancellation(e)||skipUnstarted&&e instanceof ApplicationFailure&&e.type==="RESOURCE.WAIT_LIMIT")throw e;
+          if(isCancellation(e)||skipUnstarted&&e instanceof ApplicationFailure&&["RESOURCE.WAIT_LIMIT","RESOURCE.OWNER_QUARANTINED","RESOURCE.REVIEW_STOP_UNVERIFIED"].includes(e.type??''))throw e;
         }
         const r=OcrReceiptOutcomeSchema.parse(await call(queues.ocrReceipts,"resolveOcrReceipt",{input:p.task,outcome}));
         if(r.status==="review")return r.operationId===p.task.operationId?{id:source.id,status:"review",reviewId:r.reviewId}:state("rejected");
@@ -77,6 +77,7 @@ export async function runChannelLabelWorkflow(raw:unknown,progress?:ChannelSourc
     }catch(error){
       if(isCancellation(error))throw error;
       if(skipUnstarted&&error instanceof ApplicationFailure&&error.type==="RESOURCE.WAIT_LIMIT")waitingSources.push(source.id);
+      if(error instanceof ApplicationFailure&&["RESOURCE.OWNER_QUARANTINED","RESOURCE.REVIEW_STOP_UNVERIFIED"].includes(error.type??''))quarantinedSources.push(source.id);
       return state("unresolved");
     }
   };
@@ -117,9 +118,10 @@ export async function runChannelLabelWorkflow(raw:unknown,progress?:ChannelSourc
     const r=AcquisitionReviewSchema.parse(await call(queues.review,"reviewChannelProduct",{input,states,code:"CHANNEL.LABEL_PREPARATION_UNVERIFIED"}));
     if(r.operationId!==input.operationId)invalid();return r;
   }
-  if(waitingSources.length){
+  if(waitingSources.length||quarantinedSources.length){
     const r=AcquisitionReviewSchema.parse(await call(queues.review,"reviewChannelProduct",{input,states,code:"CHANNEL.DEPENDENCY_UNAVAILABLE",
-      failures:waitingSources.sort().map(sourceId=>({sourceId,code:"RESOURCE.WAIT_LIMIT",executionFact:"not_executed"}))}));
+      failures:[...waitingSources.sort().map(sourceId=>({sourceId,code:"RESOURCE.WAIT_LIMIT",executionFact:"not_executed"})),
+        ...quarantinedSources.sort().map(sourceId=>({sourceId,code:"RESOURCE.OWNER_QUARANTINED",executionFact:"unknown"}))]}));
     if(r.operationId!==input.operationId||r.code!=="CHANNEL.DEPENDENCY_UNAVAILABLE")invalid();return r;
   }
   let result;

@@ -3,6 +3,7 @@ import { isDeepStrictEqual } from "node:util";
 import { ResourceRequestSchema, TextInputSchema, VisionTaskSchema, observationIdentity, type ReviewRecord } from "@crawl-automation/v3-contracts";
 import { visionFingerprint } from "@crawl-automation/v3-vision";
 import { RetainedPublication, sha256 } from "@crawl-automation/v3-artifacts";
+import {publishStoppedEvidence} from './stopped-evidence.js';
 type Invocation={workflowId:string;runId:string;activityId:string;activityName:string;operationId:string;inputFingerprint:string;owner:unknown;returned?:string};
 // Citation validation runs after provider return just like label validation.
 // This only authorizes a stop proof; the invalid result remains in Review.
@@ -30,7 +31,7 @@ export class QualityReviewStops {
         const review=await this.reviews.read(out.reviewId);
         if(review&&review.failure.code===out.code&&qualityFailure(review.failure.code)&&review.failure.executionFact==="executed"&&
           review.failure.operationId===invocation.operationId&&review.failure.inputFingerprint===invocation.inputFingerprint&&isDeepStrictEqual(review.observation,invocation.owner))
-          await this.publication.publish(this.returnKey(invocation),Buffer.from(JSON.stringify({codec:"model-return-attestation/1",invocation,reviewId:out.reviewId})),"application/json",AbortSignal.timeout(10000));
+          await publishStoppedEvidence(this.publication,this.returnKey(invocation),Buffer.from(JSON.stringify({codec:"model-return-attestation/1",invocation,reviewId:out.reviewId})),AbortSignal.timeout(65000));
       }
       return result;
     });
@@ -55,7 +56,7 @@ export class QualityReviewStops {
     // failures continue through the existing separate evidence recovery path.
     if(!qualityFailure(review.failure.code)||review.failure.executionFact!=="executed")return unknown;
     const key=`v3/resource-stop/${request.permitId}.json`,evidence={codec:"owned-model-review-stop/1",request,invocation:known,reviewId:review.reviewId,reviewPreserved:true};
-    await this.publication.publish(key,Buffer.from(JSON.stringify(evidence)),"application/json",signal);
+    await publishStoppedEvidence(this.publication,key,Buffer.from(JSON.stringify(evidence)),signal);
     return {permitId:request.permitId,status:"stopped",evidenceKey:key};
   }
 }

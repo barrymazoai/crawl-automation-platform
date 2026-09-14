@@ -1,12 +1,14 @@
 import {isDeepStrictEqual as equal} from 'node:util';
 import {sha256,type ObjectStore} from '@crawl-automation/v3-artifacts';
 import type {CatalogDiscovery} from '@crawl-automation/v3-contracts';
+import {recoveredAmazonLabelFailure} from './amazon-label-terminal-proof.js';
 
 /** A failed attempt is settled only after the separate recovery verifier has
  * retained its terminal history and exact page-cleanup proof and released it.
  * This does not turn a failed product into a collected product. */
 type ReadDatabase={query:(sql:string,args:unknown[])=>Promise<{rows:any[]}>};
 export async function recoveredAmazonFailure(d:CatalogDiscovery,runId:string,db:ReadDatabase,resourceDb:ReadDatabase,remote:ObjectStore,signal:AbortSignal){
+ if(await recoveredAmazonLabelFailure(d,runId,db,resourceDb,remote,signal))return true;
  const rows=(await resourceDb.query("select permit_id,request,released_at from resource_permit where request->>'workflowId'=$1 and request->>'runId'=$2",[d.workflowId,runId])).rows;
  if(rows.length!==1||!rows[0].released_at)return false;
  const row=rows[0],key=`v3/amazon-history-recovery/${row.permit_id}/proof.json`,raw=await remote.read(key,65536,signal);
