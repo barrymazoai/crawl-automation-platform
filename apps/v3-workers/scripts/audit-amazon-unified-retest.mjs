@@ -90,6 +90,8 @@ try{
  await keep(out+'/service-material.json',materials);
  const reviews=(await db.query("SELECT record->'observation'->>'listingId' asin,record->'failure'->>'stage' stage,record->'failure'->>'code' code FROM review_record WHERE record->'observation'->>'requestId'=ANY($1)",[ids])).rows;
  const spans=[...grants].map(([id,g])=>({id,...g,end:releases.get(id)})).filter(s=>s.end!==undefined),activitySpans=activities.filter(a=>a.start!==null&&a.end!==null);
+ const activityTotals={};for(const a of activitySpans){const total=activityTotals[a.name]??={count:0,runningSeconds:0,queueSeconds:0};total.count++;total.runningSeconds+=(a.end-a.start)/1000;total.queueSeconds+=(a.start-a.scheduled)/1000;}
+ const resourceOccupancySeconds=Object.fromEntries(['mini-ego-space-1','mini-model-account','windows-ocr'].map(id=>[id,spans.filter(s=>s.request.needs.some(n=>n.resourceId===id)).reduce((n,s)=>n+(s.end-s.start)/1000,0)]));
  const resourcePeaks=Object.fromEntries(['mini-ego-space-1','mini-model-account','windows-ocr'].map(id=>[id,peak(spans.filter(s=>s.request.needs.some(n=>n.resourceId===id)))]));assert.ok(resourcePeaks['mini-ego-space-1']<=1);
  const modelSpans=activitySpans.filter(a=>['interpretImage','interpretText'].includes(a.name));
  const captureSpans=activitySpans.filter(a=>['captureAmazonProduct','acquireAmazonFile'].includes(a.name));
@@ -105,11 +107,13 @@ try{
  }
  const workers=await read(main+'/status.json');assert.ok(workers.jobs.every(j=>j.ready));assert.ok(Date.now()-Date.parse(workers.at)<20000);
  const elapsed=(new Date(state.closeTime??Date.now()).getTime()-new Date(state.startTime).getTime())/1000;
- const report={at:new Date().toISOString(),verified:true,expected,campaignId:plan.campaignId,phase:progress.phase,cursor:progress.cursor,elapsedSeconds:elapsed,acceptancePauseSeconds,processingSeconds:elapsed-acceptancePauseSeconds,workflowCount:workflows.length,
+ const priceComparison=[];
+ if(single){const baseline=await read(work+'/price-baseline.json');for(const {record:current} of captures){const prior=baseline.filter(p=>p.listing.externalId===current.listing.externalId).sort((a,b)=>b.capturedAt.localeCompare(a.capturedAt))[0];if(prior)priceComparison.push({asin:current.listing.externalId,previous:prior.metrics.price,current:current.metrics.price,currency:current.metrics.currency,conditions:lib.comparePurchaseConditions(prior.metrics.extras.purchaseConditions,current.metrics.extras.purchaseConditions)});}}
+ const report={at:new Date().toISOString(),verified:true,expected,campaignId:plan.campaignId,phase:single?'complete':progress.phase,cursor:single?progress.finished:progress.cursor,elapsedSeconds:elapsed,acceptancePauseSeconds,processingSeconds:elapsed-acceptancePauseSeconds,workflowCount:workflows.length,
   products:discoveries.map(d=>({asin:d.entry.listingId,result:workflows.find(w=>w.id===d.workflowId)?.result})),
   captures:captures.map(({record:v})=>({asin:v.listing.externalId,observationId:v.observationId,price:v.metrics.price,reviewCount:v.metrics.reviewCount,inStock:v.metrics.inStock,purchaseConditions:v.metrics.extras.purchaseConditions})),
   reviews,formulaMaterials:materials.reduce((n,m)=>n+m.labels.length,0),equivalentFootnotes:materials.flatMap(m=>m.labels.flatMap(l=>l.draft.label.content.exclusions.filter(e=>/equivalent/i.test(e.quote.text)))),
-  pages,checks,held:0,historyRecordsVerified,oldCaptureRecordsPreserved:preserved,oldCampaignPausedAt:24,workersReady:workers.jobs.length,resourcePeaks,modelActivityPeak:peak(modelSpans),captureModelOverlap:overlap};
+  pages,checks,held:0,historyRecordsVerified,oldCaptureRecordsPreserved:preserved,oldCampaignPausedAt:24,workersReady:workers.jobs.length,resourcePeaks,resourceOccupancySeconds,activityTotals,priceComparison,modelActivityPeak:peak(modelSpans),captureModelOverlap:overlap};
  await keep(out+'/timing.json',{workflows,activities,resourceSpans:spans});await keep(out+'/report.json',report);
  await keep(dir+'/acceptance-'+expected+'.json',{out,reportPath:out+'/report.json',verified:true});
  console.log(JSON.stringify({...report,captures:report.captures.map(c=>({asin:c.asin,price:c.price,reviewCount:c.reviewCount,inStock:c.inStock})),pages:pages.length,captureModelOverlap:overlap.length}));
