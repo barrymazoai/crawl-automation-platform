@@ -1,0 +1,15 @@
+{
+  "at": "2026-09-14T01:50:56.140Z",
+  "campaignId": "amazon-history-100-us-10001-20260913",
+  "cursorBefore": 10,
+  "recovery": {
+    "status": "settled",
+    "requestId": "24e1a133-c988-41a4-9143-2a8814645b8c",
+    "proofKey": "v3/amazon-label-recovery/01a09b9b-ca75-7beb-b36c-433cdddef45d/proof.json",
+    "alreadyRecovered": true
+  },
+  "oldRootStatus": "COMPLETED",
+  "resumed": true,
+  "phase": "running",
+  "cursor": 10
+}

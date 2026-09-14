@@ -1,0 +1,22 @@
+{
+  "passed": true,
+  "activityCalls": 0,
+  "results": [
+    {
+      "which": "parent",
+      "workflowId": "catalog-product-96658469cc38bd3fce3ca48e0546b320ac7330b4cb60660af48d10fb48e8efb2",
+      "runId": "01a09b9b-ca75-7beb-b36c-433cdddef45d",
+      "events": 142,
+      "replay": "passed",
+      "sha256": "2540645416475d29bd7a77d4b0bd2ddcf16650e792c95d0a93aedf270ff66fd1"
+    },
+    {
+      "which": "child",
+      "workflowId": "catalog-product-96658469cc38bd3fce3ca48e0546b320ac7330b4cb60660af48d10fb48e8efb2-label",
+      "runId": "01a09b9c-83f3-7dfc-8b5a-5f48266a9beb",
+      "events": 51201,
+      "replay": "passed",
+      "sha256": "d009da69456396634f33a49ae6a9564348894645573c575ff32ddb77ecc11814"
+    }
+  ]
+}

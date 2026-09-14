@@ -1,0 +1,94 @@
+{
+  "at": "2026-09-14T02:01:00.823Z",
+  "campaignId": "amazon-history-100-us-10001-20260913",
+  "runId": "01a09b78-4a5f-7047-b670-48d4ca5e4781",
+  "status": "RUNNING",
+  "phase": "waiting-for-products",
+  "cursor": 12,
+  "total": 100,
+  "error": null,
+  "submissions": 13,
+  "captures": 11,
+  "prices": [
+    {
+      "asin": "B0GGVD471R",
+      "price": "18.00",
+      "currency": "USD",
+      "captured_at": "2026-09-13T16:22:27.747Z"
+    },
+    {
+      "asin": "B0F85T9DCQ",
+      "price": "14.99",
+      "currency": "USD",
+      "captured_at": "2026-09-14T01:55:51.325Z"
+    },
+    {
+      "asin": "B0C296MRW4",
+      "price": "7.99",
+      "currency": "USD",
+      "captured_at": "2026-09-13T15:53:05.608Z"
+    },
+    {
+      "asin": "B08951CXCW",
+      "price": "16.47",
+      "currency": "USD",
+      "captured_at": "2026-09-13T16:18:05.381Z"
+    },
+    {
+      "asin": "B07VLV4HMF",
+      "price": "24.99",
+      "currency": "USD",
+      "captured_at": "2026-09-13T16:08:18.958Z"
+    },
+    {
+      "asin": "B0GHZDFNP8",
+      "price": "30.54",
+      "currency": "USD",
+      "captured_at": "2026-09-13T16:03:58.549Z"
+    },
+    {
+      "asin": "B0H2BRKTMX",
+      "price": "9.99",
+      "currency": "USD",
+      "captured_at": "2026-09-13T16:13:13.624Z"
+    },
+    {
+      "asin": "B0D1LQLV1P",
+      "price": "9.99",
+      "currency": "USD",
+      "captured_at": "2026-09-13T15:59:03.615Z"
+    },
+    {
+      "asin": "B0D94RTZGR",
+      "price": "9.19",
+      "currency": "USD",
+      "captured_at": "2026-09-13T16:31:36.926Z"
+    },
+    {
+      "asin": "B08LP471TS",
+      "price": "12.99",
+      "currency": "USD",
+      "captured_at": "2026-09-14T01:51:30.511Z"
+    }
+  ],
+  "reviewCount": 31,
+  "current": [
+    {
+      "asin": "B0C1TGW13G",
+      "workflowId": "catalog-product-09da1ad7df6aeb85ee8f446736a6280394eccf12853951aec934c1cd8a88c289",
+      "status": "RUNNING",
+      "pending": [
+        "prepareChannelProduct"
+      ],
+      "child": null
+    }
+  ],
+  "workers": {
+    "mainReady": 90,
+    "mainTotal": 90,
+    "batchReady": 2,
+    "batchTotal": 2
+  },
+  "pricePoints": 10,
+  "savedProducts": 0
+}

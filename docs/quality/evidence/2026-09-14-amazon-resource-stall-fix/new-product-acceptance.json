@@ -1,0 +1,80 @@
+{
+  "status": "verified",
+  "at": "2026-09-14T01:59:22.693Z",
+  "asin": "B08LP471TS",
+  "requestId": "d766bf7c-b363-4a14-82fc-c398c17432ed",
+  "workflowId": "catalog-product-20258c5d715773d1e0082f0ae994e990477b8ad18e14baff2d1722d272924a46",
+  "productStatus": "COMPLETED",
+  "outcome": {
+    "status": "review",
+    "evidenceKey": "v3/label-products/label-5a7ecf6482ee4f2528b15587d58304f9bffb50827401879abb0c195bce6e875d/assembly.json",
+    "reviewId": "label-a54017c45bc8af0208d271009f53037310eebe733f4bd0285a263ae82e8bb4e9",
+    "codes": [
+      "TEXT.LABEL_INGREDIENT_HEADING_INVALID",
+      "VALIDATION.FORMULA_MISSING",
+      "VALIDATION.INGREDIENTS_MISSING",
+      "VISION.LABEL_AMOUNT_UNREADABLE"
+    ],
+    "automaticRetry": false
+  },
+  "childStatus": "COMPLETED",
+  "childEvents": 497,
+  "patchMarkers": 5,
+  "stops": [
+    {
+      "permitId": "permit-01a09d9d-262e-7384-aa5a-a27999da4008-3",
+      "evidenceKey": "v3/resource-stop/permit-01a09d9d-262e-7384-aa5a-a27999da4008-3.json",
+      "sha256": "c5d07f1d0e90050f0153e4388576c8a2264a32ac89f4a3806fa9a2674a3f3eee"
+    },
+    {
+      "permitId": "permit-01a09d9d-262e-7384-aa5a-a27999da4008-6",
+      "evidenceKey": "v3/resource-stop/permit-01a09d9d-262e-7384-aa5a-a27999da4008-6.json",
+      "sha256": "b211bfe3c65683cef3f948f1b279b38940b51d0215c1f61eae84e93fbc59e941"
+    }
+  ],
+  "heldPermits": 0,
+  "intakeGuards": 0,
+  "page": {
+    "taskId": "amazon-page-258fc552dc66fedf7e72b4d2f876f985164882c3a6015f0410b88d02deb52913",
+    "targetId": "4385080879BCEB3F9E79BF3DA2602715",
+    "closedSha256": "379b5c43a461de35c2a7198ec3b0d533e9211d1ab5b18899bb7ecd5fddf3ff59",
+    "checks": [
+      {
+        "at": "2026-09-14T01:59:18.551Z",
+        "targetsAbsent": true
+      },
+      {
+        "at": "2026-09-14T01:59:18.641Z",
+        "targetsAbsent": true
+      },
+      {
+        "at": "2026-09-14T01:59:18.719Z",
+        "targetsAbsent": true
+      }
+    ]
+  },
+  "reviews": [
+    {
+      "review_id": "text-c6904fd5-d33b-40b9-b99a-5d3d988afcf9",
+      "code": "TEXT.LABEL_INGREDIENT_HEADING_INVALID"
+    },
+    {
+      "review_id": "vision-d3b4cc5c-664d-4b8a-81e2-b8ca4ebf1cd3",
+      "code": "VISION.LABEL_AMOUNT_UNREADABLE"
+    },
+    {
+      "review_id": "label-a54017c45bc8af0208d271009f53037310eebe733f4bd0285a263ae82e8bb4e9",
+      "code": "TEXT.LABEL_INGREDIENT_HEADING_INVALID"
+    }
+  ],
+  "captures": 1,
+  "trendRows": [
+    {
+      "kind": "metrics",
+      "observedAt": "2026-09-14T01:51:30.511Z",
+      "price": "12.99",
+      "currency": "USD"
+    }
+  ],
+  "cursor": 11
+}

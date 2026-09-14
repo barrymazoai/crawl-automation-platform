@@ -1,0 +1,26 @@
+{
+  "environment": "Mac mini",
+  "typecheck": "passed",
+  "tests": [
+    {
+      "file": "unit-results.json",
+      "passed": 93,
+      "failed": 0,
+      "total": 93
+    },
+    {
+      "file": "recovery-unit-results.json",
+      "passed": 17,
+      "failed": 0,
+      "total": 17
+    },
+    {
+      "file": "integration-results.json",
+      "passed": 2,
+      "failed": 0,
+      "total": 2
+    }
+  ],
+  "distinctUnitTests": 103,
+  "temporalIntegrationTests": 2
+}

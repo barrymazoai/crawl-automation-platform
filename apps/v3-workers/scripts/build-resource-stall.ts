@@ -7,6 +7,7 @@ await build({...common,outDir:base+'/label',entry:['src/channel-label-worker.ts'
 await build({...common,outDir:base+'/workflow',entry:['src/product-workflow-worker.ts']});
 await build({...common,outDir:base+'/amazon',entry:['src/amazon-live-worker.ts']});
 await build({...common,outDir:base+'/recovery',entry:['scripts/recover-amazon-label-stop.ts']});
+await build({...common,outDir:base+'/acceptance',entry:['scripts/verify-amazon-resource-stall.ts']});
 await build({...common,outDir:base+'/tests',external:[...common.external,'vitest'],entry:{
  'resource-workflow.test':'../../packages/v3-product/src/resource-workflow.test.ts',
  'quality-review-stops.test':'integration/quality-review-stops.test.ts',

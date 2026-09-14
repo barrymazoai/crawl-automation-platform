@@ -1,0 +1,98 @@
+{
+  "at": "2026-09-14T01:46:25.658Z",
+  "workers": [
+    {
+      "event": "INDEPENDENT_WORKER_READY",
+      "id": "amazon-channel-label-text",
+      "pid": 3802,
+      "buildId": "8a3df1132a3d547831b18f7373f25a9c061b208858ff8690d3de0fb929ee1fc2",
+      "taskQueue": "v3.channel.label.text.v1.channel-label-v1.session.sw-00be82ef-f7cb-47"
+    },
+    {
+      "event": "INDEPENDENT_WORKER_READY",
+      "id": "amazon-channel-label-vision",
+      "pid": 3865,
+      "buildId": "8a3df1132a3d547831b18f7373f25a9c061b208858ff8690d3de0fb929ee1fc2",
+      "taskQueue": "v3.channel.label.vision.v1.channel-label-v1.session.sw-00be82ef-f7cb-47"
+    },
+    {
+      "event": "INDEPENDENT_WORKER_READY",
+      "id": "amazon-channel-label-resources",
+      "pid": 3906,
+      "buildId": "8a3df1132a3d547831b18f7373f25a9c061b208858ff8690d3de0fb929ee1fc2",
+      "taskQueue": "v3.channel.label.resources.v1.channel-label-v1.session.sw-00be82ef-f7cb-47"
+    },
+    {
+      "event": "INDEPENDENT_WORKER_READY",
+      "id": "amazon-product-workflow",
+      "pid": 3941,
+      "buildId": "5cabfca0caf45505d18c894fa25e1b9f1dba13cabfb90badf43e13726fa54efc",
+      "taskQueue": "v3.amazon.product-input.v1.amazon-live-v1.session.sw-00be82ef-f7cb-47"
+    },
+    {
+      "event": "INDEPENDENT_WORKER_READY",
+      "id": "amazon-channel-label-workflow",
+      "pid": 3978,
+      "buildId": "5cabfca0caf45505d18c894fa25e1b9f1dba13cabfb90badf43e13726fa54efc",
+      "taskQueue": "v3.channel.saved-label.v1.channel-label-v1.session.sw-00be82ef-f7cb-47"
+    },
+    {
+      "event": "INDEPENDENT_WORKER_READY",
+      "id": "amazon-catalog-workflow",
+      "pid": 4018,
+      "buildId": "5cabfca0caf45505d18c894fa25e1b9f1dba13cabfb90badf43e13726fa54efc",
+      "taskQueue": "v3.catalog.workflow.v1.catalog-v1.session.sw-00be82ef-f7cb-47"
+    },
+    {
+      "event": "INDEPENDENT_WORKER_READY",
+      "id": "amazon-control",
+      "pid": 4055,
+      "buildId": "d373e65b778937e9aad1d08e90e8328e64b7c98c6663f8d81c7828529f0e78df",
+      "taskQueue": "v3.amazon.control.v1.amazon-live-v1.session.sw-00be82ef-f7cb-47"
+    },
+    {
+      "id": "amazon-batch-workflow",
+      "pid": 4978,
+      "buildId": "a2c43470b14e7830e1dce0293f684c68554b3dd0f99e5a4c0438ec0bb1d756de",
+      "taskQueue": "v3.amazon.batch.workflow.v1.amazon-batch-v1.session.amazon-history-10-us-10001"
+    },
+    {
+      "id": "amazon-batch-control",
+      "pid": 5018,
+      "buildId": "a2c43470b14e7830e1dce0293f684c68554b3dd0f99e5a4c0438ec0bb1d756de",
+      "taskQueue": "v3.amazon.batch.control.v1.amazon-batch-v1.session.amazon-history-10-us-10001"
+    }
+  ],
+  "unrelatedWorkerPidsUnchanged": true,
+  "mainMonitorUnchanged": true,
+  "batchMonitorRestarted": true,
+  "samples": [
+    {
+      "at": "2026-09-14T01:46:13.648Z",
+      "ready": [
+        90,
+        2
+      ],
+      "batchMonitorPid": 4968
+    },
+    {
+      "at": "2026-09-14T01:46:19.655Z",
+      "ready": [
+        90,
+        2
+      ],
+      "batchMonitorPid": 4968
+    },
+    {
+      "at": "2026-09-14T01:46:25.658Z",
+      "ready": [
+        90,
+        2
+      ],
+      "batchMonitorPid": 4968
+    }
+  ],
+  "resumed": false,
+  "release": "/Users/barry/apps/crawlv3-batch-a.UiA4dx/release-amazon-resource-stall-20260914",
+  "batchRelease": "/Users/barry/apps/crawlv3-batch-a.UiA4dx/amazon-pilot-10-20260913/release-resource-stall-20260914"
+}
