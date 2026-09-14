@@ -14,12 +14,26 @@ const asRow=(v:unknown):Row=>v!==null&&typeof v==="object"&&!Array.isArray(v)?v 
 const emptyMetrics=():CaptureHistory["metrics"]=>({price:null,currency:null,listPrice:null,rating:null,reviewCount:null,salesRank:null,inStock:null,unitsSold:null,unitsSoldPeriod:null,extras:null});
 const currency=(v:unknown)=>{const s=text(v)?.toUpperCase();return s&&/^[A-Z]{3}$/.test(s)?s:null;};
 function amount(v:unknown){const s=text(v);if(!s)return decimal(v);return decimal(s.replace(/^(?:US\$|USD\s*|\$|£|€)\s*/u,"").replace(/(?<=\d),(?=\d{3}(?:,|\.|$))/gu,""));}
-function stock(v:unknown):boolean|null{if(typeof v==="boolean")return v;const s=text(v);if(!s)return null;if(/^(?:https?:\/\/schema.org\/)?InStock\.?$/i.test(s.trim()))return true;if(/^(?:https?:\/\/schema.org\/)?(?:OutOfStock|SoldOut)$/i.test(s.trim()))return false;return null;}
+function stock(v:unknown):boolean|null{
+  if(typeof v==="boolean")return v;
+  const s=text(v)?.replace(/\s+/gu," ").trim();if(!s)return null;
+  if(/^(?:https?:\/\/schema.org\/)?InStock\.?$/i.test(s)||/^In stock\.?$/i.test(s)||/^Only [1-9]\d* left in stock(?:\s*-\s*order soon\.?)?$/i.test(s))return true;
+  if(/^(?:https?:\/\/schema.org\/)?(?:OutOfStock|SoldOut)$/i.test(s)||/^(?:Out of stock|Sold out)\.?$/i.test(s)||/^Currently unavailable\.(?: We don't know when or if this item will be back in stock\.)?$/i.test(s))return false;
+  return null;
+}
+function reviewCount(v:unknown):string|null{
+  if(typeof v==="number")return Number.isSafeInteger(v)&&v>=0?String(v):null;
+  const s=text(v)?.trim();if(!s)return null;
+  const number="(?:\\d{1,3}(?:,\\d{3})+|\\d+)";
+  const match=s.match(new RegExp(`^(?:\\((${number})\\)|(${number}))(?:\\s+(?:global\\s+)?(?:ratings|reviews))?$`,"i"));
+  if(!match)return null;const digits=(match[1]??match[2]!).replaceAll(",","");
+  return Number.isSafeInteger(Number(digits))?String(Number(digits)):null;
+}
 export function commerceMetrics(raw:unknown){
   const r=asRow(raw),m=emptyMetrics();
   m.price=amount(r.price);m.listPrice=amount(r.listPrice);m.currency=currency(r.currency);
   m.rating=decimal(r.rating)??decimal(text(r.rating)?.match(/^(\d+(?:\.\d+)?)\s+out of\s+5\s+stars$/i)?.[1]);
-  m.reviewCount=decimal(r.reviewCount)??decimal(text(r.reviewCount)?.match(/^([\d,]+)\s+(?:ratings|reviews)$/i)?.[1]?.replaceAll(",",""));
+  m.reviewCount=reviewCount(r.reviewCount);
   m.inStock=stock(r.availability);m.extras={commerce:r};
   // Only new, explicitly versioned observations gain structured conditions.
   // Do not enrich old immutable receipts during replay or change their hashes.
@@ -53,6 +67,15 @@ export class HistoryObservations{
   private async append(raw:unknown){const value=convertHistoryInput(raw),db=await this.db.connect();try{const result=await new ProductHistory(db).append(value);await new ProductHistory(db).verify([value]);return result;}finally{db.release();}}
   private async retain(raw:CaptureHistory,s:AbortSignal){
     const value=CaptureHistorySchema.parse(raw),bytes=Buffer.from(JSON.stringify(value)),key=`v3/history-observations/${hash([value.dataset,value.observationId])}/capture.json`;
+    // A completed historical observation keeps the projection originally recorded.
+    // Parser improvements apply to a new observation, never rewrite old trend points.
+    // Everything except the derived metrics must still match the exact capture.
+    const prior=await this.remote.read(key,8*1024*1024,s);
+    if(prior){
+      const saved=CaptureHistorySchema.parse(decode(prior));
+      if(!equal({...saved,metrics:value.metrics},value))throw Error("HISTORY.CAPTURE_RECEIPT_CONFLICT");
+      const result=await this.append(saved);this.report({event:"HISTORY_CAPTURE_SAVED",observationId:saved.observationId,evidenceKey:key,...result});return saved;
+    }
     // This receipt permits retry without re-opening the site or re-running labels.
     await this.remote.create(key,bytes,"application/json",s);
     const saved=await this.remote.read(key,bytes.length,s);

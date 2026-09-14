@@ -112,7 +112,7 @@ try{
   const manifest=DeploymentSchema.parse({platform:"darwin",host:hostname(),root:base,node:process.execPath,database,jobs,resources:[
     {resourceId:live.browserResource,capacity:1,jobs:["gnc-live-capture","gnc-live-file","catalog-live-source"],minFreeBytes:1024*1024*1024},
     {resourceId:"mini-cpu",capacity:2,jobs:["codex-text","codex-vision"],minFreeBytes:1024*1024*1024},
-    {resourceId:"mini-model-account",capacity:1,jobs:["codex-text","codex-vision"],minFreeBytes:1024*1024*1024},
+    {resourceId:"mini-model-account",capacity:2,jobs:["codex-text","codex-vision"],minFreeBytes:1024*1024*1024},
     {resourceId:"windows-ocr",capacity:2,jobs:["ocr-file"],minFreeBytes:0},
   ]});
   const manifestPath=await json("deployment.json",manifest);

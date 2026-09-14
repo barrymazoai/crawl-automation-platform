@@ -34,6 +34,18 @@ export const amazonPurchaseConditionsDomExpression=String.raw`(()=>{
    const quoted=one(list('#corePrice_feature_div .apex-pricetopay-value, #corePrice_feature_div .priceToPay',selectedBox).map(amount));
    if(price&&quoted===price)out.priceScope='selected_offer';
    else warn('PURCHASE.PRICE_BINDING_UNKNOWN');
+   // The observed plain offer has both native, same-form purchase actions.
+   // Read only public form/button attributes, never hidden offer/session fields.
+   if(out.purchaseType==='unknown'&&accordion.length===0&&out.priceScope==='selected_offer'&&!/subscribe|subscription/i.test(content)){
+    const forms=list('form#addToCart',selectedBox);
+    if(forms.length===1){
+     const f=forms[0],cart=list('input#add-to-cart-button[name="submit.add-to-cart"]',f),buy=list('input#buy-now-button[name="submit.buy-now"]',f);
+     const action=(e,path)=>{try{const u=new URL(e.getAttribute('formaction')||'',location.href);return u.origin===location.origin&&(u.pathname===path||u.pathname.startsWith(path+'/'));}catch{return false;}};
+     if(cart.length===1&&buy.length===1&&!cart[0].disabled&&!buy[0].disabled&&action(cart[0],'/cart/add-to-cart')&&action(buy[0],'/checkout/entry/buynow')){
+      out.purchaseType='one_time';evidence('purchaseType',selector+' form#addToCart','Native Add to cart (/cart/add-to-cart) and Buy Now (/checkout/entry/buynow) in the selected offer');
+     }
+    }
+   }
    const combined=fieldAfter(content,['Shipper / Seller','Ships from and sold by']);
    const anchors=list('#sellerProfileTriggerId',selectedBox),names=anchors.map(txt);
    const labelled=fieldAfter(content,['Sold by']);
@@ -50,6 +62,7 @@ export const amazonPurchaseConditionsDomExpression=String.raw`(()=>{
    const quantities=list('select[name="quantity"], select#quantity',selectedBox);
    const q=one(quantities.map(e=>e.value));out.quantity=q&&/^\d+$/.test(q)&&Number(q)>0&&Number(q)<=10000?Number(q):null;
    evidence('quantity',selector+' select[name="quantity"]',quantities.map(e=>e.options?.[e.selectedIndex]?.text||e.value||'').join('\n'));
+   if(out.quantity===null)warn('PURCHASE.QUANTITY_NOT_OBSERVED');
    if(out.purchaseType==='subscription'){
     const frequency=one(list('select[name*="frequency"], select[id*="frequency"], #sns-frequency',selectedBox).map(e=>e.options?.[e.selectedIndex]?.text||txt(e)));
     out.subscription={frequencyText:frequency?.slice(0,4000)||null,conditionsText:content.slice(0,4000)||null};
@@ -60,6 +73,15 @@ export const amazonPurchaseConditionsDomExpression=String.raw`(()=>{
    if(name&&value&&!out.selectedOptions.some(o=>o.name===name&&o.value===value)&&out.selectedOptions.length<20){
     out.selectedOptions.push({name:name.slice(0,4000),value:value.slice(0,4000)});evidence('selectedOptions','#'+e.id,name+' '+value);
    }
+  }
+  for(const e of list('[id^="inline-twister-row-"]')){
+   const title=list('[id^="inline-twister-dim-title-"]',e),value=one(list('[id^="inline-twister-expanded-dimension-text-"]',e).map(txt));
+   const name=title.length===1?one(list('.a-color-secondary',title[0]).map(txt)):null;
+   const selected=list('[role="radio"][aria-checked="true"]',e),swatch=selected.length===1?selected[0].closest('li[data-asin]'):null;
+   const label=swatch?one(list('.swatch-title-text',swatch).map(txt)):null;
+   if(name&&value&&label===value&&swatch?.getAttribute('data-asin')===document.querySelector('#ASIN')?.value){
+    if(!out.selectedOptions.some(o=>o.name===name&&o.value===value)&&out.selectedOptions.length<20){out.selectedOptions.push({name,value});evidence('selectedOptions','#'+e.id,name+' '+value);}
+   }else warn('PURCHASE.OPTION_SELECTION_UNKNOWN');
   }
   const promoSelectors=['#couponsInBuybox_feature_div','#coupons_feature_div','#promoPriceBlockMessage_feature_div','#promotionMessageInsideBuyBox_feature_div','#corePriceDisplay_desktop_feature_div'];
   for(const ps of promoSelectors)for(const e of list(ps)){

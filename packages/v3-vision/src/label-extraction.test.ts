@@ -16,7 +16,7 @@ it("legacy raw responses are not silently relabelled and model schema remains st
   expect(JSON.stringify(labelVisionOutputSchema)).toContain('"additionalProperties":false');
 });
 it("versioned prompt preserves parenthesized continuation and one dosed blend",()=>{
-  expect(labelVisionPolicyVersion).toBe("label-vision/5");
+  expect(labelVisionPolicyVersion).toBe("label-vision/6");
   expect(labelVisionPrompt).toContain("never a standalone '(capsule)' item");
   expect(labelVisionPrompt).toContain("not one item per printed line");
   expect(labelVisionPrompt).toContain("ONE blend_total row");

@@ -70,7 +70,7 @@ try {
   const jobs: any[] = [], queues: Record<string, string> = {};
   async function define(key: string, role: string, entry: string, capability: string, compatibility: string, variable?: string, configPath?: string, workflow = false) {
     const config = parseWorkerConfig({ ...runtime, role, capability, compatibility, contractVersion: 1, expectedBuildId: workflow ? workflowBuild : activityBuild,
-      hostId: `mini-amazon-${role}`, queueScope, concurrency: workflow ? 4 : key === "resources" ? 4 : 1, startupTimeoutMs: 120000 });
+      hostId: `mini-amazon-${role}`, queueScope, concurrency: workflow ? 4 : key === "resources" ? 4 : ["ocr", "vision"].includes(key) ? 2 : 1, startupTimeoutMs: 120000 });
     const env: Record<string, string> = { V3_WORKER_ENABLED: "true", V3_WORKER_CONFIG: await retained(`${role}.runtime.json`, config) };
     if (variable) { env[`${variable}_ENABLED`] = "true"; env[`${variable}_CONFIG`] = configPath!; }
     jobs.push({ id: role, entry: join(release, `${entry}.js`), env }); queues[key] = taskQueueFor(config);
@@ -97,7 +97,7 @@ try {
     catalogQueue: queues.catalogWorkflow, catalogQueues: { source: queues["amazon-catalog-source"], ledger: queues["amazon-catalog-ledger"], product: queues.productWorkflow },
     catalogResources: gate({ readCatalogPage: browserNeeds }), productQueues: { capture: queues["amazon-capture"], plan: queues.productPlan, file: queues["amazon-file"], label: queues.labelWorkflow, review: queues["amazon-review"] },
     productResources: gate({ browserSession: browserNeeds }), sourceText, ocr: ocr.supported, sourceVisionConfigFingerprint: vision.configFingerprint,
-    labelText: text, visionConfigFingerprint: vision.configFingerprint, evidencePolicy: "label-image-first/3", labelQueues,
+    labelText: text, visionConfigFingerprint: vision.configFingerprint, evidencePolicy: "label-image-first/5", labelQueues,
     labelResources: gate({ interpretText: modelNeeds, interpretImage: modelNeeds, ocrFile: [{ resourceId: "windows-ocr", units: 1 }] }, true) });
   await ocr.close(); await retained("amazon.private.json", config);
   // The original GNC intent target remains immutable. Only fresh Amazon requests use this scoped queue.

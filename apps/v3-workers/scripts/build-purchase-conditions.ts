@@ -6,6 +6,11 @@ for(const [group,entry] of Object.entries({amazon:'src/amazon-live-worker.ts',pl
  await build({...common,outDir:base+'/'+group,entry:[entry]});
 await cp('../../database/v3',base+'/migrations',{recursive:true});
 await build({...common,outDir:base+'/tests',external:[...common.external,'vitest'],noExternal:[...common.noExternal,/^linkedom$/,/^htmlparser2$/,/^css-select$/,/^cssom$/,/^uhyphen$/,/^domhandler$/,/^domutils$/,/^domelementtype$/,/^entities$/,/^boolbase$/,/^css-what$/,/^nth-check$/,/^dom-serializer$/],entry:{
+ 'commerce-metrics.test':'src/commerce-metrics.test.ts',
+ 'amazon-ego.test':'../../packages/v3-channels/src/amazon-ego.test.ts',
+ 'vision-label.test':'../../packages/v3-vision/src/label-extraction.test.ts',
+ 'label-product.test':'../../packages/v3-product/src/label-product.test.ts',
+ 'label-image-first.test':'../../packages/v3-product/src/label-image-first.test.ts',
  'purchase-conditions.test':'../../packages/v3-channels/src/purchase-conditions.test.ts',
  'commerce-dom.test':'../../packages/v3-channels/src/commerce-dom.test.ts',
  'amazon-live.test':'../../packages/v3-channels/src/amazon-live.test.ts',

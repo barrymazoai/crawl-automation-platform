@@ -10,3 +10,10 @@ export {productServiceMaterial} from '../../v3-api/src/history/product-service.j
 export {comparePurchaseConditions} from '../src/price-conditions.js';
 export {ArtifactResolver,RetainedPublication,createR2Objects} from '@crawl-automation/v3-artifacts';
 export {ProductHistory} from '../../v3-api/src/history/store.js';
+export {CodexVisionProvider} from '@crawl-automation/v3-vision';
+export {decodeLabelImage,decodeLabelImageV2} from '../../../packages/v3-vision/src/label-extraction.js';
+export {AmazonLiveConfigSchema} from '../src/amazon-live-config.js';
+export {AmazonLinkBatchesSchema} from '../src/amazon-link-batches.js';
+export {EgoTaskPages,EgoCliRunner} from '@crawl-automation/v3-acquisition';
+export {TextLocalStore} from '@crawl-automation/v3-text';
+export {PostgresResourceAdmission} from '../../../packages/v3-product/src/resource-admission.js';

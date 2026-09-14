@@ -59,6 +59,22 @@ describe.skipIf(!address)("Mini capture history integration",()=>{
   const key=`v3/history-observations/${hash(["v3:swanson","lost-ack"])}/capture.json`;
   expect(await history.replay(key,s())).toEqual({inserted:true});expect(await history.replay(key,s())).toEqual({inserted:false});
  });
+ it("preserves old derived metrics on capture replay and corrects only fresh observations",async()=>{
+  const old=input('old-metrics-format','7.99'),raw=JSON.parse(Buffer.from(remote.data.get(old.source.objectKey)!).toString());
+  raw.commerce.reviewCount='(4,247)';raw.commerce.availability='In Stock';
+  const bytes=Buffer.from(JSON.stringify(raw));remote.data.set(old.source.objectKey,bytes);old.source.byteSize=bytes.length;old.source.sha256=sha256(bytes);
+  const key=`v3/history-observations/${hash(['v3:swanson',old.owner.observationId])}/capture.json`;
+  const saved=await history.channel(old,s());expect(saved.metrics).toMatchObject({reviewCount:'4247',inStock:true});
+  const historic={...saved,metrics:{...saved.metrics,reviewCount:null,inStock:null}};
+  // Isolated fixture: seed a distinct historical observation with the previous decoder output.
+  const legacyInput={...old,operationId:'plan-historical-decoder',owner:{...old.owner,observationId:'historical-decoder'},source:{...old.source,observationId:'historical-decoder'}};
+  const prior={...historic,observationId:'historical-decoder',owner:legacyInput.owner,capture:{input:legacyInput,projection:raw}};
+  const priorKey=`v3/history-observations/${hash(['v3:swanson','historical-decoder'])}/capture.json`;
+  const priorBytes=Buffer.from(JSON.stringify(prior));remote.data.set(priorKey,priorBytes);
+  const c=await db.connect();try{await new ProductHistory(c).append(convertHistoryInput(prior));}finally{c.release();}
+  expect((await history.channel(legacyInput,s())).metrics).toMatchObject({reviewCount:null,inStock:null});
+  expect(remote.data.get(priorKey)).toEqual(priorBytes);expect((await history.replay(key,s())).inserted).toBe(false);
+ });
  it("preserves full collected label, associates capture time, and deduplicates formula registration",async()=>{
   const f=await labelProductFixture(),out=await f.assembly.run(f.join,s());expect(out.status).toBe("ready");
   expect((await f.collector.run({join:f.join,evidenceKey:out.evidenceKey},s())).status).toBe("collected");
