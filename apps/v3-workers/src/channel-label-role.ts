@@ -1,6 +1,6 @@
 import { join, dirname, delimiter } from "node:path";
 import type pg from "pg";
-import { FileCopies, ArtifactResolver, RetainedPublication, sha256, verifyBytes, type ObjectStore } from "@crawl-automation/v3-artifacts";
+import { FileCopies, ArtifactResolver, RetainedPublication, sha256, verifyBytes, ActivityObjectReads, type ObjectStore } from "@crawl-automation/v3-artifacts";
 import { ChannelLabelInputSchema, ReviewRecordSchema, TextOutputSchema, TextCandidateV3Schema, VisionTaskSchema } from "@crawl-automation/v3-contracts";
 import { ChannelProductPlans, ChannelLabelPlans } from "@crawl-automation/v3-channels";
 import { FileEvidence, PageEvidence, PreparePageModule, PreparePageText, PrepareImageOcr, PrepareSwansonLabelCore } from "@crawl-automation/v3-acquisition";
@@ -29,7 +29,7 @@ export async function channelLabelRole(o:{role:string;hostId:string;root:string;
  if(!o.hostId)throw Error("CHANNEL.HOST_REQUIRED");
  if(["text","vision"].includes(o.role)&&!o.codex)throw Error("CHANNEL.CODEX_CONFIG_REQUIRED");
  if(o.role==="ocr"&&!o.ocrProvider)throw Error("CHANNEL.OCR_CONFIG_REQUIRED");
- const {root,remote,db,storageId}=o,local=await TextLocalStore.open(join(root,"journal"));
+ const {root,db,storageId}=o,remote=new ActivityObjectReads(o.remote),local=await TextLocalStore.open(join(root,"journal"));
  const reviews=new PostgresReviews(db),publication=new RetainedPublication(local,remote),stops=new QualityReviewStops(publication,reviews,true);
  const closers:Array<()=>Promise<void>>=[],checks:Array<()=>Promise<void>>=[];
  const constructed:string[]=[];
@@ -103,6 +103,7 @@ export async function channelLabelRole(o:{role:string;hostId:string;root:string;
    const record=ReviewRecordSchema.parse({schemaVersion:1,reviewId:id,occurredAt:new Date().toISOString(),observation:owner,failure:{schemaVersion:1,requestId:owner.requestId,observationId:owner.observationId,operationId:input.operationId,inputFingerprint:fp,stage:"channel.label-input",category:"PROCESSING",code:raw.code,executionFact:"unknown",evidenceKey:key,blockedBy:null,automaticRetry:false},rawError:{name:"ChannelLabelFailure",message:raw.code,stack:null,details:{input,states:raw.states,...(raw.failures?{failures:raw.failures}:{})}},candidate:null,inspection:{kind:"none"}});
    await publication.publish(key,Buffer.from(JSON.stringify(record)),"application/json",s);await reviews.append(record);return{status:"review",operationId:input.operationId,reviewId:id,code:record.failure.code,evidenceKey:key,automaticRetry:false};};break;}
  }
- return{activities,stops,constructed,check:async()=>{for(const check of checks)await check();},close:async()=>{await Promise.all(closers.map(close=>close()));}};
+ const scoped=Object.fromEntries(Object.entries(activities).map(([name,fn])=>[name,(raw:unknown,s:AbortSignal)=>remote.run(()=>fn(raw,s),stats=>console.log(JSON.stringify({event:"ARTIFACT_READ_SCOPE",activity:name,...stats})))]));
+ return{activities:scoped,stops,constructed,check:async()=>{for(const check of checks)await check();},close:async()=>{await Promise.all(closers.map(close=>close()));}};
  }catch(error){await Promise.allSettled(closers.map(close=>close()));throw error;}
 }

@@ -78,9 +78,15 @@ export class ChannelLabelPlans {
     const order=loaded.imageOrder!,selectedIndex=selectedImageId===null?-1:order.indexOf(selectedImageId);
     if(selectedImageId!==null&&(selectedIndex<0||byId.get(selectedImageId)?.status!=="registered"||!(await this.imageCheck({input,sourceId:selectedImageId},signal)).complete))throw Error("CHANNEL.LABEL_SELECTION_UNVERIFIED");
     const sources:LabelProductManifest["sources"]=[],skipped:string[]=[],decisions:unknown[]=[];
+    // Every original remains required, including images whose OCR/model was skipped.
+    // Bound independent retained-file checks, and settle them before any publication.
+    const files=loaded.manifest.sources.filter(s=>s.kind==="file-image");
+    for(let offset=0;offset<files.length;offset+=4){
+      const checks=await Promise.allSettled(files.slice(offset,offset+4).map(source=>this.inspection!.file(source,signal)));
+      for(const check of checks){if(check.status==="rejected")throw check.reason;if(!check.value)throw Error("CHANNEL.LABEL_FILE_UNVERIFIED");}
+    }
     for(const source of loaded.manifest.sources){
       const state=byId.get(source.id)!;
-      if(source.kind==="file-image"&&!await this.inspection.file(source,signal))throw Error("CHANNEL.LABEL_FILE_UNVERIFIED");
       if(state.status==="unresolved"||state.status==="rejected")throw Error("CHANNEL.LABEL_PREPARATION_UNVERIFIED");
       if(state.status==="not_started"){
         if(selectedIndex<0||(source.kind!=="page"&&(source.kind!=="file-image"||order.indexOf(source.id)<=selectedIndex)))throw Error("CHANNEL.LABEL_SELECTION_UNVERIFIED");

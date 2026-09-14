@@ -10,7 +10,7 @@ assert.equal(plan.productCount,10);const ids=plan.batches.map(b=>b.requestId);as
 const connection=await Connection.connect({address:r.address,connectTimeout:'15 seconds',tls:{serverNameOverride:t.serverName,serverRootCACertificate:await fs.readFile(t.caFile),clientCertPair:{crt:await fs.readFile(t.certFile),key:await fs.readFile(t.keyFile)}}});
 const db=new pg.Pool({connectionString:c.database.connectionString,max:1,statement_timeout:5000,options:'-c default_transaction_read_only=on'});
 try{
- const client=new Client({connection,namespace:r.namespace}),h=client.workflow.getHandle(started.campaignId),state=await h.describe(),p=state.status.name==='COMPLETED'?await h.result():await h.query('progress');
+ const client=new Client({connection,namespace:r.namespace}),h=client.workflow.getHandle(started.campaignId),state=await h.describe(),p=started.workflowId?{phase:state.status.name==='COMPLETED'?'complete':'running',stopAfter:10}:state.status.name==='COMPLETED'?await h.result():await h.query('progress');
  const old=await client.workflow.getHandle('amazon-history-100-us-10001-20260913').query('progress');assert.equal(old.phase,'paused');assert.equal(old.cursor,24);assert.equal(old.stopAfter,24);
  const submissions=(await db.query('SELECT count(*)::int n FROM collection_submission WHERE request_id=ANY($1::uuid[])',[ids])).rows[0].n;assert.ok(submissions<=ids.length);
  const discoveries=(await db.query('SELECT record FROM catalog_discovery WHERE catalog_id=ANY($1)',[ids])).rows.map(x=>x.record),products=[];
@@ -27,6 +27,6 @@ try{
  const reviews=(await db.query("SELECT record->'observation'->>'listingId' asin,record->'failure'->>'stage' stage,record->'failure'->>'code' code FROM review_record WHERE record->'observation'->>'requestId'=ANY($1)",[ids])).rows;
  const owners=discoveries.flatMap(d=>[d.workflowId,d.workflowId+'-label']);
  const held=(await db.query("SELECT request->>'workflowId' workflow_id,request->'needs' needs FROM resource_permit WHERE released_at IS NULL AND request->>'workflowId'=ANY($1)",[owners])).rows;
- const workers=await read(main+'/status.json'),report={at:new Date().toISOString(),campaignId:started.campaignId,runId:state.runId,status:state.status.name,phase:p.phase,cursor:p.cursor,total:10,totalChunks:ids.length,stopAfter:p.stopAfter,error:p.error,submissions,products,captures,reviews,held,report:p.report,oldCampaign:{phase:old.phase,cursor:old.cursor,stopAfter:old.stopAfter},workers:{ready:workers.jobs.filter(j=>j.ready).length,total:workers.jobs.length}};
+ const workers=await read(main+'/status.json'),report={at:new Date().toISOString(),campaignId:started.campaignId,runId:state.runId,status:state.status.name,phase:p.phase,cursor:started.workflowId?products.filter(p=>p.status==='COMPLETED').length:p.cursor,total:10,totalChunks:ids.length,stopAfter:p.stopAfter,error:p.error,submissions,products,captures,reviews,held,report:p.report,oldCampaign:{phase:old.phase,cursor:old.cursor,stopAfter:old.stopAfter},workers:{ready:workers.jobs.filter(j=>j.ready).length,total:workers.jobs.length},elapsedSeconds:((state.closeTime??new Date())-state.startTime)/1000};
  await fs.writeFile(dir+'/inspection.json',JSON.stringify(report,null,2),{mode:0o600});console.log(JSON.stringify(report));
 }finally{await db.end();await connection.close();}

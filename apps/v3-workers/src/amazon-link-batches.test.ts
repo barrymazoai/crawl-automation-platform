@@ -40,6 +40,17 @@ it("bounds each submission and rejects conflicting identities, external origins 
   expect(AmazonLinkBatchSchema.safeParse(bad).success).toBe(false);
   expect(AmazonLinkBatchesSchema.safeParse([f.batch, f.batch]).success).toBe(false);
 });
+it("admits one bounded ten-product Temporal request and rejects an eleventh entry", async () => {
+  const f = fixture();
+  const entries = Array.from({ length: 11 }, (_, i) => {
+    const asin = `B${String(i).padStart(9, "0")}`;
+    return { ...f.batch.entries[0]!, entry: { ...f.batch.entries[0]!.entry, listingId: asin, url: `https://www.amazon.com/dp/${asin}` } };
+  });
+  const batch = { ...f.batch, entries: entries.slice(0, 10) };
+  const page = await new AmazonLinkCatalog(f.publication, batch).read(f.input, signal());
+  expect(page.entries).toHaveLength(10); expect(page.completion).toBe("unknown");
+  expect(AmazonLinkBatchSchema.safeParse({ ...batch, entries }).success).toBe(false);
+});
 it('imported ASIN capture requires explicit request authorization instead of a fabricated store directory',async()=>{
  const f=fixture(),page=await new AmazonLinkCatalog(f.publication,f.batch).read(f.input,signal());
  const job=await f.job();job.discovery.catalogId=f.batch.requestId;job.discovery.scope=f.batch.scope;job.discovery.source=page.source;

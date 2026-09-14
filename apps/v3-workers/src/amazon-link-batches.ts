@@ -12,7 +12,9 @@ export const AmazonLinkBatchSchema = z.strictObject({
   entries: z.array(z.strictObject({ entry: CatalogEntrySchema,
     candidateId: z.string().regex(/^[a-f0-9]{64}$/),
     historyListingId: z.string().regex(/^[a-f0-9]{64}$/),
-  })).min(1).max(4),
+  // One bounded request can keep the normal Temporal pipeline occupied. Browser
+  // and provider permits still control execution; this is not browser concurrency.
+  })).min(1).max(10),
 }).superRefine((b, ctx) => {
   const ids = new Set<string>();
   for (const { entry } of b.entries) {

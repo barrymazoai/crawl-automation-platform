@@ -8,7 +8,7 @@ import { ApplicationFailure } from "@temporalio/common";
 import { Client, Connection } from "@temporalio/client";
 import { CatalogPageInputSchema, CatalogDiscoverySchema, AmazonProductJobSchema, CollectionWorkflowInput, BrandCollectionPlanSchema, BrandCollectionProgressSchema,
   AmazonProductCaptureSchema, AmazonProductHandoffSchema, ChannelLabelInputSchema, ReviewRecordSchema, observationIdentity } from "@crawl-automation/v3-contracts";
-import { createR2Objects, RetainedPublication, ArtifactResolver, FileCopies, sha256 } from "@crawl-automation/v3-artifacts";
+import { createR2Objects, RetainedPublication, ArtifactResolver, FileCopies, sha256, ActivityObjectReads } from "@crawl-automation/v3-artifacts";
 import { EgoTaskPages, EgoFileTransport, AcquireFileModule, FileEvidence, systemDns, type SourceAccess } from "@crawl-automation/v3-acquisition";
 import { AmazonCatalogSource, AmazonEgoReader, AmazonLiveProduct, ChannelProductPlans } from "@crawl-automation/v3-channels";
 import { TextLocalStore } from "@crawl-automation/v3-text";
@@ -34,12 +34,13 @@ async function main() {
       const db = new pg.Pool({ connectionString: config.database.connectionString, ssl: config.database.tls ? { rejectUnauthorized: true } : false,
         max: 4, connectionTimeoutMillis: 5000, statement_timeout: 5000 });
       const r2 = createR2Objects(config.r2, config.r2Credentials); let connection: Connection | undefined;
+      const remote = new ActivityObjectReads(r2.store);
       const resourceDb=config.resourceDatabase?new pg.Pool({connectionString:config.resourceDatabase.connectionString,ssl:config.resourceDatabase.tls?{rejectUnauthorized:true}:false,max:2,connectionTimeoutMillis:5000,statement_timeout:5000}):db;
       const dispose = async () => { r2.close(); await connection?.close();if(resourceDb!==db)await resourceDb.end(); await db.end(); };
       try {
         await db.query("SELECT discovery_id FROM catalog_discovery LIMIT 0");
         const local = await TextLocalStore.open(config.journalRoot), copies = await FileCopies.open(config.cacheRoot);
-        const publication = new RetainedPublication(local, r2.store), reviews = new PostgresReviews(db), admission = new PostgresResourceAdmission(resourceDb);
+        const publication = new RetainedPublication(local, remote), reviews = new PostgresReviews(db), admission = new PostgresResourceAdmission(resourceDb);
         const pages = new EgoTaskPages(config.browser, await TextLocalStore.open(config.pageJournalRoot));
         const requireBrowser = async () => { const e = execution(); await admission.requireHeld(config.browserResource, e.workflowId, e.runId); };
         const links = new Map((config.linkBatches ?? []).map(b => [b.requestId, b]));
@@ -58,8 +59,8 @@ async function main() {
           visionConfigFingerprint: config.sourceVisionConfigFingerprint, egressId: config.egressId }, {
           capture: async (job, signal) => { await requireBrowser(); return new AmazonEgoReader(await pages.open(job.sessionId, signal)).product(job.discovery.entry.url, signal, undefined, config.deliveryPostalCode); },
         }, [...links.keys()]);
-        const plans = new ChannelProductPlans(publication, new ArtifactResolver(copies, r2.store), reviews);
-        const files = new FileEvidence({ local, remote: r2.store, copies, reviews });
+        const plans = new ChannelProductPlans(publication, new ArtifactResolver(copies, remote), reviews);
+        const files = new FileEvidence({ local, remote, copies, reviews });
         const submission = async (id: string) => {
           const row = (await db.query("SELECT snapshot FROM collection_submission WHERE request_id=$1", [id])).rows[0];
           if (!row) throw Error("AMAZON.SUBMISSION_REQUIRED");
@@ -181,7 +182,7 @@ async function main() {
         return { kind: "activity" as const, dispose, activities: Object.fromEntries(Object.entries(handlers).map(([name, fn]) => [name, async (raw: unknown) => {
           const ctx = Context.current(); if (ctx.info.attempt !== 1 && !["prepareBrandCollection", "inspectBrandCollection"].includes(name)) throw ApplicationFailure.nonRetryable("Inspect existing evidence", "AMAZON.RETRY_DENIED");
           const timer = setInterval(() => ctx.heartbeat(), 2000);
-          try { return await fn(raw, ctx.cancellationSignal); }
+          try { return await remote.run(() => fn(raw, ctx.cancellationSignal), stats => console.log(JSON.stringify({event:"ARTIFACT_READ_SCOPE",activity:name,...stats}))); }
           catch (error) { ctx.cancellationSignal.throwIfAborted(); const code = error instanceof Error && /^(AMAZON|SOURCE|CATALOG|ARTIFACT)\.[A-Z_]+$/.test(error.message) ? error.message : "AMAZON.ACTIVITY_UNRESOLVED";
             throw ApplicationFailure.nonRetryable("Inspect retained Amazon evidence", code); }
           finally { clearInterval(timer); }

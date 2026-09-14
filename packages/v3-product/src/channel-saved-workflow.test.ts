@@ -152,6 +152,18 @@ it("single label keeps missing later originals blocking even after complete firs
  await vi.waitFor(()=>expect(f.counts.vision).toBe(1),{timeout:10000});runtime.handlers.channelStreamSealed!({operationId:f.input.operationId,status:"failed"});
  expect(await run).toMatchObject({status:"review"});expect(f.collected.size).toBe(0);expect(f.counts.vision).toBe(1);
 });
+it("single manifest checks independent original files together and drains them before reporting a missing file",async()=>{
+ const f=await setup();f.input.evidencePolicy="label-image-first/5";f.nonmatch.clear();
+ expect(await ChannelSavedLabelWorkflow(f.entry)).toMatchObject({status:"collected"});
+ const selection=JSON.parse(Buffer.from((await f.remote.read(`v3/channel-labels/${f.input.operationId}/selection.json`,100000))!).toString());
+ const releases:Array<(v:boolean)=>void>=[];
+ (f.bridge as any).inspection.file=()=>new Promise<boolean>(resolve=>{releases.push(resolve);});
+ let settled=false;
+ const check=f.bridge.singleManifest(selection.request,new AbortController().signal).then(()=>{settled=true;return null;},error=>{settled=true;return error;});
+ await vi.waitFor(()=>expect(releases).toHaveLength(2));
+ releases[0]!(false);await Promise.resolve();expect(settled).toBe(false);
+ releases[1]!(true);expect((await check)?.message).toBe("CHANNEL.LABEL_FILE_UNVERIFIED");
+});
 
 it("single label retries another image after a verified executed quality Review, preserving that Review",async()=>{
  const f=await setup();f.input.evidencePolicy="label-image-first/5";f.nonmatch.clear();const complete=structuredClone(f.imageCandidate.value),original=f.activities.interpretImage!;let n=0;

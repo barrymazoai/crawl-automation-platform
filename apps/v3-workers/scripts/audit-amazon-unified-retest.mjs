@@ -10,7 +10,7 @@ import {defaultPayloadConverter} from '@temporalio/common';
 
 const [work,countArg]=process.argv.slice(2),expected=Number(countArg);
 assert.match(hostname(),/^barrydeMac-mini(?:\.|$)/);assert.ok([2,10].includes(expected));
-const dir='/Users/barry/apps/crawlv3-history-20260913/amazon-unified-retest-10-20260914';
+const single=process.argv[4]==='single',dir=single?work:'/Users/barry/apps/crawlv3-history-20260913/amazon-unified-retest-10-20260914';
 const main='/Users/barry/apps/crawlv3-batch-a.UiA4dx';
 const read=async p=>JSON.parse(await fs.readFile(p,'utf8'));
 const keep=(p,v)=>fs.writeFile(p,JSON.stringify(v,null,2),{flag:'wx',mode:0o600});
@@ -27,14 +27,15 @@ const peak=spans=>{let n=0,max=0;for(const [,d] of spans.flatMap(s=>[[s.start,1]
 try{
  const client=new Client({connection,namespace:r.namespace}),campaign=client.workflow.getHandle(plan.campaignId),state=await campaign.describe();
  const progress=state.status.name==='COMPLETED'?await campaign.result():await campaign.query('progress');
- assert.equal(progress.cursor,expected/2);assert.equal(progress.phase,expected===2?'paused':'complete');
+ if(single){assert.equal(state.status.name,'COMPLETED');assert.equal(progress.settled,true);assert.equal(progress.finished,expected);assert.equal(plan.batches.length,1);}
+ else{assert.equal(progress.cursor,expected/2);assert.equal(progress.phase,expected===2?'paused':'complete');}
  const campaignHistory=await campaign.fetchHistory(),campaignEvents=campaignHistory.events??[];
  await keep(out+'/campaign-history.json',campaignHistory);
  const resumeEvent=campaignEvents.find(e=>e.workflowExecutionSignaledEventAttributes?.signalName==='runUntil'&&decode(e.workflowExecutionSignaledEventAttributes.input)===5);
  const pauseEnd=resumeEvent?ms(resumeEvent.eventTime):Date.now();
  const scheduledReports=new Set(campaignEvents.filter(e=>e.activityTaskScheduledEventAttributes?.activityType?.name==='reportAmazonHistoryBatch').map(e=>e.eventId.toString()));
  const lastReportBeforeResume=campaignEvents.filter(e=>e.activityTaskCompletedEventAttributes&&scheduledReports.has(e.activityTaskCompletedEventAttributes.scheduledEventId.toString())&&ms(e.eventTime)<pauseEnd).at(-1);
- assert.ok(lastReportBeforeResume);const acceptancePauseSeconds=(pauseEnd-ms(lastReportBeforeResume.eventTime))/1000;
+ if(!single)assert.ok(lastReportBeforeResume);const acceptancePauseSeconds=single?0:(pauseEnd-ms(lastReportBeforeResume.eventTime))/1000;
  const old=await client.workflow.getHandle('amazon-history-100-us-10001-20260913').query('progress');assert.equal(old.phase,'paused');assert.equal(old.cursor,24);assert.equal(old.stopAfter,24);
  const discoveries=(await db.query('SELECT record FROM catalog_discovery WHERE catalog_id=ANY($1)',[ids])).rows.map(r=>r.record);assert.equal(discoveries.length,expected);
  const queue=ids.map(id=>'v3-collection-'+id),seen=new Set(),workflows=[],activities=[],pages=[],jobs=new Map(),closedCalls=new Map(),grants=new Map(),releases=new Map();
@@ -93,15 +94,22 @@ try{
  const modelSpans=activitySpans.filter(a=>['interpretImage','interpretText'].includes(a.name));
  const captureSpans=activitySpans.filter(a=>['captureAmazonProduct','acquireAmazonFile'].includes(a.name));
  const overlap=captureSpans.flatMap(a=>modelSpans.filter(b=>b.workflowId!==a.workflowId&&Math.max(a.start,b.start)<Math.min(a.end,b.end)).map(b=>({capture:a.workflowId,model:b.workflowId,seconds:(Math.min(a.end,b.end)-Math.max(a.start,b.start))/1000})));
- const previous=await read(work+'/evidence/records.json');
- for(const v of previous.captures){const current=(await db.query("SELECT record FROM product_history_source WHERE dataset='v3:amazon' AND record->>'observationId'=$1",[v.observationId])).rows;assert.equal(current.length,1);assert.deepEqual(current[0].record,v);}
+ let preserved;
+ if(single){
+  const previous=await read(work+'/preserved-before.json');
+  for(const v of previous.history){const current=(await db.query('SELECT record FROM product_history_source WHERE source_record_id=$1',[v.id])).rows;assert.equal(current.length,1);assert.equal(sha(Buffer.from(JSON.stringify(current[0].record))),v.sha256);}
+  for(const v of previous.reviews){const current=(await db.query('SELECT record FROM review_record WHERE review_id=$1',[v.id])).rows;assert.equal(current.length,1);assert.equal(sha(Buffer.from(JSON.stringify(current[0].record))),v.sha256);}
+  preserved=previous.history.length;
+ }else{const previous=await read(work+'/evidence/records.json');
+  for(const v of previous.captures){const current=(await db.query("SELECT record FROM product_history_source WHERE dataset='v3:amazon' AND record->>'observationId'=$1",[v.observationId])).rows;assert.equal(current.length,1);assert.deepEqual(current[0].record,v);}preserved=previous.captures.length;
+ }
  const workers=await read(main+'/status.json');assert.ok(workers.jobs.every(j=>j.ready));assert.ok(Date.now()-Date.parse(workers.at)<20000);
  const elapsed=(new Date(state.closeTime??Date.now()).getTime()-new Date(state.startTime).getTime())/1000;
  const report={at:new Date().toISOString(),verified:true,expected,campaignId:plan.campaignId,phase:progress.phase,cursor:progress.cursor,elapsedSeconds:elapsed,acceptancePauseSeconds,processingSeconds:elapsed-acceptancePauseSeconds,workflowCount:workflows.length,
   products:discoveries.map(d=>({asin:d.entry.listingId,result:workflows.find(w=>w.id===d.workflowId)?.result})),
   captures:captures.map(({record:v})=>({asin:v.listing.externalId,observationId:v.observationId,price:v.metrics.price,reviewCount:v.metrics.reviewCount,inStock:v.metrics.inStock,purchaseConditions:v.metrics.extras.purchaseConditions})),
   reviews,formulaMaterials:materials.reduce((n,m)=>n+m.labels.length,0),equivalentFootnotes:materials.flatMap(m=>m.labels.flatMap(l=>l.draft.label.content.exclusions.filter(e=>/equivalent/i.test(e.quote.text)))),
-  pages,checks,held:0,historyRecordsVerified,oldCaptureRecordsPreserved:previous.captures.length,oldCampaignPausedAt:24,workersReady:workers.jobs.length,resourcePeaks,modelActivityPeak:peak(modelSpans),captureModelOverlap:overlap};
+  pages,checks,held:0,historyRecordsVerified,oldCaptureRecordsPreserved:preserved,oldCampaignPausedAt:24,workersReady:workers.jobs.length,resourcePeaks,modelActivityPeak:peak(modelSpans),captureModelOverlap:overlap};
  await keep(out+'/timing.json',{workflows,activities,resourceSpans:spans});await keep(out+'/report.json',report);
  await keep(dir+'/acceptance-'+expected+'.json',{out,reportPath:out+'/report.json',verified:true});
  console.log(JSON.stringify({...report,captures:report.captures.map(c=>({asin:c.asin,price:c.price,reviewCount:c.reviewCount,inStock:c.inStock})),pages:pages.length,captureModelOverlap:overlap.length}));

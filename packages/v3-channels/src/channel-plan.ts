@@ -63,15 +63,17 @@ export class ChannelProductPlans {
     if (!saved) return null;
     const { plan } = await this.derive(input, signal);
     if (!equal(ChannelProductPlanSchema.parse(decode(saved)), plan)) throw new ChannelError("CHANNEL.PLAN_CONFLICT");
-    if (plan.fragment) {
+    const checks = await Promise.allSettled([(async () => { if (plan.fragment) {
       const bytes = await this.publication.remote.read(plan.fragment.objectKey, plan.fragment.byteSize, signal);
       if (!bytes) throw new ChannelError("CHANNEL.NOT_DURABLE");
       verifyBytes(plan.fragment, bytes, 2 * 1024 * 1024);
-    }
+    } })(), (async () => {
     // Publication is only durable if its original input is available beyond this worker's local disk.
     const source = await this.publication.remote.read(input.source.objectKey, input.source.byteSize, signal);
     if (!source) throw new ChannelError("CHANNEL.NOT_DURABLE");
     verifyBytes(input.source, source, 4 * 1024 * 1024);
+    })()]);
+    for (const check of checks) if (check.status === "rejected") throw check.reason;
     return plan;
   }
   private result(plan: ChannelProductPlan): ChannelPlanOutcome {
