@@ -1,0 +1,160 @@
+{
+  "at": "2026-09-14T02:34:03.740Z",
+  "workers": [
+    {
+      "event": "WORKER_RESTARTED",
+      "deployment": 0,
+      "id": "channel-label-text",
+      "pid": 14391,
+      "buildId": "8a3df1132a3d547831b18f7373f25a9c061b208858ff8690d3de0fb929ee1fc2"
+    },
+    {
+      "event": "WORKER_RESTARTED",
+      "deployment": 0,
+      "id": "channel-label-vision",
+      "pid": 14455,
+      "buildId": "8a3df1132a3d547831b18f7373f25a9c061b208858ff8690d3de0fb929ee1fc2"
+    },
+    {
+      "event": "WORKER_RESTARTED",
+      "deployment": 0,
+      "id": "channel-label-resources",
+      "pid": 14504,
+      "buildId": "8a3df1132a3d547831b18f7373f25a9c061b208858ff8690d3de0fb929ee1fc2"
+    },
+    {
+      "event": "WORKER_RESTARTED",
+      "deployment": 0,
+      "id": "gnc-core-stream-workflow",
+      "pid": 14542,
+      "buildId": "5cabfca0caf45505d18c894fa25e1b9f1dba13cabfb90badf43e13726fa54efc"
+    },
+    {
+      "event": "WORKER_RESTARTED",
+      "deployment": 0,
+      "id": "catalog-workflow",
+      "pid": 14580,
+      "buildId": "5cabfca0caf45505d18c894fa25e1b9f1dba13cabfb90badf43e13726fa54efc"
+    },
+    {
+      "event": "WORKER_RESTARTED",
+      "deployment": 0,
+      "id": "swanson-product-workflow",
+      "pid": 14620,
+      "buildId": "5cabfca0caf45505d18c894fa25e1b9f1dba13cabfb90badf43e13726fa54efc"
+    },
+    {
+      "event": "WORKER_RESTARTED",
+      "deployment": 0,
+      "id": "swanson-catalog-workflow",
+      "pid": 14647,
+      "buildId": "5cabfca0caf45505d18c894fa25e1b9f1dba13cabfb90badf43e13726fa54efc"
+    },
+    {
+      "event": "WORKER_RESTARTED",
+      "deployment": 0,
+      "id": "channel-label-workflow",
+      "pid": 14684,
+      "buildId": "5cabfca0caf45505d18c894fa25e1b9f1dba13cabfb90badf43e13726fa54efc"
+    },
+    {
+      "event": "WORKER_RESTARTED",
+      "deployment": 1,
+      "id": "channel-label-text",
+      "pid": 14723,
+      "buildId": "8a3df1132a3d547831b18f7373f25a9c061b208858ff8690d3de0fb929ee1fc2"
+    },
+    {
+      "event": "WORKER_RESTARTED",
+      "deployment": 1,
+      "id": "channel-label-vision",
+      "pid": 14773,
+      "buildId": "8a3df1132a3d547831b18f7373f25a9c061b208858ff8690d3de0fb929ee1fc2"
+    },
+    {
+      "event": "WORKER_RESTARTED",
+      "deployment": 1,
+      "id": "channel-label-resources",
+      "pid": 14819,
+      "buildId": "8a3df1132a3d547831b18f7373f25a9c061b208858ff8690d3de0fb929ee1fc2"
+    },
+    {
+      "event": "WORKER_RESTARTED",
+      "deployment": 1,
+      "id": "dtc-product-workflow",
+      "pid": 14874,
+      "buildId": "5cabfca0caf45505d18c894fa25e1b9f1dba13cabfb90badf43e13726fa54efc"
+    },
+    {
+      "event": "WORKER_RESTARTED",
+      "deployment": 1,
+      "id": "catalog-workflow",
+      "pid": 14911,
+      "buildId": "5cabfca0caf45505d18c894fa25e1b9f1dba13cabfb90badf43e13726fa54efc"
+    },
+    {
+      "event": "WORKER_RESTARTED",
+      "deployment": 1,
+      "id": "channel-label-workflow",
+      "pid": 14951,
+      "buildId": "5cabfca0caf45505d18c894fa25e1b9f1dba13cabfb90badf43e13726fa54efc"
+    },
+    {
+      "event": "WORKER_RESTARTED",
+      "deployment": 2,
+      "id": "amazon-batch-workflow",
+      "pid": 14990,
+      "buildId": "f6dab62fa7907367371d049cdc0e9313c42962890b700fcb89c0a5b25ba97f09"
+    },
+    {
+      "event": "WORKER_RESTARTED",
+      "deployment": 2,
+      "id": "amazon-batch-control",
+      "pid": 15032,
+      "buildId": "f6dab62fa7907367371d049cdc0e9313c42962890b700fcb89c0a5b25ba97f09"
+    }
+  ],
+  "samples": [
+    {
+      "at": "2026-09-14T02:33:51.168Z",
+      "ready": [
+        90,
+        26,
+        2
+      ]
+    },
+    {
+      "at": "2026-09-14T02:33:57.170Z",
+      "ready": [
+        90,
+        26,
+        2
+      ]
+    },
+    {
+      "at": "2026-09-14T02:34:03.174Z",
+      "ready": [
+        90,
+        26,
+        2
+      ]
+    }
+  ],
+  "unrelatedPidsUnchanged": true,
+  "monitorsUnchanged": true,
+  "windowsDtcRestarted": false,
+  "heldAtCheck": [
+    {
+      "permit_id": "permit-01a09dc1-90b5-7a79-96c0-1aca2c58b659-13",
+      "workflow_id": "catalog-product-fa927d022dc9dc510d46aa445a1ddbe08a6e7e330a89d397c49f06278890b0ba-label"
+    }
+  ],
+  "campaign": {
+    "id": "amazon-history-100-us-10001-20260913",
+    "baselineCursor": 14,
+    "alreadySettled": 16,
+    "stopAfter": 24,
+    "phase": "waiting-for-products",
+    "cursor": 16
+  }
+}

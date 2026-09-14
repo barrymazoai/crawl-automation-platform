@@ -1,0 +1,231 @@
+{
+  "beforeAt": "2026-09-14T02:14:06.591Z",
+  "afterAt": "2026-09-14T02:35:27.608Z",
+  "roleBased": true,
+  "deployments": [
+    {
+      "root": "/Users/barry/apps/crawlv3-batch-a.UiA4dx",
+      "ready": 90,
+      "total": 90,
+      "affected": [
+        {
+          "id": "gnc-core-stream-workflow",
+          "role": "gnc-core-stream-workflow",
+          "reasons": [
+            "unbounded_resource_wait"
+          ],
+          "oldPid": 68419,
+          "newPid": 14542,
+          "buildId": "5cabfca0caf45505d18c894fa25e1b9f1dba13cabfb90badf43e13726fa54efc",
+          "boundedGate": true,
+          "stopsPublisher": null,
+          "ready": true,
+          "buildMatches": true
+        },
+        {
+          "id": "catalog-workflow",
+          "role": "catalog-workflow",
+          "reasons": [
+            "unbounded_resource_wait"
+          ],
+          "oldPid": 68426,
+          "newPid": 14580,
+          "buildId": "5cabfca0caf45505d18c894fa25e1b9f1dba13cabfb90badf43e13726fa54efc",
+          "boundedGate": true,
+          "stopsPublisher": null,
+          "ready": true,
+          "buildMatches": true
+        },
+        {
+          "id": "channel-label-text",
+          "role": "channel-label-text",
+          "reasons": [
+            "stop_publication_cannot_resume_claim"
+          ],
+          "oldPid": 68552,
+          "newPid": 14391,
+          "buildId": "8a3df1132a3d547831b18f7373f25a9c061b208858ff8690d3de0fb929ee1fc2",
+          "boundedGate": null,
+          "stopsPublisher": true,
+          "ready": true,
+          "buildMatches": true
+        },
+        {
+          "id": "channel-label-vision",
+          "role": "channel-label-vision",
+          "reasons": [
+            "stop_publication_cannot_resume_claim"
+          ],
+          "oldPid": 68562,
+          "newPid": 14455,
+          "buildId": "8a3df1132a3d547831b18f7373f25a9c061b208858ff8690d3de0fb929ee1fc2",
+          "boundedGate": null,
+          "stopsPublisher": true,
+          "ready": true,
+          "buildMatches": true
+        },
+        {
+          "id": "channel-label-resources",
+          "role": "channel-label-resources",
+          "reasons": [
+            "stop_publication_cannot_resume_claim"
+          ],
+          "oldPid": 68600,
+          "newPid": 14504,
+          "buildId": "8a3df1132a3d547831b18f7373f25a9c061b208858ff8690d3de0fb929ee1fc2",
+          "boundedGate": null,
+          "stopsPublisher": true,
+          "ready": true,
+          "buildMatches": true
+        },
+        {
+          "id": "swanson-product-workflow",
+          "role": "swanson-product-workflow",
+          "reasons": [
+            "unbounded_resource_wait"
+          ],
+          "oldPid": 68674,
+          "newPid": 14620,
+          "buildId": "5cabfca0caf45505d18c894fa25e1b9f1dba13cabfb90badf43e13726fa54efc",
+          "boundedGate": true,
+          "stopsPublisher": null,
+          "ready": true,
+          "buildMatches": true
+        },
+        {
+          "id": "swanson-catalog-workflow",
+          "role": "catalog-workflow",
+          "reasons": [
+            "unbounded_resource_wait"
+          ],
+          "oldPid": 68679,
+          "newPid": 14647,
+          "buildId": "5cabfca0caf45505d18c894fa25e1b9f1dba13cabfb90badf43e13726fa54efc",
+          "boundedGate": true,
+          "stopsPublisher": null,
+          "ready": true,
+          "buildMatches": true
+        },
+        {
+          "id": "channel-label-workflow",
+          "role": "channel-label-workflow",
+          "reasons": [
+            "unbounded_resource_wait"
+          ],
+          "oldPid": 68685,
+          "newPid": 14684,
+          "buildId": "5cabfca0caf45505d18c894fa25e1b9f1dba13cabfb90badf43e13726fa54efc",
+          "boundedGate": true,
+          "stopsPublisher": null,
+          "ready": true,
+          "buildMatches": true
+        }
+      ],
+      "buildMismatches": []
+    },
+    {
+      "root": "/Users/barry/apps/crawlv3-batch-a.UiA4dx/dtc-innerbody-v2-20260911",
+      "ready": 26,
+      "total": 26,
+      "affected": [
+        {
+          "id": "channel-label-text",
+          "role": "channel-label-text",
+          "reasons": [
+            "stop_publication_cannot_resume_claim"
+          ],
+          "oldPid": 69377,
+          "newPid": 14723,
+          "buildId": "8a3df1132a3d547831b18f7373f25a9c061b208858ff8690d3de0fb929ee1fc2",
+          "boundedGate": null,
+          "stopsPublisher": true,
+          "ready": true,
+          "buildMatches": true
+        },
+        {
+          "id": "channel-label-vision",
+          "role": "channel-label-vision",
+          "reasons": [
+            "stop_publication_cannot_resume_claim"
+          ],
+          "oldPid": 69397,
+          "newPid": 14773,
+          "buildId": "8a3df1132a3d547831b18f7373f25a9c061b208858ff8690d3de0fb929ee1fc2",
+          "boundedGate": null,
+          "stopsPublisher": true,
+          "ready": true,
+          "buildMatches": true
+        },
+        {
+          "id": "channel-label-resources",
+          "role": "channel-label-resources",
+          "reasons": [
+            "stop_publication_cannot_resume_claim"
+          ],
+          "oldPid": 69434,
+          "newPid": 14819,
+          "buildId": "8a3df1132a3d547831b18f7373f25a9c061b208858ff8690d3de0fb929ee1fc2",
+          "boundedGate": null,
+          "stopsPublisher": true,
+          "ready": true,
+          "buildMatches": true
+        },
+        {
+          "id": "dtc-product-workflow",
+          "role": "dtc-product-workflow",
+          "reasons": [
+            "unbounded_resource_wait"
+          ],
+          "oldPid": 69470,
+          "newPid": 14874,
+          "buildId": "5cabfca0caf45505d18c894fa25e1b9f1dba13cabfb90badf43e13726fa54efc",
+          "boundedGate": true,
+          "stopsPublisher": null,
+          "ready": true,
+          "buildMatches": true
+        },
+        {
+          "id": "catalog-workflow",
+          "role": "catalog-workflow",
+          "reasons": [
+            "unbounded_resource_wait"
+          ],
+          "oldPid": 69475,
+          "newPid": 14911,
+          "buildId": "5cabfca0caf45505d18c894fa25e1b9f1dba13cabfb90badf43e13726fa54efc",
+          "boundedGate": true,
+          "stopsPublisher": null,
+          "ready": true,
+          "buildMatches": true
+        },
+        {
+          "id": "channel-label-workflow",
+          "role": "channel-label-workflow",
+          "reasons": [
+            "unbounded_resource_wait"
+          ],
+          "oldPid": 69481,
+          "newPid": 14951,
+          "buildId": "5cabfca0caf45505d18c894fa25e1b9f1dba13cabfb90badf43e13726fa54efc",
+          "boundedGate": true,
+          "stopsPublisher": null,
+          "ready": true,
+          "buildMatches": true
+        }
+      ],
+      "buildMismatches": []
+    },
+    {
+      "root": "/Users/barry/apps/crawlv3-batch-a.UiA4dx/amazon-pilot-10-20260913",
+      "ready": 2,
+      "total": 2,
+      "affected": [],
+      "buildMismatches": []
+    }
+  ],
+  "test": {
+    "numPassedTests": 1,
+    "numFailedTests": 0,
+    "numTotalTests": 1
+  }
+}

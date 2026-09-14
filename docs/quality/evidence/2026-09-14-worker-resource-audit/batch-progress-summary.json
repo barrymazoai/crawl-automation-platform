@@ -1,0 +1,43 @@
+{
+  "at": "2026-09-14T02:40:12.483Z",
+  "campaignId": "amazon-history-100-us-10001-20260913",
+  "runId": "01a09b78-4a5f-7047-b670-48d4ca5e4781",
+  "status": "RUNNING",
+  "phase": "waiting-for-products",
+  "cursor": 17,
+  "stopAfter": 24,
+  "submissions": 18,
+  "captures": 17,
+  "reviewCount": 46,
+  "current": [
+    {
+      "asin": "B0FM63VY63",
+      "workflowId": "catalog-product-fef72c6b92b646ae0bbcfbb7adfdf225ee2371c11d921b5eb11067560cf03e29",
+      "status": "RUNNING",
+      "pending": [
+        "acquireAmazonFile"
+      ],
+      "child": {
+        "status": "RUNNING",
+        "pending": [
+          {
+            "name": "interpretText",
+            "attempt": 1,
+            "state": 2
+          },
+          {
+            "name": "ocrFile",
+            "attempt": 1,
+            "state": 2
+          }
+        ]
+      }
+    }
+  ],
+  "workers": {
+    "mainReady": 90,
+    "mainTotal": 90,
+    "batchReady": 2,
+    "batchTotal": 2
+  }
+}

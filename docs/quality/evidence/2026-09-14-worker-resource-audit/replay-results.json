@@ -1,0 +1,67 @@
+{
+  "at": "2026-09-14T02:23:32.838Z",
+  "passed": true,
+  "results": [
+    {
+      "workflowId": "amazon-history-100-us-10001-20260913",
+      "kind": "batch",
+      "events": 26765,
+      "passed": true
+    },
+    {
+      "kind": "GncStreamingLabelWorkflow",
+      "skipped": "no completed history"
+    },
+    {
+      "kind": "GncLeasedProductWorkflow",
+      "workflowId": "catalog-product-d2c153a04c17243dc4af718ff5ce62eaa460d234e358b428044b1bc9dd02d132-gnc",
+      "runId": "01a08b56-00e5-7c6c-bd84-aaa5bfd4cc41",
+      "events": 430,
+      "passed": true
+    },
+    {
+      "kind": "SwansonCatalogProductWorkflow",
+      "workflowId": "catalog-product-d5dc34f552ae6e351ed5d939894ff8437977321fe3ac2ed351e09674351f52ee",
+      "runId": "01a09a3a-eb4b-7a39-a275-078367119282",
+      "events": 474,
+      "passed": true
+    },
+    {
+      "kind": "ChannelStreamingLabelWorkflow",
+      "workflowId": "catalog-product-0cf7008fa72ba8d94451db529fba248a4c07f868d0eb433ccef06cdcaedae0b2-label",
+      "runId": "01a09db0-a7f7-7c7a-a1ca-f80934fae485",
+      "events": 517,
+      "passed": true
+    },
+    {
+      "kind": "DtcCatalogProductV2Workflow",
+      "workflowId": "catalog-product-101fb207ee40326cb436432dcc73244445815b3136790ef8209edc467fbec6e8",
+      "runId": "01a0997e-1e7d-7032-b8e8-657a926b819c",
+      "events": 3236,
+      "passed": true
+    },
+    {
+      "kind": "DtcCatalogWorkflow",
+      "workflowId": "v3-collection-b089c0d7-164b-4df9-85d1-0011b942077f-catalog",
+      "runId": "01a0997b-2d72-7a9e-9fb9-7db8557d2f37",
+      "events": 1075,
+      "passed": true
+    }
+  ],
+  "active": [
+    {
+      "workflowId": "v3-dtc-node-dtc-innerbody-v2-20260911",
+      "runId": "5b5c7edf-a228-42fa-ba41-d4aee3c05313",
+      "type": "DtcNodeSessionWorkflow",
+      "taskQueue": "v3.dtc.control.v1.dtc-live-v2.session.dtc-innerbody-v2-20260911",
+      "historyLength": 0
+    },
+    {
+      "workflowId": "amazon-history-100-us-10001-20260913",
+      "runId": "01a09b78-4a5f-7047-b670-48d4ca5e4781",
+      "type": "AmazonHistoryBatchWorkflow",
+      "taskQueue": "v3.amazon.batch.workflow.v1.amazon-batch-v1.session.amazon-history-10-us-10001",
+      "historyLength": 0
+    }
+  ]
+}

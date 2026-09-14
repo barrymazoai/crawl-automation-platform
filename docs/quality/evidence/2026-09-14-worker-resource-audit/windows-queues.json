@@ -1,0 +1,45 @@
+{
+  "at": "2026-09-14T02:35:32.470Z",
+  "nodeStatus": "RUNNING",
+  "runId": "5b5c7edf-a228-42fa-ba41-d4aee3c05313",
+  "health": {
+    "resource_id": "windows-dtc-browser",
+    "healthy": true,
+    "health_until": "2026-09-14T02:35:49.047Z",
+    "reason": "ready"
+  },
+  "queues": [
+    {
+      "role": "capture",
+      "taskQueue": "v3.dtc.capture.v1.dtc-live-v2.session.dtc-innerbody-v2-20260911",
+      "pollers": [
+        {
+          "identity": "windows-dtc-capture/dtc-capture/fd1fe789-cb5b-43af-9f58-e3c6a9438e2f/3b705195988155f01befac765ec9708ba236d30c3dce88827cd0477aca017371",
+          "lastAccess": "2026-09-14T02:35:15.874Z"
+        }
+      ]
+    },
+    {
+      "role": "catalog-source",
+      "taskQueue": "v3.dtc.catalog-source.v1.dtc-live-v2.session.dtc-innerbody-v2-20260911",
+      "pollers": [
+        {
+          "identity": "windows-dtc-catalog-source/dtc-catalog-source/ddb6719e-b892-45b1-ae81-d49b36bf25d8/3b705195988155f01befac765ec9708ba236d30c3dce88827cd0477aca017371",
+          "lastAccess": "2026-09-14T02:34:40.690Z"
+        }
+      ]
+    },
+    {
+      "role": "file",
+      "taskQueue": "v3.dtc.file.v1.dtc-live-v2.session.dtc-innerbody-v2-20260911",
+      "pollers": [
+        {
+          "identity": "windows-dtc-file/dtc-file/357c8868-fdb5-49ab-b409-328e6f41ee28/3b705195988155f01befac765ec9708ba236d30c3dce88827cd0477aca017371",
+          "lastAccess": "2026-09-14T02:35:13.916Z"
+        }
+      ]
+    }
+  ],
+  "windowsLocalFilesystemInspected": false,
+  "windowsRestarted": false
+}
