@@ -75,6 +75,7 @@ try{
  assert.ok(permits.every(p=>p.released_at!==null));assert.equal((await db.query('SELECT count(*)::int n FROM source_submission_guard WHERE request_id=ANY($1::uuid[])',[ids])).rows[0].n,0);
  const rows=(await db.query("SELECT source_record_id,record FROM product_history_source WHERE dataset='v3:amazon' AND (record->'owner'->>'requestId'=ANY($1) OR record->'collection'->'observation'->>'requestId'=ANY($1))",[ids])).rows;
  const captures=rows.filter(x=>x.record.codec==='v3-capture-history/1');assert.equal(captures.length,expected);
+ const historyRecordsVerified=await new lib.ProductHistory(db).verify(rows.map(x=>lib.convertHistoryInput(x.record)));assert.equal(historyRecordsVerified,rows.length);
  const materials=[];
  for(const {record:v} of rows){
   const capture=v.codec==='v3-formula-history/1'?captures.find(x=>x.source_record_id===v.captureSourceId)?.record:undefined;
@@ -100,7 +101,7 @@ try{
   products:discoveries.map(d=>({asin:d.entry.listingId,result:workflows.find(w=>w.id===d.workflowId)?.result})),
   captures:captures.map(({record:v})=>({asin:v.listing.externalId,observationId:v.observationId,price:v.metrics.price,reviewCount:v.metrics.reviewCount,inStock:v.metrics.inStock,purchaseConditions:v.metrics.extras.purchaseConditions})),
   reviews,formulaMaterials:materials.reduce((n,m)=>n+m.labels.length,0),equivalentFootnotes:materials.flatMap(m=>m.labels.flatMap(l=>l.draft.label.content.exclusions.filter(e=>/equivalent/i.test(e.quote.text)))),
-  pages,checks,held:0,oldCaptureRecordsPreserved:previous.captures.length,oldCampaignPausedAt:24,workersReady:workers.jobs.length,resourcePeaks,modelActivityPeak:peak(modelSpans),captureModelOverlap:overlap};
+  pages,checks,held:0,historyRecordsVerified,oldCaptureRecordsPreserved:previous.captures.length,oldCampaignPausedAt:24,workersReady:workers.jobs.length,resourcePeaks,modelActivityPeak:peak(modelSpans),captureModelOverlap:overlap};
  await keep(out+'/timing.json',{workflows,activities,resourceSpans:spans});await keep(out+'/report.json',report);
  await keep(dir+'/acceptance-'+expected+'.json',{out,reportPath:out+'/report.json',verified:true});
  console.log(JSON.stringify({...report,captures:report.captures.map(c=>({asin:c.asin,price:c.price,reviewCount:c.reviewCount,inStock:c.inStock})),pages:pages.length,captureModelOverlap:overlap.length}));
