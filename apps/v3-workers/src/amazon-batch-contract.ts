@@ -3,6 +3,7 @@ export const AmazonBatchInputSchema=z.strictObject({
  campaignId:z.string().regex(/^[a-z][a-z0-9-]{0,100}$/),
  manifestSha256:z.string().regex(/^[a-f0-9]{64}$/),
  controlQueue:z.string().min(1).max(255),cursor:z.number().int().min(0).max(2000).default(0),
+ stopAfter:z.number().int().min(0).max(2000).optional(),
 });
 export type AmazonBatchInput=z.infer<typeof AmazonBatchInputSchema>;
 export type BatchCall={campaignId:string;manifestSha256:string;requestId?:string};

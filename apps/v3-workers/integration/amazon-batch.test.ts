@@ -30,7 +30,13 @@ it('Mini: batch cursor survives Worker restart, pause/resume and ContinueAsNew; 
   await h.signal('pause');firstSettled=true;
   await vi.waitFor(async()=>expect(await h.query('progress')).toMatchObject({phase:'paused',cursor:1}),{timeout:45000});
   expect(new Set(submissions)).toEqual(new Set([requestIds[0]]));
-  await h.signal('resume');expect(await h.result()).toMatchObject({phase:'complete',cursor:22,totalProducts:2000});
+  await h.signal('runUntil',21);
+  await vi.waitFor(async()=>expect(await h.query('progress')).toMatchObject({phase:'paused',cursor:21,stopAfter:21}),{timeout:20000});
+  expect(new Set(submissions)).toEqual(new Set(requestIds.slice(0,21)));
+  // The limit crosses ContinueAsNew and survives another cold Worker restart.
+  workers.at(-1)!.shutdown();await runs.at(-1);await start();
+  expect(await h.query('progress')).toMatchObject({phase:'paused',cursor:21,stopAfter:21});
+  await h.signal('resume');expect(await h.result()).toMatchObject({phase:'complete',cursor:22,totalProducts:2000,stopAfter:null});
   expect(new Set(submissions)).toEqual(new Set(requestIds));expect(submissions.filter(id=>id!==requestIds[0])).toHaveLength(21);
   const firstHandle=env.client.workflow.getHandle(campaignId,h.firstExecutionRunId),firstHistory=await firstHandle.fetchHistory();
   expect(firstHistory.events?.some(e=>e.workflowExecutionContinuedAsNewEventAttributes)).toBe(true);

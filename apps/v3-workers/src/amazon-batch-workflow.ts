@@ -4,6 +4,7 @@ import {AmazonBatchInputSchema,type AmazonBatchActivities,type BatchReport} from
 export const amazonBatchProgress=defineQuery<unknown>('progress');
 export const pauseAmazonBatch=defineSignal('pause');
 export const resumeAmazonBatch=defineSignal('resume');
+export const runAmazonBatchUntil=defineSignal<[number]>('runUntil');
 
 /** Temporal owns the durable cursor, waits, pause/resume and bounded continuation.
  * Activities use the normal Brand intake; existing product workflows stay intact. */
@@ -12,17 +13,22 @@ export async function AmazonHistoryBatchWorkflow(raw:unknown):Promise<unknown>{
  if(workflowInfo().workflowId!==input.campaignId)throw ApplicationFailure.nonRetryable('Batch identity conflict','AMAZON.BATCH_IDENTITY');
  const call={campaignId:input.campaignId,manifestSha256:input.manifestSha256};
  const a=proxyActivities<AmazonBatchActivities>({taskQueue:input.controlQueue,startToCloseTimeout:'3 minutes',scheduleToCloseTimeout:'6 minutes',heartbeatTimeout:'30 seconds',retry:{maximumAttempts:3,initialInterval:'5 seconds',maximumInterval:'20 seconds'}});
- let paused=false,completedThisRun=0;
- const state={campaignId:input.campaignId,phase:'starting',cursor:input.cursor,totalChunks:0,totalProducts:0,requestId:null as string|null,workflowId:null as string|null,error:null as string|null,report:null as BatchReport|null};
+ let paused=false,completedThisRun=0,stopAfter=input.stopAfter??null;
+ const state={campaignId:input.campaignId,phase:'starting',cursor:input.cursor,totalChunks:0,totalProducts:0,stopAfter,requestId:null as string|null,workflowId:null as string|null,error:null as string|null,report:null as BatchReport|null};
  setHandler(amazonBatchProgress,()=>state);
  setHandler(pauseAmazonBatch,()=>{paused=true;state.phase='paused';});
- setHandler(resumeAmazonBatch,()=>{paused=false;state.error=null;state.phase='running';});
+ setHandler(resumeAmazonBatch,()=>{stopAfter=null;state.stopAfter=null;paused=false;state.error=null;state.phase='running';});
+ setHandler(runAmazonBatchUntil,target=>{
+  if(!Number.isInteger(target)||target<state.cursor||target>2000||state.totalChunks>0&&target>state.totalChunks){paused=true;state.error='AMAZON.BATCH_STOP_CURSOR_INVALID';state.phase='blocked';return;}
+  stopAfter=target;state.stopAfter=target;paused=state.cursor>=target;state.error=null;state.phase=paused?'paused':'running';
+ });
  for(;;){
   try{
    await condition(()=>!paused);
    const plan=await a.loadAmazonHistoryBatch(call);state.totalChunks=plan.requestIds.length;state.totalProducts=plan.totalProducts;
    if(state.cursor>plan.requestIds.length)throw ApplicationFailure.nonRetryable('Invalid cursor','AMAZON.BATCH_CURSOR');
    while(state.cursor<plan.requestIds.length){
+    if(stopAfter!==null&&state.cursor>=stopAfter){paused=true;state.phase='paused';}
     await condition(()=>!paused);state.phase='running';state.requestId=plan.requestIds[state.cursor]!;
     const chunk={...call,requestId:state.requestId};
     const accepted=await a.submitAmazonHistoryChunk(chunk);
@@ -36,6 +42,7 @@ export async function AmazonHistoryBatchWorkflow(raw:unknown):Promise<unknown>{
      await sleep('30 seconds');
     }
     state.cursor++;completedThisRun++;
+    if(stopAfter!==null&&state.cursor>=stopAfter){paused=true;state.phase='paused';}
     if(completedThisRun>=20&&state.cursor<plan.requestIds.length){
      break;
     }
@@ -48,6 +55,6 @@ export async function AmazonHistoryBatchWorkflow(raw:unknown):Promise<unknown>{
    await condition(()=>!paused);
   }
   // ContinueAsNew throws a control-flow exception; keep it outside the recovery catch.
-  if(completedThisRun>=20){await condition(()=>!paused);return continueAsNew<typeof AmazonHistoryBatchWorkflow>({...input,cursor:state.cursor});}
+  if(completedThisRun>=20){await condition(()=>!paused);return continueAsNew<typeof AmazonHistoryBatchWorkflow>({...input,cursor:state.cursor,stopAfter:stopAfter??undefined});}
  }
 }
