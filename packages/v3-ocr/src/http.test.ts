@@ -72,6 +72,13 @@ it("credentials do not enter semantic configuration fingerprint", () => {
   const config = { endpoint: "https://example.com/ocr", provider: "test/1" };
   expect(new MultipartOcr(config, "synthetic-a").supported).toEqual(new MultipartOcr(config, "synthetic-b").supported);
 });
+it("the fingerprint follows the service semantics, not the address: a LAN box and a loopback box share one queue", () => {
+  const mini = new MultipartOcr({ endpoint: "http://192.168.0.6:8081/ocr", trustedHttpOrigin: "http://192.168.0.6:8081", provider: "paddle-ocr/1", minScore: 0.3 });
+  const loopback = new MultipartOcr({ endpoint: "http://127.0.0.1:8081/ocr", allowLoopbackHttp: true, provider: "paddle-ocr/1", minScore: 0.3, timeoutMs: 30000 });
+  expect(loopback.supported).toEqual(mini.supported);
+  expect(new MultipartOcr({ endpoint: "https://example.com/other", provider: "paddle-ocr/1", minScore: 0.3 }).supported.configFingerprint).not.toBe(mini.supported.configFingerprint);
+  expect(new MultipartOcr({ endpoint: "http://127.0.0.1:8081/ocr", allowLoopbackHttp: true, provider: "paddle-ocr/2", minScore: 0.3 }).supported.configFingerprint).not.toBe(mini.supported.configFingerprint);
+});
 it("permits only an explicitly trusted private IPv4 origin, including its port", () => {
   const config = { endpoint: "http://192.168.0.6:8081/ocr", provider: "legacy/1", minScore: 0.3 };
   expect(() => new MultipartOcr(config)).toThrow("OCR.CONFIG");

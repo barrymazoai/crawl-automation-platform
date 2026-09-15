@@ -46,7 +46,12 @@ export class MultipartOcr implements OcrProvider {
     if (this.config.minScore !== undefined) this.endpoint.searchParams.set("min_score", String(this.config.minScore));
     this.provider = this.config.provider;
     this.supported = { module: "ocr.file", schemaVersion: 1, implementationVersion: "multipart-ocr/2", policyVersion: "single-call/1",
-      resultSchemaVersion: 2, configFingerprint: sha256(Buffer.from(JSON.stringify({ ...this.config, endpoint: this.endpoint.href }))) };
+      resultSchemaVersion: 2,
+      // Semantic configuration only: which service protocol and which thresholds/limits shape the output. The network
+      // address (endpoint, trusted origin, loopback allowance, timeout) is where a worker reaches its own OCR box and
+      // must not split one generic OCR queue by machine.
+      configFingerprint: sha256(Buffer.from(JSON.stringify({ provider: this.config.provider, path: this.endpoint.pathname, minScore: this.config.minScore ?? null,
+        maxInputBytes: this.config.maxInputBytes, maxResponseBytes: this.config.maxResponseBytes }))) };
   }
   async close(): Promise<void> { this.closed = true; }
   async recognize(file: OcrInput["file"], source: Uint8Array, signal: AbortSignal, onReturned?: (response: Uint8Array) => void): Promise<OcrResponse> {

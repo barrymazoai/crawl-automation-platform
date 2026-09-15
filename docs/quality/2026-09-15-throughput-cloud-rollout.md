@@ -17,11 +17,11 @@ Temporal 变更全部用 `patched()` 标记：`resource-wait-backoff-v1`、`batc
 
 | 项目 | 结果 |
 | --- | --- |
-| 候选全套 vitest（19 个套件，含 4 个 fixture 套件与 3 个 Temporal 集成套件） | 241/241 通过，`test-results-20260915b.json` |
+| 候选全套 vitest（20 个套件，含 4 个 fixture 套件与 3 个 Temporal 集成套件） | 262/262 通过，`test-results-20260915b.json` |
 | 历史回放（`replay-ocr-cloud.mjs`） | 26/26，bundle `12270fcf…` |
 | 批次并发集成测试（真实 Temporal） | 2/2 |
 | 只读预演 `apply-throughput-rollout.mjs --check` | 通过：31 个 job、迁移 020 待应用、配置与两份 manifest 均过 schema |
-| Windows 云端 release `dist/cloud-workers` | BUILD_ID `dcf01efc…`，已同步到 `…/ocr-cloud-20260915/cloud-release/` |
+| Windows 云端 release `dist/cloud-workers` | BUILD_ID `021f5db7…`（美国机从同一 commit 自行构建，指纹一致），已同步到 `…/ocr-cloud-20260915/cloud-release/` |
 
 ## 部署顺序（用户执行，均在 mini）
 
@@ -36,9 +36,16 @@ Temporal 变更全部用 `patched()` 标记：`resource-wait-backoff-v1`、`batc
    launchctl bootstrap gui/501 ~/Library/LaunchAgents/com.crawlv3.m.e63308fcc11e0470.plist   # batch 监控 2 个 job
    ```
    看 `~/apps/crawlv3-batch-a.UiA4dx/status.json` 全部 ready，ledger 里 `scraperapi-lane` / `mini-model-account` 等被监控接管（controller 非空、healthy）。
-3. 生成两台 Windows 的 worker 配置包：`node prepare-cloud-workers.mjs cloud-release cloud-sets`（美国：ocr 6 + text 2 + vision 2；本地：text 3 + vision 3）。把 `cloud-sets/us`、`cloud-sets/local` 各自发过去，按 `release/README.md` 起进程；路径占位符（`D:\crawlv3-cloud\…`）由对方填。成了的判据：Temporal 对应队列出现 `us-amazon-*` / `local-amazon-*` 开头的 poller。
+3. 生成两台 Windows 的 worker 配置包：`node prepare-cloud-workers.mjs cloud-release cloud-sets-v2`（已生成并发出）（美国：ocr 6 + text 2 + vision 2；本地：text 3 + vision 3）。把 `cloud-sets/us`、`cloud-sets/local` 各自发过去，按 `release/README.md` 起进程；路径占位符（`D:\crawlv3-cloud\…`）由对方填。成了的判据：Temporal 对应队列出现 `us-amazon-*` / `local-amazon-*` 开头的 poller。
 4. 单个测试：`node submit-throughput-one.mjs [ASIN]`，看 `EVIDENCE` 行：`captureVia.mode=http`、OCR `byHost` 与 `outcomes`（mini 是 `registered`，Windows 是 `uploaded`）、`receipts` 全 `registered`、`reusedFormula` 或 `collectedProducts>0`、`enrich.rowsAfter>rowsBefore`、`heldPermits=0`。同一 ASIN 再提交一次应见 `reusedFormula:true` 且 `enrich.calls` 结果 `reused:true`。
 5. 批量：新的活动 `maxInFlight` 只对新启动的 campaign 生效（现有 run 的输入没有该字段，默认 1）。启动新 campaign 时在输入里带 `maxInFlight`（≤10），`cursor` 取当前已结算游标。
+
+## 美国机首次启动失败后的两处修正（2026-09-15 晚）
+
+- **OCR 指纹不再包含地址。** `MultipartOcr.supported.configFingerprint` 原来对整份 provider 配置（含 endpoint、trustedHttpOrigin）取哈希，任务里的 `ocr` 兼容性由 mini 的局域网地址算出，别的机器永远对不上，"通用 OCR 队列"根本跑不起来。现在只哈希 provider、路径、minScore、输入/输出上限；地址、可信来源、loopback 允许、超时不参与。部署脚本用新规则从 mini 的 OCR 配置重算 Amazon 任务的 `ocr`。GNC/Swanson 的任务配置仍是旧指纹，它们的 worker 也仍在旧 build 上，两边自洽；以后切它们时要用新规则重算。
+- **loopback OCR 配置**：`trustedHttpOrigin` 的守卫只认 RFC1918，127.0.0.1 要用 `allowLoopbackHttp: true` 且不写 `trustedHttpOrigin`。
+- **Codex MCP 禁用列表**：mini 的配置里 `disabledMcpServers: ["node_repl","computer-use"]` 会变成 `-c mcp_servers.X.enabled=false`；Windows 上专用的空 codex-home 没定义这些 server，Codex 0.150 会报 `invalid transport` 拒绝加载。云端配置改为 `disabledMcpServers: []`。该字段不参与 text/vision 指纹。
+- 证书占位符改为按 mini 的真实文件名（`ca.pem`、`mac-worker.pem`、`mac-worker-key.pem`）。
 
 ## 待用户拍板 / 已知边界
 

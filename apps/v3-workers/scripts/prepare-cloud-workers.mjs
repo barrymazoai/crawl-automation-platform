@@ -9,6 +9,7 @@ assert.match(hostname(),/^barrydeMac-mini(?:\.|$)/);
 const [release,out]=process.argv.slice(2);assert.ok(release&&out,'usage: prepare-cloud-workers.mjs <release> <out>');
 const main='/Users/barry/apps/crawlv3-batch-a.UiA4dx',read=async p=>JSON.parse(await fs.readFile(p,'utf8')),keep=(p,v)=>fs.writeFile(p,typeof v==='string'?v:JSON.stringify(v,null,2),{flag:'wx',mode:0o600});
 const buildId=(await fs.readFile(path.join(release,'BUILD_ID'),'utf8')).trim();assert.match(buildId,/^[a-f0-9]{64}$/);
+const {MultipartOcr}=await import(path.resolve('candidate/amazon-config/ocr-http.js')),ocrSemantics=({endpoint:_e,trustedHttpOrigin:_t,allowLoopbackHttp:_l,...rest})=>rest;
 const m=await read(main+'/live/deployment.json'),job=id=>m.jobs.find(j=>j.id===id);
 const base={ocr:job('amazon-channel-label-ocr'),text:job('amazon-channel-label-text'),vision:job('amazon-channel-label-vision')};
 for(const [k,j] of Object.entries(base))assert.ok(j,k);
@@ -22,11 +23,15 @@ for(const [node,roles] of Object.entries(sets)){
   for(const f of [rt.transport.caFile,rt.transport.certFile,rt.transport.keyFile])certs.add(f);
   // Windows paths are placeholders the deployer fills in; everything else is bound to the same queue scope as Mini.
   const runtime={...rt,hostId:`${node}-amazon-${role}`,concurrency,expectedBuildId:buildId,
-   transport:{...rt.transport,caFile:'D:\\\\crawlv3-cloud\\\\private\\\\ca.pem',certFile:'D:\\\\crawlv3-cloud\\\\private\\\\client.pem',keyFile:'D:\\\\crawlv3-cloud\\\\private\\\\client.key'}};
+   transport:{...rt.transport,caFile:'D:\\\\crawlv3-cloud\\\\private\\\\'+path.basename(rt.transport.caFile),certFile:'D:\\\\crawlv3-cloud\\\\private\\\\'+path.basename(rt.transport.certFile),keyFile:'D:\\\\crawlv3-cloud\\\\private\\\\'+path.basename(rt.transport.keyFile)}};
   const {database:_db,resourceDatabase:_rdb,...rest}=priv;
   const cloud={...rest,root:`D:\\\\crawlv3-cloud\\\\work\\\\${role}`,
-   ...(role==='ocr'?{ocrProvider:{...priv.ocrProvider,endpoint:'http://127.0.0.1:8081/ocr',trustedHttpOrigin:'http://127.0.0.1:8081'}}:{}),
-   ...(priv.codex?{codex:{...priv.codex,executable:'D:\\\\crawlv3-cloud\\\\codex\\\\codex.exe',codexHome:'D:\\\\crawlv3-cloud\\\\codex-home',workRoot:`D:\\\\crawlv3-cloud\\\\work\\\\${role}\\\\model-work`}}:{})};
+   // Loopback OCR: the RFC1918 `trustedHttpOrigin` guard does not cover 127.0.0.1; the explicit loopback allowance does.
+   // The provider fingerprint ignores the address, so this worker stays compatible with jobs prepared against Mini's LAN box.
+   ...(role==='ocr'?{ocrProvider:{...ocrSemantics(priv.ocrProvider),endpoint:'http://127.0.0.1:8081/ocr',allowLoopbackHttp:true}}:{}),
+   // A dedicated Codex home defines no MCP servers; `enabled=false` overrides for undefined servers are rejected by Codex (invalid transport).
+   ...(priv.codex?{codex:{...priv.codex,disabledMcpServers:[],executable:'D:\\\\crawlv3-cloud\\\\codex\\\\codex.exe',codexHome:'D:\\\\crawlv3-cloud\\\\codex-home',workRoot:`D:\\\\crawlv3-cloud\\\\work\\\\${role}\\\\model-work`}}:{})};
+  if(role==='ocr')assert.deepEqual(new MultipartOcr(cloud.ocrProvider).supported,new MultipartOcr(priv.ocrProvider).supported,'cloud OCR provider must stay compatible with Mini jobs');
   await keep(path.join(dir,'private',`channel-label-${role}.runtime.json`),runtime);
   await keep(path.join(dir,'private',`channel-label-${role}.private.json`),cloud);
  }

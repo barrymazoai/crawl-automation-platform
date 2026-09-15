@@ -33,6 +33,7 @@ const apiKey=(await fs.readFile(work+'/private/scraperapi.key','utf8')).trim();a
 const manifestPath=main+'/live/deployment.json',text=await fs.readFile(manifestPath,'utf8'),before=JSON.parse(text),after=structuredClone(before);
 const batchManifestPath=batchRoot+'/deployment.json',batchText=await fs.readFile(batchManifestPath,'utf8'),batchBefore=JSON.parse(batchText),batchAfter=structuredClone(batchBefore);
 const {AmazonLiveConfigSchema}=await import(candidate+'/amazon-config/amazon-live-config.js'),{DeploymentSchema}=await import(candidate+'/amazon-config/deployment-supervisor.js');
+const {MultipartOcr}=await import(candidate+'/amazon-config/ocr-http.js');
 const receiptsPrivate=await read(before.jobs.find(j=>j.id==='amazon-channel-label-ocr-receipts').env.V3_CHANNEL_LABEL_CONFIG);
 const db=new pg.Pool({connectionString:receiptsPrivate.database.connectionString,max:1,connectionTimeoutMillis:5000,statement_timeout:15000});
 try{
@@ -63,7 +64,9 @@ try{
  const oldAmazonPath=before.jobs.find(j=>j.id==='amazon-capture').env.V3_AMAZON_LIVE_CONFIG,oldAmazon=await read(oldAmazonPath);
  for(const id of amazonJobs)assert.equal(before.jobs.find(j=>j.id===id).env.V3_AMAZON_LIVE_CONFIG,oldAmazonPath,'Amazon jobs must share one config');
  const {deliveryPostalCode:_zip,...rest}=oldAmazon,modelNeeds=oldAmazon.labelResources.activities.interpretText;assert.ok(Array.isArray(modelNeeds)&&modelNeeds.length);
- const amazon=AmazonLiveConfigSchema.parse({...rest,
+ // OCR compatibility is recomputed under the address-independent fingerprint rule of this build, from Mini's own OCR provider config.
+ const ocrPrivate=await read(before.jobs.find(j=>j.id==='amazon-channel-label-ocr').env.V3_CHANNEL_LABEL_CONFIG),ocrSupported=new MultipartOcr(ocrPrivate.ocrProvider).supported;assert.notEqual(ocrSupported.configFingerprint,oldAmazon.ocr.configFingerprint);
+ const amazon=AmazonLiveConfigSchema.parse({...rest,ocr:ocrSupported,
   capture:{mode:'scraperapi',route:{routeId:'scraperapi-us',version:'scraperapi/1',egressId:'scraperapi-us/1',mode:'scraperapi',managed:true,countryCode:'us',sessionNumber:null,responseMode:'html',providerPolicy:'scraperapi-sync/1'},scraperApi:{apiKey,allowedOrigins:['https://www.amazon.com']},images:'direct'},
   browserResource:lane.resourceId,egressId:'direct/1',productQueues:{...oldAmazon.productQueues,enrich:oldAmazon.labelQueues.collection},
   productResources:{...oldAmazon.productResources,activities:{...oldAmazon.productResources.activities,browserSession:[{resourceId:lane.resourceId,units:1}],enrichProduct:modelNeeds}}});
@@ -107,7 +110,7 @@ try{
  await keep(out+'/deployment-after.private.json',after);await keep(out+'/batch-deployment-after.private.json',batchAfter);
  await keep(manifestPath+'.throughput-next',after);await fs.rename(manifestPath+'.throughput-next',manifestPath);
  await keep(batchManifestPath+'.throughput-next',batchAfter);await fs.rename(batchManifestPath+'.throughput-next',batchManifestPath);
- const receipt={at:new Date().toISOString(),passed:true,builds,migrationApplied:pending,amazonPrivate,capture:{mode:amazon.capture.mode,route:amazon.capture.route,images:amazon.capture.images,lane:amazon.browserResource,egressId:amazon.egressId,enrichQueue:amazon.productQueues.enrich},
+ const receipt={at:new Date().toISOString(),passed:true,builds,migrationApplied:pending,amazonPrivate,capture:{mode:amazon.capture.mode,route:amazon.capture.route,images:amazon.capture.images,lane:amazon.browserResource,egressId:amazon.egressId,enrichQueue:amazon.productQueues.enrich},ocr:{before:oldAmazon.ocr.configFingerprint,after:ocrSupported.configFingerprint},
   changed,batchChanged,capacities,lane,ledgerBefore,ledgerAfter,preflight:checks,tests:{passed:tests.numPassedTests,failed:tests.numFailedTests},replay:{bundleSha256:replay.bundleSha256}};
  await keep(out+'/receipt.json',receipt);
  console.log(JSON.stringify({event:'THROUGHPUT_ROLLOUT_APPLIED',builds:Object.fromEntries(Object.entries(builds).map(([g,b])=>[g,b.buildId])),jobs:changed.length+batchChanged.length,migrationApplied:pending,capacities,lane:lane.capacity,preflightReady:checks.length}));
