@@ -3,12 +3,12 @@ const env=vi.hoisted(()=>({reserve:vi.fn(),release:vi.fn(),verify:vi.fn(),sleep:
 vi.mock("@temporalio/workflow",()=>({
   proxyActivities:(options:unknown)=>{env.options(options);return{reserveResources:env.reserve,releaseResources:env.release,verifyResourceReviewStopped:env.verify};},
   sleep:env.sleep,workflowInfo:()=>({workflowId:"test-product",runId:"00000000-0000-4000-8000-000000000001"}),
-  patched:env.patched,
+  patched:env.patched, CancellationScope:{nonCancellable:(fn:()=>Promise<unknown>)=>fn()}, ActivityCancellationType:{WAIT_CANCELLATION_COMPLETED:"WAIT_CANCELLATION_COMPLETED"},
   ApplicationFailure:{nonRetryable:(_message:string,code:string)=>Error(code)},
 }));
 import { resourceGate } from "./resource-workflow.js";
 const config={queue:"resources",activities:{ocr:[{resourceId:"ocr-cpu",units:1}]},maxWaitSeconds:10};
-beforeEach(()=>{vi.clearAllMocks();env.patched.mockImplementation(id=>id!=='resource-recovery-bounds-v1');vi.useFakeTimers();vi.setSystemTime(100000);
+beforeEach(()=>{vi.clearAllMocks();env.patched.mockImplementation(id=>!['resource-recovery-bounds-v1','resource-execution-finally-v1'].includes(id));vi.useFakeTimers();vi.setSystemTime(100000);
   env.reserve.mockImplementation(async r=>({permitId:r.permitId,status:"granted",reason:"available"}));
   env.release.mockImplementation(async r=>({permitId:r.permitId,status:"released",reason:"released"}));
   env.sleep.mockImplementation(async()=>{vi.setSystemTime(Date.now()+10000);});});
@@ -108,4 +108,37 @@ it('returns a newly granted but unused sibling permit after quarantine wins the 
  const first=gate('ocr',async()=>({status:'review'})),checked=expect(first).rejects.toThrow('RESOURCE.REVIEW_STOP_UNVERIFIED'),second=gate('ocr',fn),secondChecked=expect(second).rejects.toThrow('RESOURCE.OWNER_QUARANTINED');
  await checked;pending(undefined);await secondChecked;expect(fn).not.toHaveBeenCalled();expect(env.release).toHaveBeenCalledOnce();
  expect(env.release.mock.calls[0]![0].permitId).toMatch(/-1$/);
+});
+
+function finalizer(){
+ env.patched.mockReturnValue(true);
+ env.verify.mockImplementation(async({request})=>({permitId:request.permitId,status:'stopped',evidenceKey:`v3/resource-stop/${request.permitId}.json`}));
+ return resourceGate({...config,reviewStopCheck:true});
+}
+it.each(['OCR.EMPTY','ARTIFACT.UPLOAD_UNKNOWN','FUTURE.NEW_ERROR'])('finalizer preserves arbitrary Review %s and releases exactly once',async code=>{
+ const gate=finalizer(),out={status:'review',reviewId:'preserved',code};
+ expect(await gate('ocr',async binding=>{expect(binding?.activityId).toMatch(/^permit-/);return out;})).toBe(out);
+ expect(env.verify).toHaveBeenCalledOnce();expect(env.release).toHaveBeenCalledOnce();
+});
+it.each(['failed','cancelled'])('finalizer releases a confirmed stopped %s call and rethrows its original error',async kind=>{
+ const gate=finalizer(),error=Error(kind);
+ await expect(gate('ocr',async()=>{throw error;})).rejects.toBe(error);
+ expect(env.verify).toHaveBeenCalledWith(expect.objectContaining({activityId:expect.stringMatching(/^permit-/),outcome:{status:'failed'}}));
+ expect(env.release).toHaveBeenCalledOnce();
+});
+it.each(['unknown','wrong-key','unavailable'])('finalizer retains an uncertain permit (%s) and blocks further admission',async mode=>{
+ const gate=finalizer(),error=Error('original'),next=vi.fn();
+ env.verify.mockImplementation(async({request})=>{if(mode==='unavailable')throw Error();return{permitId:request.permitId,status:mode==='unknown'?'unknown':'stopped',evidenceKey:'v3/resource-stop/another-permit.json'};});
+ await expect(gate('ocr',async()=>{throw error;})).rejects.toBe(error);
+ await expect(gate('ocr',next)).rejects.toThrow('RESOURCE.OWNER_QUARANTINED');
+ expect(env.release).not.toHaveBeenCalled();expect(next).not.toHaveBeenCalled();
+});
+it('release outage preserves the original exception and quarantines siblings',async()=>{
+ const gate=finalizer(),error=Error('original');env.release.mockRejectedValue(Error('ledger offline'));
+ await expect(gate('ocr',async()=>{throw error;})).rejects.toBe(error);
+ await expect(gate('ocr',async()=>1)).rejects.toThrow('RESOURCE.OWNER_QUARANTINED');
+});
+it('successful calls release without a stop-proof round trip',async()=>{
+ const gate=finalizer();expect(await gate('ocr',async()=>42)).toBe(42);
+ expect(env.release).toHaveBeenCalledOnce();expect(env.verify).not.toHaveBeenCalled();
 });

@@ -24,7 +24,7 @@ export async function channelLabelActivities(options:{root:string;remote:ObjectS
   const registry=new PostgresResultRegistry(db),results=new OcrResultHandoff(storageId,copies,remote,await FileCompletionJournal.open(join(root,"ocr-journal")),registry);
   const counts={ocr:0,text:0,vision:0},ocrProvider=new MultipartOcr(options.ocrProvider??{endpoint:"http://192.168.0.6:8081/ocr",trustedHttpOrigin:"http://192.168.0.6:8081",provider:"paddle-ocr/1",minScore:0.3});
   const ocr=new OcrFileModule({provider:{provider:ocrProvider.provider,supported:ocrProvider.supported,close:()=>ocrProvider.close(),
-    recognize:async(...args)=>{if(options.readOnlyProviders)throw Error("COLD_PROVIDER_FORBIDDEN");counts.ocr++;return ocrProvider.recognize(...args);}},artifacts,intents:new OcrIntents(remote,"mini-channel-label",storageId),results,reviews});
+    recognize:async(...args)=>{if(options.readOnlyProviders)throw Error("COLD_PROVIDER_FORBIDDEN");counts.ocr++;return ocrProvider.recognize(...args,response=>stops.returned(response));}},artifacts,intents:new OcrIntents(remote,"mini-channel-label",storageId),results,reviews});
   const receipt=new ResolveOcrReceipt({results,local,reviews}),screen=new RegisteredOcrEvidence(artifacts,results,registry),keywords=new KeywordPublication(local,remote);
   const config=options.codex??{settings:{provider:"openai",model:"gpt-5.6-luna",reasoningEffort:"medium"},executable:"/opt/homebrew/bin/codex",codexHome:"/Users/barry/.codex",
     workRoot:join(root,"model-work"),runtimeProfileVersion:"gnc-persistent-auth/1",timeoutMs:240000,disabledMcpServers:["node_repl","computer-use"],extractionProtocol:"label-extraction/1"};
@@ -37,11 +37,11 @@ export async function channelLabelActivities(options:{root:string;remote:ObjectS
   const visionProvider=!options.providerRole||options.providerRole==="vision"?await CodexVisionProvider.open(visionConfig,environment):undefined;
   const textEvidence=new TextEvidence(artifacts,results),textHandoff=new TextHandoff(local,remote,new PostgresTextRegistry(db),textEvidence,storageId);
   const text=new TextModule({provider:{provider:"codex-app-server/2",supported:textMeta,policy:{executionRetries:0,internalModelRequests:"codex-managed",toolAccess:"runtime-profile",modelFallback:false,networkSwitching:false},close:async()=>{await textProvider?.close();},
-    interpret:async(...args)=>{if(options.readOnlyProviders||!textProvider)throw Error("COLD_PROVIDER_FORBIDDEN");counts.text++;const response=await textProvider.interpret(...args);stops.returned(response);return response;}},handoff:textHandoff,reviews,nodeId:"mini-channel-label"});
+    interpret:async(...args)=>{if(options.readOnlyProviders||!textProvider)throw Error("COLD_PROVIDER_FORBIDDEN");counts.text++;const response=await textProvider.interpret(...args,()=>stops.closed());stops.returned(response);return response;}},handoff:textHandoff,reviews,nodeId:"mini-channel-label"});
   const textReceipt=new ResolveTextReceipt({results:textHandoff,local,reviews});
   const visionHandoff=new VisionHandoff(local,remote,new PostgresVisionRegistry(db),storageId,async(task,signal)=>{await screen.verifiedText(task.input.selection,signal);});
   const vision=new VisionModule({provider:{fingerprint:visionMeta.configFingerprint,extractionProtocol:visionMeta.extractionProtocol,
-    interpret:async(...args)=>{if(options.readOnlyProviders||!visionProvider)throw Error("COLD_PROVIDER_FORBIDDEN");counts.vision++;const response=await visionProvider.interpret(...args);stops.returned(response);return response;}},store:remote,localEvidence:local,
+    interpret:async(...args)=>{if(options.readOnlyProviders||!visionProvider)throw Error("COLD_PROVIDER_FORBIDDEN");counts.vision++;const response=await visionProvider.interpret(...args,()=>stops.closed());stops.returned(response);return response;}},store:remote,localEvidence:local,
     verifiedOcrText:(s,a)=>screen.verifiedText(s,a),resolve:async(f,a,owner)=>(await artifacts.resolve(f,owner,a)).bytes});
   const recordVisionReview=visionReviewWriter(local,reviews);
   const saved=new SavedSourceEvidence({remote,files,pages,reviews,ocr:registry,screen});

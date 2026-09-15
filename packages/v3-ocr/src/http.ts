@@ -49,7 +49,7 @@ export class MultipartOcr implements OcrProvider {
       resultSchemaVersion: 2, configFingerprint: sha256(Buffer.from(JSON.stringify({ ...this.config, endpoint: this.endpoint.href }))) };
   }
   async close(): Promise<void> { this.closed = true; }
-  async recognize(file: OcrInput["file"], source: Uint8Array, signal: AbortSignal): Promise<OcrResponse> {
+  async recognize(file: OcrInput["file"], source: Uint8Array, signal: AbortSignal, onReturned?: (response: Uint8Array) => void): Promise<OcrResponse> {
     if (this.closed || signal.aborted) throw new OcrError("OCR.CANCELLED", "not_executed");
     if (!["source-image", "pdf-page"].includes(file.kind)) throw new OcrError("OCR.INVALID_INPUT", "not_executed");
     if (source.byteLength > this.config.maxInputBytes) throw new OcrError("OCR.INPUT_LIMIT", "not_executed");
@@ -91,6 +91,10 @@ export class MultipartOcr implements OcrProvider {
       });
       req.end(body);
     });
+    // A complete synchronous response AND request close precede parsing. Empty or
+    // malformed output does not mean the provider is still using the OCR slot.
+    // Destroying a timed-out socket above deliberately does not call this hook.
+    onReturned?.(response);
     try {
       const parsed = OcrResponseSchema.parse(JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(response)));
       if (!parsed.text.trim()) throw new OcrError("OCR.EMPTY", "executed");

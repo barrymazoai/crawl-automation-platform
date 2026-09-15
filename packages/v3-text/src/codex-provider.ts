@@ -67,11 +67,11 @@ export class CodexTextProvider implements TextProvider {
     try { await rpc.initialize(lifetime); await assertCodexTextModel(rpc, this.config.settings, cwd, lifetime); }
     finally { await rpc.close(); this.active.delete(rpc); }
   }
-  async interpret(request: Parameters<TextProvider["interpret"]>[0], signal: AbortSignal) {
+  async interpret(request: Parameters<TextProvider["interpret"]>[0], signal: AbortSignal, onStopped?: () => void) {
     const lifetime = AbortSignal.any([signal, this.stopped.signal, AbortSignal.timeout(this.config.timeoutMs)]);
     const { rpc, cwd } = await this.connection(lifetime);
     try { return await runCodexTextTurn(rpc, { ...this.config.settings, cwd, prompt: request.prompt, outputSchema: request.outputSchema }, lifetime, this.config.timeoutMs); }
-    finally { await rpc.close(); this.active.delete(rpc); }
+    finally { await rpc.close(); this.active.delete(rpc); onStopped?.(); }
   }
   async close() {
     this.closed = true;

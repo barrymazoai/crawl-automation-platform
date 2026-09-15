@@ -27,7 +27,7 @@ it.each([true,false])("citation Review requires an actual provider stop attestat
  expect((await verifier.verify({request:f.request,activityName:"interpretText",outcome:f.outcome},AbortSignal.timeout(1000))).status).toBe(returned?"stopped":"unknown");
  expect(f.review.failure.code).toBe("TEXT.CITATION_INVALID");
 });
-it.each(["no-return","throws","foreign-operation","foreign-run","handoff","unknown"])("cold verifier rejects %s",async mode=>{
+it.each(["no-return","throws","foreign-operation","foreign-run"])("cold verifier rejects %s",async mode=>{
  const f=setup(true);
  if(mode==="handoff")f.review.failure.code=f.outcome.code="TEXT.HANDOFF_UNKNOWN";
  if(mode==="unknown")f.review.failure.executionFact="unknown";
@@ -37,7 +37,7 @@ it.each(["no-return","throws","foreign-operation","foreign-run","handoff","unkno
  const verifier=new QualityReviewStops(new RetainedPublication(f.local,f.remote),{read:async()=>f.review},true);
  expect((await verifier.verify({request:f.request,activityName:"interpretText",outcome:f.outcome},AbortSignal.timeout(1000))).status).toBe("unknown");
 });
-it.each(["no-return","activity-throws","foreign-owner","foreign-input","unknown-execution","handoff"])("quarantines %s",async mode=>{
+it.each(["no-return","activity-throws","foreign-owner","foreign-input"])("quarantines %s",async mode=>{
  const f=setup();try{await f.stops.run(f.context,"interpretText",f.input,async()=>{if(mode!=="no-return")f.stops.returned("response");if(mode==="activity-throws")throw Error();return f.outcome;});}catch{}
  if(mode==="foreign-owner")f.request.workflowId="different";
  if(mode==="foreign-input")f.review.failure.inputFingerprint="b".repeat(64);
@@ -71,4 +71,24 @@ it('never replaces a conflicting publication claim or restarts the model',async(
   const key='v3/resource-stop/permit-1.json',claimKey='v3/publication-claims/'+sha256(Buffer.from(key))+'.json',foreign=Buffer.from(JSON.stringify({key,sha256:'0'.repeat(64),nonce:'00000000-0000-4000-8000-000000000001'}));
   f.remote.data.set(claimKey,foreign);await expect(f.verify()).rejects.toThrow('RESOURCE.STOP_EVIDENCE_CONFLICT');expect(f.remote.data.get(claimKey)).toBe(foreign);expect(f.remote.data.has(key)).toBe(false);
  }finally{log.mockRestore();}
+});
+
+it.each(['OCR.EMPTY','TEXT.HANDOFF_UNKNOWN','TEXT.UNKNOWN_FUTURE_CODE'])('a confirmed return releases independently of error code or executionFact: %s',async code=>{
+ const f=setup(true);f.review.failure.code=f.outcome.code=code;f.review.failure.executionFact='unknown';
+ await f.stops.run(f.context,'interpretText',f.input,async()=>{f.stops.returned('response');return f.outcome;});
+ expect(await f.verify()).toMatchObject({status:'stopped'});expect(f.review.failure.code).toBe(code);
+});
+it.each(['throw','cancel'])('cold verifier can confirm Activity %s after owned process close without a Review receipt',async mode=>{
+ const f=setup(true),context={...f.context,activityId:f.request.permitId},error=Error(mode);
+ await expect(f.stops.run(context,'interpretText',f.input,async()=>{f.stops.closed();throw error;})).rejects.toBe(error);
+ const verifier=new QualityReviewStops(new RetainedPublication(f.local,f.remote),{read:async()=>{throw Error('no Review lookup');}},true);
+ expect(await verifier.verify({request:f.request,activityId:f.request.permitId,activityName:'interpretText',outcome:{status:'failed'}},AbortSignal.timeout(1000))).toMatchObject({status:'stopped'});
+ expect(await verifier.verify({request:{...f.request,permitId:'other'},activityId:'other',activityName:'interpretText',outcome:{status:'failed'}},AbortSignal.timeout(1000))).toMatchObject({status:'unknown'});
+});
+it('a returned provider does not authorize release while the Activity body is still running',async()=>{
+ const f=setup(true),context={...f.context,activityId:f.request.permitId};
+ await f.stops.run(context,'interpretText',f.input,async()=>{
+  f.stops.closed();expect(await f.stops.verify({request:f.request,activityId:f.request.permitId,activityName:'interpretText',outcome:{status:'failed'}},AbortSignal.timeout(1000))).toMatchObject({status:'unknown'});
+  return f.outcome;
+ });
 });

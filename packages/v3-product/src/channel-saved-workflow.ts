@@ -19,8 +19,8 @@ export interface ChannelSourceProgress {
 export async function runChannelLabelWorkflow(raw:unknown,progress?:ChannelSourceProgress){
   const {input,queues,resources}=ChannelSavedLabelWorkflowInputSchema.parse(raw),owner=input.sourcePlan.owner,gate=resourceGate(resources,{requireReviewStop:input.evidencePolicy==="label-image-first/5"});
   const skipUnstarted=patched("channel-resource-wait-no-receipt-v1"),waitingSources:string[]=[],quarantinedSources:string[]=[];
-  const call=(queue:string,name:string,value:unknown)=>gate(name,()=>proxyActivities<Record<string,(raw:unknown)=>Promise<unknown>>>(
-    name==="ocrFile"?ocrActivityOptions(queue):imageActivityOptions(queue))[name]!(value));
+  const call=(queue:string,name:string,value:unknown)=>gate(name,binding=>proxyActivities<Record<string,(raw:unknown)=>Promise<unknown>>>(
+    {...(name==="ocrFile"?ocrActivityOptions(queue):imageActivityOptions(queue)),...binding})[name]!(value));
   const loaded=ChannelLabelPlanResultSchema.parse(await call(queues.plan,"loadChannelLabelPlan",input));
   if(!same(loaded.input,input)||!same(loaded.manifest.observation,owner)||loaded.manifest.operationId!==input.sourcePlan.operationId)invalid();
   const issued=new Map<string,unknown>();

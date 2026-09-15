@@ -17,8 +17,8 @@ export async function GncStreamingLabelWorkflow(raw: unknown, sharedGate?:Return
   const { input, queues, start } = parsed.data, owner = input.sourcePlan.task.owner;
   const gate = sharedGate??resourceGate(parsed.data.resources);
   let expected = 0, finished = 0; setHandler(gncStreamProgress, () => ({ expected, finished }));
-  const activity = (queue: string, name: string, ocr = false) => (raw: unknown) => gate(name, () => proxyActivities<Record<string, (raw: unknown) => Promise<unknown>>>(
-    ocr ? ocrActivityOptions(queue) : imageActivityOptions(queue))[name]!(raw));
+  const activity = (queue: string, name: string, ocr = false) => (raw: unknown) => gate(name, binding => proxyActivities<Record<string, (raw: unknown) => Promise<unknown>>>(
+    {...(ocr ? ocrActivityOptions(queue) : imageActivityOptions(queue)),...binding})[name]!(raw));
   if (start === "capture") {
     let receipt = null;
     try { receipt = GncAcquireOutcomeSchema.parse(await activity(queues.capture!, "captureGncProduct")(input.sourcePlan.task)); }

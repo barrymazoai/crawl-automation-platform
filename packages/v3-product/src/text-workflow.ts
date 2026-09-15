@@ -2,15 +2,17 @@ import { proxyActivities, isCancellation, ApplicationFailure } from "@temporalio
 import { PreparedTextWorkflowInputSchema, TextActivityOutcomeSchema, TextReceiptOutcomeSchema, TextInputSchema,
   textActivityOptions, type TextInput, type TextActivityOutcome, type TextReceiptInput, type TextReceiptOutcome } from "@crawl-automation/v3-contracts";
 
+import type { ResourceActivityBinding } from "./resource-workflow.js";
+
 /** One prepared text document; no OCR dependency and no product eligibility/collection claim. */
-export async function PreparedTextWorkflow(raw: unknown, gate: <T>(name:string, run:()=>Promise<T>)=>Promise<T> = (_name,run)=>run(), propagateAdmissionFailure = false): Promise<TextReceiptOutcome> {
+export async function PreparedTextWorkflow(raw: unknown, gate: <T>(name:string, run:(binding?:ResourceActivityBinding)=>Promise<T>)=>Promise<T> = (_name,run)=>run(), propagateAdmissionFailure = false): Promise<TextReceiptOutcome> {
   const parsed = PreparedTextWorkflowInputSchema.safeParse(raw);
   if (!parsed.success) throw ApplicationFailure.nonRetryable("Invalid prepared text plan", "TEXT_RECEIPT.INVALID_INPUT");
   const { task, queues } = parsed.data;
   const text = proxyActivities<{ interpretText(input: TextInput): Promise<unknown> }>(textActivityOptions(queues.text));
   const receipts = proxyActivities<{ resolveTextReceipt(input: TextReceiptInput): Promise<unknown> }>(textActivityOptions(queues.receipts));
   let outcome: TextActivityOutcome | null = null;
-  try { outcome = TextActivityOutcomeSchema.parse(await gate("interpretText",()=>text.interpretText(task))); }
+  try { outcome = TextActivityOutcomeSchema.parse(await gate("interpretText",binding=>binding?proxyActivities<{interpretText(input:TextInput):Promise<unknown>}>({...textActivityOptions(queues.text),...binding}).interpretText(task):text.interpretText(task))); }
   catch (error) {
     if (isCancellation(error) || propagateAdmissionFailure && error instanceof ApplicationFailure &&
       ["RESOURCE.WAIT_LIMIT","RESOURCE.OWNER_QUARANTINED","RESOURCE.REVIEW_STOP_UNVERIFIED"].includes(error.type??'')) throw error;

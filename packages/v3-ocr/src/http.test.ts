@@ -1,5 +1,5 @@
 import { createServer, type Server } from "node:http";
-import { afterAll, beforeAll, expect, it } from "vitest";
+import { afterAll, beforeAll, expect, it, vi } from "vitest";
 import { MultipartOcr } from "./http.js";
 import { png, setup, signal } from "./testing.fixture.js";
 
@@ -97,4 +97,15 @@ it("sends typed min_score exactly once and fingerprints it without accepting arb
   for (const minScore of [-0.1, 1.1, NaN, Infinity, "0.3"])
     expect(() => provider("/ocr", { minScore })).toThrow();
   expect(() => provider("/ocr?min_score=0.3", { minScore: 0.3 })).toThrow("OCR.CONFIG");
+});
+
+it.each(['/empty','/broken'])('attests a fully returned response before validation fails (%s)',async path=>{
+ const s=await setup(),returned=vi.fn();
+ await expect(provider(path).recognize(s.input.file,png,signal(),returned)).rejects.toThrow();
+ expect(returned).toHaveBeenCalledOnce();expect(returned.mock.calls[0]![0]).toBeInstanceOf(Buffer);
+});
+it.each(['/hang','/drop','/large'])('does not equate a closed client socket with stopped remote OCR (%s)',async path=>{
+ const s=await setup(),returned=vi.fn();
+ await expect(provider(path,{timeoutMs:100,maxResponseBytes:100}).recognize(s.input.file,png,signal(),returned)).rejects.toThrow();
+ expect(returned).not.toHaveBeenCalled();
 });

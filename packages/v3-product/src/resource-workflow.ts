@@ -1,6 +1,7 @@
-import { proxyActivities, sleep, workflowInfo, ApplicationFailure, patched } from "@temporalio/workflow";
+import { proxyActivities, sleep, workflowInfo, ApplicationFailure, patched, CancellationScope, ActivityCancellationType } from "@temporalio/workflow";
 import { ResourceGateSchema, ResourceDecisionSchema, type ResourceRequest } from "@crawl-automation/v3-contracts";
 
+export type ResourceActivityBinding={activityId:string;cancellationType:typeof ActivityCancellationType.WAIT_CANCELLATION_COMPLETED};
 export function resourceGate(raw: unknown, options:{requireReviewStop?:boolean}={}) {
   const config = raw === undefined ? undefined : ResourceGateSchema.parse(raw);
   let sequence = 0;
@@ -8,7 +9,7 @@ export function resourceGate(raw: unknown, options:{requireReviewStop?:boolean}=
   // state across sibling sources, but never cancels external work already running.
   const bounded=config?patched('resource-recovery-bounds-v1'):false;
   let quarantined=false,waits=0;
-  return async <T>(name: string, run: () => Promise<T>): Promise<T> => {
+  return async <T>(name: string, run: (binding?:ResourceActivityBinding) => Promise<T>): Promise<T> => {
     const needs = config?.activities[name]; if (!config || !needs) return run();
     const checkOwner=()=>{if(bounded&&quarantined)throw ApplicationFailure.nonRetryable('Sibling execution requires recovery','RESOURCE.OWNER_QUARANTINED');};
     checkOwner();
@@ -46,6 +47,37 @@ export function resourceGate(raw: unknown, options:{requireReviewStop?:boolean}=
       if (waitForCapacity ? unhealthySince !== undefined && Date.now() - unhealthySince >= config.maxWaitSeconds * 1000 : Date.now() >= until)
         throw ApplicationFailure.nonRetryable("Resource unavailable; no business execution started", "RESOURCE.WAIT_LIMIT");
       await sleep("10 seconds");
+    }
+    if(config.reviewStopCheck&&patched("resource-execution-finally-v1")){
+      // The permit is also the Activity id: exceptions/cancellation do not have a
+      // business receipt, so the verifier needs an independent exact identity.
+      const binding={activityId:request.permitId,cancellationType:ActivityCancellationType.WAIT_CANCELLATION_COMPLETED};
+      let value:T|undefined,failed=false;
+      try{value=await run(binding);return value;}
+      catch(error){failed=true;throw error;}
+      finally{
+        await CancellationScope.nonCancellable(async()=>{
+          const review=!!value&&typeof value==='object'&&'status' in value&&value.status==='review';
+          if(failed||review){
+            const verifier=proxyActivities<{verifyResourceReviewStopped(raw:unknown):Promise<unknown>}>({
+              taskQueue:config.queue,startToCloseTimeout:'90 seconds',scheduleToCloseTimeout:'2 minutes',retry:{maximumAttempts:1}});
+            let stopped=false;
+            try{
+              const proof=await verifier.verifyResourceReviewStopped({request,activityName:name,activityId:binding.activityId,outcome:failed?{status:'failed'}:value}) as {permitId?:string;status?:string;evidenceKey?:string};
+              stopped=proof?.permitId===request.permitId&&proof.status==='stopped'&&proof.evidenceKey===`v3/resource-stop/${request.permitId}.json`;
+            }catch{/* No stop proof means no release, independent of the business error code. */}
+            if(!stopped){
+              quarantined=true;
+              if(!failed)throw ApplicationFailure.nonRetryable('Execution stop unverified','RESOURCE.REVIEW_STOP_UNVERIFIED');
+              return; // Preserve the original exception/cancellation.
+            }
+          }
+          try{
+            const released=ResourceDecisionSchema.parse(await ports.releaseResources(request));
+            if(released.permitId!==request.permitId||released.status!=='released')throw ApplicationFailure.nonRetryable('Resource release unverified','RESOURCE.RELEASE_UNKNOWN');
+          }catch(error){quarantined=true;if(!failed)throw error;}
+        });
+      }
     }
     // An Activity timeout/cancel may leave external work alive. Do NOT release in finally.
     // Such permits remain quarantined until a separate evidence-based recovery proves the owner stopped.

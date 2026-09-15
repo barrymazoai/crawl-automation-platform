@@ -63,7 +63,7 @@ export class CodexVisionProvider implements VisionProvider {
     try { await rpc.initialize(lifetime); await assertCodexModel(rpc, this.config.settings, cwd, lifetime, ["text", "image"]); }
     finally { await rpc.close(); this.active.delete(rpc); }
   }
-  async interpret(rawImage: ArtifactRef, bytes: Uint8Array, signal: AbortSignal) {
+  async interpret(rawImage: ArtifactRef, bytes: Uint8Array, signal: AbortSignal, onStopped?: () => void) {
     const image = ImageEvidenceSchema.parse(rawImage);
     verifyBytes(image, bytes, 16 * 1024 * 1024);
     const lifetime = AbortSignal.any([signal, this.stopped.signal, AbortSignal.timeout(this.config.timeoutMs)]);
@@ -78,7 +78,7 @@ export class CodexVisionProvider implements VisionProvider {
         image: { path, detail: "original" } }, lifetime, this.config.timeoutMs);
     } catch (e) {
       throw e instanceof CodexError ? new CodexError(e.code.replace(/^TEXT\./, "VISION."), e.executionFact) : e;
-    } finally { await rpc.close(); this.active.delete(rpc); }
+    } finally { await rpc.close(); this.active.delete(rpc); onStopped?.(); }
   }
   async close() { this.stopped.abort(); await Promise.all([...this.active].map(r => r.close())); }
 }

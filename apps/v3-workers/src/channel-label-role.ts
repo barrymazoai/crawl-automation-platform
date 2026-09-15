@@ -70,7 +70,7 @@ export async function channelLabelRole(o:{role:string;hostId:string;root:string;
  case "image-prepare":{const m=new PrepareImageOcr(await files());activities.prepareImageOcr=(r,s)=>m.run(r,s);break;}
  case "ocr":{
   const p=new MultipartOcr(o.ocrProvider!);closers.push(()=>p.close());constructed.push("ocr-provider");
-  const m=new OcrFileModule({provider:p,artifacts:await artifacts(),intents:new OcrIntents(remote,o.hostId,storageId),results:await results(),reviews});
+  const m=new OcrFileModule({provider:{provider:p.provider,supported:p.supported,close:()=>p.close(),recognize:(f,b,s)=>p.recognize(f,b,s,response=>stops.returned(response))},artifacts:await artifacts(),intents:new OcrIntents(remote,o.hostId,storageId),results:await results(),reviews});
   activities.ocrFile=(r,s)=>m.run(r,s);break;
  }
  case "ocr-receipts":{const m=new ResolveOcrReceipt({results:await results(),local,reviews});activities.resolveOcrReceipt=(r,s)=>m.run(r,s);break;}
@@ -78,14 +78,14 @@ export async function channelLabelRole(o:{role:string;hostId:string;root:string;
  case "core":{const m=await core();activities.prepareSwansonLabelCore=(r,s)=>m.run(r,s);break;}
  case "text":{
   const p=await CodexTextProvider.open(o.codex!,environment);closers.push(()=>p.close());constructed.push("text-provider");checks.push(()=>p.check(AbortSignal.timeout(30000)));
-  const m=new TextModule({provider:{provider:p.provider,supported:p.supported,policy:p.policy,close:()=>p.close(),interpret:async(...args)=>{const result=await p.interpret(...args);stops.returned(result);return result;}},handoff:await textHandoff(),reviews,nodeId:o.hostId});
+  const m=new TextModule({provider:{provider:p.provider,supported:p.supported,policy:p.policy,close:()=>p.close(),interpret:async(...args)=>{const result=await p.interpret(...args,()=>stops.closed());stops.returned(result);return result;}},handoff:await textHandoff(),reviews,nodeId:o.hostId});
   activities.interpretText=(r,s)=>m.run(r,s);break;
  }
  case "text-receipts":{const m=new ResolveTextReceipt({results:await textHandoff(),local,reviews});activities.resolveTextReceipt=(r,s)=>m.run(r,s);break;}
  case "vision":{
   const meta=CodexVisionProvider.describe(o.codex!),p=await CodexVisionProvider.open(o.codex!,environment);closers.push(()=>p.close());constructed.push("vision-provider");
   checks.push(async()=>{await assertLabelVisionRegistrySchema(db,meta.extractionProtocol);await p.check(AbortSignal.timeout(30000));});
-  const h=await visionHandoff(),m=new VisionModule({provider:{fingerprint:meta.configFingerprint,extractionProtocol:meta.extractionProtocol,interpret:async(...args)=>{const result=await p.interpret(...args);stops.returned(result);return result;}},store:remote,localEvidence:local,
+  const h=await visionHandoff(),m=new VisionModule({provider:{fingerprint:meta.configFingerprint,extractionProtocol:meta.extractionProtocol,interpret:async(...args)=>{const result=await p.interpret(...args,()=>stops.closed());stops.returned(result);return result;}},store:remote,localEvidence:local,
     verifiedOcrText:async(s,a)=>(await screen()).verifiedText(s,a),resolve:async(f,a,owner)=>(await(await artifacts()).resolve(f,owner,a)).bytes});
   const record=visionReviewWriter(local,reviews);
   activities.interpretImage=async(raw,signal)=>{const task=VisionTaskSchema.parse(raw);if(task.configFingerprint!==meta.configFingerprint)throw Error("VISION.CONFIG_MISMATCH");

@@ -3,16 +3,25 @@ import {isDeepStrictEqual} from 'node:util';
 import {setTimeout as delay} from 'node:timers/promises';
 import {sha256,type RetainedPublication} from '@crawl-automation/v3-artifacts';
 
+export const resourceReturnKey=(c:{workflowId:string;runId:string;activityName:string;activityId:string})=>
+ `v3/resource-returns/${sha256(Buffer.from(JSON.stringify([c.workflowId,c.runId,c.activityName,c.activityId])))}.json`;
 const conflict=()=>{throw Error('RESOURCE.STOP_EVIDENCE_CONFLICT');};
 /** Only immutable attestations of already stopped model work may resume an existing claim.
  * This has no provider, permit-release, overwrite or delete capability. */
 export async function publishStoppedEvidence(publication:RetainedPublication,key:string,bytes:Buffer,signal:AbortSignal){
  const evidence=JSON.parse(bytes.toString()),inv=evidence.invocation;
- if(!inv||!/^[a-f0-9]{64}$/.test(inv.returned??'')||typeof inv.operationId!=='string'||typeof evidence.reviewId!=='string')conflict();
- const expected=evidence.codec==='model-return-attestation/1'
-  ?`v3/model-returns/${sha256(Buffer.from(JSON.stringify([inv.workflowId,inv.runId,inv.activityName,inv.operationId])))}.json`
-  :evidence.codec==='owned-model-review-stop/1'&&evidence.request?.workflowId===inv.workflowId&&evidence.request?.runId===inv.runId
-   ?`v3/resource-stop/${evidence.request.permitId}.json`:null;
+ if(!inv||!/^[a-f0-9]{64}$/.test(inv.returned??'')||typeof inv.operationId!=='string'||typeof inv.activityId!=='string')conflict();
+ const legacyKey=`v3/model-returns/${sha256(Buffer.from(JSON.stringify([inv.workflowId,inv.runId,inv.activityName,inv.operationId])))}.json`;
+ let expected:string|null=null;
+ if(evidence.codec==='model-return-attestation/1'&&typeof evidence.reviewId==='string')expected=legacyKey;
+ if(evidence.codec==='resource-return-attestation/2'&&['owned-process','provider-response'].includes(inv.stop)&&['review','failed'].includes(evidence.outcome?.status))
+  expected=inv.activityId.startsWith('permit-')?resourceReturnKey(inv):legacyKey;
+ if(['owned-model-review-stop/1','owned-resource-stop/2'].includes(evidence.codec)&&evidence.request?.workflowId===inv.workflowId&&evidence.request?.runId===inv.runId){
+  if(evidence.codec==='owned-model-review-stop/1'&&typeof evidence.reviewId!=='string')conflict();
+  if(evidence.codec==='owned-resource-stop/2'&&!['review','failed'].includes(evidence.outcome?.status))conflict();
+  if(evidence.outcome?.status==='failed'&&inv.activityId!==evidence.request.permitId)conflict();
+  expected=`v3/resource-stop/${evidence.request.permitId}.json`;
+ }
  if(key!==expected)conflict();
  const lifetime=AbortSignal.any([signal,AbortSignal.timeout(65000)]),digest=sha256(bytes),claimKey=`v3/publication-claims/${sha256(Buffer.from(key))}.json`;
  const check=(saved:Uint8Array|null)=>{if(saved&&sha256(saved)!==digest)conflict();return !!saved;};

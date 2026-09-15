@@ -2,7 +2,7 @@ import { mkdtemp, mkdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { expect, it } from "vitest";
+import { expect, it, vi } from "vitest";
 import { CodexRpc, type CodexConnectionOptions } from "@crawl-automation/v3-codex";
 import { CodexVisionProvider } from "./provider.js";
 import { image, bytes } from "./testing.fixture.js";
@@ -42,4 +42,10 @@ it("closed providers cannot start new image executions", async () => {
   const f = await setup(); await f.provider.close();
   await expect(f.provider.interpret(image, bytes, AbortSignal.timeout(1000))).rejects.toThrow();
   expect(f.connections).toHaveLength(0);
+});
+
+it('attests process close even when capability validation fails',async()=>{
+ const f=await setup('text-only'),stopped=vi.fn();
+ try{await expect(f.provider.interpret(image,bytes,AbortSignal.timeout(4000),stopped)).rejects.toThrow();expect(stopped).toHaveBeenCalledOnce();}
+ finally{await f.provider.close();}
 });

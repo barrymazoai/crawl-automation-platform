@@ -2,7 +2,7 @@ import { mkdtemp, mkdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { expect, it } from "vitest";
+import { expect, it, vi } from "vitest";
 import { CodexTextProvider, codexTextConnection, type CodexConnectionOptions } from "./codex-provider.js";
 import { CodexRpc } from "./codex-rpc.js";
 const fixture = fileURLToPath(new URL("./codex.fixture.mjs", import.meta.url));
@@ -78,4 +78,10 @@ it("does not inherit arbitrary environment secrets or rewrite existing proxy set
     const c = codexTextConnection(f.config, "/isolated/task", { HTTPS_PROXY: "http://proxy", DATABASE_URL: "secret", CODEX_HOME: "/personal", HOME: "/personal" });
     expect(c.env).toEqual({ HTTPS_PROXY: "http://proxy", HOME: "/isolated/task", CODEX_HOME: f.config.codexHome });
   } finally { await f.provider.close(); }
+});
+
+it('attests process close even when the model turn fails',async()=>{
+ const f=await setup('failed-turn'),stopped=vi.fn();
+ try{await expect(f.provider.interpret(request,AbortSignal.timeout(4000),stopped)).rejects.toThrow();expect(stopped).toHaveBeenCalledOnce();}
+ finally{await f.provider.close();}
 });
