@@ -13,7 +13,10 @@ export const amazonCommerceDomExpression=`(()=>{
   if(!symbol||!whole||!/^\\d[\\d,]*\\.?$/.test(whole)||!/^\\d{2}$/.test(fraction||''))return '';return symbol+whole+(whole.endsWith('.')?'':'.')+fraction;};
  const main=elements('#corePriceDisplay_desktop_feature_div .priceToPay').filter(visible);
  const selected=elements('#buyBoxAccordion .a-accordion-active #corePrice_feature_div .apex-pricetopay-value').filter(visible);
- const price=unique((main.length?main:selected).map(amount));
+ // Static HTML can carry several main-block variants at once (one-time and subscription); only a single
+ // readable main amount is trusted, otherwise the selected offer's own amount is the visible price.
+ const mainAmounts=main.map(amount).filter(Boolean);
+ const price=(mainAmounts.length?unique(mainAmounts):null)??unique(selected.map(amount));
  const mainRegions=elements('#corePriceDisplay_desktop_feature_div').filter(visible);
  const selectedOffers=elements('#buyBoxAccordion .a-accordion-active');
  return {codec:'public-product-commerce/1',sku:value('[itemprop="sku"], [data-product-sku]'),price,

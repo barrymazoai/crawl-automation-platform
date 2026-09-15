@@ -34,6 +34,13 @@ async function main(){
      if(context.info.workflowExecution?.workflowId!==config.campaignId||context.info.workflowType!=='AmazonHistoryBatchWorkflow')throw ApplicationFailure.nonRetryable('Campaign mismatch','AMAZON.BATCH_OWNER');
      const timer=setInterval(()=>context.heartbeat({activity:name}),2000);
      try{return await controller[name](raw as BatchCall,context.cancellationSignal);}
+     catch(error){
+      // Operator-facing conditions must fail fast under the long control retry policy; transient
+      // ones (held permits, API/Temporal/DB hiccups) keep retrying with backoff.
+      const code=error instanceof Error?error.message:'';
+      if(/^AMAZON\.BATCH_(ROOT_NOT_SETTLED|DISCOVERY_CONFLICT|RECOVERY_[A-Z_]+|CURSOR|IDENTITY|OWNER)$/.test(code))throw ApplicationFailure.nonRetryable(code,code);
+      throw error;
+     }
      finally{clearInterval(timer);}
     }]))};
    }catch(error){await dispose();throw error;}

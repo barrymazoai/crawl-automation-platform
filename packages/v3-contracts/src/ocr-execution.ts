@@ -8,6 +8,9 @@ export type OcrIntent = z.infer<typeof OcrIntentSchema>;
 export const OcrActivityOutcomeSchema = z.discriminatedUnion("status", [
   z.strictObject({ status: z.literal("registered"), operationId: ExecutionIdSchema,
     result: ArtifactRefSchema, completion: ArtifactRefSchema, resultRegistered: z.literal(true) }),
+  // Cloud mode: evidence is durable in object storage; the Mini receipt step registers it in the ledger.
+  z.strictObject({ status: z.literal("uploaded"), operationId: ExecutionIdSchema,
+    result: ArtifactRefSchema, completion: ArtifactRefSchema, resultRegistered: z.literal(false) }),
   z.strictObject({ status: z.literal("review"), operationId: ExecutionIdSchema,
     reviewId: ExecutionIdSchema, code: ReviewCodeSchema, evidenceKey: ObjectKeySchema, automaticRetry: z.literal(false) }),
 ]);

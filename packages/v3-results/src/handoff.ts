@@ -1,10 +1,11 @@
 import { parseOcrInput, observationIdentity, type OcrRegistration } from "@crawl-automation/v3-contracts";
 import { ArtifactResolver, verifyBytes, type LocalCopies, type ObjectStore } from "@crawl-automation/v3-artifacts";
-import { digest, matchInput, prepare, recordHash, validateRecord, verifyCompletion } from "./codec.js";
+import { digest, matchInput, operationKey, prepare, rebuild, recordHash, validateRecord, verifyCompletion } from "./codec.js";
 import { ResultError, type CompletionJournal, type ResultFacts, type ResultRegistry } from "./ports.js";
 /** No provider, Workflow, queue or Review consumer is reachable from this module. */
 export class OcrResultHandoff {
-    constructor(private readonly storageId: string, private readonly local: LocalCopies, private readonly remote: ObjectStore, private readonly journal: CompletionJournal, private readonly registry: ResultRegistry) { }
+    /** `registry` is null for a cloud-mode worker: it retains evidence locally and remotely but never touches the ledger. */
+    constructor(private readonly storageId: string, private readonly local: LocalCopies, private readonly remote: ObjectStore, private readonly journal: CompletionJournal, private readonly registry: ResultRegistry | null) { }
     async capture(input: unknown, output: unknown, signal: AbortSignal): Promise<OcrRegistration> {
         signal.throwIfAborted();
         const prepared = prepare(input, output, this.storageId);
@@ -21,7 +22,7 @@ export class OcrResultHandoff {
         signal.throwIfAborted();
         const input = parseOcrInput(inputRaw, digest);
         // Ledger read is from the configured primary, never a lagging read replica.
-        const registered = await this.registry.read(input.operationId), saved = await this.journal.read(input.operationId);
+        const registered = this.registry ? await this.registry.read(input.operationId) : null, saved = await this.journal.read(input.operationId);
         signal.throwIfAborted();
         if (registered && saved && recordHash(validateRecord(registered)) !== recordHash(validateRecord(saved)))
             throw new ResultError("RESULT.CONFLICT");
@@ -89,6 +90,8 @@ export class OcrResultHandoff {
             return before;
         if (!before.artifactDurable || !before.record)
             throw new ResultError("RESULT.NOT_DURABLE");
+        if (!this.registry)
+            throw new ResultError("RESULT.REGISTRY_UNAVAILABLE");
         signal.throwIfAborted();
         try {
             await this.registry.register(before.record);
@@ -103,5 +106,71 @@ export class OcrResultHandoff {
         if (!after.resultRegistered)
             throw new ResultError("RESULT.REGISTRATION_UNKNOWN");
         return after;
+    }
+    /** Read-only: rebuild and verify a record from remote bytes alone. For cloud-mode consumers (text/vision workers
+     * without a ledger) whose task already embeds a registration the Mini produced. Never writes or registers. */
+    async inspectRemote(inputRaw: unknown, signal: AbortSignal): Promise<ResultFacts> {
+        const input = parseOcrInput(inputRaw, digest);
+        const key = operationKey(input), limit = 32 * 1024 * 1024;
+        const resultBytes = await this.remote.read(`${key}/result.json`, limit, signal);
+        const completionBytes = await this.remote.read(`${key}/completion.json`, limit, signal);
+        signal.throwIfAborted();
+        if (!resultBytes || !completionBytes)
+            return { computedLocal: false, artifactDurable: false, resultRegistered: false, record: null };
+        const record = rebuild(input, resultBytes, completionBytes, this.storageId);
+        matchInput(record, input, this.storageId);
+        const source = await this.remote.read(record.input.file.objectKey, record.input.file.byteSize, signal);
+        if (!source)
+            throw new ResultError("RESULT.NOT_DURABLE");
+        try {
+            verifyBytes(record.input.file, source, limit);
+        }
+        catch {
+            throw new ResultError("RESULT.INTEGRITY");
+        }
+        return { computedLocal: false, artifactDurable: true, resultRegistered: false, record };
+    }
+    /** Mini-side registration of evidence a cloud-mode worker retained remotely. Rebuilds the record from the
+     * remote bytes only, verifies every hash and identity, then registers; never calls OCR or re-uploads. */
+    async registerFromRemote(inputRaw: unknown, signal: AbortSignal): Promise<ResultFacts> {
+        const input = parseOcrInput(inputRaw, digest);
+        const before = await this.inspect(input, signal);
+        if (before.resultRegistered)
+            return before;
+        if (!this.registry)
+            throw new ResultError("RESULT.REGISTRY_UNAVAILABLE");
+        const key = operationKey(input), limit = 32 * 1024 * 1024;
+        const resultBytes = await this.remote.read(`${key}/result.json`, limit, signal);
+        const completionBytes = await this.remote.read(`${key}/completion.json`, limit, signal);
+        signal.throwIfAborted();
+        if (!resultBytes || !completionBytes)
+            throw new ResultError("RESULT.INCOMPLETE");
+        const record = rebuild(input, resultBytes, completionBytes, this.storageId);
+        matchInput(record, input, this.storageId);
+        if (before.record && recordHash(before.record) !== recordHash(record))
+            throw new ResultError("RESULT.CONFLICT");
+        const source = await this.remote.read(record.input.file.objectKey, record.input.file.byteSize, signal);
+        if (!source)
+            throw new ResultError("RESULT.NOT_DURABLE");
+        try {
+            verifyBytes(record.input.file, source, limit);
+        }
+        catch {
+            throw new ResultError("RESULT.INTEGRITY");
+        }
+        await this.local.retain(record.result, resultBytes, signal);
+        await this.local.retain(record.completion, completionBytes, signal);
+        if (!before.record)
+            await this.journal.create(record);
+        signal.throwIfAborted();
+        try {
+            await this.registry.register(record);
+        }
+        catch (error) {
+            if (error instanceof ResultError && error.code === "RESULT.CONFLICT")
+                throw error;
+            throw new ResultError("RESULT.REGISTRATION_UNKNOWN");
+        }
+        return this.inspect(input, signal);
     }
 }

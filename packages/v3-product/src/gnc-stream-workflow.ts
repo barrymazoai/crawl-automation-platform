@@ -102,7 +102,7 @@ export async function GncStreamingLabelWorkflow(raw: unknown, sharedGate?:Return
       issued.set(source.id, next);
       const result = await activity(queues.vision, "interpretImage")(next.task) as { status?: string; reviewId?: string; operationId?: string };
       if (result?.status === "review" && ExecutionIdSchema.safeParse(result.reviewId).success) return review(result.reviewId!);
-      return result?.status === "registered" && result.operationId === next.task.input.operationId ? state("registered") : state("rejected");
+      return (result?.status === "registered" || result?.status === "uploaded") && result.operationId === next.task.input.operationId ? state("registered") : state("rejected");
     } catch (error) {
       if (isCancellation(error)) throw error;
       if (error instanceof ApplicationFailure && ["TEXT_RECEIPT.INVALID_RECEIPT", "TEXT_RECEIPT.IDENTITY_CONFLICT"].includes(error.type ?? "")) return state("rejected");

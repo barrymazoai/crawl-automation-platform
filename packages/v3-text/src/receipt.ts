@@ -8,9 +8,11 @@ import { hashText, type TextHandoff } from "./handoff.js";
 /** No model, upload or registration capability: unknown execution means inspect only. */
 export class ResolveTextReceipt {
   constructor(private readonly deps: {
-    results: Pick<TextHandoff, "inspect">;
+    results: Pick<TextHandoff, "inspect"> & Partial<Pick<TextHandoff, "registerFromRemote">>;
     local: ObjectStore;
     reviews: { read(id: string): Promise<ReviewRecord | null>; append(record: ReviewRecord): Promise<unknown> };
+    /** Cloud mode: Reviews retained remotely by a ledger-less worker; registered here only after identity checks. */
+    remoteReviews?: { read(id: string): Promise<ReviewRecord | null> };
   }) {}
   async run(raw: unknown, signal: AbortSignal): Promise<TextReceiptOutcome> {
     const request = TextReceiptInputSchema.parse(raw), input = parseTextInput(request.input, hashText), outcome = request.outcome;
@@ -20,18 +22,36 @@ export class ResolveTextReceipt {
       signal.throwIfAborted();
       if (outcome && outcome.operationId !== input.operationId) throw Error("TEXT_RECEIPT.IDENTITY_CONFLICT");
       if (outcome?.status === "review") {
-        const saved = await this.deps.reviews.read(outcome.reviewId);
+        const identity = (raw: unknown) => {
+          const record = ReviewRecordSchema.parse(raw), failure = record.failure;
+          if (record.reviewId !== outcome.reviewId || failure.operationId !== input.operationId || failure.inputFingerprint !== input.inputFingerprint ||
+            failure.stage !== "codex.text" || failure.code !== outcome.code || !equal(record.observation, textObservation(input)))
+            throw Error("TEXT_RECEIPT.IDENTITY_CONFLICT");
+          return record;
+        };
+        let saved = await this.deps.reviews.read(outcome.reviewId);
+        if (!saved && this.deps.remoteReviews) {
+          // Cloud mode: the worker retained the Review remotely; it enters the ledger only as exactly this operation's Review.
+          const retained = await this.deps.remoteReviews.read(outcome.reviewId);
+          if (retained) {
+            const record = identity(retained);
+            try { await this.deps.reviews.append(record); } catch { /* Only the read-back below counts. */ }
+            saved = await this.deps.reviews.read(outcome.reviewId);
+            if (!saved || !equal(ReviewRecordSchema.parse(saved), record)) throw Error("TEXT_RECEIPT.REVIEW_UNVERIFIED");
+          }
+        }
         if (!saved) throw Error("TEXT_RECEIPT.REVIEW_UNVERIFIED");
-        const record = ReviewRecordSchema.parse(saved), failure = record.failure;
-        if (record.reviewId !== outcome.reviewId || failure.operationId !== input.operationId || failure.inputFingerprint !== input.inputFingerprint ||
-          failure.stage !== "codex.text" || failure.code !== outcome.code || !equal(record.observation, textObservation(input)))
-          throw Error("TEXT_RECEIPT.IDENTITY_CONFLICT");
-        return receipt(record); // Explicit Review is never silently promoted to success.
+        return receipt(identity(saved)); // Explicit Review is never silently promoted to success.
+      }
+      if (outcome?.status === "uploaded") {
+        // Cloud mode: durable but unregistered; rebuild and verify from the remote bytes, then register here.
+        if (!this.deps.results.registerFromRemote) throw Error("TEXT_RECEIPT.TEXT_UNCONFIRMED");
+        await this.deps.results.registerFromRemote(input, signal);
       }
       const facts = await this.deps.results.inspect(input, signal);
       if (!facts.resultRegistered || !facts.artifactDurable || !facts.record) throw Error("TEXT_RECEIPT.TEXT_UNCONFIRMED");
       const registration = TextRecordSchema.parse(facts.record);
-      if (!equal(registration.input, input) || (outcome?.status === "registered" &&
+      if (!equal(registration.input, input) || ((outcome?.status === "registered" || outcome?.status === "uploaded") &&
         (!equal(outcome.result, registration.result) || !equal(outcome.completion, registration.completion))))
         throw Error("TEXT_RECEIPT.IDENTITY_CONFLICT");
       return { status: "registered", registration };

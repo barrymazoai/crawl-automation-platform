@@ -142,3 +142,24 @@ it('successful calls release without a stop-proof round trip',async()=>{
  const gate=finalizer();expect(await gate('ocr',async()=>42)).toBe(42);
  expect(env.release).toHaveBeenCalledOnce();expect(env.verify).not.toHaveBeenCalled();
 });
+
+it('backoff patch: healthy capacity waits are not cut by the time budget, poll less often, and still end at the iteration cap',async()=>{
+ env.patched.mockReturnValue(true);env.reserve.mockImplementation(async r=>({permitId:r.permitId,status:'waiting',reason:'capacity'}));
+ env.sleep.mockImplementation(async(d:string)=>{vi.setSystemTime(Date.now()+Number(d.split(' ')[0])*1000);});
+ const fn=vi.fn();await expect(resourceGate(config)('ocr',fn)).rejects.toThrow('RESOURCE.WAIT_LIMIT');
+ expect(fn).not.toHaveBeenCalled();expect(env.release).not.toHaveBeenCalled();
+ expect(env.sleep).toHaveBeenCalledTimes(399);
+ // sleep k happens after wait k+1 was counted: waits 1..29 -> 10s, 30..119 -> 30s, 120.. -> 60s
+ expect(env.sleep.mock.calls[0]![0]).toBe('10 seconds');expect(env.sleep.mock.calls[28]![0]).toBe('10 seconds');
+ expect(env.sleep.mock.calls[29]![0]).toBe('30 seconds');expect(env.sleep.mock.calls[118]![0]).toBe('30 seconds');expect(env.sleep.mock.calls[119]![0]).toBe('60 seconds');
+});
+it('backoff patch: consecutive unhealthy time still exhausts the dependency budget quickly',async()=>{
+ env.patched.mockReturnValue(true);env.reserve.mockImplementation(async r=>({permitId:r.permitId,status:'waiting',reason:'unhealthy'}));
+ const fn=vi.fn();await expect(resourceGate(config)('ocr',fn)).rejects.toThrow('RESOURCE.WAIT_LIMIT');
+ expect(env.sleep.mock.calls.length).toBeLessThanOrEqual(2);expect(fn).not.toHaveBeenCalled();
+});
+it('without the backoff patch the old bounded deadline behaviour is replayed unchanged',async()=>{
+ env.patched.mockImplementation(id=>id!=='resource-wait-backoff-v1');env.reserve.mockImplementation(async r=>({permitId:r.permitId,status:'waiting',reason:'capacity'}));
+ const fn=vi.fn();await expect(resourceGate(config)('ocr',fn)).rejects.toThrow('RESOURCE.WAIT_LIMIT');
+ expect(env.sleep.mock.calls.length).toBeLessThan(5);expect(env.sleep.mock.calls.every(c=>c[0]==='10 seconds')).toBe(true);
+});

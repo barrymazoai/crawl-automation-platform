@@ -1,6 +1,14 @@
 import { expect, it, vi } from "vitest";
 import { ResolveOcrReceipt } from "./ocr-receipt.js";
-import { setup, signal } from "../../v3-ocr/src/testing.fixture.js";
+import { mkdtemp } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { FileCopies } from "@crawl-automation/v3-artifacts";
+import { png, setup, signal } from "../../v3-ocr/src/testing.fixture.js";
+import { OcrFileModule } from "../../v3-ocr/src/module.js";
+import { OcrError } from "../../v3-ocr/src/ports.js";
+import { FileCompletionJournal, OcrResultHandoff } from "../../v3-results/src/index.js";
+import { RemoteReviews } from "../../v3-review/src/remote.js";
 import { MemoryObjects } from "../../v3-results/src/testing.fixture.js";
 import { ProductImageWorkflowInputSchema, observationIdentity } from "@crawl-automation/v3-contracts";
 
@@ -72,4 +80,45 @@ it("owned OCR manifest rejects mixed mode, wrong owner, duplicate operations and
   await f.module.run(task, signal());
   const registration = await f.registry.read(task.operationId);
   expect(ProductImageWorkflowInputSchema.safeParse({ ...base, initialOcr: [registration] }).success).toBe(false);
+});
+
+async function cloudWorker(f: Awaited<ReturnType<typeof fixture>>, overrides: Partial<ConstructorParameters<typeof OcrFileModule>[0]> = {}) {
+  const root = await mkdtemp(join(tmpdir(), "v3-receipt-cloud-"));
+  const local = await FileCopies.open(join(root, "cache")), journal = await FileCompletionJournal.open(join(root, "journal"));
+  await local.retain(f.input.file, png, signal());
+  const results = new OcrResultHandoff("fixture/1", local, f.remote, journal, null);
+  return new OcrFileModule({ ...f.deps, results, mode: "upload-only", ...overrides });
+}
+it("registers cloud-mode uploaded evidence from remote bytes only, then answers registered", async () => {
+  const f = await fixture(), outcome = await (await cloudWorker(f)).run(f.input, signal());
+  expect(outcome.status).toBe("uploaded"); expect(f.registry.writes).toBe(0);
+  const writes = f.remote.writes, r = await f.resolver.run({ input: f.input, outcome }, signal());
+  expect(r.status).toBe("registered"); if (r.status !== "registered") throw Error("unreachable");
+  expect(f.registry.writes).toBe(1); expect(f.remote.writes).toBe(writes); expect(f.calls()).toBe(1);
+  if (outcome.status !== "uploaded") throw Error("unreachable");
+  expect(r.registration.result).toEqual(outcome.result); expect(r.registration.completion).toEqual(outcome.completion);
+  expect(await f.resolver.run({ input: f.input, outcome }, signal())).toEqual(r); expect(f.registry.writes).toBe(1);
+});
+it("an uploaded outcome whose refs do not match the remote evidence is a receipt Review, not a registration", async () => {
+  const f = await fixture(), outcome = await (await cloudWorker(f)).run(f.input, signal());
+  if (outcome.status !== "uploaded") throw Error("unreachable");
+  const forged = { ...outcome, result: { ...outcome.result, sha256: "b".repeat(64) } };
+  const r = await f.resolver.run({ input: f.input, outcome: forged }, signal());
+  expect(r.status).toBe("review"); if (r.status !== "review") throw Error("unreachable");
+  expect(r.code).toBe("RECEIPT.IDENTITY_CONFLICT");
+});
+it("a cloud-mode Review retained remotely enters the ledger through the receipt with identity checks", async () => {
+  const f = await fixture(), remoteReviews = new RemoteReviews(f.remote);
+  const provider = { ...f.provider, recognize: async () => { throw new OcrError("OCR.EMPTY", "executed"); } };
+  const outcome = await (await cloudWorker(f, { provider, reviews: remoteReviews })).run(f.input, signal());
+  expect(outcome.status).toBe("review"); if (outcome.status !== "review") throw Error("unreachable");
+  expect(f.reviews.records.has(outcome.reviewId)).toBe(false);
+  const resolver = new ResolveOcrReceipt({ results: f.results, reviews: f.reviews, remoteReviews, local: new MemoryObjects() });
+  const r = await resolver.run({ input: f.input, outcome }, signal());
+  expect(r).toMatchObject({ status: "review", reviewId: outcome.reviewId, code: "OCR.EMPTY" });
+  expect(f.reviews.records.has(outcome.reviewId)).toBe(true);
+  const foreign = { ...outcome, code: "OCR.UNCLASSIFIED" as const };
+  const wrong = await resolver.run({ input: f.input, outcome: foreign }, signal());
+  expect(wrong.status).toBe("review"); if (wrong.status !== "review") throw Error("unreachable");
+  expect(wrong.code).toBe("RECEIPT.IDENTITY_CONFLICT");
 });

@@ -9,6 +9,7 @@ import { OcrFileModule, OcrIntents, MultipartOcr } from "@crawl-automation/v3-oc
 import { TextLocalStore, TextEvidence, TextHandoff, TextModule, ResolveTextReceipt, PostgresTextRegistry, CodexTextProvider } from "@crawl-automation/v3-text";
 import { RegisteredOcrEvidence, KeywordPublication, VisionHandoff, VisionModule, PostgresVisionRegistry, CodexVisionProvider, visionReviewWriter, assertLabelVisionRegistrySchema } from "@crawl-automation/v3-vision";
 import { PostgresReviews } from "@crawl-automation/v3-review";
+import { RemoteReviews } from "@crawl-automation/v3-review";
 import { SavedSourceEvidence, ResolveOcrReceipt, LabelProductAssembly, CollectLabelProduct, PostgresLabelCollectedProducts } from "@crawl-automation/v3-product";
 import { PostgresResourceAdmission } from "../../../packages/v3-product/src/resource-admission.js";
 import { QualityReviewStops } from "./quality-review-stops.js";
@@ -25,7 +26,7 @@ export async function channelLabelActivities(options:{root:string;remote:ObjectS
   const counts={ocr:0,text:0,vision:0},ocrProvider=new MultipartOcr(options.ocrProvider??{endpoint:"http://192.168.0.6:8081/ocr",trustedHttpOrigin:"http://192.168.0.6:8081",provider:"paddle-ocr/1",minScore:0.3});
   const ocr=new OcrFileModule({provider:{provider:ocrProvider.provider,supported:ocrProvider.supported,close:()=>ocrProvider.close(),
     recognize:async(...args)=>{if(options.readOnlyProviders)throw Error("COLD_PROVIDER_FORBIDDEN");counts.ocr++;return ocrProvider.recognize(...args,response=>stops.returned(response));}},artifacts,intents:new OcrIntents(remote,"mini-channel-label",storageId),results,reviews});
-  const receipt=new ResolveOcrReceipt({results,local,reviews}),screen=new RegisteredOcrEvidence(artifacts,results,registry),keywords=new KeywordPublication(local,remote);
+  const receipt=new ResolveOcrReceipt({results,local,reviews,remoteReviews:new RemoteReviews(remote)}),screen=new RegisteredOcrEvidence(artifacts,results,registry),keywords=new KeywordPublication(local,remote);
   const config=options.codex??{settings:{provider:"openai",model:"gpt-5.6-luna",reasoningEffort:"medium"},executable:"/opt/homebrew/bin/codex",codexHome:"/Users/barry/.codex",
     workRoot:join(root,"model-work"),runtimeProfileVersion:"gnc-persistent-auth/1",timeoutMs:240000,disabledMcpServers:["node_repl","computer-use"],extractionProtocol:"label-extraction/1"};
   // SSH/launchd may omit Homebrew from PATH; npm's Codex launcher uses /usr/bin/env node.
@@ -38,7 +39,7 @@ export async function channelLabelActivities(options:{root:string;remote:ObjectS
   const textEvidence=new TextEvidence(artifacts,results),textHandoff=new TextHandoff(local,remote,new PostgresTextRegistry(db),textEvidence,storageId);
   const text=new TextModule({provider:{provider:"codex-app-server/2",supported:textMeta,policy:{executionRetries:0,internalModelRequests:"codex-managed",toolAccess:"runtime-profile",modelFallback:false,networkSwitching:false},close:async()=>{await textProvider?.close();},
     interpret:async(...args)=>{if(options.readOnlyProviders||!textProvider)throw Error("COLD_PROVIDER_FORBIDDEN");counts.text++;const response=await textProvider.interpret(...args,()=>stops.closed());stops.returned(response);return response;}},handoff:textHandoff,reviews,nodeId:"mini-channel-label"});
-  const textReceipt=new ResolveTextReceipt({results:textHandoff,local,reviews});
+  const textReceipt=new ResolveTextReceipt({results:textHandoff,local,reviews,remoteReviews:new RemoteReviews(remote)});
   const visionHandoff=new VisionHandoff(local,remote,new PostgresVisionRegistry(db),storageId,async(task,signal)=>{await screen.verifiedText(task.input.selection,signal);});
   const vision=new VisionModule({provider:{fingerprint:visionMeta.configFingerprint,extractionProtocol:visionMeta.extractionProtocol,
     interpret:async(...args)=>{if(options.readOnlyProviders||!visionProvider)throw Error("COLD_PROVIDER_FORBIDDEN");counts.vision++;const response=await visionProvider.interpret(...args,()=>stops.closed());stops.returned(response);return response;}},store:remote,localEvidence:local,

@@ -23,6 +23,7 @@ export * from "./swanson-live-product.js";
 export * from './amazon-rendered.js';
 export * from './amazon-ego.js';
 export * from './amazon-live-product.js';
+export * from './amazon-http.js';
 export * from './amazon-catalog-source.js';
 
 export * from "./dtc-rendered.js";

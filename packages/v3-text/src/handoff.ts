@@ -32,7 +32,8 @@ export class PostgresTextRegistry implements TextRegistry {
     }
 }
 export class TextHandoff {
-    constructor(readonly local: ObjectStore, readonly remote: ObjectStore, readonly registry: TextRegistry, readonly evidence: TextEvidence, readonly storageId: string) { }
+    /** `registry` is null for a cloud-mode worker: it retains evidence locally and remotely but never touches the ledger. */
+    constructor(readonly local: ObjectStore, readonly remote: ObjectStore, readonly registry: TextRegistry | null, readonly evidence: TextEvidence, readonly storageId: string) { }
     journalKey(input: TextInput) { return `text-completions/${input.operationId}.json`; }
     responseKey(input: TextInput) { return `text-responses/${input.operationId}.json`; }
     /** Recover only a retained typed output; raw response alone lacks original provider metadata. */
@@ -101,7 +102,7 @@ export class TextHandoff {
         await this.put(this.local, this.journalKey(input), encode(p.record), signal);
     }
     async inspect(input: TextInput, signal: AbortSignal): Promise<TextFacts> {
-        const saved = await this.registry.read(input.operationId), journal = await this.local.read(this.journalKey(input), 524288, signal);
+        const saved = this.registry ? await this.registry.read(input.operationId) : null, journal = await this.local.read(this.journalKey(input), 524288, signal);
         const localRecord = journal ? textRecord(decode(journal)) : null;
         if (saved && localRecord && hashRecord(saved) !== hashRecord(localRecord))
             throw new TextError("TEXT.RESULT_CONFLICT");
@@ -176,8 +177,49 @@ export class TextHandoff {
         const facts = await this.inspect(input, signal);
         if (!facts.artifactDurable || !facts.record)
             throw new TextError("TEXT.HANDOFF_INCOMPLETE", "executed");
+        if (!this.registry)
+            throw new TextError("TEXT.REGISTRY_UNAVAILABLE", "executed");
         if (!facts.resultRegistered)
             await this.registry.register(facts.record);
+        const after = await this.inspect(input, signal);
+        if (!after.resultRegistered)
+            throw new TextError("TEXT.HANDOFF_UNKNOWN", "executed");
+        return after;
+    }
+    /** Mini-side registration of evidence a cloud-mode worker retained remotely: rebuild the record from the remote
+     * result bytes, require the remote completion to match exactly, then register. Never calls a model or re-uploads. */
+    async registerFromRemote(inputRaw: unknown, signal: AbortSignal): Promise<TextFacts> {
+        const input = parseTextInput(inputRaw, hashText);
+        const before = await this.inspect(input, signal);
+        if (before.resultRegistered)
+            return before;
+        if (!this.registry)
+            throw new TextError("TEXT.REGISTRY_UNAVAILABLE", "executed");
+        const prefix = `text-operations/${input.operationId}/${input.inputFingerprint}`;
+        const resultBytes = await this.remote.read(`${prefix}/result.json`, 524288, signal), manifestBytes = await this.remote.read(`${prefix}/completion.json`, 65536, signal);
+        signal.throwIfAborted();
+        if (!resultBytes || !manifestBytes)
+            throw new TextError("TEXT.HANDOFF_INCOMPLETE", "executed");
+        let p: ReturnType<TextHandoff["prepare"]>;
+        try {
+            p = this.prepare(input, TextOutputSchema.parse(decode(resultBytes)));
+        }
+        catch {
+            throw new TextError("TEXT.RESULT_INTEGRITY", "executed");
+        }
+        if (sha256(p.bytes) !== sha256(resultBytes) || sha256(p.manifest) !== sha256(manifestBytes))
+            throw new TextError("TEXT.RESULT_INTEGRITY", "executed");
+        if (before.record && hashRecord(before.record) !== hashRecord(p.record))
+            throw new TextError("TEXT.RESULT_CONFLICT", "executed");
+        await this.put(this.local, p.record.result.objectKey, p.bytes, signal);
+        await this.put(this.local, p.record.completion.objectKey, p.manifest, signal);
+        if (!before.record)
+            await this.put(this.local, this.journalKey(input), encode(p.record), signal);
+        // inspect() re-verifies quotes, candidate decoding and source durability against the remote copy.
+        const verified = await this.inspect(input, signal);
+        if (!verified.artifactDurable || !verified.record)
+            throw new TextError("TEXT.HANDOFF_INCOMPLETE", "executed");
+        await this.registry.register(verified.record);
         const after = await this.inspect(input, signal);
         if (!after.resultRegistered)
             throw new TextError("TEXT.HANDOFF_UNKNOWN", "executed");

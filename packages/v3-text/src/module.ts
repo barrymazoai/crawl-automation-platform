@@ -9,6 +9,9 @@ export interface TextDependencies {
     handoff: TextHandoff;
     reviews: ReviewWriter & PrivateReviewReader;
     nodeId: string;
+    /** "register" (default) writes the ledger; "upload-only" is cloud mode: evidence is retained locally and
+     * remotely, the Mini receipt registers it, and Reviews go to the injected (remote) store. */
+    mode?: "register" | "upload-only";
 }
 export function textPrompt(input: TextInput, fullText: string) {
     return textProtocolPrompt(input, fullText);
@@ -33,8 +36,11 @@ export class TextModule {
         }
         const h = this.deps.handoff, key = `text-intents/${input.operationId}.json`;
         let fact: "not_executed" | "executed" | "unknown" = "not_executed", response: string | null = null, output: TextOutput | null = null;
+        const uploadOnly = this.deps.mode === "upload-only";
         const done = (r: Awaited<ReturnType<TextHandoff["inspect"]>>): TextActivityOutcome | null => r.resultRegistered && r.artifactDurable && r.record
-            ? { status: "registered", operationId: input.operationId, result: r.record.result, completion: r.record.completion } : null;
+            ? { status: "registered", operationId: input.operationId, result: r.record.result, completion: r.record.completion }
+            : uploadOnly && r.artifactDurable && r.record
+                ? { status: "uploaded", operationId: input.operationId, result: r.record.result, completion: r.record.completion } : null;
         try {
             signal.throwIfAborted();
             const previous = await h.inspect(input, signal);
@@ -72,7 +78,7 @@ export class TextModule {
             await h.capture(input, output, AbortSignal.timeout(10000));
             signal.throwIfAborted();
             await h.uploadMissing(input, signal);
-            const registered = done(await h.register(input, signal));
+            const registered = done(uploadOnly ? await h.inspect(input, signal) : await h.register(input, signal));
             if (!registered)
                 throw new TextError("TEXT.HANDOFF_UNKNOWN", "executed");
             return registered;

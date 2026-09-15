@@ -12,6 +12,7 @@ import { ChannelProductPlans } from "@crawl-automation/v3-channels";
 import { TextLocalStore } from "@crawl-automation/v3-text";
 import { PostgresReviews } from "@crawl-automation/v3-review";
 import {historyObservations} from "./history-observations.js";
+import {inspectExistingFormula} from "./enrichment-store.js";
 
 const Config = z.strictObject({ cacheRoot: z.string().refine(isAbsolute), journalRoot: z.string().refine(isAbsolute), r2: R2ScopeSchema,
   r2Credentials: z.strictObject({ accessKeyId: z.string().min(1), secretAccessKey: z.string().min(1) }),
@@ -41,7 +42,7 @@ async function main() {
         const module = new ChannelProductPlans(publication, new ArtifactResolver(await FileCopies.open(config.cacheRoot), remote), new PostgresReviews(db));
         const history=historyObservations(db,remote);
         await history?.check();
-        return { kind: "activity", dispose, activities: { prepareChannelProduct: async (...args: unknown[]) => {
+        return { kind: "activity", dispose, activities: { inspectExistingFormula: async (raw: unknown) => inspectExistingFormula(db, raw), prepareChannelProduct: async (...args: unknown[]) => {
           const context = Context.current();
           if (args.length !== 1 || context.info.attempt !== 1) throw ApplicationFailure.nonRetryable("Automatic retry denied", "CHANNEL.RETRY_DENIED");
           const timer = setInterval(() => context.heartbeat(), 2000);

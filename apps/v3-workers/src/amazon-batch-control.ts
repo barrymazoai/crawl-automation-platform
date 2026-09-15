@@ -10,7 +10,7 @@ import {sha256} from '@crawl-automation/v3-artifacts';
 import {AmazonLinkBatchesSchema,type AmazonLinkBatch} from './amazon-link-batches.js';
 import type {BatchCall,BatchReport} from './amazon-batch-contract.js';
 const path=z.string().refine(isAbsolute);
-export const AmazonBatchConfigSchema=z.strictObject({campaignId:z.string(),manifestPath:path,manifestSha256:z.string().regex(/^[a-f0-9]{64}$/),dataRoot:path,adminFile:path,recoveryHelper:path,modelRecoveryHelper:path.optional(),controlQueue:z.string()});
+export const AmazonBatchConfigSchema=z.strictObject({campaignId:z.string(),manifestPath:path,manifestSha256:z.string().regex(/^[a-f0-9]{64}$/),dataRoot:path,adminFile:path,recoveryHelper:path,modelRecoveryHelper:path.optional(),controlQueue:z.string(),settledIntakeRecoveries:z.array(z.strictObject({requestId:z.string().uuid(),proofPath:path,proofSha256:z.string().regex(/^[a-f0-9]{64}$/)})).optional()});
 export type AmazonBatchConfig=z.infer<typeof AmazonBatchConfigSchema>;
 export class AmazonBatchController{
  private constructor(readonly config:AmazonBatchConfig,private db:pg.Pool,private client:Client,private batches:AmazonLinkBatch[],private products:Map<string,any>,private baseline:any[]){}
@@ -49,12 +49,37 @@ export class AmazonBatchController{
  async inspectAmazonHistoryChunk(raw:BatchCall,signal:AbortSignal){
   const batch=this.validate(raw,true),receipt=await this.api('/submissions/'+batch.requestId+'/delivery',signal),delivery=receipt?.item;
   if(!delivery||delivery.state!=='CLOSED')return{settled:false,workflowId:'v3-collection-'+batch.requestId,state:delivery?.observedStatus??'PENDING'};
-  if(delivery.observedStatus!=='COMPLETED')throw Error('AMAZON.BATCH_ROOT_NOT_SETTLED');
+  if(delivery.observedStatus!=='COMPLETED')await this.verifyRecoveredIntake(batch,delivery);
   const discoveries=(await this.db.query('select record from catalog_discovery where catalog_id=$1',[batch.requestId])).rows.map(r=>r.record);
   if(!equal(discoveries.map(d=>d.entry.listingId).sort(),batch.entries.map(e=>e.entry.listingId).sort()))throw Error('AMAZON.BATCH_DISCOVERY_CONFLICT');
   const ids=discoveries.flatMap(d=>[d.workflowId,d.workflowId+'-label']);
   if((await this.db.query("select count(*)::int n from resource_permit where released_at is null and request->>'workflowId'=ANY($1)",[ids])).rows[0].n)throw Error('AMAZON.BATCH_PERMIT_HELD');
-  return{settled:true,workflowId:'v3-collection-'+batch.requestId,state:'COMPLETED'};
+  return{settled:true,workflowId:'v3-collection-'+batch.requestId,state:delivery.observedStatus};
+ }
+ private async verifyRecoveredIntake(batch:AmazonLinkBatch,delivery:any){
+  // A closed failed root is not successful business execution. Only an explicitly
+  // retained operator audit can let the campaign advance past this settled group.
+  const ref=this.config.settledIntakeRecoveries?.find(r=>r.requestId===batch.requestId);
+  if(!ref||delivery.observedStatus!=='FAILED')throw Error('AMAZON.BATCH_ROOT_NOT_SETTLED');
+  const bytes=await fs.readFile(ref.proofPath);
+  if(sha256(bytes)!==ref.proofSha256)throw Error('AMAZON.BATCH_RECOVERY_PROOF_CHANGED');
+  const proof=JSON.parse(bytes.toString());
+  if(proof.codec!=='amazon-settled-intake-recovery/1'||proof.requestId!==batch.requestId||proof.terminal.status!=='FAILED'||proof.terminal.continued!==false||proof.terminal.runId!==delivery.runId||proof.terminal.terminalEventId!==delivery.terminalEventId||proof.heldPermits!==0||proof.checks.length!==3||proof.checks.some((c:any)=>c.targetsAbsent!==true))throw Error('AMAZON.BATCH_RECOVERY_PROOF_INVALID');
+  const root=await this.client.workflow.getHandle('v3-collection-'+batch.requestId).describe();
+  if(root.status.name!=='FAILED'||root.runId!==delivery.runId||root.raw.pendingActivities?.length)throw Error('AMAZON.BATCH_RECOVERY_RUN_CHANGED');
+  const rows=(await this.db.query('select d.record,x.execution from catalog_discovery d join catalog_dispatch x using(discovery_id) where d.catalog_id=$1',[batch.requestId])).rows;
+  if(rows.length!==batch.entries.length||!equal(rows.map(d=>d.record.entry.listingId).sort(),batch.entries.map(e=>e.entry.listingId).sort()))throw Error('AMAZON.BATCH_DISCOVERY_CONFLICT');
+  for(const row of rows){
+   const retained=proof.trees.find((t:any)=>t.workflowId===row.record.workflowId),current=await this.client.workflow.getHandle(row.record.workflowId).describe();
+   if(!retained||retained.status!=='COMPLETED'||retained.runId!==row.execution.runId||current.runId!==retained.runId||current.status.name!=='COMPLETED'||current.raw.pendingActivities?.length)throw Error('AMAZON.BATCH_RECOVERY_PRODUCT_UNSETTLED');
+  }
+  for(const tree of proof.trees){
+   const current=await this.client.workflow.getHandle(tree.workflowId).describe();
+   if(current.runId!==tree.runId||current.status.name!==tree.status||current.raw.pendingActivities?.length)throw Error('AMAZON.BATCH_RECOVERY_RUN_CHANGED');
+  }
+  const owners=proof.trees.map((t:any)=>t.workflowId);
+  if((await this.db.query("select count(*)::int n from resource_permit where released_at is null and request->>'workflowId'=ANY($1)",[owners])).rows[0].n)throw Error('AMAZON.BATCH_PERMIT_HELD');
+  if((await this.db.query('select count(*)::int n from source_submission_guard where request_id=$1',[batch.requestId])).rows[0].n)throw Error('AMAZON.BATCH_RECOVERY_GUARD_HELD');
  }
  async recoverAmazonHistoryChunk(raw:BatchCall,signal:AbortSignal){
   const batch=this.validate(raw,true);

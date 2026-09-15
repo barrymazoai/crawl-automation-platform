@@ -73,7 +73,8 @@ export async function runChannelLabelWorkflow(raw:unknown,progress?:ChannelSourc
       issued.set(source.id,next);
       const result=await call(queues.vision,"interpretImage",next.task) as {status?:string;operationId?:string;reviewId?:string};
       if(result?.status==="review"&&ExecutionIdSchema.safeParse(result.reviewId).success)return{id:source.id,status:"review",reviewId:result.reviewId!};
-      return result?.status==="registered"&&result.operationId===next.task.input.operationId?state("registered"):state("rejected");
+      // "uploaded" = cloud-mode worker retained the result remotely; the Mini consumer registers it on first read.
+      return (result?.status==="registered"||result?.status==="uploaded")&&result.operationId===next.task.input.operationId?state("registered"):state("rejected");
     }catch(error){
       if(isCancellation(error))throw error;
       if(skipUnstarted&&error instanceof ApplicationFailure&&error.type==="RESOURCE.WAIT_LIMIT")waitingSources.push(source.id);

@@ -14,14 +14,26 @@ export interface OcrDependencies {
   intents: OcrIntents;
   results: Pick<OcrResultHandoff, "inspect" | "capture" | "uploadMissing" | "register">;
   reviews: ReviewWriter & PrivateReviewReader;
+  /** "register" (default): this worker writes the ledger. "upload-only": cloud mode, evidence is retained
+   * locally and remotely and the Mini receipt step registers it. Reviews then go to a remote store too. */
+  mode?: "register" | "upload-only";
 }
 function registered(input: OcrInput, facts: ResultFacts): OcrActivityOutcome | null {
   if (!facts.resultRegistered || !facts.artifactDurable || !facts.record) return null;
   return { status: "registered", operationId: input.operationId, result: facts.record.result,
     completion: facts.record.completion, resultRegistered: true };
 }
+function uploaded(input: OcrInput, facts: ResultFacts): OcrActivityOutcome | null {
+  if (!facts.artifactDurable || !facts.record) return null;
+  return { status: "uploaded", operationId: input.operationId, result: facts.record.result,
+    completion: facts.record.completion, resultRegistered: false };
+}
 export class OcrFileModule {
   constructor(private readonly deps: OcrDependencies) {}
+  private get uploadOnly() { return this.deps.mode === "upload-only"; }
+  private settled(input: OcrInput, facts: ResultFacts): OcrActivityOutcome | null {
+    return registered(input, facts) ?? (this.uploadOnly ? uploaded(input, facts) : null);
+  }
   async run(raw: unknown, signal: AbortSignal): Promise<OcrActivityOutcome> {
     let input: OcrInput;
     try { input = parseOcrInput(raw, hash); assertOcrCompatibility(input, this.deps.provider.supported);
@@ -32,7 +44,7 @@ export class OcrFileModule {
     try {
       signal.throwIfAborted();
       const prior = await this.deps.results.inspect(input, signal);
-      const done = registered(input, prior);
+      const done = this.settled(input, prior);
       if (done) return done;
       if (prior.record) throw new OcrError("OCR.HANDOFF_INCOMPLETE", "executed");
       const source = await this.deps.artifacts.resolve(input.file, observationIdentity(input), signal);
@@ -51,7 +63,12 @@ export class OcrFileModule {
       // A late cancellation must not discard an already received result.
       await this.deps.results.capture(input, output, AbortSignal.timeout(10000));
       signal.throwIfAborted();
-      await this.deps.results.uploadMissing(input, signal);
+      const durable = await this.deps.results.uploadMissing(input, signal);
+      if (this.uploadOnly) {
+        const done = uploaded(input, durable);
+        if (!done) throw new OcrError("OCR.HANDOFF_INCOMPLETE", "executed");
+        return done;
+      }
       const after = await this.deps.results.register(input, signal);
       const success = registered(input, after);
       if (!success) throw new OcrError("OCR.HANDOFF_INCOMPLETE", "executed");
@@ -60,7 +77,7 @@ export class OcrFileModule {
       // One read-only reconciliation. Never reacquire, re-upload, re-register or call OCR in this path.
       try {
         const facts = await this.deps.results.inspect(input, AbortSignal.timeout(10000));
-        const done = registered(input, facts);
+        const done = this.settled(input, facts);
         if (done) return done;
       } catch { /* unavailable evidence is not proof of absence */ }
       const code = error instanceof OcrError ? error.code : signal.aborted ? "OCR.CANCELLED" :

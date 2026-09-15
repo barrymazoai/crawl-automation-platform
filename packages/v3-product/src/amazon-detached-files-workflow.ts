@@ -1,5 +1,5 @@
-import { startChild, ParentClosePolicy, WorkflowIdReusePolicy, ApplicationFailure, CancellationScope, isCancellation, type ChildWorkflowHandle } from '@temporalio/workflow';
-import { AmazonProductCaptureSchema, AmazonStagedFilesSchema, AmazonProductHandoffSchema, ChannelPlanOutcomeSchema, FileAcquireOutcomeSchema, AcquisitionReviewSchema, type AmazonProductJob } from '@crawl-automation/v3-contracts';
+import { startChild, ParentClosePolicy, WorkflowIdReusePolicy, ApplicationFailure, CancellationScope, isCancellation, patched, type ChildWorkflowHandle } from '@temporalio/workflow';
+import { AmazonProductCaptureSchema, AmazonStagedFilesSchema, AmazonProductHandoffSchema, ChannelPlanOutcomeSchema, FileAcquireOutcomeSchema, AcquisitionReviewSchema, ExistingFormulaSchema, type AmazonProductJob, type ExistingFormula } from '@crawl-automation/v3-contracts';
 import { resourceGate } from './resource-workflow.js';
 const same=(a:unknown,b:unknown)=>JSON.stringify(a)===JSON.stringify(b);
 const invalid=()=>{throw ApplicationFailure.nonRetryable('Amazon staged file identity conflict','AMAZON.STAGE_IDENTITY_CONFLICT');};
@@ -8,7 +8,18 @@ function code(error:unknown){let current=error;for(let n=0;n<8&&current&&typeof 
 /** All origin bytes and local checks finish before page close/lease release.
  * Cloud-only file Activities can then overlap the next product's browser phase. */
 export async function detachedAmazonProduct(job:AmazonProductJob,inputQueue:string,call:(queue:string,name:string,value:unknown)=>Promise<unknown>){
- let captured:ReturnType<typeof AmazonProductCaptureSchema.parse>|undefined,staged:ReturnType<typeof AmazonStagedFilesSchema.parse>|undefined;
+ let captured:ReturnType<typeof AmazonProductCaptureSchema.parse>|undefined,staged:ReturnType<typeof AmazonStagedFilesSchema.parse>|undefined,reuse:Extract<ExistingFormula,{exists:true}>|undefined;
+ // Formula is extracted once per listing: a current-structure formula already in the ledger means no image download,
+ // OCR or model call this time; the page observation (price, rating, stock) was already recorded by the plan step.
+ // Both steps are enabled per deployment by configuring the enrichment queue on the product job; older jobs keep the previous behaviour.
+ const formulaOnce=!!job.queues.enrich&&patched('amazon-formula-once-v1');
+ // Enrichment (unified name, form, variant attributes, health functions) runs after any collected formula and is
+ // itself idempotent on (listing, formula content); a failure there is a Review, never a product failure.
+ const enrich=async(operationId:string)=>{
+  if(!job.queues.enrich||!patched('product-enrichment-v1'))return;
+  try{await resourceGate(job.resources)('enrichProduct',()=>call(job.queues.enrich!,'enrichProduct',{schemaVersion:1,collectionOperationId:operationId}));}
+  catch(error){if(isCancellation(error))throw error;}
+ };
  const review=async(error:unknown,stage:'AMAZON.BROWSER_PHASE_UNRESOLVED'|'AMAZON.FILE_PUBLICATION_UNRESOLVED')=>{
   const r=AcquisitionReviewSchema.parse(await call(job.queues.review,'reviewAmazonProduct',{job,code:stage,causeCode:code(error)}));if(r.operationId!==job.operationId)invalid();return r;
  };
@@ -22,6 +33,7 @@ export async function detachedAmazonProduct(job:AmazonProductJob,inputQueue:stri
     if(!same(captured.job,job)||o.requestId!==d.catalogId||o.brandId!==d.scope.brandId||o.sourceId!==d.scope.sourceId||o.listingId!==d.entry.listingId||o.variantId!==d.entry.variantId||p.expectedUrl!==d.entry.url||p.binding.sessionId!==job.sessionId||p.source.producer.operationId!==job.operationId)invalid();
     const plan=ChannelPlanOutcomeSchema.parse(await call(job.queues.plan,'prepareChannelProduct',p));
     if(plan.operationId!==p.operationId)invalid();if(plan.status==='review')return plan;if(!same(plan.manifest.observation,o))invalid();
+    if(formulaOnce){const existing=ExistingFormulaSchema.parse(await call(job.queues.plan,'inspectExistingFormula',{schemaVersion:1,owner:o}));if(existing.exists){reuse=existing;return null;}}
     staged=AmazonStagedFilesSchema.parse(await call(job.queues.capture,'stageAmazonProductFiles',captured));
     const files=plan.manifest.sources.filter(s=>s.kind==='file-image');
     if(!same(staged.capture,captured)||staged.files.length!==files.length)invalid();
@@ -35,6 +47,10 @@ export async function detachedAmazonProduct(job:AmazonProductJob,inputQueue:stri
   });
   if(phase)return phase;
  }catch(error){if(isCancellation(error))throw error;return review(error,'AMAZON.BROWSER_PHASE_UNRESOLVED');}
+ if(reuse){
+  const outcome={status:'collected',operationId:reuse.operationId,observationId:reuse.observationId,evidenceKey:reuse.evidenceKey,recordHash:reuse.recordHash,reusedFormula:true,collectedAt:reuse.collectedAt};
+  await enrich(reuse.operationId);return outcome;
+ }
  if(!captured||!staged)invalid();
  let child:ChildWorkflowHandle<(raw:unknown)=>Promise<unknown>>|undefined,labelId:string|undefined;
  const seal=(status:'closed'|'failed')=>child!.signal('channelStreamSealed',{operationId:labelId,status});
@@ -58,7 +74,9 @@ export async function detachedAmazonProduct(job:AmazonProductJob,inputQueue:stri
    if(failed)throw failed;
    if(passive){await seal('failed');await child.result();return passive;}
   }
-  await seal('closed');return child.result();
+  await seal('closed');const result=await child.result() as {status?:string;operationId?:string};
+  if(result?.status==='collected'&&typeof result.operationId==='string')await enrich(result.operationId);
+  return result;
  }catch(error){
   if(child)await CancellationScope.nonCancellable(async()=>{try{await seal('failed');}catch{/* REQUEST_CANCEL also closes the child if signalling is unavailable. */}});
   if(isCancellation(error))throw error;

@@ -13,7 +13,8 @@ import { runChannelLabelActivity } from "./channel-label-execution.js";
 
 const database=z.strictObject({connectionString:z.string().min(1),tls:z.boolean()});
 export const ChannelLabelWorkerConfigSchema=z.strictObject({
-  root:z.string().refine(isAbsolute),storageId:z.string().min(1),database,resourceDatabase:database.optional(),
+  // `database` is absent for a cloud-mode worker (no ledger access); only the ocr/text/vision roles may run then.
+  root:z.string().refine(isAbsolute),storageId:z.string().min(1),database:database.optional(),resourceDatabase:database.optional(),
   r2:R2ScopeSchema,r2Credentials:z.strictObject({accessKeyId:z.string().min(1),secretAccessKey:z.string().min(1)}),
   codex:CodexTextConfigSchema.optional(),ocrProvider:MultipartOcrConfigSchema.optional(),
 });
@@ -28,12 +29,13 @@ async function main(){
     kind:"activity" as const,testOnly:false,buildId,sessionScoped:true as const,
     async prepare(runtime){
       const pool=(d:z.infer<typeof database>)=>new pg.Pool({connectionString:d.connectionString,ssl:d.tls?{rejectUnauthorized:true}:false,max:2,connectionTimeoutMillis:5000,statement_timeout:5000});
-      const db=pool(c.database),resourceDb=role==="resources"&&c.resourceDatabase?pool(c.resourceDatabase):db,r2=createR2Objects(c.r2,c.r2Credentials);
+      if(!c.database&&!["ocr","text","vision"].includes(role))throw Error("CHANNEL.DATABASE_REQUIRED");
+      const db=c.database?pool(c.database):undefined,resourceDb=role==="resources"&&c.resourceDatabase?pool(c.resourceDatabase):db,r2=createR2Objects(c.r2,c.r2Credentials);
       let modules:Awaited<ReturnType<typeof channelLabelRole>>|undefined;
-      const dispose=async()=>{await modules?.close();r2.close();if(resourceDb!==db)await resourceDb.end();await db.end();};
+      const dispose=async()=>{await modules?.close();r2.close();if(resourceDb&&resourceDb!==db)await resourceDb.end();await db?.end();};
       try{
-        await db.query("SELECT review_id FROM review_record LIMIT 0");
-        modules=await channelLabelRole({root:join(c.root,role),db,resourceDb,remote:r2.store,storageId:c.storageId,
+        if(db)await db.query("SELECT review_id FROM review_record LIMIT 0");
+        modules=await channelLabelRole({root:join(c.root,role),...(db?{db}:{}),...(resourceDb?{resourceDb}:{}),remote:r2.store,storageId:c.storageId,
           ...(c.codex?{codex:c.codex}:{}),...(c.ocrProvider?{ocrProvider:c.ocrProvider}:{}),role,hostId:runtime.hostId});
         await modules.check();
         console.log(JSON.stringify({event:"CHANNEL_ROLE_PREPARED",role,hostId:runtime.hostId,modules:modules.constructed}));

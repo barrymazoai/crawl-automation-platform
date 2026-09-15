@@ -1,11 +1,13 @@
-import { readFile, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it, expect } from "vitest";
 import { fingerprintOcrInput } from "@crawl-automation/v3-contracts";
-import { sha256 } from "@crawl-automation/v3-artifacts";
-import { digest, prepare } from "./codec.js";
+import { FileCopies, sha256 } from "@crawl-automation/v3-artifacts";
+import { digest, prepare, recordHash } from "./codec.js";
 import { OcrResultHandoff } from "./handoff.js";
-import { MemoryRegistry, setup, signal } from "./testing.fixture.js";
+import { FileCompletionJournal } from "./file-journal.js";
+import { MemoryObjects, MemoryRegistry, setup, signal } from "./testing.fixture.js";
 describe("evidence-driven result handoff, no provider port", () => {
     it("oversized declared source is rejected before storage I/O", async () => {
         const s = await setup();
@@ -172,5 +174,54 @@ describe("evidence-driven result handoff, no provider port", () => {
         const s = await setup();
         await s.handoff.capture(s.input, s.output, signal());
         await expect(new OcrResultHandoff("different-r2/1", s.local, s.remote, s.journal, s.registry).inspect(s.input, signal())).rejects.toMatchObject({ code: "RESULT.CONFLICT" });
+    });
+});
+
+describe("cloud mode: ledger-less worker retains remotely, Mini registers from remote bytes", () => {
+    const mini = async (remote: MemoryObjects, registry = new MemoryRegistry()) => {
+        const root = await mkdtemp(join(tmpdir(), "v3-result-mini-"));
+        const local = await FileCopies.open(join(root, "cache")), journal = await FileCompletionJournal.open(join(root, "journal"));
+        return { registry, journal, handoff: new OcrResultHandoff("fixture-r2/1", local, remote, journal, registry) };
+    };
+    it("a worker without a ledger retains and uploads but can never register", async () => {
+        const s = await setup(), cloud = new OcrResultHandoff("fixture-r2/1", s.local, s.remote, s.journal, null);
+        await cloud.capture(s.input, s.output, signal());
+        expect(await cloud.inspect(s.input, signal())).toMatchObject({ computedLocal: true, artifactDurable: false, resultRegistered: false });
+        expect(await cloud.uploadMissing(s.input, signal())).toMatchObject({ computedLocal: true, artifactDurable: true, resultRegistered: false });
+        await expect(cloud.register(s.input, signal())).rejects.toMatchObject({ code: "RESULT.REGISTRY_UNAVAILABLE" });
+        await expect(cloud.registerFromRemote(s.input, signal())).rejects.toMatchObject({ code: "RESULT.REGISTRY_UNAVAILABLE" });
+        expect(s.remote.writes).toBe(2);
+    });
+    it("Mini rebuilds the identical record from remote bytes, registers once, and is idempotent", async () => {
+        const s = await setup(), cloud = new OcrResultHandoff("fixture-r2/1", s.local, s.remote, s.journal, null);
+        await cloud.capture(s.input, s.output, signal());
+        const uploaded = await cloud.uploadMissing(s.input, signal());
+        const m = await mini(s.remote), writesBefore = s.remote.writes;
+        const facts = await m.handoff.registerFromRemote(s.input, signal());
+        expect(facts).toMatchObject({ computedLocal: true, artifactDurable: true, resultRegistered: true });
+        expect(recordHash(facts.record!)).toBe(recordHash(uploaded.record!));
+        expect(m.registry.writes).toBe(1);
+        expect(s.remote.writes).toBe(writesBefore);
+        expect(await m.journal.read(s.input.operationId)).not.toBeNull();
+        expect(await m.handoff.registerFromRemote(s.input, signal())).toMatchObject({ resultRegistered: true });
+        expect(m.registry.writes).toBe(1);
+        expect(await m.handoff.inspect(s.input, signal())).toMatchObject({ resultRegistered: true, artifactDurable: true });
+    });
+    it("missing, tampered or foreign remote evidence never registers", async () => {
+        const s = await setup(), cloud = new OcrResultHandoff("fixture-r2/1", s.local, s.remote, s.journal, null);
+        const m = await mini(s.remote);
+        await expect(m.handoff.registerFromRemote(s.input, signal())).rejects.toMatchObject({ code: "RESULT.INCOMPLETE" });
+        await cloud.capture(s.input, s.output, signal());
+        const uploaded = await cloud.uploadMissing(s.input, signal());
+        const resultKey = uploaded.record!.result.objectKey, original = s.remote.data.get(resultKey)!;
+        s.remote.data.set(resultKey, Buffer.from(JSON.stringify({ ...JSON.parse(Buffer.from(original).toString()), text: "tampered" })));
+        await expect(m.handoff.registerFromRemote(s.input, signal())).rejects.toMatchObject({ code: "RESULT.INTEGRITY" });
+        s.remote.data.set(resultKey, original);
+        const other = await mini(s.remote);
+        const foreign = { ...s.input, operationId: `op-foreign-${s.input.operationId}` };
+        foreign.inputFingerprint = fingerprintOcrInput(foreign, digest);
+        await expect(other.handoff.registerFromRemote(foreign, signal())).rejects.toMatchObject({ code: "RESULT.INCOMPLETE" });
+        expect(m.registry.writes + other.registry.writes).toBe(0);
+        expect(await m.handoff.registerFromRemote(s.input, signal())).toMatchObject({ resultRegistered: true });
     });
 });

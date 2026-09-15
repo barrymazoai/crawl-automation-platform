@@ -133,6 +133,8 @@ export const TextRecordSchema = z.strictObject({ schemaVersion: z.literal(1), st
 export type TextRecord = z.infer<typeof TextRecordSchema>;
 export const TextActivityOutcomeSchema = z.discriminatedUnion("status", [
     z.strictObject({ status: z.literal("registered"), operationId: ExecutionIdSchema, result: ArtifactRefSchema, completion: ArtifactRefSchema }),
+    // Cloud mode: evidence is durable in object storage; the Mini receipt step registers it in the ledger.
+    z.strictObject({ status: z.literal("uploaded"), operationId: ExecutionIdSchema, result: ArtifactRefSchema, completion: ArtifactRefSchema }),
     z.strictObject({ status: z.literal("review"), operationId: ExecutionIdSchema, reviewId: ExecutionIdSchema, code: z.string().regex(/^TEXT\.[A-Z_]+$/), automaticRetry: z.literal(false) }),
 ]);
 export type TextActivityOutcome = z.infer<typeof TextActivityOutcomeSchema>;

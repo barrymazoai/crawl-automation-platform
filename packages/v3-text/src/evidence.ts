@@ -4,7 +4,10 @@ import type { OcrResultHandoff } from "@crawl-automation/v3-results";
 import { TextError } from "./ports.js";
 import { extractGncLabelCore, extractSwansonLabelCore } from "@crawl-automation/v3-acquisition";
 export class TextEvidence {
-    constructor(private readonly artifacts: Pick<ArtifactResolver, "resolve">, private readonly ocr: Pick<OcrResultHandoff, "inspect">) { }
+    /** `remoteOcr` (cloud mode only): a worker without a ledger verifies OCR-sourced text against the remote bytes.
+     * The registration embedded in the task was produced by the Mini receipt, so durable+identical evidence suffices. */
+    constructor(private readonly artifacts: Pick<ArtifactResolver, "resolve">, private readonly ocr: Pick<OcrResultHandoff, "inspect">,
+        private readonly remoteOcr?: Pick<OcrResultHandoff, "inspectRemote">) { }
     async resolve(input: TextInput, signal: AbortSignal): Promise<{
         text: string;
         refs: ArtifactRef[];
@@ -13,8 +16,12 @@ export class TextEvidence {
         let text: string, refs: ArtifactRef[];
         try {
             if (input.source.kind === "ocr") {
-                const expected = input.source.registration, facts = await this.ocr.inspect(expected.input, signal);
-                if (!facts.resultRegistered || !facts.artifactDurable || JSON.stringify(facts.record) !== JSON.stringify(expected))
+                const expected = input.source.registration;
+                let facts = await this.ocr.inspect(expected.input, signal);
+                if (!facts.record && this.remoteOcr)
+                    facts = await this.remoteOcr.inspectRemote(expected.input, signal);
+                const verified = facts.artifactDurable && JSON.stringify(facts.record) === JSON.stringify(expected) && (facts.resultRegistered || !!this.remoteOcr);
+                if (!verified)
                     throw new TextError("TEXT.UPSTREAM_UNVERIFIED", "not_executed");
                 const result = await this.artifacts.resolve(expected.result, owner, signal);
                 const output = OcrOutputSchema.parse(JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(result.bytes)));

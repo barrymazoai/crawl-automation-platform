@@ -44,3 +44,32 @@ it('Mini: batch cursor survives Worker restart, pause/resume and ContinueAsNew; 
   const finalHandle=env.client.workflow.getHandle(campaignId);await Worker.runReplayHistory({workflowBundle},await finalHandle.fetchHistory(),campaignId);
  }finally{for(const w of workers)if(w.getState()==='RUNNING')w.shutdown();await Promise.allSettled(runs);await env.teardown();}
 },120000);
+
+it('Mini: concurrent chunks keep at most maxInFlight requests open, pause stops new submissions only, and ContinueAsNew carries in-flight cursors',async()=>{
+ if(!/^barrydeMac-mini(?:\.|$)/.test(hostname()))throw Error('Run integration on Mac mini');
+ const env=await TestWorkflowEnvironment.createLocal({server:{ip:'127.0.0.1',ui:false,executable:{type:'cached-download',version:'v1.8.3'}}});
+ const workflowBundle={codePath:join(dirname(fileURLToPath(import.meta.url)),'amazon-batch-workflows.cjs')};
+ const campaignId='batch-c-'+randomUUID(),queue=campaignId,requestIds=Array.from({length:25},()=>randomUUID());
+ const report={at:new Date().toISOString(),requested:250,submittedProducts:0,submittedAttempts:0,captures:0,capturedProducts:0,savedProducts:0,moduleReviewRecords:0,pricePoints:0,comparablePricePoints:0,priceChangeExamples:[]};
+ const open=new Set<string>(),settled=new Set<string>(),submissions:string[]=[];let peak=0,release=false;
+ const activities={loadAmazonHistoryBatch:async()=>({requestIds,totalProducts:250}),
+  submitAmazonHistoryChunk:async({requestId}:any)=>{submissions.push(requestId);open.add(requestId);peak=Math.max(peak,open.size);return{accepted:true,workflowId:'product-'+requestId};},
+  inspectAmazonHistoryChunk:async({requestId}:any)=>{const done=release||settled.has(requestId);if(done){open.delete(requestId);settled.add(requestId);}return{settled:done,workflowId:'product-'+requestId,state:done?'COMPLETED':'RUNNING'};},
+  recoverAmazonHistoryChunk:async()=>({status:'not-needed'}),reportAmazonHistoryBatch:async()=>report};
+ const workers:Worker[]=[],runs:Promise<void>[]=[];
+ const start=async()=>{const w=await Worker.create({connection:env.nativeConnection,taskQueue:queue,workflowBundle,activities});workers.push(w);const run=w.run();run.catch(()=>{});runs.push(run);return w;};
+ try{
+  await start();const h=await env.client.workflow.start('AmazonHistoryBatchWorkflow',{workflowId:campaignId,taskQueue:queue,args:[{campaignId,manifestSha256:'a'.repeat(64),controlQueue:queue,maxInFlight:3}]});
+  await vi.waitFor(async()=>expect(await h.query('progress')).toMatchObject({phase:'waiting-for-products',cursor:0,next:3,inFlight:[0,1,2]}),{timeout:15000});
+  expect(new Set(submissions).size).toBe(3);expect(peak).toBe(3);
+  // Pausing stops new submissions; already open chunks still settle.
+  await h.signal('pause');settled.add(requestIds[1]!);
+  await vi.waitFor(async()=>expect(await h.query('progress')).toMatchObject({phase:'paused',cursor:1,next:3,inFlight:[0,2]}),{timeout:45000});
+  expect(new Set(submissions).size).toBe(3);
+  // A cold restart while chunks are open must not resubmit or lose them.
+  workers.at(-1)!.shutdown();await runs.at(-1);await start();
+  await h.signal('resume');release=true;
+  expect(await h.result()).toMatchObject({phase:'complete',cursor:25,next:25,inFlight:[],totalProducts:250});
+  expect(new Set(submissions).size).toBe(25);expect(submissions.length).toBe(25);expect(peak).toBeLessThanOrEqual(3);
+ }finally{for(const w of workers){try{w.shutdown();}catch{/* already stopped by the restart step */}}await Promise.allSettled(runs);await env.teardown();}
+},180000);

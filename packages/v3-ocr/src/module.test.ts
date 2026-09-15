@@ -1,8 +1,10 @@
-import { expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { OcrFileModule } from "./module.js";
 import { OcrError } from "./ports.js";
 import { OcrIntents } from "./intent.js";
 import { setup, signal } from "./testing.fixture.js";
+import { OcrResultHandoff } from "@crawl-automation/v3-results";
+import { RemoteReviews } from "@crawl-automation/v3-review";
 import { fingerprintOcrInput } from "@crawl-automation/v3-contracts";
 import { sha256 } from "@crawl-automation/v3-artifacts";
 
@@ -110,4 +112,36 @@ it("rendered PDF page retains its parent/page provenance through OCR registratio
   s.remote.data.set(s.input.file.objectKey, (await import("./testing.fixture.js")).png);
   expect(await s.module.run(s.input, signal())).toMatchObject({ status: "registered" });
   expect((await s.registry.read(s.input.operationId))?.input.file).toMatchObject({ kind: "pdf-page", parentArtifactId: "parent-pdf", pageIndex: 3 });
+});
+
+describe("cloud mode (upload-only): no ledger access", () => {
+  it("retains and uploads evidence, returns uploaded, and is idempotent without re-running OCR", async () => {
+    const s = await setup();
+    const cloud = new OcrFileModule({ ...s.deps, results: new OcrResultHandoff("fixture/1", s.local, s.remote, s.journal, null), mode: "upload-only" });
+    const first = await cloud.run(s.input, signal());
+    expect(first.status).toBe("uploaded");
+    if (first.status !== "uploaded") throw Error("unreachable");
+    expect(first.resultRegistered).toBe(false);
+    expect(s.remote.data.has(first.result.objectKey)).toBe(true);
+    expect(s.remote.data.has(first.completion.objectKey)).toBe(true);
+    expect(s.registry.writes).toBe(0);
+    expect(s.calls()).toBe(1);
+    const writes = s.remote.writes;
+    expect(await cloud.run(s.input, signal())).toEqual(first);
+    expect(s.calls()).toBe(1);
+    expect(s.remote.writes).toBe(writes);
+  });
+  it("keeps failure Reviews in the remote store when it has no ledger", async () => {
+    const s = await setup(), reviews = new RemoteReviews(s.remote);
+    const provider = { ...s.provider, recognize: async () => { throw new OcrError("OCR.EMPTY", "executed"); } };
+    const cloud = new OcrFileModule({ ...s.deps, provider, reviews, results: new OcrResultHandoff("fixture/1", s.local, s.remote, s.journal, null), mode: "upload-only" });
+    const outcome = await cloud.run(s.input, signal());
+    expect(outcome.status).toBe("review");
+    if (outcome.status !== "review") throw Error("unreachable");
+    expect(outcome.code).toBe("OCR.EMPTY");
+    const retained = await reviews.read(outcome.reviewId);
+    expect(retained?.failure.operationId).toBe(s.input.operationId);
+    expect(s.remote.data.has(`v3/ocr-reviews/${outcome.reviewId}.json`)).toBe(true);
+    expect(s.registry.writes).toBe(0);
+  });
 });

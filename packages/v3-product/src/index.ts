@@ -10,3 +10,4 @@ export * from "./label-comparison.js";
 export * from "./label-merge.js";
 export * from "./label-product.js";
 export * from "./packaging.js";
+export * from "./enrichment.js";

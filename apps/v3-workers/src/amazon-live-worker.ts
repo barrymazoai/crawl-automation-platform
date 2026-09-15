@@ -10,8 +10,8 @@ import { Client, Connection } from "@temporalio/client";
 import { CatalogPageInputSchema, CatalogDiscoverySchema, AmazonProductJobSchema, CollectionWorkflowInput, BrandCollectionPlanSchema, BrandCollectionProgressSchema,
   AmazonProductCaptureSchema, AmazonProductHandoffSchema, ChannelLabelInputSchema, ReviewRecordSchema, observationIdentity } from "@crawl-automation/v3-contracts";
 import { createR2Objects, RetainedPublication, ArtifactResolver, FileCopies, sha256, ActivityObjectReads } from "@crawl-automation/v3-artifacts";
-import { EgoTaskPages, EgoFileTransport, AcquireFileModule, FileEvidence, acquireFile, systemDns, type SourceAccess } from "@crawl-automation/v3-acquisition";
-import { AmazonCatalogSource, AmazonEgoReader, AmazonLiveProduct, ChannelProductPlans } from "@crawl-automation/v3-channels";
+import { EgoTaskPages, EgoFileTransport, DirectHttpsTransport, createHttpRoute, AcquireFileModule, FileEvidence, acquireFile, systemDns, type SourceAccess, type FileTransport } from "@crawl-automation/v3-acquisition";
+import { AmazonCatalogSource, AmazonEgoReader, AmazonHttpReader, AmazonLiveProduct, ChannelProductPlans } from "@crawl-automation/v3-channels";
 import { TextLocalStore } from "@crawl-automation/v3-text";
 import { PostgresReviews } from "@crawl-automation/v3-review";
 import { RoleRegistry, artifactBuildId, workerProcess } from "@crawl-automation/v3-worker-runtime";
@@ -43,8 +43,15 @@ async function main() {
         await db.query("SELECT discovery_id FROM catalog_discovery LIMIT 0");
         const local = await TextLocalStore.open(config.journalRoot), copies = await FileCopies.open(config.cacheRoot);
         const publication = new RetainedPublication(local, remote), reviews = new PostgresReviews(db), admission = new PostgresResourceAdmission(resourceDb);
-        const pages = new EgoTaskPages(config.browser, await TextLocalStore.open(config.pageJournalRoot));
+        // scraperapi mode: no owned page. The lane permit (`browserResource`) is still required for every capture-phase call.
+        const http = config.capture.mode === "scraperapi" ? createHttpRoute(config.capture.route, { scraperApi: config.capture.scraperApi }) : undefined;
+        const pages = config.browser ? new EgoTaskPages(config.browser, await TextLocalStore.open(config.pageJournalRoot)) : undefined;
+        const requirePages = () => { if (!pages) throw Error("AMAZON.CAPTURE_UNAVAILABLE"); return pages; };
         const requireBrowser = async () => { const e = execution(); await admission.requireHeld(config.browserResource, e.workflowId, e.runId); };
+        // Originals: through the owned page in browser mode; a pinned direct HTTPS GET to the image CDN in scraperapi mode.
+        const fileTransport = async (sessionId: string, pageUrl: string, url: string, s: AbortSignal): Promise<FileTransport> =>
+          http ? new DirectHttpsTransport() : new EgoFileTransport({ browser: await requirePages().open(sessionId, s), pageUrl, allowedUrls: [url] }, config.egressId);
+        const notOpened = (sessionId: string) => ({ status: "not-opened" as const, taskId: sessionId, targetId: null });
         const links = new Map((config.linkBatches ?? []).map(b => [b.requestId, b]));
         const jobsFor = async (raw: unknown) => {
           const discovery = CatalogDiscoverySchema.parse(raw);
@@ -59,20 +66,21 @@ async function main() {
         };
         const products = new AmazonLiveProduct(publication, { text: config.sourceText, ocr: config.ocr,
           visionConfigFingerprint: config.sourceVisionConfigFingerprint, egressId: config.egressId }, {
-          capture: async (job, signal) => { await requireBrowser(); return new AmazonEgoReader(await pages.open(job.sessionId, signal)).product(job.discovery.entry.url, signal, undefined, config.deliveryPostalCode); },
+          capture: async (job, signal) => { await requireBrowser(); return http ? new AmazonHttpReader(http).product(job.discovery.entry.url, signal)
+            : new AmazonEgoReader(await requirePages().open(job.sessionId, signal)).product(job.discovery.entry.url, signal, undefined, config.deliveryPostalCode); },
         }, [...links.keys()]);
         const plans = new ChannelProductPlans(publication, new ArtifactResolver(copies, remote), reviews);
         const files = new FileEvidence({ local, remote, copies, reviews });
         const staging = new AmazonStagedFiles({publication,copies,files,storageId:sha256(Buffer.from(JSON.stringify([hostname(),config.journalRoot,config.cacheRoot]))),
           describe:async(c,s)=>{await verifyJob(c.job,s);const pageUrl=await products.filePageUrl(c,s),plan=await plans.inspect(c.sourcePlan,s);if(!plan)throw Error('AMAZON.PLAN_UNVERIFIED');return{plan,pageUrl};},
           closed:async(c,s)=>{
-            await verifyJob(c.job,s);const e=execution(),proof=await pages.closedProof(c.job.sessionId,s);
+            await verifyJob(c.job,s);const e=execution(),proof=http?notOpened(c.job.sessionId):await requirePages().closedProof(c.job.sessionId,s);
             const held=await resourceDb.query("SELECT p.released_at FROM resource_permit p JOIN resource_permit_need n USING(permit_id) WHERE n.resource_id=$1 AND p.request->>'workflowId'=$2 AND p.request->>'runId'=$3",[config.browserResource,e.workflowId,e.runId]);
             if(held.rowCount!==1||held.rows[0].released_at===null)throw Error('AMAZON.STAGE_BROWSER_NOT_RELEASED');return proof;
           },
           ...(role==='capture'?{download:async(c:ReturnType<typeof AmazonProductCaptureSchema.parse>,input:Parameters<typeof acquireFile>[0],url:string,pageUrl:string,s:AbortSignal)=>{
-            const access:SourceAccess={acquire:async raw=>{if(!equal(raw,input))throw Error('SOURCE.SESSION_MISMATCH');await requireBrowser();const browser=await pages.open(c.job.sessionId,s);let released=false;
-              return{owner:observationIdentity(input),sourceId:input.sourceId,resourceId:input.resourceId,binding:input.binding,url,allowedOrigins:['https://m.media-amazon.com'],transport:new EgoFileTransport({browser,pageUrl,allowedUrls:[url]},config.egressId),headersFor:()=>({}),assertActive:()=>{if(released)throw Error('SOURCE.SESSION_UNAVAILABLE');},release:async()=>{released=true;}};}};
+            const access:SourceAccess={acquire:async raw=>{if(!equal(raw,input))throw Error('SOURCE.SESSION_MISMATCH');await requireBrowser();const transport=await fileTransport(c.job.sessionId,pageUrl,url,s);let released=false;
+              return{owner:observationIdentity(input),sourceId:input.sourceId,resourceId:input.resourceId,binding:input.binding,url,allowedOrigins:['https://m.media-amazon.com'],transport,headersFor:()=>({}),assertActive:()=>{if(released)throw Error('SOURCE.SESSION_UNAVAILABLE');},release:async()=>{released=true;}};}};
             return acquireFile(input,{access,dns:systemDns},s);
           }}:{}),
           timing:(phase,milliseconds)=>console.log(JSON.stringify({event:'AMAZON_FILE_PHASE',phase,milliseconds,workflowId:execution().workflowId,activityId:Context.current().info.activityId}))});
@@ -85,7 +93,7 @@ async function main() {
         };
         const catalog = new AmazonCatalogSource(publication, {brandName:config.brandName,pages:config.catalogPages,asins:config.selectedAsins}, { capture: async (input, signal, retain) => {
           await requireBrowser();
-          return pages.using(`amazon-catalog-${sha256(Buffer.from(JSON.stringify(input)))}`, signal,
+          return requirePages().using(`amazon-catalog-${sha256(Buffer.from(JSON.stringify(input)))}`, signal,
             async browser => {
               const projection = await new AmazonEgoReader(browser).catalog(config.catalogPages[input.page]!, config.brandName, signal);
               await retain(projection); // Preserve evidence before the exact owned page is closed.
@@ -140,7 +148,7 @@ async function main() {
         else if (role === "capture") handlers = {
           captureAmazonProduct: async (raw, s) => products.capture(await verifyJob(raw, s), s),
           stageAmazonProductFiles: (raw,s) => staging.stage(raw,s),
-          closeAmazonProductPage: async (raw, s) => { const job = await verifyJob(raw, s); await requireBrowser(); return pages.close(job.sessionId, s); },
+          closeAmazonProductPage: async (raw, s) => { const job = await verifyJob(raw, s); if (http) return notOpened(job.sessionId); await requireBrowser(); return requirePages().close(job.sessionId, s); },
         };
         else if (role === "file") handlers = { acquireAmazonFile: async (raw, s) => {
           const captured = AmazonProductCaptureSchema.parse({ job: raw.job, sourcePlan: raw.sourcePlan }), job = await verifyJob(captured.job, s);
@@ -148,9 +156,9 @@ async function main() {
           const url = await plans.fileSource(captured.sourcePlan, raw.input, s);
           const access: SourceAccess = { acquire: async input => {
             if (!equal(input, raw.input)) throw Error("SOURCE.SESSION_MISMATCH");
-            await requireBrowser(); const browser = await pages.open(job.sessionId, s); let released = false;
+            await requireBrowser(); const transport = await fileTransport(job.sessionId, pageUrl, url, s); let released = false;
             return { owner: observationIdentity(input), sourceId: input.sourceId, resourceId: input.resourceId, binding: input.binding, url,
-              allowedOrigins: ["https://m.media-amazon.com"], transport: new EgoFileTransport({ browser, pageUrl, allowedUrls: [url] }, config.egressId),
+              allowedOrigins: ["https://m.media-amazon.com"], transport,
               headersFor: () => ({}), assertActive: () => { if (released) throw Error("SOURCE.SESSION_UNAVAILABLE"); }, release: async () => { released = true; } };
           } };
           return new AcquireFileModule(files, { access, dns: systemDns }).run(raw.input, s);

@@ -46,8 +46,11 @@ export class PostgresVisionRegistry implements VisionRegistry {
 
 /** Registration is not product ingestion. Inspection never uploads, registers, or calls a model. */
 export class VisionHandoff {
-  constructor(readonly local: ObjectStore, readonly remote: ObjectStore, readonly registry: VisionRegistry,
-    readonly storageId: string, private readonly verifyOcr: (task: VisionTask, signal: AbortSignal) => Promise<void>) {}
+  /** `registry` is null for a cloud-mode worker (retains evidence, never touches the ledger). `settleRemote` lets a
+   * Mini-side consumer with the ledger register such remotely retained evidence on first read. */
+  constructor(readonly local: ObjectStore, readonly remote: ObjectStore, readonly registry: VisionRegistry | null,
+    readonly storageId: string, private readonly verifyOcr: (task: VisionTask, signal: AbortSignal) => Promise<void>,
+    private readonly options: { settleRemote?: boolean } = {}) {}
   private prefix(task: VisionTask) { return `v3/vision/${task.input.operationId}`; }
   private async evidence(task: VisionTask, signal: AbortSignal, allowLocalResponse = false) {
     await this.verifyOcr(task, signal);
@@ -98,7 +101,7 @@ export class VisionHandoff {
     if (!saved || digest(saved) !== digest(bytes)) throw Error("VISION.HANDOFF_UNKNOWN");
   }
   async inspect(raw: VisionTask, signal: AbortSignal) {
-    const task = VisionTaskSchema.parse(raw), record = await this.registry.read(task.input.operationId);
+    const task = VisionTaskSchema.parse(raw), record = this.registry ? await this.registry.read(task.input.operationId) : null;
     if (!record) return null;
     if (record.configFingerprint !== task.configFingerprint || JSON.stringify(record.input) !== JSON.stringify(task.input) || record.storageId !== this.storageId)
       throw Error("VISION.RESULT_CONFLICT");
@@ -122,13 +125,17 @@ export class VisionHandoff {
     return { record, candidate: LabelImageCandidateSchema.parse(candidate) };
   }
   private async readResultCandidate(raw: VisionTask, signal: AbortSignal) {
-    const task = VisionTaskSchema.parse(raw), record = await this.inspect(task, signal);
+    const task = VisionTaskSchema.parse(raw);
+    let record = await this.inspect(task, signal);
+    if (!record && this.options.settleRemote && this.registry) record = await this.registerFromRemote(task, signal);
     if (!record) throw Error("VISION.RESULT_NOT_REGISTERED");
     const { output } = await this.evidence(task, signal);
     return { record, candidate: output.candidate };
   }
 
-  /** Only the initial successful execution calls complete; redelivery must inspect only. */
+  /** Only the initial successful execution calls complete; redelivery must inspect only.
+   * Without a ledger (cloud mode) it retains registration + completion locally and remotely and returns the
+   * prepared record; the Mini registers it later via registerFromRemote. */
   async complete(raw: VisionTask, signal: AbortSignal) {
     const task = VisionTaskSchema.parse(raw), prior = await this.inspect(task, signal);
     if (prior) return prior;
@@ -137,6 +144,23 @@ export class VisionHandoff {
     await this.put(this.local, key, encode(p.record), signal);
     await this.put(this.local, p.record.completion.objectKey, p.completion, signal);
     await this.put(this.remote, p.record.completion.objectKey, p.completion, signal);
+    if (!this.registry) return p.record;
+    await this.registry.register(p.record);
+    const saved = await this.inspect(task, signal);
+    if (!saved) throw Error("VISION.HANDOFF_UNKNOWN");
+    return saved;
+  }
+  /** Mini-side registration of evidence a cloud-mode worker retained remotely: re-derive the record from the remote
+   * intent/response (OCR re-verified), require the remote completion to match byte-for-byte, then register. */
+  async registerFromRemote(raw: VisionTask, signal: AbortSignal) {
+    const task = VisionTaskSchema.parse(raw), prior = await this.inspect(task, signal);
+    if (prior) return prior;
+    if (!this.registry) throw Error("VISION.REGISTRY_UNAVAILABLE");
+    const { bytes, output } = await this.evidence(task, signal), p = this.prepare(task, bytes, output.status as "candidate" | "partial");
+    const completion = await this.remote.read(p.record.completion.objectKey, 1024 * 1024, signal);
+    if (!completion) throw Error("VISION.RESULT_NOT_DURABLE");
+    if (digest(completion) !== digest(p.completion)) throw Error("VISION.RESULT_INTEGRITY");
+    await this.put(this.local, `${this.prefix(task)}/registration.json`, encode(p.record), signal);
     await this.registry.register(p.record);
     const saved = await this.inspect(task, signal);
     if (!saved) throw Error("VISION.HANDOFF_UNKNOWN");

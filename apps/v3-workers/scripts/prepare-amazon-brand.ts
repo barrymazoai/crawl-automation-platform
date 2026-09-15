@@ -78,7 +78,7 @@ try {
   const labelRoot = join(dir, "label");
   const labelPrivate = await retained("label.private.json", { root: labelRoot, storageId: `amazon-${intent.id}`, database: original.database, ...storage, codex, ocrProvider });
   const names: Record<string, string> = { plan: "plan", page: "page", pageText: "page-text", imagePrepare: "image-prepare", ocr: "ocr", ocrReceipts: "ocr-receipts", keywords: "keywords", source: "source", manifest: "manifest", text: "text", textReceipts: "text-receipts", vision: "vision", core: "core", assembly: "assembly", collection: "collection", review: "review", resources: "resources" };
-  for (const [key, name] of Object.entries(names)) {const c=await readGncPrivateJson(labelPrivate) as any;if(!["text","vision"].includes(name))delete c.codex;if(name!=="ocr")delete c.ocrProvider;const path=await retained(`label-${name}.private.json`,c);await define(key, `channel-label-${name}`, "channel-label-worker", `channel.label.${name}`, "channel-label-v1", "V3_CHANNEL_LABEL", path);}
+  for (const [key, name] of Object.entries(names)) {const c=await readGncPrivateJson(labelPrivate) as any;if(!["text","vision","collection"].includes(name))delete c.codex;if(name!=="ocr")delete c.ocrProvider;const path=await retained(`label-${name}.private.json`,c);await define(key, `channel-label-${name}`, "channel-label-worker", `channel.label.${name}`, "channel-label-v1", "V3_CHANNEL_LABEL", path);}
   const labelQueues = Object.fromEntries(Object.keys(names).filter(n => n !== "resources").map(n => [n, queues[n]]));
   const amazonPrivate = join(dir, "amazon.private.json");
   for (const role of ["control", "catalog-source", "catalog-ledger", "product-input", "capture", "file", "review"])
@@ -95,8 +95,8 @@ try {
     journalRoot: join(dir, "source-journal"), pageJournalRoot: join(dir, "browser-pages"), cacheRoot: join(dir, "source-cache"),
     browser: { engine: "ego-lite", sdk: "1", cliPath: "/Users/barry/.local/bin/ego-browser", taskSpaceId: 1 }, browserResource: "mini-ego-space-1", egressId: "mini-ego-host/1", scope, brandName: "UNIQUE E", catalogPages:[scope.rootUrl], selectedAsins:["B000REPUY0"], maxPages:1,
     catalogQueue: queues.catalogWorkflow, catalogQueues: { source: queues["amazon-catalog-source"], ledger: queues["amazon-catalog-ledger"], product: queues.productWorkflow },
-    catalogResources: gate({ readCatalogPage: browserNeeds }), productQueues: { capture: queues["amazon-capture"], plan: queues.productPlan, file: queues["amazon-file"], label: queues.labelWorkflow, review: queues["amazon-review"] },
-    productResources: gate({ browserSession: browserNeeds }), sourceText, ocr: ocr.supported, sourceVisionConfigFingerprint: vision.configFingerprint,
+    catalogResources: gate({ readCatalogPage: browserNeeds }), productQueues: { capture: queues["amazon-capture"], plan: queues.productPlan, file: queues["amazon-file"], label: queues.labelWorkflow, review: queues["amazon-review"], enrich: labelQueues.collection },
+    productResources: gate({ browserSession: browserNeeds, enrichProduct: modelNeeds }), sourceText, ocr: ocr.supported, sourceVisionConfigFingerprint: vision.configFingerprint,
     labelText: text, visionConfigFingerprint: vision.configFingerprint, evidencePolicy: "label-image-first/5", labelQueues,
     labelResources: gate({ interpretText: modelNeeds, interpretImage: modelNeeds, ocrFile: [{ resourceId: "windows-ocr", units: 1 }] }, true) });
   await ocr.close(); await retained("amazon.private.json", config);

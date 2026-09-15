@@ -28,7 +28,7 @@ export class AmazonLiveProduct {
       expectedUrl: d.entry.url, binding: { sessionId: job.sessionId, egressId }, ...providers,
       source: { schemaVersion: 1, artifactId: `source-${sha256(bytes(job))}`, observationId: owner.observationId, sourceId: owner.sourceId, ...identity,
         kind: "result-json", mediaType: "application/json", objectKey: `${this.key(job)}/projection.json`, byteSize: encoded.length, sha256: sha256(encoded),
-        producer: { operationId: job.operationId, module: "amazon.browser-projection", implementationVersion: "amazon-rendered/1" } } });
+        producer: { operationId: job.operationId, module: p.fetchedVia?.mode === "http" ? "amazon.http-projection" : "amazon.browser-projection", implementationVersion: "amazon-rendered/1" } } });
     return AmazonProductCaptureSchema.parse({ job, sourcePlan });
   }
   private async inspectProduct(raw: unknown, signal: AbortSignal) {

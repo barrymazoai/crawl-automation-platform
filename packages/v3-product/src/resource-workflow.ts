@@ -8,6 +8,9 @@ export function resourceGate(raw: unknown, options:{requireReviewStop?:boolean}=
   // Keep historical command sequences unchanged. A new gate shares its quarantine
   // state across sibling sources, but never cancels external work already running.
   const bounded=config?patched('resource-recovery-bounds-v1'):false;
+  // Healthy-but-occupied capacity is normal queueing: with this patch the time budget no longer cuts it off,
+  // only the iteration cap does, and polling backs off so the cap spans hours instead of ~67 minutes.
+  const backoff=config?patched('resource-wait-backoff-v1'):false;
   let quarantined=false,waits=0;
   return async <T>(name: string, run: (binding?:ResourceActivityBinding) => Promise<T>): Promise<T> => {
     const needs = config?.activities[name]; if (!config || !needs) return run();
@@ -36,7 +39,8 @@ export function resourceGate(raw: unknown, options:{requireReviewStop?:boolean}=
         }
         break;
       }
-      if(bounded&&(++waits>=400||Date.now()>=until))throw ApplicationFailure.nonRetryable('Resource wait budget exhausted; no business execution started','RESOURCE.WAIT_LIMIT');
+      const capacityWait=waitForCapacity&&result.reason==="capacity";
+      if(bounded&&(++waits>=400||(!(backoff&&capacityWait)&&Date.now()>=until)))throw ApplicationFailure.nonRetryable('Resource wait budget exhausted; no business execution started','RESOURCE.WAIT_LIMIT');
       // Occupied but healthy capacity is normal scheduling, not a product failure.
       // Preserve the old deadline on replay; only consecutive unhealthy time counts
       // against the new dependency budget. No business Activity has started yet.
@@ -46,7 +50,7 @@ export function resourceGate(raw: unknown, options:{requireReviewStop?:boolean}=
       }
       if (waitForCapacity ? unhealthySince !== undefined && Date.now() - unhealthySince >= config.maxWaitSeconds * 1000 : Date.now() >= until)
         throw ApplicationFailure.nonRetryable("Resource unavailable; no business execution started", "RESOURCE.WAIT_LIMIT");
-      await sleep("10 seconds");
+      await sleep(backoff?(waits<30?"10 seconds":waits<120?"30 seconds":"60 seconds"):"10 seconds");
     }
     if(config.reviewStopCheck&&patched("resource-execution-finally-v1")){
       // The permit is also the Activity id: exceptions/cancellation do not have a
