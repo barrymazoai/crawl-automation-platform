@@ -10,7 +10,7 @@ import { Client, Connection } from "@temporalio/client";
 import { CatalogPageInputSchema, CatalogDiscoverySchema, AmazonProductJobSchema, CollectionWorkflowInput, BrandCollectionPlanSchema, BrandCollectionProgressSchema,
   AmazonProductCaptureSchema, AmazonProductHandoffSchema, ChannelLabelInputSchema, ReviewRecordSchema, observationIdentity } from "@crawl-automation/v3-contracts";
 import { createR2Objects, RetainedPublication, ArtifactResolver, FileCopies, sha256, ActivityObjectReads } from "@crawl-automation/v3-artifacts";
-import { EgoTaskPages, EgoFileTransport, DirectHttpsTransport, createHttpRoute, AcquireFileModule, FileEvidence, acquireFile, systemDns, type SourceAccess, type FileTransport } from "@crawl-automation/v3-acquisition";
+import { EgoTaskPages, EgoFileTransport, DirectHttpsTransport, createHttpRoute, AcquireFileModule, FileEvidence, acquireFile, systemDns, dohDns, type SourceAccess, type FileTransport } from "@crawl-automation/v3-acquisition";
 import { AmazonCatalogSource, AmazonEgoReader, AmazonHttpReader, AmazonLiveProduct, ChannelProductPlans } from "@crawl-automation/v3-channels";
 import { TextLocalStore } from "@crawl-automation/v3-text";
 import { PostgresReviews } from "@crawl-automation/v3-review";
@@ -81,7 +81,7 @@ async function main() {
           ...(role==='capture'?{download:async(c:ReturnType<typeof AmazonProductCaptureSchema.parse>,input:Parameters<typeof acquireFile>[0],url:string,pageUrl:string,s:AbortSignal)=>{
             const access:SourceAccess={acquire:async raw=>{if(!equal(raw,input))throw Error('SOURCE.SESSION_MISMATCH');await requireBrowser();const transport=await fileTransport(c.job.sessionId,pageUrl,url,s);let released=false;
               return{owner:observationIdentity(input),sourceId:input.sourceId,resourceId:input.resourceId,binding:input.binding,url,allowedOrigins:['https://m.media-amazon.com'],transport,headersFor:()=>({}),assertActive:()=>{if(released)throw Error('SOURCE.SESSION_UNAVAILABLE');},release:async()=>{released=true;}};}};
-            return acquireFile(input,{access,dns:systemDns},s);
+            return acquireFile(input,{access,dns:config.capture.mode==='scraperapi'&&config.capture.dns==='doh'?dohDns():systemDns},s);
           }}:{}),
           timing:(phase,milliseconds)=>console.log(JSON.stringify({event:'AMAZON_FILE_PHASE',phase,milliseconds,workflowId:execution().workflowId,activityId:Context.current().info.activityId}))});
         const submission = async (id: string) => {
@@ -207,7 +207,11 @@ async function main() {
           const ctx = Context.current(); if (ctx.info.attempt !== 1 && !["prepareBrandCollection", "inspectBrandCollection"].includes(name)) throw ApplicationFailure.nonRetryable("Inspect existing evidence", "AMAZON.RETRY_DENIED");
           const timer = setInterval(() => ctx.heartbeat(), 2000);
           try { return await remote.run(() => fn(raw, ctx.cancellationSignal), stats => console.log(JSON.stringify({event:"ARTIFACT_READ_SCOPE",activity:name,...stats}))); }
-          catch (error) { ctx.cancellationSignal.throwIfAborted(); const code = error instanceof Error && /^(AMAZON|SOURCE|CATALOG|ARTIFACT)\.[A-Z_]+$/.test(error.message) ? error.message : "AMAZON.ACTIVITY_UNRESOLVED";
+          catch (error) { ctx.cancellationSignal.throwIfAborted(); const code = error instanceof Error && /^(AMAZON|SOURCE|CATALOG|ARTIFACT|SCRAPERAPI|NETWORK|CHANNEL)\.[A-Z_]+$/.test(error.message) ? error.message : "AMAZON.ACTIVITY_UNRESOLVED";
+            // The failure only carries a code; the underlying error stays in the worker log for diagnosis.
+            const e = error as { name?: string; message?: string; code?: string; cause?: { name?: string; message?: string; code?: string } };
+            console.error(JSON.stringify({ event: "AMAZON_ACTIVITY_FAILED", activity: name, workflowId: ctx.info.workflowExecution.workflowId, code, error: { name: e?.name, message: String(e?.message ?? "").slice(0, 500), code: e?.code },
+              cause: e?.cause ? { name: e.cause.name, message: String(e.cause.message ?? "").slice(0, 300), code: e.cause.code } : null }));
             throw ApplicationFailure.nonRetryable("Inspect retained Amazon evidence", code); }
           finally { clearInterval(timer); }
         }])) };

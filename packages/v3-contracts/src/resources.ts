@@ -8,6 +8,9 @@ export const ResourceDecisionSchema = z.strictObject({ permitId: ExecutionIdSche
   reason: z.enum(["available", "capacity", "unhealthy", "released"]) });
 export const ResourceGateSchema = z.strictObject({ queue: VersionTagSchema,
   reviewStopCheck: z.boolean().optional(),
+  // The gated work is one synchronous provider request (no browser, no owned process): a Review receipt from the
+  // Activity already means nothing is running outside it, so the permit is released without a stop proof.
+  releaseOnReview: z.boolean().optional(),
   activities: z.record(z.string().regex(/^[A-Za-z][A-Za-z0-9]{0,79}$/), z.array(ResourceNeedSchema).min(1).max(8)),
   maxWaitSeconds: z.number().int().min(10).max(3600).default(900),
 });

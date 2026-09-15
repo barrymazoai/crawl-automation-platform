@@ -25,11 +25,41 @@ export async function runChannelLabelWorkflow(raw:unknown,progress?:ChannelSourc
   if(!same(loaded.input,input)||!same(loaded.manifest.observation,owner)||loaded.manifest.operationId!==input.sourcePlan.operationId)invalid();
   const issued=new Map<string,unknown>();
   const single=input.evidencePolicy==="label-image-first/5";
+  type ImageSource=Extract<typeof loaded.manifest.sources[number],{kind:"file-image"}>;
+  type OcrOutcome={kind:"state";state:LabelProductJoin["states"][number];ready:boolean}|{kind:"selection";selection:unknown};
+  // OCR of one image up to its keyword screen: prepare -> ocrFile -> receipt -> keywords. Cheap (seconds per image on
+  // the OCR lanes) and independent per image, so a single-label product can run it for all images at once.
+  // Started per image in single-label mode; the ordered walk awaits each in turn, so an early image still advances while later originals are in flight.
+  const ocrPending=new Map<string,Promise<OcrOutcome>>();
+  const ocrImage=async(source:ImageSource):Promise<OcrOutcome>=>{
+    const state=(status:"unresolved"|"rejected"|"registered"|"not_matched",ready=true):OcrOutcome=>({kind:"state",state:{id:source.id,status},ready});
+    try{
+      if(progress&&!await progress.ready(source))return state("unresolved",false);
+      const p=ImageOcrPrepareOutcomeSchema.parse(await call(queues.imagePrepare,"prepareImageOcr",{plan:source.plan,receipt:null}));
+      if(p.status==="review")return p.operationId===source.plan.acquire.operationId?{kind:"state",state:{id:source.id,status:"review",reviewId:p.reviewId},ready:true}:state("rejected");
+      if(p.task.operationId!==source.plan.ocrOperationId||p.task.file.artifactId!==source.plan.imageId||!same(observationIdentity(p.task),owner))return state("rejected");
+      let outcome:OcrActivityOutcome|null=null;
+      try{outcome=OcrActivityOutcomeSchema.parse(await call(queues.ocr,"ocrFile",p.task));}catch(e){
+        if(isCancellation(e)||skipUnstarted&&e instanceof ApplicationFailure&&["RESOURCE.WAIT_LIMIT","RESOURCE.OWNER_QUARANTINED","RESOURCE.REVIEW_STOP_UNVERIFIED"].includes(e.type??''))throw e;
+      }
+      const r=OcrReceiptOutcomeSchema.parse(await call(queues.ocrReceipts,"resolveOcrReceipt",{input:p.task,outcome}));
+      if(r.status==="review")return r.operationId===p.task.operationId?{kind:"state",state:{id:source.id,status:"review",reviewId:r.reviewId},ready:true}:state("rejected");
+      if(!same(r.registration.input,p.task))return state("rejected");
+      const k=KeywordReceiptSchema.parse(await call(queues.keywords,"screenImageKeywords",r.registration));
+      if(k.selection.ocrOperationId!==p.task.operationId||!same(k.selection.image,p.task.file)||!same(k.selection.observation,owner))return state("rejected");
+      return {kind:"selection",selection:k.selection};
+    }catch(error){
+      if(isCancellation(error))throw error;
+      if(skipUnstarted&&error instanceof ApplicationFailure&&error.type==="RESOURCE.WAIT_LIMIT")waitingSources.push(source.id);
+      if(error instanceof ApplicationFailure&&["RESOURCE.OWNER_QUARANTINED","RESOURCE.REVIEW_STOP_UNVERIFIED"].includes(error.type??''))quarantinedSources.push(source.id);
+      return state("unresolved");
+    }
+  };
   const processSource=async(source:typeof loaded.manifest.sources[number]):Promise<LabelProductJoin["states"][number]>=>{
     const state=(status:"unresolved"|"rejected"|"registered"|"not_matched")=>({id:source.id,status});
     let document:unknown,range:unknown,selection:unknown;
     try{
-      if(progress&&!await progress.ready(source))return state("unresolved");
+      if(progress&&!(source.kind==="file-image"&&ocrPending.has(source.id))&&!await progress.ready(source))return state("unresolved");
       if(source.kind==="page"){
         let receipt=null;try{receipt=PagePrepareOutcomeSchema.parse(await call(queues.page,"prepareHtmlPage",source.plan.page));}catch(e){if(isCancellation(e))throw e;}
         const p=PageTextPrepareOutcomeSchema.parse(await call(queues.pageText,"preparePageText",{plan:source.plan,receipt}));
@@ -43,19 +73,9 @@ export async function runChannelLabelWorkflow(raw:unknown,progress?:ChannelSourc
           document=core.document;range=core.range;
         }
       }else if(source.kind==="file-image"){
-        const p=ImageOcrPrepareOutcomeSchema.parse(await call(queues.imagePrepare,"prepareImageOcr",{plan:source.plan,receipt:null}));
-        if(p.status==="review")return p.operationId===source.plan.acquire.operationId?{id:source.id,status:"review",reviewId:p.reviewId}:state("rejected");
-        if(p.task.operationId!==source.plan.ocrOperationId||p.task.file.artifactId!==source.plan.imageId||!same(observationIdentity(p.task),owner))return state("rejected");
-        let outcome:OcrActivityOutcome|null=null;
-        try{outcome=OcrActivityOutcomeSchema.parse(await call(queues.ocr,"ocrFile",p.task));}catch(e){
-          if(isCancellation(e)||skipUnstarted&&e instanceof ApplicationFailure&&["RESOURCE.WAIT_LIMIT","RESOURCE.OWNER_QUARANTINED","RESOURCE.REVIEW_STOP_UNVERIFIED"].includes(e.type??''))throw e;
-        }
-        const r=OcrReceiptOutcomeSchema.parse(await call(queues.ocrReceipts,"resolveOcrReceipt",{input:p.task,outcome}));
-        if(r.status==="review")return r.operationId===p.task.operationId?{id:source.id,status:"review",reviewId:r.reviewId}:state("rejected");
-        if(!same(r.registration.input,p.task))return state("rejected");
-        const k=KeywordReceiptSchema.parse(await call(queues.keywords,"screenImageKeywords",r.registration));
-        if(k.selection.ocrOperationId!==p.task.operationId||!same(k.selection.image,p.task.file)||!same(k.selection.observation,owner))return state("rejected");
-        selection=k.selection;
+        const o=await(ocrPending.get(source.id)??ocrImage(source));
+        if(o.kind==="state")return o.state;
+        selection=o.selection;
       }else return state("rejected");
       const request={input,sourceId:source.id},r=ChannelLabelSourceResultSchema.parse(await call(queues.source,"prepareChannelLabelSource",request));
       if(!same(r.input,request))return state("rejected");
@@ -88,12 +108,15 @@ export async function runChannelLabelWorkflow(raw:unknown,progress?:ChannelSourc
   if(single){
     const images=loaded.manifest.sources.filter(s=>s.kind==="file-image"),order=loaded.imageOrder;
     if(!order||new Set(order).size!==images.length||order.length!==images.length||images.some(s=>!order.includes(s.id)))invalid();
+    // OCR every image at once; the ordered walk below still spends the image model only until the first complete label.
+    if(patched("channel-parallel-image-ocr-v1"))for(const id of order!)ocrPending.set(id,ocrImage(images.find(s=>s.id===id)! as ImageSource));
     states=[];
     for(const id of order!){
       const source=images.find(s=>s.id===id)!;
       if(selectedImageId){
-        // Every original file must still become durable; only OCR/model work is skipped.
-        if(progress&&!await progress.ready(source))states.push({id,status:"unresolved"});
+        // Every original file must still become durable; only model work is skipped (OCR already started stays cheap and is awaited, never abandoned).
+        const pending=ocrPending.get(id);
+        if(pending?(await pending).kind==="state"&&!(await pending as {ready:boolean}).ready:progress&&!await progress.ready(source))states.push({id,status:"unresolved"});
         else notStarted.push({id,status:"not_started"});
         continue;
       }

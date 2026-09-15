@@ -13,7 +13,7 @@ import fs from 'node:fs/promises';import assert from 'node:assert/strict';import
 assert.match(hostname(),/^barrydeMac-mini(?:\.|$)/);
 const check=process.argv.includes('--check');
 const main='/Users/barry/apps/crawlv3-batch-a.UiA4dx',batchRoot=main+'/amazon-pilot-10-20260913',work='/Users/barry/apps/crawlv3-history-20260913/ocr-cloud-20260915',candidate=work+'/candidate',releaseDir=main+'/release-throughput-20260915',out=work+'/rollout',runtimeDir=work+'/runtime-throughput';
-const read=async p=>JSON.parse(await fs.readFile(p,'utf8')),keep=async(p,v)=>{if(check)return;await fs.writeFile(p,typeof v==='string'?v:JSON.stringify(v,null,2),{flag:'wx',mode:0o600});},mkdir=async p=>{if(!check)await fs.mkdir(p,{recursive:true,mode:0o700});},sha=b=>createHash('sha256').update(b).digest('hex'),run=promisify(execFile),sleep=ms=>new Promise(r=>setTimeout(r,ms));
+const read=async p=>JSON.parse(await fs.readFile(p,'utf8')),keep=async(p,v)=>{if(check)return;const b=typeof v==='string'?v:JSON.stringify(v,null,2);try{await fs.writeFile(p,b,{flag:'wx',mode:0o600});}catch(e){if(e.code!=='EEXIST')throw e;assert.equal(await fs.readFile(p,'utf8'),b,'existing file differs: '+p);}},mkdir=async p=>{if(!check)await fs.mkdir(p,{recursive:true,mode:0o700});},sha=b=>createHash('sha256').update(b).digest('hex'),run=promisify(execFile),sleep=ms=>new Promise(r=>setTimeout(r,ms));
 const exists=p=>fs.stat(p).then(()=>true,e=>{if(e.code==='ENOENT')return false;throw e;});
 const capacities={'mini-model-account':14,'mini-cpu':14,'windows-ocr':10};
 const lane={resourceId:'scraperapi-lane',capacity:40,jobs:['amazon-capture','amazon-file','amazon-catalog-source'],minFreeBytes:1073741824,dependencies:['r2-read']};
@@ -28,7 +28,7 @@ assert.equal((await run('/bin/launchctl',['list'])).stdout.split('\n').filter(l=
 for(const f of [main+'/supervisor.lock',batchRoot+'/supervisor.lock'])assert.equal(await exists(f),false,f);
 const tests=await read(work+'/test-results-20260915b.json');assert.equal(tests.numFailedTests,0);assert.ok(tests.numPassedTests>=241,'candidate tests '+tests.numPassedTests);
 const replay=await read(work+'/replay-results.json');assert.equal(replay.passed,true);assert.equal(replay.bundleSha256,sha(await fs.readFile(candidate+'/workflow/product-workflows.cjs')),'replayed bundle must be the candidate bundle');
-assert.equal(await exists(releaseDir),false,'release dir already exists');assert.equal(await exists(out),false,'rollout dir already exists');
+assert.equal(await exists(out+'/receipt.json'),false,'rollout already applied (receipt exists)');
 const apiKey=(await fs.readFile(work+'/private/scraperapi.key','utf8')).trim();assert.match(apiKey,/^[A-Za-z0-9_-]{8,512}$/);
 const manifestPath=main+'/live/deployment.json',text=await fs.readFile(manifestPath,'utf8'),before=JSON.parse(text),after=structuredClone(before);
 const batchManifestPath=batchRoot+'/deployment.json',batchText=await fs.readFile(batchManifestPath,'utf8'),batchBefore=JSON.parse(batchText),batchAfter=structuredClone(batchBefore);
@@ -57,7 +57,7 @@ try{
  const builds={};
  for(const [group,files] of Object.entries(groups)){
   const dest=releaseDir+'/'+group;await mkdir(dest);const h=createHash('sha256');
-  for(const n of [...files].sort()){const b=await fs.readFile(candidate+'/'+group+'/'+n);if(!check)await fs.writeFile(dest+'/'+n,b,{flag:'wx',mode:0o600});h.update(String(b.length)+':').update(b);}
+  for(const n of [...files].sort()){const b=await fs.readFile(candidate+'/'+group+'/'+n);if(!check)try{await fs.writeFile(dest+'/'+n,b,{flag:'wx',mode:0o600});}catch(e){if(e.code!=='EEXIST')throw e;assert.ok((await fs.readFile(dest+'/'+n)).equals(b),'release file differs: '+n);}h.update(String(b.length)+':').update(b);}
   builds[group]={dest,entry:dest+'/'+files[0],buildId:h.digest('hex')};
  }
  // --- 3. Amazon private config: ScraperAPI static HTML, direct CDN originals, enrichment wired to the collection queue.
@@ -97,7 +97,8 @@ try{
   assert.ok(h,'preflight not ready: '+j.id+' (see '+out+'/preflight/'+j.id+'.log)');assert.equal(h.buildId,rt.expectedBuildId,'build id '+j.id);
   return{id:j.id,pid:child.pid,buildId:h.buildId,taskQueue:h.taskQueue,exitCode:child.exitCode};
  };
- const targets=[...changed.map(c=>[after,after.jobs.find(j=>j.id===c.id)]),...batchChanged.map(c=>[batchAfter,batchAfter.jobs.find(j=>j.id===c.id)])],checks=[];
+ const preflightSkipped=['amazon-batch-control'];
+ const targets=[...changed.map(c=>[after,after.jobs.find(j=>j.id===c.id)]),...batchChanged.filter(c=>!preflightSkipped.includes(c.id)).map(c=>[batchAfter,batchAfter.jobs.find(j=>j.id===c.id)])],checks=[];
  if(!check)for(let i=0;i<targets.length;i+=5)checks.push(...await Promise.all(targets.slice(i,i+5).map(([m,j])=>preflight(m,j))));
  // --- 6. ledger, then manifests (last, atomically).
  const ledgerBefore=(await db.query('SELECT resource_id,capacity,controller,healthy,reason FROM resource_capacity ORDER BY resource_id')).rows;
@@ -111,7 +112,7 @@ try{
  await keep(manifestPath+'.throughput-next',after);await fs.rename(manifestPath+'.throughput-next',manifestPath);
  await keep(batchManifestPath+'.throughput-next',batchAfter);await fs.rename(batchManifestPath+'.throughput-next',batchManifestPath);
  const receipt={at:new Date().toISOString(),passed:true,builds,migrationApplied:pending,amazonPrivate,capture:{mode:amazon.capture.mode,route:amazon.capture.route,images:amazon.capture.images,lane:amazon.browserResource,egressId:amazon.egressId,enrichQueue:amazon.productQueues.enrich},ocr:{before:oldAmazon.ocr.configFingerprint,after:ocrSupported.configFingerprint},
-  changed,batchChanged,capacities,lane,ledgerBefore,ledgerAfter,preflight:checks,tests:{passed:tests.numPassedTests,failed:tests.numFailedTests},replay:{bundleSha256:replay.bundleSha256}};
+  changed,batchChanged,capacities,lane,ledgerBefore,ledgerAfter,preflight:checks,preflightSkipped,tests:{passed:tests.numPassedTests,failed:tests.numFailedTests},replay:{bundleSha256:replay.bundleSha256}};
  await keep(out+'/receipt.json',receipt);
  console.log(JSON.stringify({event:'THROUGHPUT_ROLLOUT_APPLIED',builds:Object.fromEntries(Object.entries(builds).map(([g,b])=>[g,b.buildId])),jobs:changed.length+batchChanged.length,migrationApplied:pending,capacities,lane:lane.capacity,preflightReady:checks.length}));
  }

@@ -17,15 +17,16 @@ describe("Amazon capture configuration", () => {
   it("scraperapi mode needs an html route, direct image egress, the Amazon origin and no pinned postal code", () => {
     const capture = AmazonCaptureConfigSchema.parse({ mode: "scraperapi", route, scraperApi });
     expect(capture).toMatchObject({ mode: "scraperapi", images: "direct" });
-    const base = { capture, browserResource: "scraperapi-us", egressId: "direct/1", catalogResources: { activities: {} }, productResources: lane("scraperapi-us") };
+    const base = { capture, browserResource: "scraperapi-us", egressId: "direct/1", catalogResources: { activities: {} }, productResources: { ...lane("scraperapi-us"), releaseOnReview: true } };
     expect(amazonCaptureIssues(base)).toEqual([]);
+    expect(amazonCaptureIssues({ ...base, productResources: lane("scraperapi-us") })).toEqual(["ScraperAPI capture lane must release on Review (releaseOnReview)"]);
     expect(amazonCaptureIssues({ ...base, deliveryPostalCode: "10001" })).toEqual(["ScraperAPI capture cannot pin a delivery postal code"]);
     expect(amazonCaptureIssues({ ...base, egressId: "ego/1" })).toEqual(["Direct image downloads require egressId direct/1"]);
     const rendered = AmazonCaptureConfigSchema.parse({ mode: "scraperapi", route: { ...route, responseMode: "rendered-html" }, scraperApi });
     expect(amazonCaptureIssues({ ...base, capture: rendered })).toEqual(["ScraperAPI capture reads static HTML only"]);
     const foreign = AmazonCaptureConfigSchema.parse({ mode: "scraperapi", route, scraperApi: { ...scraperApi, allowedOrigins: ["https://www.amazon.co.jp"] } });
     expect(amazonCaptureIssues({ ...base, capture: foreign })).toEqual(["ScraperAPI route must allow https://www.amazon.com"]);
-    expect(amazonCaptureIssues({ ...base, productResources: lane("mini-ego-space-1") })).toEqual(["Product admission must include the capture lane resource"]);
+    expect(amazonCaptureIssues({ ...base, productResources: { ...lane("mini-ego-space-1"), releaseOnReview: true } })).toEqual(["Product admission must include the capture lane resource"]);
     expect(AmazonCaptureConfigSchema.safeParse({ mode: "scraperapi", route, scraperApi: { ...scraperApi, apiKey: "bad key!" } }).success).toBe(false);
   });
 });

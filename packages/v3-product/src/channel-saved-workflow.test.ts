@@ -1,7 +1,7 @@
 import { beforeEach, expect, it, vi } from "vitest";
-const runtime=vi.hoisted(()=>({skipPage:true,activities:{} as Record<string,Record<string,(raw:any)=>Promise<any>>>,handlers:{} as Record<string,(raw:any)=>void>}));
+const runtime=vi.hoisted(()=>({skipPage:true,parallelOcr:true,activities:{} as Record<string,Record<string,(raw:any)=>Promise<any>>>,handlers:{} as Record<string,(raw:any)=>void>}));
 vi.mock("@temporalio/workflow",()=>({proxyActivities:({taskQueue}:{taskQueue:string})=>runtime.activities[taskQueue],
-  patched:(id:string)=>id==="channel-complete-image-skip-page-v1"?runtime.skipPage:true,
+  patched:(id:string)=>id==="channel-complete-image-skip-page-v1"?runtime.skipPage:id==="channel-parallel-image-ocr-v1"?runtime.parallelOcr:true,
   defineSignal:(name:string)=>name,setHandler:(name:string,fn:(raw:any)=>void)=>{runtime.handlers[name]=fn;},
   condition:async(predicate:()=>boolean)=>{await vi.waitFor(()=>expect(predicate()).toBe(true),{timeout:15000,interval:5});},
   isCancellation:(e:unknown)=>e instanceof Error&&e.message==="cancelled",
@@ -10,7 +10,7 @@ import { ApplicationFailure } from "@temporalio/workflow";
 import { ChannelSavedLabelWorkflow } from "./channel-saved-workflow.js";
 import { ChannelStreamingLabelWorkflow } from "./channel-stream-workflow.js";
 import { channelSavedFixture } from "./channel-saved.fixture.js";
-beforeEach(()=>{runtime.activities={};runtime.handlers={};runtime.skipPage=true;});
+beforeEach(()=>{runtime.activities={};runtime.handlers={};runtime.skipPage=true;runtime.parallelOcr=true;});
 async function setup(){const f=await channelSavedFixture();runtime.activities=f.activityQueues;return f;}
 
 it("saved evidence advances without capture/download; label protocol collects and replay does not call providers",async()=>{
@@ -109,18 +109,25 @@ it.each(["foreign-owner","foreign-file","conflicting-duplicate"])("stream: %s ca
 
 it("single label stops OCR and vision after the first complete image, preserves skipped originals and replay",async()=>{
  const f=await setup();f.input.evidencePolicy="label-image-first/5";f.nonmatch.clear();
+ const images=f.manifest.sources.filter(s=>s.kind==="file-image").length;
  expect(await ChannelSavedLabelWorkflow(f.entry)).toMatchObject({status:"collected"});
- expect(f.counts).toMatchObject({ocr:1,vision:1,text:0});
+ // OCR runs for every image at once (cheap); the image model still runs once.
+ expect(f.counts).toMatchObject({ocr:images,vision:1,text:0});
  const record=[...f.collected.values()][0]!;expect(record.provenance.filter(p=>p.kind==="image")).toHaveLength(1);
  const decision=JSON.parse(Buffer.from((await f.remote.read(`v3/channel-labels/${f.input.operationId}/selection.json`,100000))!).toString());
  expect(decision.decisions).toContainEqual({id:"image-1",reason:"complete_label_already_selected"});
  const counts={...f.counts};expect(await ChannelSavedLabelWorkflow(f.entry)).toMatchObject({status:"collected"});expect(f.counts).toEqual(counts);
 });
+it("without the parallel-OCR patch a single label still OCRs one image at a time until the first complete one",async()=>{
+ const f=await setup();f.input.evidencePolicy="label-image-first/5";f.nonmatch.clear();runtime.parallelOcr=false;
+ expect(await ChannelSavedLabelWorkflow(f.entry)).toMatchObject({status:"collected"});
+ expect(f.counts).toMatchObject({ocr:1,vision:1,text:0});
+});
 it("single label tries the next image when a registered candidate is incomplete",async()=>{
  const f=await setup();f.input.evidencePolicy="label-image-first/5";f.nonmatch.clear();
  const original=f.activities.interpretImage!,complete=structuredClone(f.imageCandidate.value);let n=0;
  f.activities.interpretImage=async raw=>{f.imageCandidate.value=structuredClone(complete);if(n++===0){f.imageCandidate.value.formula=null;f.imageCandidate.value.formulaComplete=false;}return original(raw);};
- expect(await ChannelSavedLabelWorkflow(f.entry)).toMatchObject({status:"collected"});expect(f.counts).toMatchObject({ocr:2,vision:2});
+ expect(await ChannelSavedLabelWorkflow(f.entry)).toMatchObject({status:"collected"});expect(f.counts).toMatchObject({ocr:f.manifest.sources.filter(s=>s.kind==="file-image").length,vision:2});
  expect([...f.collected.values()][0]!.provenance.filter(p=>p.kind==="image").map(p=>p.id)).toEqual(["image-1"]);
 });
 it("single label cannot use an unverified image receipt as completeness proof",async()=>{
@@ -138,7 +145,9 @@ it("single label stream still waits for every original and page closure after mo
  const first=await f.activities.acquireSourceFile!(sources[0]!.plan.acquire);runtime.handlers.channelSourceReady!({operationId:f.input.operationId,sourceId:sources[0]!.id,file:first.file});
  await vi.waitFor(()=>expect(f.counts.vision).toBe(1),{timeout:10000});expect(f.collected.size).toBe(0);
  const second=await f.activities.acquireSourceFile!(sources[1]!.plan.acquire);runtime.handlers.channelSourceReady!({operationId:f.input.operationId,sourceId:sources[1]!.id,file:second.file});
- runtime.handlers.channelStreamSealed!({operationId:f.input.operationId,status:"closed"});expect(await run).toMatchObject({status:"collected"});expect(f.counts.ocr).toBe(1);expect(f.counts.vision).toBe(1);
+ runtime.handlers.channelStreamSealed!({operationId:f.input.operationId,status:"closed"});expect(await run).toMatchObject({status:"collected"});
+ // The late original is still OCRed (cheap, started up front) but never reaches the image model.
+ expect(f.counts.ocr).toBe(2);expect(f.counts.vision).toBe(1);
 });
 
 it("single label falls back to complete page text if all images fail the keyword screen",async()=>{

@@ -9,6 +9,9 @@ export const R2ScopeSchema = z.strictObject({
   bucket: z.string().regex(/^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$/),
   prefix: ObjectKeySchema.refine(key => key.includes("/"), "Explicit scoped prefix required"),
   timeoutMs: z.number().int().min(100).max(120000).default(30000),
+  // Transient transport failures (connection resets, TLS aborts, 5xx/429) are retried this many extra times with
+  // 0.5s/1.5s/3s backoff; each attempt has its own timeout. Keys are immutable, so a repeated PUT is harmless.
+  retries: z.number().int().min(0).max(5).default(3),
 });
 export type R2Scope = z.infer<typeof R2ScopeSchema>;
 export interface R2ClientPort {
@@ -32,8 +35,24 @@ export class R2Objects implements ObjectStore {
   constructor(private readonly client: R2ClientPort, scope: R2Scope) { this.scope = R2ScopeSchema.parse(scope); }
   private key(key: string) { return ObjectKeySchema.parse(`${this.scope.prefix}/${ObjectKeySchema.parse(key)}`); }
   private signal(signal: AbortSignal) { return AbortSignal.any([signal, AbortSignal.timeout(this.scope.timeoutMs)]); }
+  /** Retry only what the transport lost: never a decided answer (404, 412, size limit) and never after the caller aborted. */
+  private async attempt<T>(signal: AbortSignal, once: () => Promise<T>): Promise<T> {
+    for (let n = 0; ; n++) {
+      try { return await once(); }
+      catch (error) {
+        signal.throwIfAborted();
+        const code = status(error), transient = !(error instanceof ArtifactError) && (code === undefined || code === 429 || code >= 500);
+        if (!transient || n >= this.scope.retries) throw error;
+        await new Promise(r => setTimeout(r, [500, 1500, 3000][Math.min(n, 2)]));
+      }
+    }
+  }
   async read(key: string, maxBytes: number, signal: AbortSignal): Promise<Uint8Array | null> {
     if (!Number.isSafeInteger(maxBytes) || maxBytes < 1) throw new ArtifactError("ARTIFACT.TOO_LARGE");
+    try { return await this.attempt(signal, () => this.readOnce(key, maxBytes, signal)); }
+    catch (error) { signal.throwIfAborted(); if (error instanceof ArtifactError) throw error; throw new ArtifactError("ARTIFACT.UNAVAILABLE", diagnostics(error)); }
+  }
+  private async readOnce(key: string, maxBytes: number, signal: AbortSignal): Promise<Uint8Array | null> {
     const scopedKey = this.key(key), bounded = this.signal(signal);
     bounded.throwIfAborted();
     try {
@@ -64,10 +83,14 @@ export class R2Objects implements ObjectStore {
       signal.throwIfAborted();
       if (error instanceof ArtifactError) throw error;
       if (status(error) === 404 && error instanceof Error && error.name === "NoSuchKey") return null;
-      throw new ArtifactError("ARTIFACT.UNAVAILABLE",diagnostics(error));
+      throw error;
     }
   }
   async create(key: string, bytes: Uint8Array, mediaType: string, signal: AbortSignal): Promise<"created" | "exists"> {
+    try { return await this.attempt(signal, () => this.createOnce(key, bytes, mediaType, signal)); }
+    catch (error) { signal.throwIfAborted(); if (error instanceof ArtifactError) throw error; throw new ArtifactError("ARTIFACT.UPLOAD_UNKNOWN", diagnostics(error)); }
+  }
+  private async createOnce(key: string, bytes: Uint8Array, mediaType: string, signal: AbortSignal): Promise<"created" | "exists"> {
     const scopedKey = this.key(key), bounded = this.signal(signal);
     bounded.throwIfAborted();
     try {
@@ -77,7 +100,7 @@ export class R2Objects implements ObjectStore {
     } catch (error) {
       signal.throwIfAborted();
       if (status(error) === 412) return "exists";
-      throw new ArtifactError("ARTIFACT.UPLOAD_UNKNOWN",diagnostics(error));
+      throw error;
     }
   }
 }

@@ -13,7 +13,8 @@ export const ChannelPlanInputSchema = z.strictObject({
   ocr: ProcessingCompatibilitySchema.refine(c => c.resultSchemaVersion === 2), visionConfigFingerprint: Sha256Schema,
 }).superRefine((i, ctx) => {
   try { assertArtifactBelongsTo(i.source, i.owner); } catch { ctx.addIssue({ code: "custom", message: "Source owner conflict" }); }
-  if (i.source.kind !== "result-json" || i.source.producer.module !== `${i.channel}.browser-projection` ||
+  // A projection comes from an owned browser page or, for Amazon, from one static HTTP fetch through a provider route.
+  if (i.source.kind !== "result-json" || ![`${i.channel}.browser-projection`, ...(i.channel === "amazon" ? ["amazon.http-projection"] : [])].includes(i.source.producer.module) ||
     i.source.producer.implementationVersion !== i.parserVersion || i.parserVersion !== `${i.channel}-rendered/1` || i.source.producer.operationId === i.operationId || (i.channel === "swanson" ? i.owner.variantId === null : i.owner.variantId !== null))
     ctx.addIssue({ code: "custom", message: "Rendered source provenance required" });
 });

@@ -9,7 +9,8 @@ export const AmazonCaptureConfigSchema = z.discriminatedUnion("mode", [
   z.strictObject({ mode: z.literal("browser") }),
   z.strictObject({ mode: z.literal("scraperapi"), route: ScraperApiRouteSchema,
     scraperApi: z.strictObject({ apiKey: z.string().min(8).max(512).regex(/^[A-Za-z0-9_-]+$/), allowedOrigins: z.array(z.string().url()).min(1).max(32) }),
-    images: z.literal("direct").default("direct") }),
+    // Direct downloads pin a resolved address; "doh" resolves through DNS over HTTPS where the host resolver returns fake IPs (Clash fake-ip).
+    images: z.literal("direct").default("direct"), dns: z.enum(["system", "doh"]).default("system") }),
 ]);
 export type AmazonCaptureConfig = z.infer<typeof AmazonCaptureConfigSchema>;
 export const AmazonLiveConfigSchema = z.strictObject({
@@ -38,7 +39,7 @@ export const AmazonLiveConfigSchema = z.strictObject({
 }).superRefine((c, ctx) => { for (const message of amazonCaptureIssues(c)) ctx.addIssue({ code: "custom", message }); });
 /** Pure config rules shared by the schema and tests. */
 export function amazonCaptureIssues(c: { capture: AmazonCaptureConfig; browser?: unknown; browserResource: string; egressId: string; deliveryPostalCode?: string | undefined;
-  catalogResources: { activities: Record<string, { resourceId: string }[]> }; productResources: { activities: Record<string, { resourceId: string }[]> } }): string[] {
+  catalogResources: { activities: Record<string, { resourceId: string }[]> }; productResources: { activities: Record<string, { resourceId: string }[]>; releaseOnReview?: boolean | undefined } }): string[] {
   const issues: string[] = [], product = c.productResources.activities.browserSession, catalog = c.catalogResources.activities.readCatalogPage;
   if (!product?.some(n => n.resourceId === c.browserResource)) issues.push("Product admission must include the capture lane resource");
   if (c.capture.mode === "browser") {
@@ -49,6 +50,7 @@ export function amazonCaptureIssues(c: { capture: AmazonCaptureConfig; browser?:
     if (c.deliveryPostalCode !== undefined) issues.push("ScraperAPI capture cannot pin a delivery postal code");
     if (c.capture.images === "direct" && c.egressId !== "direct/1") issues.push("Direct image downloads require egressId direct/1");
     if (!c.capture.scraperApi.allowedOrigins.includes("https://www.amazon.com")) issues.push("ScraperAPI route must allow https://www.amazon.com");
+    if (c.productResources.releaseOnReview !== true) issues.push("ScraperAPI capture lane must release on Review (releaseOnReview)");
   }
   return issues;
 }

@@ -15,16 +15,19 @@ export async function detachedAmazonProduct(job:AmazonProductJob,inputQueue:stri
  const formulaOnce=!!job.queues.enrich&&patched('amazon-formula-once-v1');
  // Enrichment (unified name, form, variant attributes, health functions) runs after any collected formula and is
  // itself idempotent on (listing, formula content); a failure there is a Review, never a product failure.
+ // One gate per run: permit ids are sequenced per gate instance, so a second instance would reuse the capture permit id.
+ const gate=resourceGate(job.resources);
  const enrich=async(operationId:string)=>{
   if(!job.queues.enrich||!patched('product-enrichment-v1'))return;
-  try{await resourceGate(job.resources)('enrichProduct',()=>call(job.queues.enrich!,'enrichProduct',{schemaVersion:1,collectionOperationId:operationId}));}
+  const g=patched('product-enrichment-permit-v1')?gate:resourceGate(job.resources);
+  try{await g('enrichProduct',()=>call(job.queues.enrich!,'enrichProduct',{schemaVersion:1,collectionOperationId:operationId}));}
   catch(error){if(isCancellation(error))throw error;}
  };
  const review=async(error:unknown,stage:'AMAZON.BROWSER_PHASE_UNRESOLVED'|'AMAZON.FILE_PUBLICATION_UNRESOLVED')=>{
   const r=AcquisitionReviewSchema.parse(await call(job.queues.review,'reviewAmazonProduct',{job,code:stage,causeCode:code(error)}));if(r.operationId!==job.operationId)invalid();return r;
  };
  try{
-  const phase=await resourceGate(job.resources)('browserSession',async()=>{
+  const phase=await gate('browserSession',async()=>{
    let cleanupAllowed=true;
    try{
     const raw=await call(job.queues.capture,'captureAmazonProduct',job),r=AcquisitionReviewSchema.safeParse(raw);

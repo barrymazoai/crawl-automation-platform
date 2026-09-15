@@ -30,9 +30,11 @@ await build({...common,outDir:base+'/tests',external:[...common.external,'vitest
 }});
 await build({...common,outDir:base+'/batch',entry:['src/amazon-batch-worker.ts']});
 await build({...common,outDir:base+'/plan',entry:['src/channel-plan-worker.ts']});
+// brand-web reads `migrations/<name>` next to itself and refuses to start when the ledger holds a migration it does not know (020).
+await build({...common,outDir:base+'/web',entry:['src/brand-web.ts']});
 await build({...common,outDir:base+'/amazon',entry:['src/amazon-live-worker.ts']});
 // Config schema as a library, so the Mini rollout script can validate the rewritten Amazon private config before binding it.
-await build({...common,outDir:base+'/amazon-config',entry:{'amazon-live-config':'src/amazon-live-config.ts','deployment-supervisor':'src/deployment-supervisor.ts','ocr-http':'../../packages/v3-ocr/src/http.ts'}});
+await build({...common,outDir:base+'/amazon-config',entry:{'amazon-live-config':'src/amazon-live-config.ts','deployment-supervisor':'src/deployment-supervisor.ts','ocr-http':'../../packages/v3-ocr/src/http.ts','capture-probe':'scripts/capture-probe.ts'}});
 {const bundle=await bundleWorkflowCode({workflowsPath:resolve('src/amazon-batch-workflow.ts')});await writeFile(base+'/batch/amazon-batch-workflows.cjs',bundle.code);await writeFile(base+'/tests/amazon-batch-workflows.cjs',bundle.code);}
 for(const [entry,file] of [['src/product-workflows.ts','workflow/product-workflows.cjs'],['integration/resource-stall-workflows.ts','tests/resource-stall-workflows.cjs']]){
  const bundle=await bundleWorkflowCode({workflowsPath:resolve(entry!)});await writeFile(base+'/'+file,bundle.code);

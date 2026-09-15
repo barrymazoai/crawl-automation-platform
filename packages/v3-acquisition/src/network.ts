@@ -31,6 +31,29 @@ export const systemDns: DnsResolver = {
         return addresses.map(a => ({ address: a.address, family: a.family as 4 | 6 }));
     },
 };
+/** DNS over HTTPS (RFC 8484 JSON API, Cloudflare by default): real public answers on hosts whose system resolver
+ * hands out fake addresses (Clash fake-ip mode returns 198.18.0.0/15, which the SSRF guard rightly refuses).
+ * IPv4 only: the direct transport pins one address and the crawl hosts route IPv4. The SSRF guard still applies. */
+export function dohDns(endpoint = "https://cloudflare-dns.com/dns-query", fetchImpl: typeof fetch = fetch): DnsResolver {
+    return {
+        async resolve(hostname, signal) {
+            let answer: { Status?: number; Answer?: { type: number; data: string }[] };
+            try {
+                const r = await fetchImpl(`${endpoint}?name=${encodeURIComponent(hostname)}&type=A`, { headers: { accept: "application/dns-json" }, signal, redirect: "error" });
+                if (!r.ok) throw new Error(String(r.status));
+                answer = await r.json() as typeof answer;
+            }
+            catch {
+                signal.throwIfAborted();
+                throw new AcquisitionError("SOURCE.NETWORK_UNAVAILABLE");
+            }
+            if (answer.Status !== 0) throw new AcquisitionError("SOURCE.NETWORK_UNAVAILABLE");
+            const out: Address[] = (answer.Answer ?? []).filter(a => a.type === 1 && isIP(a.data) === 4).map(a => ({ address: a.data, family: 4 as const }));
+            if (!out.length) throw new AcquisitionError("SOURCE.NETWORK_UNAVAILABLE");
+            return out;
+        },
+    };
+}
 export async function pinAddress(url: URL, dns: DnsResolver, signal: AbortSignal): Promise<Address> {
     let answers: Address[];
     try {

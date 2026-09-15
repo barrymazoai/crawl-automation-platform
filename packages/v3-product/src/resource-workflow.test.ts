@@ -4,8 +4,10 @@ vi.mock("@temporalio/workflow",()=>({
   proxyActivities:(options:unknown)=>{env.options(options);return{reserveResources:env.reserve,releaseResources:env.release,verifyResourceReviewStopped:env.verify};},
   sleep:env.sleep,workflowInfo:()=>({workflowId:"test-product",runId:"00000000-0000-4000-8000-000000000001"}),
   patched:env.patched, CancellationScope:{nonCancellable:(fn:()=>Promise<unknown>)=>fn()}, ActivityCancellationType:{WAIT_CANCELLATION_COMPLETED:"WAIT_CANCELLATION_COMPLETED"},
-  ApplicationFailure:{nonRetryable:(_message:string,code:string)=>Error(code)},
+  ApplicationFailure:class ApplicationFailure extends Error{static nonRetryable(_message:string,code:string){return new ApplicationFailure(code);}},
+  ActivityFailure:class ActivityFailure extends Error{constructor(cause:unknown){super('Activity task failed');this.cause=cause;}},
 }));
+import { ActivityFailure as MockActivityFailure, ApplicationFailure as MockApplicationFailure } from "@temporalio/workflow";
 import { resourceGate } from "./resource-workflow.js";
 const config={queue:"resources",activities:{ocr:[{resourceId:"ocr-cpu",units:1}]},maxWaitSeconds:10};
 beforeEach(()=>{vi.clearAllMocks();env.patched.mockImplementation(id=>!['resource-recovery-bounds-v1','resource-execution-finally-v1'].includes(id));vi.useFakeTimers();vi.setSystemTime(100000);
@@ -26,6 +28,32 @@ it("opt-in verified stopped quality Review releases capacity without changing Re
 it.each(["unknown","foreign","missing-key","throw"])("does not release unverified stop %s",async mode=>{
   env.verify.mockImplementation(async({request})=>{if(mode==="throw")throw Error("lost");return{permitId:mode==="foreign"?"other":request.permitId,status:mode==="unknown"?"unknown":"stopped",evidenceKey:mode==="missing-key"?undefined:"v3/resource-stop/test.json"};});
   await resourceGate({...config,reviewStopCheck:true})("ocr",async()=>({status:"review"}));expect(env.release).not.toHaveBeenCalled();
+});
+it("request lane: a Review releases the permit without a stop proof; exceptions still quarantine",async()=>{
+  const out={status:"review",code:"AMAZON.BROWSER_PHASE_UNRESOLVED"};
+  expect(await resourceGate({...config,releaseOnReview:true})("ocr",async()=>out)).toBe(out);
+  expect(env.verify).not.toHaveBeenCalled();expect(env.release).toHaveBeenCalledOnce();
+  vi.clearAllMocks();env.release.mockImplementation(async r=>({permitId:r.permitId,status:"released",reason:"released"}));
+  await expect(resourceGate({...config,releaseOnReview:true})("ocr",async()=>{throw Error("boom");})).rejects.toThrow("boom");expect(env.release).not.toHaveBeenCalled();
+});
+it("request lane: a typed business failure from the Activity releases; a timeout-like error still quarantines",async()=>{
+  const typed=new (MockActivityFailure as any)((MockApplicationFailure as any).nonRetryable("Inspect retained Amazon evidence","AMAZON.ACTIVITY_UNRESOLVED"));
+  await expect(resourceGate({...config,releaseOnReview:true})("ocr",async()=>{throw typed;})).rejects.toBe(typed);expect(env.release).toHaveBeenCalledOnce();
+  vi.clearAllMocks();env.release.mockImplementation(async r=>({permitId:r.permitId,status:"released",reason:"released"}));
+  env.patched.mockImplementation(id=>id!=='resource-recovery-bounds-v1');
+  await expect(resourceGate({...config,reviewStopCheck:true,releaseOnReview:true})("ocr",async()=>{throw typed;})).rejects.toBe(typed);expect(env.verify).not.toHaveBeenCalled();expect(env.release).toHaveBeenCalledOnce();
+  vi.clearAllMocks();env.release.mockImplementation(async r=>({permitId:r.permitId,status:"released",reason:"released"}));
+  await expect(resourceGate({...config,reviewStopCheck:true,releaseOnReview:true})("ocr",async()=>{throw Error("timeout");})).rejects.toThrow("timeout");expect(env.release).not.toHaveBeenCalled();
+});
+it("request lane with stop checks enabled still releases a Review without the verifier",async()=>{
+  env.patched.mockImplementation(id=>id!=='resource-recovery-bounds-v1');
+  const out={status:"review",code:"ENRICH.OUTPUT_INVALID"};
+  expect(await resourceGate({...config,reviewStopCheck:true,releaseOnReview:true})("ocr",async()=>out)).toBe(out);
+  expect(env.verify).not.toHaveBeenCalled();expect(env.release).toHaveBeenCalledOnce();
+});
+it("without the release patch a request-lane Review is quarantined as before",async()=>{
+  env.patched.mockImplementation(id=>!['resource-recovery-bounds-v1','resource-execution-finally-v1','resource-review-release-v1'].includes(id));
+  expect(await resourceGate({...config,releaseOnReview:true})("ocr",async()=>({status:"review"}))).toEqual({status:"review"});expect(env.release).not.toHaveBeenCalled();
 });
 it("old histories without patch retain their original release sequence",async()=>{
   env.patched.mockReturnValue(false);await resourceGate(config)("ocr",async()=>({status:"review"}));expect(env.release).toHaveBeenCalledOnce();

@@ -1,4 +1,4 @@
-import { proxyActivities, sleep, workflowInfo, ApplicationFailure, patched, CancellationScope, ActivityCancellationType } from "@temporalio/workflow";
+import { proxyActivities, sleep, workflowInfo, ApplicationFailure, ActivityFailure, patched, CancellationScope, ActivityCancellationType } from "@temporalio/workflow";
 import { ResourceGateSchema, ResourceDecisionSchema, type ResourceRequest } from "@crawl-automation/v3-contracts";
 
 export type ResourceActivityBinding={activityId:string;cancellationType:typeof ActivityCancellationType.WAIT_CANCELLATION_COMPLETED};
@@ -11,6 +11,10 @@ export function resourceGate(raw: unknown, options:{requireReviewStop?:boolean}=
   // Healthy-but-occupied capacity is normal queueing: with this patch the time budget no longer cuts it off,
   // only the iteration cap does, and polling backs off so the cap spans hours instead of ~67 minutes.
   const backoff=config?patched('resource-wait-backoff-v1'):false;
+  // Request lanes: a Review outcome releases immediately (exceptions/timeouts still quarantine, the request may be alive).
+  const releaseOnReview=config?.releaseOnReview===true&&patched('resource-review-release-v1');
+  // A typed business failure reported by the Activity means the request ended; a timeout/cancellation does not.
+  const businessFailure=(e:unknown)=>e instanceof ActivityFailure&&e.cause instanceof ApplicationFailure;
   let quarantined=false,waits=0;
   return async <T>(name: string, run: (binding?:ResourceActivityBinding) => Promise<T>): Promise<T> => {
     const needs = config?.activities[name]; if (!config || !needs) return run();
@@ -56,13 +60,13 @@ export function resourceGate(raw: unknown, options:{requireReviewStop?:boolean}=
       // The permit is also the Activity id: exceptions/cancellation do not have a
       // business receipt, so the verifier needs an independent exact identity.
       const binding={activityId:request.permitId,cancellationType:ActivityCancellationType.WAIT_CANCELLATION_COMPLETED};
-      let value:T|undefined,failed=false;
+      let value:T|undefined,failed=false,caught:unknown;
       try{value=await run(binding);return value;}
-      catch(error){failed=true;throw error;}
+      catch(error){failed=true;caught=error;throw error;}
       finally{
         await CancellationScope.nonCancellable(async()=>{
           const review=!!value&&typeof value==='object'&&'status' in value&&value.status==='review';
-          if(failed||review){
+          if((failed&&!(releaseOnReview&&businessFailure(caught)))||(review&&!releaseOnReview)){
             const verifier=proxyActivities<{verifyResourceReviewStopped(raw:unknown):Promise<unknown>}>({
               taskQueue:config.queue,startToCloseTimeout:'90 seconds',scheduleToCloseTimeout:'2 minutes',retry:{maximumAttempts:1}});
             let stopped=false;
@@ -86,11 +90,17 @@ export function resourceGate(raw: unknown, options:{requireReviewStop?:boolean}=
     // An Activity timeout/cancel may leave external work alive. Do NOT release in finally.
     // Such permits remain quarantined until a separate evidence-based recovery proves the owner stopped.
     let value:T;
-    try{value=await run();}catch(error){quarantined=true;throw error;}
+    try{value=await run();}
+    catch(error){
+      if(releaseOnReview&&businessFailure(error)){
+        try{const r=ResourceDecisionSchema.parse(await ports.releaseResources(request));if(r.permitId!==request.permitId||r.status!=='released')quarantined=true;}catch{quarantined=true;}
+      }else quarantined=true;
+      throw error;
+    }
     // A Review receipt proves classification, not that external execution has stopped.
     // Preserve the result for downstream Review handling, but quarantine its permit.
     // Old histories retain their original command sequence during replay.
-    if (patched("resource-review-quarantine-v1") && value && typeof value === "object" && "status" in value && value.status === "review") {
+    if (patched("resource-review-quarantine-v1") && value && typeof value === "object" && "status" in value && value.status === "review" && !releaseOnReview) {
       const unverified=()=>{quarantined=true;if(bounded||options.requireReviewStop)throw ApplicationFailure.nonRetryable("Review execution stop unverified","RESOURCE.REVIEW_STOP_UNVERIFIED");return value;};
       if (!config.reviewStopCheck || !patched("resource-review-stop-proof-v1")) return unverified();
       // Only an explicit verifier may attest to a stopped execution. A Review
