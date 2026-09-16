@@ -35,6 +35,15 @@ export type LabelImageCandidate = z.infer<typeof LabelImageCandidateSchema>;
 export type LabelCandidate = LabelTextCandidate | LabelImageCandidate;
 
 /** Structural/quality checks, NOT source verification or product-ingestion approval. */
+/** Real labels head the ingredient list many ways ("Other Ingredients:", "Ingredients:", "Inactive Ingredients",
+ * "Capsule ingredients:; Other ingredients:", OCR "Oher"). Accept any heading naming ingredients; reject facts-table
+ * headings and warnings, which is what this rule exists for. */
+export function isIngredientHeading(raw: string): boolean {
+  const text = raw.trim();
+  if (!/\b(?:ingredients?|ingr[e\.]{0,2}dients?|oher\s+ingredients)\b/i.test(text)) return false;
+  if (/\b(?:supplement|nutrition)\s+facts\b|amount\s+per\s+serving|daily\s+value|contains\s*:|may\s+contain|allergen/i.test(text)) return false;
+  return text.length <= 80;
+}
 export function assessLabelCandidate(candidate: LabelCandidate) {
   const codes = new Set<string>();
   let componentCount = 0;
@@ -64,7 +73,7 @@ export function assessLabelCandidate(candidate: LabelCandidate) {
   }
   const hasIngredients = componentCount > 0 || !!candidate.otherIngredients;
   if (candidate.otherIngredients) {
-    if (!/^(?:other|oher)\s+ingredients\s*:?$/i.test(candidate.otherIngredients.heading.text.trim())) codes.add("LABEL.INGREDIENT_HEADING_INVALID");
+    if (!isIngredientHeading(candidate.otherIngredients.heading.text)) codes.add("LABEL.INGREDIENT_HEADING_INVALID");
     if (candidate.otherIngredients.items.some(i => /\b(?:contains\s*:|may\s+contain|manufactured\s+(?:in|on)|shared\s+equipment)/i.test(i.text))) codes.add("LABEL.INGREDIENT_ROLE_INVALID");
   }
   if (!candidate.formula && candidate.formulaComplete || !hasIngredients && candidate.ingredientsComplete) codes.add("LABEL.COMPLETENESS_CONFLICT");

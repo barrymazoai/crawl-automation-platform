@@ -1,10 +1,12 @@
 import { z } from "zod";
-import { LabelTextWireSchema, LabelTextCandidateSchema, assessLabelCandidate, type TextInput } from "@crawl-automation/v3-contracts";
+import { isIngredientHeading, LabelTextWireSchema, LabelTextCandidateSchema, assessLabelCandidate, type TextInput } from "@crawl-automation/v3-contracts";
 import { evidenceLines, resolveAnchor } from "./extraction.js";
 
 export const labelTextPolicyVersion = "label-text/4";
 export const labelTextOutputSchema = z.toJSONSchema(LabelTextWireSchema);
-const heading = /^(?:other|oher)[ \t]+ingredients[ \t]*:?$/i;
+// Text preceding the heading on the same line is tolerated when it looks like the tail of a facts row (amount, %DV, footnote),
+// never when it is prose ("We discuss Other Ingredients ...").
+const rowTail = /(?:\d|%|\)|†|\*|mg|mcg|iu|g)\s*[:.]?\s*$/i;
 const warning = /\b(?:contains\s*:|may\s+contain|manufactured\s+(?:in|on)|processed\s+(?:in|on)|shared\s+equipment)/i;
 type Scope = Pick<TextInput, "range">;
 type Anchor = z.infer<typeof LabelTextWireSchema>["exclusions"][number]["quote"];
@@ -35,7 +37,8 @@ export function decodeLabelText(scope: Scope, text: string, response: string, po
   const other = candidate.otherIngredients;
   if (other) {
     const lineStart = text.lastIndexOf("\n", other.heading.start - 1) + 1;
-    if (!heading.test(other.heading.text.trim()) || text.slice(lineStart, other.heading.start).trim()) codes.add("LABEL.INGREDIENT_HEADING_INVALID");
+    const before = text.slice(lineStart, other.heading.start).trim();
+    if (!isIngredientHeading(other.heading.text) || (before && !rowTail.test(before))) codes.add("LABEL.INGREDIENT_HEADING_INVALID");
     other.items.forEach((item, index) => {
       const previous = other.items[index - 1], sinceHeading = text.slice(other.heading.end, item.start);
       if (item.start < other.heading.end || warning.test(sinceHeading) || warning.test(item.text) || /supplement\s+facts/i.test(sinceHeading)) codes.add("LABEL.INGREDIENT_ROLE_INVALID");

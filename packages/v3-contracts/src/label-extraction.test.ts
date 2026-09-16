@@ -60,6 +60,8 @@ it("new codec is strict, independently serializable, and not accepted as a legac
 it("blank fields, nonexistent complete sections, and allergen headings cannot count as ingredients", () => {
   const c = gncLabelFixture(); c.otherIngredients!.heading.text = "Contains:";
   expect(assess(c).codes).toContain("LABEL.INGREDIENT_HEADING_INVALID");
+  for (const bad of ["Amount Per Serving", "Supplement Facts", "% Daily Value", "May contain milk"]) { c.otherIngredients!.heading.text = bad; expect(assess(c).codes).toContain("LABEL.INGREDIENT_HEADING_INVALID"); }
+  for (const ok of ["Ingredients:", "Inactive Ingredients", "Other Ingredients (Capsule):", "Capsule ingredients:; Other ingredients:", "Oher Ingredients:", "Non-medicinal ingredients"]) { c.otherIngredients!.heading.text = ok; expect(assess(c).codes).not.toContain("LABEL.INGREDIENT_HEADING_INVALID"); }
   c.formula = null; expect(assess(c).codes).toContain("LABEL.COMPLETENESS_CONFLICT");
   c.otherIngredients!.items[0]!.text = " "; expect(LabelImageCandidateSchema.safeParse(c).success).toBe(false);
 });
