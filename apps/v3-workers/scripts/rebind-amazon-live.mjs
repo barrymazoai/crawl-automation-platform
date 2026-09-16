@@ -23,7 +23,9 @@ const rt=await read(m.jobs.find(j=>j.id==='amazon-catalog-source').env.V3_WORKER
 const connection=await Connection.connect({address:rt.address,connectTimeout:'15 seconds',tls:{serverNameOverride:t.serverName,serverRootCACertificate:await fs.readFile(t.caFile),clientCertPair:{crt:await fs.readFile(t.certFile),key:await fs.readFile(t.keyFile)}}});
 try{
  const client=new Client({connection,namespace:rt.namespace});
- for await(const s of client.workflow.list({query:"ExecutionStatus = 'Running'"}))assert.ok(['AmazonHistoryBatchWorkflow','DtcNodeSessionWorkflow'].includes(s.type),'running '+s.type+' '+s.workflowId);
+ // ALLOW_RUNNING=1: operator accepts that in-flight product workflows resume on the restarted workers (Temporal retries
+ // the interrupted activity); the runner must already be stopped so nothing new is submitted or restored mid-swap.
+ for await(const s of client.workflow.list({query:"ExecutionStatus = 'Running'"}))assert.ok(process.env.ALLOW_RUNNING==='1'||['AmazonHistoryBatchWorkflow','DtcNodeSessionWorkflow'].includes(s.type),'running '+s.type+' '+s.workflowId);
  let currentPath=m.jobs.find(j=>j.id==='amazon-capture').env.V3_AMAZON_LIVE_CONFIG;
  if(currentPath.includes('/batch-')){const before=await read(currentPath.replace(/\/amazon\.private\.json$/,'/deployment-before.private.json'));currentPath=before.jobs.find(j=>j.id==='amazon-capture').env.V3_AMAZON_LIVE_CONFIG;assert.ok(!currentPath.includes('/batch-'),'canonical config unresolved');}
  const current=await read(currentPath),amazon=AmazonLiveConfigSchema.parse({...current,productResources:{...current.productResources,releaseOnReview:true},...(current.capture?.mode==='scraperapi'?{capture:{...current.capture,dns:'none'}}:{})});
