@@ -99,7 +99,9 @@ export class DirectHttpsTransport implements FileTransport {
  * No address pinning and no public-address check: chosen by the operator for CDN downloads whose URLs come from a
  * trusted channel (Amazon's own image CDN), where the SSRF guard only ever cost a DNS round trip per file. */
 export class SystemHttpsTransport implements FileTransport {
-    readonly egressId = "direct-system/1";
+    // Same egress as the pinned transport (this host, no proxy); only name resolution differs. A lease binds by
+    // egress, so a distinct id here would fail every session check with SOURCE.SESSION_MISMATCH.
+    readonly egressId = "direct/1";
     readonly targetResolution = "system" as const;
     async get(url: URL, _address: Address | undefined, headers: Readonly<Record<string, string>>, signal: AbortSignal): Promise<Response> {
         permittedUrl(url.href, [url.origin]);
