@@ -46,6 +46,12 @@ it("ingredient-heading words inside prose are not a real section", () => {
   const f = fixture(), a = f.wire.otherIngredients!.heading; f.lines[a.fromLine - 1] = "We discuss Other Ingredients";
   expect(f.decode().codes).toContain("LABEL.INGREDIENT_HEADING_INVALID");
 });
+it("a heading that opens a new clause on a shared line is a real section", () => {
+  const f = fixture(), a = f.wire.otherIngredients!.heading; f.lines[a.fromLine - 1] = "Vitamin D. " + f.lines[a.fromLine - 1];
+  expect(f.decode().codes).not.toContain("LABEL.INGREDIENT_HEADING_INVALID");
+  f.lines[a.fromLine - 1] = "Vitamin D 25 mcg 125% " + a.text;
+  expect(f.decode().codes).not.toContain("LABEL.INGREDIENT_HEADING_INVALID");
+});
 it("Contains is not an ingredient and a line wrap is not a delimiter", () => {
   const f = fixture(), items = f.wire.otherIngredients!.items;
   f.lines[items[1]!.fromLine - 2] = "CONTAINS: ";

@@ -4,9 +4,10 @@ import { evidenceLines, resolveAnchor } from "./extraction.js";
 
 export const labelTextPolicyVersion = "label-text/4";
 export const labelTextOutputSchema = z.toJSONSchema(LabelTextWireSchema);
-// Text preceding the heading on the same line is tolerated when it looks like the tail of a facts row (amount, %DV, footnote),
-// never when it is prose ("We discuss Other Ingredients ...").
-const rowTail = /(?:\d|%|\)|†|\*|mg|mcg|iu|g)\s*[:.]?\s*$/i;
+// Text preceding the heading on the same line is tolerated when the heading starts a new clause: after the tail of a
+// facts row (amount, %DV, footnote) or after sentence punctuation, as Amazon's one-line ingredient paragraphs read
+// ("Vitamin D. Other Ingredients: Sugar, ..."). Never inside running prose ("We discuss Other Ingredients ...").
+const clauseEnd = /(?:\d|%|\)|†|\*|\b(?:mg|mcg|iu|g)|[.;:!?])\s*$/i;
 const warning = /\b(?:contains\s*:|may\s+contain|manufactured\s+(?:in|on)|processed\s+(?:in|on)|shared\s+equipment)/i;
 type Scope = Pick<TextInput, "range">;
 type Anchor = z.infer<typeof LabelTextWireSchema>["exclusions"][number]["quote"];
@@ -38,7 +39,7 @@ export function decodeLabelText(scope: Scope, text: string, response: string, po
   if (other) {
     const lineStart = text.lastIndexOf("\n", other.heading.start - 1) + 1;
     const before = text.slice(lineStart, other.heading.start).trim();
-    if (!isIngredientHeading(other.heading.text) || (before && !rowTail.test(before))) codes.add("LABEL.INGREDIENT_HEADING_INVALID");
+    if (!isIngredientHeading(other.heading.text) || (before && !clauseEnd.test(before))) codes.add("LABEL.INGREDIENT_HEADING_INVALID");
     other.items.forEach((item, index) => {
       const previous = other.items[index - 1], sinceHeading = text.slice(other.heading.end, item.start);
       if (item.start < other.heading.end || warning.test(sinceHeading) || warning.test(item.text) || /supplement\s+facts/i.test(sinceHeading)) codes.add("LABEL.INGREDIENT_ROLE_INVALID");
