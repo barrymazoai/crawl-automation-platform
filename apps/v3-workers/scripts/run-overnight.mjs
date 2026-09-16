@@ -6,9 +6,9 @@
 // (nothing can run under them), so a lost heartbeat cannot stall settlement. Progress: overnight-<ts>.log / .json.
 //   nohup node run-overnight.mjs <total> [perRequest=10] [maxConcurrentRequests=8] > /dev/null 2>&1 &
 //   node run-overnight.mjs retry-capture <since-iso> [perRequest] [maxConcurrent]   # re-crawl listings whose last outcome was a capture/preparation Review
-import fs from 'node:fs/promises';import assert from 'node:assert/strict';import {hostname} from 'node:os';import {randomUUID} from 'node:crypto';import {execFile} from 'node:child_process';import {promisify} from 'node:util';import pg from 'pg';import {Client,Connection} from '@temporalio/client';
+import fs from 'node:fs/promises';import path from 'node:path';import assert from 'node:assert/strict';import {hostname} from 'node:os';import {randomUUID} from 'node:crypto';import {execFile} from 'node:child_process';import {promisify} from 'node:util';import pg from 'pg';import {Client,Connection} from '@temporalio/client';
 assert.match(hostname(),/^barrydeMac-mini(?:\.|$)/);
-const retryMode=process.argv[2]==='retry-capture',retrySince=retryMode?process.argv[3]:null,total=retryMode?2000:Number(process.argv[2]),perRequest=Number(process.argv[retryMode?4:3]??10),maxConcurrent=Number(process.argv[retryMode?5:4]??8);assert.ok(total>=1&&total<=2000&&perRequest>=1&&perRequest<=10&&maxConcurrent>=1&&maxConcurrent<=20);if(retryMode)assert.match(retrySince??'',/^\d{4}-\d{2}-\d{2}T/,'retry-capture needs an ISO start time');
+const retryMode=process.argv[2]==='retry-capture',retrySince=retryMode?process.argv[3]:null,total=retryMode?2000:Number(process.argv[2]),perRequest=Number(process.argv[retryMode?4:3]??10),maxConcurrent=Number(process.argv[retryMode?5:4]??8);assert.ok(total>=1&&total<=10000&&perRequest>=1&&perRequest<=10&&maxConcurrent>=1&&maxConcurrent<=20);if(retryMode)assert.match(retrySince??'',/^\d{4}-\d{2}-\d{2}T/,'retry-capture needs an ISO start time');
 // RETRY_CODES=A,B overrides the capture list, e.g. to rerun products a since-relaxed content rule had sent to Review.
 const CAPTURE_REVIEW_CODES=process.env.RETRY_CODES?process.env.RETRY_CODES.split(','):['AMAZON.BROWSER_PHASE_UNRESOLVED','AMAZON.FILE_PUBLICATION_UNRESOLVED','CHANNEL.LABEL_PREPARATION_UNVERIFIED','CHANNEL.DEPENDENCY_UNAVAILABLE','ARTIFACT.UNAVAILABLE','ARTIFACT.UPLOAD_UNKNOWN'];
 const main='/Users/barry/apps/crawlv3-batch-a.UiA4dx',history='/Users/barry/apps/crawlv3-history-20260913',work=history+'/ocr-cloud-20260915',plan2000=process.env.PLAN??history+'/amazon-2000-us-20260913/temporal-plan.json'; // PLAN=<temporal-plan.json> selects another retained plan (e.g. the full set)
@@ -19,7 +19,11 @@ const amazonRoles=['amazon-control','amazon-catalog-source','amazon-catalog-ledg
 const manifestPath=main+'/live/deployment.json',text=await fs.readFile(manifestPath,'utf8'),m=JSON.parse(text);
 const waitReady=async()=>{for(let w=0;w<36;w++){const st=await read(main+'/status.json');if(st.jobs.every(j=>j.ready)&&Date.now()-Date.parse(st.at)<20000)return true;await pause(5000);}return false;};
 assert.ok(await waitReady(),'fleet not ready');
-const source=m.jobs.find(j=>j.id==='amazon-catalog-source'),liveConfigPath=source.env.V3_AMAZON_LIVE_CONFIG;assert.ok(!liveConfigPath.includes('/batch-')&&!liveConfigPath.includes('/overnight-'),'Amazon roles bound to a test copy: '+liveConfigPath);
+const source=m.jobs.find(j=>j.id==='amazon-catalog-source');let liveConfigPath=source.env.V3_AMAZON_LIVE_CONFIG;
+// A stopped run (or one whose restore was skipped for a lingering root) leaves the roles bound to its test copy. The
+// canonical config is the one the manifest carried before that run; follow the retained deployment-before manifests.
+for(let hops=0;liveConfigPath.includes('/overnight-')||liveConfigPath.includes('/batch-');hops++){assert.ok(hops<20,'binding chain too deep');const before=JSON.parse(await fs.readFile(path.dirname(liveConfigPath)+'/deployment-before.private.json','utf8'));liveConfigPath=before.jobs.find(j=>j.id==='amazon-catalog-source').env.V3_AMAZON_LIVE_CONFIG;}
+if(liveConfigPath!==source.env.V3_AMAZON_LIVE_CONFIG)console.log(JSON.stringify({event:'OVERNIGHT_CANONICAL_RESOLVED',bound:source.env.V3_AMAZON_LIVE_CONFIG,canonical:liveConfigPath}));
 const live=await read(liveConfigPath);assert.equal(live.capture.mode,'scraperapi');assert.ok(live.productQueues.enrich);
 const rt=await read(source.env.V3_WORKER_CONFIG),t=rt.transport;
 const labelPrivate=await read(m.jobs.find(j=>j.id==='amazon-channel-label-ocr-receipts').env.V3_CHANNEL_LABEL_CONFIG);
@@ -41,7 +45,8 @@ const releaseStalePermits=async()=>{const held=(await q("SELECT p.permit_id,p.re
   n++;await log('STALE_PERMIT_RELEASED',{permitId:row.permit_id,resources:row.resources,workflowId,status:d.status.name});}
  summary.permitsReleased+=n;return n;};
 try{
- for await(const s of client.workflow.list({query:"ExecutionStatus = 'Running'"}))assert.ok(['AmazonHistoryBatchWorkflow','DtcNodeSessionWorkflow'].includes(s.type),'running '+s.type+' '+s.workflowId);
+ // ALLOW_RUNNING=1: a leftover root of a stopped run may keep polling its ledger; requests are concurrent per scope, so a new run may start beside it.
+ for await(const s of client.workflow.list({query:"ExecutionStatus = 'Running'"}))assert.ok(process.env.ALLOW_RUNNING==='1'||['AmazonHistoryBatchWorkflow','DtcNodeSessionWorkflow'].includes(s.type),'running '+s.type+' '+s.workflowId);
  const plan=await read(plan2000),attempted=new Set((await q("SELECT DISTINCT record->'entry'->>'listingId' asin FROM catalog_discovery WHERE record->'scope'->>'channel'='amazon'")).rows.map(r=>r.asin));
  let asins;
  if(retryMode){const rows=(await q("SELECT DISTINCT record->'observation'->>'listingId' asin FROM review_record WHERE registered_at>$1 AND record->'failure'->>'code'=ANY($2) AND coalesce(record->'rawError'->'details'->>'causeCode','') NOT IN ('AMAZON.NOT_FOUND','AMAZON.ASIN_CONFLICT') AND record->'observation'->>'listingId' NOT IN (SELECT record->'observation'->>'listingId' FROM collected_product WHERE collected_at>$1)",[retrySince,CAPTURE_REVIEW_CODES])).rows;asins=rows.map(r=>r.asin).filter(a=>plan.products.some(p=>p.asin===a)).slice(0,total);}
@@ -70,7 +75,7 @@ try{
  }
 }catch(error){summary.stoppedReason='error: '+String(error?.message??error).slice(0,300);await log('OVERNIGHT_ERROR',{message:summary.stoppedReason});}
 finally{
- let running=0;try{for await(const s of client.workflow.list({query:"WorkflowType = 'BrandCollectionWorkflow' AND ExecutionStatus = 'Running'"}))running++;}catch{}
+ let running=0;try{for await(const s of client.workflow.list({query:"(WorkflowType = 'AmazonCatalogProductWorkflow' OR WorkflowType = 'ChannelStreamingLabelWorkflow') AND ExecutionStatus = 'Running'"}))running++;}catch{}
  if(running===0){try{await bind(liveConfigPath);await log('OVERNIGHT_RESTORED');}catch(e){await log('OVERNIGHT_RESTORE_FAILED',{message:String(e?.message).slice(0,200)});}}
  else await log('OVERNIGHT_RESTORE_SKIPPED',{reason:'brand collections still running; Amazon roles stay bound to '+dir});
  summary.finishedAt=new Date().toISOString();await fs.writeFile(dir+'/summary.json',JSON.stringify(summary,null,2),{mode:0o600}).catch(()=>{});
