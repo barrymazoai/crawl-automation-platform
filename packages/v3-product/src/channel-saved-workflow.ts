@@ -134,6 +134,8 @@ export async function runChannelLabelWorkflow(raw:unknown,progress?:ChannelSourc
       }
       if(["unresolved","rejected"].includes(state.status))break;
     }
+    // Whatever ended the walk, every OCR started up front is awaited: an abandoned Activity would keep its OCR permit forever.
+    await Promise.allSettled([...ocrPending.values()]);
     for(const source of loaded.manifest.sources.filter(s=>s.kind!=="file-image")){
       if(selectedImageId&&source.kind==="page"&&patched("channel-complete-image-skip-page-v1"))notStarted.push({id:source.id,status:"not_started"});
       else states.push(await processSource(source));
