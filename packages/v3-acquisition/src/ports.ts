@@ -21,7 +21,7 @@ export type Response = {
  */
 export interface FileTransport {
     readonly egressId: string;
-    readonly targetResolution?: "local-pinned" | "proxy" | "browser";
+    readonly targetResolution?: "local-pinned" | "proxy" | "browser" | "system";
     get(url: URL, address: Address | undefined, headers: Readonly<Record<string, string>>, signal: AbortSignal): Promise<Response>;
 }
 /** Acquire pins BOTH source session and egress until release; other operations may acquire independent leases. */

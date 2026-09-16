@@ -95,9 +95,34 @@ export class DirectHttpsTransport implements FileTransport {
     }
 }
 
+/** Direct route that leaves name resolution to the host (system resolver, or the TUN proxy on a Clash host).
+ * No address pinning and no public-address check: chosen by the operator for CDN downloads whose URLs come from a
+ * trusted channel (Amazon's own image CDN), where the SSRF guard only ever cost a DNS round trip per file. */
+export class SystemHttpsTransport implements FileTransport {
+    readonly egressId = "direct-system/1";
+    readonly targetResolution = "system" as const;
+    async get(url: URL, _address: Address | undefined, headers: Readonly<Record<string, string>>, signal: AbortSignal): Promise<Response> {
+        permittedUrl(url.href, [url.origin]);
+        return new Promise((resolve, reject) => {
+            const req = request(url, { method: "GET", agent: false, signal, maxHeaderSize: 16 * 1024, servername: url.hostname,
+                headers: { ...headers, "accept-encoding": "identity" }, rejectUnauthorized: true,
+            }, res => {
+                const h: Record<string, string | undefined> = {};
+                for (const name of ["content-type", "content-length", "content-encoding", "location"]) {
+                    const value = res.headers[name];
+                    h[name] = Array.isArray(value) ? value.join(",") : value;
+                }
+                resolve({ status: res.statusCode ?? 0, headers: h, body: res, close: () => res.destroy() });
+            });
+            req.on("error", () => reject(new AcquisitionError("SOURCE.NETWORK_UNAVAILABLE")));
+            req.end();
+        });
+    }
+}
+
 /** Select resolution by the trusted transport, never by task input or DNS failure fallback. */
 export async function transportAddress(url: URL, transport: FileTransport, dns: DnsResolver, signal: AbortSignal): Promise<Address | undefined> {
     signal.throwIfAborted();
-    if (transport.targetResolution === "proxy" || transport.targetResolution === "browser") return undefined;
+    if (transport.targetResolution === "proxy" || transport.targetResolution === "browser" || transport.targetResolution === "system") return undefined;
     return pinAddress(url, dns, signal);
 }

@@ -10,7 +10,7 @@ export const AmazonCaptureConfigSchema = z.discriminatedUnion("mode", [
   z.strictObject({ mode: z.literal("scraperapi"), route: ScraperApiRouteSchema,
     scraperApi: z.strictObject({ apiKey: z.string().min(8).max(512).regex(/^[A-Za-z0-9_-]+$/), allowedOrigins: z.array(z.string().url()).min(1).max(32) }),
     // Direct downloads pin a resolved address; "doh" resolves through DNS over HTTPS where the host resolver returns fake IPs (Clash fake-ip).
-    images: z.literal("direct").default("direct"), dns: z.enum(["system", "doh"]).default("system") }),
+    images: z.literal("direct").default("direct"), dns: z.enum(["system", "doh", "none"]).default("system") }),
 ]);
 export type AmazonCaptureConfig = z.infer<typeof AmazonCaptureConfigSchema>;
 export const AmazonLiveConfigSchema = z.strictObject({

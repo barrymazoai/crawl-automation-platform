@@ -10,7 +10,7 @@ import { Client, Connection } from "@temporalio/client";
 import { CatalogPageInputSchema, CatalogDiscoverySchema, AmazonProductJobSchema, CollectionWorkflowInput, BrandCollectionPlanSchema, BrandCollectionProgressSchema,
   AmazonProductCaptureSchema, AmazonProductHandoffSchema, ChannelLabelInputSchema, ReviewRecordSchema, observationIdentity } from "@crawl-automation/v3-contracts";
 import { createR2Objects, RetainedPublication, ArtifactResolver, FileCopies, sha256, ActivityObjectReads } from "@crawl-automation/v3-artifacts";
-import { EgoTaskPages, EgoFileTransport, DirectHttpsTransport, createHttpRoute, AcquireFileModule, FileEvidence, acquireFile, systemDns, dohDns, type SourceAccess, type FileTransport } from "@crawl-automation/v3-acquisition";
+import { EgoTaskPages, EgoFileTransport, DirectHttpsTransport, SystemHttpsTransport, createHttpRoute, AcquireFileModule, FileEvidence, acquireFile, systemDns, dohDns, type SourceAccess, type FileTransport } from "@crawl-automation/v3-acquisition";
 import { AmazonCatalogSource, AmazonEgoReader, AmazonHttpReader, AmazonLiveProduct, ChannelProductPlans } from "@crawl-automation/v3-channels";
 import { TextLocalStore } from "@crawl-automation/v3-text";
 import { PostgresReviews } from "@crawl-automation/v3-review";
@@ -50,7 +50,7 @@ async function main() {
         const requireBrowser = async () => { const e = execution(); await admission.requireHeld(config.browserResource, e.workflowId, e.runId); };
         // Originals: through the owned page in browser mode; a pinned direct HTTPS GET to the image CDN in scraperapi mode.
         const fileTransport = async (sessionId: string, pageUrl: string, url: string, s: AbortSignal): Promise<FileTransport> =>
-          http ? new DirectHttpsTransport() : new EgoFileTransport({ browser: await requirePages().open(sessionId, s), pageUrl, allowedUrls: [url] }, config.egressId);
+          http ? (config.capture.mode==='scraperapi'&&config.capture.dns==='none' ? new SystemHttpsTransport() : new DirectHttpsTransport()) : new EgoFileTransport({ browser: await requirePages().open(sessionId, s), pageUrl, allowedUrls: [url] }, config.egressId);
         const notOpened = (sessionId: string) => ({ status: "not-opened" as const, taskId: sessionId, targetId: null });
         const links = new Map((config.linkBatches ?? []).map(b => [b.requestId, b]));
         const jobsFor = async (raw: unknown) => {

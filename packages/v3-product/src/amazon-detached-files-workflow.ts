@@ -3,7 +3,7 @@ import { AmazonProductCaptureSchema, AmazonStagedFilesSchema, AmazonProductHando
 import { resourceGate } from './resource-workflow.js';
 const same=(a:unknown,b:unknown)=>JSON.stringify(a)===JSON.stringify(b);
 const invalid=()=>{throw ApplicationFailure.nonRetryable('Amazon staged file identity conflict','AMAZON.STAGE_IDENTITY_CONFLICT');};
-function code(error:unknown){let current=error;for(let n=0;n<8&&current&&typeof current==='object';n++){const e=current as {type?:unknown;cause?:unknown};if(typeof e.type==='string'&&/^(AMAZON|SOURCE|ACQUIRE|ARTIFACT|RESOURCE)\.[A-Z_]+$/.test(e.type))return e.type;current=e.cause;}return 'AMAZON.FILE_PUBLICATION_UNRESOLVED';}
+function code(error:unknown){let current=error;for(let n=0;n<8&&current&&typeof current==='object';n++){const e=current as {type?:unknown;cause?:unknown};if(typeof e.type==='string'&&/^(AMAZON|SOURCE|ACQUIRE|ARTIFACT|RESOURCE|SCRAPERAPI|CHANNEL)\.[A-Z_]+$/.test(e.type))return e.type;current=e.cause;}return 'AMAZON.FILE_PUBLICATION_UNRESOLVED';}
 
 /** All origin bytes and local checks finish before page close/lease release.
  * Cloud-only file Activities can then overlap the next product's browser phase. */
