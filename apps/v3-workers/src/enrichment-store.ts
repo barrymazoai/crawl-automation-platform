@@ -1,5 +1,5 @@
 import type pg from "pg";
-import { EnrichmentRecordSchema, ExistingFormulaInputSchema, ExistingFormulaSchema, LabelCollectedProductSchema, type EnrichmentRecord, type ExistingFormula } from "@crawl-automation/v3-contracts";
+import { EnrichmentRecordSchema, ExistingFormulaInputSchema, RecentAttemptInputSchema, RecentAttemptSchema, ExistingFormulaSchema, LabelCollectedProductSchema, type EnrichmentRecord, type ExistingFormula } from "@crawl-automation/v3-contracts";
 import { sha256 } from "@crawl-automation/v3-artifacts";
 
 type Db = Pick<pg.Pool, "query">;
@@ -25,6 +25,14 @@ export function enrichmentStores(db: Db) {
   };
 }
 /** Latest current-structure formula already collected for this listing, or none. Read-only. */
+export async function inspectRecentAttempt(db: Db, raw: unknown) {
+  const { listingId, withinHours } = RecentAttemptInputSchema.parse(raw);
+  const row = (await db.query(`SELECT at, kind FROM (
+      SELECT collected_at AS at, 'collected' AS kind FROM collected_product WHERE record->'observation'->>'listingId'=$1
+      UNION ALL SELECT registered_at, 'review' FROM review_record WHERE record->'observation'->>'listingId'=$1) a
+    WHERE at > now() - ($2 || ' hours')::interval ORDER BY at DESC LIMIT 1`, [listingId, String(withinHours)])).rows[0];
+  return RecentAttemptSchema.parse({ schemaVersion: 1, attemptedAt: row ? new Date(row.at).toISOString() : null, kind: row?.kind ?? null });
+}
 export async function inspectExistingFormula(db: Db, raw: unknown): Promise<ExistingFormula> {
   const { owner } = ExistingFormulaInputSchema.parse(raw);
   const row = (await db.query("SELECT operation_id,record,record_hash,collected_at FROM collected_product WHERE record->'observation'->>'listingId'=$1 AND record->>'codec' IN ('collected-product/3','collected-product/4') ORDER BY collected_at DESC LIMIT 1", [owner.listingId])).rows[0];

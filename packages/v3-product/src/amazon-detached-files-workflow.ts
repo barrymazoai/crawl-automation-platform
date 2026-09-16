@@ -1,5 +1,5 @@
 import { startChild, ParentClosePolicy, WorkflowIdReusePolicy, ApplicationFailure, CancellationScope, isCancellation, patched, type ChildWorkflowHandle } from '@temporalio/workflow';
-import { AmazonProductCaptureSchema, AmazonStagedFilesSchema, AmazonProductHandoffSchema, ChannelPlanOutcomeSchema, FileAcquireOutcomeSchema, AcquisitionReviewSchema, ExistingFormulaSchema, type AmazonProductJob, type ExistingFormula } from '@crawl-automation/v3-contracts';
+import { AmazonProductCaptureSchema, AmazonStagedFilesSchema, AmazonProductHandoffSchema, ChannelPlanOutcomeSchema, FileAcquireOutcomeSchema, AcquisitionReviewSchema, ExistingFormulaSchema,RecentAttemptSchema, type AmazonProductJob, type ExistingFormula } from '@crawl-automation/v3-contracts';
 import { resourceGate } from './resource-workflow.js';
 const same=(a:unknown,b:unknown)=>JSON.stringify(a)===JSON.stringify(b);
 const invalid=()=>{throw ApplicationFailure.nonRetryable('Amazon staged file identity conflict','AMAZON.STAGE_IDENTITY_CONFLICT');};
@@ -13,6 +13,8 @@ export async function detachedAmazonProduct(job:AmazonProductJob,inputQueue:stri
  // OCR or model call this time; the page observation (price, rating, stock) was already recorded by the plan step.
  // Both steps are enabled per deployment by configuring the enrichment queue on the product job; older jobs keep the previous behaviour.
  const formulaOnce=!!job.queues.enrich&&patched('amazon-formula-once-v1');
+ // Duplicate submissions are harmless: a listing attempted (collected or reviewed) within the last 24 hours is not crawled again.
+ const dedup=!!job.queues.enrich&&patched('amazon-recent-attempt-skip-v1');
  // Enrichment (unified name, form, variant attributes, health functions) runs after any collected formula and is
  // itself idempotent on (listing, formula content); a failure there is a Review, never a product failure.
  // One gate per run: permit ids are sequenced per gate instance, so a second instance would reuse the capture permit id.
@@ -26,6 +28,8 @@ export async function detachedAmazonProduct(job:AmazonProductJob,inputQueue:stri
  const review=async(error:unknown,stage:'AMAZON.BROWSER_PHASE_UNRESOLVED'|'AMAZON.FILE_PUBLICATION_UNRESOLVED')=>{
   const r=AcquisitionReviewSchema.parse(await call(job.queues.review,'reviewAmazonProduct',{job,code:stage,causeCode:code(error)}));if(r.operationId!==job.operationId)invalid();return r;
  };
+ if(dedup){const recent=RecentAttemptSchema.parse(await call(job.queues.plan,'inspectRecentAttempt',{schemaVersion:1,listingId:job.discovery.entry.listingId,withinHours:24}));
+  if(recent.attemptedAt)return{status:'skipped',code:'AMAZON.RECENTLY_ATTEMPTED',listingId:job.discovery.entry.listingId,attemptedAt:recent.attemptedAt,previous:recent.kind};}
  try{
   const phase=await gate('browserSession',async()=>{
    let cleanupAllowed=true;

@@ -4,15 +4,16 @@
 //   node bind-brand-web.mjs
 import fs from 'node:fs/promises';import assert from 'node:assert/strict';import {hostname} from 'node:os';import {execFile} from 'node:child_process';import {promisify} from 'node:util';
 assert.match(hostname(),/^barrydeMac-mini(?:\.|$)/);
-const main='/Users/barry/apps/crawlv3-batch-a.UiA4dx',work='/Users/barry/apps/crawlv3-history-20260913/ocr-cloud-20260915',candidate=work+'/candidate',dest=main+'/release-throughput-20260915/web',out=work+'/rollout';
+const tag=process.argv[2]??'';assert.match(tag,/^[a-z0-9-]{0,12}$/,'usage: bind-brand-web.mjs [tag]');
+const main='/Users/barry/apps/crawlv3-batch-a.UiA4dx',work='/Users/barry/apps/crawlv3-history-20260913/ocr-cloud-20260915',candidate=work+'/candidate',dest=main+'/release-throughput-20260915/web'+(tag?'-'+tag:''),out=work+'/rollout';
 const read=async p=>JSON.parse(await fs.readFile(p,'utf8')),run=promisify(execFile);
 const retain=async(p,b)=>{try{await fs.writeFile(p,b,{flag:'wx',mode:0o600});}catch(e){if(e.code!=='EEXIST')throw e;assert.ok((await fs.readFile(p)).equals(Buffer.from(b)),'differs: '+p);}};
 await fs.mkdir(dest+'/migrations',{recursive:true,mode:0o700});
 await retain(dest+'/brand-web.js',await fs.readFile(candidate+'/web/brand-web.js'));
-const migrations=(await fs.readdir(candidate+'/migrations')).filter(n=>/^\d{3}_.*\.sql$/.test(n)).sort();assert.equal(migrations.at(-1),'020_product_enrichment.sql');
+const migrations=(await fs.readdir(candidate+'/migrations')).filter(n=>/^\d{3}_.*\.sql$/.test(n)).sort();assert.ok(migrations.length>=20,'migrations '+migrations.length);
 for(const n of migrations)await retain(dest+'/migrations/'+n,await fs.readFile(candidate+'/migrations/'+n));
 const manifestPath=main+'/live/deployment.json',text=await fs.readFile(manifestPath,'utf8'),m=JSON.parse(text),job=m.jobs.find(j=>j.id==='brand-web');assert.ok(job);
-await retain(out+'/deployment-before-brand-web.private.json',text);
+await retain(out+'/deployment-before-brand-web'+(tag?'-'+tag:'')+'.private.json',text);
 const before=job.entry;job.entry=dest+'/brand-web.js';
 await fs.writeFile(manifestPath+'.brand-web-next',JSON.stringify(m,null,2),{flag:'wx',mode:0o600});await fs.rename(manifestPath+'.brand-web-next',manifestPath);
 const controller=main+'/release-independent-control-20260913/independent-deployment/deployment-launchd.js';

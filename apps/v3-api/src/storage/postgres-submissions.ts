@@ -58,15 +58,18 @@ export class PostgresSubmissions implements SubmissionRepository {
       const snapshot = CollectionSnapshot.parse(fields);
       // All intake paths already hold the source lock. Check BEFORE inserting:
       // a skipped tick must commit its receipt without a collection row.
-      const active = await client.query("SELECT 1 FROM source_submission_guard WHERE source_id=$1", [sourceId]);
-      if (active.rowCount) throw new ApiError(409, "SOURCE_BUSY", "This source already has an accepted request.");
+      // Browser channels own one page session per source; request-based channels (amazon) admit concurrent requests.
+      if (snapshot.channel !== "amazon") {
+        const active = await client.query("SELECT 1 FROM source_submission_guard WHERE source_id=$1", [sourceId]);
+        if (active.rowCount) throw new ApiError(409, "SOURCE_BUSY", "This source already has an accepted request.");
+      }
       const result = await client.query(
         `INSERT INTO collection_submission(request_id,source_id,workflow_id,snapshot) VALUES($1,$2,$3,$4::jsonb)
          RETURNING request_id AS "requestId", workflow_id AS "workflowId", snapshot, created_at AS "createdAt"`,
         [requestId, sourceId, `v3-collection-${requestId}`, JSON.stringify(snapshot)],
       );
       const guard = await client.query(
-        "INSERT INTO source_submission_guard(source_id,request_id) VALUES($1,$2) ON CONFLICT(source_id) DO NOTHING RETURNING source_id", [sourceId, requestId],
+        "INSERT INTO source_submission_guard(source_id,request_id) VALUES($1,$2) ON CONFLICT(request_id) DO NOTHING RETURNING source_id", [sourceId, requestId],
       );
       if (!guard.rowCount) throw new Error("Source guard changed despite source lock; roll back transaction");
       return fromRow(result.rows[0]);

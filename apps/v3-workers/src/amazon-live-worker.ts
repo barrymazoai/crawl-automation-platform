@@ -210,7 +210,7 @@ async function main() {
           catch (error) { ctx.cancellationSignal.throwIfAborted(); const code = error instanceof Error && /^(AMAZON|SOURCE|CATALOG|ARTIFACT|SCRAPERAPI|NETWORK|CHANNEL)\.[A-Z_]+$/.test(error.message) ? error.message : "AMAZON.ACTIVITY_UNRESOLVED";
             // The failure only carries a code; the underlying error stays in the worker log for diagnosis.
             const e = error as { name?: string; message?: string; code?: string; cause?: { name?: string; message?: string; code?: string } };
-            console.error(JSON.stringify({ event: "AMAZON_ACTIVITY_FAILED", activity: name, workflowId: ctx.info.workflowExecution.workflowId, code, error: { name: e?.name, message: String(e?.message ?? "").slice(0, 500), code: e?.code },
+            console.error(JSON.stringify({ event: "AMAZON_ACTIVITY_FAILED", activity: name, workflowId: ctx.info.workflowExecution?.workflowId, code, error: { name: e?.name, message: String(e?.message ?? "").slice(0, 500), code: e?.code },
               cause: e?.cause ? { name: e.cause.name, message: String(e.cause.message ?? "").slice(0, 300), code: e.cause.code } : null }));
             throw ApplicationFailure.nonRetryable("Inspect retained Amazon evidence", code); }
           finally { clearInterval(timer); }

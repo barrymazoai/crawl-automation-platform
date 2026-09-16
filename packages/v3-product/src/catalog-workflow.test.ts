@@ -1,6 +1,7 @@
 import { beforeEach, expect, it, vi } from "vitest";
 const runtime = vi.hoisted(() => ({ activities: {} as Record<string, any>, starts: vi.fn(), continued: vi.fn() }));
 vi.mock("@temporalio/workflow", () => ({ proxyActivities: ({ taskQueue }: any) => runtime.activities[taskQueue], startChild: runtime.starts,
+  patched: () => true,
   continueAsNew: runtime.continued, ParentClosePolicy: { ABANDON: "ABANDON" }, WorkflowIdReusePolicy: { REJECT_DUPLICATE: "REJECT_DUPLICATE" },
   workflowInfo: () => ({ taskQueue: "product" }), isCancellation: (e: any) => e?.message === "cancelled",
   ApplicationFailure: { nonRetryable: (message: string) => Error(message) } }));

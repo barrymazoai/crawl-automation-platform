@@ -51,3 +51,7 @@ export const ExistingFormulaSchema = z.discriminatedUnion("exists", [
 ]);
 export type ExistingFormula = z.infer<typeof ExistingFormulaSchema>;
 export const ExistingFormulaInputSchema = z.strictObject({ schemaVersion: z.literal(1), owner: ObservationSchema });
+/** Duplicate-submission guard at product level: any attempt (collected or reviewed) for this listing inside the window means no re-crawl. */
+export const RecentAttemptInputSchema = z.strictObject({ schemaVersion: z.literal(1), listingId: z.string().min(1).max(200), withinHours: z.number().int().min(1).max(24 * 30) });
+export const RecentAttemptSchema = z.strictObject({ schemaVersion: z.literal(1), attemptedAt: z.iso.datetime().nullable(), kind: z.enum(["collected", "review"]).nullable() });
+export type RecentAttempt = z.infer<typeof RecentAttemptSchema>;

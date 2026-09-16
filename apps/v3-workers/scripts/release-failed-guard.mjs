@@ -14,11 +14,13 @@ const db=new pg.Pool({connectionString:priv.database.connectionString,max:1,stat
 try{
  const client=new Client({connection,namespace:rt.namespace}),rootId='v3-collection-'+requestId;
  const root=await client.workflow.getHandle(rootId).describe();assert.equal(root.status.name,'FAILED','root must be FAILED, is '+root.status.name);
- let children=0;for await(const e of client.workflow.list({query:`WorkflowId STARTS_WITH '${rootId}-'`}))children++;assert.equal(children,0,'root has descendants');
- const hist=await client.workflow.getHandle(rootId).fetchHistory();const completed=hist.events.filter(e=>e.activityTaskCompletedEventAttributes).length;assert.equal(completed,0,'root completed activities: '+completed);
- assert.equal((await db.query('SELECT count(*)::int n FROM catalog_discovery WHERE catalog_id=$1',[requestId])).rows[0].n,0,'discoveries exist');
- assert.equal((await db.query("SELECT count(*)::int n FROM resource_permit WHERE released_at IS NULL AND request->>'workflowId' LIKE $1",[rootId+'%'])).rows[0].n,0,'permits held');
+ // Either nothing ever started under this root, or every product it discovered has closed and holds no permit.
+ let running=0;for await(const e of client.workflow.list({query:`WorkflowId STARTS_WITH '${rootId}-' AND ExecutionStatus = 'Running'`}))running++;assert.equal(running,0,'root still has running descendants');
+ const discoveries=(await db.query('SELECT record FROM catalog_discovery WHERE catalog_id=$1',[requestId])).rows.map(r=>r.record);
+ for(const d of discoveries){for(const id of [d.workflowId,d.workflowId+'-label']){let st='NOT_STARTED';try{st=(await client.workflow.getHandle(id).describe()).status.name;}catch(e){if(e?.name!=='WorkflowNotFoundError')throw e;}assert.notEqual(st,'RUNNING','product still running: '+id);}}
+ assert.equal((await db.query('SELECT count(*)::int n FROM resource_permit WHERE released_at IS NULL')).rows[0].n,0,'permits held (release-stale-permits.mjs first)');
+ const hist=await client.workflow.getHandle(rootId).fetchHistory();
  const guard=(await db.query('SELECT source_id FROM source_submission_guard WHERE request_id=$1',[requestId])).rows;assert.equal(guard.length,1,'guard row count '+guard.length);
  const released=await db.query('DELETE FROM source_submission_guard WHERE request_id=$1 RETURNING source_id',[requestId]);assert.equal(released.rowCount,1);
- console.log(JSON.stringify({event:'FAILED_GUARD_RELEASED',requestId,sourceId:released.rows[0].source_id,rootStatus:root.status.name,failure:hist.events.find(e=>e.workflowExecutionFailedEventAttributes)?.workflowExecutionFailedEventAttributes?.failure?.cause?.message??null}));
+ console.log(JSON.stringify({event:'FAILED_GUARD_RELEASED',requestId,sourceId:released.rows[0].source_id,rootStatus:root.status.name,products:discoveries.length,failure:hist.events.find(e=>e.workflowExecutionFailedEventAttributes)?.workflowExecutionFailedEventAttributes?.failure?.cause?.message??null}));
 }finally{await db.end();await connection.close();}

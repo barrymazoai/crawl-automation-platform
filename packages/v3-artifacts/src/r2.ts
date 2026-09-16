@@ -11,7 +11,7 @@ export const R2ScopeSchema = z.strictObject({
   timeoutMs: z.number().int().min(100).max(120000).default(30000),
   // Transient transport failures (connection resets, TLS aborts, 5xx/429) are retried this many extra times with
   // 0.5s/1.5s/3s backoff; each attempt has its own timeout. Keys are immutable, so a repeated PUT is harmless.
-  retries: z.number().int().min(0).max(5).default(3),
+  retries: z.number().int().min(0).max(5).optional(),
 });
 export type R2Scope = z.infer<typeof R2ScopeSchema>;
 export interface R2ClientPort {
@@ -42,7 +42,7 @@ export class R2Objects implements ObjectStore {
       catch (error) {
         signal.throwIfAborted();
         const code = status(error), transient = !(error instanceof ArtifactError) && (code === undefined || code === 429 || code >= 500);
-        if (!transient || n >= this.scope.retries) throw error;
+        if (!transient || n >= (this.scope.retries ?? 3)) throw error;
         await new Promise(r => setTimeout(r, [500, 1500, 3000][Math.min(n, 2)]));
       }
     }

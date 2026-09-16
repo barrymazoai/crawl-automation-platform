@@ -1,6 +1,7 @@
 import { beforeEach, expect, it, vi } from "vitest";
 const runtime = vi.hoisted(() => ({ activities: {} as Record<string, Record<string, (...args: any[]) => Promise<unknown>>>, query: null as null | (() => unknown) }));
 vi.mock("@temporalio/workflow", () => ({
+  patched: () => true,
   proxyActivities: ({ taskQueue }: { taskQueue: string }) => runtime.activities[taskQueue],
   isCancellation: (error: unknown) => error instanceof Error && error.message === "cancelled",
   defineQuery: (name: string) => name, setHandler: (_name: unknown, handler: () => unknown) => { runtime.query = handler; },

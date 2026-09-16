@@ -88,7 +88,7 @@ it('detached originals close and release the browser before two cloud uploads an
 });
 it('enrichment after collection runs on the same gate with a fresh permit id',async()=>{
  const f=await detachedSetup();for(const j of [f.job,f.captured.job,f.handoff.job] as any[]){j.queues.enrich='enrich';j.resources.activities.enrichProduct=[{resourceId:'model',units:1}];}
- env.activities.plan.inspectExistingFormula=vi.fn(async()=>({exists:false}));
+ env.activities.plan.inspectExistingFormula=vi.fn(async()=>({exists:false}));env.activities.plan.inspectRecentAttempt=vi.fn(async()=>({schemaVersion:1,attemptedAt:null,kind:null}));
  env.activities.enrich={enrichProduct:vi.fn(async()=>({status:'registered',enrichmentId:'e'.repeat(64),reused:false,candidate:{unifiedName:'x',baseName:'x',form:'unknown',variant:{count:null,size:null,flavor:null,strength:null},healthFunctions:[],confidence:0.5,notes:null}}))};
  const permits:string[]=[];const reserve=env.activities.resource.reserveResources;env.activities.resource.reserveResources=async(r:any)=>{permits.push(r.permitId);return reserve(r);};
  env.start.mockImplementation(async()=>{expect(env.held).toBe(false);env.events.push('label');return{...f.child,result:async()=>({status:'collected',operationId:'label-op'})};});

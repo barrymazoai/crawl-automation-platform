@@ -19,8 +19,13 @@ export interface ChannelSourceProgress {
 export async function runChannelLabelWorkflow(raw:unknown,progress?:ChannelSourceProgress){
   const {input,queues,resources}=ChannelSavedLabelWorkflowInputSchema.parse(raw),owner=input.sourcePlan.owner,gate=resourceGate(resources,{requireReviewStop:input.evidencePolicy==="label-image-first/5"});
   const skipUnstarted=patched("channel-resource-wait-no-receipt-v1"),waitingSources:string[]=[],quarantinedSources:string[]=[];
+  // Model/OCR calls: a 10 s heartbeat window was lost to a single CPU stall on a cloud worker; 60 s tolerates it, and one
+  // retry lets the task move to another worker (results are idempotent per operation, so a duplicate attempt only costs a call).
+  const hardened=patched("model-activity-hardening-v1");
+  const optionsFor=(queue:string,name:string)=>{const base=name==="ocrFile"?ocrActivityOptions(queue):imageActivityOptions(queue);
+    return hardened&&["ocrFile","interpretImage"].includes(name)?{...base,heartbeatTimeout:"60 seconds" as const,retry:{maximumAttempts:2}}:base;};
   const call=(queue:string,name:string,value:unknown)=>gate(name,binding=>proxyActivities<Record<string,(raw:unknown)=>Promise<unknown>>>(
-    {...(name==="ocrFile"?ocrActivityOptions(queue):imageActivityOptions(queue)),...binding})[name]!(value));
+    {...optionsFor(queue,name),...binding})[name]!(value));
   const loaded=ChannelLabelPlanResultSchema.parse(await call(queues.plan,"loadChannelLabelPlan",input));
   if(!same(loaded.input,input)||!same(loaded.manifest.observation,owner)||loaded.manifest.operationId!==input.sourcePlan.operationId)invalid();
   const issued=new Map<string,unknown>();

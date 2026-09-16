@@ -54,3 +54,35 @@ Temporal 变更全部用 `patched()` 标记：`resource-wait-backoff-v1`、`batc
 - `amazon-batch-control` 的依赖健康检查仍看 `mini-ego-space-1`（未改）。
 - `apply-mini-capacities.mjs`、`deploy-ocr-cloud.mjs` 是早先的分步/预演脚本，已被 `apply-throughput-rollout.mjs` 取代。
 - Codex 会话存储：mini `~/.codex` 1.9 GB（`state_5.sqlite` 911 MB、`logs_2.sqlite` 272 MB、sessions 185 MB）；Windows 配置里 `codexHome` 已指到 D 盘。
+
+## 2026-09-16 上线验证（mini 舰队已部署，代码在 main `08e759e`）
+
+部署经过 `apply-throughput-rollout.mjs` 一次性应用，之后按问题逐次 `rebind-amazon-live.mjs`（r2…r6）换 bundle 和配置，舰队不停机。两台 Windows 的 5 个云端 worker（美国 ocr/text/vision，本地 text/vision）全程在线并实际领到任务：OCR 有美国机做的 `uploaded` 回执经 mini 登记成功，图片解析有本地机做的。
+
+真实跑出来并修掉的问题（都是单机单测覆盖不到、只有真实并发才暴露的）：
+
+| 现象 | 根因 | 修法 |
+| --- | --- | --- |
+| 10 个产品全部在抓取后失败 | 规划输入合同只认 `amazon.browser-projection`，ScraperAPI 投影标 `http-projection` 被拒 | 合同对 Amazon 放开 http 投影 |
+| 抓取失败后车道许可被隔离，根工作流永不结算 | 隔离规则是为浏览器设计的 | 资源门新增 `releaseOnReview`：请求型车道遇 Review 或带类型的业务失败直接放行，超时/取消仍隔离；ScraperAPI 配置强制开启 |
+| 下图 `SOURCE.SSRF_BLOCKED` | mini 的 Clash fake-ip 把域名解析成 198.18/15，SSRF 守卫拒绝 | 直连下载改用 DNS over HTTPS 解析（`capture.dns: "doh"`） |
+| 补齐从不执行（`RESOURCE.IDENTITY_CONFLICT`） | 工作流里第二次 `resourceGate()` 的许可序号从 0 重来，撞上抓取许可的 id | 一个 run 共用一个 gate（`product-enrichment-permit-v1`） |
+| 补齐活动未注册 | collection 角色的私有配置没有 `codex` 块 | 配置补齐并重启 |
+| 单产品 8 张图 OCR 串行 5 分钟 | 标签工作流按顺序逐张 OCR 直到第一张完整 | 所有图并行 OCR，按序只给第一张完整的图调模型（`channel-parallel-image-ocr-v1`），31 秒 |
+| 10 并发时 6 个产品 `ARTIFACT.UNAVAILABLE` | mini→R2 经代理约 2 MB/s，20 秒超时被打穿 | R2 超时 60 秒；R2 层对瞬断重试 3 次；Clash 增加 `R2专用` 选择组（直连 + 美国节点）和 media-amazon/scraperapi 直连规则 |
+| 辅助 worker 并发全是 1 | 首轮只改了模型/OCR 四个 worker | `apply-amazon-concurrency.mjs`：辅助角色 8，抓取/下图 8，其余 4 |
+| worker 吞掉底层错误 | 包装器只留笼统代码 | 记录 `AMAZON_ACTIVITY_FAILED` 事件（含错误名/消息），并透传 SCRAPERAPI/NETWORK/CHANNEL 码 |
+| brand-web 起不来 | 旧 build 只认 19 个迁移，账本已有 020 | 从候选构建 brand-web 并带全部迁移文件（`bind-brand-web.mjs`） |
+
+实测：
+
+| 场景 | 结果 |
+| --- | --- |
+| 单产品（6 张图） | 5 分 12 秒入库；抓页 17s、规划 18s、下图 32s、OCR 31s、看图 54s、组装入库 22s |
+| 10 个并发，R2 走德州节点 + 60s 超时 | 10/10 入库，10/10 补齐，0 待审，4 分 35 秒 |
+| 10 个并发，R2 直连 + 重试 | 见 `batch-10-*` 证据目录 |
+| R2 传输（1.5MB×8 并行） | 代理节点最好 5.6～5.9 秒；直连 2.8 秒但每次请求约 10% 概率 TLS 中断，靠重试消化 |
+
+吞吐估算（瓶颈是 14 个 Codex 槽位，每产品看图 54s + 补齐约 40s）：理论上限每小时约 530，按 60% 排满约 300，一天约 7,000。10 并发实测每小时约 130；要顶到模型上限需 30 左右并发（campaign `maxInFlight`）。再往上要么加 Windows 的 Codex 槽位，要么用本地小模型替换看图/补齐。
+
+未做：batch 监控未启动（campaign 需用 `maxInFlight` 新起）；配方复用路径在本轮全是新 ASIN，未被真实触发；`submit-throughput-batch.mjs` 的 `captureVia` 证据字段取不到（判定 `passed` 偏严，看 `collected` 与 `reviews`）。
