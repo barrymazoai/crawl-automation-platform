@@ -67,6 +67,17 @@ describe("ScraperAPI explicit, single-submission transport (no live calls)", () 
     const transport = new ScraperApiTransport(selection, privateConfig, async () => response(status));
     const res = await transport.get(target, undefined, {}, signal()); expect(res.status).toBe(status); res.close();
   });
+  it("follows a same-origin redirect once and re-checks the origin; a foreign redirect is not followed", async () => {
+    const hops: string[] = [];
+    const send = vi.fn(async (url: URL) => { const t = url.searchParams.get("url")!; hops.push(t);
+      if (t === target.href) { const r = response(301); r.headers["location"] = "/products/example-slug"; return r; } return response(); });
+    const transport = new ScraperApiTransport(selection, privateConfig, send);
+    const res = await transport.get(target, undefined, {}, signal()); expect(res.status).toBe(200); res.close();
+    expect(hops).toEqual([target.href, "https://www.swansonvitamins.com/products/example-slug"]);
+    const foreign = vi.fn(async () => { const r = response(302); r.headers["location"] = "https://evil.example/x"; return r; });
+    await expect(new ScraperApiTransport(selection, privateConfig, foreign).get(target, undefined, {}, signal())).rejects.toThrow("SCRAPERAPI.REDIRECT_UNVERIFIED");
+    expect(foreign).toHaveBeenCalledTimes(1);
+  });
   it("rejects a changed final URL without following it", async () => {
     const res = response(); res.headers["sa-final-url"] = "https://evil.example/";
     const send = vi.fn(async () => res), transport = new ScraperApiTransport(selection, privateConfig, send);

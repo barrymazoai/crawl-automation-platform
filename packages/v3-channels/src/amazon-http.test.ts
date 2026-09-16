@@ -6,7 +6,8 @@ import { fileURLToPath } from "node:url";
 import { AmazonRenderedProductSchema } from "@crawl-automation/v3-contracts";
 import { CommerceEvidenceSchema } from "../../v3-contracts/src/commerce.js";
 import { ScraperApiTransport, type HttpRoute, type Response } from "@crawl-automation/v3-acquisition";
-import { AmazonHttpReader, amazonStaticGallery, amazonStaticTwister, parseAmazonStaticHtml, readAmazonHtml, AMAZON_HTTP_POLICY } from "./amazon-http.js";
+import { AmazonHttpReader, amazonStaticGallery, amazonStaticTwister, parseAmazonStaticHtml, readAmazonHtml, AMAZON_HTTP_POLICY, AMAZON_HTTP_RETRY } from "./amazon-http.js";
+AMAZON_HTTP_RETRY.delaysMs = [0, 0];
 import { parseAmazonRenderedProduct } from "./amazon-rendered.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -26,6 +27,14 @@ function fakeRoute(reply: (target: URL) => { status: number; type?: string; body
   return { selection: route, transport, capabilities: transport.capabilities, calls };
 }
 
+describe("transient provider outcomes are retried on the same route", () => {
+  it("an empty body is retried and the second attempt parses; a not-found answer is not retried", async () => {
+    let n = 0; const r = fakeRoute(() => ({ status: 200, body: n++ === 0 ? "" : page("B0G963NB8Q") }));
+    expect((await readAmazonHtml(r, url("B0G963NB8Q"), new AbortController().signal)).length).toBeGreaterThan(1000); expect(r.calls).toHaveLength(2);
+    const gone = fakeRoute(() => ({ status: 404, body: "" }));
+    await expect(readAmazonHtml(gone, url("B0G963NB8Q"), new AbortController().signal)).rejects.toThrow("AMAZON.NOT_FOUND"); expect(gone.calls).toHaveLength(1);
+  }, 20000);
+});
 describe("static Amazon HTML parses into the browser projection", () => {
   it("B0G963NB8Q: title, store, USD selected-offer price, seller link, gallery from colorImages, no variants", () => {
     const p = parseAmazonStaticHtml(page("B0G963NB8Q"), url("B0G963NB8Q"));

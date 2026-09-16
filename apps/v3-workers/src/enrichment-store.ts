@@ -27,10 +27,9 @@ export function enrichmentStores(db: Db) {
 /** Latest current-structure formula already collected for this listing, or none. Read-only. */
 export async function inspectRecentAttempt(db: Db, raw: unknown) {
   const { listingId, withinHours } = RecentAttemptInputSchema.parse(raw);
-  const row = (await db.query(`SELECT at, kind FROM (
-      SELECT collected_at AS at, 'collected' AS kind FROM collected_product WHERE record->'observation'->>'listingId'=$1
-      UNION ALL SELECT registered_at, 'review' FROM review_record WHERE record->'observation'->>'listingId'=$1) a
-    WHERE at > now() - ($2 || ' hours')::interval ORDER BY at DESC LIMIT 1`, [listingId, String(withinHours)])).rows[0];
+  // Only a collected result counts as done: a listing that ended in a Review (transport or content) may be retried.
+  const row = (await db.query(`SELECT collected_at AS at, 'collected' AS kind FROM collected_product WHERE record->'observation'->>'listingId'=$1
+    AND collected_at > now() - ($2 || ' hours')::interval ORDER BY collected_at DESC LIMIT 1`, [listingId, String(withinHours)])).rows[0];
   return RecentAttemptSchema.parse({ schemaVersion: 1, attemptedAt: row ? new Date(row.at).toISOString() : null, kind: row?.kind ?? null });
 }
 export async function inspectExistingFormula(db: Db, raw: unknown): Promise<ExistingFormula> {

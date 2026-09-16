@@ -5,9 +5,11 @@
 // of this run is still running. While waiting, permits still held by CLOSED workflows are released with evidence
 // (nothing can run under them), so a lost heartbeat cannot stall settlement. Progress: overnight-<ts>.log / .json.
 //   nohup node run-overnight.mjs <total> [perRequest=10] [maxConcurrentRequests=8] > /dev/null 2>&1 &
+//   node run-overnight.mjs retry-capture <since-iso> [perRequest] [maxConcurrent]   # re-crawl listings whose last outcome was a capture/preparation Review
 import fs from 'node:fs/promises';import assert from 'node:assert/strict';import {hostname} from 'node:os';import {randomUUID} from 'node:crypto';import {execFile} from 'node:child_process';import {promisify} from 'node:util';import pg from 'pg';import {Client,Connection} from '@temporalio/client';
 assert.match(hostname(),/^barrydeMac-mini(?:\.|$)/);
-const total=Number(process.argv[2]),perRequest=Number(process.argv[3]??10),maxConcurrent=Number(process.argv[4]??8);assert.ok(total>=1&&total<=2000&&perRequest>=1&&perRequest<=10&&maxConcurrent>=1&&maxConcurrent<=20);
+const retryMode=process.argv[2]==='retry-capture',retrySince=retryMode?process.argv[3]:null,total=retryMode?2000:Number(process.argv[2]),perRequest=Number(process.argv[retryMode?4:3]??10),maxConcurrent=Number(process.argv[retryMode?5:4]??8);assert.ok(total>=1&&total<=2000&&perRequest>=1&&perRequest<=10&&maxConcurrent>=1&&maxConcurrent<=20);if(retryMode)assert.match(retrySince??'',/^\d{4}-\d{2}-\d{2}T/,'retry-capture needs an ISO start time');
+const CAPTURE_REVIEW_CODES=['AMAZON.BROWSER_PHASE_UNRESOLVED','AMAZON.FILE_PUBLICATION_UNRESOLVED','CHANNEL.LABEL_PREPARATION_UNVERIFIED','CHANNEL.DEPENDENCY_UNAVAILABLE','ARTIFACT.UNAVAILABLE','ARTIFACT.UPLOAD_UNKNOWN'];
 const main='/Users/barry/apps/crawlv3-batch-a.UiA4dx',history='/Users/barry/apps/crawlv3-history-20260913',work=history+'/ocr-cloud-20260915',plan2000=history+'/amazon-2000-us-20260913/temporal-plan.json';
 const stamp=new Date().toISOString().replace(/[:.]/g,'-'),dir=work+'/overnight-'+stamp,logPath=work+'/overnight-'+stamp+'.log';
 const read=async p=>JSON.parse(await fs.readFile(p,'utf8')),keep=(p,v)=>fs.writeFile(p,typeof v==='string'?v:JSON.stringify(v,null,2),{flag:'wx',mode:0o600}),run=promisify(execFile),pause=ms=>new Promise(r=>setTimeout(r,ms));
@@ -40,7 +42,10 @@ const releaseStalePermits=async()=>{const held=(await q("SELECT p.permit_id,p.re
 try{
  for await(const s of client.workflow.list({query:"ExecutionStatus = 'Running'"}))assert.ok(['AmazonHistoryBatchWorkflow','DtcNodeSessionWorkflow'].includes(s.type),'running '+s.type+' '+s.workflowId);
  const plan=await read(plan2000),attempted=new Set((await q("SELECT DISTINCT record->'entry'->>'listingId' asin FROM catalog_discovery WHERE record->'scope'->>'channel'='amazon'")).rows.map(r=>r.asin));
- const asins=plan.products.filter(p=>!attempted.has(p.asin)).slice(0,total).map(p=>p.asin);assert.ok(asins.length>=1,'nothing left to attempt');
+ let asins;
+ if(retryMode){const rows=(await q("SELECT DISTINCT record->'observation'->>'listingId' asin FROM review_record WHERE registered_at>$1 AND record->'failure'->>'code'=ANY($2) AND record->'observation'->>'listingId' NOT IN (SELECT record->'observation'->>'listingId' FROM collected_product WHERE collected_at>$1)",[retrySince,CAPTURE_REVIEW_CODES])).rows;asins=rows.map(r=>r.asin).filter(a=>plan.products.some(p=>p.asin===a)).slice(0,total);}
+ else asins=plan.products.filter(p=>!attempted.has(p.asin)).slice(0,total).map(p=>p.asin);
+ assert.ok(asins.length>=1,'nothing left to attempt');await log('OVERNIGHT_SELECTION',{mode:retryMode?'retry-capture':'never-attempted',asins:asins.length});
  const byScope=new Map();for(const a of asins){const b=plan.batches.find(b=>b.entries.some(e=>e.entry.listingId===a));const k=JSON.stringify(b.scope);if(!byScope.has(k))byScope.set(k,{template:b,entries:[]});byScope.get(k).entries.push(b.entries.find(e=>e.entry.listingId===a));}
  const batches=[];for(const {template,entries} of byScope.values()){const src=(await q('SELECT brand_id,channel,region,enabled FROM brand_source WHERE id=$1',[template.scope.sourceId])).rows[0];assert.ok(src?.enabled&&src.channel==='amazon'&&src.brand_id===template.scope.brandId,'source not enabled: '+template.scope.sourceId);
   for(let i=0;i<entries.length;i+=perRequest)batches.push({...template,requestId:randomUUID(),entries:entries.slice(i,i+perRequest)});}

@@ -63,8 +63,19 @@ export class ScraperApiTransport implements FileTransport {
     const timeout = AbortSignal.timeout(this.policy.timeoutMs), signal = AbortSignal.any([outer, timeout]);
     let response: Response | undefined;
     try {
-      const saved = await abortable<Response>(this.send(url, signal).then(r => { if (signal.aborted) { r.close(); signal.throwIfAborted(); } return r; }), signal);
-      response = saved; signal.throwIfAborted();
+      let saved: Response;
+      // Amazon answers many /dp/<asin> requests with a 301 to the slugged canonical URL. Same-origin hops are followed
+      // (at most two, each re-checked against the allowed origins); anything else stays an unverified redirect.
+      for (let hop = 0; ; hop++) {
+        saved = await abortable<Response>(this.send(url, signal).then(r => { if (signal.aborted) { r.close(); signal.throwIfAborted(); } return r; }), signal);
+        response = saved; signal.throwIfAborted();
+        if (response.status < 300 || response.status >= 400 || hop >= 2) break;
+        const location = response.headers["location"];
+        let next: URL | undefined;
+        try { next = location ? permittedUrl(new URL(location, target).href, this.#private.allowedOrigins) : undefined; } catch { next = undefined; }
+        if (!next) break;
+        saved.close(); target = next; url.searchParams.set("url", target.href);
+      }
       if (response.status === 401) throw new ScraperApiError("SCRAPERAPI.AUTH");
       if (response.status === 429) throw new ScraperApiError("SCRAPERAPI.THROTTLED");
       if (response.status >= 300 && response.status < 400) throw new ScraperApiError("SCRAPERAPI.REDIRECT_UNVERIFIED");

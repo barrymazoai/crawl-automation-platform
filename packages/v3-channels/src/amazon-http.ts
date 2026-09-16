@@ -83,9 +83,24 @@ export function parseAmazonStaticHtml(html: string, pageUrl: string, fetchedVia?
   return AmazonRenderedProductSchema.parse(projection);
 }
 
-/** One bounded GET of a public Amazon page through the configured route (ScraperAPI). Challenge/redirect/status
- * outcomes are typed errors, never silent retries, route changes or escalation. */
+/** Provider-side transients seen under load: an empty body, a soft challenge, a provider hiccup. Each is retried a
+ * bounded number of times on the same route (ScraperAPI rotates its own exit IP); never a route change or escalation. */
+const AMAZON_HTTP_TRANSIENT = new Set(["AMAZON.PAGE_EMPTY", "AMAZON.ACCESS_CHALLENGE", "AMAZON.HTTP_STATUS", "SCRAPERAPI.EXECUTION_UNKNOWN", "SCRAPERAPI.PROVIDER_FAILURE", "SCRAPERAPI.THROTTLED", "SCRAPERAPI.REDIRECT_UNVERIFIED"]);
+export const AMAZON_HTTP_RETRY = { attempts: 3, delaysMs: [2000, 5000] };
 export async function readAmazonHtml(route: HttpRoute, rawUrl: string, abort: AbortSignal, dns: DnsResolver = systemDns): Promise<string> {
+  for (let n = 1; ; n++) {
+    try { return await readAmazonHtmlOnce(route, rawUrl, abort, dns); }
+    catch (error) {
+      abort.throwIfAborted();
+      const code = error instanceof Error ? error.message : "";
+      if (n >= AMAZON_HTTP_RETRY.attempts || !AMAZON_HTTP_TRANSIENT.has(code)) throw error;
+      await new Promise(r => setTimeout(r, AMAZON_HTTP_RETRY.delaysMs[Math.min(n - 1, AMAZON_HTTP_RETRY.delaysMs.length - 1)] ?? 0));
+    }
+  }
+}
+/** One bounded GET of a public Amazon page through the configured route (ScraperAPI). Challenge/redirect/status
+ * outcomes are typed errors; the caller above decides which of them deserve another attempt. */
+async function readAmazonHtmlOnce(route: HttpRoute, rawUrl: string, abort: AbortSignal, dns: DnsResolver): Promise<string> {
   requireCapability(route, "http");
   const url = permittedUrl(rawUrl, AMAZON_HTTP_POLICY.origins);
   const controller = new AbortController(), signal = AbortSignal.any([abort, controller.signal]);
