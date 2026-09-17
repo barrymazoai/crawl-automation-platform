@@ -69,17 +69,27 @@ export async function handoffMarkers(probe: Extract<DependencyProbe, { kind: "ha
   return [...found].map(([operationId, modifiedAt]) => ({ operationId, modifiedAt }));
 }
 
+// Registration and review rows are permanent (the ledger never deletes them), so an operation once settled stays
+// settled. Remembering settled ids keeps each tick proportional to NEW handoffs. Without it the tick grows with every
+// product ever processed and eventually overruns the monitor's per-probe deadline, which closes every dependent
+// resource (2026-09-17: 22k OCR markers took 4.7s of a 5s deadline). Progress is kept per batch, so an aborted tick
+// still shortens the next one.
+const settledCache = new Map<string, { settled: Set<string>; reviewed: Set<string> }>();
 export async function readHandoffBacklog(probe: Extract<DependencyProbe, { kind: "handoff-backlog" }>, db: Db, signal: AbortSignal) {
-  const markers = await handoffMarkers(probe, signal), settled = new Set<string>(), reviewed = new Set<string>();
-  for (let i = 0; i < markers.length; i += 200) {
-    signal.throwIfAborted(); const ids = markers.slice(i, i + 200).map(x => x.operationId);
+  const key = JSON.stringify([probe.id, probe.roots]);
+  const cache = settledCache.get(key) ?? { settled: new Set<string>(), reviewed: new Set<string>() }; settledCache.set(key, cache);
+  const { settled, reviewed } = cache;
+  const markers = await handoffMarkers(probe, signal);
+  const unknown = markers.filter(m => !settled.has(m.operationId) && !reviewed.has(m.operationId)).map(m => m.operationId);
+  for (let i = 0; i < unknown.length; i += 500) {
+    signal.throwIfAborted(); const ids = unknown.slice(i, i + 500);
     for (const r of (await db.query("SELECT operation_id FROM processing_result WHERE operation_id=ANY($1::text[])", [ids])).rows) settled.add(r.operation_id);
     for (const r of (await db.query("SELECT record->'failure'->>'operationId' AS operation_id FROM review_record WHERE record->'failure'->>'operationId'=ANY($1::text[])", [ids])).rows) reviewed.add(r.operation_id);
   }
   const pending = markers.filter(m => !settled.has(m.operationId) && !reviewed.has(m.operationId));
   const oldestSeconds = pending.length ? Math.max(0, Math.floor((Date.now() - Math.min(...pending.map(x => x.modifiedAt))) / 1000)) : 0;
   return { healthy: pending.length < probe.maxPending && oldestSeconds < probe.maxOldestSeconds,
-    pending: pending.length, reviewed: reviewed.size, oldestSeconds };
+    pending: pending.length, reviewed: markers.filter(m => reviewed.has(m.operationId)).length, oldestSeconds };
 }
 
 async function boundedJson(response: Response, signal: AbortSignal) {

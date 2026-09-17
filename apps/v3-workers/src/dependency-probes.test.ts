@@ -32,6 +32,17 @@ it("counts only unregistered/unreviewed local handoffs", async () => {
   expect(await readHandoffBacklog(p, db, signal())).toMatchObject({ pending: 1, reviewed: 1, healthy: true });
   expect(db.query.mock.calls.every(([sql]) => sql.startsWith("SELECT"))).toBe(true);
 });
+it("settled and reviewed operations are remembered; later ticks query only new handoffs", async () => {
+  const p = await backlog();
+  for (const id of ["pending-one", "saved-one", "review-one"]) await writeFile(join(p.roots[0]!.root, `${id}.json`), "{}");
+  db.query.mockImplementation(async sql => ({ rows: [{ operation_id: sql.includes("processing_result") ? "saved-one" : "review-one" }] }));
+  await readHandoffBacklog(p, db, signal());
+  db.query.mockClear(); db.query.mockImplementation(async () => ({ rows: [] }));
+  await writeFile(join(p.roots[0]!.root, "new-one.json"), "{}");
+  expect(await readHandoffBacklog({ ...p, maxPending: 3 }, db, signal())).toMatchObject({ pending: 2, reviewed: 1, healthy: true });
+  const asked = db.query.mock.calls.flatMap(([, params]) => (params as string[][])[0]!);
+  expect(new Set(asked)).toEqual(new Set(["pending-one", "new-one"]));
+});
 it("threshold blocks at equality; old unsettled evidence also blocks", async () => {
   const p = await backlog(); await writeFile(join(p.roots[0]!.root, "pending.json"), "{}");
   expect((await readHandoffBacklog({ ...p, maxPending: 1 }, db, signal())).healthy).toBe(false);
