@@ -29,7 +29,7 @@ async function main(){
   if(process.env.V3_BRAND_WEB_ENABLED!=="true"||!process.env.V3_BRAND_WEB_CONFIG)throw Error("Web opt-in required");
   const c=schema.parse(await readGncPrivateJson(process.env.V3_BRAND_WEB_CONFIG)),delivery=parseDeliverySettings(c.databaseUrl,c.delivery),origin=`http://127.0.0.1:${c.port}`;
   if(delivery.target.workflowType!=="BrandCollectionWorkflow")throw Error("Wrong acceptance target");
-  const db=new pg.Pool({connectionString:c.databaseUrl,max:8,connectionTimeoutMillis:5000,statement_timeout:5000});
+  const db=new pg.Pool({connectionString:c.databaseUrl,max:8,connectionTimeoutMillis:5000,statement_timeout:5000});db.on("error",e=>console.error(JSON.stringify({event:"DB_POOL_ERROR",message:String(e?.message).slice(0,160)})));
   const t=delivery.transport,connection=await Connection.connect({address:delivery.address,connectTimeout:"20 seconds",...(t.mode==="mtls"?{tls:{serverNameOverride:t.serverName,serverRootCACertificate:await readFile(t.caFile),clientCertPair:{crt:await readFile(t.certFile),key:await readFile(t.keyFile)}}}:{})});
   const signal=new AbortController();process.once("SIGINT",()=>signal.abort());process.once("SIGTERM",()=>signal.abort());
   const health=process.env.V3_WORKER_HEALTH_FILE?new WorkerHealthFile(process.env.V3_WORKER_HEALTH_FILE):undefined;

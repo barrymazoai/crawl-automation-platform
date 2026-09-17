@@ -12,6 +12,7 @@ import { ChannelProductPlans } from "@crawl-automation/v3-channels";
 import { TextLocalStore } from "@crawl-automation/v3-text";
 import { PostgresReviews } from "@crawl-automation/v3-review";
 import {historyObservations} from "./history-observations.js";
+import { withExceptionRecord } from "./process-exceptions.js";
 import {inspectExistingFormula, inspectRecentAttempt} from "./enrichment-store.js";
 
 const Config = z.strictObject({ cacheRoot: z.string().refine(isAbsolute), journalRoot: z.string().refine(isAbsolute), r2: R2ScopeSchema,
@@ -34,7 +35,7 @@ async function main() {
       const config = await load(), r2 = createR2Objects(config.r2, config.r2Credentials);
       const remote = new ActivityObjectReads(r2.store);
       const db = new pg.Pool({ connectionString: config.reviewDatabase.connectionString, ssl: config.reviewDatabase.tls ? { rejectUnauthorized: true } : false,
-        max: 4, connectionTimeoutMillis: 5000, statement_timeout: 5000 });
+        max: 4, connectionTimeoutMillis: 5000, statement_timeout: 5000 }); db.on("error",e=>console.error(JSON.stringify({event:"DB_POOL_ERROR",message:String(e?.message).slice(0,160)})));
       const dispose = async () => { r2.close(); await db.end(); };
       try {
         await db.query("SELECT review_id,record_hash,record FROM public.review_record LIMIT 0");
@@ -42,14 +43,14 @@ async function main() {
         const module = new ChannelProductPlans(publication, new ArtifactResolver(await FileCopies.open(config.cacheRoot), remote), new PostgresReviews(db));
         const history=historyObservations(db,remote);
         await history?.check();
-        return { kind: "activity", dispose, activities: { inspectExistingFormula: async (raw: unknown) => inspectExistingFormula(db, raw), inspectRecentAttempt: async (raw: unknown) => inspectRecentAttempt(db, raw), prepareChannelProduct: async (...args: unknown[]) => {
+        return { kind: "activity", dispose, activities: withExceptionRecord(db, "channel-plan", { inspectExistingFormula: async (raw: unknown) => inspectExistingFormula(db, raw), inspectRecentAttempt: async (raw: unknown) => inspectRecentAttempt(db, raw), prepareChannelProduct: async (...args: unknown[]) => {
           const context = Context.current();
           if (args.length !== 1 || context.info.attempt !== 1) throw ApplicationFailure.nonRetryable("Automatic retry denied", "CHANNEL.RETRY_DENIED");
           const timer = setInterval(() => context.heartbeat(), 2000);
           try { return await remote.run(async()=>{await history?.attempt("channel",args[0],context.cancellationSignal);const result = await module.run(args[0], context.cancellationSignal); context.cancellationSignal.throwIfAborted(); return result;},stats=>console.log(JSON.stringify({event:"ARTIFACT_READ_SCOPE",activity:"prepareChannelProduct",...stats}))); }
           catch { context.cancellationSignal.throwIfAborted(); throw ApplicationFailure.nonRetryable("Inspect retained channel evidence", "CHANNEL.UNRESOLVED"); }
           finally { clearInterval(timer); }
-        } } };
+        } }) };
       } catch (error) { await dispose(); throw error; }
     },
   }]));

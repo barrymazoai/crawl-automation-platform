@@ -23,6 +23,7 @@ import { AmazonLiveConfigSchema } from "./amazon-live-config.js";
 import { readGncPrivateJson } from "./gnc-config.js";
 import { AmazonLinkCatalog } from "./amazon-link-batches.js";
 import { recoveredAmazonFailure } from './amazon-terminal-proof.js';
+import { recordException, describeError, listingOf } from './process-exceptions.js';
 import { AmazonStagedFiles } from './amazon-staged-files.js';
 
 const execution = () => { const e = Context.current().info.workflowExecution; if (!e) throw Error("AMAZON.WORKFLOW_REQUIRED"); return e; };
@@ -34,10 +35,10 @@ async function main() {
   await workerProcess(new RoleRegistry("business", roles.map(role => ({ role: `amazon-${role}`, capability: `amazon.${role}`, compatibility: "amazon-live-v1",
     contractVersion: 1, kind: "activity" as const, buildId, testOnly: false, sessionScoped:true as const, async prepare(runtime) {
       const db = new pg.Pool({ connectionString: config.database.connectionString, ssl: config.database.tls ? { rejectUnauthorized: true } : false,
-        max: 4, connectionTimeoutMillis: 5000, statement_timeout: 5000 });
+        max: 4, connectionTimeoutMillis: 5000, statement_timeout: 5000 }); db.on("error", e => console.error(JSON.stringify({ event: "DB_POOL_ERROR", message: String(e?.message).slice(0, 160) })));
       const r2 = createR2Objects(config.r2, config.r2Credentials); let connection: Connection | undefined;
       const remote = new ActivityObjectReads(r2.store);
-      const resourceDb=config.resourceDatabase?new pg.Pool({connectionString:config.resourceDatabase.connectionString,ssl:config.resourceDatabase.tls?{rejectUnauthorized:true}:false,max:2,connectionTimeoutMillis:5000,statement_timeout:5000}):db;
+      const resourceDb=config.resourceDatabase?new pg.Pool({connectionString:config.resourceDatabase.connectionString,ssl:config.resourceDatabase.tls?{rejectUnauthorized:true}:false,max:2,connectionTimeoutMillis:5000,statement_timeout:5000}):db;resourceDb.on("error",e=>console.error(JSON.stringify({event:"DB_POOL_ERROR",message:String(e?.message).slice(0,160)})));
       const dispose = async () => { r2.close(); await connection?.close();if(resourceDb!==db)await resourceDb.end(); await db.end(); };
       try {
         await db.query("SELECT discovery_id FROM catalog_discovery LIMIT 0");
@@ -63,6 +64,23 @@ async function main() {
         const verifyJob = async (raw: unknown, s: AbortSignal) => {
           const job = AmazonProductJobSchema.parse(raw);
           return (await jobsFor(job.discovery)).verify(job, execution().workflowId, s);
+        };
+        /** One review per product job, written once; later calls return the existing record. */
+        const writeAmazonReview = async (job: ReturnType<typeof AmazonProductJobSchema.parse>, code: string, causeCode: string, extra: Record<string, unknown>, s: AbortSignal) => {
+          const id = `amazon-review-${sha256(Buffer.from(JSON.stringify(job)))}`, key = `v3/amazon-reviews/${id}.json`;
+          let record = await reviews.read(id);
+          if (!record) {
+            const old = await r2.store.read(key, 65536, s);
+            record = old ? ReviewRecordSchema.parse(JSON.parse(Buffer.from(old).toString())) : ReviewRecordSchema.parse({ schemaVersion: 1, reviewId: id, occurredAt: new Date().toISOString(),
+              observation: { schemaVersion: 1, requestId: job.discovery.catalogId, observationId: job.operationId, brandId: job.discovery.scope.brandId,
+                sourceId: job.discovery.scope.sourceId, listingId: job.discovery.entry.listingId, variantId: null },
+              failure: { schemaVersion: 1, requestId: job.discovery.catalogId, observationId: job.operationId, operationId: job.operationId,
+                inputFingerprint: sha256(Buffer.from(JSON.stringify(job))), stage: code==="AMAZON.FILE_PUBLICATION_UNRESOLVED"?"amazon.file-publication":"amazon.browser", category: "PROCESSING", code,
+                executionFact: "unknown", evidenceKey: key, blockedBy: null, automaticRetry: false },
+              rawError: { name: "AmazonBrowserPhase", message: code, stack: null, details: JSON.parse(JSON.stringify({ job, causeCode, ...extra })) }, candidate: null, inspection: { kind: "none" } });
+            await publication.publish(key, Buffer.from(JSON.stringify(record)), "application/json", s); await reviews.append(record);
+          }
+          return { status: "review", operationId: job.operationId, reviewId: id, code: record.failure.code, evidenceKey: key, automaticRetry: false };
         };
         const products = new AmazonLiveProduct(publication, { text: config.sourceText, ocr: config.ocr,
           visionConfigFingerprint: config.sourceVisionConfigFingerprint, egressId: config.egressId }, {
@@ -165,22 +183,12 @@ async function main() {
         },publishAmazonStagedFile:(raw,s)=>staging.publish(raw,s) };
         else if (role === "review") handlers = { reviewAmazonProduct: async (raw, s) => {
           const job = await verifyJob(raw.job, s); if (!["AMAZON.BROWSER_PHASE_UNRESOLVED","AMAZON.FILE_PUBLICATION_UNRESOLVED"].includes(raw.code)) throw Error("AMAZON.REVIEW_CODE");
-          if (typeof raw.causeCode !== "string" || !/^(SOURCE|AMAZON|ACQUIRE|ARTIFACT|RESOURCE)\.[A-Z_]+$/.test(raw.causeCode)) throw Error("AMAZON.REVIEW_CODE");
-          const id = `amazon-review-${sha256(Buffer.from(JSON.stringify(job)))}`, key = `v3/amazon-reviews/${id}.json`;
-          let record = await reviews.read(id);
-          if (!record) {
-            const old = await r2.store.read(key, 65536, s);
-            record = old ? ReviewRecordSchema.parse(JSON.parse(Buffer.from(old).toString())) : ReviewRecordSchema.parse({ schemaVersion: 1, reviewId: id, occurredAt: new Date().toISOString(),
-              observation: { schemaVersion: 1, requestId: job.discovery.catalogId, observationId: job.operationId, brandId: job.discovery.scope.brandId,
-                sourceId: job.discovery.scope.sourceId, listingId: job.discovery.entry.listingId, variantId: null },
-              failure: { schemaVersion: 1, requestId: job.discovery.catalogId, observationId: job.operationId, operationId: job.operationId,
-                inputFingerprint: sha256(Buffer.from(JSON.stringify(job))), stage: raw.code==="AMAZON.FILE_PUBLICATION_UNRESOLVED"?"amazon.file-publication":"amazon.browser", category: "PROCESSING", code: raw.code,
-                executionFact: "unknown", evidenceKey: key, blockedBy: null, automaticRetry: false },
-              rawError: { name: "AmazonBrowserPhase", message: raw.code, stack: null, details: { job, causeCode: raw.causeCode } }, candidate: null, inspection: { kind: "none" } });
-            await publication.publish(key, Buffer.from(JSON.stringify(record)), "application/json", s); await reviews.append(record);
-          }
-          return { status: "review", operationId: job.operationId, reviewId: id, code: record.failure.code, evidenceKey: key, automaticRetry: false };
+          // The failure path must never fail: an unrecognized cause is recorded as such, never thrown (2026-09-17: a
+          // rejected cause code left 30 products without any record and held their batch slots for hours).
+          if (typeof raw.causeCode !== "string" || !/^[A-Z][A-Z0-9]*\.[A-Z0-9_]+$/.test(raw.causeCode)) raw = { ...raw, causeCode: "AMAZON.CAUSE_UNRECOGNIZED" };
+          return writeAmazonReview(job, raw.code, raw.causeCode, {}, s);
         } };
+
         else {
           const t = runtime.transport;
           connection = await Connection.connect({ address: runtime.address, connectTimeout: "15 seconds", ...(t.mode === "mtls" ? { tls: {
@@ -194,9 +202,26 @@ async function main() {
             for (const d of rows) if (d.execution) {
               const e = await client.workflow.getHandle(d.record.workflowId).describe();
               const held = await resourceDb.query("SELECT 1 FROM resource_permit WHERE request->>'workflowId'=ANY($1::text[]) AND released_at IS NULL", [[d.record.workflowId, `${d.record.workflowId}-label`]]);
-              if (e.runId === d.execution.runId && e.type === "AmazonCatalogProductWorkflow" && !held.rowCount &&
-                (e.status.name === "COMPLETED" || links.has(id) && e.status.name === "FAILED" &&
-                  await recoveredAmazonFailure(d.record,e.runId,db,resourceDb,r2.store,AbortSignal.timeout(30000)))) finished++;
+              if (e.runId !== d.execution.runId || e.type !== "AmazonCatalogProductWorkflow" || held.rowCount) continue;
+              if (e.status.name === "COMPLETED") { finished++; continue; }
+              if (e.status.name === "RUNNING" || e.status.name === "CONTINUED_AS_NEW") continue;
+              if (links.has(id) && e.status.name === "FAILED" && await recoveredAmazonFailure(d.record,e.runId,db,resourceDb,r2.store,AbortSignal.timeout(30000))) { finished++; continue; }
+              // Any other end (failed, terminated, timed out, cancelled) must not hold the request open: the product goes
+              // to review with the workflow's own failure as the cause, and the exception is recorded (2026-09-17).
+              const wf = { workflowType: e.type, workflowId: d.record.workflowId, runId: e.runId }, listingId = d.record.entry?.listingId ?? null;
+              let failure: unknown = { message: `workflow ${e.status.name}` };
+              try { const h = await client.workflow.getHandle(d.record.workflowId, e.runId).fetchHistory(); const last = h.events?.[h.events.length - 1] as any;
+                failure = last?.workflowExecutionFailedEventAttributes?.failure ?? last?.workflowExecutionTimedOutEventAttributes ?? last?.workflowExecutionTerminatedEventAttributes ?? failure; } catch { /* cause stays generic */ }
+              const cause = describeError(failure);
+              try {
+                const job = await (await jobsFor(d.record)).prepare(d.record, d.record.workflowId, AbortSignal.timeout(20000));
+                await writeAmazonReview(job, "AMAZON.BROWSER_PHASE_UNRESOLVED", `AMAZON.PRODUCT_WORKFLOW_${e.status.name}`, { workflow: { ...wf, status: e.status.name, cause } }, AbortSignal.timeout(20000));
+                recordException(db, { kind: "product", service: "amazon-control", ...wf, requestId: id, listingId, code: cause.code, errorName: cause.name, message: cause.message, outcome: "sent-to-review", detail: { status: e.status.name } });
+              } catch (error) {
+                const w = describeError(error);
+                recordException(db, { kind: "product", service: "amazon-control", ...wf, requestId: id, listingId, code: cause.code, errorName: cause.name, message: cause.message, outcome: "closed-without-record", detail: { status: e.status.name, reviewWriteError: w } });
+              }
+              finished++;
             }
             const held = await resourceDb.query("SELECT 1 FROM resource_permit WHERE request->>'workflowId'=$1 AND released_at IS NULL", [`v3-collection-${id}-catalog`]);
             return BrandCollectionProgressSchema.parse({ catalogId: id, settled: Boolean(closure) && finished === rows.length && !held.rowCount,
@@ -212,6 +237,10 @@ async function main() {
             const e = error as { name?: string; message?: string; code?: string; cause?: { name?: string; message?: string; code?: string } };
             console.error(JSON.stringify({ event: "AMAZON_ACTIVITY_FAILED", activity: name, workflowId: ctx.info.workflowExecution?.workflowId, code, error: { name: e?.name, message: String(e?.message ?? "").slice(0, 500), code: e?.code },
               cause: e?.cause ? { name: e.cause.name, message: String(e.cause.message ?? "").slice(0, 300), code: e.cause.code } : null }));
+            const d = describeError(error), p = listingOf(raw);
+            recordException(db, { kind: "activity", service: `amazon-${role}`, workflowType: ctx.info.workflowType, workflowId: ctx.info.workflowExecution?.workflowId, runId: ctx.info.workflowExecution?.runId,
+              activity: name, attempt: ctx.info.attempt, requestId: p.requestId, listingId: p.listingId, code: code === "AMAZON.ACTIVITY_UNRESOLVED" ? d.code : code,
+              errorName: d.name, message: d.message, outcome: "step-failed", detail: { taskQueue: ctx.info.taskQueue } });
             throw ApplicationFailure.nonRetryable("Inspect retained Amazon evidence", code); }
           finally { clearInterval(timer); }
         }])) };

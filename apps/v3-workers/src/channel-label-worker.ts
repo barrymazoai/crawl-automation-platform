@@ -9,6 +9,7 @@ import { CodexTextConfigSchema } from "@crawl-automation/v3-text";
 import { MultipartOcrConfigSchema } from "@crawl-automation/v3-ocr";
 import { readGncPrivateJson } from "./gnc-config.js";
 import { channelLabelRole, channelLabelRoutes } from "./channel-label-role.js";
+import { withExceptionRecord } from "./process-exceptions.js";
 import { runChannelLabelActivity } from "./channel-label-execution.js";
 
 const database=z.strictObject({connectionString:z.string().min(1),tls:z.boolean()});
@@ -28,7 +29,8 @@ async function main(){
     role:`channel-label-${role}`,capability:`channel.label.${role}`,compatibility:"channel-label-v1",contractVersion:1,
     kind:"activity" as const,testOnly:false,buildId,sessionScoped:true as const,
     async prepare(runtime){
-      const pool=(d:z.infer<typeof database>)=>new pg.Pool({connectionString:d.connectionString,ssl:d.tls?{rejectUnauthorized:true}:false,max:2,connectionTimeoutMillis:5000,statement_timeout:5000});
+      // A dropped database connection must not end the process (2026-09-17: a 1s Postgres restart stopped 12 workers).
+      const pool=(d:z.infer<typeof database>)=>{const p=new pg.Pool({connectionString:d.connectionString,ssl:d.tls?{rejectUnauthorized:true}:false,max:2,connectionTimeoutMillis:5000,statement_timeout:5000});p.on("error",e=>console.error(JSON.stringify({event:"DB_POOL_ERROR",message:String(e?.message).slice(0,160)})));return p;};
       if(!c.database&&!["ocr","text","vision"].includes(role))throw Error("CHANNEL.DATABASE_REQUIRED");
       const db=c.database?pool(c.database):undefined,resourceDb=role==="resources"&&c.resourceDatabase?pool(c.resourceDatabase):db,r2=createR2Objects(c.r2,c.r2Credentials);
       let modules:Awaited<ReturnType<typeof channelLabelRole>>|undefined;
@@ -40,8 +42,8 @@ async function main(){
         await modules.check();
         console.log(JSON.stringify({event:"CHANNEL_ROLE_PREPARED",role,hostId:runtime.hostId,modules:modules.constructed}));
         const owned=modules;
-        return{kind:"activity" as const,dispose,activities:Object.fromEntries(names.map(name=>[name,async(raw:unknown)=>
-          runChannelLabelActivity(name,raw,owned.stops,owned.activities[name]!)]))};
+        return{kind:"activity" as const,dispose,activities:withExceptionRecord(db,`channel-label-${role}`,Object.fromEntries(names.map(name=>[name,async(raw:unknown)=>
+          runChannelLabelActivity(name,raw,owned.stops,owned.activities[name]!)])))};
       }catch(error){await dispose();throw error;}
     },
   }))));
