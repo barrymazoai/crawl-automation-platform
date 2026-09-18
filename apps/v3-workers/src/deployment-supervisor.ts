@@ -14,6 +14,11 @@ export const DeploymentSchema=z.strictObject({platform:z.literal("darwin"),host:
   jobs:z.array(z.strictObject({id:token,entry:path,env:z.record(z.string().regex(/^V3_[A-Z_]+$/),z.string())})).min(1).max(128),
   resources:z.array(z.strictObject({resourceId:token,capacity:z.number().int().min(1).max(64),jobs:z.array(token).min(1),minFreeBytes:z.number().int().nonnegative(),dependencies:z.array(token).max(20).optional()})).max(20),
   dependencyProbes:z.array(DependencyProbeSchema).max(20).optional(),
+  // How the monitor runs its probes. A probe that needs longer than its deadline used to be recorded as an unhealthy
+  // dependency, which closed the gate for work that was never blocked; graceMs bounds how long a verdict stands once
+  // the probe stops answering.
+  probePolicy:z.strictObject({intervalMs:z.number().int().min(1000).max(300000),timeoutMs:z.number().int().min(1000).max(300000),
+    graceMs:z.number().int().min(0).max(3600000)}).optional(),
   database:z.strictObject({connectionString:z.string().min(1),tls:z.boolean()}),
 }).refine(c=>new Set(c.jobs.map(j=>j.id)).size===c.jobs.length && new Set(c.resources.map(r=>r.resourceId)).size===c.resources.length &&
   c.resources.every(r=>r.jobs.every(id=>c.jobs.some(j=>j.id===id))) &&

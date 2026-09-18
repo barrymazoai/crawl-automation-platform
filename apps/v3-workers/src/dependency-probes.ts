@@ -1,5 +1,5 @@
 import { constants } from "node:fs";
-import { lstat, open, opendir } from "node:fs/promises";
+import { lstat, open, opendir, readFile, rename, writeFile } from "node:fs/promises";
 import { isAbsolute, join } from "node:path";
 import { z } from "zod";
 import { createR2Objects, sha256 } from "@crawl-automation/v3-artifacts";
@@ -16,7 +16,10 @@ export const DependencyProbeSchema = z.discriminatedUnion("kind", [
   z.strictObject({ id, kind: z.literal("handoff-backlog"), roots: z.array(z.strictObject({ root: path,
     layout: z.enum(["ocr", "text", "vision"]) })).min(1).max(8),
     maxPending: z.number().int().min(1).max(10000), maxOldestSeconds: z.number().int().min(30).max(604800),
-    maxFiles: z.number().int().min(1).max(100000).default(10000) }),
+    maxFiles: z.number().int().min(1).max(100000).default(10000),
+    // Where to keep the settled ids between processes. Without it a restarted monitor re-asks the ledger about every
+    // handoff this node ever made, which is what overran the deadline once the journals passed ~30k markers.
+    settledCachePath: path.optional() }),
 ]);
 export type DependencyProbe = z.infer<typeof DependencyProbeSchema>;
 export type ProbeState = { id: string; healthy: boolean; checkedAt: string; expiresAt: string; reason: string;
@@ -74,10 +77,31 @@ export async function handoffMarkers(probe: Extract<DependencyProbe, { kind: "ha
 // product ever processed and eventually overruns the monitor's per-probe deadline, which closes every dependent
 // resource (2026-09-17: 22k OCR markers took 4.7s of a 5s deadline). Progress is kept per batch, so an aborted tick
 // still shortens the next one.
-const settledCache = new Map<string, { settled: Set<string>; reviewed: Set<string> }>();
+const settledCache = new Map<string, { settled: Set<string>; reviewed: Set<string>; written: number }>();
+/** Settled ids survive a restart. The file is a cache of permanent ledger facts, never evidence: a missing,
+ * unreadable or truncated one only costs one slower tick, so every failure here is silent by design. */
+async function loadSettled(probe: Extract<DependencyProbe, { kind: "handoff-backlog" }>) {
+  const empty = { settled: new Set<string>(), reviewed: new Set<string>(), written: 0 };
+  if (!probe.settledCachePath) return empty;
+  try {
+    const raw = JSON.parse(await readFile(probe.settledCachePath, "utf8")) as { settled?: unknown; reviewed?: unknown };
+    const ids = (v: unknown) => new Set((Array.isArray(v) ? v : []).filter((s): s is string => typeof s === "string" && ExecutionIdSchema.safeParse(s).success));
+    const settled = ids(raw.settled), reviewed = ids(raw.reviewed);
+    return { settled, reviewed, written: settled.size + reviewed.size };
+  } catch { return empty; }
+}
+async function saveSettled(probe: Extract<DependencyProbe, { kind: "handoff-backlog" }>, cache: { settled: Set<string>; reviewed: Set<string>; written: number }) {
+  if (!probe.settledCachePath || cache.settled.size + cache.reviewed.size === cache.written) return;
+  const temporary = `${probe.settledCachePath}.next`;
+  try {
+    await writeFile(temporary, JSON.stringify({ settled: [...cache.settled], reviewed: [...cache.reviewed] }), { mode: 0o600 });
+    await rename(temporary, probe.settledCachePath);
+    cache.written = cache.settled.size + cache.reviewed.size;
+  } catch { /* the next tick simply queries more ids */ }
+}
 export async function readHandoffBacklog(probe: Extract<DependencyProbe, { kind: "handoff-backlog" }>, db: Db, signal: AbortSignal) {
   const key = JSON.stringify([probe.id, probe.roots]);
-  const cache = settledCache.get(key) ?? { settled: new Set<string>(), reviewed: new Set<string>() }; settledCache.set(key, cache);
+  const cache = settledCache.get(key) ?? await loadSettled(probe); settledCache.set(key, cache);
   const { settled, reviewed } = cache;
   const markers = await handoffMarkers(probe, signal);
   const unknown = markers.filter(m => !settled.has(m.operationId) && !reviewed.has(m.operationId)).map(m => m.operationId);
@@ -86,6 +110,7 @@ export async function readHandoffBacklog(probe: Extract<DependencyProbe, { kind:
     for (const r of (await db.query("SELECT operation_id FROM processing_result WHERE operation_id=ANY($1::text[])", [ids])).rows) settled.add(r.operation_id);
     for (const r of (await db.query("SELECT record->'failure'->>'operationId' AS operation_id FROM review_record WHERE record->'failure'->>'operationId'=ANY($1::text[])", [ids])).rows) reviewed.add(r.operation_id);
   }
+  await saveSettled(probe, cache);
   const pending = markers.filter(m => !settled.has(m.operationId) && !reviewed.has(m.operationId));
   const oldestSeconds = pending.length ? Math.max(0, Math.floor((Date.now() - Math.min(...pending.map(x => x.modifiedAt))) / 1000)) : 0;
   return { healthy: pending.length < probe.maxPending && oldestSeconds < probe.maxOldestSeconds,
@@ -126,8 +151,18 @@ export class DependencyMonitor {
   private readonly controllers = new Map<string, AbortController>();
   private readonly next = new Map<string, number>();
   private stopped = false;
+  private readonly lastHealthy = new Map<string, ProbeState>();
   constructor(private readonly probes: DependencyProbe[], private readonly run: typeof runDependencyProbe, private readonly db: Db,
-    private readonly intervalMs = 30000, private readonly timeoutMs = 5000) {}
+    private readonly intervalMs = 30000, private readonly timeoutMs = 5000,
+    // A probe that cannot answer is not a dependency that answered "unhealthy". Within this window the last verdict
+    // the probe actually produced still stands, so a slow or restarted monitor cannot close a gate on its own; past
+    // it the resource does close, because by then nothing has confirmed the dependency for a long time.
+    private readonly graceMs = 600000) {}
+  /** The last verdict this probe really produced, while it is still inside the grace window. */
+  private held(id: string, now: number): ProbeState | undefined {
+    const last = this.lastHealthy.get(id);
+    return last && now - Date.parse(last.checkedAt) < this.graceMs ? { ...last, reason: `${last.reason}:held` } : undefined;
+  }
   tick(now = Date.now()) {
     if (this.stopped) return;
     for (const p of this.probes) if (!this.running.has(p.id) && !this.executing.has(p.id) && (this.next.get(p.id) ?? 0) <= now) {
@@ -140,9 +175,13 @@ export class DependencyMonitor {
           const timeout = new Promise<never>((_, reject) => { timer = setTimeout(() => { controller.abort(); reject(Error("PROBE.TIMEOUT")); }, this.timeoutMs); });
           const execution = Promise.resolve().then(() => this.run(p, this.db, controller.signal)).finally(() => { this.executing.delete(p.id); });
           const result = await Promise.race([execution, timeout]);
-          if (!this.stopped) this.states.set(p.id, { ...result, id: p.id, checkedAt: new Date().toISOString(), expiresAt: new Date(Date.now() + this.intervalMs + this.timeoutMs + 5000).toISOString() });
+          const state = { ...result, id: p.id, checkedAt: new Date().toISOString(), expiresAt: new Date(Date.now() + this.intervalMs + this.timeoutMs + 5000).toISOString() };
+          if (!this.stopped) { this.states.set(p.id, state); if (state.healthy) this.lastHealthy.set(p.id, state); }
         } catch {
-          if (!this.stopped) this.states.set(p.id, { id: p.id, healthy: false, reason: "dependency_unavailable", checkedAt: new Date().toISOString(), expiresAt: new Date(Date.now() + this.intervalMs).toISOString() });
+          // The probe itself failed or overran its deadline: hold its last real verdict rather than invent an unhealthy one.
+          const held = this.held(p.id, Date.now());
+          if (!this.stopped) this.states.set(p.id, held ? { ...held, expiresAt: new Date(Date.now() + this.intervalMs).toISOString() }
+            : { id: p.id, healthy: false, reason: "dependency_unavailable", checkedAt: new Date().toISOString(), expiresAt: new Date(Date.now() + this.intervalMs).toISOString() });
         } finally { clearTimeout(timer); this.next.set(p.id, Date.now() + this.intervalMs); this.controllers.delete(p.id); }
       })().finally(() => { this.running.delete(p.id); });
       this.running.set(p.id, task);
@@ -150,7 +189,9 @@ export class DependencyMonitor {
   }
   snapshot(now = Date.now()): ProbeState[] { return this.probes.map(p => {
     const s = this.states.get(p.id);
-    return s && Date.parse(s.checkedAt) <= now && Date.parse(s.expiresAt) > now ? s : { id: p.id, healthy: false, reason: "dependency_stale", checkedAt: s?.checkedAt ?? new Date(0).toISOString(), expiresAt: s?.expiresAt ?? new Date(0).toISOString() };
+    if (s && Date.parse(s.checkedAt) <= now && Date.parse(s.expiresAt) > now) return s;
+    // No fresh observation. A verdict the probe produced recently still stands; only a long silence closes the gate.
+    return this.held(p.id, now) ?? { id: p.id, healthy: false, reason: "dependency_stale", checkedAt: s?.checkedAt ?? new Date(0).toISOString(), expiresAt: s?.expiresAt ?? new Date(0).toISOString() };
   }); }
   async close() { this.stopped = true; for (const c of this.controllers.values()) c.abort(); await Promise.all(this.running.values()); }
 }

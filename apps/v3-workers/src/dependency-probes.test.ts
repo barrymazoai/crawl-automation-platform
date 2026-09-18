@@ -85,13 +85,38 @@ it("OCR health verifies usable backends, not merely HTTP 200; rejects redirects 
     mode = "redirect"; await expect(runDependencyProbe(p, db, signal())).rejects.toThrow();
   } finally { server.closeAllConnections(); await new Promise<void>(r => server.close(() => r())); }
 });
-it("monitor starts unavailable, refreshes on cadence, and expires success", async () => {
+it("monitor starts unavailable, refreshes on cadence, and expires success once the grace window closes", async () => {
   vi.useFakeTimers(); const run = vi.fn(async () => ({ healthy: true, reason: "ready" }));
-  const m = new DependencyMonitor([probe], run, db, 30000, 5000);
+  const m = new DependencyMonitor([probe], run, db, 30000, 5000, 600000);
   expect(m.snapshot()[0]!.healthy).toBe(false); m.tick(); await vi.advanceTimersByTimeAsync(0);
   expect(m.snapshot()[0]!.healthy).toBe(true); m.tick(); expect(run).toHaveBeenCalledTimes(1);
   await vi.advanceTimersByTimeAsync(30001); m.tick(); await vi.advanceTimersByTimeAsync(0); expect(run).toHaveBeenCalledTimes(2);
-  await vi.advanceTimersByTimeAsync(40001); expect(m.snapshot()[0]!.reason).toBe("dependency_stale"); await m.close();
+  // The observation is no longer fresh, but the probe did answer recently: the verdict it gave still stands.
+  await vi.advanceTimersByTimeAsync(40001); expect(m.snapshot()[0]).toMatchObject({ healthy: true, reason: "ready:held" });
+  // Nothing has confirmed the dependency for the whole grace window: now the gate closes.
+  await vi.advanceTimersByTimeAsync(600001); expect(m.snapshot()[0]).toMatchObject({ healthy: false, reason: "dependency_stale" });
+  await m.close();
+});
+it("a probe that cannot answer never closes a gate its last real verdict had open", async () => {
+  vi.useFakeTimers(); let answer = true;
+  const run = vi.fn(async () => { if (!answer) throw Error("PROBE.TIMEOUT"); return { healthy: true, reason: "ready" }; });
+  const m = new DependencyMonitor([probe], run, db, 30000, 5000, 120000);
+  m.tick(); await vi.advanceTimersByTimeAsync(0); expect(m.snapshot()[0]!.healthy).toBe(true);
+  answer = false;
+  await vi.advanceTimersByTimeAsync(30001); m.tick(); await vi.advanceTimersByTimeAsync(0);
+  expect(m.snapshot()[0]).toMatchObject({ healthy: true, reason: "ready:held" });
+  // A dependency that stays unconfirmed past the window is a real outage, not a slow probe.
+  await vi.advanceTimersByTimeAsync(120001); m.tick(); await vi.advanceTimersByTimeAsync(0);
+  expect(m.snapshot()[0]!.healthy).toBe(false); await m.close();
+});
+it("an unhealthy verdict is never held: a dependency that answered no stays closed", async () => {
+  vi.useFakeTimers(); let answer = true;
+  const run = vi.fn(async () => { if (!answer) throw Error("PROBE.TIMEOUT"); return { healthy: false, reason: "backlog" }; });
+  const m = new DependencyMonitor([probe], run, db, 30000, 5000, 600000);
+  m.tick(); await vi.advanceTimersByTimeAsync(0); expect(m.snapshot()[0]!.healthy).toBe(false);
+  answer = false;
+  await vi.advanceTimersByTimeAsync(30001); m.tick(); await vi.advanceTimersByTimeAsync(0);
+  expect(m.snapshot()[0]!.healthy).toBe(false); await m.close();
 });
 it("hung dependency cannot stall healthy independent probes, overlap itself or publish late success", async () => {
   vi.useFakeTimers(); let resolve!: (v: { healthy: boolean; reason: string }) => void;
@@ -106,4 +131,26 @@ it("shutdown aborts probes and suppresses publication; error text is never discl
   vi.useFakeTimers(); const run = vi.fn(async () => { throw Error("password=do-not-publish"); });
   const m = new DependencyMonitor([probe], run, db); m.tick(); await vi.advanceTimersByTimeAsync(0);
   expect(JSON.stringify(m.snapshot())).not.toContain("password"); await m.close(); m.tick(); expect(run).toHaveBeenCalledTimes(1);
+});
+
+it("settled ids survive a restart: a cold monitor asks the ledger only about new handoffs", async () => {
+  const p = { ...(await backlog()), settledCachePath: join(await mkdtemp(join(tmpdir(), "v3-settled-")), "settled.json") };
+  for (const id of ["pending-one", "saved-one", "review-one"]) await writeFile(join(p.roots[0]!.root, `${id}.json`), "{}");
+  db.query.mockImplementation(async sql => ({ rows: [{ operation_id: sql.includes("processing_result") ? "saved-one" : "review-one" }] }));
+  expect(await readHandoffBacklog(p, db, signal())).toMatchObject({ pending: 1, reviewed: 1 });
+  // A new process: nothing is remembered in memory, only the file on disk is.
+  const restarted = { ...p, id: "spool-restarted" };
+  db.query.mockClear(); db.query.mockImplementation(async () => ({ rows: [] }));
+  expect(await readHandoffBacklog(restarted, db, signal())).toMatchObject({ pending: 1, reviewed: 1 });
+  // One batch, two permanent-fact tables, and the only id it had to ask about is the one still pending.
+  expect(db.query).toHaveBeenCalledTimes(2);
+  expect([...new Set(db.query.mock.calls.flatMap(([, args]) => (args as string[][])[0]!))]).toEqual(["pending-one"]);
+});
+it("an unusable settled cache costs a slower tick, never a wrong verdict", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "v3-settled-bad-"));
+  const p = { ...(await backlog()), settledCachePath: join(dir, "settled.json") };
+  await writeFile(p.settledCachePath, "{ truncated");
+  for (const id of ["pending-one", "saved-one"]) await writeFile(join(p.roots[0]!.root, `${id}.json`), "{}");
+  db.query.mockImplementation(async sql => ({ rows: sql.includes("processing_result") ? [{ operation_id: "saved-one" }] : [] }));
+  expect(await readHandoffBacklog(p, db, signal())).toMatchObject({ pending: 1 });
 });

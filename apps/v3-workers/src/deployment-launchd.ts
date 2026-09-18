@@ -86,7 +86,8 @@ export async function runIndependentMonitor(manifest:string,signal:AbortSignal) 
   await lock.writeFile(JSON.stringify({pid:process.pid,host:c.host,kind:"independent-monitor",at:new Date().toISOString()}));await lock.close();
   const db=new pg.Pool({connectionString:c.database.connectionString,ssl:c.database.tls?{rejectUnauthorized:true}:false,max:2,connectionTimeoutMillis:5000,statement_timeout:5000});db.on("error",e=>console.error(JSON.stringify({event:"DB_POOL_ERROR",scope:"monitor",message:String(e?.message).slice(0,160)})));
   const probeDb=new pg.Pool({connectionString:c.database.connectionString,ssl:c.database.tls?{rejectUnauthorized:true}:false,max:2,connectionTimeoutMillis:3000,statement_timeout:3000,options:"-c default_transaction_read_only=on"});probeDb.on("error",e=>console.error(JSON.stringify({event:"DB_POOL_ERROR",scope:"probe",message:String(e?.message).slice(0,160)})));
-  const monitor=new DependencyMonitor(c.dependencyProbes??[],runDependencyProbe,probeDb);
+  const pp=c.probePolicy;
+  const monitor=new DependencyMonitor(c.dependencyProbes??[],runDependencyProbe,probeDb,pp?.intervalMs,pp?.timeoutMs,pp?.graceMs);
   try {
     for(const r of c.resources) {
       await db.query("INSERT INTO resource_capacity(resource_id,capacity) VALUES($1,$2) ON CONFLICT DO NOTHING",[r.resourceId,r.capacity]);
