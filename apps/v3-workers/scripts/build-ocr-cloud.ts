@@ -24,6 +24,7 @@ await build({...common,outDir:base+'/tests',external:[...common.external,'vitest
  'amazon-live.test':'../../packages/v3-channels/src/amazon-live.test.ts',
  'amazon-link-batches.test':'src/amazon-link-batches.test.ts',
  'amazon-catalog-workflow.test':'../../packages/v3-product/src/amazon-catalog-workflow.test.ts',
+ 'amazon-product-jobs.test':'../../packages/v3-product/src/amazon-product-jobs.test.ts',
  'quality-review-stops.test':'integration/quality-review-stops.test.ts',
  'resource-stall.test':'integration/resource-stall.test.ts',
  'amazon-batch.test':'integration/amazon-batch.test.ts',

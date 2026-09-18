@@ -9,6 +9,7 @@ function code(error:unknown){let current=error;for(let n=0;n<8&&current&&typeof 
  * Cloud-only file Activities can then overlap the next product's browser phase. */
 export async function detachedAmazonProduct(job:AmazonProductJob,inputQueue:string,call:(queue:string,name:string,value:unknown)=>Promise<unknown>){
  let captured:ReturnType<typeof AmazonProductCaptureSchema.parse>|undefined,staged:ReturnType<typeof AmazonStagedFilesSchema.parse>|undefined,reuse:Extract<ExistingFormula,{exists:true}>|undefined;
+ let sources:{id:string;plan:{acquire:unknown;imageId:string}}[]|undefined;
  // Formula is extracted once per listing: a current-structure formula already in the ledger means no image download,
  // OCR or model call this time; the page observation (price, rating, stock) was already recorded by the plan step.
  // Both steps are enabled per deployment by configuring the enrichment queue on the product job; older jobs keep the previous behaviour.
@@ -19,11 +20,22 @@ export async function detachedAmazonProduct(job:AmazonProductJob,inputQueue:stri
  // itself idempotent on (listing, formula content); a failure there is a Review, never a product failure.
  // One gate per run: permit ids are sequenced per gate instance, so a second instance would reuse the capture permit id.
  const gate=resourceGate(job.resources);
+ // Image bytes come straight from the CDN and spend none of the page provider's concurrency, yet staging them inside
+ // the browser gate held a provider lane for the whole download (measured 2026-09-18: 24 minutes average per product,
+ // 50/50 lanes occupied while the model pool sat at 6 of 14). With a `fileTransfer` group configured, staging takes
+ // its own permit after the page is closed, so a provider lane covers only the fetch it is meant to limit.
+ const fileLane=!!(job.resources as {activities?:Record<string,unknown>}|undefined)?.activities?.fileTransfer&&patched('amazon-file-transfer-lane-v1');
  const enrich=async(operationId:string)=>{
   if(!job.queues.enrich||!patched('product-enrichment-v1'))return;
   const g=patched('product-enrichment-permit-v1')?gate:resourceGate(job.resources);
   try{await g('enrichProduct',()=>call(job.queues.enrich!,'enrichProduct',{schemaVersion:1,collectionOperationId:operationId}));}
   catch(error){if(isCancellation(error))throw error;}
+ };
+ // Downloading the gallery and checking every staged file against the plan. Identical in both lane layouts.
+ const stage=async(files:{id:string;plan:{acquire:unknown;imageId:string}}[])=>{
+  staged=AmazonStagedFilesSchema.parse(await call(job.queues.capture,'stageAmazonProductFiles',captured));
+  if(!same(staged.capture,captured)||staged.files.length!==files.length)invalid();
+  for(const [i,source]of files.entries()){const f=staged.files[i]!;if(f.sourceId!==source.id||!same(f.record.input,source.plan.acquire)||f.record.file.artifactId!==source.plan.imageId)invalid();}
  };
  const review=async(error:unknown,stage:'AMAZON.BROWSER_PHASE_UNRESOLVED'|'AMAZON.FILE_PUBLICATION_UNRESOLVED')=>{
   const r=AcquisitionReviewSchema.parse(await call(job.queues.review,'reviewAmazonProduct',{job,code:stage,causeCode:code(error)}));if(r.operationId!==job.operationId)invalid();return r;
@@ -40,11 +52,12 @@ export async function detachedAmazonProduct(job:AmazonProductJob,inputQueue:stri
     if(!same(captured.job,job)||o.requestId!==d.catalogId||o.brandId!==d.scope.brandId||o.sourceId!==d.scope.sourceId||o.listingId!==d.entry.listingId||o.variantId!==d.entry.variantId||p.expectedUrl!==d.entry.url||p.binding.sessionId!==job.sessionId||p.source.producer.operationId!==job.operationId)invalid();
     const plan=ChannelPlanOutcomeSchema.parse(await call(job.queues.plan,'prepareChannelProduct',p));
     if(plan.operationId!==p.operationId)invalid();if(plan.status==='review')return plan;if(!same(plan.manifest.observation,o))invalid();
+    // Price-and-availability sweep: the page observation (price, stock, rating) is now recorded, so the product is
+    // finished here. No image download, no OCR, no model call. Formula extraction runs as its own later pass.
+    if(job.stopAfter==='observation'&&patched('amazon-observation-only-v1'))return{status:'observed',operationId:p.operationId,observationId:o.observationId,listingId:job.discovery.entry.listingId};
     if(formulaOnce){const existing=ExistingFormulaSchema.parse(await call(job.queues.plan,'inspectExistingFormula',{schemaVersion:1,owner:o}));if(existing.exists){reuse=existing;return null;}}
-    staged=AmazonStagedFilesSchema.parse(await call(job.queues.capture,'stageAmazonProductFiles',captured));
-    const files=plan.manifest.sources.filter(s=>s.kind==='file-image');
-    if(!same(staged.capture,captured)||staged.files.length!==files.length)invalid();
-    for(const [i,source]of files.entries()){const f=staged.files[i]!;if(f.sourceId!==source.id||!same(f.record.input,source.plan.acquire)||f.record.file.artifactId!==source.plan.imageId)invalid();}
+    if(fileLane){sources=plan.manifest.sources.filter(s=>s.kind==='file-image');return null;}
+    await stage(plan.manifest.sources.filter(s=>s.kind==='file-image'));
     return null;
    }catch(error){if(code(error)==='SOURCE.BROWSER_USER_CONTROL')cleanupAllowed=false;throw error;}
    finally{if(cleanupAllowed)await CancellationScope.nonCancellable(async()=>{
@@ -54,6 +67,10 @@ export async function detachedAmazonProduct(job:AmazonProductJob,inputQueue:stri
   });
   if(phase)return phase;
  }catch(error){if(isCancellation(error))throw error;return review(error,'AMAZON.BROWSER_PHASE_UNRESOLVED');}
+ if(fileLane&&sources){
+  try{await gate('fileTransfer',()=>stage(sources!));}
+  catch(error){if(isCancellation(error))throw error;return review(error,'AMAZON.FILE_PUBLICATION_UNRESOLVED');}
+ }
  if(reuse){
   const outcome={status:'collected',operationId:reuse.operationId,observationId:reuse.observationId,evidenceKey:reuse.evidenceKey,recordHash:reuse.recordHash,reusedFormula:true,collectedAt:reuse.collectedAt};
   await enrich(reuse.operationId);return outcome;

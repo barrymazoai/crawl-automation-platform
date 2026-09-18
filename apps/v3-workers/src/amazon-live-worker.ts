@@ -49,6 +49,10 @@ async function main() {
         const pages = config.browser ? new EgoTaskPages(config.browser, await TextLocalStore.open(config.pageJournalRoot)) : undefined;
         const requirePages = () => { if (!pages) throw Error("AMAZON.CAPTURE_UNAVAILABLE"); return pages; };
         const requireBrowser = async () => { const e = execution(); await admission.requireHeld(config.browserResource, e.workflowId, e.runId); };
+        // Image bytes come straight from the CDN over a pinned direct GET: no page, no cookies, and none of the page
+        // provider's concurrency. Holding its lane is a browser-mode requirement that guards nothing here, and it is
+        // what made a product keep a provider lane for the whole gallery download.
+        const requireBrowserForFiles = async () => { if (!http) await requireBrowser(); };
         // Originals: through the owned page in browser mode; a pinned direct HTTPS GET to the image CDN in scraperapi mode.
         const fileTransport = async (sessionId: string, pageUrl: string, url: string, s: AbortSignal): Promise<FileTransport> =>
           http ? (config.capture.mode==='scraperapi'&&config.capture.dns==='none' ? new SystemHttpsTransport() : new DirectHttpsTransport()) : new EgoFileTransport({ browser: await requirePages().open(sessionId, s), pageUrl, allowedUrls: [url] }, config.egressId);
@@ -59,7 +63,8 @@ async function main() {
           await submission(discovery.catalogId);
           const batch = links.get(discovery.catalogId), scope = batch?.scope ?? config.scope;
           if (batch && !batch.entries.some(x => equal(x.entry, discovery.entry))) throw Error("AMAZON.LINK_ENTRY_CONFLICT");
-          return new AmazonProductJobs(db, publication, { scope, queues: config.productQueues, resources: config.productResources });
+          return new AmazonProductJobs(db, publication, { scope, queues: config.productQueues, resources: config.productResources,
+            ...(config.capture.mode === "scraperapi" && config.capture.stopAfter === "observation" ? { stopAfter: "observation" as const } : {}) });
         };
         const verifyJob = async (raw: unknown, s: AbortSignal) => {
           const job = AmazonProductJobSchema.parse(raw);
@@ -97,7 +102,7 @@ async function main() {
             if(held.rowCount!==1||held.rows[0].released_at===null)throw Error('AMAZON.STAGE_BROWSER_NOT_RELEASED');return proof;
           },
           ...(role==='capture'?{download:async(c:ReturnType<typeof AmazonProductCaptureSchema.parse>,input:Parameters<typeof acquireFile>[0],url:string,pageUrl:string,s:AbortSignal)=>{
-            const access:SourceAccess={acquire:async raw=>{if(!equal(raw,input))throw Error('SOURCE.SESSION_MISMATCH');await requireBrowser();const transport=await fileTransport(c.job.sessionId,pageUrl,url,s);let released=false;
+            const access:SourceAccess={acquire:async raw=>{if(!equal(raw,input))throw Error('SOURCE.SESSION_MISMATCH');await requireBrowserForFiles();const transport=await fileTransport(c.job.sessionId,pageUrl,url,s);let released=false;
               return{owner:observationIdentity(input),sourceId:input.sourceId,resourceId:input.resourceId,binding:input.binding,url,allowedOrigins:['https://m.media-amazon.com'],transport,headersFor:()=>({}),assertActive:()=>{if(released)throw Error('SOURCE.SESSION_UNAVAILABLE');},release:async()=>{released=true;}};}};
             return acquireFile(input,{access,dns:config.capture.mode==='scraperapi'&&config.capture.dns==='doh'?dohDns():systemDns},s);
           }}:{}),
@@ -174,7 +179,7 @@ async function main() {
           const url = await plans.fileSource(captured.sourcePlan, raw.input, s);
           const access: SourceAccess = { acquire: async input => {
             if (!equal(input, raw.input)) throw Error("SOURCE.SESSION_MISMATCH");
-            await requireBrowser(); const transport = await fileTransport(job.sessionId, pageUrl, url, s); let released = false;
+            await requireBrowserForFiles(); const transport = await fileTransport(job.sessionId, pageUrl, url, s); let released = false;
             return { owner: observationIdentity(input), sourceId: input.sourceId, resourceId: input.resourceId, binding: input.binding, url,
               allowedOrigins: ["https://m.media-amazon.com"], transport,
               headersFor: () => ({}), assertActive: () => { if (released) throw Error("SOURCE.SESSION_UNAVAILABLE"); }, release: async () => { released = true; } };

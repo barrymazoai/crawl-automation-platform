@@ -28,7 +28,7 @@ try{
  for await(const s of client.workflow.list({query:"ExecutionStatus = 'Running'"}))assert.ok(process.env.ALLOW_RUNNING==='1'||['AmazonHistoryBatchWorkflow','DtcNodeSessionWorkflow'].includes(s.type),'running '+s.type+' '+s.workflowId);
  let currentPath=m.jobs.find(j=>j.id==='amazon-capture').env.V3_AMAZON_LIVE_CONFIG;
  if(currentPath.includes('/batch-')){const before=await read(currentPath.replace(/\/amazon\.private\.json$/,'/deployment-before.private.json'));currentPath=before.jobs.find(j=>j.id==='amazon-capture').env.V3_AMAZON_LIVE_CONFIG;assert.ok(!currentPath.includes('/batch-'),'canonical config unresolved');}
- const current=await read(currentPath),amazon=AmazonLiveConfigSchema.parse({...current,productResources:{...current.productResources,releaseOnReview:true},...(current.capture?.mode==='scraperapi'?{capture:{...current.capture,dns:'none'}}:{})});
+ const current=await read(currentPath),amazon=AmazonLiveConfigSchema.parse({...current,productResources:{...current.productResources,releaseOnReview:true},...(current.capture?.mode==='scraperapi'?{capture:{...current.capture,dns:'none',...(process.env.STOP_AFTER?{stopAfter:process.env.STOP_AFTER}:{})}}:{})});
  const privatePath=work+'/private/amazon-scraperapi-'+tag+'.private.json';await fs.writeFile(privatePath,JSON.stringify(amazon,null,2),{flag:'wx',mode:0o600});
  await fs.mkdir(runtimeDir,{recursive:true,mode:0o700});const builds={},before=[];
  for(const [group,g] of Object.entries(groups)){

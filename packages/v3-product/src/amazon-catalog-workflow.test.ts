@@ -86,6 +86,24 @@ it('detached originals close and release the browser before two cloud uploads an
  expect(env.events).toEqual(['capture','stage','close','release','label','upload','upload','ready','ready','closed']);
  expect(env.activities.file.acquireAmazonFile).not.toHaveBeenCalled();
 });
+it('a configured file lane frees the provider permit at page close and stages images on its own permit',async()=>{
+ const f=await detachedSetup();
+ const lane=(j:any)=>{j.resources={...j.resources,activities:{...j.resources.activities,fileTransfer:[{resourceId:'amazon-file-lane',units:1}]}};};
+ for(const j of [f.job,f.captured.job,f.handoff.job] as any[])lane(j);
+ expect(await AmazonCatalogProductWorkflow(f.job.discovery)).toMatchObject({status:'collected'});
+ // The page closes and the provider lane is released before a single image byte is downloaded.
+ expect(env.events).toEqual(['capture','close','release','stage','release','label','upload','upload','ready','ready','closed']);
+ expect(env.activities.capture.stageAmazonProductFiles).toHaveBeenCalledOnce();
+});
+it('stopAfter observation ends the product once price and availability are recorded: no images, OCR or model',async()=>{
+ const f=await detachedSetup();for(const j of [f.job,f.captured.job,f.handoff.job] as any[])j.stopAfter='observation';
+ expect(await AmazonCatalogProductWorkflow(f.job.discovery)).toMatchObject({status:'observed',listingId:f.job.discovery.entry.listingId});
+ // The page was captured and its observation recorded; everything after it is left for the later formula pass.
+ expect(env.events).toEqual(['capture','close','release']);
+ expect(env.activities.capture.stageAmazonProductFiles).not.toHaveBeenCalled();
+ expect(env.activities.input.prepareAmazonStreamingLabel).not.toHaveBeenCalled();
+ expect(env.start).not.toHaveBeenCalled();
+});
 it('enrichment after collection runs on the same gate with a fresh permit id',async()=>{
  const f=await detachedSetup();for(const j of [f.job,f.captured.job,f.handoff.job] as any[]){j.queues.enrich='enrich';j.resources.activities.enrichProduct=[{resourceId:'model',units:1}];}
  env.activities.plan.inspectExistingFormula=vi.fn(async()=>({exists:false}));env.activities.plan.inspectRecentAttempt=vi.fn(async()=>({schemaVersion:1,attemptedAt:null,kind:null}));
