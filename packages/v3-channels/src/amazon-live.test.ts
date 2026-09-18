@@ -45,3 +45,15 @@ it.each(['https://evil.example/dp/B000REPUY0','https://www.amazon.com/dp/B000000
  const f=amazonFixture(),job=await f.job();f.product.url=url;
  await expect(f.live.capture(job,signal())).rejects.toThrow();
 });
+it('a page retained by a price-only pass is reused when the product resumes through the full pipeline',async()=>{
+ const f=amazonFixture(),full=await f.job(),priced={...full,stopAfter:'observation' as const};
+ const captured=await f.live.capture(priced,signal());
+ expect(f.productBrowser.capture).toHaveBeenCalledOnce();
+ const resumed=await f.live.inspect(full,signal());
+ // Same retained page, no second fetch: only where the run stops has changed.
+ expect(resumed).not.toBeNull();
+ expect(resumed!.sourcePlan.source.objectKey).toBe(captured.sourcePlan.source.objectKey);
+ expect(f.productBrowser.capture).toHaveBeenCalledOnce();
+ // Everything else in the job is still identity: a different session is still a conflict.
+ await expect(f.live.inspect({...full,sessionId:'amazon-page-other'},signal())).rejects.toThrow('AMAZON.PRODUCT_POLICY_CONFLICT');
+});

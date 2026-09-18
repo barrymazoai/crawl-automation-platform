@@ -7,6 +7,16 @@ const bytes = (v: unknown) => Buffer.from(JSON.stringify(v));
 // Preserve the selected ASIN and all public gallery-selection evidence.
 const productProjection=(raw:unknown)=>AmazonRenderedProductSchema.parse(raw);
 type Settings = Pick<ChannelPlanInput, "text" | "ocr" | "visionConfigFingerprint"> & { egressId: string };
+/** The retained intent proves which page was fetched, with which capture settings, for which product. Queue names,
+ * resource lanes and the run's stopping point are deployment policy that changes between runs and say nothing about
+ * the page, so they are not part of the comparison; the discovery, the operation and session ids and every capture
+ * setting still have to match exactly. */
+const identityOnly = (intent: unknown) => {
+  const v = intent as { job?: Record<string, unknown>; settings?: unknown };
+  const job = v?.job ?? {};
+  return { settings: v?.settings,
+    job: { codec: job.codec, discovery: job.discovery, operationId: job.operationId, sessionId: job.sessionId } };
+};
 export interface AmazonProductPort { capture(job: AmazonProductJob, signal: AbortSignal): Promise<unknown> }
 
 /** Capture only. Planning, each image transfer and browser close are other atomic calls. */
@@ -34,7 +44,9 @@ export class AmazonLiveProduct {
   private async inspectProduct(raw: unknown, signal: AbortSignal) {
     const job = AmazonProductJobSchema.parse(raw), key = this.key(job);
     const intent = await this.publication.remote.read(`${key}/intent.json`, 65536, signal);
-    if (intent && !equal(JSON.parse(Buffer.from(intent).toString()), { job, settings: this.settings })) throw Error("AMAZON.PRODUCT_POLICY_CONFLICT");
+    // The retained page is reused whenever it was fetched for this same product with these same capture settings.
+    if (intent && !equal(identityOnly(JSON.parse(Buffer.from(intent).toString())), identityOnly({ job, settings: this.settings })))
+      throw Error("AMAZON.PRODUCT_POLICY_CONFLICT");
     const p = await this.publication.remote.read(`${key}/projection.json`, 4 * 1024 * 1024, signal);
     if (!p) return null;
     if (!intent) throw Error("AMAZON.PRODUCT_INTENT_MISSING");
