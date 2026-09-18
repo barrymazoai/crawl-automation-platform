@@ -19,7 +19,9 @@ it("uses authoritative running launchd PIDs, excluding exited services and heade
 it("each Worker plist launches only its entry; the separate monitor launches no Worker",()=>{
  const c=config("/private/a & b"),worker=renderService(c,"/private/manifest","/private/control",c.jobs[0]);
  expect(worker).toContain("/private/a &amp; b/text.js");expect(worker).toContain("V3_WORKER_HEALTH_FILE");
- expect(worker).not.toContain("/private/control");expect(worker).toContain("<key>KeepAlive</key><false/>");
+ expect(worker).not.toContain("/private/control");
+ // A crashed service restarts; a clean exit (operator stop) stays stopped.
+ expect(worker).toContain("<key>KeepAlive</key><dict><key>SuccessfulExit</key><false/></dict>");expect(worker).toContain("<key>ThrottleInterval</key><integer>30</integer>");
  const monitor=renderService(c,"/private/manifest","/private/control");
  expect(monitor).toContain("<string>monitor</string>");expect(monitor).not.toContain("text.js");
 });
@@ -29,3 +31,4 @@ it.each(["correct","stale-pid","exited-service","wrong-build","wrong-role","stal
  await writeFile(join(root,"text.health.json"),JSON.stringify({pid:mode==="stale-pid"?process.pid+1:process.pid,role:mode==="wrong-role"?"vision":"text",buildId:(mode==="wrong-build"?"b":"a").repeat(64),event:mode==="stopped"?"WORKER_STOPPED":"WORKER_RUNNING",reportedAt:new Date(Date.now()-(mode==="stale-heartbeat"?20000:0)).toISOString()}));
  expect(await independentReady(c,j,mode==="exited-service"?undefined:process.pid)).toBe(mode==="correct");
 });
+

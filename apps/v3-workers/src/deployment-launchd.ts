@@ -35,8 +35,10 @@ export function renderService(c:Deployment, manifest:string, controlEntry:string
   const searchPath=[...new Set(["/opt/homebrew/bin",...(process.env.PATH??"").split(":").filter(Boolean),"/usr/bin","/bin","/usr/sbin","/sbin"])].join(":");
   const env={PATH:searchPath,...(job?job.env:{}),
     ...(job?{V3_WORKER_HEALTH_FILE:join(c.root,`${job.id}.health.json`)}:{})};
-  // No KeepAlive retry loop: an explicit restart is required after a fatal exit.
-  return `<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">\n<plist version="1.0"><dict>\n<key>Label</key><string>${xml(label)}</string>\n<key>ProgramArguments</key><array>${args.map(a=>`<string>${xml(a)}</string>`).join("")}</array>\n<key>WorkingDirectory</key><string>${xml(c.root)}</string>\n<key>EnvironmentVariables</key><dict>${Object.entries(env).map(([k,v])=>`<key>${xml(k)}</key><string>${xml(v)}</string>`).join("")}</dict>\n<key>RunAtLoad</key><true/><key>KeepAlive</key><false/>\n<key>ExitTimeOut</key><integer>150</integer>\n<key>StandardOutPath</key><string>${xml(log)}</string>\n<key>StandardErrorPath</key><string>${xml(log)}</string>\n</dict></plist>\n`;
+  // Crash restart: a service that exits non-zero is started again by launchd (2026-09-17: a monitor killed by one
+  // dropped database connection stayed down for 10 hours and idled the fleet). A clean exit stays stopped, so
+  // operator stops and drains still hold, and the throttle keeps a rejected start from looping hot.
+  return `<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">\n<plist version="1.0"><dict>\n<key>Label</key><string>${xml(label)}</string>\n<key>ProgramArguments</key><array>${args.map(a=>`<string>${xml(a)}</string>`).join("")}</array>\n<key>WorkingDirectory</key><string>${xml(c.root)}</string>\n<key>EnvironmentVariables</key><dict>${Object.entries(env).map(([k,v])=>`<key>${xml(k)}</key><string>${xml(v)}</string>`).join("")}</dict>\n<key>RunAtLoad</key><true/><key>KeepAlive</key><dict><key>SuccessfulExit</key><false/></dict>\n<key>ThrottleInterval</key><integer>30</integer>\n<key>ExitTimeOut</key><integer>150</integer>\n<key>StandardOutPath</key><string>${xml(log)}</string>\n<key>StandardErrorPath</key><string>${xml(log)}</string>\n</dict></plist>\n`;
 }
 async function launchctl(...args:string[]) { return (await execute("/bin/launchctl",args,{timeout:170000,maxBuffer:4*1024*1024})).stdout; }
 async function services() { return parseLaunchdList(await launchctl("list")); }
@@ -65,10 +67,25 @@ export async function independentReady(c:Deployment,j:Job,pid:number|undefined) 
 }
 export async function runIndependentMonitor(manifest:string,signal:AbortSignal) {
   const c=await load(manifest),controller=JSON.stringify([c.host,resolve(c.root)]),lockPath=join(c.root,"supervisor.lock");
-  const lock=await open(lockPath,"wx",0o600);
+  // A monitor that died leaves its lock behind. Refusing to start then keeps every resource's health expired and the
+  // whole fleet idle (2026-09-17: 10 hours, 2,745 products). Take over a lock whose process is gone; never one that lives.
+  const lock=await (async()=>{
+    for(let attempt=0;;attempt++){
+      try{return await open(lockPath,"wx",0o600);}
+      catch(error){
+        if((error as NodeJS.ErrnoException).code!=="EEXIST"||attempt)throw error;
+        const held=JSON.parse(await readFile(lockPath,"utf8")) as {pid?:unknown;host?:unknown;kind?:unknown};
+        if(held.kind!=="independent-monitor"||held.host!==c.host||typeof held.pid!=="number")throw error;
+        try{process.kill(held.pid,0);throw Error("DEPLOYMENT.MONITOR_ALREADY_RUNNING");}
+        catch(e){if((e as NodeJS.ErrnoException).code!=="ESRCH")throw e;}
+        console.log(JSON.stringify({event:"MONITOR_LOCK_TAKEOVER",deadPid:held.pid}));
+        return await open(lockPath,"w",0o600);
+      }
+    }
+  })();
   await lock.writeFile(JSON.stringify({pid:process.pid,host:c.host,kind:"independent-monitor",at:new Date().toISOString()}));await lock.close();
-  const db=new pg.Pool({connectionString:c.database.connectionString,ssl:c.database.tls?{rejectUnauthorized:true}:false,max:2,connectionTimeoutMillis:5000,statement_timeout:5000});
-  const probeDb=new pg.Pool({connectionString:c.database.connectionString,ssl:c.database.tls?{rejectUnauthorized:true}:false,max:2,connectionTimeoutMillis:3000,statement_timeout:3000,options:"-c default_transaction_read_only=on"});
+  const db=new pg.Pool({connectionString:c.database.connectionString,ssl:c.database.tls?{rejectUnauthorized:true}:false,max:2,connectionTimeoutMillis:5000,statement_timeout:5000});db.on("error",e=>console.error(JSON.stringify({event:"DB_POOL_ERROR",scope:"monitor",message:String(e?.message).slice(0,160)})));
+  const probeDb=new pg.Pool({connectionString:c.database.connectionString,ssl:c.database.tls?{rejectUnauthorized:true}:false,max:2,connectionTimeoutMillis:3000,statement_timeout:3000,options:"-c default_transaction_read_only=on"});probeDb.on("error",e=>console.error(JSON.stringify({event:"DB_POOL_ERROR",scope:"probe",message:String(e?.message).slice(0,160)})));
   const monitor=new DependencyMonitor(c.dependencyProbes??[],runDependencyProbe,probeDb);
   try {
     for(const r of c.resources) {
