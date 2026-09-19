@@ -110,8 +110,14 @@ export class ChannelLabelPlans {
           const retained=await this.inspection.review(state.reviewId);
           if(!retained){skipped.push(source.id);decisions.push({id:source.id,reason:"incomplete_label_review_unretained",state});continue;}
           const r=ReviewRecordSchema.parse(retained),task=resolved.source;
-          if(task.kind!=="image"||r.reviewId!==state.reviewId||r.failure.operationId!==task.task.input.operationId||r.failure.inputFingerprint!==sha256(bytes(["vision-input/1",task.task.input,task.task.configFingerprint]))||r.failure.stage!=="codex.vision"||r.failure.executionFact!=="executed"||!equal(r.observation,input.sourcePlan.owner)||!equal(r.rawError.details,{task:task.task,evidenceKey:r.failure.evidenceKey}))throw Error("CHANNEL.LABEL_SELECTION_UNVERIFIED");
-          if(!/^VISION\.LABEL_[A-Z_]+$/.test(r.failure.code))throw Error("CHANNEL.LABEL_SELECTION_UNVERIFIED");
+          // Identity first: the Review must belong to exactly this image of this observation.
+          if(task.kind!=="image"||r.reviewId!==state.reviewId||r.failure.operationId!==task.task.input.operationId||r.failure.inputFingerprint!==sha256(bytes(["vision-input/1",task.task.input,task.task.configFingerprint]))||r.failure.stage!=="codex.vision"||!equal(r.observation,input.sourcePlan.owner)||!equal(r.rawError.details,{task:task.task,evidenceKey:r.failure.evidenceKey}))throw Error("CHANNEL.LABEL_SELECTION_UNVERIFIED");
+          // A turn that never produced a verdict (the model call itself failed) read no label at all, so it cannot be
+          // hiding a complete one. Only a verdict is held to the completeness check below; the rest is skipped for
+          // exactly the reason the Review records. 2026-09-19: 22 products were discarded here because a failed turn
+          // was treated as a forged skip.
+          const verdict=r.failure.executionFact==="executed"&&/^VISION\.LABEL_[A-Z_]+$/.test(r.failure.code);
+          if(!verdict){skipped.push(source.id);decisions.push({id:source.id,reason:"incomplete_label_no_verdict",code:r.failure.code,state});continue;}
           const candidate=LabelImageCandidateSchema.parse(r.candidate?.value);
           if(isCompleteLabelImage({kind:"image",candidate})&&!labelImageIntegrityCodes(candidate).length)throw Error("CHANNEL.LABEL_SELECTION_UNVERIFIED");
         }else throw Error("CHANNEL.LABEL_SELECTION_UNVERIFIED");

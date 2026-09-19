@@ -182,6 +182,19 @@ it("single label retries another image after a verified executed quality Review,
  const prior=decision.decisions.find((d:any)=>d.id==="image-0");expect(prior.state.status).toBe("review");expect(await f.reviews.read(prior.state.reviewId)).not.toBeNull();
 });
 
+it("an image whose model turn failed is skipped, not treated as a forged skip",async()=>{
+ const f=await setup();f.input.evidencePolicy="label-image-first/5";f.nonmatch.clear();
+ const complete=structuredClone(f.imageCandidate.value),original=f.activities.interpretImage!;let n=0;
+ f.activities.interpretImage=async raw=>{f.imageCandidate.value=structuredClone(complete);if(n++===0)f.imageCandidate.value.formulaComplete=false;return original(raw);};
+ // The Review the first image produced is real; only its outcome is turned into a failed turn: no verdict, execution
+ // unknown. Identity is untouched, so this exercises exactly the branch that used to reject it as a forged skip.
+ const read=f.reviews.read.bind(f.reviews);
+ f.reviews.read=async(id:string)=>{const r=await read(id);return r?{...r,failure:{...r.failure,code:"VISION.CODEX_TURN_FAILED",executionFact:"unknown"}}:r;};
+ expect(await ChannelSavedLabelWorkflow(f.entry)).toMatchObject({status:"collected"});
+ const decision=JSON.parse(Buffer.from((await f.remote.read(`v3/channel-labels/${f.input.operationId}/selection.json`,100000))!).toString());
+ expect(decision.decisions.find((d:any)=>d.id==="image-0")).toMatchObject({reason:"incomplete_label_no_verdict",code:"VISION.CODEX_TURN_FAILED"});
+ f.reviews.read=read;
+});
 it("a lost quality Review does not discard the complete label another image already gave",async()=>{
  const f=await setup();f.input.evidencePolicy="label-image-first/5";f.nonmatch.clear();
  const complete=structuredClone(f.imageCandidate.value),original=f.activities.interpretImage!;let n=0;
