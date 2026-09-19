@@ -105,6 +105,28 @@ it("cancellation does not write or create a new Review", async () => {
   await expect(f.assembly.run(f.join, AbortSignal.abort(Error("cancelled")))).rejects.toThrow("cancelled");
   expect(f.remote.writes).toBe(0); expect(f.records.size).toBe(0);
 });
+it("a source Review the ledger never received is still accounted for, not thrown away", async () => {
+  const f = await labelProductFixture();
+  // A cloud worker has no ledger of its own: its Review exists only in the retained copy until something registers
+  // it, and vision has no receipt step at all. The consumer is given a reader that falls back to that copy.
+  const source = f.join.manifest.sources[0]!;
+  const record = ReviewRecordSchema.parse({ schemaVersion: 1, reviewId: "vision-only-retained", occurredAt: new Date().toISOString(),
+    failure: { schemaVersion: 1, requestId: f.join.manifest.observation.requestId, observationId: f.join.manifest.observation.observationId,
+      operationId: source.kind === "text" ? source.task.operationId : source.task.input.operationId,
+      inputFingerprint: source.kind === "text" ? source.task.inputFingerprint : visionFingerprint(source.task),
+      stage: source.kind === "text" ? "codex.text" : "codex.vision", category: "PROCESSING", code: "VISION.LABEL_CORE_MISSING",
+      executionFact: "executed", evidenceKey: "v3/vision/retained.json", blockedBy: null, automaticRetry: false },
+    observation: f.join.manifest.observation, rawError: { name: "VisionReview", message: "VISION.LABEL_CORE_MISSING", stack: null, details: {} },
+    candidate: null, inspection: { kind: "none" } });
+  const retained = new Map([[record.reviewId, record]]);
+  const ledger = f.deps.reviews.read.getMockImplementation()!;
+  f.deps.reviews.read.mockImplementation(async (id: string) => (await ledger(id)) ?? retained.get(id) ?? null);
+  f.join.states = f.join.manifest.sources.map((x, i) => i === 0 ? { id: x.id, status: "review", reviewId: record.reviewId } : { id: x.id, status: "registered" });
+  const out = await f.assembly.run(f.join, signal());
+  // The product is accounted for on the real reason, instead of dying because the record was not in the ledger.
+  expect(out.status).toBe("review");
+  expect(JSON.stringify(out)).not.toContain("LABEL_PRODUCT.REVIEW_UNVERIFIED");
+});
 it("refuses fake Review confirmation", async () => {
   const f = await labelProductFixture(); f.join.states = []; f.deps.reviews.append.mockResolvedValue(undefined);
   await expect(f.assembly.run(f.join, signal())).rejects.toThrow("LABEL_PRODUCT.REVIEW_UNVERIFIED");

@@ -38,6 +38,14 @@ export async function channelLabelRole(o:{role:string;hostId:string;root:string;
  const reviews:PrivateReviewReader&ReviewWriter=ledgerReviews??remoteReviews;
  // Stop verification may run before the receipt step has registered a cloud-mode Review: fall back to the retained copy.
  const stopReviews=ledgerReviews?new ReviewsWithRemoteFallback(ledgerReviews,remoteReviews):remoteReviews;
+ // Every consumer of a Review faces the same race, not just stop verification: a cloud-mode worker has no ledger, so
+ // its Review lives only in the retained copy until a receipt step registers it — and vision has no receipt step at
+ // all. Reading a Review through the ledger alone therefore loses 79% of vision Reviews (measured 2026-09-19:
+ // 3,397 of 4,288), and every product whose label needed one was discarded with its formula already extracted.
+ const readReviews=stopReviews;
+ // Assembly both writes its own Review and reads the source Reviews it must account for; only the read needs the
+ // fallback, so the ledger stays the single place anything is written.
+ const assemblyReviews={append:(r:Parameters<ReviewWriter["append"]>[0])=>reviews.append(r),read:(id:string)=>readReviews.read(id)};
  const publication=new RetainedPublication(local,remote),stops=new QualityReviewStops(publication,stopReviews,true);
  const closers:Array<()=>Promise<void>>=[],checks:Array<()=>Promise<void>>=[];
  const constructed:string[]=[];
@@ -61,8 +69,8 @@ export async function channelLabelRole(o:{role:string;hostId:string;root:string;
    async(source,s)=>(await saved()).resolve(source,{id:source.id,status:"unresolved"},s),await core(),{file:async(source,s)=>source.kind==="file-image"&&!!await(await files()).inspect(source.plan.acquire,s),image:async(source,s)=>{
      if(source.kind!=="image")throw Error("CHANNEL.LABEL_IDENTITY_CONFLICT");
      return (await(await visionHandoff()).readLabelCandidate(source.task,s)).candidate;
-   },review:id=>reviews.read(id)}));
- const assembly=once("label-assembly",async()=>new LabelProductAssembly({local,remote,reviews,readSource:async(source,s)=>{
+   },review:id=>readReviews.read(id)}));
+ const assembly=once("label-assembly",async()=>new LabelProductAssembly({local,remote,reviews:assemblyReviews,readSource:async(source,s)=>{
    if(source.kind==="image")return{id:source.id,kind:"image",...await(await visionHandoff()).readLabelCandidate(source.task,s)};
    const facts=await(await textHandoff()).inspect(source.task,s);
    if(!facts.artifactDurable||!facts.resultRegistered||!facts.record)throw Error("LABEL_PRODUCT.TEXT_UNVERIFIED");

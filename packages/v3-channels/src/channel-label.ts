@@ -103,7 +103,13 @@ export class ChannelLabelPlans {
         if(state.status==="registered"){
           if((await this.imageCheck({input,sourceId:source.id},signal)).complete)throw Error("CHANNEL.LABEL_SELECTION_UNVERIFIED");
         }else if(state.status==="review"){
-          const r=ReviewRecordSchema.parse(await this.inspection.review(state.reviewId)),task=resolved.source;
+          // The state itself is the first-hand fact: an image that yielded a usable label is `registered`, so `review`
+          // already proves this one did not. The record only corroborates it, and a cloud worker that loses its Codex
+          // turn has no ledger to write one (2026-09-18: 139 products discarded a complete label taken from another
+          // image because this lookup returned nothing). A record that IS there is still checked in full.
+          const retained=await this.inspection.review(state.reviewId);
+          if(!retained){skipped.push(source.id);decisions.push({id:source.id,reason:"incomplete_label_review_unretained",state});continue;}
+          const r=ReviewRecordSchema.parse(retained),task=resolved.source;
           if(task.kind!=="image"||r.reviewId!==state.reviewId||r.failure.operationId!==task.task.input.operationId||r.failure.inputFingerprint!==sha256(bytes(["vision-input/1",task.task.input,task.task.configFingerprint]))||r.failure.stage!=="codex.vision"||r.failure.executionFact!=="executed"||!equal(r.observation,input.sourcePlan.owner)||!equal(r.rawError.details,{task:task.task,evidenceKey:r.failure.evidenceKey}))throw Error("CHANNEL.LABEL_SELECTION_UNVERIFIED");
           if(!/^VISION\.LABEL_[A-Z_]+$/.test(r.failure.code))throw Error("CHANNEL.LABEL_SELECTION_UNVERIFIED");
           const candidate=LabelImageCandidateSchema.parse(r.candidate?.value);

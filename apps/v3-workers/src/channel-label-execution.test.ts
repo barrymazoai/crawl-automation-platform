@@ -24,6 +24,22 @@ it("keeps unknown failures non-retryable and does not leak raw errors",async()=>
  const f=setup();await expect(runChannelLabelActivity("ocrFile",{},f.stops,async()=>{throw Error("private-credential");})).rejects.toMatchObject({type:"CHANNEL.ACTIVITY_UNRESOLVED",message:"Inspect retained channel evidence",nonRetryable:true});
  expect(vi.getTimerCount()).toBe(0);
 });
+it("records the original error for diagnosis while the failure itself still carries only a code",async()=>{
+ const f=setup(),log=vi.spyOn(console,"error").mockImplementation(()=>{});
+ const cause=Object.assign(Error("plan manifest missing a source"),{code:"CHANNEL.PLAN_INCOMPLETE"});
+ await expect(runChannelLabelActivity("prepareChannelSingleLabelManifest",{},f.stops,async()=>{throw Object.assign(Error("upstream said no"),{cause});}))
+   .rejects.toMatchObject({type:"CHANNEL.ACTIVITY_UNRESOLVED",message:"Inspect retained channel evidence"});
+ const entry=JSON.parse(log.mock.calls.at(-1)![0] as string);
+ expect(entry).toMatchObject({event:"CHANNEL_ACTIVITY_FAILED",code:"CHANNEL.ACTIVITY_UNRESOLVED",
+   error:{name:"Error",message:"upstream said no"},cause:{code:"CHANNEL.PLAN_INCOMPLETE",message:"plan manifest missing a source"}});
+ log.mockRestore();
+});
+it("truncates a long error text so a page or transcript cannot be echoed into the log",async()=>{
+ const f=setup(),log=vi.spyOn(console,"error").mockImplementation(()=>{});
+ await expect(runChannelLabelActivity("ocrFile",{},f.stops,async()=>{throw Error("x".repeat(5000));})).rejects.toBeTruthy();
+ expect(JSON.parse(log.mock.calls.at(-1)![0] as string).error.message).toHaveLength(300);
+ log.mockRestore();
+});
 it("preserves cancellation and always removes its heartbeat",async()=>{
  const f=setup(),reason=Error("cancelled");f.controller.abort(reason);
  await expect(runChannelLabelActivity("interpretImage",{},f.stops,async(_r,s)=>{s.throwIfAborted();})).rejects.toBe(reason);

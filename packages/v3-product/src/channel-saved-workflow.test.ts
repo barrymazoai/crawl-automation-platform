@@ -182,6 +182,17 @@ it("single label retries another image after a verified executed quality Review,
  const prior=decision.decisions.find((d:any)=>d.id==="image-0");expect(prior.state.status).toBe("review");expect(await f.reviews.read(prior.state.reviewId)).not.toBeNull();
 });
 
+it("a lost quality Review does not discard the complete label another image already gave",async()=>{
+ const f=await setup();f.input.evidencePolicy="label-image-first/5";f.nonmatch.clear();
+ const complete=structuredClone(f.imageCandidate.value),original=f.activities.interpretImage!;let n=0;
+ f.activities.interpretImage=async raw=>{f.imageCandidate.value=structuredClone(complete);if(n++===0)f.imageCandidate.value.formulaComplete=false;return original(raw);};
+ // A cloud worker has no ledger of its own, so the Review its failed turn names may never be written.
+ const read=f.reviews.read.bind(f.reviews);f.reviews.read=async(id:string)=>null as any;
+ expect(await ChannelSavedLabelWorkflow(f.entry)).toMatchObject({status:"collected"});
+ const decision=JSON.parse(Buffer.from((await f.remote.read(`v3/channel-labels/${f.input.operationId}/selection.json`,100000))!).toString());
+ expect(decision.decisions.find((d:any)=>d.id==="image-0")).toMatchObject({reason:"incomplete_label_review_unretained",state:{status:"review"}});
+ f.reviews.read=read;
+});
 it("old histories retain their page interpretation command when the skip patch is absent",async()=>{
  const f=await setup();f.input.evidencePolicy="label-image-first/5";f.nonmatch.clear();runtime.skipPage=false;
  expect(await ChannelSavedLabelWorkflow(f.entry)).toMatchObject({status:"collected"});expect(f.counts.text).toBe(1);
