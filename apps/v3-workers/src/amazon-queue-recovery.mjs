@@ -94,7 +94,7 @@ if($proof.model){
  $all=@(Get-CimInstance Win32_Process|Select-Object ProcessId,ParentProcessId,Name,ExecutablePath,CreationDate)
  $owner=@($all|Where-Object {$_.ProcessId -eq $lock.pid});if($owner.Count -ne 1 -or $owner[0].Name -ne 'node.exe'){throw 'Cloud PID identity changed'}
  $ids=@([int]$lock.pid);for($i=0;$i -lt 12;$i++){$add=@($all|Where-Object {$ids -contains [int]$_.ParentProcessId -and $ids -notcontains [int]$_.ProcessId}|ForEach-Object {[int]$_.ProcessId});if(!$add.Count){break};$ids+=$add}
- if(@($all|Where-Object {$ids -contains [int]$_.ProcessId -and $_.Name -notin @('node.exe','codex.exe')}).Count){throw 'Unexpected cloud child'}
+ if(@($all|Where-Object {$ids -contains [int]$_.ProcessId -and ($_.Name -notin @('node.exe','codex.exe','conhost.exe') -or ($_.Name -eq 'conhost.exe' -and $_.ExecutablePath -ne ($env:WINDIR+'\System32\conhost.exe')))}).Count){throw 'Unexpected cloud child'}
  $proof.cloudOwner=$lock;$proof.cloudBuild=$state.buildId;$proof.oldPids+=$ids
  $proof.cloudStopRequested=$true;$proof|ConvertTo-Json -Depth 5|Set-Content ($dir+'\progress.json') -Encoding UTF8
  Set-Content 'D:\crawlv3-cloud\private\STOP-cloud' '${id}' -Encoding ASCII

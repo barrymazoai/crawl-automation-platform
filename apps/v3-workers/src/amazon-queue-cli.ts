@@ -77,7 +77,7 @@ async function main() {
         try {
           if (row.target.clusterId !== target.clusterId || row.target.namespace !== target.namespace) throw Error("QUEUE.TARGET_CHANGED");
           const old = new AmazonQueueTemporal(db, resourceDb, client, row.target);
-          results.push({ requestId: row.request_id, status: "settled", proof: await old.audit(row.request_id) });
+          results.push({ requestId: row.request_id, status: "settled", proof: await old.audit(row.request_id,120000) });
         } catch (e) { results.push({ requestId: row.request_id, status: "held", code: e instanceof Error && /^QUEUE\.[A-Z_]+$/.test(e.message) ? e.message : "QUEUE.AUDIT_UNAVAILABLE" }); }
         await persist();if(results.length%25===0)print({event:'QUEUE_AUDIT_PROGRESS',audited:results.length,total:rows.length});
       }}));
@@ -89,7 +89,7 @@ async function main() {
       try {
         const receipt = await ports.journal.get(row.requestId);
         if (!receipt || receipt.target.clusterId !== target.clusterId || receipt.target.namespace !== target.namespace) throw Error("QUEUE.TARGET_CHANGED");
-        const old = new AmazonQueueTemporal(db, resourceDb, client, receipt.target), fresh = await old.audit(row.requestId);
+        const old = new AmazonQueueTemporal(db, resourceDb, client, receipt.target), fresh = await old.audit(row.requestId,120000);
         if (fresh.root.runId !== row.proof?.root?.runId || fresh.root.terminalEventId !== row.proof?.root?.terminalEventId) throw Error("QUEUE.AUDIT_CHANGED");
         // Retain the full fresh proof before releasing the exact guard.
         await writeFile(resolve(args[0]!) + "." + row.requestId + ".verified.json", JSON.stringify(fresh), { flag: "wx", mode: 0o600 });

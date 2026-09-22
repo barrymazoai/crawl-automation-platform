@@ -106,8 +106,8 @@ export class AmazonQueueTemporal implements AmazonQueuePorts {
     if (!await this.submission(batch)) fail("SUBMISSION_MISSING");
     await this.delivery.reconcile(batch.requestId);
   }
-  async audit(requestId: string) {
-    return this.bounded(async () => {
+  async audit(requestId: string, timeoutMs = 30000) {
+    return this.client.connection.withDeadline(Date.now()+timeoutMs, async () => {
       const submission = await this.submissions.get(requestId), receipt = await this.journal.get(requestId);
       if (!receipt || submission.snapshot.channel !== "amazon") fail("DELIVERY_REQUIRED");
       if (!equal(receipt!.target, this.gateway.target)) fail("TARGET_CHANGED");
