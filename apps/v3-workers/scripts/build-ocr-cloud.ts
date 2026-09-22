@@ -5,6 +5,7 @@ import {writeFile,cp} from 'node:fs/promises';
 import {resolve} from 'node:path';
 const base='dist/ocr-cloud',common={config:false as const,format:'esm' as const,noExternal:[/^@crawl-automation\/v3-/],external:[/^@temporalio\//,'zod','pg','@aws-sdk/client-s3']};
 await build({...common,outDir:base+'/label',entry:['src/channel-label-worker.ts']});
+await build({...common,outDir:base+'/model',entry:['src/text-worker.ts','src/vision-worker.ts']});
 await build({...common,outDir:base+'/workflow',entry:['src/product-workflow-worker.ts']});
 await build({...common,outDir:base+'/tests',external:[...common.external,'vitest'],entry:{
  'results-handoff.test':'../../packages/v3-results/src/handoff.test.ts',

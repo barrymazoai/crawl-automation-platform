@@ -33,9 +33,9 @@ export const JanitorConfigSchema = z.strictObject({
   root: path,
   logPath: path,
   floorGB: z.number().int().min(1).max(4096),
-  rules: z.array(JanitorRuleSchema).min(1).max(16),
+  rules: z.array(JanitorRuleSchema).min(1).max(128),
   intervalSeconds: z.number().int().min(30).max(86400).default(3600),
-  logFiles: z.array(path).max(30).default([]),
+  logFiles: z.array(path).max(128).default([]),
   logMaxBytes: z.number().int().min(1048576).default(20 * 1024 ** 2),
   /** Codex writes an unbounded diagnostic log DB (openai/codex#29588) that no setting turns off, and a multi-GB one
    * makes its own startup time out (#27741). It lives outside `root`, so only these exact names may be removed, and
