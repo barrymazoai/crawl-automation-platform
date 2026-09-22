@@ -69,7 +69,7 @@ export async function channelLabelRole(o:{role:string;hostId:string;root:string;
    async(source,s)=>(await saved()).resolve(source,{id:source.id,status:"unresolved"},s),await core(),{file:async(source,s)=>source.kind==="file-image"&&!!await(await files()).inspect(source.plan.acquire,s),image:async(source,s)=>{
      if(source.kind!=="image")throw Error("CHANNEL.LABEL_IDENTITY_CONFLICT");
      return (await(await visionHandoff()).readLabelCandidate(source.task,s)).candidate;
-   },review:id=>readReviews.read(id)}));
+   },review:id=>readReviews.read(id),reviewSource:async(source,state,s)=>(await saved()).resolve(source,state,s)}));
  const assembly=once("label-assembly",async()=>new LabelProductAssembly({local,remote,reviews:assemblyReviews,readSource:async(source,s)=>{
    if(source.kind==="image")return{id:source.id,kind:"image",...await(await visionHandoff()).readLabelCandidate(source.task,s)};
    const facts=await(await textHandoff()).inspect(source.task,s);

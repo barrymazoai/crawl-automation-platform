@@ -8,7 +8,7 @@ import { AcquireFileModule, FileEvidence, PrepareImageOcr, PageEvidence, Prepare
 import { lease, response } from "../../v3-acquisition/src/testing.fixture.js";
 import { FileCompletionJournal, OcrResultHandoff } from "../../v3-results/src/index.js";
 import { MemoryObjects, MemoryRegistry } from "../../v3-results/src/testing.fixture.js";
-import { OcrFileModule, OcrIntents } from "../../v3-ocr/src/index.js";
+import { OcrFileModule, OcrIntents, OcrError } from "../../v3-ocr/src/index.js";
 import { TextEvidence, TextHandoff, TextModule, ResolveTextReceipt } from "../../v3-text/src/index.js";
 import { MemoryTextRegistry } from "../../v3-text/src/testing.fixture.js";
 import { labelExecutionFixture } from "../../v3-text/src/label-execution.fixture.js";
@@ -59,9 +59,10 @@ export async function gncStreamFixture(coreEnabled = false, variantId?: string) 
     ...lease(async () => { counts.download++; return response(); }), owner: base.owner, sourceId: task.sourceId, resourceId: task.resourceId, binding: task.binding }) } });
   const pages = new PageEvidence({ local, remote, reviews }), pagePrepare = new PreparePageModule(pages), pageText = new PreparePageText(pages), imagePrepare = new PrepareImageOcr(fileEvidence);
   const ocrRegistry = new MemoryRegistry(), ocrResults = new OcrResultHandoff("fixture-r2/1", copies, remote, await FileCompletionJournal.open(join(root, "ocr-journal")), ocrRegistry);
-  const nonmatch = new Set<string>();
+  const nonmatch = new Set<string>(), emptyOcr = new Set<string>();
   const ocr = new OcrFileModule({ provider: { provider: "fixture/1", supported: input.sourcePlan.ocr, close: async () => {}, recognize: async file => {
-    counts.ocr++; return { text: nonmatch.has(file.artifactId) ? "Marketing only" : "Supplement Facts", lines: [] }; } },
+    counts.ocr++; if(emptyOcr.has(file.artifactId))throw new OcrError("OCR.EMPTY","executed");
+    return { text: nonmatch.has(file.artifactId) ? "Marketing only" : "Supplement Facts", lines: [] }; } },
     artifacts, intents: new OcrIntents(remote, "stream-ocr", "fixture-r2/1"), results: ocrResults, reviews });
   const ocrReceipt = new ResolveOcrReceipt({ results: ocrResults, local, reviews }), screen = new RegisteredOcrEvidence(artifacts, ocrResults, ocrRegistry), keywords = new KeywordPublication(local, remote);
   const textEvidence = new TextEvidence(artifacts, ocrResults), textRegistry = new MemoryTextRegistry(), textHandoff = new TextHandoff(local, remote, textRegistry, textEvidence, "fixture-r2/1");
@@ -103,5 +104,5 @@ export async function gncStreamFixture(coreEnabled = false, variantId?: string) 
     page: "prepareHtmlPage", pageText: "preparePageText", acquire: "acquireSourceFile", imagePrepare: "prepareImageOcr", ocr: "ocrFile", ocrReceipts: "resolveOcrReceipt", keywords: "screenImageKeywords",
     text: "interpretText", textReceipts: "resolveTextReceipt", vision: "interpretImage", assembly: "assembleLabelProduct", collection: "collectLabelProduct" };
   const routed = { ...route, ...(coreEnabled ? { core: "prepareLabelCore" } : {}) };
-  return { input, activities, route: routed, queues: Object.fromEntries(Object.keys(routed).map(k => [k, k])), counts, collected, reviews, remote, local, labelPlans, fileEvidence, plans, textRegistry, visionRecords, visionHandoff, nonmatch, imageCandidate, saved };
+  return { input, activities, route: routed, queues: Object.fromEntries(Object.keys(routed).map(k => [k, k])), counts, collected, reviews, remote, local, labelPlans, fileEvidence, plans, textRegistry, visionRecords, visionHandoff, nonmatch, emptyOcr, imageCandidate, saved };
 }

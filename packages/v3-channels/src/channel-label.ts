@@ -1,6 +1,6 @@
 import { isDeepStrictEqual as equal } from "node:util";
 import { ChannelLabelInputSchema, ChannelLabelSourceRequestSchema, ChannelLabelSourceResultSchema, ChannelLabelManifestResultSchema, ChannelSingleLabelSelectionSchema, LabelImageCandidateSchema, isCompleteLabelImage, labelImageIntegrityCodes, ReviewRecordSchema,
-  type LabelImageCandidate, type LabelProductManifest,
+  type LabelImageCandidate, type LabelProductManifest, type ProductEvidenceJoin,
   TextInputSchema, LabelCoreOutcomeSchema, textFingerprint, observationIdentity, type SavedEvidenceSource, type ProductResolvedEvidenceSource, type ChannelProductPlan } from "@crawl-automation/v3-contracts";
 import { RetainedPublication, sha256 } from "@crawl-automation/v3-artifacts";
 type Resolution = { status: "resolved"; source: ProductResolvedEvidenceSource } | { status: "not_matched" } | { status: "review"; code: string };
@@ -10,7 +10,8 @@ export class ChannelLabelPlans {
   constructor(private readonly plans: { inspect(raw: unknown, signal: AbortSignal): Promise<Pick<ChannelProductPlan,"manifest"> | null> }, private readonly publication: RetainedPublication,
     private readonly resolve: (source: SavedEvidenceSource, signal: AbortSignal) => Promise<Resolution>,
     private readonly core?:{inspect(raw:unknown,signal:AbortSignal):Promise<unknown>},
-    private readonly inspection?:{file(source:SavedEvidenceSource,signal:AbortSignal):Promise<boolean>;image(source:LabelProductManifest["sources"][number],signal:AbortSignal):Promise<LabelImageCandidate>;review(id:string):Promise<unknown>}) {}
+    private readonly inspection?:{file(source:SavedEvidenceSource,signal:AbortSignal):Promise<boolean>;image(source:LabelProductManifest["sources"][number],signal:AbortSignal):Promise<LabelImageCandidate>;review(id:string):Promise<unknown>;
+      reviewSource?(source:SavedEvidenceSource,state:Extract<ProductEvidenceJoin["states"][number],{status:"review"}>,signal:AbortSignal):Promise<Resolution>}) {}
   async load(raw: unknown, signal: AbortSignal) {
     const input=ChannelLabelInputSchema.parse(raw), plan=await this.plans.inspect(input.sourcePlan,signal);
     if(!plan)throw Error("CHANNEL.LABEL_SOURCE_UNVERIFIED");
@@ -93,6 +94,20 @@ export class ChannelLabelPlans {
         skipped.push(source.id);decisions.push({id:source.id,reason:"complete_label_already_selected"});continue;
       }
       if(source.kind==="file-image"&&selectedIndex>=0&&order.indexOf(source.id)>selectedIndex)throw Error("CHANNEL.LABEL_SELECTION_UNVERIFIED");
+      // An executed empty OCR has no registration from which source() can reconstruct a vision task.
+      // A later complete label may cover it only after the saved input and exact Review identity are verified.
+      if(source.kind==="file-image"&&selectedImageId!==null&&source.id!==selectedImageId&&state.status==="review"){
+        const raw=await this.inspection.review(state.reviewId);
+        if(raw){
+          const r=ReviewRecordSchema.parse(raw);
+          if(r.failure.stage==="ocr.file"&&r.failure.code==="OCR.EMPTY"&&r.failure.executionFact==="executed"){
+            if(r.reviewId!==state.reviewId||!equal(r.observation,input.sourcePlan.owner)||!this.inspection.reviewSource)throw Error("CHANNEL.LABEL_SELECTION_UNVERIFIED");
+            const verified=await this.inspection.reviewSource(source,state,signal);
+            if(verified.status!=="review"||verified.code!=="OCR.EMPTY")throw Error("CHANNEL.LABEL_SELECTION_UNVERIFIED");
+            skipped.push(source.id);decisions.push({id:source.id,reason:"verified_empty_ocr",code:r.failure.code,state});continue;
+          }
+        }
+      }
       const resolved=await this.source({input,sourceId:source.id},signal);
       if(resolved.status==="not_matched"){
         if(state.status!=="not_matched")throw Error("CHANNEL.LABEL_IDENTITY_CONFLICT");

@@ -130,6 +130,54 @@ it("single label tries the next image when a registered candidate is incomplete"
  expect(await ChannelSavedLabelWorkflow(f.entry)).toMatchObject({status:"collected"});expect(f.counts).toMatchObject({ocr:f.manifest.sources.filter(s=>s.kind==="file-image").length,vision:2});
  expect([...f.collected.values()][0]!.provenance.filter(p=>p.kind==="image").map(p=>p.id)).toEqual(["image-1"]);
 });
+async function emptyFirstImage(){
+ const f=await setup();f.input.evidencePolicy="label-image-first/5";f.nonmatch.clear();
+ const first=f.manifest.sources.find(s=>s.kind==="file-image")!;
+ if(first.kind!=="file-image")throw Error("missing fixture image");
+ f.emptyOcr.add(first.plan.imageId);return{f,first};
+}
+it.each([true,false])("verified empty OCR before a complete label collects and retains its Review (parallel=%s)",async parallel=>{
+ runtime.parallelOcr=parallel;const {f}=await emptyFirstImage();
+ expect(await ChannelSavedLabelWorkflow(f.entry)).toMatchObject({status:"collected"});
+ expect(f.counts).toMatchObject({ocr:2,vision:1,text:0});
+ expect([...f.collected.values()][0]!.provenance.filter(p=>p.kind==="image").map(p=>p.id)).toEqual(["image-1"]);
+ const selection=JSON.parse(Buffer.from((await f.remote.read(`v3/channel-labels/${f.input.operationId}/selection.json`,100000))!).toString());
+ const skipped=selection.decisions.find((d:any)=>d.id==="image-0");
+ expect(skipped).toMatchObject({reason:"verified_empty_ocr",code:"OCR.EMPTY",state:{status:"review"}});
+ const review=await f.reviews.read(skipped.state.reviewId);
+ expect(review).toMatchObject({failure:{stage:"ocr.file",code:"OCR.EMPTY",executionFact:"executed",automaticRetry:false}});
+ const counts={...f.counts};await f.bridge.singleManifest(selection.request,new AbortController().signal);
+ expect(f.counts).toEqual(counts);expect(await f.reviews.read(skipped.state.reviewId)).toEqual(review);
+});
+it.each(["missing-review","foreign-observation","foreign-operation","wrong-fingerprint","wrong-review-id","not-executed","different-code","missing-input","missing-original"])("empty OCR cannot authorize collection with %s",async mode=>{
+ const {f,first}=await emptyFirstImage(),prepare=f.activities.prepareChannelSingleLabelManifest;
+ f.activities.prepareChannelSingleLabelManifest=async raw=>{
+   const read=f.reviews.read.bind(f.reviews);
+   if(mode==="missing-input")f.remote.data.delete(`v3/acquisition/${first.plan.acquire.operationId}/ocr-${first.plan.ocrOperationId}.json`);
+   else if(mode==="missing-original")(f.bridge as any).inspection.file=async()=>false;
+   else f.reviews.read=async id=>{
+     const r=await read(id);if(!r||r.failure.code!=="OCR.EMPTY")return r;
+     if(mode==="missing-review")return null;
+     const bad=structuredClone(r);
+     if(mode==="foreign-observation")bad.observation!.observationId="foreign";
+     if(mode==="foreign-operation")bad.failure.operationId="foreign";
+     if(mode==="wrong-fingerprint")bad.failure.inputFingerprint="f".repeat(64);
+     if(mode==="wrong-review-id")bad.reviewId="foreign";
+     if(mode==="not-executed")bad.failure.executionFact="unknown";
+     if(mode==="different-code")bad.failure.code="OCR.TIMEOUT";
+     return bad;
+   };
+   return prepare(raw);
+ };
+ expect(await ChannelSavedLabelWorkflow(f.entry)).toMatchObject({status:"review",automaticRetry:false});
+ expect(f.collected.size).toBe(0);expect(f.counts).toMatchObject({ocr:2,vision:1});
+ expect(f.remote.data.has(`v3/channel-labels/${f.input.operationId}/manifest.json`)).toBe(false);
+});
+it("empty OCR remains blocking when no complete image was selected",async()=>{
+ const {f}=await emptyFirstImage();for(const s of f.manifest.sources)if(s.kind==="file-image")f.emptyOcr.add(s.plan.imageId);
+ expect(await ChannelSavedLabelWorkflow(f.entry)).toMatchObject({status:"review"});
+ expect(f.collected.size).toBe(0);expect(f.counts.vision).toBe(0);
+});
 it("single label cannot use an unverified image receipt as completeness proof",async()=>{
  const f=await setup();f.input.evidencePolicy="label-image-first/5";
  f.activities.interpretImage=async(raw:any)=>({status:"registered",operationId:raw.input.operationId});
