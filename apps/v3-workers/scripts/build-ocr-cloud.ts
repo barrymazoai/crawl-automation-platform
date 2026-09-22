@@ -36,13 +36,14 @@ await build({...common,outDir:base+'/tests',external:[...common.external,'vitest
  'codex-errors.test':'../../packages/v3-codex/src/errors.test.ts',
  'codex-connection.test':'../../packages/v3-codex/src/connection.test.ts',
  'codex-provider.test':'../../packages/v3-text/src/codex-provider.test.ts',
- 'vision-provider.test':'../../packages/v3-vision/src/provider.test.ts',
+ 'vision-provider/provider.test':'../../packages/v3-vision/src/provider.test.ts',
  'vision-handoff.test':'../../packages/v3-vision/src/handoff.test.ts',
  'quality-review-stops.test':'integration/quality-review-stops.test.ts',
  'resource-stall.test':'integration/resource-stall.test.ts',
  'amazon-batch.test':'integration/amazon-batch.test.ts',
 }});
 await cp('../../packages/v3-text/src/codex.fixture.mjs',base+'/tests/codex.fixture.mjs');
+await cp('../../packages/v3-vision/src/codex.fixture.mjs',base+'/tests/vision-provider/codex.fixture.mjs');
 await build({...common,outDir:base+'/batch',entry:['src/amazon-batch-worker.ts']});
 await build({...common,outDir:base+'/plan',entry:['src/channel-plan-worker.ts']});
 // brand-web reads `migrations/<name>` next to itself and refuses to start when the ledger holds a migration it does not know (020).
