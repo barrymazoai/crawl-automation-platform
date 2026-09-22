@@ -44,6 +44,7 @@ await build({...common,outDir:base+'/tests',external:[...common.external,'vitest
 }});
 await cp('../../packages/v3-text/src/codex.fixture.mjs',base+'/tests/codex.fixture.mjs');
 await cp('../../packages/v3-vision/src/codex.fixture.mjs',base+'/tests/vision-provider/codex.fixture.mjs');
+await cp('../../packages/v3-channels/src/fixtures',base+'/tests/fixtures',{recursive:true});
 await build({...common,outDir:base+'/batch',entry:['src/amazon-batch-worker.ts']});
 await build({...common,outDir:base+'/plan',entry:['src/channel-plan-worker.ts']});
 // brand-web reads `migrations/<name>` next to itself and refuses to start when the ledger holds a migration it does not know (020).

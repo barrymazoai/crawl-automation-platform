@@ -12,7 +12,7 @@ import {MemoryObjects} from '../../../packages/v3-results/src/testing.fixture.js
 import {QualityReviewStops} from '../src/quality-review-stops.js';
 
 it('Mini Temporal: lost stop-proof PUT recovers; persistent failure ends sibling waits without another model invocation',async()=>{
- if(!/^barrydeMac-mini(?:\.|$)/.test(hostname()))throw Error('Run integration on Mac mini');
+ if(!/^(barrydeMac-mini|servers-Mac-mini)(?:\.|$)/.test(hostname()))throw Error('Run integration on Mac mini');
  const env=await TestWorkflowEnvironment.createLocal({server:{ip:'127.0.0.1',ui:false,executable:{type:'cached-download',version:'v1.8.3'}}});
  const workflowBundle={codePath:join(dirname(fileURLToPath(import.meta.url)),'resource-stall-workflows.cjs')};
  try{for(const permanent of [false,true]){
@@ -39,7 +39,7 @@ it('Mini Temporal: lost stop-proof PUT recovers; persistent failure ends sibling
 },120000);
 
 it('Mini Temporal: errors and cancellation verify stopped work, release once and preserve the original failure',async()=>{
- if(!/^barrydeMac-mini(?:\.|$)/.test(hostname()))throw Error('Run integration on Mac mini');
+ if(!/^(barrydeMac-mini|servers-Mac-mini)(?:\.|$)/.test(hostname()))throw Error('Run integration on Mac mini');
  const env=await TestWorkflowEnvironment.createLocal({server:{ip:'127.0.0.1',ui:false,executable:{type:'cached-download',version:'v1.8.3'}}});
  const workflowBundle={codePath:join(dirname(fileURLToPath(import.meta.url)),'resource-stall-workflows.cjs')};
  try{for(const mode of ['error','cancel','unknown']){

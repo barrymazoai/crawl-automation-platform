@@ -8,7 +8,7 @@ import {Worker} from '@temporalio/worker';
 import {ApplicationFailure} from '@temporalio/common';
 
 it('Mini: batch cursor survives Worker restart, pause/resume and ContinueAsNew; unverifiable recovery blocks advancement',async()=>{
- if(!/^barrydeMac-mini(?:\.|$)/.test(hostname()))throw Error('Run integration on Mac mini');
+ if(!/^(barrydeMac-mini|servers-Mac-mini)(?:\.|$)/.test(hostname()))throw Error('Run integration on Mac mini');
  const env=await TestWorkflowEnvironment.createLocal({server:{ip:'127.0.0.1',ui:false,executable:{type:'cached-download',version:'v1.8.3'}}});
  const workflowBundle={codePath:join(dirname(fileURLToPath(import.meta.url)),'amazon-batch-workflows.cjs')};
  const campaignId='batch-'+randomUUID(),queue=campaignId,requestIds=Array.from({length:22},()=>randomUUID());
@@ -46,7 +46,7 @@ it('Mini: batch cursor survives Worker restart, pause/resume and ContinueAsNew; 
 },120000);
 
 it('Mini: concurrent chunks keep at most maxInFlight requests open, pause stops new submissions only, and ContinueAsNew carries in-flight cursors',async()=>{
- if(!/^barrydeMac-mini(?:\.|$)/.test(hostname()))throw Error('Run integration on Mac mini');
+ if(!/^(barrydeMac-mini|servers-Mac-mini)(?:\.|$)/.test(hostname()))throw Error('Run integration on Mac mini');
  const env=await TestWorkflowEnvironment.createLocal({server:{ip:'127.0.0.1',ui:false,executable:{type:'cached-download',version:'v1.8.3'}}});
  const workflowBundle={codePath:join(dirname(fileURLToPath(import.meta.url)),'amazon-batch-workflows.cjs')};
  const campaignId='batch-c-'+randomUUID(),queue=campaignId,requestIds=Array.from({length:25},()=>randomUUID());

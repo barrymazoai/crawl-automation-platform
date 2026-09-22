@@ -12,7 +12,7 @@ import { loadMigrations, migrate } from "../src/bootstrap/schema.js";
  * newly named container on a random loopback port; never accepts a database URL. */
 export async function startDockerTestDatabase(image: string, empty = false) {
   if (!/^(barrydeMac-mini|servers-Mac-mini)(?:\.|$)/.test(hostname())) throw Error("Run integration on Mac mini");
-  if (!/^postgres:(?:16|17|18)(?:-alpine)?$/.test(image)) throw Error("Explicit PostgreSQL test image required");
+  if (!/^postgres:(?:16|17|18)(?:\.\d+)?(?:-alpine|-bookworm)?$/.test(image)) throw Error("Explicit PostgreSQL test image required");
   const exec = promisify(execFile), name = `v3-queue-test-${randomUUID()}`, root = await mkdtemp(join(tmpdir(), "v3-queue-test-"));
   const opts = { timeout: 30000, maxBuffer: 1024 * 1024 };
   await exec("docker", ["run", "--pull=never", "--detach", "--name", name, "--label", "v3.isolated-test=true",
