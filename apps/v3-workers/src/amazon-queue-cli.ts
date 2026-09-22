@@ -81,13 +81,17 @@ async function main() {
         } catch (e) { results.push({ requestId: row.request_id, status: "held", code: e instanceof Error && /^QUEUE\.[A-Z_]+$/.test(e.message) ? e.message : "QUEUE.AUDIT_UNAVAILABLE" }); }
         await persist();if(results.length%25===0)print({event:'QUEUE_AUDIT_PROGRESS',audited:results.length,total:rows.length});
       }}));
+      await persist();
       return print({ audited: results.length, output: resolve(args[0]) });
     }
     // Explicit operator command only; never run at startup or as part of audit-old.
-    const audit = z.object({ codec: z.literal("amazon-old-intake-audit/1"), results: z.array(z.object({ requestId: z.uuid(), status: z.string(), proof: z.any().optional() })) }).parse(await json(args[0]!));
-    for (const row of audit.results.filter(r => r.status === "settled")) {
+    const audit = z.object({ codec: z.literal("amazon-old-intake-audit/1"), complete:z.literal(true), results: z.array(z.object({ requestId: z.uuid(), status: z.string(), proof: z.any().optional() })) }).parse(await json(args[0]!));
+    const settled=audit.results.filter(r=>r.status==='settled');let closing=0;
+    await Promise.all(Array.from({length:Math.min(4,settled.length)},async()=>{for(;;){
+      const row=settled[closing++];if(!row)return;
       try {
         const receipt = await ports.journal.get(row.requestId);
+        if(receipt?.state==='CLOSED'){print({requestId:row.requestId,state:'CLOSED',alreadyClosed:true});continue;}
         if (!receipt || receipt.target.clusterId !== target.clusterId || receipt.target.namespace !== target.namespace) throw Error("QUEUE.TARGET_CHANGED");
         const old = new AmazonQueueTemporal(db, resourceDb, client, receipt.target), fresh = await old.audit(row.requestId,120000);
         if (fresh.root.runId !== row.proof?.root?.runId || fresh.root.terminalEventId !== row.proof?.root?.terminalEventId) throw Error("QUEUE.AUDIT_CHANGED");
@@ -96,7 +100,7 @@ async function main() {
         const result = await old.journal.record(row.requestId, fresh.root);
         print({ requestId: row.requestId, state: result.state, outcome: result.observedStatus });
       } catch { print({ requestId: row.requestId, state: "HELD" }); }
-    }
+    }}));
   } finally { await connection?.close(); if (resourceDb !== db) await resourceDb.end(); await db.end(); }
 }
 main().catch(e => { print({ event: "QUEUE_COMMAND_FAILED", code: e instanceof Error && /^QUEUE\.[A-Z_]+$/.test(e.message) ? e.message : "QUEUE.COMMAND_FAILED" }); process.exitCode = 1; });
