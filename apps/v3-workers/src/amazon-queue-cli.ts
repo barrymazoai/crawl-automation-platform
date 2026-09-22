@@ -1,4 +1,4 @@
-import { readFile, writeFile } from "node:fs/promises";
+import { readFile, writeFile, rename } from "node:fs/promises";
 import { resolve, isAbsolute } from "node:path";
 import { z } from "zod";
 import pg from "pg";
@@ -67,14 +67,20 @@ async function main() {
         WHERE d.closed_at IS NULL AND d.last_issue='UNCONFIRMED_TERMINAL' AND s.snapshot->>'channel'='amazon'
         ORDER BY d.intent_at LIMIT 1000`)).rows;
       const results: unknown[] = [];
-      for (const row of rows) {
+      const output=resolve(args[0]),startedAt=new Date().toISOString();
+      await writeFile(output,JSON.stringify({codec:'amazon-old-intake-audit/1',at:startedAt,complete:false,results}),{flag:'wx',mode:0o600});
+      let index=0,checkpoint=Promise.resolve();
+      const persist=()=>{const body=JSON.stringify({codec:'amazon-old-intake-audit/1',at:startedAt,complete:results.length===rows.length,results},null,2);
+        checkpoint=checkpoint.then(async()=>{await writeFile(output+'.next',body,{mode:0o600});await rename(output+'.next',output);});return checkpoint;};
+      await Promise.all(Array.from({length:Math.min(4,rows.length)},async()=>{for(;;){
+        const row=rows[index++];if(!row)return;
         try {
           if (row.target.clusterId !== target.clusterId || row.target.namespace !== target.namespace) throw Error("QUEUE.TARGET_CHANGED");
           const old = new AmazonQueueTemporal(db, resourceDb, client, row.target);
           results.push({ requestId: row.request_id, status: "settled", proof: await old.audit(row.request_id) });
         } catch (e) { results.push({ requestId: row.request_id, status: "held", code: e instanceof Error && /^QUEUE\.[A-Z_]+$/.test(e.message) ? e.message : "QUEUE.AUDIT_UNAVAILABLE" }); }
-      }
-      await writeFile(resolve(args[0]), JSON.stringify({ codec: "amazon-old-intake-audit/1", at: new Date().toISOString(), results }, null, 2), { flag: "wx", mode: 0o600 });
+        await persist();if(results.length%25===0)print({event:'QUEUE_AUDIT_PROGRESS',audited:results.length,total:rows.length});
+      }}));
       return print({ audited: results.length, output: resolve(args[0]) });
     }
     // Explicit operator command only; never run at startup or as part of audit-old.
