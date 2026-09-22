@@ -136,13 +136,14 @@ describe("a sweep on a real directory", () => {
   it("compacts oversized diagnostics while retaining the insert guard and rotates only configured logs", async () => {
     const base=await fixture(),home=join(base,'codex');await mkdir(home);
     const file=join(home,'logs_2.sqlite'),db=new DatabaseSync(file);
-    db.exec("CREATE TABLE logs(id INTEGER PRIMARY KEY, message TEXT); INSERT INTO logs VALUES(1,zeroblob(2000000));");db.close();
+    db.exec("CREATE TABLE logs(id INTEGER PRIMARY KEY, message TEXT); INSERT INTO logs VALUES(1,zeroblob(2000000)); CREATE TABLE _sqlx_migrations(version INTEGER PRIMARY KEY, checksum BLOB); INSERT INTO _sqlx_migrations VALUES(1,X'0123');");db.close();
     const log=join(base,'worker.log');await writeFile(log,'x'.repeat(1100000));
     const result=await sweep({...config(base,true),codexLog:{home,maxBytes:1048576},logFiles:[log],logMaxBytes:1048576},
       {apply:true,codexRunning:false},new AbortController().signal);
     expect(result.codexLog).toMatchObject({removed:true,guard:'guarded'});
     const check=new DatabaseSync(file);check.exec("INSERT INTO logs VALUES(2,'test')");
-    expect(check.prepare('SELECT count(*) n FROM logs').get()).toEqual({n:0});check.close();
+    expect(check.prepare('SELECT count(*) n FROM logs').get()).toEqual({n:0});
+    expect(check.prepare('SELECT version,hex(checksum) checksum FROM _sqlx_migrations').get()).toEqual({version:1,checksum:'0123'});check.close();
     expect(await readFile(log,'utf8')).toBe('');expect((await readFile(log+'.1','utf8')).length).toBe(1100000);
   });
 });

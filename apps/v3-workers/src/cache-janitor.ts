@@ -5,6 +5,7 @@ import { isAbsolute, join, sep, resolve, relative, basename } from "node:path";
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { setTimeout as delay } from 'node:timers/promises';
+import { randomUUID } from 'node:crypto';
 import { z } from "zod";
 
 // Regenerable caches are the only thing a node may delete on its own. Evidence (any `journal`), the ledger's data
@@ -90,6 +91,36 @@ export function guardCodexLog(file: string): "guarded" | "absent" | "no_logs_tab
     db.exec(LOG_GUARD_SQL);
     return "guarded";
   } finally { db.close(); }
+}
+
+/** Offline diagnostic-only rebuild. Preserve Codex migration metadata and the
+ * exact schema, without deleting millions of indexed rows on a slow disk. */
+export async function compactCodexLog(file: string) {
+  const scratch=file+'.rebuild-'+randomUUID(),old=new DatabaseSync(file,{timeout:5000});
+  let next:DatabaseSync|undefined;
+  try {
+    const schema=old.prepare("SELECT type,name,sql FROM sqlite_master WHERE sql IS NOT NULL AND name NOT LIKE 'sqlite_%' ORDER BY CASE type WHEN 'table' THEN 0 WHEN 'index' THEN 1 ELSE 2 END").all() as {type:string;name:string;sql:string}[];
+    if(schema.some(r=>r.type==='table'&&!['logs','_sqlx_migrations'].includes(r.name)))throw Error('JANITOR.CODEX_SCHEMA_CHANGED');
+    await writeFile(scratch,'',{flag:'wx',mode:0o600});next=new DatabaseSync(scratch);
+    for(const row of schema)next.exec(row.sql);
+    if(schema.some(r=>r.name==='_sqlx_migrations')){
+      const metadata=old.prepare('SELECT * FROM _sqlx_migrations LIMIT 1001').all();
+      if(metadata.length>1000)throw Error('JANITOR.CODEX_SCHEMA_CHANGED');
+      for(const row of metadata){const keys=Object.keys(row),quote=(s:string)=>'"'+s.replaceAll('"','""')+'"';
+        next.prepare('INSERT INTO _sqlx_migrations('+keys.map(quote).join(',')+') VALUES('+keys.map(()=>'?').join(',')+')').run(...keys.map(k=>row[k]!));}
+    }
+    next.exec(LOG_GUARD_SQL);
+    for(const pragma of ['user_version','application_id']){const value=Object.values(old.prepare('PRAGMA '+pragma).get()!)[0];if(typeof value!=='number')throw Error('JANITOR.CODEX_SCHEMA_CHANGED');next.exec('PRAGMA '+pragma+'='+value);}
+    next.close();next=undefined;
+    const checkpoint=old.prepare('PRAGMA wal_checkpoint(TRUNCATE)').get();
+    if(checkpoint?.busy)throw Error('JANITOR.CODEX_LOG_BUSY');
+  }catch(error){next?.close();await rm(scratch,{force:true});throw error;}finally{old.close();}
+  try {
+    // Recheck immediately before replacement; never remove an active provider's DB.
+    if(await codexRunning())throw Error('JANITOR.CODEX_LOG_BUSY');
+    for(const suffix of ['-wal','-shm']){const st=await lstat(file+suffix).catch(()=>null);if(st?.isSymbolicLink()||(suffix==='-wal'&&st&&st.size>0))throw Error('JANITOR.CODEX_LOG_BUSY');if(st)await rm(file+suffix);}
+    await rename(scratch,file);
+  }finally{await rm(scratch,{force:true});}
 }
 
 export async function codexRunning(): Promise<boolean> {
@@ -192,8 +223,7 @@ export async function sweep(raw: z.input<typeof JanitorConfigSchema>, opts: { ap
     if (opts.apply) { try {
       guard = guardCodexLog(file);
       if(removable&&guard==='guarded'){
-        const db=new DatabaseSync(file,{timeout:5000});
-        try{db.exec('DELETE FROM logs; PRAGMA wal_checkpoint(TRUNCATE); VACUUM;');compacted=true;}finally{db.close();}
+        await compactCodexLog(file);compacted=true;
       }
     } catch { guard = "busy"; } }
     codexLog = { sizeBytes: total, removed: compacted, reason, guard };
