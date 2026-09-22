@@ -32,6 +32,9 @@ export class PostgresDelivery extends PostgresDeliveryReader implements Delivery
     try {
       await client.query("BEGIN");
       await client.query("SET LOCAL lock_timeout='3s'");
+      await client.query("SELECT pg_advisory_xact_lock(hashtextextended('amazon-queue-attempt:' || $1,0))", [requestId]);
+      const attempt = (await client.query("SELECT outcome FROM amazon_queue_attempt WHERE request_id=$1", [requestId])).rows[0];
+      if (attempt && attempt.outcome !== "running") throw new ApiError(409, "QUEUE_ATTEMPT_SETTLED", "Queue attempt is already settled; refusing Start.");
       const inserted = await client.query(
         `INSERT INTO workflow_delivery(request_id,target,input_hash)
          SELECT r.request_id,$2::jsonb,$3 FROM collection_submission r

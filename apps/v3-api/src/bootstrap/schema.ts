@@ -2,12 +2,12 @@ import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import type pg from "pg";
 
-export const migrationNames = ["001_brand_sources.sql", "002_api_receipts.sql", "003_collection_submissions.sql", "004_workflow_delivery.sql", "005_delivery_scan.sql", "006_processing_results.sql", "007_review_records.sql", "008_collected_products.sql", "009_mixed_collected_products.sql", "010_label_collected_products.sql", "011_label_processing_results.sql", "012_packaging_collected_products.sql", "013_catalog_presence.sql", "014_catalog_product_input.sql", "015_resource_admission.sql", "016_visual_wire_v2.sql", "017_catalog_product_skip.sql", "018_product_history.sql", "019_history_provenance_index.sql", "020_product_enrichment.sql", "021_submission_guard_per_request.sql", "022_process_exception.sql"];
+export const migrationNames = ["001_brand_sources.sql", "002_api_receipts.sql", "003_collection_submissions.sql", "004_workflow_delivery.sql", "005_delivery_scan.sql", "006_processing_results.sql", "007_review_records.sql", "008_collected_products.sql", "009_mixed_collected_products.sql", "010_label_collected_products.sql", "011_label_processing_results.sql", "012_packaging_collected_products.sql", "013_catalog_presence.sql", "014_catalog_product_input.sql", "015_resource_admission.sql", "016_visual_wire_v2.sql", "017_catalog_product_skip.sql", "018_product_history.sql", "019_history_provenance_index.sql", "020_product_enrichment.sql", "021_submission_guard_per_request.sql", "022_process_exception.sql", "023_amazon_dynamic_queue.sql"];
 export type Migration = { name: string; sha256: string; sql: string };
 export const digest = (data: string | Buffer) => createHash("sha256").update(data).digest("hex");
 export async function loadMigrations(): Promise<Migration[]> {
   // Both source and bundled entries live in this monorepo; SQL ships with it.
-  const roots = [new URL("../../../../database/v3/", import.meta.url), new URL("../../../database/v3/", import.meta.url)];
+  const roots = [new URL("./migrations/", import.meta.url), new URL("../../../../database/v3/", import.meta.url), new URL("../../../database/v3/", import.meta.url)];
   let root: URL | undefined;
   for (const candidate of roots) {
     try { await readFile(new URL(migrationNames[0]!, candidate)); root = candidate; break; } catch { /* try bundled path */ }

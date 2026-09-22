@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir } from "node:fs/promises";
+import { mkdtemp, mkdir, readdir, access } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -28,6 +28,7 @@ it("runs multiple internal recoveries in one owned process and passes explicit s
     expect(f.connections[0]!.env).toMatchObject({ ALL_PROXY: "http://existing-proxy" });
     expect(f.connections[0]!.env).not.toHaveProperty("R2_SECRET");
     expect(f.connections[0]!.args.join(" ")).not.toMatch(/retries|dangerously|danger-full-access/);
+    expect(await readdir(f.config.workRoot)).toEqual([]);
   } finally { await f.provider.close(); }
 });
 it("never restarts a failed business execution", async () => {
@@ -35,6 +36,7 @@ it("never restarts a failed business execution", async () => {
   try {
     await expect(f.provider.interpret(request, AbortSignal.timeout(4000))).rejects.toThrow();
     expect(f.connections).toHaveLength(1);
+    await expect(access(f.connections[0]!.cwd)).rejects.toThrow();
   } finally { await f.provider.close(); }
 });
 it("isolates concurrent operations with different working directories and processes", async () => {

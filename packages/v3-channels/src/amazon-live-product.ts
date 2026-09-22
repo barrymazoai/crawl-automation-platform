@@ -22,11 +22,12 @@ export interface AmazonProductPort { capture(job: AmazonProductJob, signal: Abor
 /** Capture only. Planning, each image transfer and browser close are other atomic calls. */
 export class AmazonLiveProduct {
   constructor(readonly publication: RetainedPublication, readonly settings: Settings, readonly browser?: AmazonProductPort,
-    readonly linkRequestIds: readonly string[] = []) {}
+    readonly linkRequestIds: readonly string[] | ((job: AmazonProductJob) => Promise<boolean>) = []) {}
   private key(job: AmazonProductJob) { return `v3/amazon-products/${job.operationId}`; }
-  private derive(job: AmazonProductJob, raw: unknown) {
+  private async derive(job: AmazonProductJob, raw: unknown) {
     const p = productProjection(raw), d = job.discovery;
-    const imported = this.linkRequestIds.includes(d.catalogId) && d.source.producer.module === "amazon.link-list" && d.source.producer.implementationVersion === "amazon-link-batch/1";
+    const authorized = typeof this.linkRequestIds === "function" ? await this.linkRequestIds(job) : this.linkRequestIds.includes(d.catalogId);
+    const imported = authorized && d.source.producer.module === "amazon.link-list" && d.source.producer.implementationVersion === "amazon-link-batch/1";
     if (amazonProductAddress(d.entry.url).asin !== d.entry.listingId || p.asin !== d.entry.listingId || d.entry.variantId !== null || (!imported && (p.storeUrl === null || amazonStoreAddress(p.storeUrl).id !== amazonStoreAddress(d.scope.rootUrl).id)))
       throw Error("AMAZON.IDENTITY_UNVERIFIED");
     const identity = { listingId: p.asin, variantId: null };
@@ -51,7 +52,7 @@ export class AmazonLiveProduct {
     if (!p) return null;
     if (!intent) throw Error("AMAZON.PRODUCT_INTENT_MISSING");
     const product = productProjection(JSON.parse(Buffer.from(p).toString()));
-    return { captured: this.derive(job, product), product };
+    return { captured: await this.derive(job, product), product };
   }
   async inspect(raw: unknown, signal: AbortSignal) {
     return (await this.inspectProduct(raw, signal))?.captured ?? null;
@@ -74,7 +75,7 @@ export class AmazonLiveProduct {
     if (await this.publication.remote.create(`${key}/intent.json`, bytes({ job, settings: this.settings }), "application/json", signal) !== "created")
       throw Error("AMAZON.CAPTURE_UNRESOLVED");
     const projection = productProjection(await this.browser.capture(job, signal));
-    const result = this.derive(job, projection);
+    const result = await this.derive(job, projection);
     await this.publication.publish(result.sourcePlan.source.objectKey, bytes(projection), "application/json", signal);
     const confirmed = await this.inspect(job, signal);
     if (!confirmed || !equal(confirmed, result)) throw Error("AMAZON.CAPTURE_UNRESOLVED");

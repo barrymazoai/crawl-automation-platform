@@ -38,6 +38,9 @@ export function codexConnection(config: CodexExecutionConfig, cwd: string, envir
     // The effective-config preflight rejects an omitted/new enabled server before any turn.
     ...(config.disabledMcpServers ?? []).flatMap(name => ["-c", `mcp_servers.${name}.enabled=false`]),
     "-c", "project_doc_max_bytes=0", "-c", "tools.view_image=false",
+    // History persistence controls history.jsonl. thread/start ephemeral=true controls
+    // the task transcript; neither setting caps the diagnostic SQLite database.
+    "-c", "analytics.enabled=false", "-c", 'history.persistence="none"',
     // CLI 0.147 rejects unknown --disable names. Keep this future feature explicitly
     // false through the equivalent config override; do not relax the runtime profile.
     "-c", "features.sleep_tool=false",

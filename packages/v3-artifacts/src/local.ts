@@ -42,6 +42,9 @@ export class FileCopies implements LocalCopies {
       }
       const value = bytes.subarray(0, offset);
       verifyBytes(ref, value, this.maxBytes);
+      // Retention measures last verified use, so frequently reused evidence copies
+      // do not expire while a task consumes them. The retained R2 object is unchanged.
+      const now = new Date(); await file.utimes(now, now).catch(() => {});
       return value;
     } finally { await file.close(); }
   }

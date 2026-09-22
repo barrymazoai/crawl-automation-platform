@@ -1,5 +1,4 @@
-import { mkdir, mkdtemp, lstat, realpath } from "node:fs/promises";
-import { join } from "node:path";
+import { mkdir, lstat, realpath } from "node:fs/promises";
 import { z } from "zod";
 import { CodexRpc } from "./codex-rpc.js";
 import { runCodexTextTurn } from "./codex-turn.js";
@@ -9,6 +8,7 @@ import { hashText } from "./handoff.js";
 import { TextError, type TextProvider } from "./ports.js";
 
 import { CodexExecutionConfigSchema, codexConnection as codexTextConnection,
+  codexWorkspace, finishCodexWorkspace,
   type CodexConnectionFactory } from "@crawl-automation/v3-codex";
 export { codexConnection as codexTextConnection, type CodexConnectionFactory, type CodexConnectionOptions } from "@crawl-automation/v3-codex";
 export const CodexTextConfigSchema = CodexExecutionConfigSchema.extend({ extractionProtocol: z.literal("label-extraction/1").optional() });
@@ -53,25 +53,27 @@ export class CodexTextProvider implements TextProvider {
   private async connection(signal: AbortSignal) {
     signal.throwIfAborted();
     if (this.closed) throw new TextError("TEXT.CODEX_CLOSED", "not_executed");
-    const cwd = await mkdtemp(join(this.config.workRoot, "execution-"));
-    signal.throwIfAborted();
-    if (this.closed) throw new TextError("TEXT.CODEX_CLOSED", "not_executed");
-    const rpc = this.create(codexTextConnection(this.config, cwd, this.environment));
-    this.active.add(rpc);
-    return { rpc, cwd };
+    const cwd = await codexWorkspace(this.config.workRoot, "execution-");
+    try {
+      signal.throwIfAborted();
+      if (this.closed) throw new TextError("TEXT.CODEX_CLOSED", "not_executed");
+      const rpc = this.create(codexTextConnection(this.config, cwd, this.environment));
+      this.active.add(rpc);
+      return { rpc, cwd };
+    } catch(error) { await finishCodexWorkspace(cwd); throw error; }
   }
   /** Startup capabilities only. No thread or model turn. */
   async check(signal: AbortSignal) {
     const lifetime = AbortSignal.any([signal, this.stopped.signal, AbortSignal.timeout(this.config.timeoutMs)]);
     const { rpc, cwd } = await this.connection(lifetime);
     try { await rpc.initialize(lifetime); await assertCodexTextModel(rpc, this.config.settings, cwd, lifetime); }
-    finally { await rpc.close(); this.active.delete(rpc); }
+    finally { await rpc.close(); this.active.delete(rpc); await finishCodexWorkspace(cwd); }
   }
   async interpret(request: Parameters<TextProvider["interpret"]>[0], signal: AbortSignal, onStopped?: () => void) {
     const lifetime = AbortSignal.any([signal, this.stopped.signal, AbortSignal.timeout(this.config.timeoutMs)]);
     const { rpc, cwd } = await this.connection(lifetime);
     try { return await runCodexTextTurn(rpc, { ...this.config.settings, cwd, prompt: request.prompt, outputSchema: request.outputSchema }, lifetime, this.config.timeoutMs); }
-    finally { await rpc.close(); this.active.delete(rpc); onStopped?.(); }
+    finally { await rpc.close(); this.active.delete(rpc); await finishCodexWorkspace(cwd); onStopped?.(); }
   }
   async close() {
     this.closed = true;

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { TextError } from "./errors.js";
+import { describeCodexError, TextError } from "./errors.js";
 import { CodexRpc } from "./codex-rpc.js";
 import { CodexModelSettingsSchema } from "@crawl-automation/v3-contracts";
 import { assertCodexModel } from "./codex-preflight.js";
@@ -50,7 +50,7 @@ export async function runCodexTurn(rpc: CodexRpc, input: {
                     return;
                 if (message.method === "error") {
                     if (params.willRetry === true) return; // Codex's internal recovery, not a new business execution.
-                    throw new TextError("TEXT.CODEX_TURN_FAILED");
+                    throw new TextError("TEXT.CODEX_TURN_FAILED", "unknown", describeCodexError(params.error ?? params.message));
                 }
                 if (message.method === "model/rerouted")
                     throw new TextError("TEXT.CODEX_CONFIG_MISMATCH");
@@ -64,7 +64,7 @@ export async function runCodexTurn(rpc: CodexRpc, input: {
                     const turn = z.object({ id, status: z.enum(["completed", "failed", "interrupted"]), error: z.unknown().optional() }).parse(params.turn);
                     if (turn.id !== seenTurn)
                         throw new TextError("TEXT.CODEX_TURN_CONFLICT");
-                    if (turn.status === "failed") throw new TextError("TEXT.CODEX_TURN_FAILED");
+                    if (turn.status === "failed") throw new TextError("TEXT.CODEX_TURN_FAILED", "unknown", describeCodexError(turn.error));
                     if (turn.status === "interrupted") throw new TextError("TEXT.CODEX_CANCELLED");
                     if (turn.error != null) throw new TextError("TEXT.CODEX_PROTOCOL");
                     resolve();
