@@ -2,7 +2,7 @@ import {z} from 'zod';
 import {CommerceEvidenceSchema} from './commerce.js';
 const url=z.string().url().max(4096),asin=z.string().regex(/^[A-Z0-9]{10}$/);
 // Public selected-product DOM only. No scripts, cookies, account or runtime globals.
-export const AmazonRenderedProductSchema=z.strictObject({codec:z.literal('amazon-rendered/1'),url,canonicalUrl:url,capturedAt:z.iso.datetime(),asin,title:z.string().trim().min(1).max(4000),brandRaw:z.string().max(1000),storeUrl:url,
+export const AmazonRenderedProductSchema=z.strictObject({codec:z.literal('amazon-rendered/1'),url,canonicalUrl:url,capturedAt:z.iso.datetime(),asin,title:z.string().trim().min(1).max(4000),brandRaw:z.string().max(1000),storeUrl:url.nullable().default(null),
  commerce:CommerceEvidenceSchema.optional(),deliveryText:z.string().max(1000),galleryCount:z.number().int().min(1).max(100),gallery:z.array(z.strictObject({index:z.number().int().min(0).max(99),url,alt:z.string().max(4000)})).min(1).max(100),
  sections:z.array(z.strictObject({id:z.enum(['feature-bullets','productDescription','important-information']),text:z.string().max(500000)})).max(3),
  variantControls:z.number().int().nonnegative(),variants:z.array(z.strictObject({asin,url,label:z.string().max(1000)})).max(100),

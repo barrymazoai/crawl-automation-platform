@@ -27,7 +27,7 @@ export class AmazonLiveProduct {
   private derive(job: AmazonProductJob, raw: unknown) {
     const p = productProjection(raw), d = job.discovery;
     const imported = this.linkRequestIds.includes(d.catalogId) && d.source.producer.module === "amazon.link-list" && d.source.producer.implementationVersion === "amazon-link-batch/1";
-    if (amazonProductAddress(d.entry.url).asin !== d.entry.listingId || p.asin !== d.entry.listingId || d.entry.variantId !== null || (!imported && amazonStoreAddress(p.storeUrl).id !== amazonStoreAddress(d.scope.rootUrl).id))
+    if (amazonProductAddress(d.entry.url).asin !== d.entry.listingId || p.asin !== d.entry.listingId || d.entry.variantId !== null || (!imported && (p.storeUrl === null || amazonStoreAddress(p.storeUrl).id !== amazonStoreAddress(d.scope.rootUrl).id)))
       throw Error("AMAZON.IDENTITY_UNVERIFIED");
     const identity = { listingId: p.asin, variantId: null };
     parseAmazonRenderedProduct(p, d.entry.url, identity);
