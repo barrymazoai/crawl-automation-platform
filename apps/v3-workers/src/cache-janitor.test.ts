@@ -3,7 +3,7 @@ import { mkdtemp, mkdir, writeFile, utimes, readdir, realpath, symlink, readFile
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import { assertRuleSafe, codexLogRemovable, guardCodexLog, planRemovals, sweep, urgent,
+import { assertRuleSafe, codexLogRemovable, guardCodexLog, planRemovals, sweep, urgent, isCodexProcessLine,
   type Entry, type JanitorRule } from "./cache-janitor.js";
 
 const root = "/live/release";
@@ -57,6 +57,13 @@ describe("what one sweep may remove", () => {
 });
 
 describe("the Codex diagnostic log", () => {
+  it('distinguishes model processes from the Windows system sandbox service',()=>{
+    expect(isCodexProcessLine('"codex.exe","123","Console"','win32')).toBe(true);
+    expect(isCodexProcessLine('"codex-x86_64-pc-windows-msvc.exe","123"','win32')).toBe(true);
+    expect(isCodexProcessLine('"codex-windows-sandbox-service.exe","123","Services"','win32')).toBe(false);
+    expect(isCodexProcessLine('/Applications/Codex.app/Contents/Resources/codex','darwin')).toBe(true);
+    expect(isCodexProcessLine('"node.exe","123"','win32')).toBe(false);
+  });
   it("goes only when it is oversized and nothing holds it open", () => {
     expect(codexLogRemovable(9e9, 2e9, false)).toBe(true);
     expect(codexLogRemovable(9e9, 2e9, true)).toBe(false); // an open SQLite file is never removed

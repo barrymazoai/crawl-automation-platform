@@ -123,15 +123,20 @@ export async function compactCodexLog(file: string) {
   }finally{await rm(scratch,{force:true});}
 }
 
+export function isCodexProcessLine(line:string,platform=process.platform):boolean {
+  // The machine-wide Windows sandbox service runs as a system service, not as
+  // an app-server using this project's CODEX_HOME. It is never stopped here.
+  if(platform==='win32'&&/^"codex-windows-sandbox-service\.exe"/i.test(line.trim()))return false;
+  return platform==='win32'?/^"codex(?:[-_.][^"]*)?\.exe"/i.test(line.trim()):/^codex(?:[-_.].*)?$/.test(basename(line.trim()));
+}
+
 export async function codexRunning(): Promise<boolean> {
   // Failure to inspect processes is an error, never proof that the database is idle.
   const exec = promisify(execFile);
   const out = process.platform === 'win32'
     ? await exec('tasklist.exe', ['/FO','CSV','/NH'], {timeout:15000,maxBuffer:4000000})
     : await exec('/bin/ps', ['-axo','comm='], {timeout:10000,maxBuffer:4000000});
-  return out.stdout.split('\n').some(line => process.platform === 'win32'
-    ? /^"codex(?:[-_.][^"]*)?\.exe"/i.test(line.trim())
-    : /^codex(?:[-_.].*)?$/.test(basename(line.trim())));
+  return out.stdout.split('\n').some(line=>isCodexProcessLine(line));
 }
 
 async function stoppedWorkspace(dir: string, noCodexProcesses: boolean): Promise<boolean> {
