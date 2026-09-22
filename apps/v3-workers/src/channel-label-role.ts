@@ -88,7 +88,7 @@ export async function channelLabelRole(o:{role:string;hostId:string;root:string;
  case "page-text":{const m=new PreparePageText(await pages());activities.preparePageText=(r,s)=>m.run(r,s);break;}
  case "image-prepare":{const m=new PrepareImageOcr(await files());activities.prepareImageOcr=(r,s)=>m.run(r,s);break;}
  case "ocr":{
-  const p=new MultipartOcr(o.ocrProvider!);closers.push(()=>p.close());constructed.push("ocr-provider");
+  const p=new MultipartOcr(o.ocrProvider!,undefined,process.env.V3_OCR_TRACE==="true"?event=>console.log(JSON.stringify({event:"OCR_HTTP_TRACE",...event})):undefined);closers.push(()=>p.close());constructed.push("ocr-provider");
   const m=new OcrFileModule({provider:{provider:p.provider,supported:p.supported,close:()=>p.close(),recognize:(f,b,s)=>p.recognize(f,b,s,response=>stops.returned(response))},artifacts:await artifacts(),intents:new OcrIntents(remote,o.hostId,storageId),results:await results(),reviews,mode:o.db?"register":"upload-only"});
   activities.ocrFile=(r,s)=>m.run(r,s);break;
  }

@@ -29,7 +29,8 @@ export class MultipartOcr implements OcrProvider {
   private readonly config: z.output<typeof MultipartOcrConfigSchema>;
   private readonly endpoint: URL;
   private closed = false;
-  constructor(raw: MultipartOcrConfig, private readonly bearerToken?: string) {
+  constructor(raw: MultipartOcrConfig, private readonly bearerToken?: string,
+    private readonly trace?: (event: { phase: string; traceId: string; fileSha256: string; elapsedMs: number; inputBytes: number; sentBytes: number; receivedBytes: number; code?: string; status?: number }) => void) {
     this.config = MultipartOcrConfigSchema.parse(raw);
     this.endpoint = new URL(this.config.endpoint);
     const trusted = this.config.trustedHttpOrigin;
@@ -61,6 +62,8 @@ export class MultipartOcr implements OcrProvider {
     const bytes = Buffer.from(source);
     try { verifyBytes(file, bytes, this.config.maxInputBytes); } catch { throw new OcrError("OCR.INPUT_INTEGRITY", "not_executed"); }
     const boundary = `v3-${randomUUID()}`;
+    const began=Date.now();let sentBytes=0,receivedBytes=0;
+    const trace=(phase:string,extra:{code?:string;status?:number}={})=>{try{this.trace?.({phase,traceId:boundary,fileSha256:file.sha256,elapsedMs:Date.now()-began,inputBytes:bytes.length,sentBytes,receivedBytes,...extra});}catch{/* Diagnostics cannot change OCR results. */}};
     const extension = file.mediaType === "image/png" ? "png" : file.mediaType === "image/jpeg" ? "jpg" : "webp";
     const body = Buffer.concat([Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="image.${extension}"\r\nContent-Type: ${file.mediaType}\r\n\r\n`), bytes, Buffer.from(`\r\n--${boundary}--\r\n`)]);
     const response = await new Promise<Buffer>((resolve, reject) => {
@@ -71,10 +74,14 @@ export class MultipartOcr implements OcrProvider {
       });
       const stop = (error: OcrError) => { failure ??= error; req.destroy(); };
       const abort = () => stop(new OcrError("OCR.CANCELLED"));
-      const timer = setTimeout(() => stop(new OcrError("OCR.TIMEOUT")), this.config.timeoutMs);
+      const timer = setTimeout(() => {trace("timeout");stop(new OcrError("OCR.TIMEOUT"));}, this.config.timeoutMs);
+      trace("created");
+      req.on("socket",socket=>{trace("socket");socket.once("connect",()=>trace("connected"));});
+      req.on("finish",()=>{sentBytes=body.length;trace("sent");});
       signal.addEventListener("abort", abort, { once: true });
       if (signal.aborted) abort();
       req.on("response", res => {
+        trace("response",res.statusCode===undefined?{}:{status:res.statusCode});
         if (res.statusCode !== 200) { stop(new OcrError(res.statusCode === 429 ? "OCR.RATE_LIMIT" : "OCR.HTTP_STATUS")); res.destroy(); return; }
         if (!/^application\/json(?:\s*;|$)/i.test(String(res.headers["content-type"] ?? "")) ||
             (res.headers["content-encoding"] && res.headers["content-encoding"] !== "identity")) {
@@ -83,14 +90,16 @@ export class MultipartOcr implements OcrProvider {
         const chunks: Buffer[] = []; let size = 0;
         res.on("data", (chunk: Buffer) => {
           size += chunk.length;
+          receivedBytes=size;
           if (size > this.config.maxResponseBytes) { stop(new OcrError("OCR.OUTPUT_LIMIT")); res.destroy(); }
           else chunks.push(chunk);
         });
-        res.on("end", () => { if (res.complete) complete = Buffer.concat(chunks, size); });
+        res.on("end", () => { if (res.complete) complete = Buffer.concat(chunks, size);trace("end"); });
         res.on("error", () => stop(new OcrError("OCR.RESPONSE_UNKNOWN")));
       });
-      req.on("error", () => { failure ??= new OcrError("OCR.RESPONSE_UNKNOWN"); });
+      req.on("error", (error: NodeJS.ErrnoException) => { trace("error",error.code?{code:error.code}:{});failure ??= new OcrError("OCR.RESPONSE_UNKNOWN"); });
       req.on("close", () => {
+        trace("close");
         clearTimeout(timer); signal.removeEventListener("abort", abort);
         if (failure || !complete) reject(failure ?? new OcrError("OCR.RESPONSE_UNKNOWN")); else resolve(complete);
       });
