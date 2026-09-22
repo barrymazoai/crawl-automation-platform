@@ -2,6 +2,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import {spawnSync} from 'node:child_process';
+import {setTimeout as delay} from 'node:timers/promises';
 
 const [root, command, target = 'all'] = process.argv.slice(2);
 const names = ['health', 'queue', 'janitor'];
@@ -27,8 +28,16 @@ for (const name of command === 'stop' ? [...selected].reverse() : selected) {
   } else if (command === 'stop' && before.status === 0) {
     if (run('/bin/launchctl', ['bootout', service]).status !== 0) throw Error('MAINTENANCE.STOP_FAILED');
   }
-  const after = run('/bin/launchctl', ['print', service]);
-  if (command === 'stop' && after.status === 0) throw Error('MAINTENANCE.STOP_UNCONFIRMED');
+  let after = run('/bin/launchctl', ['print', service]);
+  if (command === 'stop') {
+    const oldPid = Number(/\n\s*pid = (\d+)/.exec(before.stdout)?.[1]);
+    const alive = () => { if (!oldPid) return false; try { process.kill(oldPid, 0); return true; } catch (e) { if (e.code === 'ESRCH') return false; throw e; } };
+    // launchd's service inventory can lag behind a successful bootout receipt.
+    for (let n = 0; n < 40 && (after.status === 0 || alive()); n++) {
+      await delay(250); after = run('/bin/launchctl', ['print', service]);
+    }
+    if (after.status === 0 || alive()) throw Error('MAINTENANCE.STOP_UNCONFIRMED');
+  }
   console.log(JSON.stringify({name, loaded: after.status === 0,
     state: /\n\s*state = ([^\n]+)/.exec(after.stdout)?.[1] ?? 'unloaded',
     pid: Number(/\n\s*pid = (\d+)/.exec(after.stdout)?.[1]) || null,
