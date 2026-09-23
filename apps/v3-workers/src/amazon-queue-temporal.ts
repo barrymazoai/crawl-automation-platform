@@ -116,10 +116,9 @@ export class AmazonQueueTemporal implements AmazonQueuePorts {
       if (!terminalStatuses.has(root.status)) {
         // An intake root can still be polling after its product has ended.
         // Surface that product's held permit as cleanup pending, not normal work.
-        const held = (await this.resources.query(`SELECT p.request FROM resource_permit p
-          JOIN catalog_discovery c ON c.record->>'workflowId'=p.request->>'workflowId'
-            OR (c.record->>'workflowId')||'-label'=p.request->>'workflowId'
-          WHERE p.released_at IS NULL AND c.catalog_id=$1`, [requestId])).rows;
+        const discoveries = (await this.db.query("SELECT record->>'workflowId' id FROM catalog_discovery WHERE catalog_id=$1", [requestId])).rows;
+        const ids = discoveries.flatMap(d=>[d.id,d.id+'-label']);
+        const held = (await this.resources.query("SELECT request FROM resource_permit WHERE released_at IS NULL AND request->>'workflowId'=ANY($1)", [ids])).rows;
         for (const {request} of held) {
           const owner = await this.client.workflow.getHandle(request.workflowId,request.runId).describe();
           if (terminalStatuses.has(owner.status.name)) fail("RESOURCE_CLEANUP_PENDING");
