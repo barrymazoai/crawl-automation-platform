@@ -34,6 +34,6 @@
 
 2026-09-23 01:43 UTC 左右已按首次 intent/progress 精确核对：原 5 个 Python PID 全部不存在，OCR 执行器为 0，唯一许可对应的工作流已 COMPLETED。保存 R2 停止证明后只释放该许可，并手动启动 OCR 服务一次；没有重跑原商品。01:44:55 UTC 的 Mini LAN 检查确认 OCR 健康 4/4、held permit 为 0。
 
-禁止重试及清理失败暂停的候选代码已完成主要验收，尚未切换上线：自动审批拒绝本次 29 个 Worker 的停止/替换，要求明确授权。队列 paused，旧健康恢复监控停止。详见 [资源生命周期审计](2026-09-23-resource-lifecycle-audit.md)。
+用户补齐明确授权后，已切换美国 Mini 29 个 Amazon Worker 与 Windows 2 个 Text/Vision Worker。2026-09-23 02:18:37 UTC 健康验收通过后恢复原 4,442 个未执行队列条目：Mini 90/90、Windows 2/2、OCR 4/4、遗留 held permit 为 0；保持全部原并发及网络/Profile 限制，不重排 Review、不增加开机/登录自启。禁止自动重试及清理失败暂停的代码已在本轮 Amazon 部署生效；首轮 Codex 配置兼容错误已修复，Windows 首次 Vision 启动通用错误的具体原因未证实，保留记录后一次人工启动正常。详见 [资源生命周期审计](2026-09-23-resource-lifecycle-audit.md)。
 
 远端证据：Mini `/Users/server/apps/crawler-v3/manual-releases/promises-20260922/failure-cleanup/`；Windows `D:\crawlv3-cloud\logs\failure-cleanup-7ae7d8b7-41df-40f2-99aa-846882288a3f\progress.json`。这里只记录必要标量，不导出完整私密配置或 provider 日志。
