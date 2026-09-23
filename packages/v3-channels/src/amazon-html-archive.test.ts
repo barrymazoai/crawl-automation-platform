@@ -78,6 +78,16 @@ it('a database acknowledgment failure never re-downloads, and another task can r
   expect(next.capturedAt).toBe((await f.archive.inspect(signal()))!.capturedAt);
   expect(f.get).toHaveBeenCalledOnce();
 });
+it('a paused or delayed executor cannot spend a stale download admission', async () => {
+  const f = await setup();
+  vi.mocked(f.gate.acquire).mockImplementation(async () => {
+    vi.spyOn(Date, 'now').mockReturnValue(new Date().getTime() + 6000);
+    return {kind:'download'};
+  });
+  try { await expect(f.reader.product(url,signal(),undefined,undefined,f.archive)).rejects.toThrow('HTML_ADMISSION_EXPIRED'); }
+  finally { vi.restoreAllMocks(); }
+  expect(f.get).not.toHaveBeenCalled();
+});
 it('publishes exact bytes and verified metadata before returning a projection; a cold reader never fetches again', async () => {
   const f = await setup(), body = html();
   const p = await f.reader.product(url, signal(), undefined, undefined, f.archive);

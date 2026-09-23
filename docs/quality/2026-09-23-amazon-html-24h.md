@@ -9,6 +9,7 @@ The successful-collection shortcut did not cover HTML downloaded before a later 
 - Reuse reads and verifies the original receipt and bytes from R2, retains an immutable copy bound to the new observation, and records the original receipt key and SHA-256 in `reusedFrom`. The original capture time and fetch-route metadata are retained. Reuse does not extend freshness. The extra copy is one requested HTML document, not a cache migration.
 - Download success is archived before parsing. Parsing failure leaves reusable original evidence. If the DB acknowledgment is lost after R2 publication, a subsequent explicitly submitted task can verify that archive and reconcile its receipt without another GET.
 - Missing/corrupt evidence or unknown publication stops the task without a fallback download. Original archives and Review records are not overwritten.
+- At unknown-attempt expiry, inspect R2 under a bounded 4-second reconciliation before deciding to fetch: request start may be older than 24 hours while the original capture is still fresh. If that check fails, stop. A download admission must reach the actual HTTP GET within 5 seconds; a paused executor cannot spend an old admission later.
 
 Migration: `024_amazon_html_fetch.sql` is additive and retains attempt history. Apply via the versioned migration path after a fresh backup. Releases that validate the migration ledger must use the updated migration list before their next startup (API, delivery, brand web and queue CLI). Existing product workflows and concurrency settings are unchanged.
 

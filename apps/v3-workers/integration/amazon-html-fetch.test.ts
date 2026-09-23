@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import { hostname } from 'node:os';
-import { beforeAll, afterAll, describe, it, expect } from 'vitest';
+import { beforeAll, afterAll, describe, it, expect, vi } from 'vitest';
 import pg from 'pg';
 import { PostgresAmazonHtmlFetchGate } from '../src/amazon-html-fetch.js';
 import { amazonFixture } from '../../../packages/v3-channels/src/amazon-live.fixture.js';
@@ -8,13 +8,14 @@ import { amazonFixture } from '../../../packages/v3-channels/src/amazon-live.fix
 const address = process.env.V3_HTML_FETCH_TEST_URL, signal = () => AbortSignal.timeout(15000);
 describe.skipIf(!address)('Mini atomic rolling HTML fetch admission', () => {
   let db: pg.Pool, gate: PostgresAmazonHtmlFetchGate;
+  const inspect = vi.fn(async (_job: unknown, _signal: AbortSignal): Promise<{capturedAt:string}|null> => null);
   beforeAll(async () => {
     if (!/Mac-mini/i.test(hostname()) || process.env.V3_HTML_FETCH_ISOLATED !== 'true') throw Error('Isolated Mac mini database required');
     db = new pg.Pool({ connectionString: address, max: 12 });
     if ((await db.query('SELECT current_database() name')).rows[0].name !== 'crawler_v3_test' ||
       (await db.query("SELECT to_regclass('amazon_html_fetch') t")).rows[0].t) throw Error('Empty isolated database required');
     await db.query(await readFile(`${process.env.V3_HISTORY_SQL_ROOT}/024_amazon_html_fetch.sql`, 'utf8'));
-    gate = new PostgresAmazonHtmlFetchGate(db);
+    gate = new PostgresAmazonHtmlFetchGate(db, inspect);
   });
   afterAll(async () => { await db?.end(); });
   async function job(id: string, asin: string) {
@@ -63,5 +64,21 @@ describe.skipIf(!address)('Mini atomic rolling HTML fetch admission', () => {
     const j = await job('aborted', 'B000000008');
     await expect(gate.acquire(j, AbortSignal.abort())).rejects.toThrow();
     expect((await db.query('SELECT count(*)::int n FROM amazon_html_fetch WHERE operation_id=$1', [j.operationId])).rows[0].n).toBe(0);
+  });
+  it('reconciles a lost acknowledgment at expiry before deciding whether a new fetch is allowed', async () => {
+    const first = await job('lost-ack-expiry', 'B000000009');
+    await db.query("INSERT INTO amazon_html_fetch(operation_id,site,asin,job,requested_at) VALUES($1,'https://www.amazon.com',$2,$3,clock_timestamp()-interval '24 hours 1 minute')", [first.operationId,first.discovery.entry.listingId,first]);
+    const capturedAt = new Date(Date.now()-24*60*60*1000+30000).toISOString();
+    inspect.mockResolvedValueOnce({capturedAt});
+    expect(await gate.acquire(await job('lost-ack-new', 'B000000009'), signal())).toEqual({kind:'reuse',job:first});
+    expect((await db.query('SELECT captured_at FROM amazon_html_fetch WHERE operation_id=$1',[first.operationId])).rows[0].captured_at.toISOString()).toBe(capturedAt);
+  });
+  it('unavailable R2 at unknown-attempt expiry fails closed instead of granting another download', async () => {
+    const first = await job('expiry-offline', 'B000000010');
+    await db.query("INSERT INTO amazon_html_fetch(operation_id,site,asin,job,requested_at) VALUES($1,'https://www.amazon.com',$2,$3,clock_timestamp()-interval '25 hours')", [first.operationId,first.discovery.entry.listingId,first]);
+    inspect.mockRejectedValueOnce(Error('R2 unavailable'));
+    const next = await job('expiry-offline-new', 'B000000010');
+    await expect(gate.acquire(next,signal())).rejects.toThrow('R2 unavailable');
+    expect((await db.query('SELECT count(*)::int n FROM amazon_html_fetch WHERE operation_id=$1',[next.operationId])).rows[0].n).toBe(0);
   });
 });

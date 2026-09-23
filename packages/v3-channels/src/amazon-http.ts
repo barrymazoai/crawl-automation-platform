@@ -94,7 +94,7 @@ export async function readAmazonHtml(route: HttpRoute, rawUrl: string, abort: Ab
 }
 /** One bounded GET of a public Amazon page through the configured route (ScraperAPI).
  * Errors terminate this download; neither this reader nor its product adapter retries. */
-async function readAmazonHtmlBytes(route: HttpRoute, rawUrl: string, abort: AbortSignal, dns: DnsResolver): Promise<Uint8Array> {
+async function readAmazonHtmlBytes(route: HttpRoute, rawUrl: string, abort: AbortSignal, dns: DnsResolver, admissionDeadline?: number): Promise<Uint8Array> {
   requireCapability(route, "http");
   const url = permittedUrl(rawUrl, AMAZON_HTTP_POLICY.origins);
   const controller = new AbortController(), signal = AbortSignal.any([abort, controller.signal]);
@@ -103,6 +103,7 @@ async function readAmazonHtmlBytes(route: HttpRoute, rawUrl: string, abort: Abor
   try {
     const address = await abortable(transportAddress(url, route.transport, dns, signal), signal);
     signal.throwIfAborted();
+    if (admissionDeadline !== undefined && Date.now() > admissionDeadline) throw new ChannelError('AMAZON.HTML_ADMISSION_EXPIRED');
     const got = await abortable(route.transport.get(url, address, { accept: "text/html" }, signal).then(r => { if (signal.aborted) { r.close(); signal.throwIfAborted(); } return r; }), signal);
     response = got; signal.throwIfAborted();
     if (got.status >= 300 && got.status < 400) throw new ChannelError("AMAZON.REDIRECT_UNVERIFIED");
@@ -156,13 +157,14 @@ export class AmazonHttpReader {
     if (!saved) {
       if (!this.fetchGate) throw new ChannelError('AMAZON.HTML_FETCH_GATE_REQUIRED');
       await archive.beginDownload(signal);
+      const admissionDeadline = Date.now() + 5000;
       const admission = await this.fetchGate.acquire(archive.job, signal);
       if (admission.kind === 'reuse') {
         saved = await archive.reuse(new AmazonHtmlArchive(archive.publication, admission.job), signal);
         // Reconcile an R2 success whose database acknowledgment was lost. No provider retry.
         await this.fetchGate.complete(admission.job, saved.capturedAt, signal);
       } else {
-        saved = await archive.save(await readAmazonHtmlBytes(this.route, url, signal, this.dns), signal, { fetchedVia: this.fetchedVia });
+        saved = await archive.save(await readAmazonHtmlBytes(this.route, url, signal, this.dns, admissionDeadline), signal, { fetchedVia: this.fetchedVia });
         await this.fetchGate.complete(archive.job, saved.capturedAt, signal);
       }
     }

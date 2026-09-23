@@ -49,7 +49,7 @@ async function main() {
         // scraperapi mode: no owned page. The lane permit (`browserResource`) is still required for every capture-phase call.
         const http = config.capture.mode === "scraperapi" ? createHttpRoute(config.capture.route, { scraperApi: config.capture.scraperApi }) : undefined;
         if (http) await db.query('SELECT operation_id,site,asin,job,requested_at,captured_at FROM amazon_html_fetch LIMIT 0');
-        const fetchGate = new PostgresAmazonHtmlFetchGate(db);
+        const fetchGate = new PostgresAmazonHtmlFetchGate(db, (job, signal) => new AmazonHtmlArchive(publication, job).inspect(signal));
         const pages = config.browser ? new EgoTaskPages(config.browser, await TextLocalStore.open(config.pageJournalRoot)) : undefined;
         const requirePages = () => { if (!pages) throw Error("AMAZON.CAPTURE_UNAVAILABLE"); return pages; };
         const requireBrowser = async () => { const e = execution(); await admission.requireHeld(config.browserResource, e.workflowId, e.runId); };
