@@ -5,7 +5,8 @@ import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { BrowserRunner } from './browser-runner.js';
 import { CandidateSchema, ManifestSchema, OutcomeSchema, baseOutcome, type Outcome } from './contracts.js';
-import { createJson, readJson, atomicJson, digest } from './local-store.js';
+import { createJson, readJson, atomicJson, digest, LocalEvidence } from './local-store.js';
+import { verifiedProofs } from './proofs.js';
 
 const alive = (pid: number) => { try { process.kill(pid, 0); return true; } catch { return false; } };
 export async function batchStatus(root: string) {
@@ -30,6 +31,22 @@ async function main() {
     console.log(JSON.stringify({ root, campaignId: manifest.campaignId, candidates: candidates.length, manifestSha256: digest(await fs.readFile(manifestFile)), credentialsRequired: false })); return;
   }
   if (command === 'status') { console.log(JSON.stringify(await batchStatus(root))); return; }
+  if (command === 'package-list') {
+    const manifest = ManifestSchema.parse(await readJson(manifestFile)), store = new LocalEvidence(join(root, 'evidence'));
+    const files = new Set<string>(['manifest.json']); let verified = 0;
+    for (const candidate of manifest.candidates) {
+      const name = `results/${candidate.companyId}.json`; let out: Outcome;
+      try { out = OutcomeSchema.parse(await readJson(join(root, name))); } catch (e: any) { if (e.code === 'ENOENT') continue; throw e; }
+      if (out.campaignId !== manifest.campaignId || out.candidateId !== candidate.companyId) throw Error('BRAND_ENTRY.RESULT_IDENTITY');
+      files.add(name);
+      if (out.state !== 'verified') continue;
+      for (const ref of verifiedProofs(out)) { await store.read(ref); files.add(`evidence/${ref.key}`); }
+      verified++;
+    }
+    // Review evidence remains retained on this Mini and is pulled on demand.
+    await fs.writeFile(join(root, 'transfer-files.txt'), [...files].join('\n') + '\n', { mode: 0o600 });
+    console.log(JSON.stringify({ files: files.size, verified, manifestSha256: digest(await fs.readFile(manifestFile)) })); return;
+  }
   const manifest = ManifestSchema.parse(await readJson(manifestFile)), config = await readJson(configFile);
   const runner = new BrowserRunner(configFile, config, join(dirname(fileURLToPath(import.meta.url)), 'browser-script.js'));
   const lockFile = join(root, 'run-lock.json');
