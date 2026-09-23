@@ -14,6 +14,12 @@ export function importedBrandId(out: Outcome) {
   const h = digest(`brand-entry:${out.campaignId}:${out.candidateId}`).slice(0, 32).split(''); h[12] = '8'; h[16] = '8';
   const value = h.join(''); return [value.slice(0, 8), value.slice(8, 12), value.slice(12, 16), value.slice(16, 20), value.slice(20)].join('-');
 }
+const identityName = (name: string) => name.normalize('NFKC').toLowerCase().replace(/[^\p{L}\p{N}]/gu, '');
+function requireBrandIdentity(out: Outcome) {
+  const seed = out.seed!;
+  if (seed.candidate.existingBrandIds.length && !seed.candidate.existingBrandNames.some(n => identityName(n) === identityName(seed.name)))
+    throw Error('BRAND_ENTRY.BRAND_NAME_REQUIRES_REVIEW');
+}
 export async function validateLocalResult(root: string, out: Outcome) {
   const store = new LocalEvidence(join(root, 'evidence'));
   for (const ref of verifiedProofs(out)) await store.read(ref);
@@ -29,10 +35,13 @@ export class LocalBrandImporter {
     const brandId = importedBrandId(out), urls = out.directories.map(x => storeEntryUrl(x.url));
     const brand = (await this.db.query('SELECT id,name,note,revision FROM brand WHERE id=$1', [brandId])).rows[0];
     const sources = (await this.db.query("SELECT id,url,enabled,revision FROM brand_source WHERE brand_id=$1 AND channel='amazon' AND region='US' AND url=ANY($2::text[])", [brandId, urls])).rows;
-    return { brandId, brand, sources, urls, complete: Boolean(brand) && new Set(sources.map(x => x.url)).size === new Set(urls).size };
+    const identityMatches = out.seed!.candidate.existingBrandIds.length ? out.seed!.candidate.existingBrandNames.includes(brand?.name)
+      : brand?.name === out.seed!.name && brand?.note === `Amazon Brand entry preparation ${out.campaignId}/${out.candidateId}; result ${digest(JSON.stringify(out))}`;
+    return { brandId, brand, sources, urls, complete: Boolean(brand) && identityMatches && new Set(sources.map(x => x.url)).size === new Set(urls).size };
   }
   async apply(out: Outcome) {
     verifiedProofs(out);
+    requireBrandIdentity(out);
     const seed = out.seed!, id = importedBrandId(out), c = await this.db.connect();
     try {
       await c.query('BEGIN'); await c.query("SET LOCAL lock_timeout='5s'; SET LOCAL statement_timeout='10s'");
@@ -100,6 +109,7 @@ async function main() {
         out.seed!.candidate.existingBrandNames = identity.existingBrandNames;
       }
       if (out.seed!.candidate.existingBrandIds.length > 1) { rows.push({ id: candidate.companyId, state: 'review', code: 'BRAND_ENTRY.BRAND_IDENTITY_AMBIGUOUS' }); continue; }
+      try { requireBrandIdentity(out); } catch (e) { rows.push({ id: candidate.companyId, state: 'review', code: safeCode(e) }); continue; }
       const resultHash = digest(JSON.stringify(out)), receiptFile = join(root, 'import-receipts', `${candidate.companyId}.json`);
       let prior; try { prior = await readJson(receiptFile); } catch (e: any) { if (e.code !== 'ENOENT') throw e; }
       if (prior) { if (prior.resultHash !== resultHash) throw Error('BRAND_ENTRY.RESULT_CONFLICT'); rows.push(prior); continue; }
@@ -114,8 +124,8 @@ async function main() {
       } else {
         await createJson(attemptFile, { at: new Date().toISOString(), resultHash });
         try { receipt = { id: candidate.companyId, resultHash, state: 'imported', ...await importer.apply(out) }; }
-        catch (e) { const settled = await importer.existing(out);
-          receipt = settled.complete ? { id: candidate.companyId, resultHash, state: 'imported', recoveredReadOnly: true, brandId: settled.brandId, sourceIds: settled.sources.map(x => x.id) }
+        catch (e) { const settled = await importer.existing(out), code = safeCode(e);
+          receipt = code === 'BRAND_ENTRY.EXECUTION_UNRESOLVED' && settled.complete ? { id: candidate.companyId, resultHash, state: 'imported', recoveredReadOnly: true, brandId: settled.brandId, sourceIds: settled.sources.map(x => x.id) }
             : { id: candidate.companyId, resultHash, state: 'review', code: safeCode(e) }; }
       }
       await createJson(receiptFile, receipt); rows.push(receipt);

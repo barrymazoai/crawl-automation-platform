@@ -20,7 +20,7 @@ export function seedBrand(html: string, asin: string, url: string) {
   const identities = [...(main?.querySelectorAll('#ASIN') ?? [])].map(e => e.getAttribute('value'));
   const canonical = document.querySelector('link[rel="canonical"]')?.getAttribute('href');
   if (!main || !identities.length || identities.some(x => x !== asin) ||
-      canonical && new URL(amazonEntryUrl(canonical, url)).pathname.match(/\/dp\/([A-Z0-9]{10})/)?.[1] !== asin)
+      canonical && new URL(amazonEntryUrl(canonical, url)).pathname.match(/\/(?:dp|clp|gp\/product)\/([A-Z0-9]{10})(?:\/|$)/)?.[1] !== asin)
     return brandEntryCode('PRODUCT_IDENTITY');
   const links = main.querySelectorAll('#bylineInfo');
   if (links.length !== 1) return brandEntryCode('BRAND_LINK_MISSING');

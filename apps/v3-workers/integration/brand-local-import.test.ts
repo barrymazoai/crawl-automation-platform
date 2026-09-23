@@ -35,6 +35,7 @@ describe.skipIf(!address)('standalone Brand importer on isolated Mini PostgreSQL
   });
   it('preserves an existing enabled source, and refuses a renamed private Brand identity', async () => {
     const out = example(), id = randomUUID(), name = `Existing ${id}`;
+    out.seed!.name = name;
     out.seed!.candidate.existingBrandIds = [id]; out.seed!.candidate.existingBrandNames = [name];
     await db.query('INSERT INTO brand(id,name) VALUES($1,$2)', [id, name]);
     await db.query("INSERT INTO brand_source(brand_id,channel,region,url,enabled) VALUES($1,'amazon','US',$2,true)", [id, out.directories[0]!.url]);
@@ -49,6 +50,10 @@ describe.skipIf(!address)('standalone Brand importer on isolated Mini PostgreSQL
     out.cleanup.status = 'closed'; await db.query('INSERT INTO brand(name) VALUES($1)', [out.seed!.name]);
     await expect(importer.apply(out)).rejects.toThrow('BRAND_NAME_CONFLICT');
     expect((await db.query('SELECT count(*)::int n FROM brand WHERE id=$1', [importedBrandId(out)])).rows[0].n).toBe(0);
+  });
+  it('does not bind a wrongly associated legacy company to a different actual product brand', async () => {
+    const out = example(), id = randomUUID(); out.seed!.candidate.existingBrandIds = [id]; out.seed!.candidate.existingBrandNames = ['MaryRuth']; out.seed!.name = 'NaturesPlus';
+    await expect(importer.apply(out)).rejects.toThrow('BRAND_NAME_REQUIRES_REVIEW');
   });
   it('uses only the existing Brand schema, leaving product/Temporal state absent', async () => {
     expect((await db.query("SELECT to_regnamespace('brand_entry') n,to_regclass('amazon_queue_item') q")).rows).toEqual([{ n: null, q: null }]);

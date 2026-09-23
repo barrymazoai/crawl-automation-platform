@@ -10,6 +10,10 @@ describe('Brand seed and directory identity', () => {
   it.each(['https://amazon.com.evil.test/stores/x', 'https://user:secret@www.amazon.com/stores/x', 'http://www.amazon.com/stores/x', 'https://www.amazon.com:444/stores/x'])('rejects a foreign or unsafe address %s', url => expect(() => amazonEntryUrl(url)).toThrow('BRAND_ENTRY.URL'));
   it('does not turn a seller or search URL into a Store', () => expect(() => seedBrand(html('/s?rh=p_4%3AHerbPharm'), asin, `https://www.amazon.com/dp/${asin}`)).toThrow('STORE_LINK_UNVERIFIED'));
   it('rejects a different actual ASIN even when requested URL looks correct', () => expect(() => seedBrand(html().replace(`value="${asin}"`, 'value="B000000001"'), asin, `https://www.amazon.com/dp/${asin}`)).toThrow('PRODUCT_IDENTITY'));
+  it('accepts the observed clp canonical form only when its ASIN agrees with the product inputs', () => {
+    expect(seedBrand(html().replace(`/dp/${asin}`, `/clp/${asin}`), asin, `https://www.amazon.com/dp/${asin}`).name).toBe('Herb Pharm');
+    expect(() => seedBrand(html().replace(`/dp/${asin}`, '/clp/B000000001'), asin, `https://www.amazon.com/dp/${asin}`)).toThrow('PRODUCT_IDENTITY');
+  });
   it('rejects missing byline and challenge responses', () => {
     expect(() => seedBrand(html().replace('id="bylineInfo"', ''), asin, `https://www.amazon.com/dp/${asin}`)).toThrow('BRAND_LINK_MISSING');
     expect(() => seedBrand('Robot Check', asin, `https://www.amazon.com/dp/${asin}`)).toThrow('ACCESS_CHALLENGE');
