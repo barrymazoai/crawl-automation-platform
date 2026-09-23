@@ -92,7 +92,7 @@ export async function discover(api: EgoApi, configFile: string, raw: unknown): P
       // one navigation after this evaluation returns so Fetch can be read and
       // continued without deadlocking a goto/Page.navigate completion waiter.
       await page.evaluate((href: string) => { setTimeout(() => { location.href = href; }, 0); }, url);
-      let original: ObjectProof | null = null, finalUrl = url, capturedAt = '', status = 0, redirects = 0;
+      let original: ObjectProof | null = null, finalUrl = url, responseUrl = url, capturedAt = '', status = 0, redirects = 0;
       const navigationDeadline = Math.min(deadline, Date.now() + 45000);
       while (!original && Date.now() < navigationDeadline) {
         if (task.ownership !== 'agent') throw Error('BRAND_ENTRY.USER_CONTROL');
@@ -100,6 +100,7 @@ export async function discover(api: EgoApi, configFile: string, raw: unknown): P
         for (const event of events) {
           if (event.method !== 'Fetch.requestPaused') continue;
           const p = event.params;
+          responseUrl = p.request.url;
           finalUrl = storeEntryUrl(p.request.url);
           status = p.responseStatusCode;
           if (status >= 300 && status < 400) {
@@ -120,7 +121,7 @@ export async function discover(api: EgoApi, configFile: string, raw: unknown): P
           if (!bytes.length || bytes.length > 6 * 1024 * 1024) throw Error('BRAND_ENTRY.HTML_LIMIT');
           capturedAt = new Date().toISOString();
           original = await retain(`${prefix}/original.html`, bytes, 'text/html');
-          await retain(`${prefix}/original.json`, Buffer.from(JSON.stringify({ url: finalUrl, requestedUrl: url, capturedAt, status, original,
+          await retain(`${prefix}/original.json`, Buffer.from(JSON.stringify({ url: responseUrl, normalizedUrl: finalUrl, requestedUrl: url, capturedAt, status, original,
             representation: 'fetch-response-base64', contentType })), 'application/json');
           await page.cdp('Fetch.continueResponse', { requestId: p.requestId });
           // Interception is task-target-local and ends as soon as the required body is retained.
@@ -131,7 +132,7 @@ export async function discover(api: EgoApi, configFile: string, raw: unknown): P
         if (!original) await new Promise(r => setTimeout(r, 100));
       }
       if (!original) throw Error('BRAND_ENTRY.RAW_BODY_MISSING');
-      await page.waitForFunction((expected: string) => location.href === expected && document.readyState !== 'loading', finalUrl, { timeout: bounded() });
+      await page.waitForFunction((expected: string) => location.href === expected && document.readyState !== 'loading', responseUrl, { timeout: bounded() });
       if (storeEntryUrl(await page.url()) !== finalUrl) throw Error('BRAND_ENTRY.REDIRECT_UNVERIFIED');
       const snapshotText: string = await page.snapshot({ scope: 'full_page' });
       const data = await page.evaluate(() => ({ title: document.title,
