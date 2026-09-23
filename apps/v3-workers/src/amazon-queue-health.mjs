@@ -53,7 +53,7 @@ try {
       const windows=ps(String.raw`$mem=Get-CimInstance Win32_PerfFormattedData_PerfOS_Memory
 $cpu=Get-CimInstance Win32_PerfFormattedData_PerfOS_Processor -Filter "Name='_Total'"
 $s=Get-Content 'D:\crawlv3-cloud\private\cloud-status.json' -Raw|ConvertFrom-Json
-[pscustomobject]@{availableGiB=([double]$mem.AvailableMBytes/1024);cpuPercent=[double]$cpu.PercentProcessorTime;running=@($s.workers|Where-Object {$_.state -eq 'running'}).Count;stopping=[bool]$s.stopping;at=(Get-Date).ToUniversalTime().ToString('o')}|ConvertTo-Json -Compress`);
+[pscustomobject]@{availableGiB=([double]$mem.AvailableMBytes/1024);cpuPercent=[double]$cpu.PercentProcessorTime;running=@($s.workers|Where-Object {$_.state -eq 'running'}).Count;stopping=[bool]$s.stopping;statusAt=$s.updatedAt;liveProcesses=@(Get-Process -Id (@([int]$s.supervisorPid)+@($s.workers|ForEach-Object {[int]$_.pid})) -ErrorAction SilentlyContinue).Count;at=(Get-Date).ToUniversalTime().ToString('o')}|ConvertTo-Json -Compress`);
       miniHighSince=mini.cpuPercent>75?(miniHighSince??now):null;
       windowsHighSince=windows.cpuPercent>75?(windowsHighSince??now):null;
       const reasons=[];
@@ -62,7 +62,9 @@ $s=Get-Content 'D:\crawlv3-cloud\private\cloud-status.json' -Raw|ConvertFrom-Jso
       if(windows.availableGiB<8)reasons.push('WINDOWS_MEMORY');
       if(mini.swapMinuteGrowthMiB>512)reasons.push('MINI_SWAP_GROWTH');
       if((miniHighSince&&now-miniHighSince>=30000)||(windowsHighSince&&now-windowsHighSince>=30000))reasons.push('SUSTAINED_CPU');
-      if(windows.running!==2||windows.stopping)reasons.push('WINDOWS_WORKERS');
+      if(windows.running!==2||windows.stopping||windows.liveProcesses!==3)reasons.push('WINDOWS_WORKERS');
+      const windowsStatusAge=Date.now()-Date.parse(windows.statusAt);
+      if(!Number.isFinite(windowsStatusAge)||windowsStatusAge< -5000||windowsStatusAge>45000)reasons.push('WINDOWS_STATUS_STALE');
       const fleet=read(root+'/status.json');
       if(Date.now()-Date.parse(fleet.at)>25000||fleet.jobs.filter(j=>j.ready).length!==m.jobs.length||!fleet.dependencies.every(d=>d.healthy))reasons.push('FLEET_HEALTH');
       const capacities=(await db.query('SELECT healthy,health_until FROM resource_capacity WHERE resource_id=ANY($1)',[m.resources.map(r=>r.resourceId)])).rows;
