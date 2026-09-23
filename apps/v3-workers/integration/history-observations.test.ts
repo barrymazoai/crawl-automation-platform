@@ -11,6 +11,8 @@ import {labelProductFixture} from "../../../packages/v3-product/src/label-produc
 import {labelCollectedHash} from "@crawl-automation/v3-product";
 import {purchaseFixture} from '../../../packages/v3-channels/src/purchase-conditions.fixture.js';
 import {productServiceMaterial} from '../../v3-api/src/history/product-service.js';
+import {amazonFixture} from '../../../packages/v3-channels/src/amazon-live.fixture.js';
+import {AmazonHtmlArchive} from '../../../packages/v3-channels/src/amazon-html-archive.js';
 
 const address=process.env.V3_HISTORY_TEST_URL,s=()=>AbortSignal.timeout(10000);
 describe.skipIf(!address)("Mini capture history integration",()=>{
@@ -107,6 +109,26 @@ describe.skipIf(!address)("Mini capture history integration",()=>{
   const saved=(await db.query("SELECT record FROM product_history_source WHERE source_key=$1",['purchase-conditions'])).rows[0].record;
   expect(saved.metrics.extras.purchaseConditions).toEqual(conditions);expect(saved).toEqual(captured);
   const output=productServiceMaterial(convertHistoryInput(saved));expect((output.metrics[0] as any).items[0].extras.purchaseConditions).toEqual(conditions);
+ });
+ it('persists original Amazon HTML and qualified sales through database readback, rejecting corrupt originals',async()=>{
+  const f=amazonFixture(),job=await f.job(),archive=new AmazonHtmlArchive(f.publication,job);
+  const html=Buffer.from('<html><div id="socialProofingAsinFaceout_feature_div">1K+ bought in past month</div></html>');
+  const original=await archive.save(html,s(),{capturedAt:f.product.capturedAt});
+  const salesVolume={text:'1K+ bought in past month',lowerBound:'1000',approximate:true,period:'past_month',selector:'#socialProofingAsinFaceout_feature_div'};
+  Object.assign(f.product,{originalHtml:original.source,commerce:{codec:'public-product-commerce/1',sku:null,price:'$7.99',currency:'USD',listPrice:null,rating:null,reviewCount:null,availability:'In Stock',context:[],salesVolume,priceStatus:'observed'}});
+  const capture=await f.live.capture(job,s());for(const [key,bytes] of f.remote.data)remote.data.set(key,bytes);
+  const result=await history.channel(capture.sourcePlan,s()),id=capture.sourcePlan.owner.observationId;
+  expect(result.evidence).toContainEqual({objectKey:original.source.objectKey,sha256:sha256(html)});
+  expect(result.metrics).toMatchObject({price:'7.99',unitsSold:'1000',unitsSoldPeriod:'trailing_30d'});
+  const saved=(await db.query('SELECT record FROM product_history_source WHERE source_key=$1',[id])).rows[0].record;
+  expect(saved).toEqual(result);expect(saved.metrics.extras.salesVolume).toEqual(salesVolume);
+  const receipt=`v3/history-observations/${hash(['v3:amazon',id])}/capture.json`;
+  expect(await history.replay(receipt,s())).toEqual({inserted:false});
+  const count=(await db.query('SELECT count(*)::int n FROM product_history_source')).rows[0].n;
+  remote.data.set(original.source.objectKey,Buffer.from('corrupted'));
+  await expect(history.channel(capture.sourcePlan,s())).rejects.toThrow('HISTORY.EVIDENCE_CONFLICT');
+  expect((await db.query('SELECT count(*)::int n FROM product_history_source')).rows[0].n).toBe(count);
+  remote.data.set(original.source.objectKey,html);
  });
  it("reads only the exact GNC SKU offer from retained HTML",async()=>{
   const owner={schemaVersion:1,requestId:"gnc-metric",observationId:"gnc-metric",brandId:"brand",sourceId:"source",listingId:"123456",variantId:null};
