@@ -2,6 +2,7 @@ import { z } from "zod";
 import { CodexModelSettingsSchema, type CodexModelSettings } from "@crawl-automation/v3-contracts";
 import type { CodexRpc } from "./codex-rpc.js";
 import { TextError } from "./errors.js";
+import { executionProvider, OPENAI_NO_RETRY } from "./provider-id.js";
 
 const token = z.string().min(1).max(200);
 const model = z.object({
@@ -13,6 +14,8 @@ const model = z.object({
 });
 const page = z.object({ data: z.array(model).max(100), nextCursor: z.string().min(1).max(4096).nullable() });
 const effectiveConfig = z.object({ config: z.object({ model_provider: CodexModelSettingsSchema.shape.provider,
+  openai_base_url: z.unknown().optional(),
+  model_providers: z.record(z.string(), z.record(z.string(), z.unknown())).optional(),
   mcp_servers: z.record(z.string(), z.object({ enabled: z.boolean().optional() })).optional() }) });
 
 /** Read-only preflight on an initialized, exclusively owned connection.
@@ -25,8 +28,17 @@ export async function assertCodexModel(rpc: Pick<CodexRpc, "request">, raw: Code
     const settings = CodexModelSettingsSchema.parse(raw);
     signal.throwIfAborted();
     const config = effectiveConfig.parse(await rpc.request("config/read", { includeLayers: false, cwd }, signal));
-    if (config.config.model_provider !== settings.provider)
+    if (config.config.model_provider !== executionProvider(settings.provider))
       throw new TextError("TEXT.CODEX_CATALOG_PROVIDER_MISMATCH", "not_executed");
+    if (settings.provider === "openai") {
+      const p = config.config.model_providers?.[OPENAI_NO_RETRY];
+      if (!p || p.name !== "OpenAI" || p.wire_api !== "responses" || p.requires_openai_auth !== true ||
+          p.supports_websockets !== false || p.request_max_retries !== 0 || p.stream_max_retries !== 0 ||
+          config.config.openai_base_url != null ||
+          ["base_url", "env_key", "experimental_bearer_token", "auth", "aws", "query_params", "http_headers", "env_http_headers"]
+            .some(key => p[key] != null))
+        throw new TextError("TEXT.CODEX_NO_RETRY_PROFILE", "not_executed");
+    }
     if (Object.values(config.config.mcp_servers ?? {}).some(server => server.enabled !== false))
       throw new TextError("TEXT.CODEX_RUNTIME_PROFILE", "not_executed");
 

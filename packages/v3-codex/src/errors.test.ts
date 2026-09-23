@@ -34,10 +34,12 @@ function fakeRpc(fail: (notify: (method: string, params: unknown) => void) => vo
     onNotification: (l: (m: { method?: string; params?: unknown }) => void) => { listeners.add(l); return () => listeners.delete(l); },
     close: async () => {},
     request: async (method: string) => {
-      if (method === "config/read") return { config: { model_provider: "openai", mcp_servers: {} } };
+      if (method === "config/read") return { config: { model_provider: "crawler_openai_no_retry", mcp_servers: {}, model_providers: {
+        crawler_openai_no_retry: { name: "OpenAI", wire_api: "responses", requires_openai_auth: true, supports_websockets: false, request_max_retries: 0, stream_max_retries: 0 }
+      } } };
       if (method === "model/list") return { data: [{ id: "m", model: "gpt-5.6-luna", supportedReasoningEfforts: [{ reasoningEffort: "medium" }],
         inputModalities: ["text", "image"] }], nextCursor: null };
-      if (method === "thread/start") return { thread: { id: "t1" }, model: "gpt-5.6-luna", modelProvider: "openai", cwd: "/w",
+      if (method === "thread/start") return { thread: { id: "t1" }, model: "gpt-5.6-luna", modelProvider: "crawler_openai_no_retry", cwd: "/w",
         approvalPolicy: "never", sandbox: { type: "readOnly" }, reasoningEffort: "medium" };
       if (method === "turn/start") { setTimeout(() => fail(notify), 0); return { turn: { id: "u1" } }; }
       throw Error("unexpected " + method);

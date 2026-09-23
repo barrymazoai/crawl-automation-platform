@@ -2,6 +2,7 @@ import { isAbsolute } from "node:path";
 import { z } from "zod";
 import { CodexModelSettingsSchema, VersionTagSchema } from "@crawl-automation/v3-contracts";
 import { CodexRpc } from "./codex-rpc.js";
+import { executionProvider, OPENAI_NO_RETRY } from "./provider-id.js";
 
 export const CodexExecutionConfigSchema = z.strictObject({
   settings: CodexModelSettingsSchema,
@@ -27,18 +28,22 @@ const inherited = ["PATH", "SystemRoot", "SYSTEMROOT", "WINDIR", "TEMP", "TMP", 
   "SSL_CERT_FILE", "SSL_CERT_DIR", "NODE_EXTRA_CA_CERTS"];
 
 export function codexConnection(config: CodexExecutionConfig, cwd: string, environment: NodeJS.ProcessEnv): CodexConnectionOptions {
+  const provider = executionProvider(config.settings.provider);
   const env: NodeJS.ProcessEnv = {};
   for (const key of inherited) if (environment[key] !== undefined) env[key] = environment[key];
   // Never pass business DB/R2 secrets or inherit the user's working repository.
   env.HOME = cwd;
   env.CODEX_HOME = config.codexHome;
   return { executable: config.executable, cwd, env, args: ["app-server", "--stdio",
-    "-c", `model_provider=${JSON.stringify(config.settings.provider)}`, "-c", 'web_search="disabled"',
+    "-c", `model_provider=${JSON.stringify(provider)}`, "-c", 'web_search="disabled"',
     // Empty tables merge with user config, so explicitly disable every configured server.
     // The effective-config preflight rejects an omitted/new enabled server before any turn.
     ...(config.disabledMcpServers ?? []).flatMap(name => ["-c", `mcp_servers.${name}.enabled=false`]),
-    "-c", `model_providers.${config.settings.provider}.request_max_retries=0`,
-    "-c", `model_providers.${config.settings.provider}.stream_max_retries=0`,
+    // HTTP-only prevents a failed WebSocket connection from falling back to HTTP.
+    // The preflight rejects inherited endpoint/auth/header overrides on this ID.
+    ...(config.settings.provider === "openai" ? ["-c", `model_providers.${OPENAI_NO_RETRY}={name="OpenAI",wire_api="responses",requires_openai_auth=true,supports_websockets=false,request_max_retries=0,stream_max_retries=0}`] : [
+      "-c", `model_providers.${provider}.request_max_retries=0`,
+      "-c", `model_providers.${provider}.stream_max_retries=0`]),
     "-c", "project_doc_max_bytes=0", "-c", "tools.view_image=false",
     // History persistence controls history.jsonl. thread/start ephemeral=true controls
     // the task transcript; neither setting caps the diagnostic SQLite database.
