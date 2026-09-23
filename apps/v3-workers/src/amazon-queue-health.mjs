@@ -7,6 +7,7 @@ import {setTimeout as delay} from 'node:timers/promises';
 import pg from 'pg';
 import {Client,Connection} from '@temporalio/client';
 import {inspectClosedBatchPermits,recoverClosedBatchPermits} from './amazon-queue-recovery.mjs';
+import {recoverOnce} from './recovery-attempt.mjs';
 const read=p=>JSON.parse(fs.readFileSync(p,'utf8'));
 const config=read(process.argv[2]),{root,out,healthFile,connectionFile,windowsSsh}=config;
 const exec=promisify(execFile),stop=new AbortController();
@@ -31,9 +32,14 @@ try {
       if(recovery.pause)publish({canStart:false,reasons:['FAILED_EXECUTION_CLEANUP'],recovery:{recover:recovery.recover,reason:recovery.reason}});
       if(recovery.recover){
         report({event:'FAILED_EXECUTION_CLEANUP_STARTED',permits:recovery.permits.length});
-        lastRecovery=await recoverClosedBatchPermits({snapshot:recovery,db,client,root,out,m,ps});
-        report({event:'FAILED_EXECUTIONS_RECLAIMED',...lastRecovery});
-        continue;
+        const attempt=await recoverOnce({out,permits:recovery.permits,run:id=>recoverClosedBatchPermits({snapshot:recovery,db,client,root,out,m,ps,id})});
+        if(attempt.status==='blocked'){
+          publish({canStart:false,reasons:['CLEANUP_FAILED_MANUAL_REQUIRED'],recovery:attempt});
+          report({event:'CLEANUP_FAILED_MANUAL_REQUIRED',...attempt});
+          await delay(10000,undefined,{signal:stop.signal}).catch(e=>{if(!stop.signal.aborted)throw e;});
+          continue; // Only re-read ownership on the next tick; never repeat cleanup.
+        }
+        lastRecovery=attempt.result;report({event:'FAILED_EXECUTIONS_RECLAIMED',...lastRecovery});continue;
       }
       const now=Date.now(),current=ticks(),delta=current.total-previous.total;
       const mini={cpuPercent:delta?100*(1-(current.idle-previous.idle)/delta):0};previous=current;

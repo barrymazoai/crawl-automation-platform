@@ -59,7 +59,7 @@ it.each([
 it.each(["function_call", "custom_tool_call", "local_shell_call", "web_search_call", "tool_search_call", "unknown_future_item"])("does not police internal raw response items: %s", async type => {
     expect(await runCodexTextTurn(rpc(`raw-${type}`), input, AbortSignal.timeout(3000))).toContain('"formula"');
 });
-it.each(["internal-recovery", "tool"])("waits for the final result through internal events: %s", async scenario => {
+it.each(["tool"])("waits for the final result through non-error internal events: %s", async scenario => {
     expect(await runCodexTextTurn(rpc(scenario), input, AbortSignal.timeout(3000))).toContain('"formula"');
 });
 it("still enforces the overall execution deadline during internal recovery", async () => {
@@ -67,4 +67,8 @@ it("still enforces the overall execution deadline during internal recovery", asy
 });
 it("rejects a reported model reroute instead of accepting another model's answer", async () => {
     await expect(runCodexTextTurn(rpc("rerouted"), input, AbortSignal.timeout(3000))).rejects.toThrow("TEXT.CODEX_CONFIG_MISMATCH");
+});
+
+it.each(["internal-recovery","internal-hang"])("the first error closes the child without accepting subsequent output: %s",async scenario=>{
+ await expect(runCodexTextTurn(rpc(scenario),input,AbortSignal.timeout(3000))).rejects.toMatchObject({code:"TEXT.CODEX_TURN_FAILED",detail:"Internal recovery"});
 });

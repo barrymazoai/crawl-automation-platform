@@ -19,7 +19,7 @@ export function textPrompt(input: TextInput, fullText: string) {
 export class TextModule {
     constructor(private readonly deps: TextDependencies) {
         const p = deps.provider.policy;
-        if (p.executionRetries !== 0 || p.internalModelRequests !== "codex-managed" || p.toolAccess !== "runtime-profile" || p.modelFallback !== false || p.networkSwitching !== false)
+        if (p.executionRetries !== 0 || p.internalModelRequests !== "no-retries" || p.toolAccess !== "runtime-profile" || p.modelFallback !== false || p.networkSwitching !== false)
             throw new TextError("TEXT.PROVIDER_POLICY", "not_executed");
     }
     async run(raw: unknown, signal: AbortSignal): Promise<TextActivityOutcome> {

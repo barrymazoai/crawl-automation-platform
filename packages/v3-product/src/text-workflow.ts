@@ -12,7 +12,8 @@ export async function PreparedTextWorkflow(raw: unknown, gate: <T>(name:string, 
   const text = proxyActivities<{ interpretText(input: TextInput): Promise<unknown> }>(textActivityOptions(queues.text));
   const receipts = proxyActivities<{ resolveTextReceipt(input: TextReceiptInput): Promise<unknown> }>(textActivityOptions(queues.receipts));
   let outcome: TextActivityOutcome | null = null;
-  const hardened=patched("model-activity-hardening-v1")?{heartbeatTimeout:"60 seconds" as const,retry:{maximumAttempts:2}}:{};
+  const hardening=patched("model-activity-hardening-v1"),singleAttempt=patched("no-automatic-retries-v1");
+  const hardened=hardening?{heartbeatTimeout:"60 seconds" as const,retry:{maximumAttempts:singleAttempt?1:2}}:{};
   try { outcome = TextActivityOutcomeSchema.parse(await gate("interpretText",binding=>binding?proxyActivities<{interpretText(input:TextInput):Promise<unknown>}>({...textActivityOptions(queues.text),...hardened,...binding}).interpretText(task):text.interpretText(task))); }
   catch (error) {
     if (isCancellation(error) || propagateAdmissionFailure && error instanceof ApplicationFailure &&

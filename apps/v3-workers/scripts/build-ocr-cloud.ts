@@ -34,6 +34,8 @@ await build({...common,outDir:base+'/tests',external:[...common.external,'vitest
  'amazon-catalog-workflow.test':'../../packages/v3-product/src/amazon-catalog-workflow.test.ts',
  'amazon-product-jobs.test':'../../packages/v3-product/src/amazon-product-jobs.test.ts',
  'cache-janitor.test':'src/cache-janitor.test.ts',
+ 'r2.test':'../../packages/v3-artifacts/src/r2.test.ts',
+ 'codex-turn.test':'../../packages/v3-text/src/codex.test.ts',
  'codex-errors.test':'../../packages/v3-codex/src/errors.test.ts',
  'codex-connection.test':'../../packages/v3-codex/src/connection.test.ts',
  'codex-provider.test':'../../packages/v3-text/src/codex-provider.test.ts',
@@ -54,6 +56,7 @@ await build({...common,outDir:base+'/amazon',entry:['src/amazon-live-worker.ts']
 await build({...common,outDir:base+'/queue',entry:['src/amazon-queue-cli.ts']});
 await cp('src/amazon-queue-health.mjs',base+'/queue/amazon-queue-health.mjs');
 await cp('src/amazon-queue-recovery.mjs',base+'/queue/amazon-queue-recovery.mjs');
+await cp('src/recovery-attempt.mjs',base+'/queue/recovery-attempt.mjs');
 for (const dir of ['web','queue','tests']) await cp('../../database/v3',base+'/'+dir+'/migrations',{recursive:true});
 // Config schema as a library, so the Mini rollout script can validate the rewritten Amazon private config before binding it.
 await build({...common,outDir:base+'/amazon-config',entry:{'amazon-live-config':'src/amazon-live-config.ts','deployment-supervisor':'src/deployment-supervisor.ts','ocr-http':'../../packages/v3-ocr/src/http.ts','capture-probe':'scripts/capture-probe.ts'}});

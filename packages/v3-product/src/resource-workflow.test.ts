@@ -103,7 +103,11 @@ it("independent concurrent activities get different permits",async()=>{
   const gate=resourceGate(config);await Promise.all([gate("ocr",async()=>1),gate("ocr",async()=>2)]);
   expect(new Set(env.reserve.mock.calls.map(c=>c[0].permitId)).size).toBe(2);
 });
-it("retries only idempotent control operations",async()=>{
+it("new executions never retry a control operation",async()=>{
+  await resourceGate(config)("ocr",async()=>0);expect(env.options).toHaveBeenCalledWith(expect.objectContaining({retry:{maximumAttempts:1}}));
+});
+it("replays the old control policy only for old histories",async()=>{
+  env.patched.mockReturnValue(false);
   await resourceGate(config)("ocr",async()=>0);expect(env.options).toHaveBeenCalledWith(expect.objectContaining({retry:{maximumAttempts:3}}));
 });
 it.each(["foreign","released"])("rejects %s admission without starting provider",async mode=>{

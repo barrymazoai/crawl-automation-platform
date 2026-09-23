@@ -19,11 +19,11 @@ export interface ChannelSourceProgress {
 export async function runChannelLabelWorkflow(raw:unknown,progress?:ChannelSourceProgress){
   const {input,queues,resources}=ChannelSavedLabelWorkflowInputSchema.parse(raw),owner=input.sourcePlan.owner,gate=resourceGate(resources,{requireReviewStop:input.evidencePolicy==="label-image-first/5"});
   const skipUnstarted=patched("channel-resource-wait-no-receipt-v1"),waitingSources:string[]=[],quarantinedSources:string[]=[];
-  // Model/OCR calls: a 10 s heartbeat window was lost to a single CPU stall on a cloud worker; 60 s tolerates it, and one
-  // retry lets the task move to another worker (results are idempotent per operation, so a duplicate attempt only costs a call).
-  const hardened=patched("model-activity-hardening-v1");
+  // Keep the heartbeat tolerance, but never schedule a second execution after any error.
+  // Preserve the previous options only when replaying histories predating this policy.
+  const hardened=patched("model-activity-hardening-v1"),singleAttempt=patched("no-automatic-retries-v1");
   const optionsFor=(queue:string,name:string)=>{const base=name==="ocrFile"?ocrActivityOptions(queue):imageActivityOptions(queue);
-    return hardened&&["ocrFile","interpretImage"].includes(name)?{...base,heartbeatTimeout:"60 seconds" as const,retry:{maximumAttempts:2}}:base;};
+    return hardened&&["ocrFile","interpretImage"].includes(name)?{...base,heartbeatTimeout:"60 seconds" as const,retry:{maximumAttempts:singleAttempt?1:2}}:base;};
   const call=(queue:string,name:string,value:unknown)=>gate(name,binding=>proxyActivities<Record<string,(raw:unknown)=>Promise<unknown>>>(
     {...optionsFor(queue,name),...binding})[name]!(value));
   const loaded=ChannelLabelPlanResultSchema.parse(await call(queues.plan,"loadChannelLabelPlan",input));

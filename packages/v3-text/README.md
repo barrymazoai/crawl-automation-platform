@@ -24,7 +24,7 @@
 
 一次业务 operation 只启动一次 Codex 执行；Codex 内部模型请求次数和内部续调由 Codex 自己管理，不作为业务失败依据，也不要求底层请求只能一次。业务层负责并发、总超时/取消、结果校验、证据保存和交接，失败或状态未知不另起执行盲目重跑。工具权限与模型配置独立按模块职责约束，不沿用旧代码的宽权限开关。
 
-代码现已按此边界调整：`executionRetries: 0` 只约束外层重开，`internalModelRequests: "codex-managed"` 明确内部归 Codex 管理，`toolAccess: "runtime-profile"` 分离权限。原始内部事件不再触发次数类失败；`willRetry=true` 等待内部恢复，成功完成后读取最后一条最终消息。总超时、模型匹配、连接异常和明确的客户端授权请求仍单独处理。
+2026-09-23 更新：`executionRetries: 0` 和 `internalModelRequests: "no-retries"` 同时禁止外层及 Codex 请求/流重试。第一个 error（包括 `willRetry=true`）即失败并关闭本次拥有的子进程；普通非错误通知仍可等待最终结果。超时、模型匹配和权限约束保持。
 
 最新主流程增量：`CodexTextProvider` 与[独立业务 Worker](../../apps/v3-workers/TEXT_WORKER.md)已实现，本地隔离链路已通过；不是生产部署或真实模型验收。历史[预检报告](../../docs/plane/evidence/CRAWLV3-21/PREFLIGHT.md)中的严格单请求准入结论已被用户撤销。
 

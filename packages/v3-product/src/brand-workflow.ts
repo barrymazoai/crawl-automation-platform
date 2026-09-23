@@ -4,10 +4,12 @@ import { CollectionWorkflowInput,BrandCollectionPlanSchema,BrandCollectionProgre
 export async function BrandCollectionWorkflow(raw:unknown){
   const input=CollectionWorkflowInput.parse(raw),info=workflowInfo();
   if(info.workflowId!==`v3-collection-${input.requestId}`)throw ApplicationFailure.nonRetryable("Invalid intake root","BRAND.IDENTITY");
-  // Progress inspection is a read-only, idempotent ledger query: a Temporal/DB/proxy blip must not fail the
-  // whole intake root after two minutes (which is what stalled the 350-product campaign on 09-14).
+  // Normal progress polling may continue; a failed Activity is never retried.
+  // Historical retry options remain only for deterministic replay.
   const resilient=patched("brand-inspect-retry-v1");
-  const ports=proxyActivities<{prepareBrandCollection(raw:unknown):Promise<unknown>;inspectBrandCollection(raw:unknown):Promise<unknown>}>(resilient
+  const ports=proxyActivities<{prepareBrandCollection(raw:unknown):Promise<unknown>;inspectBrandCollection(raw:unknown):Promise<unknown>}>(patched("no-automatic-retries-v1")
+    ?{taskQueue:info.taskQueue,startToCloseTimeout:"30 seconds",scheduleToCloseTimeout:"2 minutes",retry:{maximumAttempts:1}}
+    :resilient
     ?{taskQueue:info.taskQueue,startToCloseTimeout:"30 seconds",scheduleToCloseTimeout:"6 hours",retry:{initialInterval:"5 seconds",maximumInterval:"2 minutes",backoffCoefficient:2}}
     :{taskQueue:info.taskQueue,startToCloseTimeout:"30 seconds",scheduleToCloseTimeout:"2 minutes",retry:{maximumAttempts:3}});
   const plan=BrandCollectionPlanSchema.parse(await ports.prepareBrandCollection(input));

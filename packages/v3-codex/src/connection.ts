@@ -17,7 +17,7 @@ export type CodexConnectionOptions = ConstructorParameters<typeof CodexRpc>[0];
 export type CodexConnectionFactory = (options: CodexConnectionOptions) => CodexRpc;
 
 // This text-only profile does not grant command, browser, external app or environment access.
-// No request/stream retry overrides: Codex manages its internal request lifecycle.
+// Disable request and stream retries inside Codex as well as in Temporal.
 const disabled = ["shell_tool", "unified_exec", "shell_snapshot", "apps", "browser_use", "browser_use_external",
   "computer_use", "code_mode", "code_mode_host", "multi_agent", "multi_agent_v2", "hooks", "plugin_hooks",
   "plugins", "remote_plugin", "memories", "goals", "image_generation", "view_image",
@@ -37,6 +37,8 @@ export function codexConnection(config: CodexExecutionConfig, cwd: string, envir
     // Empty tables merge with user config, so explicitly disable every configured server.
     // The effective-config preflight rejects an omitted/new enabled server before any turn.
     ...(config.disabledMcpServers ?? []).flatMap(name => ["-c", `mcp_servers.${name}.enabled=false`]),
+    "-c", `model_providers.${config.settings.provider}.request_max_retries=0`,
+    "-c", `model_providers.${config.settings.provider}.stream_max_retries=0`,
     "-c", "project_doc_max_bytes=0", "-c", "tools.view_image=false",
     // History persistence controls history.jsonl. thread/start ephemeral=true controls
     // the task transcript; neither setting caps the diagnostic SQLite database.

@@ -39,12 +39,12 @@ export async function inspectClosedBatchPermits({db,client,state}){
  const products=[],children=[];for(let i=0;i<discoveries.length;i+=6)await Promise.all(discoveries.slice(i,i+6).map(async d=>{const s=await client.workflow.getHandle(d.id).describe();products.push({workflowId:d.id,runId:s.runId,status:s.status.name});try{const c=await client.workflow.getHandle(d.id+'-label').describe();children.push({status:c.status.name});}catch(e){if(e.name!=='WorkflowNotFoundError')throw e;}}));
  return {...recoveryDecision(permits,[...products,...children]),permits,products};
 }
-export async function recoverClosedBatchPermits({snapshot,db,client,root,out,m,ps,auditOnly=false}){
+export async function recoverClosedBatchPermits({snapshot,db,client,root,out,m,ps,auditOnly=false,id=randomUUID()}){
  assert.equal(snapshot.recover,true);const read=p=>JSON.parse(fs.readFileSync(p)),save=(p,v)=>fs.writeFileSync(p,JSON.stringify(v,null,2),{mode:0o600});
  const amazon=m.jobs.find(j=>j.id==='amazon-capture');assert.equal(read(amazon.env.V3_AMAZON_LIVE_CONFIG).capture.mode,'scraperapi');
  const {defaultPayloadConverter}=createRequire(root+'/package.json')('@temporalio/common');
  const decode=p=>p?.payloads?.length===1?defaultPayloadConverter.fromPayload(p.payloads[0]):null;
- const id=randomUUID(),dir=out+'/failure-cleanup/'+id;fs.mkdirSync(dir,{recursive:true,mode:0o700});
+ assert.match(id,/^[a-f0-9-]{36}$/);const dir=out+'/failure-cleanup/'+id;fs.mkdirSync(dir,{recursive:true,mode:0o700});
  const permittedResources=new Set(['mini-cpu','mini-model-account','windows-ocr','scraperapi-lane','amazon-file-lane']);
  const queues=new Set(),affectedActivities=new Set(),facts=[];
  for(const p of snapshot.permits){assert.ok(p.request.needs.every(n=>permittedResources.has(n.resourceId)),'Unsupported resource must be inspected explicitly');
@@ -109,10 +109,15 @@ if($proof.ocr){
  $parent=@($all|Where-Object {$_.ExecutablePath -eq 'D:\ocr\python\python.exe' -and $_.CommandLine -match '\-m uvicorn ocr_server:app' -and $_.CommandLine -match '\-\-port 8081'})
  if($parent.Count -ne 1){throw 'OCR owner ambiguous'}
  $ids=@([int]$parent[0].ProcessId);for($i=0;$i -lt 12;$i++){$add=@($all|Where-Object {$ids -contains [int]$_.ParentProcessId -and $ids -notcontains [int]$_.ProcessId}|ForEach-Object {[int]$_.ProcessId});if(!$add.Count){break};$ids+=$add}
- if($ids.Count -ne 5 -or @($all|Where-Object {$ids -contains [int]$_.ProcessId -and $_.ExecutablePath -ne 'D:\ocr\python\python.exe'}).Count){throw 'OCR process tree changed'}
+ if($ids.Count -gt 32 -or @($all|Where-Object {$ids -contains [int]$_.ProcessId -and $_.ExecutablePath -ne 'D:\ocr\python\python.exe'}).Count){throw 'OCR process tree changed'}
  $proof.ocrStopRequested=$true;$proof.ocrPids=$ids;$proof|ConvertTo-Json -Depth 5|Set-Content ($dir+'\progress.json') -Encoding UTF8
  & "$env:WINDIR\System32\taskkill.exe" /PID $parent[0].ProcessId /T /F |Out-Null
- if($LASTEXITCODE -ne 0 -or @(Get-Process -Id $ids -ErrorAction SilentlyContinue).Count){throw 'OCR stop failed'}
+ $proof.ocrStopExitCode=$LASTEXITCODE
+ # One stop request. Process teardown is asynchronous: read-only absence checks
+ # determine completion, not taskkill's exit status or a single immediate sample.
+ $until=(Get-Date).AddSeconds(15)
+ do{$remaining=@(Get-Process -Id $ids -ErrorAction SilentlyContinue);if(!$remaining.Count){break};Start-Sleep -Milliseconds 200}while((Get-Date)-lt $until)
+ if($remaining.Count){throw 'OCR stop unconfirmed'}
  $proof.oldPids+=$ids
  $proof.ocrStopped=$true;$proof|ConvertTo-Json -Depth 5|Set-Content ($dir+'\progress.json') -Encoding UTF8
 }

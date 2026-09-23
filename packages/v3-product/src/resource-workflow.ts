@@ -23,8 +23,8 @@ export function resourceGate(raw: unknown, options:{requireReviewStop?:boolean}=
     const info = workflowInfo();
     const request: ResourceRequest = { permitId: `permit-${info.runId}-${sequence++}`, workflowId: info.workflowId, runId: info.runId, needs };
     const ports = proxyActivities<{ reserveResources(r: ResourceRequest): Promise<unknown>; releaseResources(r: ResourceRequest): Promise<unknown> }>({
-      // These are idempotent control-ledger calls, not provider/model retries.
-      taskQueue: config.queue, startToCloseTimeout: "10 seconds", scheduleToCloseTimeout: "45 seconds", retry: { maximumAttempts: 3 } });
+      // No automatic retry, including ledger writes; an unknown reply needs read-only reconciliation.
+      taskQueue: config.queue, startToCloseTimeout: "10 seconds", scheduleToCloseTimeout: "45 seconds", retry: { maximumAttempts: patched("no-automatic-retries-v1")?1:3 } });
     const until = Date.now() + config.maxWaitSeconds * 1000;
     const waitForCapacity = patched("resource-capacity-wait-v1");
     let unhealthySince: number | undefined;

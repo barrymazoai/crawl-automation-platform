@@ -12,10 +12,12 @@ export async function AmazonHistoryBatchWorkflow(raw:unknown):Promise<unknown>{
  const input=AmazonBatchInputSchema.parse(raw);
  if(workflowInfo().workflowId!==input.campaignId)throw ApplicationFailure.nonRetryable('Batch identity conflict','AMAZON.BATCH_IDENTITY');
  const call={campaignId:input.campaignId,manifestSha256:input.manifestSha256};
- // Control calls are idempotent (submission keyed by requestId; inspect/report read-only). A connectivity
- // blip must be retried for hours, not turned into a blocked campaign after six minutes.
+ // A failed control call blocks the campaign until an explicit operator action.
+ // Keep historical retry options only for deterministic replay.
  const longRetry=patched('batch-control-retry-v1');
- const a=proxyActivities<AmazonBatchActivities>(longRetry
+ const a=proxyActivities<AmazonBatchActivities>(patched("no-automatic-retries-v1")
+  ?{taskQueue:input.controlQueue,startToCloseTimeout:"3 minutes",scheduleToCloseTimeout:"6 minutes",heartbeatTimeout:"30 seconds",retry:{maximumAttempts:1}}
+  :longRetry
   ?{taskQueue:input.controlQueue,startToCloseTimeout:'3 minutes',scheduleToCloseTimeout:'6 hours',heartbeatTimeout:'30 seconds',retry:{initialInterval:'5 seconds',maximumInterval:'5 minutes',backoffCoefficient:2}}
   :{taskQueue:input.controlQueue,startToCloseTimeout:'3 minutes',scheduleToCloseTimeout:'6 minutes',heartbeatTimeout:'30 seconds',retry:{maximumAttempts:3,initialInterval:'5 seconds',maximumInterval:'20 seconds'}});
  let paused=false,completedThisRun=0,stopAfter=input.stopAfter??null;

@@ -61,11 +61,11 @@ describe("a failed turn keeps its reason", () => {
     })).catch(e => e);
     expect(error).toMatchObject({ code: "TEXT.CODEX_TURN_FAILED", detail: "database is locked" });
   });
-  it("and an internal retry is still not a failure", async () => {
+  it("an internal retry notification ends the call immediately", async () => {
     const error = await turn(fakeRpc(n => {
       n("error", { threadId: "t1", willRetry: true, error: { message: "reconnecting" } });
       n("turn/completed", { threadId: "t1", turn: { id: "u1", status: "failed", error: { message: "gave up" } } });
     })).catch(e => e);
-    expect(error.detail).toBe("gave up");
+    expect(error.detail).toBe("reconnecting");
   });
 });

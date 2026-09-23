@@ -7,7 +7,7 @@ import { CodexTextProvider, codexTextConnection, type CodexConnectionOptions } f
 import { CodexRpc } from "./codex-rpc.js";
 const fixture = fileURLToPath(new URL("./codex.fixture.mjs", import.meta.url));
 const request = { operationId: "operation", prompt: "evidence", outputSchema: { type: "object" } };
-async function setup(scenario = "internal-recovery") {
+async function setup(scenario = "success") {
   const root = await mkdtemp(join(tmpdir(), "v3-codex-provider-"));
   const home = join(root, "auth"); await mkdir(home, { mode: 0o700 });
   const config = { settings: { provider: "fixture", model: "fixture-model", reasoningEffort: "high" },
@@ -24,7 +24,7 @@ it("runs multiple internal recoveries in one owned process and passes explicit s
   try {
     expect(await f.provider.interpret(request, AbortSignal.timeout(4000))).toContain('"formula"');
     expect(f.connections).toHaveLength(1);
-    expect(f.provider.policy).toMatchObject({ executionRetries: 0, internalModelRequests: "codex-managed" });
+    expect(f.provider.policy).toMatchObject({ executionRetries: 0, internalModelRequests: "no-retries" });
     expect(f.connections[0]!.env).toMatchObject({ ALL_PROXY: "http://existing-proxy" });
     expect(f.connections[0]!.env).not.toHaveProperty("R2_SECRET");
     expect(f.connections[0]!.args.join(" ")).not.toMatch(/retries|dangerously|danger-full-access/);

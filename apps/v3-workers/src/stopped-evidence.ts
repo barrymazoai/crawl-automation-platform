@@ -1,6 +1,5 @@
 import {randomUUID} from 'node:crypto';
 import {isDeepStrictEqual} from 'node:util';
-import {setTimeout as delay} from 'node:timers/promises';
 import {sha256,type RetainedPublication} from '@crawl-automation/v3-artifacts';
 
 export const resourceReturnKey=(c:{workflowId:string;runId:string;activityName:string;activityId:string})=>
@@ -29,7 +28,8 @@ export async function publishStoppedEvidence(publication:RetainedPublication,key
   if(Object.keys(c).sort().join(',')!=='key,nonce,sha256'||c.key!==key||c.sha256!==digest||typeof c.nonce!=='string'||!/^[a-f0-9-]{36}$/.test(c.nonce))conflict();return c;};
  await publication.retain(key,bytes,'application/json',lifetime);
  let stage='read-proof';
- for(let attempt=1;attempt<=3;attempt++){
+ {
+  const attempt=1;
   const started=Date.now();
   const io=()=>AbortSignal.any([lifetime,AbortSignal.timeout(8000)]);
   try{
@@ -51,8 +51,7 @@ export async function publishStoppedEvidence(publication:RetainedPublication,key
     code:/^(ARTIFACT|RESOURCE)\.[A-Z_]+$/.test(e.code??e.message??'')?(e.code??e.message):'RESOURCE.STOP_IO_UNKNOWN',
     name:/^[A-Za-z]{1,50}$/.test(e.name??'')?e.name:'Error',...(e.diagnostics?{io:e.diagnostics}:{})}));
    if(e.message==='RESOURCE.STOP_EVIDENCE_CONFLICT')throw error;
-   lifetime.throwIfAborted();if(attempt===3)throw Error('RESOURCE.STOP_PUBLICATION_UNAVAILABLE');
-   await delay(200,undefined,{signal:lifetime});
+   lifetime.throwIfAborted();throw Error('RESOURCE.STOP_PUBLICATION_UNAVAILABLE');
   }
  }
 }

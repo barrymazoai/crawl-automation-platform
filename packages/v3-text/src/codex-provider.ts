@@ -18,7 +18,7 @@ export type CodexTextConfig = z.infer<typeof CodexTextConfigSchema>;
 export class CodexTextProvider implements TextProvider {
   readonly provider = "codex-app-server/2";
   readonly supported;
-  readonly policy = Object.freeze({ executionRetries: 0 as const, internalModelRequests: "codex-managed" as const,
+  readonly policy = Object.freeze({ executionRetries: 0 as const, internalModelRequests: "no-retries" as const,
     toolAccess: "runtime-profile" as const, modelFallback: false as const, networkSwitching: false as const });
   private readonly active = new Set<CodexRpc>();
   private closed = false;

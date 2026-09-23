@@ -7,6 +7,8 @@ it("disables optional sleep without an unknown CLI switch and keeps the tool/sec
     "/private/work/one", { PATH: "/bin", HTTPS_PROXY: "http://127.0.0.1:7897", R2_SECRET: "not-in-child", DATABASE_URL: "not-in-child" });
   expect(c.args).toContain("features.sleep_tool=false");
   expect(c.args).toContain("analytics.enabled=false");
+  expect(c.args).toContain("model_providers.openai.request_max_retries=0");
+  expect(c.args).toContain("model_providers.openai.stream_max_retries=0");
   expect(c.args).toContain('history.persistence="none"');
   expect(c.args).toContain('mcp_servers.node_repl.enabled=false');
   expect(c.args).toContain('mcp_servers.computer-use.enabled=false');

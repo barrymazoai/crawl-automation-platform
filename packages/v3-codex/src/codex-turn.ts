@@ -49,7 +49,8 @@ export async function runCodexTurn(rpc: CodexRpc, input: {
                 if (params.threadId !== thread.thread.id)
                     return;
                 if (message.method === "error") {
-                    if (params.willRetry === true) return; // Codex's internal recovery, not a new business execution.
+                    // The first error is terminal even if an older app-server announces a retry.
+                    // The finally block closes the exact owned process before returning.
                     throw new TextError("TEXT.CODEX_TURN_FAILED", "unknown", describeCodexError(params.error ?? params.message));
                 }
                 if (message.method === "model/rerouted")
