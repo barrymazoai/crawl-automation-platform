@@ -1,5 +1,10 @@
 # Crawler V3 execution rules
 
+## Device identity and current work — 2026-09-23
+
+- Read [execution machines](docs/operations/machines.md) before connecting to a Mini or Windows host. The US primary Mini is `server@100.76.126.12`; Windows is `rc-workstation\barry@100.114.3.97`; the new Brand Mini is `server2@100.84.91.3` (identity supplied by the user; SSH not yet verified).
+- Keep the existing US single-product queue separate from [Brand entry preparation](docs/spark/2026-09-23-amazon-brand-entry-preparation-design.md). The user authorized resuming the existing single-product work, and it resumed on 2026-09-23; see [activation record](docs/quality/2026-09-23-single-products-resumed.md). Do not infer that the Brand preparation program has already been deployed.
+
 ## Browser page lifecycle — user requirement, 2026-09-10
 
 - Every channel follows the same rule: close task-owned pages when their browser work ends. This includes brand directories, product details, image previews, search pages, and temporary tabs for GNC, Swanson, Amazon, and DTC.
