@@ -38,6 +38,7 @@ await build({...common,outDir:base+'/tests',external:[...common.external,'vitest
  'codex-turn.test':'../../packages/v3-text/src/codex.test.ts',
  'codex-errors.test':'../../packages/v3-codex/src/errors.test.ts',
  'codex-connection.test':'../../packages/v3-codex/src/connection.test.ts',
+ 'codex-provider-id.test':'../../packages/v3-codex/src/provider-id.test.ts',
  'codex-provider.test':'../../packages/v3-text/src/codex-provider.test.ts',
  'vision-provider/provider.test':'../../packages/v3-vision/src/provider.test.ts',
  'vision-handoff.test':'../../packages/v3-vision/src/handoff.test.ts',

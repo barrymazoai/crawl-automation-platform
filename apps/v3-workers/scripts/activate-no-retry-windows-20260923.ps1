@@ -1,7 +1,7 @@
 param([switch]$Activate)
 $ProgressPreference='SilentlyContinue';$ErrorActionPreference='Stop'
 if(!$Activate){throw 'Explicit activation switch required'}
-$root='D:\crawlv3-cloud';$relative='releases/no-retry-20260923/source/apps/v3-workers/dist/cloud-workers'
+$root='D:\crawlv3-cloud';$relative='releases/no-retry-20260923b/source/apps/v3-workers/dist/cloud-workers'
 $release=$root+'\'+$relative.Replace('/','\');$out=$root+'\logs\no-retry-20260923'
 if(Test-Path $out){throw 'Activation already attempted; reconcile before another action'}
 $build=[IO.File]::ReadAllText($release+'\BUILD_ID').Trim();if($build -notmatch '^[a-f0-9]{64}$'){throw 'Invalid candidate build'}
