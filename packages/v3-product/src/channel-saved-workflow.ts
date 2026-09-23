@@ -23,7 +23,7 @@ export async function runChannelLabelWorkflow(raw:unknown,progress?:ChannelSourc
   // Preserve the previous options only when replaying histories predating this policy.
   const hardened=patched("model-activity-hardening-v1"),singleAttempt=patched("no-automatic-retries-v1");
   const optionsFor=(queue:string,name:string)=>{const base=name==="ocrFile"?ocrActivityOptions(queue):imageActivityOptions(queue);
-    return hardened&&["ocrFile","interpretImage"].includes(name)?{...base,heartbeatTimeout:"60 seconds" as const,retry:{maximumAttempts:singleAttempt?1:2}}:base;};
+    return hardened&&["ocrFile","interpretImage"].includes(name)?{...base,heartbeatTimeout:patched("local-execution-deadline-v1")?0:"60 seconds" as const,retry:{maximumAttempts:singleAttempt?1:2}}:base;};
   const call=(queue:string,name:string,value:unknown)=>gate(name,binding=>proxyActivities<Record<string,(raw:unknown)=>Promise<unknown>>>(
     {...optionsFor(queue,name),...binding})[name]!(value));
   const loaded=ChannelLabelPlanResultSchema.parse(await call(queues.plan,"loadChannelLabelPlan",input));

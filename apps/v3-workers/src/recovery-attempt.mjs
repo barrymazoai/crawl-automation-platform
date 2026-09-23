@@ -1,6 +1,14 @@
 import fs from 'node:fs';
 import {createHash,randomUUID} from 'node:crypto';
 
+export function recoveryError(error,depth=0){
+ const token=v=>typeof v==='string'&&/^[A-Z_a-z0-9.:-]{1,100}$/.test(v)?v:undefined;
+ return {code:token(error?.code)??token(error?.name)??'Error',
+  ...(Number.isInteger(error?.diagnostics?.exitStatus)?{exitStatus:error.diagnostics.exitStatus}:{}),
+  ...(/^[a-f0-9]{64}$/.test(error?.diagnostics?.stderrSha256??'')?{stderrSha256:error.diagnostics.stderrSha256}:{}),
+  ...(depth<2&&Array.isArray(error?.errors)?{causes:error.errors.slice(0,4).map(e=>recoveryError(e,depth+1))}:{})};
+}
+
 // A claim survives process exit. Failure, timeout, lost acknowledgement and a
 // crashed monitor all require manual reconciliation, never another stop/start.
 export async function recoverOnce({out,permits,run}){
@@ -22,7 +30,7 @@ export async function recoverOnce({out,permits,run}){
  }catch(error){
   // Do not store arbitrary stderr, URLs or credentials in public queue health.
   const token=v=>typeof v==='string'&&/^[A-Z_a-z0-9.:-]{1,100}$/.test(v)?v:undefined;
-  const failed={...attempt,status:'failed',finishedAt:new Date().toISOString(),error:token(error.code)??token(error.name)??'Error'};
+  const failed={...attempt,status:'failed',finishedAt:new Date().toISOString(),error:token(error.code)??token(error.name)??'Error',diagnostics:recoveryError(error)};
   save(failed);return {status:'blocked',reason:'RECOVERY.MANUAL_RECONCILIATION',attempts:[failed]};
  }
 }

@@ -16,7 +16,7 @@ export async function AmazonHistoryBatchWorkflow(raw:unknown):Promise<unknown>{
  // Keep historical retry options only for deterministic replay.
  const longRetry=patched('batch-control-retry-v1');
  const a=proxyActivities<AmazonBatchActivities>(patched("no-automatic-retries-v1")
-  ?{taskQueue:input.controlQueue,startToCloseTimeout:"3 minutes",scheduleToCloseTimeout:"6 minutes",heartbeatTimeout:"30 seconds",retry:{maximumAttempts:1}}
+  ?{taskQueue:input.controlQueue,startToCloseTimeout:"3 minutes",scheduleToCloseTimeout:"6 minutes",heartbeatTimeout:patched("local-execution-deadline-v1")?0:"30 seconds",retry:{maximumAttempts:1}}
   :longRetry
   ?{taskQueue:input.controlQueue,startToCloseTimeout:'3 minutes',scheduleToCloseTimeout:'6 hours',heartbeatTimeout:'30 seconds',retry:{initialInterval:'5 seconds',maximumInterval:'5 minutes',backoffCoefficient:2}}
   :{taskQueue:input.controlQueue,startToCloseTimeout:'3 minutes',scheduleToCloseTimeout:'6 minutes',heartbeatTimeout:'30 seconds',retry:{maximumAttempts:3,initialInterval:'5 seconds',maximumInterval:'20 seconds'}});

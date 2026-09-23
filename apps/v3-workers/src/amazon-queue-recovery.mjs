@@ -7,6 +7,7 @@ import {createHash,randomUUID} from 'node:crypto';
 import {createRequire} from 'node:module';
 import {execFile} from 'node:child_process';
 import {promisify} from 'node:util';
+import {recoveryError} from './recovery-attempt.mjs';
 const exec=promisify(execFile),sha=b=>createHash('sha256').update(b).digest('hex');
 const terminal=new Set(['COMPLETED','FAILED','CANCELLED','TERMINATED','TIMED_OUT']);
 export function needsWindowsModelStop(effects){
@@ -74,11 +75,11 @@ export async function recoverClosedBatchPermits({snapshot,db,client,root,out,m,p
  const ocr=snapshot.permits.some(p=>p.request.needs.some(n=>n.resourceId==='windows-ocr'));
  const cloudDir=String.raw`D:\crawlv3-cloud\logs\failure-cleanup-${id}`;
  if(auditOnly){const proof={at:new Date().toISOString(),facts,jobs:old.map(j=>({id:j.id,pid:j.pid,identity:j.identity})),model,ocr,mutations:0};save(dir+'/audit.json',proof);return proof;}
- const stopped=[];let windows=null,windowsAttempted=false,executionError;const restored=[];
+ const stopped=[];let windows=null,windowsAttempted=false,executionError,stage='retain-intent';const restored=[];
  const absent=pid=>{try{process.kill(pid,0);return false;}catch(e){if(e.code==='ESRCH')return true;throw e;}};
  try{
   save(dir+'/intent.json',{at:new Date().toISOString(),facts,jobs:old.map(j=>({id:j.id,pid:j.pid,identity:j.identity,buildId:j.buildId})),model,ocr});
-  for(const j of old){assert.equal(read(root+'/'+j.id+'.health.json').identity,j.identity);const p=(await exec('/bin/ps',['-axo','pid=,ppid=,comm='])).stdout.trim().split('\n').map(l=>{const a=/^\s*(\d+)\s+(\d+)\s+(.+)$/.exec(l);return a?{pid:+a[1],ppid:+a[2],comm:a[3]}:null;}).filter(Boolean);
+  for(const j of old){stage='stop-mini:'+j.id;assert.equal(read(root+'/'+j.id+'.health.json').identity,j.identity);const p=(await exec('/bin/ps',['-axo','pid=,ppid=,comm='])).stdout.trim().split('\n').map(l=>{const a=/^\s*(\d+)\s+(\d+)\s+(.+)$/.exec(l);return a?{pid:+a[1],ppid:+a[2],comm:a[3]}:null;}).filter(Boolean);
    const owned=new Set([j.pid]);for(let n=0;n<12;n++){const next=p.filter(x=>owned.has(x.ppid)&&!owned.has(x.pid));if(!next.length)break;next.forEach(x=>owned.add(x.pid));}
    const children=p.filter(x=>x.pid!==j.pid&&owned.has(x.pid));assert.ok(children.every(x=>/(^|\/)codex$/.test(x.comm)),'Unknown child: never kill a browser or unrelated process');
    stopped.push(j);await exec(m.node,[root+'/manual-control.mjs','stop',j.id],{timeout:180000,maxBuffer:2000000});assert.ok(absent(j.pid));
@@ -87,7 +88,7 @@ export async function recoverClosedBatchPermits({snapshot,db,client,root,out,m,p
   }
   if(model||ocr){
    // Only the existing project-owned Windows services; no OCR Worker or login task.
-   windowsAttempted=true;windows=ps(String.raw`$dir='${cloudDir}'
+   stage='stop-windows';windowsAttempted=true;windows=ps(String.raw`$dir='${cloudDir}'
 New-Item -ItemType Directory $dir|Out-Null
 $proof=[ordered]@{dir=$dir;model=${model?'$true':'$false'};ocr=${ocr?'$true':'$false'};oldPids=@()}
 $proof|ConvertTo-Json -Depth 5|Set-Content ($dir+'\progress.json') -Encoding UTF8
@@ -131,6 +132,7 @@ $proof|ConvertTo-Json -Depth 5|Set-Content ($dir+'\stopped.json') -Encoding UTF8
 $proof|ConvertTo-Json -Depth 5 -Compress`);
    assert.equal(windows.allOldProcessesAbsent,true);
   }
+  stage='retain-stop-proof';
   const cfg=read(m.jobs.find(j=>j.id==='amazon-channel-label-collection').env.V3_CHANNEL_LABEL_CONFIG),{S3Client,PutObjectCommand,GetObjectCommand}=createRequire(root+'/source/packages/v3-artifacts/package.json')('@aws-sdk/client-s3');
   const r2=new S3Client({endpoint:cfg.r2.endpoint,region:'auto',credentials:cfg.r2Credentials,maxAttempts:1,forcePathStyle:true,requestChecksumCalculation:'WHEN_REQUIRED',responseChecksumValidation:'WHEN_REQUIRED'});
   const key='v3/manual-batch-cleanup/'+id+'/proof.json',proof={codec:'stopped-batch-executors/1',at:new Date().toISOString(),facts,windows,mini:old.map(j=>({id:j.id,pid:j.pid,identity:j.identity,absent:absent(j.pid)}))},bytes=Buffer.from(JSON.stringify(proof));
@@ -145,9 +147,10 @@ $proof|ConvertTo-Json -Depth 5 -Compress`);
   catch(error){if(error.code==='ERR_ASSERTION'||error.$metadata?.httpStatusCode===412)throw error;}
   finally{r2.destroy();}
   save(dir+'/proof-publication.json',{key,sha256:sha(bytes),publication});
+  stage='release-permits';
   const tx=await db.connect();try{await tx.query('BEGIN');for(const {request} of facts){const row=(await tx.query('SELECT request FROM resource_permit WHERE permit_id=$1 FOR UPDATE',[request.permitId])).rows[0];assert.deepEqual(row.request,request);await tx.query('UPDATE resource_permit SET released_at=coalesce(released_at,now()) WHERE permit_id=$1',[request.permitId]);}await tx.query('COMMIT');}catch(e){await tx.query('ROLLBACK');throw e;}finally{tx.release();}
   save(dir+'/released.json',{at:new Date().toISOString(),permits:facts.map(f=>f.request.permitId),key});
- }catch(error){executionError=error;throw error;}finally{
+ }catch(error){executionError=error;save(dir+'/execution-failed.json',{at:new Date().toISOString(),stage,error:recoveryError(error)});throw error;}finally{
   const restoreErrors=[];
   // Recover completed stop stages even if a later stage failed. Unconfirmed stops
   // remain visible and keep intake paused; never launch over a surviving owner.

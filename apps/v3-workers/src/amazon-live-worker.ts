@@ -1,3 +1,4 @@
+import { withActivityDeadline } from "./activity-deadline.js";
 import { readFile, readdir } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -246,8 +247,8 @@ async function main() {
         return { kind: "activity" as const, dispose, activities: Object.fromEntries(Object.entries(handlers).map(([name, fn]) => [name, async (raw: unknown) => {
           const ctx = Context.current(); if (ctx.info.attempt !== 1 && !["prepareBrandCollection", "inspectBrandCollection"].includes(name)) throw ApplicationFailure.nonRetryable("Inspect existing evidence", "AMAZON.RETRY_DENIED");
           const timer = setInterval(() => ctx.heartbeat(), 2000);
-          try { return await remote.run(() => fn(raw, ctx.cancellationSignal), stats => console.log(JSON.stringify({event:"ARTIFACT_READ_SCOPE",activity:name,...stats}))); }
-          catch (error) { ctx.cancellationSignal.throwIfAborted(); const code = error instanceof Error && /^(AMAZON|SOURCE|CATALOG|ARTIFACT|SCRAPERAPI|NETWORK|CHANNEL)\.[A-Z_]+$/.test(error.message) ? error.message : "AMAZON.ACTIVITY_UNRESOLVED";
+          try { return await remote.run(() => withActivityDeadline(ctx.cancellationSignal,signal=>fn(raw, signal)), stats => console.log(JSON.stringify({event:"ARTIFACT_READ_SCOPE",activity:name,...stats}))); }
+          catch (error) { ctx.cancellationSignal.throwIfAborted(); const code = error instanceof Error && /^(AMAZON|SOURCE|CATALOG|ARTIFACT|SCRAPERAPI|NETWORK|CHANNEL|EXECUTION)\.[A-Z_]+$/.test(error.message) ? error.message : "AMAZON.ACTIVITY_UNRESOLVED";
             // The failure only carries a code; the underlying error stays in the worker log for diagnosis.
             const e = error as { name?: string; message?: string; code?: string; cause?: { name?: string; message?: string; code?: string } };
             console.error(JSON.stringify({ event: "AMAZON_ACTIVITY_FAILED", activity: name, workflowId: ctx.info.workflowExecution?.workflowId, code, error: { name: e?.name, message: String(e?.message ?? "").slice(0, 500), code: e?.code },

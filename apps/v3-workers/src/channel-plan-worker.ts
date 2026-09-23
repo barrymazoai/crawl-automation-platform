@@ -1,3 +1,4 @@
+import { withActivityDeadline } from "./activity-deadline.js";
 import { constants } from "node:fs";
 import { open, lstat, readdir } from "node:fs/promises";
 import { dirname, isAbsolute, join } from "node:path";
@@ -47,7 +48,7 @@ async function main() {
           const context = Context.current();
           if (args.length !== 1 || context.info.attempt !== 1) throw ApplicationFailure.nonRetryable("Automatic retry denied", "CHANNEL.RETRY_DENIED");
           const timer = setInterval(() => context.heartbeat(), 2000);
-          try { return await remote.run(async()=>{await history?.attempt("channel",args[0],context.cancellationSignal);const result = await module.run(args[0], context.cancellationSignal); context.cancellationSignal.throwIfAborted(); return result;},stats=>console.log(JSON.stringify({event:"ARTIFACT_READ_SCOPE",activity:"prepareChannelProduct",...stats}))); }
+          try { return await remote.run(()=>withActivityDeadline(context.cancellationSignal,async signal=>{await history?.attempt("channel",args[0],signal);return module.run(args[0],signal);}),stats=>console.log(JSON.stringify({event:"ARTIFACT_READ_SCOPE",activity:"prepareChannelProduct",...stats}))); }
           catch { context.cancellationSignal.throwIfAborted(); throw ApplicationFailure.nonRetryable("Inspect retained channel evidence", "CHANNEL.UNRESOLVED"); }
           finally { clearInterval(timer); }
         } }) };

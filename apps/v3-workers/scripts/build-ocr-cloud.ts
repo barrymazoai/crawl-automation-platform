@@ -43,6 +43,9 @@ await build({...common,outDir:base+'/tests',external:[...common.external,'vitest
  'vision-provider/provider.test':'../../packages/v3-vision/src/provider.test.ts',
  'vision-handoff.test':'../../packages/v3-vision/src/handoff.test.ts',
  'quality-review-stops.test':'integration/quality-review-stops.test.ts',
+ 'channel-label-execution.test':'src/channel-label-execution.test.ts',
+ 'activity-deadline.test':'src/activity-deadline.test.ts',
+ 'codex-close.test':'../../packages/v3-codex/src/close.test.ts',
  'resource-stall.test':'integration/resource-stall.test.ts',
  'amazon-batch.test':'integration/amazon-batch.test.ts',
 }});
@@ -58,6 +61,7 @@ await build({...common,outDir:base+'/queue',entry:['src/amazon-queue-cli.ts']});
 await cp('src/amazon-queue-health.mjs',base+'/queue/amazon-queue-health.mjs');
 await cp('src/amazon-queue-recovery.mjs',base+'/queue/amazon-queue-recovery.mjs');
 await cp('src/recovery-attempt.mjs',base+'/queue/recovery-attempt.mjs');
+await cp('src/windows-powershell.mjs',base+'/queue/windows-powershell.mjs');
 for (const dir of ['web','queue','tests']) await cp('../../database/v3',base+'/'+dir+'/migrations',{recursive:true});
 // Config schema as a library, so the Mini rollout script can validate the rewritten Amazon private config before binding it.
 await build({...common,outDir:base+'/amazon-config',entry:{'amazon-live-config':'src/amazon-live-config.ts','deployment-supervisor':'src/deployment-supervisor.ts','ocr-http':'../../packages/v3-ocr/src/http.ts','capture-probe':'scripts/capture-probe.ts'}});

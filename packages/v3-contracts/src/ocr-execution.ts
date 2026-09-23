@@ -17,6 +17,6 @@ export const OcrActivityOutcomeSchema = z.discriminatedUnion("status", [
 export type OcrActivityOutcome = z.infer<typeof OcrActivityOutcomeSchema>;
 /** Workflow-safe policy. Activity-side guard additionally rejects attempts > 1. */
 export function ocrActivityOptions(taskQueue: string) {
-  return { taskQueue, startToCloseTimeout: "2 minutes" as const, scheduleToCloseTimeout: "10 minutes" as const,
-    heartbeatTimeout: "10 seconds" as const, retry: { maximumAttempts: 1 } };
+  return { taskQueue, startToCloseTimeout: "12 minutes" as const, scheduleToCloseTimeout: "30 minutes" as const,
+    heartbeatTimeout: 0, retry: { maximumAttempts: 1 } };
 }
