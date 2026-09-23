@@ -12,13 +12,22 @@ export const amazonCommerceDomExpression=`(()=>{
   const symbol=e.querySelector('.a-price-symbol')?.textContent?.trim(),whole=e.querySelector('.a-price-whole')?.textContent?.trim(),fraction=e.querySelector('.a-price-fraction')?.textContent?.trim();
   if(!symbol||!whole||!/^\\d[\\d,]*\\.?$/.test(whole)||!/^\\d{2}$/.test(fraction||''))return '';return symbol+whole+(whole.endsWith('.')?'':'.')+fraction;};
  const main=elements('#corePriceDisplay_desktop_feature_div .priceToPay').filter(visible);
+ const accordion=elements('#buyBoxAccordion').filter(visible);
+ const boxes=elements('#buybox').filter(visible);
  const selected=elements('#buyBoxAccordion .a-accordion-active #corePrice_feature_div .apex-pricetopay-value').filter(visible);
+ // A plain buybox has no accordion. Its own price can disambiguate duplicated
+ // main blocks for a different offer; do not fall back to arbitrary page dollars.
+ const plain=accordion.length===0&&boxes.length===1?elements('#corePrice_feature_div .apex-pricetopay-value, #corePrice_feature_div .priceToPay',boxes[0]).filter(visible):[];
  // Static HTML can carry several main-block variants at once (one-time and subscription); only a single
  // readable main amount is trusted, otherwise the selected offer's own amount is the visible price.
  const mainAmounts=main.map(amount).filter(Boolean);
- const price=(mainAmounts.length?unique(mainAmounts):null)??unique(selected.map(amount));
+ const price=(mainAmounts.length?unique(mainAmounts):null)??unique((selected.length?selected:plain).map(amount));
  const mainRegions=elements('#corePriceDisplay_desktop_feature_div').filter(visible);
  const selectedOffers=elements('#buyBoxAccordion .a-accordion-active');
+ const availability=value('#availability',root,true),buyboxText=boxes.map(e=>e.innerText||'').join(' ');
+ const priceStatus=price?'observed':/Currently unavailable|Out of stock/i.test(availability||'')?'unavailable':
+  /See All Buying Options/i.test(buyboxText)?'buying_options':/To see product details, add this item to your cart/i.test(buyboxText)?'cart_required':
+  new Set(mainAmounts).size>1?'ambiguous':'not_observed';
  const salesSelector='#socialProofingAsinFaceout_feature_div';
  const salesText=unique(elements(salesSelector).filter(visible).map(e=>{
   const copy=e.cloneNode(true);copy.querySelectorAll('script,style,noscript,template').forEach(n=>n.remove());
@@ -31,7 +40,7 @@ export const amazonCommerceDomExpression=`(()=>{
  return {codec:'public-product-commerce/1',sku:value('[itemprop="sku"], [data-product-sku]'),price,
  currency:value('meta[property="product:price:currency"]',document)||value('[itemprop="priceCurrency"]')||value('input[id="currencyOfPreference"]',document),
  listPrice:unique(mainRegions.flatMap(e=>elements('.apex-basisprice-value',e).filter(visible).map(amount))),
- rating:value('#acrPopover .a-icon-alt'),reviewCount:value('#acrCustomerReviewText'),availability:value('#availability',root,true),salesVolume,
+ rating:value('#acrPopover .a-icon-alt'),reviewCount:value('#acrCustomerReviewText'),availability,salesVolume,priceStatus,
  context:[document.querySelector('#nav-global-location-popover-link')?.innerText||'',...mainRegions.map(e=>'main offer: '+e.innerText.slice(0,1200)),...selectedOffers.map(e=>'selected offer: '+e.innerText.slice(0,2500))].filter(Boolean),
  purchaseConditions:${amazonPurchaseConditionsDomExpression}};
 })()`;

@@ -44,6 +44,12 @@ it.each(['<html>Robot Check</html>', '<html><body>Unexpected product template</b
   await expect(f.reader.archivedProduct(url, signal(), f.archive)).rejects.toThrow();
   expect(f.get).toHaveBeenCalledOnce();
 });
+it('archives UTF-8 BOM bytes unchanged before decoding', async () => {
+  const body = Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf]), html()]), f = await setup(body);
+  const p = await f.reader.product(url, signal(), undefined, undefined, f.archive);
+  expect(f.remote.data.get(p.originalHtml!.objectKey)).toEqual(body);
+  expect(p.originalHtml!.byteSize).toBe(body.length);
+});
 it('a failed R2 publication prevents parsing/retention and never triggers a second download', async () => {
   const f = await setup(), retain = vi.fn();
   const create = f.remote.create.bind(f.remote);

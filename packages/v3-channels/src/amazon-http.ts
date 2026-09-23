@@ -92,8 +92,8 @@ const decodeHtml = (bytes: Uint8Array) => {
 export async function readAmazonHtml(route: HttpRoute, rawUrl: string, abort: AbortSignal, dns: DnsResolver = systemDns): Promise<string> {
   return decodeHtml(await readAmazonHtmlBytes(route, rawUrl, abort, dns));
 }
-/** One bounded GET of a public Amazon page through the configured route (ScraperAPI). Challenge/redirect/status
- * outcomes are typed errors; the caller above decides which of them deserve another attempt. */
+/** One bounded GET of a public Amazon page through the configured route (ScraperAPI).
+ * Errors terminate this download; neither this reader nor its product adapter retries. */
 async function readAmazonHtmlBytes(route: HttpRoute, rawUrl: string, abort: AbortSignal, dns: DnsResolver): Promise<Uint8Array> {
   requireCapability(route, "http");
   const url = permittedUrl(rawUrl, AMAZON_HTTP_POLICY.origins);
