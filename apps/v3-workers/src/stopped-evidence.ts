@@ -39,10 +39,12 @@ export async function publishStoppedEvidence(publication:RetainedPublication,key
    if(remoteClaim&&localClaim&&!isDeepStrictEqual(claim(remoteClaim),claim(localClaim)))conflict();
    stage='retain-claim';await publication.local.create(claimKey,chosen,'application/json',lifetime);
    const retained=await publication.local.read(claimKey,4096,lifetime);if(!retained)throw Error('RESOURCE.STOP_EVIDENCE_CONFLICT');if(!isDeepStrictEqual(claim(retained),claim(chosen)))conflict();
-   if(!remoteClaim){stage='create-claim';await publication.remote.create(claimKey,retained,'application/json',io());}
+   if(!remoteClaim){stage='create-claim';try{await publication.remote.create(claimKey,retained,'application/json',io());}
+    catch(error){const found=await publication.remote.read(claimKey,4096,io());if(!found)throw error;if(!isDeepStrictEqual(claim(found),claim(retained)))conflict();}}
    stage='verify-claim';const shared=await publication.remote.read(claimKey,4096,io());if(!shared)throw Error('RESOURCE.STOP_PUBLICATION_UNAVAILABLE');
    if(!isDeepStrictEqual(claim(shared),claim(retained)))conflict();
-   stage='create-proof';await publication.remote.create(key,bytes,'application/json',io());
+   stage='create-proof';try{await publication.remote.create(key,bytes,'application/json',io());}
+   catch(error){if(check(await publication.remote.read(key,bytes.length,io())))return;throw error;}
    stage='verify-proof';if(check(await publication.remote.read(key,bytes.length,io())))return;
    throw Error('RESOURCE.STOP_PUBLICATION_UNAVAILABLE');
   }catch(error){

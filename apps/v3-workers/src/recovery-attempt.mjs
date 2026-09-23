@@ -12,7 +12,7 @@ export async function recoverOnce({out,permits,run}){
  const attempt={id:randomUUID(),at:new Date().toISOString(),status:'started',permits:permits.map(p=>p.request.permitId)};
  const owned=[];
  for(const path of paths){
-  try{fs.writeFileSync(path,JSON.stringify(attempt),{flag:'wx',mode:0o600});owned.push(path);}
+  try{const fd=fs.openSync(path,'wx',0o600);try{fs.writeFileSync(fd,JSON.stringify(attempt));fs.fsyncSync(fd);}finally{fs.closeSync(fd);}owned.push(path);}
   catch(e){if(e.code==='EEXIST')return {status:'blocked',reason:'RECOVERY.CONCURRENT_CLAIM',attempts:[attempt]};throw e;}
  }
  const save=value=>{for(const path of owned){fs.writeFileSync(path+'.'+attempt.id,JSON.stringify(value),{mode:0o600});fs.renameSync(path+'.'+attempt.id,path);}};

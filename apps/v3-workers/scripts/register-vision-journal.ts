@@ -9,7 +9,7 @@ import pg from "pg";
 import { VisionRecordSchema } from "@crawl-automation/v3-contracts";
 import { PostgresVisionRegistry } from "@crawl-automation/v3-vision";
 const [privPath, journalRoot, operationId] = process.argv.slice(2);
-if (!privPath || !journalRoot || !/^chl-[0-9a-f]{64}$/.test(operationId ?? "")) throw Error("usage: register-vision-journal.js <label-private.json> <journal-root> <chl-operationId>");
+if (!privPath || !journalRoot || !operationId || !/^chl-[0-9a-f]{64}$/.test(operationId)) throw Error("usage: register-vision-journal.js <label-private.json> <journal-root> <chl-operationId>");
 const priv = JSON.parse(await readFile(privPath, "utf8"));
 const dir = join(journalRoot, "v3/vision", operationId);
 for (const f of ["response.json", "completion.json"]) await readFile(join(dir, f));
@@ -24,5 +24,5 @@ try {
   const registry = new PostgresVisionRegistry(db);
   await registry.register(record);
   const saved = await registry.read(operationId);
-  console.log(JSON.stringify({ event: "VISION_JOURNAL_REGISTERED", operationId, listingId: record.input.listingId ?? null, verified: !!saved }));
+  console.log(JSON.stringify({ event: "VISION_JOURNAL_REGISTERED", operationId, listingId: record.input.selection.observation.listingId, verified: !!saved }));
 } finally { await db.end(); }
