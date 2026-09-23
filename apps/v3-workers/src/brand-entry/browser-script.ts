@@ -88,18 +88,14 @@ export async function discover(api: EgoApi, configFile: string, raw: unknown): P
       const url = storeEntryUrl(rawUrl), index = state.outcome.pages.length, prefix = `v3/brand-entry/${call.campaignId}/${call.candidateId}/pages/${index}`;
       await page.events();
       await page.cdp('Fetch.enable', { patterns: [{ urlPattern: 'https://www.amazon.com/stores/*', resourceType: 'Document', requestStage: 'Response' }] });
-      let navigationError: unknown, navigationDone = false;
-      // Ego's goto lifecycle waiter misses the completion event when Fetch pauses
-      // a response. Navigate through its documented CDP escape hatch, then verify
-      // the committed URL and document readiness explicitly after retention.
-      const navigation = page.cdp('Page.navigate', { url }, { timeout: bounded() }).then((r: any) => {
-        if (r.errorText || r.isDownload) navigationError = Error('BRAND_ENTRY.NAVIGATION_FAILED'); else navigationDone = true;
-      }, (e: unknown) => { navigationError = e; });
+      // Ego serializes pending navigation commands with later CDP calls. Schedule
+      // one navigation after this evaluation returns so Fetch can be read and
+      // continued without deadlocking a goto/Page.navigate completion waiter.
+      await page.evaluate((href: string) => { setTimeout(() => { location.href = href; }, 0); }, url);
       let original: ObjectProof | null = null, finalUrl = url, capturedAt = '', status = 0, redirects = 0;
       const navigationDeadline = Math.min(deadline, Date.now() + 45000);
       while (!original && Date.now() < navigationDeadline) {
         if (task.ownership !== 'agent') throw Error('BRAND_ENTRY.USER_CONTROL');
-        if (navigationError) throw navigationError;
         const events = await page.events();
         for (const event of events) {
           if (event.method !== 'Fetch.requestPaused') continue;
@@ -135,10 +131,8 @@ export async function discover(api: EgoApi, configFile: string, raw: unknown): P
         if (!original) await new Promise(r => setTimeout(r, 100));
       }
       if (!original) throw Error('BRAND_ENTRY.RAW_BODY_MISSING');
-      await navigation;
-      if (navigationError || !navigationDone) throw Error('BRAND_ENTRY.NAVIGATION_FAILED');
+      await page.waitForFunction((expected: string) => location.href === expected && document.readyState !== 'loading', finalUrl, { timeout: bounded() });
       if (storeEntryUrl(await page.url()) !== finalUrl) throw Error('BRAND_ENTRY.REDIRECT_UNVERIFIED');
-      await page.waitForFunction(() => document.readyState !== 'loading', undefined, { timeout: bounded() });
       const snapshotText: string = await page.snapshot({ scope: 'full_page' });
       const data = await page.evaluate(() => ({ title: document.title,
         headings: Array.from(document.querySelectorAll('h1,h2,img[alt]')).map(e => e.getAttribute('alt') || e.textContent || '').slice(0, 250),
