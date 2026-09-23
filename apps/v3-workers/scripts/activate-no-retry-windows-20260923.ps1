@@ -11,7 +11,13 @@ if($status.supervisorPid -ne $lock.pid -or $status.sessionId -ne $lock.sessionId
 if(@($status.workers|Where-Object {$_.state -eq 'running'}).Count -ne 2){throw 'Expected two idle model workers'}
 $all=@(Get-CimInstance Win32_Process);$ids=@([int]$lock.pid)+@($status.workers|ForEach-Object {[int]$_.pid})
 if(@($all|Where-Object {$ids -contains [int]$_.ProcessId -and $_.Name -eq 'node.exe'}).Count -ne 3){throw 'Worker process identities changed'}
-if(@($all|Where-Object {$ids -contains [int]$_.ParentProcessId -and $ids -notcontains [int]$_.ProcessId}).Count){throw 'Worker children remain; do not interrupt model work'}
+$children=@($all|Where-Object {$ids -contains [int]$_.ParentProcessId -and $ids -notcontains [int]$_.ProcessId})
+# Windows creates an owned system console host even for an idle Node worker.
+# Only those exact console children may accompany the graceful stop. Any Codex
+# or unknown process still blocks cutover; every old PID must disappear below.
+if(@($children|Where-Object {$_.Name -ne 'conhost.exe' -or $_.ExecutablePath -ine ($env:SystemRoot+'\System32\conhost.exe')}).Count){throw 'Worker children remain; do not interrupt model work'}
+$ids+=@($children|ForEach-Object {[int]$_.ProcessId})
+if(@($all|Where-Object {$ids -contains [int]$_.ParentProcessId -and $ids -notcontains [int]$_.ProcessId}).Count){throw 'Unexpected descendant; do not interrupt model work'}
 if(Test-Path ($root+'\private\STOP-cloud')){throw 'Existing stop marker'}
 New-Item -ItemType Directory $out|Out-Null
 $status|ConvertTo-Json -Depth 8|Set-Content ($out+'\before.json') -Encoding UTF8
