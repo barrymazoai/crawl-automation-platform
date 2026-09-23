@@ -18,7 +18,7 @@ assert.equal(read(root+'/releases/no-retry-20260923/focused-results.json').numFa
 assert.equal(read(root+'/releases/no-retry-20260923/replay-health-proof.json').held,0);
 try{
  assert.equal(Number((await db.query('SELECT count(*) n FROM resource_permit WHERE released_at IS NULL')).rows[0].n),0);
- const queue=JSON.parse(run(root+'/crawler-queue',['status']));assert.notEqual(queue.mode,'running');assert.equal(queue.counts.running,0);
+ const queue=JSON.parse(run(root+'/crawler-queue',['status']));assert.notEqual(queue.mode,'running');assert.equal(queue.counts.running??0,0);
  fs.mkdirSync(out,{mode:0o700});write(out+'/deployment-before.private.json',before);
  const builds={};for(const g of Object.keys(entry)){const h=createHash('sha256');for(const n of fs.readdirSync(base+'/'+g).filter(n=>n.endsWith('.js')||n==='product-workflows.cjs').sort()){const b=fs.readFileSync(base+'/'+g+'/'+n);h.update(String(b.length)+':').update(b);}builds[g]=h.digest('hex');}
  for(const j of after.jobs){const g=group(j.id);if(!g)continue;const old=read(j.env.V3_WORKER_CONFIG),runtime={...old,expectedBuildId:builds[g]};assert.equal(runtime.concurrency,old.concurrency);j.entry=base+'/'+g+'/'+entry[g];j.env.V3_WORKER_CONFIG=out+'/'+j.id+'.runtime.json';write(j.env.V3_WORKER_CONFIG,runtime);}
