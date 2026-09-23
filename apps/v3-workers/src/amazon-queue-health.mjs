@@ -1,13 +1,14 @@
 // Manually launched alongside the durable queue. No boot/login installation.
 import fs from 'node:fs';
 import os from 'node:os';
-import {execFile,execFileSync} from 'node:child_process';
+import {execFile} from 'node:child_process';
 import {promisify} from 'node:util';
 import {setTimeout as delay} from 'node:timers/promises';
 import pg from 'pg';
 import {Client,Connection} from '@temporalio/client';
 import {inspectClosedBatchPermits,recoverClosedBatchPermits} from './amazon-queue-recovery.mjs';
 import {recoverOnce} from './recovery-attempt.mjs';
+import {runWindowsPowerShell} from './windows-powershell.mjs';
 const read=p=>JSON.parse(fs.readFileSync(p,'utf8'));
 const config=read(process.argv[2]),{root,out,healthFile,connectionFile,windowsSsh}=config;
 const exec=promisify(execFile),stop=new AbortController();
@@ -15,7 +16,7 @@ process.once('SIGTERM',()=>stop.abort());process.once('SIGINT',()=>stop.abort())
 fs.mkdirSync(out,{recursive:true,mode:0o700});
 const publish=value=>{fs.writeFileSync(healthFile+'.next',JSON.stringify({codec:'amazon-queue-health/1',at:new Date().toISOString(),pid:process.pid,...value}),{mode:0o600});fs.renameSync(healthFile+'.next',healthFile);};
 const report=value=>console.log(JSON.stringify({at:new Date().toISOString(),...value}));
-const ps=source=>JSON.parse(execFileSync('/usr/bin/ssh',[...windowsSsh,'powershell.exe -NoLogo -NoProfile -NonInteractive -EncodedCommand '+Buffer.from("$ProgressPreference='SilentlyContinue';$ErrorActionPreference='Stop'; & ([ScriptBlock]::Create([Console]::In.ReadToEnd()))",'utf16le').toString('base64')],{input:source,encoding:'utf8',timeout:55000,maxBuffer:3000000}));
+const ps=source=>runWindowsPowerShell(windowsSsh,source);
 const ticks=()=>os.cpus().reduce((a,c)=>({idle:a.idle+c.times.idle,total:a.total+Object.values(c.times).reduce((x,y)=>x+y,0)}),{idle:0,total:0});
 let previous=ticks(),miniHighSince=null,windowsHighSince=null,swapSamples=[],connection,db,lastRecovery=null;
 publish({canStart:false,reasons:['STARTING']});
@@ -31,8 +32,10 @@ try {
       const recovery=await connection.withDeadline(Date.now()+30000,()=>inspectClosedBatchPermits({db,client,state}));
       if(recovery.pause)publish({canStart:false,reasons:['FAILED_EXECUTION_CLEANUP'],recovery:{recover:recovery.recover,reason:recovery.reason}});
       if(recovery.recover){
-        report({event:'FAILED_EXECUTION_CLEANUP_STARTED',permits:recovery.permits.length});
-        const attempt=await recoverOnce({out,permits:recovery.permits,run:id=>recoverClosedBatchPermits({snapshot:recovery,db,client,root,out,m,ps,id})});
+        const attempt=await recoverOnce({out,permits:recovery.permits,run:id=>{
+          report({event:'FAILED_EXECUTION_CLEANUP_STARTED',permits:recovery.permits.length,attemptId:id});
+          return recoverClosedBatchPermits({snapshot:recovery,db,client,root,out,m,ps,id});
+        }});
         if(attempt.status==='blocked'){
           publish({canStart:false,reasons:['CLEANUP_FAILED_MANUAL_REQUIRED'],recovery:attempt});
           report({event:'CLEANUP_FAILED_MANUAL_REQUIRED',...attempt});

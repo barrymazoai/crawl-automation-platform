@@ -9,6 +9,10 @@ import {execFile} from 'node:child_process';
 import {promisify} from 'node:util';
 const exec=promisify(execFile),sha=b=>createHash('sha256').update(b).digest('hex');
 const terminal=new Set(['COMPLETED','FAILED','CANCELLED','TERMINATED','TIMED_OUT']);
+export function needsWindowsModelStop(effects){
+ return effects.some(e=>['interpretText','interpretImage'].includes(e.name)&&!e.identities.length)||
+  effects.some(e=>['interpretText','interpretImage'].includes(e.name)&&e.identities.some(i=>!/^us-mini-amazon-channel-label-(text|vision)\/channel-label-(text|vision)\//.test(i)));
+}
 export function protectedActivities(request,events,decode){
  const scheduled=events.filter(e=>e.activityTaskScheduledEventAttributes);
  const ended=e=>events.find(x=>[x.activityTaskCompletedEventAttributes,x.activityTaskFailedEventAttributes,x.activityTaskTimedOutEventAttributes,x.activityTaskCanceledEventAttributes].some(v=>String(v?.scheduledEventId)===String(e.eventId)));
@@ -46,12 +50,13 @@ export async function recoverClosedBatchPermits({snapshot,db,client,root,out,m,p
  const decode=p=>p?.payloads?.length===1?defaultPayloadConverter.fromPayload(p.payloads[0]):null;
  assert.match(id,/^[a-f0-9-]{36}$/);const dir=out+'/failure-cleanup/'+id;fs.mkdirSync(dir,{recursive:true,mode:0o700});
  const permittedResources=new Set(['mini-cpu','mini-model-account','windows-ocr','scraperapi-lane','amazon-file-lane']);
- const queues=new Set(),affectedActivities=new Set(),facts=[];
+ const queues=new Set(),affectedActivities=new Set(),facts=[],executors=[];
  for(const p of snapshot.permits){assert.ok(p.request.needs.every(n=>permittedResources.has(n.resourceId)),'Unsupported resource must be inspected explicitly');
   const handle=client.workflow.getHandle(p.request.workflowId,p.request.runId),s=await handle.describe();assert.ok(terminal.has(s.status.name));assert.equal(s.raw.pendingActivities?.length??0,0);assert.equal(s.raw.pendingChildren?.length??0,0);
   const h=await handle.fetchHistory(),events=h.events??[],scheduled=events.filter(e=>e.activityTaskScheduledEventAttributes);
   const affected=protectedActivities(p.request,events,decode);
-  for(const e of affected){queues.add(e.activityTaskScheduledEventAttributes.taskQueue.name);affectedActivities.add(e.activityTaskScheduledEventAttributes.activityType.name);}
+  for(const e of affected){queues.add(e.activityTaskScheduledEventAttributes.taskQueue.name);affectedActivities.add(e.activityTaskScheduledEventAttributes.activityType.name);
+   executors.push({name:e.activityTaskScheduledEventAttributes.activityType.name,identities:events.filter(x=>String(x.activityTaskStartedEventAttributes?.scheduledEventId)===String(e.eventId)).map(x=>x.activityTaskStartedEventAttributes.identity??'')});}
   const bytes=Buffer.from(JSON.stringify(h));fs.writeFileSync(dir+'/'+p.request.permitId+'-history.json',bytes,{mode:0o600});facts.push({request:p.request,status:s.status.name,historySha256:sha(bytes),activities:affected.map(e=>({name:e.activityTaskScheduledEventAttributes.activityType.name,id:e.activityTaskScheduledEventAttributes.activityId}))});
  }
  // This recovery is deliberately scoped to the current HTTP capture deployment.
@@ -65,11 +70,11 @@ export async function recoverClosedBatchPermits({snapshot,db,client,root,out,m,p
  const jobs=m.jobs.filter(j=>j.env.V3_WORKER_CONFIG&&queues.has(queue(read(j.env.V3_WORKER_CONFIG))));assert.ok(jobs.length&&jobs.every(j=>j.id.startsWith('amazon-')));
  const old=jobs.map(j=>({id:j.id,...read(root+'/'+j.id+'.health.json')}));assert.ok(old.every(j=>j.event==='WORKER_RUNNING'));
  for await(const w of client.workflow.list({query:'ExecutionStatus = "Running"'})){const s=await client.workflow.getHandle(w.workflowId,w.runId).describe();assert.ok((s.raw.pendingActivities??[]).every(a=>s.type==='BrandCollectionWorkflow'&&a.activityType?.name==='inspectBrandCollection'),'Other work still executing');assert.equal(s.raw.pendingChildren?.length??0,0,'Another child is still running');}
- const model=['interpretText','interpretImage'].some(n=>affectedActivities.has(n));
+ const model=needsWindowsModelStop(executors);
  const ocr=snapshot.permits.some(p=>p.request.needs.some(n=>n.resourceId==='windows-ocr'));
  const cloudDir=String.raw`D:\crawlv3-cloud\logs\failure-cleanup-${id}`;
  if(auditOnly){const proof={at:new Date().toISOString(),facts,jobs:old.map(j=>({id:j.id,pid:j.pid,identity:j.identity})),model,ocr,mutations:0};save(dir+'/audit.json',proof);return proof;}
- const stopped=[];let windows=null,windowsAttempted=false;const restored=[];
+ const stopped=[];let windows=null,windowsAttempted=false,executionError;const restored=[];
  const absent=pid=>{try{process.kill(pid,0);return false;}catch(e){if(e.code==='ESRCH')return true;throw e;}};
  try{
   save(dir+'/intent.json',{at:new Date().toISOString(),facts,jobs:old.map(j=>({id:j.id,pid:j.pid,identity:j.identity,buildId:j.buildId})),model,ocr});
@@ -129,11 +134,20 @@ $proof|ConvertTo-Json -Depth 5 -Compress`);
   const cfg=read(m.jobs.find(j=>j.id==='amazon-channel-label-collection').env.V3_CHANNEL_LABEL_CONFIG),{S3Client,PutObjectCommand,GetObjectCommand}=createRequire(root+'/source/packages/v3-artifacts/package.json')('@aws-sdk/client-s3');
   const r2=new S3Client({endpoint:cfg.r2.endpoint,region:'auto',credentials:cfg.r2Credentials,maxAttempts:1,forcePathStyle:true,requestChecksumCalculation:'WHEN_REQUIRED',responseChecksumValidation:'WHEN_REQUIRED'});
   const key='v3/manual-batch-cleanup/'+id+'/proof.json',proof={codec:'stopped-batch-executors/1',at:new Date().toISOString(),facts,windows,mini:old.map(j=>({id:j.id,pid:j.pid,identity:j.identity,absent:absent(j.pid)}))},bytes=Buffer.from(JSON.stringify(proof));
-  try{await r2.send(new PutObjectCommand({Bucket:cfg.r2.bucket,Key:cfg.r2.prefix+'/'+key,Body:bytes,ContentType:'application/json',IfNoneMatch:'*'}),{abortSignal:AbortSignal.timeout(45000)});const r=await r2.send(new GetObjectCommand({Bucket:cfg.r2.bucket,Key:cfg.r2.prefix+'/'+key}),{abortSignal:AbortSignal.timeout(45000)});assert.equal(sha(Buffer.from(await r.Body.transformToByteArray())),sha(bytes));}finally{r2.destroy();}
-  save(dir+'/stopped-proof.json',{...proof,key});
+  // Durable proof of actual process absence must not depend on R2 availability.
+  // Keep the exact bytes first; a failed upload is evidence replication pending,
+  // not a still-running executor and never permission to repeat the business task.
+  const proofFile=dir+'/stopped-proof.json',fd=fs.openSync(proofFile,'wx',0o600);
+  try{fs.writeFileSync(fd,bytes);fs.fsyncSync(fd);}finally{fs.closeSync(fd);}
+  assert.equal(sha(fs.readFileSync(proofFile)),sha(bytes));
+  let publication='pending';
+  try{await r2.send(new PutObjectCommand({Bucket:cfg.r2.bucket,Key:cfg.r2.prefix+'/'+key,Body:bytes,ContentType:'application/json',IfNoneMatch:'*'}),{abortSignal:AbortSignal.timeout(10000)});const r=await r2.send(new GetObjectCommand({Bucket:cfg.r2.bucket,Key:cfg.r2.prefix+'/'+key}),{abortSignal:AbortSignal.timeout(10000)});assert.equal(sha(Buffer.from(await r.Body.transformToByteArray())),sha(bytes));publication='verified';}
+  catch(error){if(error.code==='ERR_ASSERTION'||error.$metadata?.httpStatusCode===412)throw error;}
+  finally{r2.destroy();}
+  save(dir+'/proof-publication.json',{key,sha256:sha(bytes),publication});
   const tx=await db.connect();try{await tx.query('BEGIN');for(const {request} of facts){const row=(await tx.query('SELECT request FROM resource_permit WHERE permit_id=$1 FOR UPDATE',[request.permitId])).rows[0];assert.deepEqual(row.request,request);await tx.query('UPDATE resource_permit SET released_at=coalesce(released_at,now()) WHERE permit_id=$1',[request.permitId]);}await tx.query('COMMIT');}catch(e){await tx.query('ROLLBACK');throw e;}finally{tx.release();}
   save(dir+'/released.json',{at:new Date().toISOString(),permits:facts.map(f=>f.request.permitId),key});
- }finally{
+ }catch(error){executionError=error;throw error;}finally{
   const restoreErrors=[];
   // Recover completed stop stages even if a later stage failed. Unconfirmed stops
   // remain visible and keep intake paused; never launch over a surviving owner.
@@ -163,7 +177,11 @@ do{
  $ready=$modelReady -and $ocrReady;if($ready){break};Start-Sleep -Seconds 1
 }while((Get-Date)-lt $until)
 [pscustomobject]@{ready=$ready}|ConvertTo-Json -Compress`);assert.equal(check.ready,true);}catch(e){restoreErrors.push({host:'windows-health',error:e.code??e.name});}}
-  save(dir+'/restored.json',{at:new Date().toISOString(),mini:restored,windowsRestartRequested:!!windows,errors:restoreErrors});assert.equal(restoreErrors.length,0,'Executor restoration needs reconciliation; intake remains stopped');
+  save(dir+'/restored.json',{at:new Date().toISOString(),mini:restored,windowsRestartRequested:!!windows,errors:restoreErrors,executionFailed:!!executionError});
+  if(restoreErrors.length){const restoration=Error('Executor restoration needs reconciliation; intake remains stopped');
+   if(executionError)throw new AggregateError([executionError,restoration],'Recovery execution and restoration failed');
+   throw restoration;
+  }
  }
  return {at:new Date().toISOString(),released:facts.length,dir};
 }

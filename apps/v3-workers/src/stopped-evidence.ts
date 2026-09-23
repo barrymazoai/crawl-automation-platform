@@ -13,7 +13,7 @@ export async function publishStoppedEvidence(publication:RetainedPublication,key
  const legacyKey=`v3/model-returns/${sha256(Buffer.from(JSON.stringify([inv.workflowId,inv.runId,inv.activityName,inv.operationId])))}.json`;
  let expected:string|null=null;
  if(evidence.codec==='model-return-attestation/1'&&typeof evidence.reviewId==='string')expected=legacyKey;
- if(evidence.codec==='resource-return-attestation/2'&&['owned-process','provider-response'].includes(inv.stop)&&['review','failed'].includes(evidence.outcome?.status))
+ if(evidence.codec==='resource-return-attestation/2'&&['owned-process','provider-response','not-started'].includes(inv.stop)&&!(inv.stop==='not-started'&&inv.started)&&['review','failed'].includes(evidence.outcome?.status))
   expected=inv.activityId.startsWith('permit-')?resourceReturnKey(inv):legacyKey;
  if(['owned-model-review-stop/1','owned-resource-stop/2'].includes(evidence.codec)&&evidence.request?.workflowId===inv.workflowId&&evidence.request?.runId===inv.runId){
   if(evidence.codec==='owned-model-review-stop/1'&&typeof evidence.reviewId!=='string')conflict();
@@ -53,7 +53,20 @@ export async function publishStoppedEvidence(publication:RetainedPublication,key
     code:/^(ARTIFACT|RESOURCE)\.[A-Z_]+$/.test(e.code??e.message??'')?(e.code??e.message):'RESOURCE.STOP_IO_UNKNOWN',
     name:/^[A-Za-z]{1,50}$/.test(e.name??'')?e.name:'Error',...(e.diagnostics?{io:e.diagnostics}:{})}));
    if(e.message==='RESOURCE.STOP_EVIDENCE_CONFLICT')throw error;
-   lifetime.throwIfAborted();throw Error('RESOURCE.STOP_PUBLICATION_UNAVAILABLE');
+   signal.throwIfAborted();throw Error('RESOURCE.STOP_PUBLICATION_UNAVAILABLE');
   }
+ }
+}
+
+/** Remote replication is separate from proof that the execution has ended.
+ * Only an exact durable local readback permits this fallback; conflicts never do. */
+export async function retainStoppedEvidence(publication:RetainedPublication,key:string,bytes:Buffer,signal:AbortSignal){
+ try{await publishStoppedEvidence(publication,key,bytes,signal);return;}
+ catch(error){
+  if((error as Error).message!=='RESOURCE.STOP_PUBLICATION_UNAVAILABLE')throw error;
+  signal.throwIfAborted();
+  const saved=await publication.local.read(key,bytes.length,signal);
+  if(!saved||sha256(saved)!==sha256(bytes))throw Error('RESOURCE.STOP_EVIDENCE_CONFLICT');
+  console.error(JSON.stringify({event:'RESOURCE_STOP_RETAINED_LOCAL',key,sha256:sha256(bytes),remotePublication:'pending'}));
  }
 }
