@@ -2,7 +2,7 @@ import { spawn } from 'node:child_process';
 import * as fs from 'node:fs/promises';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { OutcomeSchema, baseOutcome, type Call, type Seed, type Outcome } from './contracts.js';
+import { OutcomeSchema, baseOutcome, type Call, type LocalTask, type Outcome } from './contracts.js';
 
 export class BrowserRunner {
   constructor(private readonly configFile: string, private readonly config: { cliPath: string; journalRoot: string; runtimeRoot: string }, private readonly scriptPath: string) {}
@@ -43,12 +43,12 @@ export class BrowserRunner {
     else await fs.rm(quarantine, { force: true });
     return result;
   }
-  async discover(seed: Seed, signal: AbortSignal) {
-    const call: Call = { campaignId: seed.campaignId, candidateId: seed.candidateId };
+  async discover(input: LocalTask, signal: AbortSignal) {
+    const call: Call = { campaignId: input.campaignId, candidateId: input.candidateId };
     try { await fs.access(join(this.config.runtimeRoot, 'browser-quarantine.json')); throw Error('BRAND_ENTRY.EXECUTOR_QUARANTINED'); }
     catch (e: any) { if (e.code !== 'ENOENT') throw e; }
     try {
-      const result = OutcomeSchema.parse(await this.execute('discover', seed, signal, 210000));
+      const result = OutcomeSchema.parse(await this.execute('discover', input, signal, 210000));
       if (result.campaignId !== call.campaignId || result.candidateId !== call.candidateId) throw Error('BRAND_ENTRY.RESULT_IDENTITY');
       if (result.cleanup.status === 'pending') await fs.writeFile(join(this.config.runtimeRoot, 'browser-quarantine.json'), JSON.stringify({ call, cleanup: result.cleanup }), { mode: 0o600 });
       return result;
@@ -56,11 +56,10 @@ export class BrowserRunner {
       // An executor failure never repeats business navigation. Preserve its journal,
       // close exact targets separately, and leave the executor quarantined if uncertain.
       const result = baseOutcome(call, signal.aborted ? 'cancelled' : 'failed', signal.aborted ? 'BRAND_ENTRY.CANCELLED' : 'BRAND_ENTRY.EXECUTION_UNRESOLVED');
-      result.seed = seed;
       try {
         const state = JSON.parse(await fs.readFile(join(this.config.journalRoot, `${call.campaignId}-${call.candidateId}.json`), 'utf8'));
         if (state.call.campaignId !== call.campaignId || state.call.candidateId !== call.candidateId) throw Error('BRAND_ENTRY.JOURNAL_IDENTITY');
-        const partial = OutcomeSchema.parse(state.outcome); result.pages = partial.pages; result.evidence = partial.evidence;
+        const partial = OutcomeSchema.parse(state.outcome); result.seed = partial.seed; result.pages = partial.pages; result.evidence = partial.evidence;
       } catch { /* Keep the terminal execution error, never invent lost evidence. */ }
       try { result.cleanup = await this.recover(call); }
       catch { result.cleanup = { status: 'pending', targetIds: [], checkedAt: new Date().toISOString() };

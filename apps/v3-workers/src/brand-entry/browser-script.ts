@@ -1,10 +1,8 @@
 import * as fs from 'node:fs/promises';
 import { join } from 'node:path';
-import { createR2Objects, RetainedPublication, sha256 } from '@crawl-automation/v3-artifacts';
-import { TextLocalStore } from '@crawl-automation/v3-text';
-import { storeEntryUrl, directoryLinks } from '../../../../packages/v3-channels/src/amazon-brand-entry.js';
-import { readGncPrivateJson } from '../gnc-config.js';
-import { SeedSchema, baseOutcome, safeCode, type Call, type Seed, type Outcome, type ObjectProof } from './contracts.js';
+import { storeEntryUrl, amazonEntryUrl, seedBrand, directoryLinks } from '../../../../packages/v3-channels/src/amazon-brand-entry.js';
+import { LocalEvidence, readJson } from './local-store.js';
+import { LocalTaskSchema, SeedSchema, baseOutcome, safeCode, type Call, type Seed, type Outcome, type ObjectProof } from './contracts.js';
 
 // These APIs are supplied by ego-browser, not a Playwright session or a second browser.
 export interface EgoApi { taskSpace(id: number): Promise<any>; }
@@ -40,7 +38,7 @@ async function cleanup(task: any, state: Journal): Promise<Outcome['cleanup']> {
 }
 
 export async function recover(api: EgoApi, configFile: string, call: Call) {
-  const config: any = await readGncPrivateJson(configFile), file = journalPath(config.journalRoot, call);
+  const config: any = await readJson(configFile), file = journalPath(config.journalRoot, call);
   let state: Journal;
   try { state = JSON.parse(await fs.readFile(file, 'utf8')); }
   catch (e: any) { if (e.code === 'ENOENT') return { status: 'not_opened', targetIds: [], checkedAt: new Date().toISOString() }; throw e; }
@@ -52,47 +50,43 @@ export async function recover(api: EgoApi, configFile: string, call: Call) {
 }
 
 export async function discover(api: EgoApi, configFile: string, raw: unknown): Promise<Outcome> {
-  const seed = SeedSchema.parse(raw), call: Call = { campaignId: seed.campaignId, candidateId: seed.candidateId };
-  const config: any = await readGncPrivateJson(configFile), file = journalPath(config.journalRoot, call);
+  const input = LocalTaskSchema.parse(raw), call: Call = { campaignId: input.campaignId, candidateId: input.candidateId };
+  if (input.candidate.companyId !== call.candidateId) throw Error('BRAND_ENTRY.SEED_IDENTITY');
+  const config: any = await readJson(configFile), file = journalPath(config.journalRoot, call);
   await fs.mkdir(config.journalRoot, { recursive: true, mode: 0o700 });
   const task = await api.taskSpace(config.taskSpaceId);
   if (task.ownership !== 'agent') throw Error('BRAND_ENTRY.USER_CONTROL');
   const state: Journal = { call, phase: 'creating', before: (await task.tabs()).map((t: any) => t.targetId), owned: null, outcome: baseOutcome(call, 'failed', 'BRAND_ENTRY.EXECUTION_UNRESOLVED') };
-  state.outcome.seed = seed;
   // This intent must exist before any page creation; an existing one denies a rerun.
   await fs.writeFile(file, JSON.stringify(state), { flag: 'wx', mode: 0o600 });
-  const r2 = createR2Objects(config.r2, config.r2Credentials);
-  const publication = new RetainedPublication(await TextLocalStore.open(join(config.journalRoot, 'retained')), r2.store);
+  const evidence = new LocalEvidence(config.evidenceRoot);
   const deadline = Date.now() + 180000, bounded = () => Math.max(1, Math.min(45000, deadline - Date.now()));
   let page: any;
+  let seed: Seed;
   const retain = async (key: string, bytes: Uint8Array, mediaType: string): Promise<ObjectProof> => {
     if (Date.now() >= deadline) throw Error('BRAND_ENTRY.TIME_LIMIT');
-    const proof = { key, sha256: sha256(bytes), byteSize: bytes.length, mediaType };
-    await publication.publish(key, bytes, mediaType, AbortSignal.timeout(bounded()));
+    const proof = await evidence.retain(key, bytes, mediaType);
     state.outcome.evidence.push(proof); await save(file, state);
     return proof;
   };
   try {
-    // Verify retained seed bytes before navigating a link derived from them.
-    for (const ref of [seed.original, seed.receipt]) {
-      const bytes = await r2.store.read(ref.key, ref.byteSize, AbortSignal.timeout(15000));
-      if (!bytes || bytes.length !== ref.byteSize || sha256(bytes) !== ref.sha256) throw Error('BRAND_ENTRY.SEED_EVIDENCE');
-    }
+    if (input.candidate.existingBrandIds.length > 1) throw Error('BRAND_ENTRY.BRAND_IDENTITY_AMBIGUOUS');
     page = await task.newPage();
     const own = (await task.tabs()).find((t: any) => t.label === page.label);
     if (!own || own.openedBy !== 'agent' || state.before.includes(own.targetId)) throw Error('BRAND_ENTRY.PAGE_OWNERSHIP');
     state.owned = { label: own.label, targetId: own.targetId }; state.phase = 'navigating'; await save(file, state);
     await page.cdp('Network.enable', { maxTotalBufferSize: 16 * 1024 * 1024, maxResourceBufferSize: 8 * 1024 * 1024 });
-    const visit = async (rawUrl: string) => {
+    const visit = async (rawUrl: string, productAsin?: string): Promise<any> => {
       if (state.outcome.pages.length >= 8) throw Error('BRAND_ENTRY.NAVIGATION_LIMIT');
-      const url = storeEntryUrl(rawUrl), index = state.outcome.pages.length, prefix = `v3/brand-entry/${call.campaignId}/${call.candidateId}/pages/${index}`;
+      const url = productAsin ? amazonEntryUrl(rawUrl) : storeEntryUrl(rawUrl), index = state.outcome.pages.length;
+      const prefix = `v3/brand-entry/${call.campaignId}/${call.candidateId}/${productAsin ? 'seed' : `pages/${index}`}`;
       await page.events();
-      await page.cdp('Fetch.enable', { patterns: [{ urlPattern: 'https://www.amazon.com/stores/*', resourceType: 'Document', requestStage: 'Response' }] });
+      await page.cdp('Fetch.enable', { patterns: [{ urlPattern: 'https://www.amazon.com/*', resourceType: 'Document', requestStage: 'Response' }] });
       // Ego serializes pending navigation commands with later CDP calls. Schedule
       // one navigation after this evaluation returns so Fetch can be read and
       // continued without deadlocking a goto/Page.navigate completion waiter.
       await page.evaluate((href: string) => { setTimeout(() => { location.href = href; }, 0); }, url);
-      let original: ObjectProof | null = null, finalUrl = url, responseUrl = url, capturedAt = '', status = 0, redirects = 0;
+      let original: ObjectProof | null = null, receipt: ObjectProof | null = null, finalUrl = url, responseUrl = url, capturedAt = '', status = 0, redirects = 0;
       const navigationDeadline = Math.min(deadline, Date.now() + 45000);
       while (!original && Date.now() < navigationDeadline) {
         if (task.ownership !== 'agent') throw Error('BRAND_ENTRY.USER_CONTROL');
@@ -101,13 +95,13 @@ export async function discover(api: EgoApi, configFile: string, raw: unknown): P
           if (event.method !== 'Fetch.requestPaused') continue;
           const p = event.params;
           responseUrl = p.request.url;
-          finalUrl = storeEntryUrl(p.request.url);
+          finalUrl = amazonEntryUrl(p.request.url);
           status = p.responseStatusCode;
           if (status >= 300 && status < 400) {
             if (++redirects > 3) throw Error('BRAND_ENTRY.REDIRECT_LIMIT');
             const location = p.responseHeaders.find((h: any) => h.name.toLowerCase() === 'location')?.value;
             if (!location) throw Error('BRAND_ENTRY.REDIRECT_UNVERIFIED');
-            storeEntryUrl(new URL(location, finalUrl).href);
+            amazonEntryUrl(new URL(location, finalUrl).href);
             await retain(`${prefix}/redirect-${redirects}.json`, Buffer.from(JSON.stringify({ url: finalUrl, status, location })), 'application/json');
             await page.cdp('Fetch.continueResponse', { requestId: p.requestId }); continue;
           }
@@ -121,7 +115,7 @@ export async function discover(api: EgoApi, configFile: string, raw: unknown): P
           if (!bytes.length || bytes.length > 6 * 1024 * 1024) throw Error('BRAND_ENTRY.HTML_LIMIT');
           capturedAt = new Date().toISOString();
           original = await retain(`${prefix}/original.html`, bytes, 'text/html');
-          await retain(`${prefix}/original.json`, Buffer.from(JSON.stringify({ url: responseUrl, normalizedUrl: finalUrl, requestedUrl: url, capturedAt, status, original,
+          receipt = await retain(`${prefix}/original.json`, Buffer.from(JSON.stringify({ url: responseUrl, normalizedUrl: finalUrl, requestedUrl: url, capturedAt, status, original,
             representation: 'fetch-response-base64', contentType })), 'application/json');
           await page.cdp('Fetch.continueResponse', { requestId: p.requestId });
           // Interception is task-target-local and ends as soon as the required body is retained.
@@ -133,7 +127,14 @@ export async function discover(api: EgoApi, configFile: string, raw: unknown): P
       }
       if (!original) throw Error('BRAND_ENTRY.RAW_BODY_MISSING');
       await page.waitForFunction((expected: string) => location.href === expected && document.readyState !== 'loading', responseUrl, { timeout: bounded() });
-      if (storeEntryUrl(await page.url()) !== finalUrl) throw Error('BRAND_ENTRY.REDIRECT_UNVERIFIED');
+      if (amazonEntryUrl(await page.url()) !== finalUrl) throw Error('BRAND_ENTRY.REDIRECT_UNVERIFIED');
+      if (productAsin) {
+        const parsed = seedBrand(new TextDecoder('utf-8', { fatal: true }).decode(await evidence.read(original)), productAsin, finalUrl);
+        seed = SeedSchema.parse({ ...call, candidate: input.candidate, asin: productAsin, productUrl: url, ...parsed, capturedAt, original, receipt });
+        state.outcome.seed = seed; await save(file, state); return;
+      }
+      storeEntryUrl(finalUrl);
+      await page.waitForFunction(() => Boolean(document.querySelector('a[href*="/stores/"][href*="/page/"],a[href*="/dp/"]')), undefined, { timeout: Math.min(15000, bounded()) });
       const snapshotText: string = await page.snapshot({ scope: 'full_page' });
       const data = await page.evaluate(() => ({ title: document.title,
         headings: Array.from(document.querySelectorAll('h1,h2,img[alt]')).map(e => e.getAttribute('alt') || e.textContent || '').slice(0, 250),
@@ -151,7 +152,10 @@ export async function discover(api: EgoApi, configFile: string, raw: unknown): P
       if (!visibleIdentity.includes(identityText(seed.name))) throw Error('BRAND_ENTRY.STORE_IDENTITY');
       return { data, index };
     };
-    const first = await visit(seed.storeUrl), choice = directoryLinks(first.data.links, seed.storeUrl);
+    const sampleAsin = new URL(input.candidate.sampleUrl).pathname.match(/\/(?:dp|gp\/product)\/([A-Z0-9]{10})/)?.[1];
+    const asin = input.candidate.amazonListings.find(x => x.asin === sampleAsin)?.asin ?? input.candidate.amazonListings[0]!.asin;
+    await visit(`https://www.amazon.com/dp/${asin}`, asin);
+    const first = await visit(seed!.storeUrl), choice = directoryLinks(first.data.links, seed!.storeUrl);
     state.outcome.directoryKind = choice.kind;
     for (const entry of choice.links) {
       const visited = entry.href === state.outcome.pages[0]!.finalUrl ? first : await visit(entry.href);
@@ -165,7 +169,7 @@ export async function discover(api: EgoApi, configFile: string, raw: unknown): P
     try { state.outcome.cleanup = await cleanup(task, state); }
     catch { state.outcome.cleanup = { status: 'pending', targetIds: state.owned ? [state.owned.targetId] : [], checkedAt: new Date().toISOString() }; }
     if (state.outcome.cleanup.status === 'pending') { state.outcome.state = 'failed'; state.outcome.code = 'BRAND_ENTRY.CLEANUP_PENDING'; state.outcome.verifiedAt = null; }
-    state.phase = 'finished'; await save(file, state); r2.close();
+    state.phase = 'finished'; await save(file, state);
   }
   return state.outcome;
 }

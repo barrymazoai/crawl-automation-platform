@@ -7,8 +7,11 @@ export const CandidateSchema = z.object({
   amazonListings: z.array(z.strictObject({ site: z.literal('amazon.com'), asin: z.string().regex(/^[A-Z0-9]{10}$/) })).min(1).max(10000),
 });
 export type Candidate = z.infer<typeof CandidateSchema>;
+export const ManifestSchema = z.strictObject({ codec: z.literal('amazon-brand-local/1'), campaignId: z.uuid(), createdAt: z.iso.datetime(), candidates: z.array(CandidateSchema).min(1).max(10000) });
 export const CallSchema = z.strictObject({ campaignId: z.uuid(), candidateId: z.uuid() });
 export type Call = z.infer<typeof CallSchema>;
+export const LocalTaskSchema = z.strictObject({ ...CallSchema.shape, candidate: CandidateSchema });
+export type LocalTask = z.infer<typeof LocalTaskSchema>;
 export const ObjectProofSchema = z.strictObject({ key: z.string().min(1).max(1000), sha256: z.string().regex(/^[a-f0-9]{64}$/), byteSize: z.number().int().positive(), mediaType: z.string() });
 export type ObjectProof = z.infer<typeof ObjectProofSchema>;
 export const SeedSchema = z.strictObject({
@@ -32,8 +35,5 @@ export const OutcomeSchema = z.strictObject({
   verifiedAt: z.iso.datetime().nullable(),
 });
 export type Outcome = z.infer<typeof OutcomeSchema>;
-export const CONTROL_QUEUE = 'amazon-brand-entry-control';
-export const BROWSER_QUEUE = 'amazon-brand-entry-browser';
-export const workflowId = (x: Call) => `brand-entry-${x.campaignId}-${x.candidateId}`;
 export const safeCode = (e: unknown) => e instanceof Error && /^(?:BRAND_ENTRY|AMAZON|ARTIFACT|RESOURCE|NETWORK|SCRAPERAPI)\.[A-Z_]+$/.test(e.message) ? e.message : 'BRAND_ENTRY.EXECUTION_UNRESOLVED';
 export const baseOutcome = (x: Call, state: Outcome['state'], code: string): Outcome => ({ ...x, state, code, seed: null, pages: [], evidence: [], directories: [], directoryKind: null, catalogEnumerationComplete: false, cleanup: { status: 'not_opened', targetIds: [], checkedAt: new Date().toISOString() }, verifiedAt: null });

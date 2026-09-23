@@ -10,9 +10,10 @@ export function verifiedProofs(out: Outcome): ObjectProof[] {
       !out.verifiedAt || !out.directoryKind || out.cleanup.status !== 'closed' || !out.cleanup.targetIds.length) return fail();
   if (seed.campaignId !== out.campaignId || seed.candidateId !== out.candidateId || seed.candidate.companyId !== out.candidateId) return fail();
   const prefix = `v3/brand-entry/${out.campaignId}/${out.candidateId}/pages/`;
+  const seedPrefix = `v3/brand-entry/${out.campaignId}/${out.candidateId}/seed/`;
   const refs = new Map<string, ObjectProof>();
   for (const ref of out.evidence) {
-    if (!ref.key.startsWith(prefix) || refs.has(ref.key)) return fail();
+    if ((!ref.key.startsWith(prefix) && !ref.key.startsWith(seedPrefix)) || refs.has(ref.key)) return fail();
     refs.set(ref.key, ref);
   }
   for (const [i, page] of out.pages.entries()) {
