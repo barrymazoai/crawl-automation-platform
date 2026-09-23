@@ -62,9 +62,12 @@ export class LocalBrandImporter {
   }
 }
 async function main() {
-  const [command, rawRoot, configFile] = process.argv.slice(2);
+  const [command, rawRoot, configFile, identityMapFile] = process.argv.slice(2);
   if (!['preview', 'apply'].includes(command ?? '') || !rawRoot || !configFile) throw Error('BRAND_ENTRY.IMPORT_ARGUMENTS');
   const root = resolve(rawRoot), manifest = ManifestSchema.parse(await readJson(join(root, 'manifest.json')));
+  // Private legacy identifiers stay on the primary Mini. Browser inputs carry
+  // only public product URLs and opaque random IDs; join them here after return.
+  const identities = identityMapFile ? await readJson(resolve(identityMapFile)) : null;
   const config = await readJson(resolve(configFile)), database = config.database ?? config;
   const db = new pg.Pool({ connectionString: database.connectionString, ssl: database.tls ? { rejectUnauthorized: true } : false, max: 1, connectionTimeoutMillis: 5000, statement_timeout: 10000 });
   try {
@@ -75,7 +78,7 @@ async function main() {
     if (command === 'apply') {
       try { await fs.access(beforeFile); } catch (e: any) {
         if (e.code !== 'ENOENT') throw e;
-        const ids = manifest.candidates.flatMap(x => x.existingBrandIds);
+        const ids = manifest.candidates.flatMap(x => identities ? identities[x.companyId]?.existingBrandIds ?? [] : x.existingBrandIds);
         await createJson(beforeFile, { at: new Date().toISOString(), campaignId: manifest.campaignId,
           brands: (await db.query('SELECT * FROM brand WHERE id=ANY($1::uuid[])', [ids])).rows,
           sources: (await db.query('SELECT * FROM brand_source WHERE brand_id=ANY($1::uuid[])', [ids])).rows });
@@ -89,6 +92,14 @@ async function main() {
       if (out.state !== 'verified') { rows.push({ id: candidate.companyId, state: out.state, code: out.code }); continue; }
       if (!isDeepStrictEqual(candidate, out.seed?.candidate)) throw Error('BRAND_ENTRY.SEED_IDENTITY');
       await validateLocalResult(root, out);
+      if (identities) {
+        const identity = identities[candidate.companyId];
+        if (!identity || !identity.amazonListings.some((x: any) => x.asin === out.seed!.asin)) throw Error('BRAND_ENTRY.PRIVATE_MAPPING_MISMATCH');
+        out = structuredClone(out);
+        out.seed!.candidate.existingBrandIds = identity.existingBrandIds;
+        out.seed!.candidate.existingBrandNames = identity.existingBrandNames;
+      }
+      if (out.seed!.candidate.existingBrandIds.length > 1) { rows.push({ id: candidate.companyId, state: 'review', code: 'BRAND_ENTRY.BRAND_IDENTITY_AMBIGUOUS' }); continue; }
       const resultHash = digest(JSON.stringify(out)), receiptFile = join(root, 'import-receipts', `${candidate.companyId}.json`);
       let prior; try { prior = await readJson(receiptFile); } catch (e: any) { if (e.code !== 'ENOENT') throw e; }
       if (prior) { if (prior.resultHash !== resultHash) throw Error('BRAND_ENTRY.RESULT_CONFLICT'); rows.push(prior); continue; }
