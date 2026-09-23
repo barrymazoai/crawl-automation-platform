@@ -32,8 +32,13 @@ export class BrowserRunner {
     });
   }
   async recover(call: Call): Promise<Outcome['cleanup']> {
-    const result = OutcomeSchema.shape.cleanup.parse(await this.execute('recover', call, AbortSignal.timeout(28000), 28000));
     const quarantine = join(this.config.runtimeRoot, 'browser-quarantine.json');
+    let prior: { call: Call } | undefined;
+    try { prior = JSON.parse(await fs.readFile(quarantine, 'utf8')); }
+    catch (e: any) { if (e.code !== 'ENOENT') throw Error('BRAND_ENTRY.EXECUTOR_QUARANTINED'); }
+    if (prior && (prior.call?.campaignId !== call.campaignId || prior.call?.candidateId !== call.candidateId))
+      throw Error('BRAND_ENTRY.EXECUTOR_QUARANTINED');
+    const result = OutcomeSchema.shape.cleanup.parse(await this.execute('recover', call, AbortSignal.timeout(28000), 28000));
     if (result.status === 'pending') await fs.writeFile(quarantine, JSON.stringify({ call, cleanup: result }), { mode: 0o600 });
     else await fs.rm(quarantine, { force: true });
     return result;

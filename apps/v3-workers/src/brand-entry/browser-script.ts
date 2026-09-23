@@ -30,7 +30,7 @@ async function cleanup(task: any, state: Journal): Promise<Outcome['cleanup']> {
     return { status: 'pending', targetIds: [owned.targetId], checkedAt };
   const page = task.page(current.label);
   // Restore only this target's interception state, and stop its pending navigation.
-  await page.cdp('Fetch.disable'); await page.cdp('Page.stopLoading');
+  await page.cdp('Fetch.disable', {}, { timeout: 5000 }); await page.cdp('Page.stopLoading', {}, { timeout: 5000 });
   try { await page.close(); } catch { /* A close timeout can precede a successful target removal. */ }
   for (let n = 0; n < 8; n++) {
     if (!(await task.tabs()).some((t: any) => t.targetId === owned.targetId)) return { status: 'closed', targetIds: [owned.targetId], checkedAt: new Date().toISOString() };
