@@ -89,7 +89,12 @@ export async function discover(api: EgoApi, configFile: string, raw: unknown): P
       await page.events();
       await page.cdp('Fetch.enable', { patterns: [{ urlPattern: 'https://www.amazon.com/stores/*', resourceType: 'Document', requestStage: 'Response' }] });
       let navigationError: unknown, navigationDone = false;
-      const navigation = page.goto(url, { waitUntil: 'domcontentloaded', timeout: bounded() }).then(() => { navigationDone = true; }, (e: unknown) => { navigationError = e; });
+      // Ego's goto lifecycle waiter misses the completion event when Fetch pauses
+      // a response. Navigate through its documented CDP escape hatch, then verify
+      // the committed URL and document readiness explicitly after retention.
+      const navigation = page.cdp('Page.navigate', { url }, { timeout: bounded() }).then((r: any) => {
+        if (r.errorText || r.isDownload) navigationError = Error('BRAND_ENTRY.NAVIGATION_FAILED'); else navigationDone = true;
+      }, (e: unknown) => { navigationError = e; });
       let original: ObjectProof | null = null, finalUrl = url, capturedAt = '', status = 0, redirects = 0;
       const navigationDeadline = Math.min(deadline, Date.now() + 45000);
       while (!original && Date.now() < navigationDeadline) {

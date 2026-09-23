@@ -75,7 +75,7 @@ async function main() {
     }
     const activities = Object.fromEntries(Object.entries(handlers).map(([name, fn]) => [name, async (raw: unknown) => {
       const ctx = Context.current(); if (ctx.info.attempt !== 1) throw ApplicationFailure.nonRetryable('Business retry disabled', 'BRAND_ENTRY.RETRY_DENIED');
-      active = ctx.info.workflowExecution.workflowId; await health('running');
+      active = ctx.info.workflowExecution?.workflowId ?? null; await health('running');
       const timer = setInterval(() => ctx.heartbeat({ phase: name }), 2000);
       try { return await fn(raw); }
       catch (error) { throw ApplicationFailure.nonRetryable('Inspect retained Brand preparation evidence', safeCode(error)); }
