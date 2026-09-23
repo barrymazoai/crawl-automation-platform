@@ -151,8 +151,18 @@ export class AmazonHttpReader {
   async product(url: string, signal: AbortSignal, retain?: (raw: unknown) => Promise<void>, postalCode?: string, archive?: AmazonHtmlArchive): Promise<AmazonRenderedProduct> {
     if (postalCode !== undefined) throw new ChannelError("AMAZON.DELIVERY_POLICY_UNSUPPORTED");
     if (!archive) throw new ChannelError('AMAZON.HTML_ARCHIVE_REQUIRED');
+    const saved = await this.originalProduct(url, signal, archive);
+    const address = amazonProductAddress(url), p = this.projection(url, saved);
+    if (p.asin !== address.asin) throw new ChannelError("AMAZON.ASIN_CONFLICT");
+    await retain?.(p);
+    parseAmazonRenderedProduct(p, url, { listingId: address.asin, variantId: null });
+    return p;
+  }
+  /** Brand preparation needs the original and byline, not image/gallery extraction.
+   * It shares exactly the product capture's paid-fetch admission and immutable archive. */
+  async originalProduct(url: string, signal: AbortSignal, archive: AmazonHtmlArchive): Promise<ArchivedAmazonHtml> {
     if (archive.job.discovery.entry.url !== url) throw new ChannelError('AMAZON.HTML_ARCHIVE_IDENTITY');
-    const address = amazonProductAddress(url);
+    amazonProductAddress(url);
     let saved = await archive.inspect(signal);
     if (!saved) {
       if (!this.fetchGate) throw new ChannelError('AMAZON.HTML_FETCH_GATE_REQUIRED');
@@ -168,10 +178,6 @@ export class AmazonHttpReader {
         await this.fetchGate.complete(archive.job, saved.capturedAt, signal);
       }
     }
-    const p = this.projection(url, saved);
-    if (p.asin !== address.asin) throw new ChannelError("AMAZON.ASIN_CONFLICT");
-    await retain?.(p);
-    parseAmazonRenderedProduct(p, url, { listingId: address.asin, variantId: null });
-    return p;
+    return saved;
   }
 }
