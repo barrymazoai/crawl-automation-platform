@@ -3,6 +3,7 @@ import type pg from "pg";
 import {z} from "zod";
 import {ChannelPlanInputSchema,GncAcquireInputSchema,GncReceivedRecordSchema,LabelCollectedProductSchema,assertArtifactBelongsTo,
   PurchaseConditionsSchema,type ArtifactRef} from "@crawl-automation/v3-contracts";
+import {CommerceEvidenceSchema} from '../../../packages/v3-contracts/src/commerce.js';
 import {sha256,type ObjectStore} from "@crawl-automation/v3-artifacts";
 import {parseAmazonRenderedProduct,parseSwansonRenderedProduct,parseDtcRenderedProduct} from "@crawl-automation/v3-channels";
 import {labelCollectedHash} from "@crawl-automation/v3-product";
@@ -35,6 +36,12 @@ export function commerceMetrics(raw:unknown){
   m.rating=decimal(r.rating)??decimal(text(r.rating)?.match(/^(\d+(?:\.\d+)?)\s+out of\s+5\s+stars$/i)?.[1]);
   m.reviewCount=reviewCount(r.reviewCount);
   m.inStock=stock(r.availability);m.extras={commerce:r};
+  if(r.salesVolume!==undefined&&r.salesVolume!==null){
+    const sales=CommerceEvidenceSchema.shape.salesVolume.parse(r.salesVolume)!;
+    m.unitsSold=sales.lowerBound;
+    m.unitsSoldPeriod=sales.period==='past_month'?'trailing_30d':'unknown';
+    m.extras.salesVolume=sales; // Includes the +/abbreviated qualifier and weekly/monthly wording.
+  }
   // Only new, explicitly versioned observations gain structured conditions.
   // Do not enrich old immutable receipts during replay or change their hashes.
   if(r.purchaseConditions!==undefined)m.extras.purchaseConditions=PurchaseConditionsSchema.parse(r.purchaseConditions);
@@ -96,7 +103,16 @@ export class HistoryObservations{
     const parsed=(i.channel==="amazon"?parseAmazonRenderedProduct:i.channel==="swanson"?parseSwansonRenderedProduct:parseDtcRenderedProduct)(r,i.expectedUrl,i.owner);
     let capturedAt=timestamp(r.capturedAt),externalId:string|null=null,metrics=commerceMetrics(r.commerce);
     const refs=[{objectKey:i.source.objectKey,sha256:i.source.sha256}];
-    if(i.channel==="amazon")externalId=i.owner.listingId;
+    if(i.channel==="amazon"){
+      externalId=i.owner.listingId;
+      if(r.originalHtml!==undefined){
+        const ref=r.originalHtml as ArtifactRef;
+        assertArtifactBelongsTo(ref,i.owner);
+        if(ref.kind!=='source-html'||ref.objectKey!==`v3/amazon-products/${i.source.producer.operationId}/original.html`||ref.producer.operationId!==i.source.producer.operationId)
+          throw Error('HISTORY.EVIDENCE_CONFLICT');
+        await this.read(ref,s);refs.push({objectKey:ref.objectKey,sha256:ref.sha256});
+      }
+    }
     if(i.channel==="swanson"){
       const sku=text(asRow(r.commerce).sku);
       externalId=sku&&/^[A-Z][A-Z0-9-]{2,30}$/.test(sku)?sku:`shopify-variant:${i.owner.variantId}`;

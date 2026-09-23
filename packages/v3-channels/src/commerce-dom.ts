@@ -19,10 +19,19 @@ export const amazonCommerceDomExpression=`(()=>{
  const price=(mainAmounts.length?unique(mainAmounts):null)??unique(selected.map(amount));
  const mainRegions=elements('#corePriceDisplay_desktop_feature_div').filter(visible);
  const selectedOffers=elements('#buyBoxAccordion .a-accordion-active');
+ const salesSelector='#socialProofingAsinFaceout_feature_div';
+ const salesText=unique(elements(salesSelector).filter(visible).map(e=>{
+  const copy=e.cloneNode(true);copy.querySelectorAll('script,style,noscript,template').forEach(n=>n.remove());
+  return (copy.textContent||'').replace(/\\s+/g,' ').trim();
+ }));
+ const sold=salesText?.match(/^(\\d+(?:,\\d{3})*(?:\\.\\d+)?)([KM])?(\\+)? bought in (?:the )?past (month|week)$/i);
+ const soldNumber=sold?Number(sold[1].replaceAll(',',''))*({K:1000,M:1000000}[(sold[2]||'').toUpperCase()]||1):null;
+ const salesVolume=sold&&Number.isSafeInteger(soldNumber)&&soldNumber>0?{text:salesText,lowerBound:String(soldNumber),
+  approximate:!!sold[2]||!!sold[3],period:sold[4].toLowerCase()==='month'?'past_month':'past_week',selector:salesSelector}:null;
  return {codec:'public-product-commerce/1',sku:value('[itemprop="sku"], [data-product-sku]'),price,
  currency:value('meta[property="product:price:currency"]',document)||value('[itemprop="priceCurrency"]')||value('input[id="currencyOfPreference"]',document),
  listPrice:unique(mainRegions.flatMap(e=>elements('.apex-basisprice-value',e).filter(visible).map(amount))),
- rating:value('#acrPopover .a-icon-alt'),reviewCount:value('#acrCustomerReviewText'),availability:value('#availability',root,true),
+ rating:value('#acrPopover .a-icon-alt'),reviewCount:value('#acrCustomerReviewText'),availability:value('#availability',root,true),salesVolume,
  context:[document.querySelector('#nav-global-location-popover-link')?.innerText||'',...mainRegions.map(e=>'main offer: '+e.innerText.slice(0,1200)),...selectedOffers.map(e=>'selected offer: '+e.innerText.slice(0,2500))].filter(Boolean),
  purchaseConditions:${amazonPurchaseConditionsDomExpression}};
 })()`;

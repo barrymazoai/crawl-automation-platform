@@ -10,3 +10,10 @@
 - Verify target absence after closing. Browser tab inventories can lag behind a close receipt; perform a bounded read-only recheck rather than assuming the receipt proves closure or blindly repeating close.
 - Automatic Workers need a task-owned page lifecycle, cleanup before lease handoff, and exact-target recovery for abnormal exits. Do not claim this is implemented just because a cleanup helper or this rule exists. Do not close a shared fixed target in an individual read/file Activity while another Activity still needs it.
 - Run browser/provider/integration tests on Mac mini, not this MacBook. Preserve R2 evidence and existing passive Review records.
+
+## Original HTML evidence — user requirement, 2026-09-23
+
+- A completed Amazon HTML download must be archived byte-for-byte in R2, with capture URL/time, identity, byte size and SHA-256, and read back successfully before product parsing or analysis starts. Retain the original when parsing fails. A projection or derived HTML fragment is not a substitute for original HTML.
+- Investigations, parser fixes and reanalysis use the retained original. Do not fetch a fresh page to stand in for missing historical evidence. Label any explicitly needed new capture as a new observation, archive it first, and preserve old evidence and Reviews.
+- Do not silently retry failed ScraperAPI requests. Unknown archive publication must stop processing; it must not cause a second download.
+- For this migration, query the production database through the US Mac mini (100.76.126.12). Keep queue intake paused until the user authorizes resuming it.

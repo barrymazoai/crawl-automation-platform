@@ -11,7 +11,7 @@ import { CatalogPageInputSchema, CatalogDiscoverySchema, AmazonProductJobSchema,
   AmazonProductCaptureSchema, AmazonProductHandoffSchema, ChannelLabelInputSchema, ReviewRecordSchema, observationIdentity } from "@crawl-automation/v3-contracts";
 import { createR2Objects, RetainedPublication, ArtifactResolver, FileCopies, sha256, ActivityObjectReads } from "@crawl-automation/v3-artifacts";
 import { EgoTaskPages, EgoFileTransport, DirectHttpsTransport, SystemHttpsTransport, createHttpRoute, AcquireFileModule, FileEvidence, acquireFile, systemDns, dohDns, type SourceAccess, type FileTransport } from "@crawl-automation/v3-acquisition";
-import { AmazonCatalogSource, AmazonEgoReader, AmazonHttpReader, AmazonLiveProduct, ChannelProductPlans } from "@crawl-automation/v3-channels";
+import { AmazonCatalogSource, AmazonEgoReader, AmazonHttpReader, AmazonHtmlArchive, AmazonLiveProduct, ChannelProductPlans } from "@crawl-automation/v3-channels";
 import { TextLocalStore } from "@crawl-automation/v3-text";
 import { PostgresReviews } from "@crawl-automation/v3-review";
 import { RoleRegistry, artifactBuildId, workerProcess } from "@crawl-automation/v3-worker-runtime";
@@ -90,8 +90,9 @@ async function main() {
         };
         const products = new AmazonLiveProduct(publication, { text: config.sourceText, ocr: config.ocr,
           visionConfigFingerprint: config.sourceVisionConfigFingerprint, egressId: config.egressId }, {
-          capture: async (job, signal) => { await requireBrowser(); return http ? new AmazonHttpReader(http).product(job.discovery.entry.url, signal)
+          capture: async (job, signal) => { await requireBrowser(); return http ? new AmazonHttpReader(http).product(job.discovery.entry.url, signal, undefined, undefined, new AmazonHtmlArchive(publication, job))
             : new AmazonEgoReader(await requirePages().open(job.sessionId, signal)).product(job.discovery.entry.url, signal, undefined, config.deliveryPostalCode); },
+          restore: async (job, signal) => http ? new AmazonHttpReader(http).archivedProduct(job.discovery.entry.url, signal, new AmazonHtmlArchive(publication, job)) : null,
         }, async job => {
           const batch = await links.get(job.discovery.catalogId);
           if (!batch) return false;

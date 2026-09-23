@@ -6,6 +6,7 @@ import { abortable, transportAddress, permittedUrl, systemDns, requireCapability
 import { amazonProductExpression } from "./amazon-ego.js";
 import { amazonProductAddress, parseAmazonRenderedProduct } from "./amazon-rendered.js";
 import { ChannelError } from "./html-evidence.js";
+import { AmazonHtmlArchive, type ArchivedAmazonHtml } from './amazon-html-archive.js';
 
 /** Bounded raw HTML read of one public product page. No JS execution, cookies, redirects or retries. */
 export const AMAZON_HTTP_POLICY = Object.freeze({ timeoutMs: 75000, maxBytes: 6 * 1024 * 1024, redirects: 0,
@@ -83,24 +84,17 @@ export function parseAmazonStaticHtml(html: string, pageUrl: string, fetchedVia?
   return AmazonRenderedProductSchema.parse(projection);
 }
 
-/** Provider-side transients seen under load: an empty body, a soft challenge, a provider hiccup. Each is retried a
- * bounded number of times on the same route (ScraperAPI rotates its own exit IP); never a route change or escalation. */
-const AMAZON_HTTP_TRANSIENT = new Set(["AMAZON.PAGE_EMPTY", "AMAZON.ACCESS_CHALLENGE", "AMAZON.HTTP_STATUS", "SCRAPERAPI.EXECUTION_UNKNOWN", "SCRAPERAPI.PROVIDER_FAILURE", "SCRAPERAPI.THROTTLED", "SCRAPERAPI.REDIRECT_UNVERIFIED"]);
-export const AMAZON_HTTP_RETRY = { attempts: 3, delaysMs: [2000, 5000] };
+const decodeHtml = (bytes: Uint8Array) => {
+  try { return new TextDecoder('utf-8', { fatal: true }).decode(bytes); }
+  catch { throw new ChannelError('AMAZON.ENCODING'); }
+};
+/** Explicit one-shot transport primitive. Product capture must use the archive-gated reader below. */
 export async function readAmazonHtml(route: HttpRoute, rawUrl: string, abort: AbortSignal, dns: DnsResolver = systemDns): Promise<string> {
-  for (let n = 1; ; n++) {
-    try { return await readAmazonHtmlOnce(route, rawUrl, abort, dns); }
-    catch (error) {
-      abort.throwIfAborted();
-      const code = error instanceof Error ? error.message : "";
-      if (n >= AMAZON_HTTP_RETRY.attempts || !AMAZON_HTTP_TRANSIENT.has(code)) throw error;
-      await new Promise(r => setTimeout(r, AMAZON_HTTP_RETRY.delaysMs[Math.min(n - 1, AMAZON_HTTP_RETRY.delaysMs.length - 1)] ?? 0));
-    }
-  }
+  return decodeHtml(await readAmazonHtmlBytes(route, rawUrl, abort, dns));
 }
 /** One bounded GET of a public Amazon page through the configured route (ScraperAPI). Challenge/redirect/status
  * outcomes are typed errors; the caller above decides which of them deserve another attempt. */
-async function readAmazonHtmlOnce(route: HttpRoute, rawUrl: string, abort: AbortSignal, dns: DnsResolver): Promise<string> {
+async function readAmazonHtmlBytes(route: HttpRoute, rawUrl: string, abort: AbortSignal, dns: DnsResolver): Promise<Uint8Array> {
   requireCapability(route, "http");
   const url = permittedUrl(rawUrl, AMAZON_HTTP_POLICY.origins);
   const controller = new AbortController(), signal = AbortSignal.any([abort, controller.signal]);
@@ -130,8 +124,7 @@ async function readAmazonHtmlOnce(route: HttpRoute, rawUrl: string, abort: Abort
       chunks.push(next.value);
     }
     if (!size) throw new ChannelError("AMAZON.PAGE_EMPTY");
-    try { return new TextDecoder("utf-8", { fatal: true }).decode(Buffer.concat(chunks)); }
-    catch { throw new ChannelError("AMAZON.ENCODING"); }
+    return Buffer.concat(chunks);
   } finally { clearTimeout(timer); response?.close(); }
 }
 
@@ -144,11 +137,27 @@ export class AmazonHttpReader {
     const s = route.selection;
     this.fetchedVia = Object.freeze({ mode: "http", routeId: s.routeId, egressId: s.egressId, provider: s.mode === "scraperapi" ? s.providerPolicy : s.mode });
   }
-  async product(url: string, signal: AbortSignal, retain?: (raw: unknown) => Promise<void>, postalCode?: string): Promise<AmazonRenderedProduct> {
+  private projection(url: string, saved: ArchivedAmazonHtml): AmazonRenderedProduct {
+    const p = parseAmazonStaticHtml(decodeHtml(saved.bytes), url, saved.fetchedVia ?? this.fetchedVia);
+    return AmazonRenderedProductSchema.parse({ ...p, capturedAt: saved.capturedAt, originalHtml: saved.source });
+  }
+  /** Offline continuation: never invokes the transport, including when the archive is missing. */
+  async archivedProduct(url: string, signal: AbortSignal, archive: AmazonHtmlArchive): Promise<AmazonRenderedProduct | null> {
+    if (archive.job.discovery.entry.url !== url) throw new ChannelError('AMAZON.HTML_ARCHIVE_IDENTITY');
+    const saved = await archive.inspect(signal);
+    return saved ? this.projection(url, saved) : null;
+  }
+  async product(url: string, signal: AbortSignal, retain?: (raw: unknown) => Promise<void>, postalCode?: string, archive?: AmazonHtmlArchive): Promise<AmazonRenderedProduct> {
     if (postalCode !== undefined) throw new ChannelError("AMAZON.DELIVERY_POLICY_UNSUPPORTED");
+    if (!archive) throw new ChannelError('AMAZON.HTML_ARCHIVE_REQUIRED');
+    if (archive.job.discovery.entry.url !== url) throw new ChannelError('AMAZON.HTML_ARCHIVE_IDENTITY');
     const address = amazonProductAddress(url);
-    const html = await readAmazonHtml(this.route, url, signal, this.dns);
-    const p = parseAmazonStaticHtml(html, url, this.fetchedVia);
+    let saved = await archive.inspect(signal);
+    if (!saved) {
+      await archive.beginDownload(signal);
+      saved = await archive.save(await readAmazonHtmlBytes(this.route, url, signal, this.dns), signal, { fetchedVia: this.fetchedVia });
+    }
+    const p = this.projection(url, saved);
     if (p.asin !== address.asin) throw new ChannelError("AMAZON.ASIN_CONFLICT");
     await retain?.(p);
     parseAmazonRenderedProduct(p, url, { listingId: address.asin, variantId: null });

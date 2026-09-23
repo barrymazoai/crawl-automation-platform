@@ -1,6 +1,14 @@
 import {expect,it} from 'vitest';
 import {commerceMetrics} from './history-observations.js';
 
+it('carries purchase-badge volume through metrics while retaining its approximate qualifier',()=>{
+ const salesVolume={text:'1K+ bought in past month',lowerBound:'1000',approximate:true,period:'past_month',selector:'#socialProofingAsinFaceout_feature_div'};
+ const metrics=commerceMetrics({salesVolume});
+ expect(metrics).toMatchObject({unitsSold:'1000',unitsSoldPeriod:'trailing_30d',extras:{salesVolume}});
+ expect(commerceMetrics({})).toMatchObject({unitsSold:null,unitsSoldPeriod:null});
+ expect(commerceMetrics({salesVolume:{...salesVolume,period:'past_week'}}).unitsSoldPeriod).toBe('unknown');
+});
+
 it.each([['(486)','486'],['(27,116)','27116'],['(4,247)','4247'],['(108)','108'],['1,248 ratings','1248'],['4,001 global ratings','4001'],[120,'120'],['0','0']])('reads a complete review-count field %s', (raw,expected)=>{
  expect(commerceMetrics({reviewCount:raw}).reviewCount).toBe(expected);
 });

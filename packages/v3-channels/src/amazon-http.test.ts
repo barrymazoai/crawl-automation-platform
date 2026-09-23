@@ -6,8 +6,9 @@ import { fileURLToPath } from "node:url";
 import { AmazonRenderedProductSchema } from "@crawl-automation/v3-contracts";
 import { CommerceEvidenceSchema } from "../../v3-contracts/src/commerce.js";
 import { ScraperApiTransport, type HttpRoute, type Response } from "@crawl-automation/v3-acquisition";
-import { AmazonHttpReader, amazonStaticGallery, amazonStaticTwister, parseAmazonStaticHtml, readAmazonHtml, AMAZON_HTTP_POLICY, AMAZON_HTTP_RETRY } from "./amazon-http.js";
-AMAZON_HTTP_RETRY.delaysMs = [0, 0];
+import { AmazonHttpReader, amazonStaticGallery, amazonStaticTwister, parseAmazonStaticHtml, readAmazonHtml, AMAZON_HTTP_POLICY } from "./amazon-http.js";
+import { AmazonHtmlArchive } from './amazon-html-archive.js';
+import { amazonFixture } from './amazon-live.fixture.js';
 import { parseAmazonRenderedProduct } from "./amazon-rendered.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -27,13 +28,17 @@ function fakeRoute(reply: (target: URL) => { status: number; type?: string; body
   return { selection: route, transport, capabilities: transport.capabilities, calls };
 }
 
-describe("transient provider outcomes are retried on the same route", () => {
-  it("an empty body is retried and the second attempt parses; a not-found answer is not retried", async () => {
-    let n = 0; const r = fakeRoute(() => ({ status: 200, body: n++ === 0 ? "" : page("B0G963NB8Q") }));
-    expect((await readAmazonHtml(r, url("B0G963NB8Q"), new AbortController().signal)).length).toBeGreaterThan(1000); expect(r.calls).toHaveLength(2);
-    const gone = fakeRoute(() => ({ status: 404, body: "" }));
-    await expect(readAmazonHtml(gone, url("B0G963NB8Q"), new AbortController().signal)).rejects.toThrow("AMAZON.NOT_FOUND"); expect(gone.calls).toHaveLength(1);
-  }, 20000);
+async function archive(asin: string) {
+  const f=amazonFixture(), job=await f.job();
+  job.discovery.entry.listingId=asin;job.discovery.entry.url=url(asin);
+  return new AmazonHtmlArchive(f.publication,job);
+}
+describe("failed HTML requests never retry", () => {
+  it.each([200,404,429,503])("one provider invocation for failed HTTP %s", async status => {
+    const r=fakeRoute(()=>({status,body:status===200?'':'failed'}));
+    await expect(readAmazonHtml(r,url('B0G963NB8Q'),AbortSignal.timeout(5000))).rejects.toThrow();
+    expect(r.calls).toHaveLength(1);
+  });
 });
 describe("static Amazon HTML parses into the browser projection", () => {
   it("B0G963NB8Q: title, store, USD selected-offer price, seller link, gallery from colorImages, no variants", () => {
@@ -93,7 +98,7 @@ describe("AmazonHttpReader over the ScraperAPI route", () => {
   it("fetches once through the provider, records the route, and validates like the browser reader", async () => {
     const r = fakeRoute(() => ({ status: 200, body: page("B0G963NB8Q") })), reader = new AmazonHttpReader(r);
     const retained: unknown[] = [];
-    const p = await reader.product(url("B0G963NB8Q"), AbortSignal.timeout(5000), async raw => { retained.push(raw); });
+    const p = await reader.product(url("B0G963NB8Q"), AbortSignal.timeout(5000), async raw => { retained.push(raw); }, undefined, await archive("B0G963NB8Q"));
     expect(r.calls.map(u => u.href)).toEqual([url("B0G963NB8Q")]);
     expect(p.fetchedVia).toEqual({ mode: "http", routeId: "route-test", egressId: "scraperapi-us/1", provider: "scraperapi-sync/1" });
     expect(retained).toEqual([p]);
@@ -101,7 +106,7 @@ describe("AmazonHttpReader over the ScraperAPI route", () => {
   });
   it("rejects delivery postal-code requirements, ASIN mismatches, challenges, not-found and redirects", async () => {
     await expect(new AmazonHttpReader(fakeRoute(() => ({ status: 200, body: page("B0G963NB8Q") }))).product(url("B0G963NB8Q"), AbortSignal.timeout(5000), undefined, "10001")).rejects.toThrow("AMAZON.DELIVERY_POLICY_UNSUPPORTED");
-    await expect(new AmazonHttpReader(fakeRoute(() => ({ status: 200, body: page("B0G963NB8Q") }))).product(url("B0013LAQS6"), AbortSignal.timeout(5000))).rejects.toThrow("AMAZON.ASIN_CONFLICT");
+    await expect(new AmazonHttpReader(fakeRoute(() => ({ status: 200, body: page("B0G963NB8Q") }))).product(url("B0013LAQS6"), AbortSignal.timeout(5000), undefined, undefined, await archive("B0013LAQS6"))).rejects.toThrow("AMAZON.ASIN_CONFLICT");
     await expect(readAmazonHtml(fakeRoute(() => ({ status: 200, body: "<html>Robot Check</html>" })), url("B0G963NB8Q"), AbortSignal.timeout(5000)).then(html => parseAmazonStaticHtml(html, url("B0G963NB8Q")))).rejects.toThrow("AMAZON.ACCESS_CHALLENGE");
     await expect(readAmazonHtml(fakeRoute(() => ({ status: 404, body: "gone" })), url("B0G963NB8Q"), AbortSignal.timeout(5000))).rejects.toThrow("AMAZON.NOT_FOUND");
     // Provider-level failures surface as the transport's own typed errors, never as a projection.
