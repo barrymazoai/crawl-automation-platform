@@ -7,7 +7,8 @@ import {createRequire} from 'node:module';
 import {execFileSync} from 'node:child_process';
 import {hostname} from 'node:os';
 assert.match(hostname(),/^servers-Mac-mini(?:\.|$)/);assert.equal(process.argv[2],'--activate');
-const root='/Users/server/apps/crawler-v3',src=root+'/releases/no-retry-20260923/source',base=src+'/apps/v3-workers/dist/ocr-cloud',out=root+'/manual-releases/no-retry-20260923';
+const release=process.argv[3]==='--corrected'?'no-retry-20260923b':'no-retry-20260923';
+const root='/Users/server/apps/crawler-v3',src=root+'/releases/'+release+'/source',base=src+'/apps/v3-workers/dist/ocr-cloud',out=root+'/manual-releases/'+release;
 const read=p=>JSON.parse(fs.readFileSync(p)),write=(p,v)=>fs.writeFileSync(p,typeof v==='string'?v:JSON.stringify(v,null,2),{flag:'wx',mode:0o600});
 const run=(bin,args)=>execFileSync(bin,args,{encoding:'utf8',timeout:180000,maxBuffer:2000000,stdio:['ignore','pipe','pipe']});
 const before=read(root+'/live/deployment.json'),after=structuredClone(before),req=createRequire(src+'/apps/v3-workers/package.json'),{Pool}=req('pg'),db=new Pool({connectionString:before.database.connectionString,max:1,statement_timeout:10000});
@@ -16,6 +17,7 @@ const entry={workflow:'product-workflow-worker.js',label:'channel-label-worker.j
 const jobs=before.jobs.filter(j=>group(j.id));assert.equal(jobs.length,29);
 assert.equal(read(root+'/releases/no-retry-20260923/focused-results.json').numFailedTests,0);
 assert.equal(read(root+'/releases/no-retry-20260923/replay-health-proof.json').held,0);
+if(release.endsWith('b'))assert.equal(read(root+'/releases/'+release+'/codex-results.json').numFailedTests,0);
 try{
  assert.equal(Number((await db.query('SELECT count(*) n FROM resource_permit WHERE released_at IS NULL')).rows[0].n),0);
  const queue=JSON.parse(run(root+'/crawler-queue',['status']));assert.notEqual(queue.mode,'running');assert.equal(queue.counts.running??0,0);
@@ -33,9 +35,9 @@ try{
  for(const name of ['health','queue']){
   const p=root+'/manual-services/com.crawlv3.maintenance.promises.'+name+'.plist',old=fs.readFileSync(p,'utf8');
   assert.ok(old.includes('/releases/promises-20260922/source/'));write(out+'/'+name+'.before.plist',old);
-  fs.writeFileSync(p,old.replaceAll('/releases/promises-20260922/source/','/releases/no-retry-20260923/source/'),{mode:0o600});run('/usr/bin/plutil',['-lint',p]);
+  fs.writeFileSync(p,old.replaceAll('/releases/promises-20260922/source/','/releases/'+release+'/source/'),{mode:0o600});run('/usr/bin/plutil',['-lint',p]);
  }
- const cli=root+'/crawler-queue',old=fs.readFileSync(cli,'utf8');write(out+'/crawler-queue.before',old);fs.writeFileSync(cli,old.replace('/releases/promises-20260922/source/','/releases/no-retry-20260923/source/'),{mode:0o700});
+ const cli=root+'/crawler-queue',old=fs.readFileSync(cli,'utf8');write(out+'/crawler-queue.before',old);fs.writeFileSync(cli,old.replace('/releases/promises-20260922/source/','/releases/'+release+'/source/'),{mode:0o700});
  write(out+'/activated.json',{at:new Date().toISOString(),builds,jobs:jobs.map(j=>j.id),limitsUnchanged:true,queueResumed:false});
  console.log(JSON.stringify({event:'CANDIDATE_ACTIVE',workers:jobs.length,limitsUnchanged:true,maintenanceStarted:false,queueResumed:false}));
 }finally{await db.end();}
