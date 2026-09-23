@@ -19,7 +19,7 @@ async function setup(scenario = "success") {
   });
   return { config, provider, connections };
 }
-it("runs multiple internal recoveries in one owned process and passes explicit settings", async () => {
+it("runs one owned process with explicit settings and retries disabled", async () => {
   const f = await setup();
   try {
     expect(await f.provider.interpret(request, AbortSignal.timeout(4000))).toContain('"formula"');
@@ -27,7 +27,9 @@ it("runs multiple internal recoveries in one owned process and passes explicit s
     expect(f.provider.policy).toMatchObject({ executionRetries: 0, internalModelRequests: "no-retries" });
     expect(f.connections[0]!.env).toMatchObject({ ALL_PROXY: "http://existing-proxy" });
     expect(f.connections[0]!.env).not.toHaveProperty("R2_SECRET");
-    expect(f.connections[0]!.args.join(" ")).not.toMatch(/retries|dangerously|danger-full-access/);
+    expect(f.connections[0]!.args.join(" ")).not.toMatch(/dangerously|danger-full-access/);
+    expect(f.connections[0]!.args).toContain("model_providers.fixture.request_max_retries=0");
+    expect(f.connections[0]!.args).toContain("model_providers.fixture.stream_max_retries=0");
     expect(await readdir(f.config.workRoot)).toEqual([]);
   } finally { await f.provider.close(); }
 });
