@@ -26,6 +26,7 @@ import { AmazonLinkStore } from "./amazon-link-store.js";
 import { recoveredAmazonFailure } from './amazon-terminal-proof.js';
 import { recordException, describeError, listingOf } from './process-exceptions.js';
 import { AmazonStagedFiles } from './amazon-staged-files.js';
+import { PostgresAmazonHtmlFetchGate } from './amazon-html-fetch.js';
 
 const execution = () => { const e = Context.current().info.workflowExecution; if (!e) throw Error("AMAZON.WORKFLOW_REQUIRED"); return e; };
 async function main() {
@@ -47,6 +48,8 @@ async function main() {
         const publication = new RetainedPublication(local, remote), reviews = new PostgresReviews(db), admission = new PostgresResourceAdmission(resourceDb);
         // scraperapi mode: no owned page. The lane permit (`browserResource`) is still required for every capture-phase call.
         const http = config.capture.mode === "scraperapi" ? createHttpRoute(config.capture.route, { scraperApi: config.capture.scraperApi }) : undefined;
+        if (http) await db.query('SELECT operation_id,site,asin,job,requested_at,captured_at FROM amazon_html_fetch LIMIT 0');
+        const fetchGate = new PostgresAmazonHtmlFetchGate(db);
         const pages = config.browser ? new EgoTaskPages(config.browser, await TextLocalStore.open(config.pageJournalRoot)) : undefined;
         const requirePages = () => { if (!pages) throw Error("AMAZON.CAPTURE_UNAVAILABLE"); return pages; };
         const requireBrowser = async () => { const e = execution(); await admission.requireHeld(config.browserResource, e.workflowId, e.runId); };
@@ -90,7 +93,7 @@ async function main() {
         };
         const products = new AmazonLiveProduct(publication, { text: config.sourceText, ocr: config.ocr,
           visionConfigFingerprint: config.sourceVisionConfigFingerprint, egressId: config.egressId }, {
-          capture: async (job, signal) => { await requireBrowser(); return http ? new AmazonHttpReader(http).product(job.discovery.entry.url, signal, undefined, undefined, new AmazonHtmlArchive(publication, job))
+          capture: async (job, signal) => { await requireBrowser(); return http ? new AmazonHttpReader(http, undefined, fetchGate).product(job.discovery.entry.url, signal, undefined, undefined, new AmazonHtmlArchive(publication, job))
             : new AmazonEgoReader(await requirePages().open(job.sessionId, signal)).product(job.discovery.entry.url, signal, undefined, config.deliveryPostalCode); },
           restore: async (job, signal) => http ? new AmazonHttpReader(http).archivedProduct(job.discovery.entry.url, signal, new AmazonHtmlArchive(publication, job)) : null,
         }, async job => {

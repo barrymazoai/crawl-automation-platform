@@ -6,7 +6,7 @@ import { abortable, transportAddress, permittedUrl, systemDns, requireCapability
 import { amazonProductExpression } from "./amazon-ego.js";
 import { amazonProductAddress, parseAmazonRenderedProduct } from "./amazon-rendered.js";
 import { ChannelError } from "./html-evidence.js";
-import { AmazonHtmlArchive, type ArchivedAmazonHtml } from './amazon-html-archive.js';
+import { AmazonHtmlArchive, type ArchivedAmazonHtml, type AmazonHtmlFetchGate } from './amazon-html-archive.js';
 
 /** Bounded raw HTML read of one public product page. No JS execution, cookies, redirects or retries. */
 export const AMAZON_HTTP_POLICY = Object.freeze({ timeoutMs: 75000, maxBytes: 6 * 1024 * 1024, redirects: 0,
@@ -132,7 +132,7 @@ async function readAmazonHtmlBytes(route: HttpRoute, rawUrl: string, abort: Abor
  * Delivery context cannot be set on a proxied request, so a postal-code requirement is rejected, not ignored. */
 export class AmazonHttpReader {
   readonly fetchedVia: FetchedVia;
-  constructor(private readonly route: HttpRoute, private readonly dns: DnsResolver = systemDns) {
+  constructor(private readonly route: HttpRoute, private readonly dns: DnsResolver = systemDns, private readonly fetchGate?: AmazonHtmlFetchGate) {
     requireCapability(route, "http");
     const s = route.selection;
     this.fetchedVia = Object.freeze({ mode: "http", routeId: s.routeId, egressId: s.egressId, provider: s.mode === "scraperapi" ? s.providerPolicy : s.mode });
@@ -154,8 +154,17 @@ export class AmazonHttpReader {
     const address = amazonProductAddress(url);
     let saved = await archive.inspect(signal);
     if (!saved) {
+      if (!this.fetchGate) throw new ChannelError('AMAZON.HTML_FETCH_GATE_REQUIRED');
       await archive.beginDownload(signal);
-      saved = await archive.save(await readAmazonHtmlBytes(this.route, url, signal, this.dns), signal, { fetchedVia: this.fetchedVia });
+      const admission = await this.fetchGate.acquire(archive.job, signal);
+      if (admission.kind === 'reuse') {
+        saved = await archive.reuse(new AmazonHtmlArchive(archive.publication, admission.job), signal);
+        // Reconcile an R2 success whose database acknowledgment was lost. No provider retry.
+        await this.fetchGate.complete(admission.job, saved.capturedAt, signal);
+      } else {
+        saved = await archive.save(await readAmazonHtmlBytes(this.route, url, signal, this.dns), signal, { fetchedVia: this.fetchedVia });
+        await this.fetchGate.complete(archive.job, saved.capturedAt, signal);
+      }
     }
     const p = this.projection(url, saved);
     if (p.asin !== address.asin) throw new ChannelError("AMAZON.ASIN_CONFLICT");

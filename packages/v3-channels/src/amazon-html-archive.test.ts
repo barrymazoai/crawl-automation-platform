@@ -2,7 +2,7 @@ import { expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { gunzipSync } from 'node:zlib';
 import { ScraperApiTransport, type HttpRoute, type Response } from '@crawl-automation/v3-acquisition';
-import { AmazonHtmlArchive } from './amazon-html-archive.js';
+import { AmazonHtmlArchive, type AmazonHtmlFetchGate } from './amazon-html-archive.js';
 import { AmazonHttpReader } from './amazon-http.js';
 import { AmazonLiveProduct } from './amazon-live-product.js';
 import { amazonFixture, AmazonMemory, RetainedPublication } from './amazon-live.fixture.js';
@@ -19,12 +19,64 @@ async function setup(body: Uint8Array = html()) {
     body: (async function* () { yield body; })(), close() {} }));
   const transport = new ScraperApiTransport(selection, { apiKey: 'test-not-real', allowedOrigins: ['https://www.amazon.com'] }, get);
   const route: HttpRoute = { selection, transport, capabilities: transport.capabilities };
-  return { ...f, job, get, route, reader: new AmazonHttpReader(route), archive: new AmazonHtmlArchive(f.publication, job) };
+  const gate: AmazonHtmlFetchGate = { acquire: vi.fn(async () => ({ kind: 'download' as const })), complete: vi.fn(async () => {}) };
+  return { ...f, job, get, route, gate, reader: new AmazonHttpReader(route, undefined, gate), archive: new AmazonHtmlArchive(f.publication, job) };
 }
 it('requires an archive before making any provider call', async () => {
   const f = await setup();
   await expect(f.reader.product(url, signal())).rejects.toThrow('HTML_ARCHIVE_REQUIRED');
   expect(f.get).not.toHaveBeenCalled();
+});
+it('requires shared admission before a new download, even with an archive', async () => {
+  const f = await setup();
+  await expect(new AmazonHttpReader(f.route).product(url, signal(), undefined, undefined, f.archive)).rejects.toThrow('HTML_FETCH_GATE_REQUIRED');
+  expect(f.get).not.toHaveBeenCalled();
+});
+it('reuses another task’s original, preserving capture time, origin proof and current ownership', async () => {
+  const f = await setup(), original = await f.reader.product(url, signal(), undefined, undefined, f.archive);
+  const oldReceipt = f.remote.data.get(`${f.archive.prefix}/original.json`);
+  const job = structuredClone(f.job); job.operationId += '-new'; job.sessionId += '-new'; job.discovery.discoveryId += '-new';
+  const archive = new AmazonHtmlArchive(f.publication, job);
+  vi.mocked(f.gate.acquire).mockResolvedValue({ kind: 'reuse', job: f.job });
+  const reused = await f.reader.product(url, signal(), undefined, undefined, archive);
+  expect(reused.capturedAt).toBe(original.capturedAt); expect(reused.fetchedVia).toEqual(original.fetchedVia);
+  expect(reused.originalHtml!.sha256).toBe(original.originalHtml!.sha256);
+  expect(reused.originalHtml!.observationId).not.toBe(original.originalHtml!.observationId);
+  expect(f.remote.data.get(`${f.archive.prefix}/original.json`)).toEqual(oldReceipt);
+  const receipt = JSON.parse(Buffer.from(f.remote.data.get(`${archive.prefix}/original.json`)!).toString());
+  expect(receipt.reusedFrom.receiptKey).toBe(`${f.archive.prefix}/original.json`);
+  expect(f.gate.complete).toHaveBeenLastCalledWith(f.job, original.capturedAt, expect.any(AbortSignal));
+  expect(f.get).toHaveBeenCalledOnce();
+  f.remote.data.set(original.originalHtml!.objectKey, Buffer.from('corrupt origin'));
+  await expect(archive.inspect(signal())).rejects.toThrow();
+  expect(f.get).toHaveBeenCalledOnce();
+});
+it('a failed provider request blocks a different task without another GET or resource wait', async () => {
+  const f = await setup(); f.get.mockRejectedValue(Error('network timeout'));
+  await expect(f.reader.product(url, signal(), undefined, undefined, f.archive)).rejects.toThrow();
+  const job = structuredClone(f.job); job.operationId += '-later'; job.sessionId += '-later';
+  vi.mocked(f.gate.acquire).mockResolvedValue({ kind: 'reuse', job: f.job });
+  await expect(f.reader.product(url, signal(), undefined, undefined, new AmazonHtmlArchive(f.publication, job))).rejects.toThrow('RECENT_HTML_FETCH_UNRESOLVED');
+  expect(f.get).toHaveBeenCalledOnce(); expect(f.gate.complete).not.toHaveBeenCalled();
+});
+it('parse failure still leaves reusable HTML and never causes another paid fetch', async () => {
+  const f = await setup(Buffer.from('<html>Robot Check</html>'));
+  await expect(f.reader.product(url, signal(), undefined, undefined, f.archive)).rejects.toThrow('ACCESS_CHALLENGE');
+  const job = structuredClone(f.job); job.operationId += '-parse-new'; job.sessionId += '-parse-new';
+  vi.mocked(f.gate.acquire).mockResolvedValue({ kind: 'reuse', job: f.job });
+  const next = new AmazonHtmlArchive(f.publication, job);
+  await expect(f.reader.product(url, signal(), undefined, undefined, next)).rejects.toThrow('ACCESS_CHALLENGE');
+  expect((await next.inspect(signal()))!.capturedAt).toBe((await f.archive.inspect(signal()))!.capturedAt);
+  expect(f.get).toHaveBeenCalledOnce();
+});
+it('a database acknowledgment failure never re-downloads, and another task can reconcile the archive', async () => {
+  const f = await setup(); vi.mocked(f.gate.complete).mockRejectedValueOnce(Error('DB unavailable'));
+  await expect(f.reader.product(url, signal(), undefined, undefined, f.archive)).rejects.toThrow('DB unavailable');
+  const job = structuredClone(f.job); job.operationId += '-reconcile'; job.sessionId += '-reconcile';
+  vi.mocked(f.gate.acquire).mockResolvedValue({ kind: 'reuse', job: f.job });
+  const next = await f.reader.product(url, signal(), undefined, undefined, new AmazonHtmlArchive(f.publication, job));
+  expect(next.capturedAt).toBe((await f.archive.inspect(signal()))!.capturedAt);
+  expect(f.get).toHaveBeenCalledOnce();
 });
 it('publishes exact bytes and verified metadata before returning a projection; a cold reader never fetches again', async () => {
   const f = await setup(), body = html();
