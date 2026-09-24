@@ -18,7 +18,7 @@ const skipAdmission = manifest.admission === 'user-authorized-refetch';
 const deployment = JSON.parse(await fs.readFile('/Users/server/apps/crawler-v3/live/deployment.json', 'utf8'));
 const cfg = JSON.parse(await fs.readFile(deployment.jobs.find(j => j.env.V3_AMAZON_LIVE_CONFIG).env.V3_AMAZON_LIVE_CONFIG, 'utf8'));
 const key = cfg.capture.scraperApi.apiKey;
-const db = allowedAsins.size ? new pg.Pool({ connectionString: deployment.database.connectionString, max: 2, statement_timeout: 10000 }) : null;
+const db = (allowedAsins.size || manifest.candidates.some(c => c.identity?.discoverFromSearch)) ? new pg.Pool({ connectionString: deployment.database.connectionString, max: 2, statement_timeout: 10000 }) : null;
 await fs.mkdir(join(root, 'evidence'), { recursive: true, mode: 0o700 });
 const hash = b => createHash('sha256').update(b).digest('hex');
 const save = async (p, b) => { const f = await fs.open(p, 'wx', 0o600); try { await f.writeFile(b); await f.sync(); } finally { await f.close(); } };
