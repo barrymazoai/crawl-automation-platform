@@ -11,12 +11,18 @@ export function powershellCommand(source){
  if(command.length>4000)throw Error('RECOVERY.POWERSHELL_COMMAND_LIMIT');
  return command;
 }
+export function redactControlOutput(text,limit=4000){
+ return String(text??'').replace(/Bearer\s+\S+/gi,'Bearer [REDACTED]').replace(/(https?:\/\/[^\s"'?]+)\?[^\s"']+/g,'$1?[REDACTED_QUERY]')
+  .replace(/(password|secret|token|key)(["'\s:=]+)[^\s"',;]+/gi,'$1$2[REDACTED]').slice(0,limit);
+}
 export function runWindowsPowerShell(sshArgs,source){
  try{return JSON.parse(execFileSync('/usr/bin/ssh',[...sshArgs,powershellCommand(source)],{input:Buffer.from(source,'utf8'),encoding:'utf8',timeout:120000,maxBuffer:3000000}));}
  catch(error){
   const stderr=String(error.stderr??''),failure=new Error('Windows control command did not complete');
   failure.code=error.code==='ETIMEDOUT'?'RECOVERY.WINDOWS_TRANSPORT_TIMEOUT':/command line is too long/i.test(stderr)?'RECOVERY.WINDOWS_COMMAND_TOO_LONG':'RECOVERY.WINDOWS_COMMAND_FAILED';
-  failure.diagnostics={exitStatus:Number.isInteger(error.status)?error.status:null,stderrSha256:createHash('sha256').update(stderr).digest('hex')};
+  // The hash goes into public health; the redacted text only into the private
+  // cleanup directory, so the next operator can read which line threw.
+  failure.diagnostics={exitStatus:Number.isInteger(error.status)?error.status:null,stderrSha256:createHash('sha256').update(stderr).digest('hex'),stderrText:redactControlOutput(stderr)};
   throw failure;
  }
 }

@@ -23,6 +23,96 @@ export function protectedActivities(request,events,decode){
  const bound=effects.filter(e=>e.activityTaskScheduledEventAttributes.activityId===request.permitId),failed=effects.filter(e=>{const x=ended(e);return x.activityTaskFailedEventAttributes||x.activityTaskTimedOutEventAttributes||x.activityTaskCanceledEventAttributes;});
  const affected=bound.length?bound:failed.length?failed:effects.slice(0,1);assert.ok(affected.length,'Protected execution not identified');return affected;
 }
+// Stop the project-owned Windows services that may still execute the ended
+// permit's work. An owner that has already died (2026-09-23: the supervisor
+// crashed three times, taking its Workers with it) is a verified-stopped state
+// once its process tree is proven absent; it is never an integrity error, and a
+// reused PID belonging to another program is never touched. Every precondition
+// writes progress.json first so a failed stop says which line threw.
+export function windowsStopScript({cloudDir,model,ocr,id}){
+ return String.raw`$dir='${cloudDir}'
+New-Item -ItemType Directory $dir|Out-Null
+$proof=[ordered]@{dir=$dir;model=${model?'$true':'$false'};ocr=${ocr?'$true':'$false'};oldPids=@();stage='start'}
+function Note($s){$proof.stage=$s;$proof|ConvertTo-Json -Depth 5|Set-Content ($dir+'\progress.json') -Encoding UTF8}
+Note 'start'
+try{
+if($proof.model){
+ Note 'model:read-owner'
+ $state=Get-Content 'D:\crawlv3-cloud\private\cloud-status.json' -Raw|ConvertFrom-Json
+ $lock=Get-Content 'D:\crawlv3-cloud\private\cloud-supervisor.lock' -Raw|ConvertFrom-Json
+ if($state.supervisorPid -ne $lock.pid -or $state.sessionId -ne $lock.sessionId){throw 'Cloud owner changed'}
+ if(Test-Path 'D:\crawlv3-cloud\private\STOP-cloud'){throw 'Cloud already stopped by user'}
+ $all=@(Get-CimInstance Win32_Process|Select-Object ProcessId,ParentProcessId,Name,ExecutablePath,CreationDate,CommandLine)
+ $owner=@($all|Where-Object {$_.ProcessId -eq $lock.pid -and $_.Name -eq 'node.exe' -and $_.CommandLine -match 'cloud-supervisor\.mjs'})
+ $proof.cloudOwner=$lock;$proof.cloudBuild=$state.buildId
+ if($owner.Count -eq 1){
+  Note 'model:stop-live-owner'
+  $ids=@([int]$lock.pid);for($i=0;$i -lt 12;$i++){$add=@($all|Where-Object {$ids -contains [int]$_.ParentProcessId -and $ids -notcontains [int]$_.ProcessId}|ForEach-Object {[int]$_.ProcessId});if(!$add.Count){break};$ids+=$add}
+  if(@($all|Where-Object {$ids -contains [int]$_.ProcessId -and ($_.Name -notin @('node.exe','codex.exe','conhost.exe') -or ($_.Name -eq 'conhost.exe' -and $_.ExecutablePath -ne ($env:WINDIR+'\System32\conhost.exe')))}).Count){throw 'Unexpected cloud child'}
+  $proof.oldPids+=$ids
+  $proof.cloudStopRequested=$true;Note 'model:stop-requested'
+  Set-Content 'D:\crawlv3-cloud\private\STOP-cloud' '${id}' -Encoding ASCII
+  $until=(Get-Date).AddSeconds(30);do{$remaining=@(Get-Process -Id $ids -ErrorAction SilentlyContinue);if(!$remaining.Count){break};Start-Sleep -Milliseconds 500}while((Get-Date)-lt $until)
+  foreach($p in $remaining){$prior=@($all|Where-Object {$_.ProcessId -eq $p.Id});$now=Get-CimInstance Win32_Process -Filter ('ProcessId='+$p.Id);if($now -and ($now.CreationDate -ne $prior[0].CreationDate -or $now.ExecutablePath -ne $prior[0].ExecutablePath)){throw 'Cloud PID reused'};if($now){Stop-Process -Id $p.Id -Force -ErrorAction Stop}}
+  if(@(Get-Process -Id $ids -ErrorAction SilentlyContinue).Count){throw 'Cloud process remains'}
+ } else {
+  # The recorded owner is gone (crashed) or its PID now belongs to another program.
+  # Only Workers of exactly this release, launched by that supervisor, may remain.
+  Note 'model:owner-absent'
+  $proof.cloudOwnerAbsent=$true
+  $proof.ownerPidHolder=@($all|Where-Object {$_.ProcessId -eq $lock.pid}|Select-Object ProcessId,Name,CreationDate)
+  $statusPids=@($state.workers|ForEach-Object {[int]$_.pid}|Where-Object {$_ -gt 0})
+  $orphans=@($all|Where-Object {$_.Name -eq 'node.exe' -and $_.CommandLine -and $_.CommandLine -match 'channel-label-worker\.js' -and $_.CommandLine.Contains([string]$lock.release)})
+  $proof.orphanWorkers=@($orphans|ForEach-Object {[int]$_.ProcessId})
+  $foreign=@($all|Where-Object {$statusPids -contains [int]$_.ProcessId -and $_.Name -eq 'node.exe' -and $proof.orphanWorkers -notcontains [int]$_.ProcessId})
+  if($foreign.Count){throw 'Status worker PID held by an unidentified node process'}
+  $ids=@($proof.orphanWorkers)
+  if($ids.Count){
+   for($i=0;$i -lt 12;$i++){$add=@($all|Where-Object {$ids -contains [int]$_.ParentProcessId -and $ids -notcontains [int]$_.ProcessId}|ForEach-Object {[int]$_.ProcessId});if(!$add.Count){break};$ids+=$add}
+   if(@($all|Where-Object {$ids -contains [int]$_.ProcessId -and ($_.Name -notin @('node.exe','codex.exe','conhost.exe') -or ($_.Name -eq 'conhost.exe' -and $_.ExecutablePath -ne ($env:WINDIR+'\System32\conhost.exe')))}).Count){throw 'Unexpected orphan child'}
+   $proof.cloudStopRequested=$true;Note 'model:stop-orphans'
+   foreach($pid in $proof.orphanWorkers){Stop-Process -Id $pid -Force -ErrorAction Stop}
+   $until=(Get-Date).AddSeconds(30);do{$remaining=@(Get-Process -Id $ids -ErrorAction SilentlyContinue);if(!$remaining.Count){break};Start-Sleep -Milliseconds 500}while((Get-Date)-lt $until)
+   if($remaining.Count){throw 'Orphan worker remains'}
+  }
+  # Only PIDs this cleanup proved absent or stopped itself; a reused owner PID belongs to someone else.
+  $proof.absentPids=@(@([int]$lock.pid)+$statusPids|Where-Object {@(Get-Process -Id $_ -ErrorAction SilentlyContinue).Count -eq 0})
+  $proof.oldPids+=$ids
+  Set-Content 'D:\crawlv3-cloud\private\STOP-cloud' '${id}' -Encoding ASCII
+ }
+ Note 'model:release-lock'
+ if(Test-Path 'D:\crawlv3-cloud\private\cloud-supervisor.lock'){$current=Get-Content 'D:\crawlv3-cloud\private\cloud-supervisor.lock' -Raw|ConvertFrom-Json;if($current.sessionId -ne $lock.sessionId){throw 'Cloud lock changed'};Remove-Item 'D:\crawlv3-cloud\private\cloud-supervisor.lock'}
+ $proof.cloudStopped=$true;Note 'model:stopped'
+}
+if($proof.ocr){
+ Note 'ocr:read-owner'
+ $all=@(Get-CimInstance Win32_Process)
+ $parent=@($all|Where-Object {$_.ExecutablePath -eq 'D:\ocr\python\python.exe' -and $_.CommandLine -match '\-m uvicorn ocr_server:app' -and $_.CommandLine -match '\-\-port 8081'})
+ if($parent.Count -gt 1){throw 'OCR owner ambiguous'}
+ if($parent.Count -eq 0){
+  # No service parent: any surviving OCR python process is unexplained and stays untouched.
+  if(@($all|Where-Object {$_.ExecutablePath -eq 'D:\ocr\python\python.exe'}).Count){throw 'OCR owner ambiguous'}
+  $proof.ocrOwnerAbsent=$true;$proof.ocrPids=@();$proof.ocrStopped=$true;Note 'ocr:owner-absent'
+ } else {
+  $ids=@([int]$parent[0].ProcessId);for($i=0;$i -lt 12;$i++){$add=@($all|Where-Object {$ids -contains [int]$_.ParentProcessId -and $ids -notcontains [int]$_.ProcessId}|ForEach-Object {[int]$_.ProcessId});if(!$add.Count){break};$ids+=$add}
+  if($ids.Count -gt 32 -or @($all|Where-Object {$ids -contains [int]$_.ProcessId -and $_.ExecutablePath -ne 'D:\ocr\python\python.exe'}).Count){throw 'OCR process tree changed'}
+  $proof.ocrStopRequested=$true;$proof.ocrPids=$ids;Note 'ocr:stop-requested'
+  & "$env:WINDIR\System32\taskkill.exe" /PID $parent[0].ProcessId /T /F |Out-Null
+  $proof.ocrStopExitCode=$LASTEXITCODE
+  # One stop request. Process teardown is asynchronous: read-only absence checks
+  # determine completion, not taskkill's exit status or a single immediate sample.
+  $until=(Get-Date).AddSeconds(15)
+  do{$remaining=@(Get-Process -Id $ids -ErrorAction SilentlyContinue);if(!$remaining.Count){break};Start-Sleep -Milliseconds 200}while((Get-Date)-lt $until)
+  if($remaining.Count){throw 'OCR stop unconfirmed'}
+  $proof.oldPids+=$ids
+  $proof.ocrStopped=$true;Note 'ocr:stopped'
+ }
+}
+}catch{$proof.error=$_.Exception.Message;$proof.failedStage=$proof.stage;Note 'failed';throw}
+$proof.at=(Get-Date).ToUniversalTime().ToString('o');$proof.allOldProcessesAbsent=$true;Note 'complete'
+$proof|ConvertTo-Json -Depth 5|Set-Content ($dir+'\stopped.json') -Encoding UTF8
+$proof|ConvertTo-Json -Depth 5 -Compress`;
+}
 export function recoveryDecision(permits,products){
  const ended=permits.filter(p=>terminal.has(p.status));
  if(!ended.length)return {pause:false,recover:false};
@@ -88,48 +178,7 @@ export async function recoverClosedBatchPermits({snapshot,db,client,root,out,m,p
   }
   if(model||ocr){
    // Only the existing project-owned Windows services; no OCR Worker or login task.
-   stage='stop-windows';windowsAttempted=true;windows=ps(String.raw`$dir='${cloudDir}'
-New-Item -ItemType Directory $dir|Out-Null
-$proof=[ordered]@{dir=$dir;model=${model?'$true':'$false'};ocr=${ocr?'$true':'$false'};oldPids=@()}
-$proof|ConvertTo-Json -Depth 5|Set-Content ($dir+'\progress.json') -Encoding UTF8
-if($proof.model){
- $state=Get-Content 'D:\crawlv3-cloud\private\cloud-status.json' -Raw|ConvertFrom-Json
- $lock=Get-Content 'D:\crawlv3-cloud\private\cloud-supervisor.lock' -Raw|ConvertFrom-Json
- if($state.supervisorPid -ne $lock.pid -or $state.sessionId -ne $lock.sessionId){throw 'Cloud owner changed'}
- if(Test-Path 'D:\crawlv3-cloud\private\STOP-cloud'){throw 'Cloud already stopped by user'}
- $all=@(Get-CimInstance Win32_Process|Select-Object ProcessId,ParentProcessId,Name,ExecutablePath,CreationDate)
- $owner=@($all|Where-Object {$_.ProcessId -eq $lock.pid});if($owner.Count -ne 1 -or $owner[0].Name -ne 'node.exe'){throw 'Cloud PID identity changed'}
- $ids=@([int]$lock.pid);for($i=0;$i -lt 12;$i++){$add=@($all|Where-Object {$ids -contains [int]$_.ParentProcessId -and $ids -notcontains [int]$_.ProcessId}|ForEach-Object {[int]$_.ProcessId});if(!$add.Count){break};$ids+=$add}
- if(@($all|Where-Object {$ids -contains [int]$_.ProcessId -and ($_.Name -notin @('node.exe','codex.exe','conhost.exe') -or ($_.Name -eq 'conhost.exe' -and $_.ExecutablePath -ne ($env:WINDIR+'\System32\conhost.exe')))}).Count){throw 'Unexpected cloud child'}
- $proof.cloudOwner=$lock;$proof.cloudBuild=$state.buildId;$proof.oldPids+=$ids
- $proof.cloudStopRequested=$true;$proof|ConvertTo-Json -Depth 5|Set-Content ($dir+'\progress.json') -Encoding UTF8
- Set-Content 'D:\crawlv3-cloud\private\STOP-cloud' '${id}' -Encoding ASCII
- $until=(Get-Date).AddSeconds(30);do{$remaining=@(Get-Process -Id $ids -ErrorAction SilentlyContinue);if(!$remaining.Count){break};Start-Sleep -Milliseconds 500}while((Get-Date)-lt $until)
- foreach($p in $remaining){$prior=@($all|Where-Object {$_.ProcessId -eq $p.Id});$now=Get-CimInstance Win32_Process -Filter ('ProcessId='+$p.Id);if($now -and ($now.CreationDate -ne $prior[0].CreationDate -or $now.ExecutablePath -ne $prior[0].ExecutablePath)){throw 'Cloud PID reused'};if($now){Stop-Process -Id $p.Id -Force -ErrorAction Stop}}
- if(@(Get-Process -Id $ids -ErrorAction SilentlyContinue).Count){throw 'Cloud process remains'}
- if(Test-Path 'D:\crawlv3-cloud\private\cloud-supervisor.lock'){$current=Get-Content 'D:\crawlv3-cloud\private\cloud-supervisor.lock' -Raw|ConvertFrom-Json;if($current.sessionId -ne $lock.sessionId){throw 'Cloud lock changed'};Remove-Item 'D:\crawlv3-cloud\private\cloud-supervisor.lock'}
- $proof.cloudStopped=$true;$proof|ConvertTo-Json -Depth 5|Set-Content ($dir+'\progress.json') -Encoding UTF8
-}
-if($proof.ocr){
- $all=@(Get-CimInstance Win32_Process)
- $parent=@($all|Where-Object {$_.ExecutablePath -eq 'D:\ocr\python\python.exe' -and $_.CommandLine -match '\-m uvicorn ocr_server:app' -and $_.CommandLine -match '\-\-port 8081'})
- if($parent.Count -ne 1){throw 'OCR owner ambiguous'}
- $ids=@([int]$parent[0].ProcessId);for($i=0;$i -lt 12;$i++){$add=@($all|Where-Object {$ids -contains [int]$_.ParentProcessId -and $ids -notcontains [int]$_.ProcessId}|ForEach-Object {[int]$_.ProcessId});if(!$add.Count){break};$ids+=$add}
- if($ids.Count -gt 32 -or @($all|Where-Object {$ids -contains [int]$_.ProcessId -and $_.ExecutablePath -ne 'D:\ocr\python\python.exe'}).Count){throw 'OCR process tree changed'}
- $proof.ocrStopRequested=$true;$proof.ocrPids=$ids;$proof|ConvertTo-Json -Depth 5|Set-Content ($dir+'\progress.json') -Encoding UTF8
- & "$env:WINDIR\System32\taskkill.exe" /PID $parent[0].ProcessId /T /F |Out-Null
- $proof.ocrStopExitCode=$LASTEXITCODE
- # One stop request. Process teardown is asynchronous: read-only absence checks
- # determine completion, not taskkill's exit status or a single immediate sample.
- $until=(Get-Date).AddSeconds(15)
- do{$remaining=@(Get-Process -Id $ids -ErrorAction SilentlyContinue);if(!$remaining.Count){break};Start-Sleep -Milliseconds 200}while((Get-Date)-lt $until)
- if($remaining.Count){throw 'OCR stop unconfirmed'}
- $proof.oldPids+=$ids
- $proof.ocrStopped=$true;$proof|ConvertTo-Json -Depth 5|Set-Content ($dir+'\progress.json') -Encoding UTF8
-}
-$proof.at=(Get-Date).ToUniversalTime().ToString('o');$proof.allOldProcessesAbsent=$true
-$proof|ConvertTo-Json -Depth 5|Set-Content ($dir+'\stopped.json') -Encoding UTF8
-$proof|ConvertTo-Json -Depth 5 -Compress`);
+   stage='stop-windows';windowsAttempted=true;windows=ps(windowsStopScript({cloudDir,model,ocr,id}));
    assert.equal(windows.allOldProcessesAbsent,true);
   }
   stage='retain-stop-proof';
@@ -150,7 +199,7 @@ $proof|ConvertTo-Json -Depth 5 -Compress`);
   stage='release-permits';
   const tx=await db.connect();try{await tx.query('BEGIN');for(const {request} of facts){const row=(await tx.query('SELECT request FROM resource_permit WHERE permit_id=$1 FOR UPDATE',[request.permitId])).rows[0];assert.deepEqual(row.request,request);await tx.query('UPDATE resource_permit SET released_at=coalesce(released_at,now()) WHERE permit_id=$1',[request.permitId]);}await tx.query('COMMIT');}catch(e){await tx.query('ROLLBACK');throw e;}finally{tx.release();}
   save(dir+'/released.json',{at:new Date().toISOString(),permits:facts.map(f=>f.request.permitId),key});
- }catch(error){executionError=error;save(dir+'/execution-failed.json',{at:new Date().toISOString(),stage,error:recoveryError(error)});throw error;}finally{
+ }catch(error){executionError=error;save(dir+'/execution-failed.json',{at:new Date().toISOString(),stage,error:recoveryError(error),...(error?.diagnostics?.stderrText?{stderr:error.diagnostics.stderrText}:{}),...(error?.code==='ERR_ASSERTION'?{assertion:String(error.message).slice(0,500)}:{})});throw error;}finally{
   const restoreErrors=[];
   // Recover completed stop stages even if a later stage failed. Unconfirmed stops
   // remain visible and keep intake paused; never launch over a surviving owner.
@@ -160,7 +209,7 @@ $saved=Get-Content ($dir+'\progress.json') -Raw|ConvertFrom-Json
 if($saved.cloudStopRequested -and !$saved.cloudStopped){throw 'Partial cloud stop requires reconciliation'}
 if($saved.ocrStopRequested -and !$saved.ocrStopped){throw 'Partial OCR stop requires reconciliation'}
 if($saved.cloudStopped){
- if(@(Get-Process -Id $saved.oldPids -ErrorAction SilentlyContinue).Count){throw 'Old Windows owner still present'}
+ if(@($saved.oldPids).Count -and @(Get-Process -Id @($saved.oldPids) -ErrorAction SilentlyContinue).Count){throw 'Old Windows owner still present'}
  $marker=(Get-Content 'D:\crawlv3-cloud\private\STOP-cloud' -Raw).Trim();if($marker -ne '${id}'){throw 'Stop marker owner changed'}
  Remove-Item 'D:\crawlv3-cloud\private\STOP-cloud'
  $p=Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{CommandLine=('D:\crawl-automation\tools\node-v22.17.0-win-x64\node.exe D:\crawlv3-cloud\cloud-supervisor.mjs '+$dir)}
@@ -170,7 +219,7 @@ if($saved.ocrStopped){
  [IO.File]::WriteAllText($dir+'\start-ocr.cmd',('@echo off'+[Environment]::NewLine+'call D:\ocr\service\start-nvidia.cmd 1>'+$dir+'\ocr.stdout.log 2>'+$dir+'\ocr.stderr.log'),[Text.Encoding]::ASCII)
  $p=Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{CommandLine=('cmd.exe /d /c '+$dir+'\start-ocr.cmd')};if($p.ReturnValue -ne 0){throw 'OCR restart failed'}
 }
-[pscustomobject]@{restartRequested=$true}|ConvertTo-Json -Compress`);}catch(e){restoreErrors.push({host:'windows',error:e.code??e.name});}}
+[pscustomobject]@{restartRequested=$true}|ConvertTo-Json -Compress`);}catch(e){restoreErrors.push({host:'windows',error:e.code??e.name,...(e?.diagnostics?.stderrText?{stderr:e.diagnostics.stderrText}:{})});}}
   for(const j of stopped){try{await exec(m.node,[root+'/manual-control.mjs','start',j.id],{timeout:180000,maxBuffer:2000000});const h=read(root+'/'+j.id+'.health.json');assert.equal(h.event,'WORKER_RUNNING');assert.equal(h.buildId,j.buildId);assert.notEqual(h.pid,j.pid);restored.push({id:j.id,pid:h.pid});}catch(e){restoreErrors.push({id:j.id,error:e.code??e.name});}}
   if(windows&&restoreErrors.length===0){try{const check=ps(String.raw`$until=(Get-Date).AddSeconds(40);$ready=$false
 do{
