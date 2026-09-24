@@ -43,6 +43,18 @@ export function productByline(html, asin) {
   if (href) { const s = new URL(href, 'https://www.amazon.com'); if (s.origin === 'https://www.amazon.com' && STORE.test(s.pathname)) storeUrl = s.origin + s.pathname.replace(/\/$/, ''); }
   return { name, brandRaw, storeUrl, title: text(d.querySelector('#productTitle')).slice(0, 300) };
 }
+// Organic (non-sponsored) result ASINs of a search page, in page order.
+export function organicAsins(html, limit = 10) {
+  const { document: d } = parseHTML(html);
+  for (const e of d.querySelectorAll('script,style')) e.remove();
+  const seen = new Set();
+  for (const e of d.querySelectorAll('.s-main-slot [data-component-type="s-search-result"][data-asin]')) {
+    const asin = e.getAttribute('data-asin') ?? '';
+    if (!/^[A-Z0-9]{10}$/.test(asin) || e.querySelector('[data-component-type="s-sponsored-label-marker"],.puis-sponsored-label-text,a[href*="/sspa/click"],a[href*="sponsored-ads.amazon.com"]')) continue;
+    seen.add(asin); if (seen.size >= limit) break;
+  }
+  return [...seen];
+}
 export const HEALTH_NODE = 'n:3760901';
 // Amazon sometimes links a brand option through an SEO path such as
 // /Align-Health-Household/s?k=Align&rh=n:3760901,p_123:232433 without i=hpc. Only

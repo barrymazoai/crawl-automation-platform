@@ -5,7 +5,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { request } from 'node:https';
 import { request as httpRequest } from 'node:http';
 import { resolve, join } from 'node:path';
-import { inspectSearch, normalizeBrand, searchAddress, productAddress, productByline } from '../../../../packages/v3-channels/src/amazon-brand-search.mjs';
+import { inspectSearch, normalizeBrand, searchAddress, productAddress, productByline, organicAsins } from '../../../../packages/v3-channels/src/amazon-brand-search.mjs';
 
 const hash = bytes => createHash('sha256').update(bytes).digest('hex');
 const read = async p => JSON.parse(await fs.readFile(p, 'utf8'));
@@ -108,12 +108,24 @@ if (command === 'status') {
       if (c.identity?.asin || c.identity?.asins?.length) {
         // Identity mode: read Amazon's byline from the brand's product pages, in order, until one
         // page yields a byline for its own ASIN. Gone, redirected or byline-less pages are skipped.
-        const asins = c.identity.asins ?? [c.identity.asin];
+        const asins = [...(c.identity.asins ?? (c.identity.asin ? [c.identity.asin] : []))], known = new Set(accepted.map(normalizeBrand));
+        const max = c.identity.maxProducts ?? asins.length, discover = !!c.identity.discoverFromSearch;
+        if (discover) {
+          // New products of the brand: organic results of a keyword search for our brand name.
+          const q = new URL('https://www.amazon.com/s'); q.searchParams.set('k', accepted[0]); q.searchParams.set('i', 'hpc');
+          const s = await capture(q.href); out.evidence.push(s.receipt);
+          for (const a of organicAsins(s.html, 6)) if (!asins.includes(a)) asins.push(a);
+        }
         let id = null; out.tried = [];
-        for (const asin of asins) {
+        for (const asin of asins.slice(0, max)) {
           try {
             const page = await capture(`https://www.amazon.com/dp/${asin}`, true); out.evidence.push(page.receipt);
-            id = { ...productByline(page.html, asin), asin }; out.tried.push({ asin, ok: true }); break;
+            const b = { ...productByline(page.html, asin), asin };
+            // A discovered product counts only when Amazon's byline shows exactly our brand name.
+            if (discover && !known.has(normalizeBrand(b.name))) { out.tried.push({ asin, code: 'BRAND_SEARCH.OTHER_BRAND', byline: b.name }); continue; }
+            // When a store link is what we need, keep looking if this page's byline has none.
+            if (c.identity.needStore && !b.storeUrl && known.has(normalizeBrand(b.name))) { out.tried.push({ asin, code: 'BRAND_SEARCH.NO_STORE_LINK', byline: b.name }); continue; }
+            id = b; out.tried.push({ asin, ok: true }); break;
           } catch (e) { if (code(e) === 'BRAND_SEARCH.LOCAL_OR_EXECUTION_UNKNOWN') throw e; out.tried.push({ asin, code: code(e) }); }
         }
         if (!id) throw Error(out.tried.at(-1)?.code ?? 'BRAND_SEARCH.BYLINE_MISSING');

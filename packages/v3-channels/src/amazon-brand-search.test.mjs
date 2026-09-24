@@ -44,3 +44,9 @@ test('byline gives the Amazon brand name and a store link only when it is a stor
  assert.throws(()=>productByline(pdp('B00000XXXX','Brand: X','/s'),'B00014FRVW'),/PRODUCT_IDENTITY/);
  assert.throws(()=>productByline('<div id="ppd"><input id="ASIN" value="B00014FRVW"></div>','B00014FRVW'),/BYLINE_MISSING/);
 });
+import { organicAsins } from './amazon-brand-search.mjs';
+test('organic result ASINs skip sponsored cards and keep page order',()=>{
+ const card=(a,s='')=>`<div data-component-type="s-search-result" data-asin="${a}">${s}</div>`;
+ const html=`<div class="s-main-slot">${card('B000000001','<span class="puis-sponsored-label-text">Sponsored</span>')}${card('B000000002')}${card('bad')}${card('B000000003')}</div>`;
+ assert.deepEqual(organicAsins(html),['B000000002','B000000003']);assert.deepEqual(organicAsins(html,1),['B000000002']);
+});

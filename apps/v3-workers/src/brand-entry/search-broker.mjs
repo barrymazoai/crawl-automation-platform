@@ -8,7 +8,7 @@ import { request } from 'node:https';
 import { createHash } from 'node:crypto';
 import { join, resolve } from 'node:path';
 import pg from 'pg';
-import { searchAddress, filterIdentity, productAddress, productByline } from '../../../../packages/v3-channels/src/amazon-brand-search.mjs';
+import { searchAddress, filterIdentity, productAddress, productByline, organicAsins } from '../../../../packages/v3-channels/src/amazon-brand-search.mjs';
 const root = resolve(process.argv[2]), manifest = JSON.parse(await fs.readFile(join(root, 'manifest.json'), 'utf8'));
 const clean = n => n.normalize('NFKC').replace(/\s+/g, ' ').trim();
 const allowedNames = new Set(manifest.candidates.flatMap(c => c.names.map(clean)));
@@ -23,7 +23,11 @@ await fs.mkdir(join(root, 'evidence'), { recursive: true, mode: 0o700 });
 const hash = b => createHash('sha256').update(b).digest('hex');
 const save = async (p, b) => { const f = await fs.open(p, 'wx', 0o600); try { await f.writeFile(b); await f.sync(); } finally { await f.close(); } };
 const ledger = v => fs.appendFile(join(root, 'product-fetches.jsonl'), JSON.stringify({ at: new Date().toISOString(), ...v }) + '\n');
-const limit = manifest.candidates.length * 2 + allowedAsins.size;
+const discoveryLimit = manifest.candidates.reduce((n, c) => n + (c.identity?.discoverFromSearch ? (c.identity.maxProducts ?? 4) : 0), 0);
+const limit = manifest.candidates.length * 3 + allowedAsins.size + discoveryLimit;
+// Search-discovered ASINs become fetchable only from search pages this broker fetched itself.
+const discoverNames = new Set(manifest.candidates.filter(c => c.identity?.discoverFromSearch).flatMap(c => c.names.map(clean)));
+const learnResults = (url, bytes) => { try { const u = new URL(url); if (!u.searchParams.has('rh') && discoverNames.has(u.searchParams.get('k'))) for (const a of organicAsins(bytes.toString('utf8'), 6)) allowedAsins.add(a); } catch {} };
 let active = 0, peak = 0, calls = 0, charged = 0;
 const pending = new Map();
 const learn = (url, bytes) => {
@@ -34,7 +38,7 @@ async function once(url, product) {
   try {
     const receipt = JSON.parse(await fs.readFile(stem + '.json', 'utf8')), bytes = await fs.readFile(stem + '.html');
     if (hash(bytes) !== receipt.sha256) throw Error('ARCHIVE');
-    if (product) learn(url, bytes);
+    if (product) learn(url, bytes); else learnResults(url, bytes);
     return { status: receipt.status, headers: { ...receipt.headers, 'sa-credit-cost': '0' }, bytes };
   } catch (e) { if (e.code !== 'ENOENT') throw e; }
   if (active >= 50 || calls >= limit) throw Error('LIMIT');
@@ -69,7 +73,7 @@ async function once(url, product) {
       await ledger({ asin: productAddress(url).asin, event: 'FETCHED', status: result.status, sha256: hash(bytes), bytes: bytes.length, finalUrl: result.finalUrl ?? null });
       if (result.finalUrl && productAddress(result.finalUrl).asin !== productAddress(url).asin) throw Error('REDIRECT');
       learn(url, bytes);
-    } else if (result.finalUrl && searchAddress(result.finalUrl) !== url) throw Error('REDIRECT');
+    } else { if (result.finalUrl && searchAddress(result.finalUrl) !== url) throw Error('REDIRECT'); if (result.status === 200) learnResults(url, bytes); }
     return result;
   } finally { active--; }
 }
