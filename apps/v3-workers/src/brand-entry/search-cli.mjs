@@ -105,7 +105,7 @@ if (command === 'status') {
       if (await exists(intent)) throw Error('BRAND_SEARCH.PRIOR_ATTEMPT_UNRESOLVED');
       await save(intent, { at: new Date().toISOString(), id: c.id });
       const accepted = names(c); if (!accepted.length) throw Error('BRAND_SEARCH.NAME_REQUIRES_REVIEW');
-      if (c.identity?.asin || c.identity?.asins?.length) {
+      if (c.identity?.asin || c.identity?.asins?.length || c.identity?.discoverFromSearch) {
         // Identity mode: read Amazon's byline from the brand's product pages, in order, until one
         // page yields a byline for its own ASIN. Gone, redirected or byline-less pages are skipped.
         const asins = [...(c.identity.asins ?? (c.identity.asin ? [c.identity.asin] : []))], known = new Set(accepted.map(normalizeBrand));
