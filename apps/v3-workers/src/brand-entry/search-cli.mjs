@@ -4,7 +4,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { request } from 'node:https';
 import { request as httpRequest } from 'node:http';
 import { resolve, join } from 'node:path';
-import { inspectSearch, normalizeBrand, searchAddress, directFilterUrl } from '../../../../packages/v3-channels/src/amazon-brand-search.mjs';
+import { inspectSearch, normalizeBrand, searchAddress } from '../../../../packages/v3-channels/src/amazon-brand-search.mjs';
 
 const hash = bytes => createHash('sha256').update(bytes).digest('hex');
 const read = async p => JSON.parse(await fs.readFile(p, 'utf8'));
@@ -102,21 +102,6 @@ if (command === 'status') {
       if (await exists(intent)) throw Error('BRAND_SEARCH.PRIOR_ATTEMPT_UNRESOLVED');
       await save(intent, { at: new Date().toISOString(), id: c.id });
       const accepted = names(c); if (!accepted.length) throw Error('BRAND_SEARCH.NAME_REQUIRES_REVIEW');
-      if (c.direct) {
-        // The brand name was taken from Amazon's own product-page byline (archived,
-        // hash-verified evidence in c.identity). One request: the p_4 filtered page.
-        if (!accepted.includes(c.direct.brandName)) throw Error('BRAND_SEARCH.NAME_REQUIRES_REVIEW');
-        const entry = directFilterUrl(c.direct.brandName, c.direct.category ?? undefined);
-        out.productAssociation = 'amazon-byline-from-archived-product-page'; out.identity = c.identity ?? null;
-        out.discovery = { mode: 'direct-byline', ...entry };
-        const filtered = await capture(entry.url); out.evidence.push(filtered.receipt);
-        out.verified = inspectSearch(filtered.html, entry.url, [entry.brandName], entry);
-        out.brandName = out.verified.brandName; out.searchUrl = out.verified.url;
-        out.state = 'verified-search'; out.verifiedAt = filtered.receipt.capturedAt;
-        await save(file, out); complete++; verified++;
-        console.log(JSON.stringify({ id: c.id, state: out.state, code: null, brandName: out.brandName, complete }));
-        return;
-      }
       const query = new URL('https://www.amazon.com/s'); query.searchParams.set('k', accepted[0]); query.searchParams.set('i', 'hpc');
       const first = await capture(query.href); out.evidence.push(first.receipt);
       const observed = inspectSearch(first.html, query.href, accepted);

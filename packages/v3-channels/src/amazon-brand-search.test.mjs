@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { inspectSearch, searchAddress, filterIdentity, directFilterUrl } from './amazon-brand-search.mjs';
+import { inspectSearch, searchAddress, filterIdentity } from './amazon-brand-search.mjs';
 const start='https://www.amazon.com/s?k=Herb+Pharm&i=hpc';
 const url=start+'&rh=n%3A3760901%2Cp_123%3A383950&dc=';
 const option=(checked,name,href,facet='p_123/383950')=>`<li id="${facet}"><a class="s-navigation-item" href="${href.replaceAll('&','&amp;')}" aria-label="${checked?'Remove':'Apply'} ${name} filter" aria-current="${checked}"><input type="checkbox" ${checked?'checked':''}>${name}</a></li>`;
@@ -9,13 +9,6 @@ test('a same-name Seller option is not a brand: no false ambiguity, no seller-on
  const seller=`<ul id="filter-p_6">${option(false,'Herb Pharm',start+'&rh=n%3A3760901%2Cp_6%3AA1XYZ&dc=','p_6/A1XYZ')}</ul>`;
  assert.equal(inspectSearch(fixture(false,'Herb Pharm',url,seller),start,['Herb Pharm']).url,url);
  const sellerOnly=fixture(false,'Other',url,seller);assert.throws(()=>inspectSearch(sellerOnly,start,['Herb Pharm']),/BRAND_FILTER_MISSING/);
-});
-test('direct p_4 entry from a byline name is verified like any applied filter',()=>{
- const e=directFilterUrl('Herb Pharm');assert.equal(e.brandFilter,'p_4:Herb Pharm');assert.equal(e.category,'n:3760901');
- const page=fixture(true,'Herb Pharm',e.url).replace('id="p_123/383950"','id="p_4/Herb Pharm"');
- assert.equal(inspectSearch(page,e.url,['Herb Pharm'],e).selected,true);
- assert.throws(()=>inspectSearch(fixture(false,'Herb Pharm',e.url),e.url,['Herb Pharm'],e),/FILTER_STATE/);
- assert.throws(()=>directFilterUrl('A, B'),/NAME_REQUIRES_REVIEW/);
 });
 test('discover actual exact brand and verify applied filter',()=>{const a=inspectSearch(fixture(),start,['Herb Pharm']);assert.equal(a.url,url);const b=inspectSearch(fixture(true),url,['Herb Pharm'],a);assert.equal(b.selected,true);assert.equal(b.organicResultCards,1);});
 test('reject lookalike names, missing selection and changed scope',()=>{const a=inspectSearch(fixture(),start,['Herb Pharm']);assert.throws(()=>inspectSearch(fixture(false,'Herb Pharma'),start,['Herb Pharm']),/MISSING/);assert.throws(()=>inspectSearch(fixture(),url,['Herb Pharm'],a),/FILTER_STATE/);assert.throws(()=>inspectSearch(fixture(true),url.replace('383950','1234'),['Herb Pharm'],a),/FILTER_STATE/);});
