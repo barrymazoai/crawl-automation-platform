@@ -19,6 +19,30 @@ export function filterIdentity(raw) {
   if (parts.length !== 2 || categories.length !== 1 || brands.length !== 1) fail('FILTER_SCOPE');
   return { category: categories[0], brandFilter: brands[0], url: u.href };
 }
+// Product pages are fetched only to read Amazon's own brand byline.
+export function productAddress(raw) {
+  const u = new URL(raw, 'https://www.amazon.com');
+  const asin = u.pathname.match(/^\/(?:[^/]+\/)?dp\/([A-Z0-9]{10})\/?$/)?.[1];
+  if (!['https://www.amazon.com', 'https://amazon.com'].includes(u.origin) || u.username || u.password || !asin) fail('URL');
+  return { asin, url: `https://www.amazon.com/dp/${asin}` };
+}
+const STORE = /^\/stores\/(?:[^/]+\/)?page\/[0-9A-Fa-f-]{36}\/?$/;
+export function productByline(html, asin) {
+  if (/validateCaptcha|Robot Check|Enter the characters you see below/i.test(html)) fail('ACCESS_CHALLENGE');
+  const { document: d } = parseHTML(html);
+  for (const e of d.querySelectorAll('script,style')) e.remove();
+  const main = d.querySelector('#ppd');
+  const ids = [...(main?.querySelectorAll('#ASIN') ?? [])].map(e => e.getAttribute('value'));
+  if (!main || !ids.length || ids.some(x => x !== asin)) fail('PRODUCT_IDENTITY');
+  const links = [...main.querySelectorAll('#bylineInfo')];
+  if (links.length !== 1) fail('BYLINE_MISSING');
+  const brandRaw = text(links[0]), name = brandRaw.replace(/^Visit the\s+/i, '').replace(/\s+Store$/i, '').replace(/^Brand:\s*/i, '').trim();
+  if (!name || name.length > 80 || /[\x00-\x1f]/.test(name)) fail('BYLINE_MISSING');
+  let storeUrl = null;
+  const href = links[0].getAttribute('href');
+  if (href) { const s = new URL(href, 'https://www.amazon.com'); if (s.origin === 'https://www.amazon.com' && STORE.test(s.pathname)) storeUrl = s.origin + s.pathname.replace(/\/$/, ''); }
+  return { name, brandRaw, storeUrl, title: text(d.querySelector('#productTitle')).slice(0, 300) };
+}
 export const HEALTH_NODE = 'n:3760901';
 // Amazon sometimes links a brand option through an SEO path such as
 // /Align-Health-Household/s?k=Align&rh=n:3760901,p_123:232433 without i=hpc. Only

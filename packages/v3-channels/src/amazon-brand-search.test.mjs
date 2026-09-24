@@ -30,3 +30,17 @@ test('reject lookalike names, missing selection and changed scope',()=>{const a=
 test('reject ambiguous exact facets and no organic results',()=>{assert.throws(()=>inspectSearch(fixture()+fixture(),start,['Herb Pharm']),/AMBIGUOUS/);const a=inspectSearch(fixture(),start,['Herb Pharm']);assert.throws(()=>inspectSearch(fixture(true).replace('<h2>','<a href="/sspa/click"></a><h2>'),url,['Herb Pharm'],a),/NO_MAIN_RESULTS/);});
 test('reject foreign URLs, added filters, challenge and category loss',()=>{assert.throws(()=>searchAddress('https://evil.example/s?k=a&i=hpc'),/URL/);assert.throws(()=>filterIdentity(url+'&page=2'),/URL/);assert.throws(()=>filterIdentity(url.replace('383950','383950%2Cp_123%3A1234')),/SCOPE/);assert.throws(()=>inspectSearch('Robot Check',start,['Herb Pharm']),/CHALLENGE/);assert.throws(()=>inspectSearch(fixture().replace('search-alias=hpc','search-alias=aps'),start,['Herb Pharm']),/CATEGORY/);});
 test('temporary parameters are removed; punctuation is not fuzzy matched',()=>{assert.equal(searchAddress(url+'&qid=1&ref=abc'),url);assert.throws(()=>inspectSearch(fixture(false,"Herb-Pharm"),start,['Herb Pharm']),/MISSING/);});
+import { productAddress, productByline } from './amazon-brand-search.mjs';
+const pdp=(asin,byline,href)=>`<div id="ppd"><input id="ASIN" value="${asin}"><span id="productTitle">Thing</span><a id="bylineInfo" href="${href}">${byline}</a></div>`;
+test('product address accepts dp and slugged dp only',()=>{
+ assert.equal(productAddress('https://www.amazon.com/Some-Slug/dp/B00014FRVW?th=1').url,'https://www.amazon.com/dp/B00014FRVW');
+ assert.throws(()=>productAddress('https://www.amazon.com/s?k=x'),/URL/);assert.throws(()=>productAddress('https://evil.example/dp/B00014FRVW'),/URL/);
+});
+test('byline gives the Amazon brand name and a store link only when it is a store page',()=>{
+ const a=productByline(pdp('B00014FRVW','Visit the Herb Pharm Store','/stores/HerbPharm/page/11111111-1111-4111-8111-111111111111?lp_asin=B00014FRVW'),'B00014FRVW');
+ assert.equal(a.name,'Herb Pharm');assert.equal(a.storeUrl,'https://www.amazon.com/stores/HerbPharm/page/11111111-1111-4111-8111-111111111111');
+ const b=productByline(pdp('B00014FRVW','Brand: Herb Pharm','/s/ref=bl_dp_s_web_0?field-keywords=Herb+Pharm'),'B00014FRVW');
+ assert.equal(b.name,'Herb Pharm');assert.equal(b.storeUrl,null);
+ assert.throws(()=>productByline(pdp('B00000XXXX','Brand: X','/s'),'B00014FRVW'),/PRODUCT_IDENTITY/);
+ assert.throws(()=>productByline('<div id="ppd"><input id="ASIN" value="B00014FRVW"></div>','B00014FRVW'),/BYLINE_MISSING/);
+});
