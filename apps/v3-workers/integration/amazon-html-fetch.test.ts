@@ -32,10 +32,24 @@ describe.skipIf(!address)('Mini atomic rolling HTML fetch admission', () => {
     const winner = jobs[decisions.findIndex(d => d.kind === 'download')]!;
     await expect(gate.acquire(winner, signal())).rejects.toThrow('DOWNLOAD_UNRESOLVED');
   });
-  it('a failed or unknown request blocks other tasks throughout the rolling window', async () => {
+  it('a request that may still be running blocks other tasks instead of starting a second download', async () => {
     const first = await job('unknown', 'B000000002'); await gate.acquire(first, signal());
     expect(await gate.acquire(await job('unknown-new', 'B000000002'), signal())).toEqual({ kind: 'reuse', job: first });
     expect((await db.query('SELECT captured_at FROM amazon_html_fetch WHERE operation_id=$1', [first.operationId])).rows[0].captured_at).toBeNull();
+  });
+  it('an attempt that ended without HTML does not hold back a new task inside 24 hours', async () => {
+    const failed = await job('failed', 'B000000011');
+    await db.query("INSERT INTO amazon_html_fetch(operation_id,site,asin,job,requested_at) VALUES($1,'https://www.amazon.com',$2,$3,clock_timestamp()-interval '2 hours')", [failed.operationId, failed.discovery.entry.listingId, failed]);
+    const next = await job('failed-new', 'B000000011');
+    expect(await gate.acquire(next, signal())).toEqual({ kind: 'download' });
+    expect((await db.query("SELECT count(*)::int n FROM amazon_html_fetch WHERE asin='B000000011'")).rows[0].n).toBe(2);
+    await expect(gate.acquire(failed, signal())).rejects.toThrow('DOWNLOAD_UNRESOLVED');
+  });
+  it('a later failed attempt does not hide an original captured in the last 24 hours', async () => {
+    const saved = await job('saved-earlier', 'B000000012'), failed = await job('failed-later', 'B000000012');
+    await db.query("INSERT INTO amazon_html_fetch(operation_id,site,asin,job,requested_at,captured_at) VALUES($1,'https://www.amazon.com',$2,$3,clock_timestamp()-interval '10 hours',clock_timestamp()-interval '10 hours')", [saved.operationId, saved.discovery.entry.listingId, saved]);
+    await db.query("INSERT INTO amazon_html_fetch(operation_id,site,asin,job,requested_at) VALUES($1,'https://www.amazon.com',$2,$3,clock_timestamp()-interval '2 hours')", [failed.operationId, failed.discovery.entry.listingId, failed]);
+    expect(await gate.acquire(await job('saved-new', 'B000000012'), signal())).toEqual({ kind: 'reuse', job: saved });
   });
   it('retains the original timestamp after multiple reuses and rejects receipt mutation', async () => {
     const first = await job('complete', 'B000000003'); await gate.acquire(first, signal());
@@ -49,7 +63,7 @@ describe.skipIf(!address)('Mini atomic rolling HTML fetch admission', () => {
   it('uses a rolling window across midnight; a new task may fetch after 24 hours, the old task cannot', async () => {
     const fresh = await job('near-expiry', 'B000000004'), expired = await job('expired', 'B000000005');
     for (const [j, age] of [[fresh, '23 hours 59 minutes'], [expired, '24 hours 1 minute']] as const)
-      await db.query("INSERT INTO amazon_html_fetch(operation_id,site,asin,job,requested_at) VALUES($1,'https://www.amazon.com',$2,$3,clock_timestamp()-$4::interval)", [j.operationId, j.discovery.entry.listingId, j, age]);
+      await db.query("INSERT INTO amazon_html_fetch(operation_id,site,asin,job,requested_at,captured_at) VALUES($1,'https://www.amazon.com',$2,$3,clock_timestamp()-$4::interval,clock_timestamp()-$4::interval)", [j.operationId, j.discovery.entry.listingId, j, age]);
     expect(await gate.acquire(await job('near-new', 'B000000004'), signal())).toEqual({ kind: 'reuse', job: fresh });
     await expect(gate.acquire(expired, signal())).rejects.toThrow('DOWNLOAD_UNRESOLVED');
     expect(await gate.acquire(await job('expired-new', 'B000000005'), signal())).toEqual({ kind: 'download' });
@@ -73,9 +87,9 @@ describe.skipIf(!address)('Mini atomic rolling HTML fetch admission', () => {
     expect(await gate.acquire(await job('lost-ack-new', 'B000000009'), signal())).toEqual({kind:'reuse',job:first});
     expect((await db.query('SELECT captured_at FROM amazon_html_fetch WHERE operation_id=$1',[first.operationId])).rows[0].captured_at.toISOString()).toBe(capturedAt);
   });
-  it('unavailable R2 at unknown-attempt expiry fails closed instead of granting another download', async () => {
+  it('unavailable R2 while resolving an ended attempt fails closed instead of granting another download', async () => {
     const first = await job('expiry-offline', 'B000000010');
-    await db.query("INSERT INTO amazon_html_fetch(operation_id,site,asin,job,requested_at) VALUES($1,'https://www.amazon.com',$2,$3,clock_timestamp()-interval '25 hours')", [first.operationId,first.discovery.entry.listingId,first]);
+    await db.query("INSERT INTO amazon_html_fetch(operation_id,site,asin,job,requested_at) VALUES($1,'https://www.amazon.com',$2,$3,clock_timestamp()-interval '2 hours')", [first.operationId,first.discovery.entry.listingId,first]);
     inspect.mockRejectedValueOnce(Error('R2 unavailable'));
     const next = await job('expiry-offline-new', 'B000000010');
     await expect(gate.acquire(next,signal())).rejects.toThrow('R2 unavailable');
