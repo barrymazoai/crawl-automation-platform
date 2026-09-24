@@ -19,6 +19,15 @@ export function filterIdentity(raw) {
   if (parts.length !== 2 || categories.length !== 1 || brands.length !== 1) fail('FILTER_SCOPE');
   return { category: categories[0], brandFilter: brands[0], url: u.href };
 }
+// Direct entry from a verified Amazon byline name: the brand-name filter (p_4) is
+// requested once and must come back selected, in category, with organic results.
+export function directFilterUrl(brandName, category = 'n:3760901') {
+  if (typeof brandName !== 'string' || !brandName.trim() || brandName.length > 80 || /[\x00-\x1f,|]/.test(brandName) || !/^n:\d+$/.test(category)) fail('NAME_REQUIRES_REVIEW');
+  const u = new URL('https://www.amazon.com/s');
+  u.searchParams.set('k', brandName.trim()); u.searchParams.set('i', 'hpc'); u.searchParams.set('rh', `${category},p_4:${brandName.trim()}`);
+  const url = searchAddress(u.href), entry = filterIdentity(url);
+  return { brandName: brandName.trim(), category: entry.category, brandFilter: entry.brandFilter, url };
+}
 export function inspectSearch(html, requestedUrl, names, expected = null) {
   if (/validateCaptcha|Robot Check|Enter the characters you see below/i.test(html)) fail('ACCESS_CHALLENGE');
   const { document: d } = parseHTML(html);
@@ -26,8 +35,12 @@ export function inspectSearch(html, requestedUrl, names, expected = null) {
   const department = d.querySelector('select[name="url"] option[selected]');
   if (department?.getAttribute('value') !== 'search-alias=hpc') fail('CATEGORY_LOST');
   const accepted = new Set(names.map(normalizeBrand));
+  // Only the Brands refinement counts. A Seller (p_6) option with the same text is
+  // a different entity; counting it produced 189 false ambiguities and 109 seller-only
+  // matches on 2026-09-23.
+  const brandFacet = a => { const li = a.closest('li[id]'); return /^(?:p_123|p_4)\//.test(li?.getAttribute('id') ?? ''); };
   const matches = [...d.querySelectorAll('a.s-navigation-item[href]')].filter(a =>
-    a.querySelector('input[type="checkbox"]') && accepted.has(normalizeBrand(text(a))));
+    a.querySelector('input[type="checkbox"]') && brandFacet(a) && accepted.has(normalizeBrand(text(a))));
   if (matches.length !== 1) fail(matches.length ? 'BRAND_AMBIGUOUS' : 'BRAND_FILTER_MISSING');
   const a = matches[0], brandName = text(a), checked = a.querySelector('input').hasAttribute('checked');
   const selected = checked && a.getAttribute('aria-current') === 'true';
