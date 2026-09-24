@@ -12,7 +12,9 @@ import { searchAddress, filterIdentity, productAddress, productByline } from '..
 const root = resolve(process.argv[2]), manifest = JSON.parse(await fs.readFile(join(root, 'manifest.json'), 'utf8'));
 const clean = n => n.normalize('NFKC').replace(/\s+/g, ' ').trim();
 const allowedNames = new Set(manifest.candidates.flatMap(c => c.names.map(clean)));
-const allowedAsins = new Set(manifest.candidates.map(c => c.identity?.asin).filter(Boolean));
+const allowedAsins = new Set(manifest.candidates.flatMap(c => [c.identity?.asin, ...(c.identity?.asins ?? [])]).filter(Boolean));
+// Set only when the user explicitly authorized refetching despite a recent attempt (2026-09-24).
+const skipAdmission = manifest.admission === 'user-authorized-refetch';
 const deployment = JSON.parse(await fs.readFile('/Users/server/apps/crawler-v3/live/deployment.json', 'utf8'));
 const cfg = JSON.parse(await fs.readFile(deployment.jobs.find(j => j.env.V3_AMAZON_LIVE_CONFIG).env.V3_AMAZON_LIVE_CONFIG, 'utf8'));
 const key = cfg.capture.scraperApi.apiKey;
@@ -21,7 +23,7 @@ await fs.mkdir(join(root, 'evidence'), { recursive: true, mode: 0o700 });
 const hash = b => createHash('sha256').update(b).digest('hex');
 const save = async (p, b) => { const f = await fs.open(p, 'wx', 0o600); try { await f.writeFile(b); await f.sync(); } finally { await f.close(); } };
 const ledger = v => fs.appendFile(join(root, 'product-fetches.jsonl'), JSON.stringify({ at: new Date().toISOString(), ...v }) + '\n');
-const limit = manifest.candidates.length * (allowedAsins.size ? 3 : 2);
+const limit = manifest.candidates.length * 2 + allowedAsins.size;
 let active = 0, peak = 0, calls = 0, charged = 0;
 const pending = new Map();
 const learn = (url, bytes) => {
@@ -41,7 +43,8 @@ async function once(url, product) {
     const { asin } = productAddress(url);
     const recent = (await db.query(`SELECT 1 FROM amazon_html_fetch WHERE site='https://www.amazon.com' AND asin=$1
       AND greatest(requested_at,coalesce(captured_at,requested_at))>clock_timestamp()-interval '24 hours' LIMIT 1`, [asin])).rowCount;
-    if (recent) { await ledger({ asin, event: 'ADMISSION_WAIT' }); throw Error('ADMISSION'); }
+    if (recent && !skipAdmission) { await ledger({ asin, event: 'ADMISSION_WAIT' }); throw Error('ADMISSION'); }
+    if (recent) await ledger({ asin, event: 'ADMISSION_SKIPPED_BY_USER' });
   }
   await save(stem + '.intent.json', JSON.stringify({ url, at: new Date().toISOString(), attempts: 1 }));
   active++; peak = Math.max(peak, active); calls++;

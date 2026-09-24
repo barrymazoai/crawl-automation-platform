@@ -105,10 +105,19 @@ if (command === 'status') {
       if (await exists(intent)) throw Error('BRAND_SEARCH.PRIOR_ATTEMPT_UNRESOLVED');
       await save(intent, { at: new Date().toISOString(), id: c.id });
       const accepted = names(c); if (!accepted.length) throw Error('BRAND_SEARCH.NAME_REQUIRES_REVIEW');
-      if (c.identity?.asin) {
-        // Identity mode: read Amazon's byline from the brand's sample product page first.
-        const page = await capture(`https://www.amazon.com/dp/${c.identity.asin}`, true); out.evidence.push(page.receipt);
-        const id = productByline(page.html, c.identity.asin); out.identity = id; out.productAssociation = 'amazon-byline-sample-product-page';
+      if (c.identity?.asin || c.identity?.asins?.length) {
+        // Identity mode: read Amazon's byline from the brand's product pages, in order, until one
+        // page yields a byline for its own ASIN. Gone, redirected or byline-less pages are skipped.
+        const asins = c.identity.asins ?? [c.identity.asin];
+        let id = null; out.tried = [];
+        for (const asin of asins) {
+          try {
+            const page = await capture(`https://www.amazon.com/dp/${asin}`, true); out.evidence.push(page.receipt);
+            id = { ...productByline(page.html, asin), asin }; out.tried.push({ asin, ok: true }); break;
+          } catch (e) { if (code(e) === 'BRAND_SEARCH.LOCAL_OR_EXECUTION_UNKNOWN') throw e; out.tried.push({ asin, code: code(e) }); }
+        }
+        if (!id) throw Error(out.tried.at(-1)?.code ?? 'BRAND_SEARCH.BYLINE_MISSING');
+        out.identity = id; out.productAssociation = 'amazon-byline-product-page';
         const fallback = reason => {
           if (!id.storeUrl) throw Error(reason);
           out.state = 'store-link-from-byline'; out.storeUrl = id.storeUrl; out.brandName = id.name; out.searchCode = reason;
