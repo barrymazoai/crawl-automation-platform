@@ -42,6 +42,12 @@ describe("failed HTML requests never retry", () => {
   });
 });
 describe("static Amazon HTML parses into the browser projection", () => {
+  it("a byline that links to a brand search instead of a store keeps the product (was AMAZON.STORE_REQUIRED)", () => {
+    const base = parseAmazonStaticHtml(page("B0G963NB8Q"), url("B0G963NB8Q"));
+    const p = { ...base, storeUrl: "https://www.amazon.com/s/ref=bl_dp_s_web_0?ie=UTF8&search-alias=aps&field-keywords=Horbaach" };
+    expect(() => parseAmazonRenderedProduct(p, url("B0G963NB8Q"), { listingId: "B0G963NB8Q", variantId: null })).not.toThrow();
+    expect(() => parseAmazonRenderedProduct({ ...base, storeUrl: "https://evil.example/stores/x" }, url("B0G963NB8Q"), { listingId: "B0G963NB8Q", variantId: null })).toThrow();
+  });
   it("B0G963NB8Q: title, store, USD selected-offer price, seller link, gallery from colorImages, no variants", () => {
     const p = parseAmazonStaticHtml(page("B0G963NB8Q"), url("B0G963NB8Q"));
     expect(AmazonRenderedProductSchema.parse(p)).toEqual(p);
