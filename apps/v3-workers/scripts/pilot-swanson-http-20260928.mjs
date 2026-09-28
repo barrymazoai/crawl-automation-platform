@@ -4,6 +4,7 @@
 //   node pilot-swanson-http-20260928.mjs source                 create + enable the Healthy Origins Swanson brand source (web API)
 //   node pilot-swanson-http-20260928.mjs config <scan-result>   write the pilot's private config (stays on Server 一)
 //   node pilot-swanson-http-20260928.mjs switch [--write]       move the 29 Swanson-session jobs to this release (backups first)
+//   node pilot-swanson-http-20260928.mjs start                  set the switched jobs' build ids and start them (stops at the first failure)
 //   node pilot-swanson-http-20260928.mjs submit                 one collection submission for the pilot source
 //   node pilot-swanson-http-20260928.mjs status                 progress of the pilot submission
 // Rollback of `switch`: copy manual-releases/swanson-http-20260928/switch/*.before* back, then stop/start the same jobs.
@@ -21,6 +22,11 @@ const m = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
 const sha = s => createHash('sha256').update(s).digest('hex');
 const uuid = s => { const h = sha(s).slice(0, 32).split(''); h[12] = '4'; h[16] = '8'; const v = h.join(''); return [v.slice(0, 8), v.slice(8, 12), v.slice(12, 16), v.slice(16, 20), v.slice(20)].join('-'); };
 const web = JSON.parse(fs.readFileSync(m.jobs.find(j => j.id === 'brand-web').env.V3_BRAND_WEB_CONFIG, 'utf8'));
+// The workers' artifactBuildId: every .js (plus the workflow bundle) in sorted order, each as `<length>:` then its bytes.
+// (The first version of this script hashed file names too, so the switched jobs refused to start; `start` repairs that.)
+const buildOf = dir => execFileSync('/usr/bin/python3', ['-c', `import hashlib,os\nh=hashlib.sha256()\nfor n in sorted(x for x in os.listdir(${JSON.stringify(dir)}) if x.endswith('.js') or x=='product-workflows.cjs'):\n b=open(os.path.join(${JSON.stringify(dir)},n),'rb').read();h.update((str(len(b))+':').encode());h.update(b)\nprint(h.hexdigest())`], { encoding: 'utf8' }).trim();
+const ctl = (c, id) => { try { return JSON.parse(execFileSync(m.node, [root + '/manual-control.mjs', c, id], { encoding: 'utf8', timeout: 180000 }).trim().split('\n').pop()); }
+  catch (e) { const t = String(e.stdout ?? '').trim().split('\n').pop(); try { return JSON.parse(t); } catch { throw e; } } };
 async function api(path, method = 'GET', body, key) {
   // brand-web accepts only its local workspace client (it adds the Bearer token itself); writes carry its own Origin.
   const origin = `http://127.0.0.1:${web.port}`;
@@ -59,7 +65,6 @@ if (cmd === 'source') {
   const readCfg = p => { try { return JSON.parse(fs.readFileSync(p, 'utf8')); } catch { return null; } };
   const jobs = m.jobs.filter(j => { const c = j.env?.V3_WORKER_CONFIG ? readCfg(j.env.V3_WORKER_CONFIG) : null; return JSON.stringify(j).includes(SESSION) || JSON.stringify(c ?? '').includes(SESSION); });
   if (jobs.length !== 29) throw Error(`expected 29 jobs of session ${SESSION}, got ${jobs.length}`);
-  const buildOf = dir => execFileSync('/usr/bin/python3', ['-c', `import hashlib,os\nh=hashlib.sha256()\nfor n in sorted(x for x in os.listdir(${JSON.stringify(dir)}) if x.endswith('.js') or x=='product-workflows.cjs'):\n b=open(os.path.join(${JSON.stringify(dir)},n),'rb').read();h.update(n.encode()+b'\\0'+str(len(b)).encode()+b'\\0'+b)\nprint(h.hexdigest())`], { encoding: 'utf8' }).trim();
   const plan = jobs.map(j => {
     const target = map.find(([re]) => re.test(j.entry))?.[1]; if (!target || !fs.existsSync(target)) throw Error('no new entry for ' + j.id);
     return { id: j.id, cfg: j.env?.V3_WORKER_CONFIG ?? null, swanson: !!j.env?.V3_SWANSON_LIVE_CONFIG, oldEntry: j.entry, newEntry: target, newBuild: buildOf(dirname(target)) };
@@ -74,7 +79,6 @@ if (cmd === 'source') {
   fs.copyFileSync(manifestPath, sw + '/deployment.before.json', fs.constants.COPYFILE_EXCL);
   for (const p of plan) if (p.cfg) fs.copyFileSync(p.cfg, sw + '/' + p.id + '.config.before.json', fs.constants.COPYFILE_EXCL);
   fs.writeFileSync(sw + '/plan.json', JSON.stringify(plan, null, 1), { flag: 'wx' });
-  const ctl = (c, id) => JSON.parse(execFileSync(m.node, [root + '/manual-control.mjs', c, id], { encoding: 'utf8', timeout: 180000 }).trim().split('\n').pop());
   for (const p of plan) ctl('stop', p.id);
   for (const p of plan) if (p.cfg) { const c = JSON.parse(fs.readFileSync(p.cfg, 'utf8')); c.expectedBuildId = p.newBuild; fs.writeFileSync(p.cfg + '.next', JSON.stringify(c, null, 2), { mode: 0o600 }); fs.renameSync(p.cfg + '.next', p.cfg); }
   for (const j of m.jobs) { const p = plan.find(x => x.id === j.id); if (!p) continue; j.entry = p.newEntry; if (p.swanson) j.env.V3_SWANSON_LIVE_CONFIG = NEW_CONFIG; }
@@ -82,6 +86,21 @@ if (cmd === 'source') {
   const started = []; for (const p of plan) { const s = ctl('start', p.id); started.push({ id: p.id, ready: s.jobs?.find(x => x.id === p.id)?.ready ?? null }); }
   fs.writeFileSync(sw + '/started.json', JSON.stringify({ at: new Date().toISOString(), started }, null, 1));
   console.log(JSON.stringify({ started: started.length, notReady: started.filter(s => !s.ready).map(s => s.id) }));
+} else if (cmd === 'start') {
+  // After `switch`: set each switched job's expectedBuildId from its current (new) entry, then start them in order,
+  // stopping at the first job that does not come up. Configs were already backed up by `switch`.
+  const plan = JSON.parse(fs.readFileSync(out + '/switch/plan.json', 'utf8'));
+  const started = [];
+  for (const p of plan) {
+    const j = m.jobs.find(x => x.id === p.id); if (!j || j.entry !== p.newEntry) throw Error('job not switched: ' + p.id);
+    if (p.cfg) { const c = JSON.parse(fs.readFileSync(p.cfg, 'utf8')), id = buildOf(dirname(p.newEntry));
+      if (c.expectedBuildId !== id) { c.expectedBuildId = id; fs.writeFileSync(p.cfg + '.next', JSON.stringify(c, null, 2), { mode: 0o600 }); fs.renameSync(p.cfg + '.next', p.cfg); } }
+    const s = ctl('start', p.id), ready = s.jobs?.find(x => x.id === p.id)?.ready ?? false;
+    started.push({ id: p.id, ready });
+    if (!ready) break;
+  }
+  fs.writeFileSync(out + '/switch/started.json', JSON.stringify({ at: new Date().toISOString(), started }, null, 1));
+  console.log(JSON.stringify({ started: started.filter(s => s.ready).length, of: plan.length, notReady: started.filter(s => !s.ready).map(s => s.id) }));
 } else if (cmd === 'submit') {
   const s = await findSource(); if (!s?.enabled) throw Error('run `source` first');
   const r = await api(`/brands/${BRAND.id}/sources/${s.id}/submissions`, 'POST', { sourceRevision: s.revision }, uuid('swanson-http-20260928:submit:' + s.revision));
@@ -100,4 +119,4 @@ if (cmd === 'source') {
     reviews: await q("SELECT record->'failure'->>'code' code, count(*)::int n FROM review_record WHERE record->'observation'->>'sourceId'=$1 GROUP BY 1 ORDER BY 2 DESC", [s.id]),
     heldPermits: (await q("SELECT count(*)::int n FROM resource_permit WHERE released_at IS NULL AND request::text LIKE '%swanson%'"))[0].n }));
   await db.end();
-} else throw Error('Usage: source | config <scan-result.json> | switch [--write] | submit | status');
+} else throw Error('Usage: source | config <scan-result.json> | switch [--write] | start | submit | status');
