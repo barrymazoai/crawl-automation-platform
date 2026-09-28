@@ -12,7 +12,8 @@ const GROUPS = [
   { from: '/releases/fleet-20260924/source/', file: 'label/channel-label-worker.js', count: 17 },
   { from: '/releases/local-temporal-20260923/source/', file: 'workflow/product-workflow-worker.js', count: 4 },
 ];
-const buildOf = dir => execFileSync('/usr/bin/python3', ['-c', `import hashlib,os\nh=hashlib.sha256()\nfor n in sorted(x for x in os.listdir(${JSON.stringify(dir)}) if x.endswith('.js')):\n b=open(os.path.join(${JSON.stringify(dir)},n),'rb').read();h.update((str(len(b))+':').encode());h.update(b)\nprint(h.hexdigest())`], { encoding: 'utf8' }).trim();
+// Same file set as the workers' artifactBuildId: every .js, plus the workflow bundle (product-workflow-worker.ts).
+const buildOf = dir => execFileSync('/usr/bin/python3', ['-c', `import hashlib,os\nh=hashlib.sha256()\nfor n in sorted(x for x in os.listdir(${JSON.stringify(dir)}) if x.endswith('.js') or x=='product-workflows.cjs'):\n b=open(os.path.join(${JSON.stringify(dir)},n),'rb').read();h.update((str(len(b))+':').encode());h.update(b)\nprint(h.hexdigest())`], { encoding: 'utf8' }).trim();
 const m = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
 const plan = [];
 for (const g of GROUPS) {
