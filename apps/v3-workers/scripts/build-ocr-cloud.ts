@@ -57,6 +57,7 @@ await build({...common,outDir:base+'/plan',entry:['src/channel-plan-worker.ts']}
 // brand-web reads `migrations/<name>` next to itself and refuses to start when the ledger holds a migration it does not know (020).
 await build({...common,outDir:base+'/web',entry:['src/brand-web.ts']});
 await build({...common,outDir:base+'/amazon',entry:['src/amazon-live-worker.ts']});
+await build({...common,outDir:base+'/swanson',entry:['src/swanson-live-worker.ts']});
 await build({...common,outDir:base+'/queue',entry:['src/amazon-queue-cli.ts']});
 await cp('src/amazon-queue-health.mjs',base+'/queue/amazon-queue-health.mjs');
 await cp('src/amazon-queue-recovery.mjs',base+'/queue/amazon-queue-recovery.mjs');
