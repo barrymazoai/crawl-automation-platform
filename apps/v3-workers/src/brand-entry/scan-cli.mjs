@@ -1,5 +1,6 @@
 // Brand scan: every product of each brand in the manifest, newest first, page by page.
-// Sites: Amazon Brand-filter searches / brand pages (amazon-brand-scan/1) and GNC brand pages (gnc-brand-scan/1).
+// Sites: Amazon Brand-filter searches / brand pages (amazon-brand-scan/1), GNC brand pages (gnc-brand-scan/1) and
+// Swanson brand collections through Shopify's products.json (swanson-brand-scan/1).
 // Standalone and finite: no Temporal, R2, database or browser. Search pages only; product
 // pages are never fetched here (the product queue does that under its own admission rules).
 // Every response is archived byte-for-byte and read back before it is parsed; a page that was
@@ -12,6 +13,7 @@ import { request as httpRequest } from 'node:http';
 import { resolve, join } from 'node:path';
 import { scanAddress, scanPageUrl, scanPage } from '../../../../packages/v3-channels/src/amazon-brand-search.mjs';
 import { gncScanAddress, gncScanPageUrl, gncScanPage } from '../../../../packages/v3-channels/src/gnc-brand-scan.mjs';
+import { swansonScanAddress, swansonScanPageUrl, swansonScanPage } from '../../../../packages/v3-channels/src/swanson-brand-scan.mjs';
 
 // One profile per site. GNC pages state their total, so a GNC scan can prove it read every tile.
 const profiles = {
@@ -19,6 +21,9 @@ const profiles = {
     complete: (p, pages) => p.nextPage === null },
   'gnc-brand-scan/1': { address: gncScanAddress, pageUrl: gncScanPageUrl, parse: gncScanPage, sort: 'new-arrivals', result: 'gnc-brand-scan-result/1', ids: 'ids',
     complete: (p, pages) => p.nextPage === null && p.totalResults !== null && pages.reduce((n, x) => n + x.cards, 0) === p.totalResults },
+  // Shopify pages hold 250 products; a shorter page is the end of the collection.
+  'swanson-brand-scan/1': { address: swansonScanAddress, pageUrl: swansonScanPageUrl, parse: swansonScanPage, sort: 'published_at-desc', result: 'swanson-brand-scan-result/1', ids: 'ids',
+    contentType: /^application\/json\b/i, complete: (p) => p.nextPage === null },
 };
 
 const hash = bytes => createHash('sha256').update(bytes).digest('hex');
@@ -103,7 +108,7 @@ if (command === 'status') {
       await save(receiptPath, receipt);
       if ([401, 403, 429].includes(result.status)) { halt = true; fatal = 'BRAND_SCAN.PROVIDER_ADMISSION'; }
       if (result.status !== 200) throw Error('BRAND_SCAN.HTTP_STATUS');
-      if (!String(receipt.contentType).includes('text/html') || receipt.encoding && receipt.encoding !== 'identity') throw Error('BRAND_SCAN.CONTENT_TYPE');
+      if (!(profile.contentType ?? /^text\/html\b/i).test(String(receipt.contentType)) || receipt.encoding && receipt.encoding !== 'identity') throw Error('BRAND_SCAN.CONTENT_TYPE');
       if (result.headers['sa-final-url']) { let final = null; try { final = profile.address(result.headers['sa-final-url']).url; } catch {} if (final !== url) throw Error('BRAND_SCAN.REDIRECT'); }
       return { receipt, html: bytes.toString('utf8') };
     } finally { active--; }
@@ -136,6 +141,7 @@ if (command === 'status') {
       // A paid page that turns out to be a challenge is kept; repeated challenges stop the run instead of paying for more.
       if (out.code.endsWith('.ACCESS_CHALLENGE') && ++challenges >= 3) { halt = true; fatal = 'BRAND_SCAN.REPEATED_ACCESS_CHALLENGE'; }
     }
+    if (profile.sort === 'published_at-desc') asins.sort((x, y) => String(items[y]?.publishedAt ?? '').localeCompare(String(items[x]?.publishedAt ?? '')));
     await save(file, out); tally(out);
     console.log(JSON.stringify({ id: c.id, state: out.state, code: out.code, pages: out.pages.length, products: asins.length, complete }));
   }

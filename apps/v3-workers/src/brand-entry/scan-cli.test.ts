@@ -109,6 +109,34 @@ describe('brand scan runner', () => {
     } finally { server.close(); await fs.rm(dir, { recursive: true, force: true }); }
   }, 30000);
 
+  it('scans Swanson brands through products.json (JSON evidence) and orders products newest first', async () => {
+    const dir = await fs.mkdtemp(join(os.tmpdir(), 'brand-scan-swanson-'));
+    const product = (id: number, published: string) => ({ id, handle: `p-${id}`, title: 'T', vendor: 'Brand', published_at: published, created_at: published,
+      variants: [{ id: id + 1, sku: `S${id}`, available: true, price: '9.99', title: 'Default Title' }] });
+    const seen: string[] = [];
+    const server: Server = createServer((req, res) => {
+      const target = new URL(new URL(req.url!, 'http://x').searchParams.get('url')!); seen.push(target.href);
+      const page = Number(target.searchParams.get('page'));
+      // 251 products: page 1 is full (250), page 2 has one more.
+      const products = page === 1 ? Array.from({ length: 250 }, (_, i) => product(1000000 + i, `2024-01-${String(1 + (i % 28)).padStart(2, '0')}T00:00:00Z`)) : [product(2000000, '2026-09-01T00:00:00Z')];
+      res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'sa-credit-cost': '1' }); res.end(JSON.stringify({ products }));
+    });
+    await new Promise<void>(ok => server.listen(0, '127.0.0.1', ok));
+    try {
+      const id = '30000000-0000-4000-8000-000000000000';
+      await fs.writeFile(join(dir, 'manifest.json'), JSON.stringify({ codec: 'swanson-brand-scan/1', concurrency: 1, maxPages: 5,
+        candidates: [{ id, url: 'https://www.swansonvitamins.com/collections/brand-healthy-origins' }] }));
+      await fs.writeFile(join(dir, 'key'), `http://127.0.0.1:${(server.address() as { port: number }).port}/capture`);
+      await run(process.execPath, [cli, 'run', dir, join(dir, 'key')]);
+      const r = JSON.parse(await fs.readFile(join(dir, 'results', id + '.json'), 'utf8'));
+      expect(r).toMatchObject({ codec: 'swanson-brand-scan-result/1', state: 'complete', catalogEnumerationComplete: true, sort: 'published_at-desc' });
+      expect(r.ids).toHaveLength(251); expect(r.ids[0]).toBe('2000000');
+      expect(r.items['2000000']).toMatchObject({ url: 'https://www.swansonvitamins.com/p/p-2000000', variants: [{ id: '2000001', sku: 'S2000000', available: true }] });
+      expect(seen).toEqual(['https://www.swansonvitamins.com/collections/brand-healthy-origins/products.json?limit=250&page=1',
+        'https://www.swansonvitamins.com/collections/brand-healthy-origins/products.json?limit=250&page=2']);
+    } finally { server.close(); await fs.rm(dir, { recursive: true, force: true }); }
+  }, 30000);
+
   it('rejects a manifest with a non-scan URL or a duplicate id', async () => {
     const dir = await fs.mkdtemp(join(os.tmpdir(), 'brand-scan-'));
     try {

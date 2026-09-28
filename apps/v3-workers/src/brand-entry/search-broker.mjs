@@ -10,10 +10,12 @@ import { join, resolve } from 'node:path';
 import pg from 'pg';
 import { searchAddress, filterIdentity, productAddress, productByline, organicAsins, scanAddress, scanPageUrl } from '../../../../packages/v3-channels/src/amazon-brand-search.mjs';
 import { gncScanAddress, gncScanPageUrl } from '../../../../packages/v3-channels/src/gnc-brand-scan.mjs';
+import { swansonScanAddress, swansonScanPageUrl } from '../../../../packages/v3-channels/src/swanson-brand-scan.mjs';
 const root = resolve(process.argv[2]), manifest = JSON.parse(await fs.readFile(join(root, 'manifest.json'), 'utf8'));
 const clean = n => n.normalize('NFKC').replace(/\s+/g, ' ').trim();
-// Brand scan runs may fetch only the listed brand URLs, pages 1..maxPages, newest first (Amazon or GNC).
-const scanSite = { 'amazon-brand-scan/1': { address: raw => scanAddress(raw).url, pageUrl: scanPageUrl }, 'gnc-brand-scan/1': { address: raw => gncScanAddress(raw).url, pageUrl: gncScanPageUrl } }[manifest.codec];
+// Brand scan runs may fetch only the listed brand URLs, pages 1..maxPages (Amazon, GNC or Swanson products.json).
+const scanSite = { 'amazon-brand-scan/1': { address: raw => scanAddress(raw).url, pageUrl: scanPageUrl }, 'gnc-brand-scan/1': { address: raw => gncScanAddress(raw).url, pageUrl: gncScanPageUrl },
+  'swanson-brand-scan/1': { address: raw => swansonScanAddress(raw).url, pageUrl: swansonScanPageUrl } }[manifest.codec];
 const scan = !!scanSite;
 if (scan && !(Number.isInteger(manifest.maxPages) && manifest.maxPages >= 1 && manifest.maxPages <= 50)) throw Error('MANIFEST');
 const allowedScan = new Set(scan ? manifest.candidates.flatMap(c => Array.from({ length: manifest.maxPages }, (_, i) => scanSite.pageUrl(c.url, i + 1))) : []);
