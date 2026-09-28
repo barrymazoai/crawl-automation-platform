@@ -3,7 +3,7 @@ import {mkdtemp,writeFile,rm} from "node:fs/promises";
 import {tmpdir} from "node:os";
 import {join} from "node:path";
 import {DeploymentSchema} from "./deployment-supervisor.js";
-import {serviceLabel,parseLaunchdList,renderService,independentReady} from "./deployment-launchd.js";
+import {serviceLabel,parseLaunchdList,renderService,independentReady,monitorBinding} from "./deployment-launchd.js";
 const roots:string[]=[];
 const config=(root:string)=>DeploymentSchema.parse({platform:"darwin",host:"mini",root,node:"/usr/bin/node",jobs:[{id:"text",entry:root+"/text.js",env:{V3_WORKER_CONFIG:root+"/runtime.json"}}],resources:[],database:{connectionString:"postgres://test",tls:false}});
 afterEach(async()=>{await Promise.all(roots.splice(0).map(root=>rm(root,{recursive:true,force:true})));});
@@ -32,3 +32,14 @@ it.each(["correct","stale-pid","exited-service","wrong-build","wrong-role","stal
  expect(await independentReady(c,j,mode==="exited-service"?undefined:process.pid)).toBe(mode==="correct");
 });
 
+it("the monitor keeps running when Workers are added or removed; only its database, probes or resource ownership bind it",()=>{
+ const job=(id:string)=>({id,entry:`/a/${id}.js`,env:{}});
+ const base=DeploymentSchema.parse({platform:"darwin",host:"mini",root:"/a",node:"/usr/bin/node",jobs:[job("text"),job("web")],
+  resources:[{resourceId:"cpu",capacity:4,jobs:["text","web"],minFreeBytes:1}],database:{connectionString:"postgres://test",tls:false}});
+ const same=(raw:object)=>monitorBinding(DeploymentSchema.parse({...base,...raw}))===monitorBinding(base);
+ expect(same({jobs:[job("text")],resources:[{resourceId:"cpu",capacity:4,jobs:["text"],minFreeBytes:2}]})).toBe(true);
+ expect(same({jobs:[job("text"),job("web"),job("vision")],startupIntervalMs:100})).toBe(true);
+ expect(same({resources:[{resourceId:"cpu",capacity:5,jobs:["text"],minFreeBytes:1}]})).toBe(false);
+ expect(same({resources:[]})).toBe(false);
+ expect(same({database:{connectionString:"postgres://other",tls:false}})).toBe(false);
+});

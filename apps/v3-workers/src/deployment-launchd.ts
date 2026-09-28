@@ -52,7 +52,13 @@ async function json(path:string,value:unknown) {
   const temp=`${path}.${process.pid}.tmp`;
   await writeFile(temp,JSON.stringify(value),{mode:0o600});await rename(temp,path);
 }
-function invariant(c:Deployment) { const {jobs:_jobs,startupIntervalMs:_interval,...fixed}=c;return JSON.stringify({...fixed,jobIds:c.jobs.map(j=>j.id)}); }
+/** What the monitor binds at start: the database and resource ownership it claimed and the probes it runs. Jobs and
+ * each resource's job list, disk floor and dependencies are re-read every tick, so adding or removing a Worker needs
+ * no monitor restart (2026-09-28: removing brand-web stopped the monitor and every resource stayed unhealthy). */
+export function monitorBinding(c:Deployment) {
+  const {platform,host,root,node,database,dependencyProbes,probePolicy}=c;
+  return JSON.stringify({platform,host,root,node,database,dependencyProbes,probePolicy,resources:c.resources.map(r=>[r.resourceId,r.capacity])});
+}
 export async function independentReady(c:Deployment,j:Job,pid:number|undefined) {
   if(!pid||!await readWorkerReady(join(c.root,`${j.id}.health.json`),pid))return false;
   try {
@@ -96,7 +102,8 @@ export async function runIndependentMonitor(manifest:string,signal:AbortSignal) 
     }
     while(!signal.aborted) {
       // Re-read per-job entry/runtime bindings so replacing one Worker needs no monitor restart.
-      const current=await load(manifest);if(invariant(current)!==invariant(c))throw Error("DEPLOYMENT.MONITOR_TOPOLOGY_CHANGED");
+      // A binding change ends this process non-zero; launchd starts a fresh monitor on the new manifest.
+      const current=await load(manifest);if(monitorBinding(current)!==monitorBinding(c))throw Error("DEPLOYMENT.MONITOR_TOPOLOGY_CHANGED");
       monitor.tick();const loaded=await services(),disk=await statfs(c.root);
       const states:Array<{id:string;label:string;pid:number|null;ready:boolean}>=[];
       for(const j of current.jobs) {
@@ -104,7 +111,7 @@ export async function runIndependentMonitor(manifest:string,signal:AbortSignal) 
         states.push({id:j.id,label,pid:pid??null,ready:await independentReady(current,j,pid)});
       }
       const dependencies=monitor.snapshot();
-      for(const r of c.resources) {
+      for(const r of current.resources) {
         const local=r.jobs.every(id=>states.some(s=>s.id===id&&s.ready))&&Number(disk.bavail)*Number(disk.bsize)>=r.minFreeBytes;
         const failed=(r.dependencies??[]).map(id=>dependencies.find(p=>p.id===id)).find(p=>!p?.healthy);
         const healthy=local&&!failed;
@@ -185,5 +192,7 @@ if(process.argv[1]?.endsWith("deployment-launchd.js")) {
   const [command,manifest,id]=process.argv.slice(2);
   const controller=new AbortController();process.once("SIGTERM",()=>controller.abort());process.once("SIGINT",()=>controller.abort());
   const run=async()=>{if(!command||!manifest)throw Error("DEPLOYMENT.COMMAND_REQUIRED");if(command==="monitor")await runIndependentMonitor(manifest,controller.signal);else console.log(JSON.stringify(await runControl(command,manifest,id)));};
-  run().catch(error=>{console.error(JSON.stringify({event:"INDEPENDENT_DEPLOYMENT_FAILED",code:error instanceof Error&&error.message.startsWith("DEPLOYMENT.")?error.message:"DEPLOYMENT.UNEXPECTED_ERROR",errorType:error?.name,errorCode:error?.code}));process.exitCode=1;});
+  // The monitor exits explicitly once its cleanup has run: a leftover handle kept a failed monitor alive for 9 hours on
+  // 2026-09-28, so launchd never restarted it. Control commands keep exitCode so piped output is not cut short.
+  run().then(()=>{if(command==="monitor")process.exit(0);},error=>{console.error(JSON.stringify({event:"INDEPENDENT_DEPLOYMENT_FAILED",code:error instanceof Error&&error.message.startsWith("DEPLOYMENT.")?error.message:"DEPLOYMENT.UNEXPECTED_ERROR",errorType:error?.name,errorCode:error?.code}));if(command==="monitor")process.exit(1);process.exitCode=1;});
 }
