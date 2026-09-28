@@ -20,11 +20,11 @@ await writeFile('dist/dtc-windows/dtc-skill-integrity.js','export default '+JSON
 // Assert the emitted Windows import graph cannot load a PostgreSQL client or a Mini Worker.
 const checked=new Set<string>();
 async function browserGraph(file:string){
- if(checked.has(file))return;checked.add(file);const code=await readFile(file,'utf8');
- for(const match of code.matchAll(/(?:from\s*|import\s*\(\s*|import\s*)["']([^"']+)["']/g)){
-  const spec=match[1]!;if(spec==='pg'||spec.includes('dtc-live-worker')||spec.includes('dtc-mini-node'))throw Error('DTC.WINDOWS_DATABASE_IMPORT');
-  if(spec.startsWith('.'))await browserGraph(resolve(file,'..',spec));
- }
+ if(checked.has(file))return;checked.add(file);const code=await readFile(file,'utf8'),specs=(text:string)=>[...text.matchAll(/(?:from\s*|import\s*\(\s*|import\s*)["']([^"']+)["']/g)].map(m=>m[1]!);
+ // Forbidden imports are checked on the raw text; only files to follow skip block comments,
+ // where bundled JSDoc such as linkedom's `import("../interface/document.js")` names no emitted file.
+ for(const spec of specs(code))if(spec==='pg'||spec.includes('dtc-live-worker')||spec.includes('dtc-mini-node'))throw Error('DTC.WINDOWS_DATABASE_IMPORT');
+ for(const spec of specs(code.replace(/\/\*[\s\S]*?\*\//g,'')))if(spec.startsWith('.'))await browserGraph(resolve(file,'..',spec));
 }
 for(const entry of ['dtc-browser-worker','dtc-node','dtc-recover'])await browserGraph(resolve('dist/dtc-windows',entry+'.js'));
 const workflowBundle=portableWorkflowBundle((await bundleWorkflowCode({workflowsPath:resolve('src/product-workflows.ts')})).code);
