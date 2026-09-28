@@ -5,7 +5,7 @@ import { ArtifactRefSchema, GncParsedEvidenceSchema, GncProductInputSchema, GncP
 import { sha256, verifyBytes } from "@crawl-automation/v3-artifacts";
 import { PAGE_CONFIG_FINGERPRINT, FILE_CONFIG_FINGERPRINT, acquiredImageId, StaticSourcesSchema, permittedUrl } from "@crawl-automation/v3-acquisition";
 import { GncCaptureEvidence } from "./gnc-handoff.js";
-import { parseGncProduct } from "./gnc.js";
+import { parseGncProduct, gncFactsTableComplete } from "./gnc.js";
 const encode = (v: unknown) => Buffer.from(JSON.stringify(v));
 const decode = (b: Uint8Array) => JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(b));
 const LIMIT = 8 * 1024 * 1024;
@@ -22,13 +22,16 @@ function build(input: GncProductInput, capture: GncAcquiredRecord, data: GncProd
     kind: "source-html", mediaType: "text/html", objectKey: `v3/gnc-products/${input.operationId}/product.html`, sha256: sha256(bytes), byteSize: bytes.length,
     producer: { operationId: id("prepare"), module: "gnc.product-input", implementationVersion: "gnc-product-input/1" } }) : null;
   const sources: GncProductPlan["manifest"]["sources"] = [];
+  // html-table-first/1: a complete Supplement Facts HTML table is the only formula source (required, so a failed text
+  // extraction is a Review, never an empty product); no gallery image is downloaded, OCR'd or sent to vision.
+  const htmlOnly = input.factsPolicy === "html-table-first/1" && !!fragment && gncFactsTableComplete(data.factsHtml).complete;
   if (fragment) {
     const raw = PagePrepareInputSchema.parse({ ...input.task.owner, operationId: id("page"), module: "page.prepare", implementationVersion: "1",
       policyVersion: "1", configFingerprint: PAGE_CONFIG_FINGERPRINT, page: fragment, inputFingerprint: "0".repeat(64) });
     const page = PagePrepareInputSchema.parse({ ...raw, inputFingerprint: sha256(Buffer.from(acquisitionFingerprintMaterial(raw))) });
-    sources.push({ id: "page", kind: "page", required: false, plan: { page, textOperationId: id("text"), text: input.text } });
+    sources.push({ id: "page", kind: "page", required: htmlOnly, plan: { page, textOperationId: id("text"), text: input.text } });
   }
-  for (const [index] of data.imageCandidates.entries()) {
+  if (!htmlOnly) for (const [index] of data.imageCandidates.entries()) {
     const raw = { ...input.task.owner, operationId: id(`file-${index}`), module: "file.acquire" as const, implementationVersion: "1",
       policyVersion: "1", configFingerprint: FILE_CONFIG_FINGERPRINT, resourceId: id(`resource-${index}`), binding: input.task.capture.binding,
       expectedSha256: null, inputFingerprint: "0".repeat(64) };

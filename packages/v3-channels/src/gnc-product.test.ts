@@ -25,12 +25,12 @@ const rawInput: GncProductInput = { operationId: "product", task: { schemaVersio
   network: { routeId: "route", version: "1", egressId: "direct/1", mode: "direct", managed: true } },
   text: { schemaVersion: 1, module: "codex.text", implementationVersion: "codex-text/2", policyVersion: "anchored/2", resultSchemaVersion: 2, configFingerprint: "a".repeat(64) },
   ocr: { schemaVersion: 1, module: "ocr.file", implementationVersion: "1", policyVersion: "1", resultSchemaVersion: 2, configFingerprint: "b".repeat(64) }, visionConfigFingerprint: "c".repeat(64) };
-async function fixture(options: { page?: boolean; images?: number; invalid?: boolean; proxy?: boolean; legacyGallery?: boolean } = {}) {
+async function fixture(options: { page?: boolean; images?: number; invalid?: boolean; proxy?: boolean; legacyGallery?: boolean; facts?: string } = {}) {
   const input = GncProductInputSchema.parse(rawInput), local = new Memory(), remote = new Memory(), rows = new Map<string, ReviewRecord>();
   if (options.proxy) { input.task.network = { mode: "static-proxy", managed: true, routeId: "proxy", version: "1", egressId: "proxy/1" }; input.task.capture.binding.egressId = "proxy/1"; }
   const reviews = { read: async (id: string) => rows.get(id) ?? null, append: async (r: ReviewRecord) => { if (!rows.has(r.reviewId)) rows.set(r.reviewId, structuredClone(r)); } };
   const data = { "@type": "Product", sku: "123456", name: "Test", image: Array.from({ length: options.images ?? 2 }, (_, i) => `https://www.gnc.com/label-${i}.png`) };
-  const html = `<script type="application/ld+json">${JSON.stringify(data)}</script>${options.page === false ? "" : '<div id="productIngredientsAccordionContent">Other ingredients: Water</div>'}<div class="recommendation">Unrelated product 999 mg</div>${options.legacyGallery ? '<div class="product-thumbnails-grid"><img alt="Test | GNC" data-zoom-url="https://www.gnc.com/back.png"></div>' : ''}`;
+  const html = `<script type="application/ld+json">${JSON.stringify(data)}</script>${options.page === false ? "" : `<div id="productIngredientsAccordionContent">${options.facts ?? "Other ingredients: Water"}</div>`}<div class="recommendation">Unrelated product 999 mg</div>${options.legacyGallery ? '<div class="product-thumbnails-grid"><img alt="Test | GNC" data-zoom-url="https://www.gnc.com/back.png"></div>' : ''}`;
   const read = vi.fn(async () => ({ operationId: input.task.capture.operationId, requestedUrl: input.task.capture.url, finalUrl: input.task.capture.url,
     binding: input.task.capture.binding, status: 200, contentType: "text/html", bytes: Buffer.from(html), network: input.task.network }));
   const evidence = new GncCaptureEvidence({ local, remote, reviews });
@@ -404,4 +404,37 @@ it("one blocked image origin does not invalidate another image lease", async () 
   const outcomes = await Promise.allSettled(f.files.map(file => access.acquire(file, signal())));
   expect(outcomes[0]!.status).toBe("rejected"); expect(outcomes[1]!.status).toBe("fulfilled");
   if (outcomes[1]!.status === "fulfilled") await outcomes[1]!.value.release();
+});
+// Shape of GNC's own Supplement Facts HTML (877080 Nordic Naturals Omega Plant Based D3+K2, checked 2026-09-28).
+const completeFacts = `<table><tr><td><table><tr><th>Serving Size 2 Soft Gels<br>Servings Per Container 30</th></tr>
+<tr><th>Amount Per Serving</th><th>% DV</th></tr><tr><td>Calories</td><td>20</td></tr><tr><td>Total Fat</td><td>2g</td><td>3%</td></tr>
+<tr><td>Vitamin D3</td><td>50 mcg</td><td>250%</td></tr><tr><td>EPA</td><td>660 mg</td><td>**</td></tr></table></td></tr></table>
+<p>Other Ingredients Marine Algal Oil Extract, High Oleic Sunflower Oil, Mixed Tocopherols, Soft Gel Capsule</p>`;
+it("html-table-first: a complete Supplement Facts table is the only, required formula source; no image is planned", async () => {
+  const f = await fixture({ facts: completeFacts });
+  const input = GncProductInputSchema.parse({ ...f.input, factsPolicy: "html-table-first/1" });
+  const out = await f.plans.run({ input, receipt: f.receipt }, signal());
+  expect(out.status).toBe("prepared"); if (out.status !== "prepared") throw Error();
+  expect(out.manifest.sources.map(s => [s.kind, s.required])).toEqual([["page", true]]);
+  const source = out.manifest.sources[0]!; if (source.kind !== "page") throw Error();
+  const text = preparePage(source.plan.page, f.remote.data.get(source.plan.page.page.objectKey)!, signal()).text;
+  for (const part of ["Serving Size 2 Soft Gels", "Vitamin D3", "50 mcg", "EPA", "660 mg", "Marine Algal Oil Extract"]) expect(text).toContain(part);
+});
+it("html-table-first keeps the images when the table is incomplete; without the policy nothing changes", async () => {
+  const incomplete = await fixture();
+  const kept = await incomplete.plans.run({ input: GncProductInputSchema.parse({ ...incomplete.input, factsPolicy: "html-table-first/1" }), receipt: incomplete.receipt }, signal());
+  if (kept.status !== "prepared") throw Error(kept.status);
+  expect(kept.manifest.sources.map(s => [s.kind, s.required])).toEqual([["page", false], ["file-image", false], ["file-image", false]]);
+  const old = await fixture({ facts: completeFacts });
+  const same = await old.plans.run({ input: old.input, receipt: old.receipt }, signal());
+  if (same.status !== "prepared") throw Error(same.status);
+  expect(same.manifest.sources.map(s => s.kind)).toEqual(["page", "file-image", "file-image"]);
+});
+it("cannot switch an existing product operation to html-table-first", async () => {
+  const f = await fixture({ facts: completeFacts }); await f.plans.run({ input: f.input, receipt: null }, signal());
+  const puts = f.remote.create.mock.calls.length;
+  expect(await f.plans.run({ input: { ...f.input, factsPolicy: "html-table-first/1" }, receipt: null }, signal()))
+    .toMatchObject({ status: "review", code: "GNC.PLAN_CONFLICT" });
+  expect(f.remote.create).toHaveBeenCalledTimes(puts);
+  expect(GncProductInputSchema.safeParse({ ...f.input, factsPolicy: "html-only" }).success).toBe(false);
 });

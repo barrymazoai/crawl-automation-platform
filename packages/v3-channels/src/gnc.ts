@@ -57,6 +57,25 @@ function parsedPage(html: string) {
     doc.all.some(n => ["px-captcha", "_pxCaptcha"].includes(n.attrs.id ?? ""))) throw new GncError("GNC.ACCESS_CHALLENGE");
   return doc;
 }
+const AMOUNT = /^[<≤~]?\s*\d[\d,]*(?:\.\d+)?\s*(?:mg|mcg|µg|μg|g|kg|iu|cfu|billion(?:\s+cfu)?|million(?:\s+cfu)?|ml|kcal|oz|%)\b/i;
+/**
+ * Whether GNC's own Supplement Facts HTML (productIngredientsAccordionContent) is complete enough to be the only formula
+ * source (html-table-first/1): an HTML table, a serving size, at least one ingredient row with an amount, and a non-empty
+ * Other Ingredients list. Checked on real pages 2026-09-28 (877080, 352114, 877130). Anything missing keeps the images.
+ */
+export function gncFactsTableComplete(factsHtml: string | null) {
+  const reasons: string[] = [];
+  if (!factsHtml?.trim()) return { complete: false, reasons: ["GNC.FACTS_DOM_MISSING"], ingredientRows: 0 };
+  const doc = tree(factsHtml), body = clean(text(doc.root));
+  if (!doc.all.some(n => n.tag === "table")) reasons.push("GNC.FACTS_TABLE_MISSING");
+  if (!/Serving Size/i.test(body)) reasons.push("GNC.FACTS_SERVING_SIZE_MISSING");
+  const rows = doc.all.filter(n => n.tag === "tr").map(r => r.children.filter(c => c.tag === "td" || c.tag === "th").map(c => clean(text(c))).filter(Boolean));
+  const ingredientRows = rows.filter(cells => cells.length >= 2 && cells.length <= 4 && !/^\d/.test(cells[0]!) &&
+    !/^(?:calories(?: from fat)?|serving size|servings? per container|amount per serving)$/i.test(cells[0]!) && AMOUNT.test(cells[1]!)).length;
+  if (!ingredientRows) reasons.push("GNC.FACTS_AMOUNTS_MISSING");
+  if (!/Other Ingredients\s*:?\s*[A-Za-z(]/i.test(body)) reasons.push("GNC.FACTS_OTHER_INGREDIENTS_MISSING");
+  return { complete: !reasons.length, reasons, ingredientRows };
+}
 export function parseGncCatalog(html: string, url: string): GncCatalogPage {
   gncUrl(url, url); const doc = parsedPage(html), entries = new Map<string, NonNullable<ReturnType<typeof productLink>>>();
   for (const n of doc.all) if (n.tag === "a" && n.attrs.href && ancestor(n, p => classHas(p, "product-tile"))) {

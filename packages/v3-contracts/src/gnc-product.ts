@@ -8,6 +8,10 @@ export const GncProductInputSchema = z.strictObject({ operationId: ExecutionIdSc
   task: GncAcquireInputSchema.refine(t => t.capture.kind === "product"),
   // Omitted means the original immutable capture result. Opt-in requires a NEW product operation.
   parseVersion: z.literal("gnc-product-html/2").optional(),
+  // Omitted means the original plan: page text plus every gallery image (download, OCR, vision). html-table-first/1:
+  // when the page's own Supplement Facts HTML table is complete, the formula comes from that text alone (no image,
+  // OCR or vision work); an incomplete or missing table keeps the images. Opt-in requires a NEW product operation.
+  factsPolicy: z.literal("html-table-first/1").optional(),
   text: TextCompatibilitySchema.refine(c => c.resultSchemaVersion === 2),
   ocr: ProcessingCompatibilitySchema.refine(c => c.resultSchemaVersion === 2), visionConfigFingerprint: Sha256Schema,
 }).refine(i => i.operationId !== i.task.capture.operationId, "Capture and product operations must differ");

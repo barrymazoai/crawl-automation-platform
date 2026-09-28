@@ -187,3 +187,13 @@ describe("injected single read, no hidden retries or handoff claim", () => {
     await expect(adapter.capture(input, later.signal)).rejects.toThrow(); expect(read).toHaveBeenCalledTimes(1);
   });
 });
+import { gncFactsTableComplete } from "./gnc.js";
+it("GNC facts table completeness: table, serving size, amounts and other ingredients are all required", () => {
+  const table = (rows: string) => `<table><tr><th>Serving Size 6g (1 Rounded Teaspoon)</th></tr><tr><th>Amount Per Serving</th><th>% DV</th></tr><tr><td>Calories</td><td>5</td></tr>${rows}</table>`;
+  const other = "<p>Other Ingredients: Natural and Artificial Flavor, Citric Acid, Sucralose</p>";
+  expect(gncFactsTableComplete(table("<tr><td>Creatine Monohydrate</td><td>5g</td><td>**</td></tr>") + other)).toEqual({ complete: true, reasons: [], ingredientRows: 1 });
+  expect(gncFactsTableComplete(table("") + other).reasons).toEqual(["GNC.FACTS_AMOUNTS_MISSING"]);
+  expect(gncFactsTableComplete(table("<tr><td>Creatine Monohydrate</td><td>5g</td></tr>")).reasons).toEqual(["GNC.FACTS_OTHER_INGREDIENTS_MISSING"]);
+  expect(gncFactsTableComplete('<img src="https://www.gnc.com/facts.png">' + other).reasons).toEqual(expect.arrayContaining(["GNC.FACTS_TABLE_MISSING", "GNC.FACTS_SERVING_SIZE_MISSING"]));
+  expect(gncFactsTableComplete(null)).toMatchObject({ complete: false, reasons: ["GNC.FACTS_DOM_MISSING"] });
+});
