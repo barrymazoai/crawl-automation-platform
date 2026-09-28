@@ -1,10 +1,11 @@
-// Standalone finite search preparation. No Temporal, R2, database, browser or product-page fetches.
+// Standalone finite search preparation. No Temporal, R2, database or browser. Product pages are fetched
+// only in identity mode, through the broker's 24h admission check, to read the brand byline.
 import fs from 'node:fs/promises';
 import { createHash, randomUUID } from 'node:crypto';
 import { request } from 'node:https';
 import { request as httpRequest } from 'node:http';
 import { resolve, join } from 'node:path';
-import { inspectSearch, normalizeBrand, searchAddress } from '../../../../packages/v3-channels/src/amazon-brand-search.mjs';
+import { inspectSearch, normalizeBrand, searchAddress, productAddress, productByline, organicAsins } from '../../../../packages/v3-channels/src/amazon-brand-search.mjs';
 
 const hash = bytes => createHash('sha256').update(bytes).digest('hex');
 const read = async p => JSON.parse(await fs.readFile(p, 'utf8'));
@@ -31,20 +32,20 @@ if (command === 'status') {
   // A leftover lock requires operator reconciliation, not automatic resume over a surviving process.
   const lock = await fs.open(join(root, 'run-lock.json'), 'wx', 0o600);
   await lock.writeFile(JSON.stringify({ pid: process.pid, at: new Date().toISOString() })); await lock.sync();
-  let halt = false, fatal = null, active = 0, peak = 0, cursor = 0, complete = 0, verified = 0, review = 0, requests = 0, credits = 0;
+  let halt = false, fatal = null, active = 0, peak = 0, cursor = 0, complete = 0, verified = 0, review = 0, storeLinks = 0, requests = 0, credits = 0;
   const startedAt = new Date().toISOString();
   process.once('SIGTERM', () => { halt = true; }); process.once('SIGINT', () => { halt = true; });
   let publishing = Promise.resolve();
   const publish = state => {
     const progress = { at: new Date().toISOString(), startedAt, pid: process.pid, state, fatal, total: manifest.candidates.length,
-      complete, verified, review, remaining: manifest.candidates.length - complete, activeRequests: active, peakRequests: peak,
+      complete, verified, storeLinks, review, remaining: manifest.candidates.length - complete, activeRequests: active, peakRequests: peak,
       submittedRequests: requests, credits, concurrencyLimit: 50, databaseImported: false };
     publishing = publishing.then(() => atomic(join(root, 'progress.json'), progress)); return publishing;
   };
   const timer = setInterval(() => { publish(halt ? 'draining' : 'running').catch(() => { halt = true; fatal = 'BRAND_SEARCH.PROGRESS_WRITE'; }); }, 5000);
   const inflight = new Map();
-  async function capture(url) {
-    url = searchAddress(url);
+  async function capture(url, product = false) {
+    url = product ? productAddress(url).url : searchAddress(url);
     if (inflight.has(url)) return inflight.get(url);
     const work = (async () => {
       const stem = join(root, 'evidence', hash(url)), receiptPath = stem + '.json';
@@ -81,9 +82,10 @@ if (command === 'status') {
           archiveReadbackVerified: true, applicationAttempts: 1 };
         await save(receiptPath, receipt);
         if ([401, 403, 429].includes(result.status)) { halt = true; fatal = 'BRAND_SEARCH.PROVIDER_ADMISSION'; }
+        if (result.status === 423) throw Error('BRAND_SEARCH.ADMISSION_WAIT');
         if (result.status !== 200) throw Error('BRAND_SEARCH.HTTP_STATUS');
         if (!String(receipt.contentType).includes('text/html') || receipt.encoding && receipt.encoding !== 'identity') throw Error('BRAND_SEARCH.CONTENT_TYPE');
-        if (result.headers['sa-final-url'] && searchAddress(result.headers['sa-final-url']) !== url) throw Error('BRAND_SEARCH.REDIRECT');
+        if (result.headers['sa-final-url'] && (product ? productAddress(result.headers['sa-final-url']).url : searchAddress(result.headers['sa-final-url'])) !== url) throw Error('BRAND_SEARCH.REDIRECT');
         return { receipt, html: bytes.toString('utf8') };
       } finally { active--; }
     })();
@@ -93,7 +95,8 @@ if (command === 'status') {
   async function one(c) {
     if (!/^[a-f0-9-]{36}$/.test(c.id)) throw Error('BRAND_SEARCH.CANDIDATE');
     const file = join(root, 'results', c.id + '.json');
-    if (await exists(file)) { const r = await read(file); complete++; r.state === 'verified-search' ? verified++ : review++; return; }
+    const tally = s => { complete++; s === 'verified-search' ? verified++ : s === 'store-link-from-byline' ? storeLinks++ : review++; };
+    if (await exists(file)) { tally((await read(file)).state); return; }
     const intent = join(root, 'attempts', c.id + '.json');
     const out = { codec: 'amazon-brand-search-result/1', id: c.id, input: c, state: 'review', code: null, evidence: [],
       productAssociation: 'existing-catalog-mapping-not-reverified', catalogEnumerationComplete: false, databaseImported: false,
@@ -102,6 +105,53 @@ if (command === 'status') {
       if (await exists(intent)) throw Error('BRAND_SEARCH.PRIOR_ATTEMPT_UNRESOLVED');
       await save(intent, { at: new Date().toISOString(), id: c.id });
       const accepted = names(c); if (!accepted.length) throw Error('BRAND_SEARCH.NAME_REQUIRES_REVIEW');
+      if (c.identity?.asin || c.identity?.asins?.length || c.identity?.discoverFromSearch) {
+        // Identity mode: read Amazon's byline from the brand's product pages, in order, until one
+        // page yields a byline for its own ASIN. Gone, redirected or byline-less pages are skipped.
+        const asins = [...(c.identity.asins ?? (c.identity.asin ? [c.identity.asin] : []))], known = new Set(accepted.map(normalizeBrand));
+        const max = c.identity.maxProducts ?? asins.length, discover = !!c.identity.discoverFromSearch;
+        if (discover) {
+          // New products of the brand: organic results of a keyword search for our brand name.
+          const q = new URL('https://www.amazon.com/s'); q.searchParams.set('k', accepted[0]); q.searchParams.set('i', 'hpc');
+          const s = await capture(q.href); out.evidence.push(s.receipt);
+          for (const a of organicAsins(s.html, 6)) if (!asins.includes(a)) asins.push(a);
+        }
+        let id = null; out.tried = [];
+        for (const asin of asins.slice(0, max)) {
+          try {
+            const page = await capture(`https://www.amazon.com/dp/${asin}`, true); out.evidence.push(page.receipt);
+            const b = { ...productByline(page.html, asin), asin };
+            // A discovered product counts only when Amazon's byline shows exactly our brand name.
+            if (discover && !known.has(normalizeBrand(b.name))) { out.tried.push({ asin, code: 'BRAND_SEARCH.OTHER_BRAND', byline: b.name }); continue; }
+            // When a store link is what we need, keep looking if this page's byline has none.
+            if (c.identity.needStore && !b.storeUrl && known.has(normalizeBrand(b.name))) { out.tried.push({ asin, code: 'BRAND_SEARCH.NO_STORE_LINK', byline: b.name }); continue; }
+            id = b; out.tried.push({ asin, ok: true }); break;
+          } catch (e) { if (code(e) === 'BRAND_SEARCH.LOCAL_OR_EXECUTION_UNKNOWN') throw e; out.tried.push({ asin, code: code(e) }); }
+        }
+        if (!id) throw Error(out.tried.at(-1)?.code ?? 'BRAND_SEARCH.BYLINE_MISSING');
+        out.identity = id; out.productAssociation = 'amazon-byline-product-page';
+        const fallback = reason => {
+          if (!id.storeUrl) throw Error(reason);
+          out.state = 'store-link-from-byline'; out.storeUrl = id.storeUrl; out.brandName = id.name; out.searchCode = reason;
+        };
+        if (accepted.some(n => normalizeBrand(n) === normalizeBrand(id.name))) {
+          // The same name was already searched on 2026-09-23 and gave no brand filter.
+          fallback('BRAND_SEARCH.BRAND_FILTER_MISSING');
+        } else {
+          try {
+            const q = new URL('https://www.amazon.com/s'); q.searchParams.set('k', id.name); q.searchParams.set('i', 'hpc');
+            const first = await capture(q.href); out.evidence.push(first.receipt);
+            const observed = inspectSearch(first.html, q.href, [id.name]); out.discovery = observed;
+            const filtered = await capture(observed.url); out.evidence.push(filtered.receipt);
+            out.verified = inspectSearch(filtered.html, observed.url, [observed.brandName], observed);
+            out.brandName = out.verified.brandName; out.searchUrl = out.verified.url;
+            out.state = 'verified-search'; out.verifiedAt = filtered.receipt.capturedAt;
+          } catch (e) { if (code(e) === 'BRAND_SEARCH.LOCAL_OR_EXECUTION_UNKNOWN') throw e; fallback(code(e)); }
+        }
+        await save(file, out); tally(out.state);
+        console.log(JSON.stringify({ id: c.id, state: out.state, code: out.searchCode ?? null, brandName: out.brandName ?? null, complete }));
+        return;
+      }
       const query = new URL('https://www.amazon.com/s'); query.searchParams.set('k', accepted[0]); query.searchParams.set('i', 'hpc');
       const first = await capture(query.href); out.evidence.push(first.receipt);
       const observed = inspectSearch(first.html, query.href, accepted);
@@ -111,7 +161,7 @@ if (command === 'status') {
       out.brandName = out.verified.brandName; out.searchUrl = out.verified.url;
       out.state = 'verified-search'; out.verifiedAt = filtered.receipt.capturedAt;
     } catch (e) { out.code = code(e); }
-    await save(file, out); complete++; out.state === 'verified-search' ? verified++ : review++;
+    await save(file, out); tally(out.state);
     console.log(JSON.stringify({ id: c.id, state: out.state, code: out.code, brandName: out.brandName ?? null, complete }));
   }
   try {
