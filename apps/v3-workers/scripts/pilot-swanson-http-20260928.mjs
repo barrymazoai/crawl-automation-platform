@@ -5,7 +5,9 @@
 //   node pilot-swanson-http-20260928.mjs config <scan-result>   write the pilot's private config (stays on Server 一)
 //   node pilot-swanson-http-20260928.mjs switch [--write]       move the 29 Swanson-session jobs to this release (backups first)
 //   node pilot-swanson-http-20260928.mjs start                  set the switched jobs' build ids and start them (stops at the first failure)
+//   node pilot-swanson-http-20260928.mjs remove-web [--write]   stop brand-web and remove it from the deployment (user request)
 //   node pilot-swanson-http-20260928.mjs submit                 one collection submission for the pilot source
+//   node pilot-swanson-http-20260928.mjs deliver                start the submission's workflow directly (no brand-web)
 //   node pilot-swanson-http-20260928.mjs status                 progress of the pilot submission
 // Rollback of `switch`: copy manual-releases/swanson-http-20260928/switch/*.before* back, then stop/start the same jobs.
 import fs from 'node:fs'; import { execFileSync } from 'node:child_process'; import { createHash } from 'node:crypto';
@@ -103,6 +105,43 @@ if (cmd === 'source') {
   }
   fs.writeFileSync(out + '/switch/started.json', JSON.stringify({ at: new Date().toISOString(), started }, null, 1));
   console.log(JSON.stringify({ started: started.filter(s => s.ready).length, of: plan.length, notReady: started.filter(s => !s.ready).map(s => s.id) }));
+} else if (cmd === 'remove-web') {
+  // User 2026-09-28: "We don't need any web service, so just remove the web service." Stops brand-web and takes its job
+  // out of the deployment (its config stays: the Amazon queue CLI reads delivery settings from it). Nothing is deleted.
+  const job = m.jobs.find(j => j.id === 'brand-web');
+  if (!job) { console.log(JSON.stringify({ removed: false, reason: 'brand-web is not in the deployment' })); process.exit(0); }
+  console.log(JSON.stringify({ job: job.id, entry: job.entry, write }));
+  if (!write) process.exit(0);
+  const dir = out + '/remove-web'; fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
+  fs.copyFileSync(manifestPath, dir + '/deployment.before.json', fs.constants.COPYFILE_EXCL);
+  fs.writeFileSync(dir + '/brand-web.job.json', JSON.stringify(job, null, 1), { flag: 'wx', mode: 0o600 });
+  const stopped = ctl('stop', 'brand-web');
+  const next = JSON.parse(fs.readFileSync(manifestPath, 'utf8')); next.jobs = next.jobs.filter(j => j.id !== 'brand-web');
+  fs.writeFileSync(manifestPath + '.next', JSON.stringify(next, null, 2), { mode: 0o600 }); fs.renameSync(manifestPath + '.next', manifestPath);
+  console.log(JSON.stringify({ removed: true, stopped: stopped.jobs?.find(j => j.id === 'brand-web') ?? stopped, jobsLeft: next.jobs.length,
+    restore: `cp ${dir}/deployment.before.json ${manifestPath} && manual-control.mjs start brand-web` }));
+} else if (cmd === 'deliver') {
+  // Without brand-web's delivery runner: start the submission's BrandCollectionWorkflow directly, with the same options
+  // TemporalGateway used (reject duplicates, no retry/timeout for a brand). An existing execution is only reported.
+  const { Client, Connection } = createRequire(import.meta.url)('@temporalio/client');
+  const sub = JSON.parse(fs.readFileSync(out + '/submission.json', 'utf8'));
+  const db = new pg.Client({ connectionString: m.database.connectionString }); await db.connect();
+  const row = (await db.query('SELECT snapshot FROM collection_submission WHERE request_id=$1', [sub.requestId])).rows[0]; await db.end();
+  if (!row) throw Error('submission not found');
+  const input = { version: 1, requestId: sub.requestId, snapshot: row.snapshot };
+  const control = m.jobs.find(j => j.id === 'swanson-control'), rt = JSON.parse(fs.readFileSync(control.env.V3_WORKER_CONFIG, 'utf8')), t = rt.transport;
+  const connection = await Connection.connect({ address: rt.address, connectTimeout: '15 seconds', ...(t.mode === 'mtls' ? { tls: { serverNameOverride: t.serverName,
+    serverRootCACertificate: fs.readFileSync(t.caFile), clientCertPair: { crt: fs.readFileSync(t.certFile), key: fs.readFileSync(t.keyFile) } } } : {}) });
+  try {
+    const client = new Client({ connection, namespace: rt.namespace }), workflowId = `v3-collection-${sub.requestId}`;
+    const taskQueue = `v3.swanson.control.v1.swanson-live-v1.session.${SESSION}`;
+    try { const d = await client.workflow.getHandle(workflowId).describe(); console.log(JSON.stringify({ exists: true, workflowId, status: d.status.name, runId: d.runId })); }
+    catch (e) {
+      if (e?.name !== 'WorkflowNotFoundError') throw e;
+      const h = await client.workflow.start('BrandCollectionWorkflow', { workflowId, taskQueue, args: [input], workflowIdReusePolicy: 'REJECT_DUPLICATE', workflowIdConflictPolicy: 'FAIL' });
+      console.log(JSON.stringify({ started: true, workflowId, runId: h.firstExecutionRunId, taskQueue }));
+    }
+  } finally { await connection.close(); }
 } else if (cmd === 'submit') {
   const s = await findSource(); if (!s?.enabled) throw Error('run `source` first');
   const r = await api(`/brands/${BRAND.id}/sources/${s.id}/submissions`, 'POST', { sourceRevision: s.revision }, uuid('swanson-http-20260928:submit:' + s.revision));
@@ -121,4 +160,4 @@ if (cmd === 'source') {
     reviews: await q("SELECT record->'failure'->>'code' code, count(*)::int n FROM review_record WHERE record->'observation'->>'sourceId'=$1 GROUP BY 1 ORDER BY 2 DESC", [s.id]),
     heldPermits: (await q("SELECT count(*)::int n FROM resource_permit WHERE released_at IS NULL AND request::text LIKE '%swanson%'"))[0].n }));
   await db.end();
-} else throw Error('Usage: source | config <scan-result.json> | switch [--write] | start | submit | status');
+} else throw Error('Usage: source | config <scan-result.json> | switch [--write] | start | remove-web [--write] | submit | deliver | status');
