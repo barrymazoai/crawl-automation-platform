@@ -6,7 +6,7 @@
 //   node pilot-swanson-http-20260928.mjs switch [--write]       move the 29 Swanson-session jobs to this release (backups first)
 //   node pilot-swanson-http-20260928.mjs start                  set the switched jobs' build ids and start them (stops at the first failure)
 //   node pilot-swanson-http-20260928.mjs remove-web [--write]   stop brand-web and remove it from the deployment (user request)
-//   node pilot-swanson-http-20260928.mjs submit                 one collection submission for the pilot source
+//   node pilot-swanson-http-20260928.mjs submit [n]             one collection submission through the collection API (n: new attempt)
 //   node pilot-swanson-http-20260928.mjs deliver                start the submission's workflow directly (no brand-web)
 //   node pilot-swanson-http-20260928.mjs status                 progress of the pilot submission
 // Rollback of `switch`: copy manual-releases/swanson-http-20260928/switch/*.before* back, then stop/start the same jobs.
@@ -23,18 +23,17 @@ const [cmd, arg] = process.argv.slice(2), write = process.argv.includes('--write
 const m = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
 const sha = s => createHash('sha256').update(s).digest('hex');
 const uuid = s => { const h = sha(s).slice(0, 32).split(''); h[12] = '4'; h[16] = '8'; const v = h.join(''); return [v.slice(0, 8), v.slice(8, 12), v.slice(12, 16), v.slice(16, 20), v.slice(20)].join('-'); };
-// brand-web (the only API) was removed from the deployment on user request; API calls exist only for `source`/`submit`.
-const webConfig = () => { const j = m.jobs.find(x => x.id === 'brand-web'); if (!j) throw Error('brand-web was removed; this step needs its API');
-  return JSON.parse(fs.readFileSync(j.env.V3_BRAND_WEB_CONFIG, 'utf8')); };
+// brand-web was removed on user request; the collection API (job `collection-api`, no web pages) replaced it on 2026-09-29.
+const apiConfig = () => { const j = m.jobs.find(x => x.id === 'collection-api'); if (!j) throw Error('collection-api is not deployed; this step needs the API');
+  return JSON.parse(fs.readFileSync(j.env.V3_COLLECTION_API_CONFIG, 'utf8')); };
 // The workers' artifactBuildId: every .js (plus the workflow bundle) in sorted order, each as `<length>:` then its bytes.
 // (The first version of this script hashed file names too, so the switched jobs refused to start; `start` repairs that.)
 const buildOf = dir => execFileSync('/usr/bin/python3', ['-c', `import hashlib,os\nh=hashlib.sha256()\nfor n in sorted(x for x in os.listdir(${JSON.stringify(dir)}) if x.endswith('.js') or x=='product-workflows.cjs'):\n b=open(os.path.join(${JSON.stringify(dir)},n),'rb').read();h.update((str(len(b))+':').encode());h.update(b)\nprint(h.hexdigest())`], { encoding: 'utf8' }).trim();
 const ctl = (c, id) => { try { return JSON.parse(execFileSync(m.node, [root + '/manual-control.mjs', c, id], { encoding: 'utf8', timeout: 180000 }).trim().split('\n').pop()); }
   catch (e) { const t = String(e.stdout ?? '').trim().split('\n').pop(); try { return JSON.parse(t); } catch { throw e; } } };
 async function api(path, method = 'GET', body, key) {
-  // brand-web accepts only its local workspace client (it adds the Bearer token itself); writes carry its own Origin.
-  const origin = `http://127.0.0.1:${webConfig().port}`;
-  const r = await fetch(`${origin}/api/v3${path}`, { method, headers: { 'X-V3-Client': 'local-workspace', ...(method !== 'GET' ? { Origin: origin } : {}),
+  const c = apiConfig();
+  const r = await fetch(`http://${c.host ?? '127.0.0.1'}:${c.port}/api/v3${path}`, { method, headers: { authorization: `Bearer ${c.token}`,
     ...(body ? { 'content-type': 'application/json' } : {}), ...(key ? { 'Idempotency-Key': key } : {}) }, ...(body ? { body: JSON.stringify(body) } : {}) });
   const v = await r.json().catch(() => null); if (!r.ok) throw Error(`API ${r.status} ${JSON.stringify(v)}`); return v;
 }
@@ -149,8 +148,11 @@ if (cmd === 'source') {
   } finally { await connection.close(); }
 } else if (cmd === 'submit') {
   const s = await findSource(); if (!s?.enabled) throw Error('run `source` first');
-  const r = await api(`/brands/${BRAND.id}/sources/${s.id}/submissions`, 'POST', { sourceRevision: s.revision }, uuid('swanson-http-20260928:submit:' + s.revision));
-  fs.writeFileSync(out + '/submission.json', JSON.stringify(r, null, 1));
+  // `submit <n>` is a new attempt (new idempotency key); the same n repeats safely. The previous submission file is kept.
+  const r = await api(`/brands/${BRAND.id}/sources/${s.id}/submissions`, 'POST', { sourceRevision: s.revision }, uuid('swanson-http-20260928:submit:' + s.revision + (arg ? ':' + arg : '')));
+  const file = out + '/submission.json';
+  if (fs.existsSync(file)) { const prev = JSON.parse(fs.readFileSync(file, 'utf8')); if (prev.requestId !== r.requestId) fs.copyFileSync(file, `${out}/submission.${prev.requestId}.json`); }
+  fs.writeFileSync(file, JSON.stringify(r, null, 1));
   console.log(JSON.stringify(r));
 } else if (cmd === 'status') {
   const sub = JSON.parse(fs.readFileSync(out + '/submission.json', 'utf8')), id = sub.requestId;

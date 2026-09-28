@@ -56,6 +56,8 @@ await build({...common,outDir:base+'/batch',entry:['src/amazon-batch-worker.ts']
 await build({...common,outDir:base+'/plan',entry:['src/channel-plan-worker.ts']});
 // brand-web reads `migrations/<name>` next to itself and refuses to start when the ledger holds a migration it does not know (020).
 await build({...common,outDir:base+'/web',entry:['src/brand-web.ts']});
+// The collection API (API + delivery runner, no web pages); reads migrations/ next to itself like brand-web.
+await build({...common,outDir:base+'/api',entry:['src/collection-api.ts']});
 await build({...common,outDir:base+'/amazon',entry:['src/amazon-live-worker.ts']});
 await build({...common,outDir:base+'/swanson',entry:['src/swanson-live-worker.ts']});
 // The independent health monitor and launchd control (manual-control.mjs imports it).
@@ -65,7 +67,7 @@ await cp('src/amazon-queue-health.mjs',base+'/queue/amazon-queue-health.mjs');
 await cp('src/amazon-queue-recovery.mjs',base+'/queue/amazon-queue-recovery.mjs');
 await cp('src/recovery-attempt.mjs',base+'/queue/recovery-attempt.mjs');
 await cp('src/windows-powershell.mjs',base+'/queue/windows-powershell.mjs');
-for (const dir of ['web','queue','tests']) await cp('../../database/v3',base+'/'+dir+'/migrations',{recursive:true});
+for (const dir of ['web','api','queue','tests']) await cp('../../database/v3',base+'/'+dir+'/migrations',{recursive:true});
 // Config schema as a library, so the Mini rollout script can validate the rewritten Amazon private config before binding it.
 await build({...common,outDir:base+'/amazon-config',entry:{'amazon-live-config':'src/amazon-live-config.ts','deployment-supervisor':'src/deployment-supervisor.ts','ocr-http':'../../packages/v3-ocr/src/http.ts','capture-probe':'scripts/capture-probe.ts'}});
 // The janitor runs on a timer beside the fleet, not inside it: a node whose disk fills up stops the whole line.
