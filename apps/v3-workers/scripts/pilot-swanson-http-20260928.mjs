@@ -23,7 +23,9 @@ const [cmd, arg] = process.argv.slice(2), write = process.argv.includes('--write
 const m = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
 const sha = s => createHash('sha256').update(s).digest('hex');
 const uuid = s => { const h = sha(s).slice(0, 32).split(''); h[12] = '4'; h[16] = '8'; const v = h.join(''); return [v.slice(0, 8), v.slice(8, 12), v.slice(12, 16), v.slice(16, 20), v.slice(20)].join('-'); };
-const web = JSON.parse(fs.readFileSync(m.jobs.find(j => j.id === 'brand-web').env.V3_BRAND_WEB_CONFIG, 'utf8'));
+// brand-web (the only API) was removed from the deployment on user request; API calls exist only for `source`/`submit`.
+const webConfig = () => { const j = m.jobs.find(x => x.id === 'brand-web'); if (!j) throw Error('brand-web was removed; this step needs its API');
+  return JSON.parse(fs.readFileSync(j.env.V3_BRAND_WEB_CONFIG, 'utf8')); };
 // The workers' artifactBuildId: every .js (plus the workflow bundle) in sorted order, each as `<length>:` then its bytes.
 // (The first version of this script hashed file names too, so the switched jobs refused to start; `start` repairs that.)
 const buildOf = dir => execFileSync('/usr/bin/python3', ['-c', `import hashlib,os\nh=hashlib.sha256()\nfor n in sorted(x for x in os.listdir(${JSON.stringify(dir)}) if x.endswith('.js') or x=='product-workflows.cjs'):\n b=open(os.path.join(${JSON.stringify(dir)},n),'rb').read();h.update((str(len(b))+':').encode());h.update(b)\nprint(h.hexdigest())`], { encoding: 'utf8' }).trim();
@@ -31,12 +33,15 @@ const ctl = (c, id) => { try { return JSON.parse(execFileSync(m.node, [root + '/
   catch (e) { const t = String(e.stdout ?? '').trim().split('\n').pop(); try { return JSON.parse(t); } catch { throw e; } } };
 async function api(path, method = 'GET', body, key) {
   // brand-web accepts only its local workspace client (it adds the Bearer token itself); writes carry its own Origin.
-  const origin = `http://127.0.0.1:${web.port}`;
+  const origin = `http://127.0.0.1:${webConfig().port}`;
   const r = await fetch(`${origin}/api/v3${path}`, { method, headers: { 'X-V3-Client': 'local-workspace', ...(method !== 'GET' ? { Origin: origin } : {}),
     ...(body ? { 'content-type': 'application/json' } : {}), ...(key ? { 'Idempotency-Key': key } : {}) }, ...(body ? { body: JSON.stringify(body) } : {}) });
   const v = await r.json().catch(() => null); if (!r.ok) throw Error(`API ${r.status} ${JSON.stringify(v)}`); return v;
 }
-const findSource = async () => (await api(`/brands/${BRAND.id}/sources?limit=100`)).items.find(s => s.channel === 'swanson' && s.url === BRAND.url) ?? null;
+// Read-only database lookup, so config/status work without the API.
+const findSource = async () => { const db = new pg.Client({ connectionString: m.database.connectionString }); await db.connect();
+  try { return (await db.query("SELECT id, channel, url, enabled, revision FROM brand_source WHERE brand_id=$1 AND channel='swanson' AND url=$2", [BRAND.id, BRAND.url])).rows[0] ?? null; }
+  finally { await db.end(); } };
 fs.mkdirSync(out, { recursive: true, mode: 0o700 });
 
 if (cmd === 'source') {
@@ -153,7 +158,7 @@ if (cmd === 'source') {
   const q = async (s, v) => (await db.query(s, v)).rows;
   const s = await findSource();
   console.log(JSON.stringify({ requestId: id,
-    delivery: await api(`/submissions/${id}/delivery`).catch(e => e.message),
+    workflow: (await q("SELECT count(*)::int n FROM catalog_page WHERE catalog_id=$1", [id]))[0].n + ' catalog pages',
     discoveries: (await q('SELECT count(*)::int n FROM catalog_discovery WHERE catalog_id=$1', [id]))[0].n,
     closure: (await q('SELECT status FROM catalog_closure WHERE catalog_id=$1', [id]))[0]?.status ?? null,
     collected: (await q("SELECT count(*)::int n FROM collected_product WHERE record->'observation'->>'sourceId'=$1", [s.id]))[0].n,
