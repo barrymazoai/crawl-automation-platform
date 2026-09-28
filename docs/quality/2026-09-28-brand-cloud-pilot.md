@@ -4,7 +4,7 @@
 
 - 来源：云端 Railway `company` 表（只读查询）。当前 4,824 家；已在 1,351 品牌集中 1,306 家；未覆盖 3,518 家，其中 `is_visible AND is_nutrition` **3,355** 家。
 - 试点：从 3,355 家中按 `md5(id || 'pilot-20260928')` 取 50 家（等同随机）。搜索词为 canonical_name 或去掉 Inc./LLC 等后缀的公司名；原名作为可接受名称保留。
-- Server 二只收到品牌名与随机 UUID；随机 ID↔公司 ID 映射只在 MacBook 本地，结果汇总见 [evidence/2026-09-28-brand-cloud-pilot-50.json](evidence/2026-09-28-brand-cloud-pilot-50.json)。
+- Server 二只收到品牌名与随机 UUID；随机 ID↔公司 ID 映射只在 MacBook 本地，结果汇总不入 git（数据只经 SCP 传递）。
 
 ## 部署
 
