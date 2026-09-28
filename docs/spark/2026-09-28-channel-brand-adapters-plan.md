@@ -185,7 +185,15 @@ Same Nordic Naturals and Garden of Life search pages, read at three stores: The 
 4. Brand sources: import the exact-name matches from the saved list of 422 (218 matched) as disabled rows. Loose matches go to a review list.
 5. Verification: Healthy Origins end to end (44 products; 2 already have formulas from 09-10).
 
-## Phase 4: Whole Foods
+## Phase 4: Whole Foods — ScraperAPI does not work (checked 2026-09-28, 4 requests, 8 credits)
+
+- **wholefoodsmarket.com search:** a Next.js shell. The page says "Loading page content…" and contains no products. Sending the store cookie `wfm_store_d8` (store 10259, The Alameda) changed nothing.
+- **ScraperAPI rendering** (`render=true`, waiting for product links): HTTP 500 after 56 s.
+- **amazon.com Whole Foods department** (`i=wholefoods` + brand ID): "No results … Choose your location". It needs a chosen location, which ScraperAPI does not have.
+- **Store data** comes from `/api/stores/<id>/summary` and `/api/wwos/subnav?wfmStoreId=10259`. No product data call was seen before the products loaded. Even in Ego on the MacBook the list did not load at the second check (the site was slow; another agent was using Ego at the same time).
+- **Conclusion:** the Whole Foods brand scan needs a real browser with the store set (Ego on Server 二, built like the store scan runner), or a data call found in a later check. Whole Foods products are Amazon ASINs, so formulas come from Amazon; Whole Foods only adds its own per-store metrics.
+
+### Original phase 4 items
 
 1. Brand URLs: built from the Amazon `p_123` IDs of the 754 verified brands. Each is visited once to confirm the brand is sold there.
 2. Listing scan: paged search, product links `/grocery/product/<slug>-<asin>`, ASIN taken from the link.
