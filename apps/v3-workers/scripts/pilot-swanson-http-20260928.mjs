@@ -9,6 +9,7 @@
 //   node pilot-swanson-http-20260928.mjs submit [n]             one collection submission through the collection API (n: new attempt)
 //   node pilot-swanson-http-20260928.mjs deliver                start the submission's workflow directly (no brand-web)
 //   node pilot-swanson-http-20260928.mjs status                 progress of the pilot submission
+//   node pilot-swanson-http-20260928.mjs cleanup [--write]      after a stop: release the pilot's own permits and source guard (user-run)
 // Rollback of `switch`: copy manual-releases/swanson-http-20260928/switch/*.before* back, then stop/start the same jobs.
 import fs from 'node:fs'; import { execFileSync } from 'node:child_process'; import { createHash } from 'node:crypto';
 import { createRequire } from 'node:module'; import { fileURLToPath } from 'node:url'; import { dirname, join } from 'node:path';
@@ -167,4 +168,41 @@ if (cmd === 'source') {
     reviews: await q("SELECT record->'failure'->>'code' code, count(*)::int n FROM review_record WHERE record->'observation'->>'sourceId'=$1 GROUP BY 1 ORDER BY 2 DESC", [s.id]),
     heldPermits: (await q("SELECT count(*)::int n FROM resource_permit WHERE released_at IS NULL AND request::text LIKE '%swanson%'"))[0].n }));
   await db.end();
-} else throw Error('Usage: source | config <scan-result.json> | switch [--write] | start | remove-web [--write] | submit | deliver | status');
+} else if (cmd === 'cleanup') {
+  // User 2026-09-29: "stop the task immediately and remove the task" (its workflows were cancelled first). Touches only this
+  // pilot: every pilot workflow must be closed, one with an unfinished Activity for over 2 minutes; then the pilot's own
+  // permits are released (evidence kept) and its source guard removed so the API stops checking it. Submission and
+  // discovery rows stay as history. Nothing is retried.
+  const sub = JSON.parse(fs.readFileSync(out + '/submission.json', 'utf8')), id = sub.requestId, rootId = `v3-collection-${id}`;
+  const { Client, Connection } = createRequire(import.meta.url)('@temporalio/client');
+  const control = m.jobs.find(j => j.id === 'swanson-control'), rt = JSON.parse(fs.readFileSync(control.env.V3_WORKER_CONFIG, 'utf8')), t = rt.transport;
+  const connection = await Connection.connect({ address: rt.address, connectTimeout: '15 seconds', ...(t.mode === 'mtls' ? { tls: { serverNameOverride: t.serverName,
+    serverRootCACertificate: fs.readFileSync(t.caFile), clientCertPair: { crt: fs.readFileSync(t.certFile), key: fs.readFileSync(t.keyFile) } } } : {}) });
+  const db = new pg.Client({ connectionString: m.database.connectionString }); await db.connect();
+  try {
+    const client = new Client({ connection, namespace: rt.namespace });
+    const ids = [rootId, `${rootId}-catalog`, ...(await db.query('SELECT record->>$2 AS id FROM catalog_discovery WHERE catalog_id=$1', [id, 'workflowId'])).rows.map(r => r.id)];
+    const open = [];
+    for (const w of ids) {
+      let d; try { d = await client.workflow.getHandle(w).describe(); } catch (e) { if (e?.name === 'WorkflowNotFoundError') continue; throw e; }
+      if (d.status.name === 'RUNNING') open.push(w + ' RUNNING');
+      else if ((d.raw.pendingActivities ?? []).length && Date.now() - d.closeTime.getTime() < 120000) open.push(w + ' closed <2 min with an open Activity');
+    }
+    if (open.length) throw Error('Not stopped yet: ' + open.join(', '));
+    const permits = (await db.query('SELECT p.permit_id, p.request, array_agg(n.resource_id) AS resources FROM resource_permit p JOIN resource_permit_need n USING(permit_id) WHERE p.released_at IS NULL AND p.request->>$2 = ANY($1) GROUP BY 1,2', [ids, 'workflowId'])).rows;
+    const guard = (await db.query('SELECT source_id FROM source_submission_guard WHERE request_id=$1', [id])).rows;
+    console.log(JSON.stringify({ requestId: id, workflows: ids.length, allClosed: true, permits: permits.map(p => ({ permitId: p.permit_id, workflowId: p.request.workflowId, resources: p.resources })), guard: guard.length, write }));
+    if (!write) process.exit(0);
+    const dir = out + '/cleanup-' + id; fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
+    await db.query('BEGIN');
+    for (const p of permits) {
+      const r = await db.query('UPDATE resource_permit SET released_at=now() WHERE permit_id=$1 AND released_at IS NULL RETURNING released_at', [p.permit_id]);
+      if (r.rowCount !== 1) throw Error('permit changed: ' + p.permit_id);
+      fs.writeFileSync(`${dir}/${p.permit_id}.json`, JSON.stringify({ codec: 'pilot-permit-release/1', ...p, releasedAt: r.rows[0].released_at, reason: 'workflow cancelled by user request' }, null, 1), { flag: 'wx', mode: 0o600 });
+    }
+    const g = await db.query('DELETE FROM source_submission_guard WHERE request_id=$1 RETURNING source_id', [id]);
+    if (g.rowCount !== guard.length) throw Error('guard changed');
+    await db.query('COMMIT');
+    console.log(JSON.stringify({ cleaned: true, permitsReleased: permits.length, guardRemoved: g.rowCount, evidence: dir }));
+  } catch (e) { await db.query('ROLLBACK').catch(() => {}); throw e; } finally { await db.end(); await connection.close(); }
+} else throw Error('Usage: source | config <scan-result.json> | switch [--write] | start | remove-web [--write] | submit | deliver | status | cleanup [--write]');
