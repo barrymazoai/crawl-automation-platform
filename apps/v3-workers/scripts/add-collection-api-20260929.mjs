@@ -1,5 +1,5 @@
 // Adds the collection API (API + delivery runner, no web pages) to Server 一's deployment as job `collection-api`,
-// running from this release clone and reusing the former brand-web private config (token, port, delivery settings).
+// running from this release clone and reusing the former brand-web private config (port, delivery settings).
 // User 2026-09-29: "we always want use the API ... just create the API". brand-web stays removed.
 // Usage (from the release's apps/v3-workers): node scripts/add-collection-api-20260929.mjs [--write]
 // Then start it alone: node ~/apps/crawler-v3/manual-control.mjs start collection-api

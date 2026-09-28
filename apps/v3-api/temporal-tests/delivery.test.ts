@@ -40,8 +40,7 @@ let server: ReturnType<typeof serve> | undefined;
 let base: string;
 let uiUrl = "";
 let address: string;
-const token = "isolated-delivery-http-proof-not-production-secret";
-const headers = { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
+const headers = { "Content-Type": "application/json" };
 const workerIdentity = `v3-delivery-proof@${hostname()}:${process.pid}`;
 const ownedIds: string[] = [];
 let activityCalls = 0;
@@ -74,7 +73,7 @@ beforeAll(async () => {
   gateway = new TemporalGateway(client, { clusterId: cloudOptIn ? projectId : "isolated-local-temporal", namespace: client.workflow.options.namespace,
     taskQueue: `v3-delivery-probe-${randomUUID()}`, workflowType: "DeliveryAcceptanceProbe" });
   bundle = await bundleWorkflowCode({ workflowsPath: fileURLToPath(new URL("workflows.ts", import.meta.url)) });
-  const app = createApp(brands, token, { submissions, delivery: journal, acceptSubmissions: true });
+  const app = createApp(brands, { submissions, delivery: journal, acceptSubmissions: true });
   server = serve({ fetch: app.fetch, hostname: "127.0.0.1", port: 0 });
   await new Promise<void>((resolve, reject) => { server!.once("listening", resolve); server!.once("error", reject); });
   const bound = server.address();

@@ -133,11 +133,11 @@ try {
     });
   }
   await privateJson("temporal-histories.json",histories);
-  const reviews=new PostgresReviews(db), token=randomUUID()+randomUUID(), dashboard=new PostgresDashboard(db);
+  const reviews=new PostgresReviews(db), dashboard=new PostgresDashboard(db);
   await reviews.append(reviewFixture("test-review-001"));
-  const app=createApp(new PostgresBrands(db),token,{dashboard,reviews});const request=(path:string,method="GET",auth=true)=>app.request(`/api/v3${path}`,{method,headers:auth?{authorization:`Bearer ${token}`}:{}});
-  await check("Dashboard API auth/read-only, genuine counts and review redaction",async()=>{
-    assert.equal((await request("/dashboard","GET",false)).status,401);assert.equal((await request("/dashboard","POST")).status,404);
+  const app=createApp(new PostgresBrands(db), {dashboard,reviews});const request=(path:string,method="GET")=>app.request(`/api/v3${path}`,{method});
+  await check("Dashboard API read-only, genuine counts and review redaction",async()=>{
+    assert.equal((await request("/dashboard","POST")).status,404);
     const summary=DashboardSummarySchema.parse(await(await request("/dashboard")).json());assert.equal(summary.collectedProducts,0);assert.equal(summary.formalWrites,null);assert.equal(summary.reviews,1);assert.ok(summary.pendingDispatches>0);
     const response=await request("/reviews"), body=await response.text();DashboardReviewsSchema.parse(JSON.parse(body));assert.ok(!body.includes("private-token-canary")&&!body.includes("candidate-private-canary"));
     assert.equal((await request("/reviews?code=RESULT.REGISTRATION_UNKNOWN")).status,200);
@@ -161,8 +161,8 @@ try {
   });
   const readerPassword=randomUUID();await db.query(`CREATE ROLE v3_dashboard_reader LOGIN PASSWORD '${readerPassword}' NOSUPERUSER NOCREATEDB NOCREATEROLE`);
   for(const pool of [db,uiDb])await pool.query("GRANT USAGE ON SCHEMA public TO v3_dashboard_reader; GRANT SELECT ON ALL TABLES IN SCHEMA public TO v3_dashboard_reader");
-  await privateJson("dashboard-private.json",{databaseUrl:`postgresql://v3_dashboard_reader:${readerPassword}@127.0.0.1:${port}/crawler_v3_dev`,token,ui:[{clusterId:"railway",baseUrl:deployment.uiUrl}],port:4186,dataset:"验收环境：2026-09-09 已归档真实 GNC 样本，非新一轮抓取。目录故障测试在另一数据库，不计入这里。"});
-  await privateJson("review-test-private.json",{databaseUrl:`postgresql://v3_dashboard_reader:${readerPassword}@127.0.0.1:${port}/crawler_v3_test`,token,ui:[],port:4187,dataset:"合成故障测试库：目录计数和 Review 均为明确构造的测试案例，不是真实采集结果。用于检查错误详情与只读行为。"});
+  await privateJson("dashboard-private.json",{databaseUrl:`postgresql://v3_dashboard_reader:${readerPassword}@127.0.0.1:${port}/crawler_v3_dev`,ui:[{clusterId:"railway",baseUrl:deployment.uiUrl}],port:4186,dataset:"验收环境：2026-09-09 已归档真实 GNC 样本，非新一轮抓取。目录故障测试在另一数据库，不计入这里。"});
+  await privateJson("review-test-private.json",{databaseUrl:`postgresql://v3_dashboard_reader:${readerPassword}@127.0.0.1:${port}/crawler_v3_test`,ui:[],port:4187,dataset:"合成故障测试库：目录计数和 Review 均为明确构造的测试案例，不是真实采集结果。用于检查错误详情与只读行为。"});
   success=true;
 } catch(error) { console.error(JSON.stringify({event:"BATCH_TWO_FAILED",name:error instanceof Error?error.name:"unknown",message:error instanceof Error?error.message:"unknown"}));process.exitCode=1; }
 finally {

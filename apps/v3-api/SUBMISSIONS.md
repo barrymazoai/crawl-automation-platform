@@ -6,7 +6,7 @@
 
 ## HTTP 契约
 
-沿用 V3 Bearer 鉴权、16 KiB 上限、严格 JSON 输入和 UUID `Idempotency-Key`。
+沿用 16 KiB 上限、严格 JSON 输入和 UUID `Idempotency-Key`。
 
 | 方法 | 路径 | 语义 |
 | --- | --- | --- |

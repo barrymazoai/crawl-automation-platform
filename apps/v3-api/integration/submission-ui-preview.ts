@@ -1,6 +1,6 @@
 // Explicit acceptance harness: synthetic configuration, real DB + Temporal + Worker.
 // stdin controls fault injection; there is no HTTP fault/control backdoor.
-import { randomBytes, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import { readFile, writeFile } from "node:fs/promises";
 import { createInterface } from "node:readline";
 import { hostname } from "node:os";
@@ -57,8 +57,7 @@ try {
   });
   workerRun = worker.run(); workerRun.catch(error => { event({ event: "WORKER_ERROR", message: String(error) }); controller.abort(); });
   runnerRun = runner.run(controller.signal);
-  const token = randomBytes(32).toString("hex");
-  const api = createApp(brands, token, { submissions, delivery: journal, acceptSubmissions: true,
+  const api = createApp(brands, { submissions, delivery: journal, acceptSubmissions: true,
     collectionUi: { environment: "isolated-acceptance", temporalUi: [{ clusterId: gateway.target.clusterId, baseUrl: "http://127.0.0.1:8234" }] },
   });
   const app = new Hono();
@@ -70,7 +69,7 @@ try {
     if (c.req.header("X-V3-Client") !== "local-workspace" ||
         (c.req.header("origin") && c.req.header("origin") !== "http://127.0.0.1:4184") ||
         (c.req.method !== "GET" && c.req.header("origin") !== "http://127.0.0.1:4184")) return c.text("Local acceptance only", 403);
-    const req = new Request(c.req.raw); req.headers.set("authorization", `Bearer ${token}`);
+    const req = new Request(c.req.raw);
     if (rejectNext && c.req.method === "POST" && c.req.path.endsWith("/submissions")) {
       rejectNext = false;
       event({ event: "HTTP", method: "POST", path: c.req.path, status: 502, key: c.req.header("Idempotency-Key"), injected: true });

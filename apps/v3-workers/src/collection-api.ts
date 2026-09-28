@@ -1,7 +1,6 @@
 // The collection API without web pages: brand/source/submission/schedule/review routes under /api/v3/ plus the
 // delivery runner, which starts each accepted submission's workflow and releases the source guard when the run ends.
-// Callers send `Authorization: Bearer <token>`; there is no browser session, page or static asset. Listens on
-// loopback unless the private config names another address.
+// A plain API: no web pages, no login. Listens on loopback unless the private config names another address.
 import { createServer } from "node:http";
 import { readFile, stat } from "node:fs/promises";
 import { resolve, dirname } from "node:path";
@@ -27,10 +26,10 @@ import { PostgresReviews, ReviewInspector } from "@crawl-automation/v3-review";
 import { WorkerHealthFile } from "../../../packages/v3-worker-runtime/src/health.js";
 import { readGncPrivateJson } from "./gnc-config.js";
 
-// Same private config as the former brand-web (webRoot is accepted and ignored), plus an optional listen address.
-export const CollectionApiConfigSchema = z.strictObject({ databaseUrl: z.string(), token: z.string().min(32),
+// Reads the former brand-web private config (fields this service does not use are ignored), plus an optional listen address.
+export const CollectionApiConfigSchema = z.object({ databaseUrl: z.string(),
   port: z.number().int().min(1024).max(65535), host: z.string().regex(/^(127\.0\.0\.1|100\.\d{1,3}\.\d{1,3}\.\d{1,3})$/).default("127.0.0.1"),
-  webRoot: z.string().optional(), delivery: z.unknown(), ui: z.array(z.strictObject({ clusterId: z.string(), baseUrl: z.url() })) });
+  delivery: z.unknown(), ui: z.array(z.strictObject({ clusterId: z.string(), baseUrl: z.url() })) });
 const MAX_BODY = 16384;
 
 async function main() {
@@ -52,7 +51,7 @@ async function main() {
   const client = new Client({ connection, namespace: delivery.target.namespace });
   const schedules = new TemporalSchedules(client, { clusterId: delivery.target.clusterId, namespace: delivery.target.namespace,
     taskQueue: "v3.schedule.intake.workflow.v1.schedule-v1" }, scheduleSourceReader(db));
-  const app = createApp(new PostgresBrands(db), c.token, { submissions, delivery: journal, acceptSubmissions: true, schedules,
+  const app = createApp(new PostgresBrands(db), { submissions, delivery: journal, acceptSubmissions: true, schedules,
     dashboard: new PostgresDashboard(db, c.ui), reviews, reviewInspector: new ReviewInspector(reviews), collectionUi: { environment: "isolated-live", temporalUi: c.ui } });
   const coordinator = delivery.channelTargets
     ? new RoutedDeliveryCoordinator(submissions, journal, delivery.channelTargets, target => new TemporalGateway(client, target), delivery.target)
@@ -66,9 +65,9 @@ async function main() {
       if (!url.pathname.startsWith("/api/v3/")) { res.writeHead(404); res.end(); return; }
       const chunks: Buffer[] = []; let size = 0;
       for await (const chunk of req) { size += chunk.length; if (size > MAX_BODY) { res.writeHead(413); res.end(); return; } chunks.push(chunk); }
-      // The API checks the Bearer token itself; only these request headers reach it.
+      // Only these request headers reach the API.
       const headers = new Headers();
-      for (const name of ["authorization", "content-type", "idempotency-key"]) if (typeof req.headers[name] === "string") headers.set(name, req.headers[name]);
+      for (const name of ["content-type", "idempotency-key"]) if (typeof req.headers[name] === "string") headers.set(name, req.headers[name]);
       const response = await app.request(url.pathname + url.search, { method: req.method ?? "GET", headers, ...(size ? { body: Buffer.concat(chunks) } : {}) });
       res.writeHead(response.status, { "Content-Type": "application/json", "Cache-Control": "no-store" }); res.end(await response.text());
     } catch { res.writeHead(503); res.end('{"error":{"code":"UNAVAILABLE","message":"Collection API unavailable"}}'); }

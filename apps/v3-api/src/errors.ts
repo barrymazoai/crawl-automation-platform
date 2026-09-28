@@ -1,6 +1,6 @@
 export class ApiError extends Error {
   constructor(
-    readonly status: 400 | 401 | 404 | 409 | 413 | 415 | 500 | 503,
+    readonly status: 400 | 404 | 409 | 413 | 415 | 500 | 503,
     readonly code: string,
     message: string,
   ) {

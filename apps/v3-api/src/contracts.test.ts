@@ -71,26 +71,22 @@ describe("V3-only HTTP contracts", () => {
     expect(() =>
       loadConfig({
         V3_DATABASE_URL: "postgres://127.0.0.1/old",
-        V3_API_TOKEN: "x".repeat(32),
       }),
     ).toThrow();
     expect(() =>
       loadConfig({
         V3_DATABASE_URL: "postgres://remote.example/crawler_v3_dev",
-        V3_API_TOKEN: "x".repeat(32),
       }),
     ).toThrow();
     expect(() =>
       loadConfig({
         V3_DATABASE_URL:
           "postgres://127.0.0.1/crawler_v3_dev?host=remote.example",
-        V3_API_TOKEN: "x".repeat(32),
       }),
     ).toThrow();
     expect(
       loadConfig({
         V3_DATABASE_URL: "postgres://127.0.0.1/crawler_v3_dev",
-        V3_API_TOKEN: "x".repeat(32),
       }).port,
     ).toBe(4180);
   });

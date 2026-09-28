@@ -8,12 +8,11 @@ import { PostgresBrands } from "../src/storage/postgres-brands.js";
 import { PostgresSubmissions } from "../src/storage/postgres-submissions.js";
 import { startTestDatabase } from "./postgres.js";
 
-const token = "isolated-submission-test-not-a-production-secret";
 let db: Awaited<ReturnType<typeof startTestDatabase>>;
 let brands: PostgresBrands;
 let submissions: PostgresSubmissions;
 let app: ReturnType<typeof createApp>;
-const makeApp = (enabled = true) => createApp(brands, token, { submissions, acceptSubmissions: enabled });
+const makeApp = (enabled = true) => createApp(brands, { submissions, acceptSubmissions: enabled });
 beforeAll(async () => {
   db = await startTestDatabase();
   brands = new PostgresBrands(db.pool);
@@ -21,7 +20,7 @@ beforeAll(async () => {
   app = makeApp();
 });
 afterAll(async () => { if (db) await db.close(); });
-const headers = { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
+const headers = { "Content-Type": "application/json" };
 async function fixture(enabled = true) {
   const brand = (await brands.create({ name: `Submission ${randomUUID()}`, note: "" }, randomUUID())).value;
   let source = (await brands.createSource(brand.id, { channel: "dtc", region: "US", url: "https://sample.example/products" }, randomUUID())).value;
@@ -41,18 +40,16 @@ async function counts(requestId: string) {
 }
 
 describe("durable submission intake with real PostgreSQL", () => {
-  it("exposes authenticated, explicit intake capabilities without guessing a Temporal UI", async () => {
-    expect((await app.request("/api/v3/collection-capabilities")).status).toBe(401);
+  it("exposes explicit intake capabilities without guessing a Temporal UI", async () => {
     expect(await (await makeApp(false).request("/api/v3/collection-capabilities", { headers })).json()).toEqual({
       submissionIntakeEnabled: false, environment: "local-v3", temporalUi: [],
     });
     expect(await (await app.request("/api/v3/collection-capabilities", { headers })).json()).toMatchObject({ submissionIntakeEnabled: true });
-    expect(() => createApp(brands, token, { collectionUi: { environment: "local-v3", temporalUi: [{ clusterId: "bad", baseUrl: "https://user:password@example.com" }] } })).toThrow();
+    expect(() => createApp(brands, { collectionUi: { environment: "local-v3", temporalUi: [{ clusterId: "bad", baseUrl: "https://user:password@example.com" }] } })).toThrow();
   });
-  it("is disabled by default and unauthenticated requests cannot reach intake", async () => {
+  it("is disabled by default", async () => {
     const f = await fixture(), key = randomUUID();
-    expect((await app.request(f.path, { method: "POST" })).status).toBe(401);
-    const closed = createApp(brands, token, { submissions });
+    const closed = createApp(brands, { submissions });
     const response = await submit(f, key, undefined, closed);
     expect(response.status).toBe(503);
     expect(await response.json()).toMatchObject({ error: { code: "SUBMISSIONS_DISABLED" } });
@@ -116,7 +113,7 @@ describe("durable submission intake with real PostgreSQL", () => {
     await brands.update(f.brand.id, { name: `Renamed ${randomUUID()}`, note: "", revision: 1 }, randomUUID());
     let changed = (await brands.updateSource(f.brand.id, f.source.id, { channel: "dtc", region: "US", url: "https://changed.example/new", revision: f.source.revision }, randomUUID())).value;
     changed = (await brands.toggleSource(f.brand.id, f.source.id, { enabled: false, revision: changed.revision }, randomUUID())).value;
-    const reconstructed = createApp(new PostgresBrands(db.pool), token, { submissions: new PostgresSubmissions(db.pool), acceptSubmissions: true });
+    const reconstructed = createApp(new PostgresBrands(db.pool), { submissions: new PostgresSubmissions(db.pool), acceptSubmissions: true });
     const replay = await submit(f, key, undefined, reconstructed);
     expect(replay.status).toBe(202);
     expect(replay.headers.get("Idempotency-Replayed")).toBe("true");
@@ -143,7 +140,7 @@ describe("durable submission intake with real PostgreSQL", () => {
     const f = await fixture();
     expect((await submit(f, randomUUID(), { sourceRevision: 2, taskQueue: "another-worker" })).status).toBe(400);
     expect((await app.request(f.path, { method: "POST", headers, body: '{"sourceRevision":2}' })).status).toBe(400);
-    expect((await app.request(f.path, { method: "POST", headers: { Authorization: `Bearer ${token}`, "Idempotency-Key": randomUUID() }, body: "{}" })).status).toBe(415);
+    expect((await app.request(f.path, { method: "POST", headers: { "Idempotency-Key": randomUUID() }, body: "{}" })).status).toBe(415);
   });
   it("waits for a concurrent source edit and rejects the now-stale revision", async () => {
     const f = await fixture(), key = randomUUID();

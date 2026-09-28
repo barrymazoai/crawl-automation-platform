@@ -14,15 +14,14 @@ import { setup as resultSetup, signal } from "../../../packages/v3-results/src/t
 import { PostgresResultRegistry } from "../../../packages/v3-results/src/postgres.js";
 import { observationIdentity } from "@crawl-automation/v3-contracts";
 let db: Awaited<ReturnType<typeof startTestDatabase>>, reviews: PostgresReviews;
-const token = "synthetic-review-test-token-".repeat(3);
 beforeAll(async () => { db = await startTestDatabase(); reviews = new PostgresReviews(db.pool); });
 afterAll(async () => { await db?.close(); });
 const record = () => fixture(randomUUID());
-const app = () => createApp(new PostgresBrands(db.pool), token, { reviews, reviewInspector: new ReviewInspector(reviews) });
-function request(path: string, method = "GET", authorized = true) {
-    return app().request(`/api/v3/reviews${path}`, { method, headers: authorized ? { authorization: `Bearer ${token}` } : {} });
+const app = () => createApp(new PostgresBrands(db.pool), { reviews, reviewInspector: new ReviewInspector(reviews) });
+function request(path: string, method = "GET") {
+    return app().request(`/api/v3/reviews${path}`, { method });
 }
-describe.sequential("passive Review with real isolated PostgreSQL and authenticated HTTP", () => {
+describe.sequential("passive Review with real isolated PostgreSQL and HTTP", () => {
     it("concurrent identical append registers one immutable full record", async () => {
         const r = record();
         r.candidate!.value = { unicode: "完整营养成分", large: "x".repeat(40000), nested: [1, false, null, { z: "value" }] };
@@ -62,15 +61,13 @@ describe.sequential("passive Review with real isolated PostgreSQL and authentica
         await expect(unavailable.append(r)).rejects.toMatchObject({ code: "REVIEW.REGISTRATION_UNKNOWN" });
         await expect(unavailable.get(r.reviewId)).rejects.toMatchObject({ code: "REVIEW.UNAVAILABLE" });
         expect(await inspectRegistration(reviews, r)).toMatchObject({ registered: false });
-        const response = await createApp(new PostgresBrands(db.pool), token, { reviews: unavailable }).request("/api/v3/reviews", { headers: { authorization: `Bearer ${token}` } });
+        const response = await createApp(new PostgresBrands(db.pool), { reviews: unavailable }).request("/api/v3/reviews");
         expect(response.status).toBe(503);
         expect(await response.text()).not.toContain("canary");
     });
-    it("requires authentication, validates filters and offers no write/retry/delete route", async () => {
+    it("validates filters and offers no write/retry/delete route", async () => {
         const r = record();
         await reviews.append(r);
-        for (const path of ["", "/summary", `/${r.reviewId}`, `/${r.reviewId}/inspection`])
-            expect((await request(path, "GET", false)).status).toBe(401);
         for (const [path, method] of [["", "POST"], [`/${r.reviewId}`, "PATCH"], [`/${r.reviewId}`, "DELETE"], ["/retry-all", "POST"], [`/${r.reviewId}/retry`, "POST"]])
             expect((await request(path!, method!)).status).toBe(404);
         expect((await request("?limit=101")).status).toBe(400);

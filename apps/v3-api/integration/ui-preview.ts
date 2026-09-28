@@ -1,5 +1,4 @@
 // Explicit, isolated browser acceptance fixture. Never opens an existing database.
-import { randomBytes } from "node:crypto";
 import { readFile, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { join } from "node:path";
@@ -16,8 +15,7 @@ if (process.env.V3_UI_ACCEPTANCE !== "isolated") throw new Error("Explicit isola
 const root = fileURLToPath(new URL("../../web/dist-v3-live/", import.meta.url));
 await readFile(join(root, "v3-live.html")); // Require an actual production build.
 const db = await startTestDatabase();
-const token = randomBytes(32).toString("hex");
-const api = createApp(new PostgresBrands(db.pool), token, {
+const api = createApp(new PostgresBrands(db.pool), {
   submissions: new PostgresSubmissions(db.pool), delivery: new PostgresDelivery(db.pool), acceptSubmissions: false,
 });
 const app = new Hono();
@@ -29,7 +27,7 @@ app.all("/api/v3/*", async c => {
   if (c.req.header("X-V3-Client") !== "local-workspace" ||
       (c.req.header("origin") && c.req.header("origin") !== "http://127.0.0.1:4183") ||
       (c.req.method !== "GET" && c.req.header("origin") !== "http://127.0.0.1:4183")) return c.text("Local acceptance only", 403);
-  const req = new Request(c.req.raw); req.headers.set("authorization", `Bearer ${token}`);
+  const req = new Request(c.req.raw);
   return api.fetch(req);
 });
 app.get("/", c => c.redirect("/v3-live.html"));

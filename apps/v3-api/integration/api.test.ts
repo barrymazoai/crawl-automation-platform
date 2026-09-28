@@ -6,18 +6,16 @@ import { PostgresBrands } from "../src/storage/postgres-brands.js";
 import { Brand, Source } from "@crawl-automation/v3-contracts";
 import { startTestDatabase } from "./postgres.js";
 
-const token = "v3-integration-test-token-not-a-production-secret";
 let db: Awaited<ReturnType<typeof startTestDatabase>>;
 let app: ReturnType<typeof createApp>;
 beforeAll(async () => {
   db = await startTestDatabase();
-  app = createApp(new PostgresBrands(db.pool), token);
+  app = createApp(new PostgresBrands(db.pool));
 });
 afterAll(async () => {
   if (db) await db.close();
 });
 const headers = {
-  Authorization: `Bearer ${token}`,
   "Content-Type": "application/json",
 };
 function request(
@@ -50,8 +48,7 @@ async function newSource(
 }
 
 describe("V3 HTTP API with a fresh real PostgreSQL cluster", () => {
-  it("requires authentication, JSON, bounded inputs and request IDs", async () => {
-    expect((await app.request("/api/v3/brands")).status).toBe(401);
+  it("requires JSON, bounded inputs and request IDs", async () => {
     expect(
       (
         await app.request("/api/v3/brands", {
@@ -66,7 +63,6 @@ describe("V3 HTTP API with a fresh real PostgreSQL cluster", () => {
         await app.request("/api/v3/brands", {
           method: "POST",
           headers: {
-            Authorization: `Bearer ${token}`,
             "Idempotency-Key": randomUUID(),
           },
           body: '{"name":"A"}',

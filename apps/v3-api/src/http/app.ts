@@ -1,4 +1,3 @@
-import { createHash, timingSafeEqual } from "node:crypto";
 import { Hono, type Context } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import type { z } from "zod";
@@ -51,7 +50,6 @@ async function body<T>(c: Context, schema: z.ZodType<T>): Promise<T> {
   }
   return parse(schema, raw);
 }
-const hash = (text: string) => createHash("sha256").update(text).digest();
 export interface AppOptions {
   dashboard?: DashboardReader;
   submissions?: SubmissionRepository;
@@ -63,10 +61,7 @@ export interface AppOptions {
   reviews?: ReviewReader;
   reviewInspector?: Pick<ReviewInspector, "inspect">;
 }
-export function createApp(repository: BrandRepository, token: string, options: AppOptions = {}) {
-  if (token.length < 32)
-    throw new Error("V3 API token must contain at least 32 characters");
-  const expected = hash(`Bearer ${token}`);
+export function createApp(repository: BrandRepository, options: AppOptions = {}) {
   const capabilities = CollectionCapabilities.parse({
     submissionIntakeEnabled: options.acceptSubmissions === true && !!options.submissions,
     environment: options.collectionUi?.environment ?? "local-v3",
@@ -76,11 +71,6 @@ export function createApp(repository: BrandRepository, token: string, options: A
   app.use("*", async (c, next) => {
     c.header("Cache-Control", "no-store");
     c.header("X-Content-Type-Options", "nosniff");
-    if (
-      c.req.path !== "/healthz" &&
-      !timingSafeEqual(expected, hash(c.req.header("authorization") ?? ""))
-    )
-      throw new ApiError(401, "UNAUTHORIZED", "Valid Bearer token required.");
     await next();
   });
   app.use(

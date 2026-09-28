@@ -150,15 +150,13 @@ describe("delivery coordinator with real atomic PostgreSQL journal", () => {
     await expect(db.pool.query("UPDATE workflow_delivery SET input_hash=$2 WHERE request_id=$1", [f.submission.requestId, "f".repeat(64)])).rejects.toMatchObject({ code: "23514" });
     expect(f.gateway.starts).toBe(1);
   });
-  it("provides authenticated read-only delivery status without starting work", async () => {
+  it("provides read-only delivery status without starting work", async () => {
     const f = await fixture();
-    const token = "delivery-query-test-not-production-secret";
-    const app = createApp(brands, token, { submissions, delivery: journal });
+    const app = createApp(brands, { submissions, delivery: journal });
     const path = `/api/v3/submissions/${f.submission.requestId}/delivery`;
-    expect((await app.request(path)).status).toBe(401);
-    expect(await (await app.request(path, { headers: { Authorization: `Bearer ${token}` } })).json()).toEqual({ item: null });
+    expect(await (await app.request(path)).json()).toEqual({ item: null });
     const receipt = await f.coordinator.reconcile(f.submission.requestId);
-    expect(await (await app.request(path, { headers: { Authorization: `Bearer ${token}` } })).json()).toEqual({ item: receipt });
+    expect(await (await app.request(path)).json()).toEqual({ item: receipt });
     expect(f.gateway.starts).toBe(1);
   });
   it("latches identity/chain isolation across later matching terminal evidence and transient errors", async () => {

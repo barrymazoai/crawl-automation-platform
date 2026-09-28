@@ -1,6 +1,5 @@
 // Explicit local provisioning entry. Never reads DATABASE_URL or any .env file.
 import { execFile } from "node:child_process";
-import { randomBytes } from "node:crypto";
 import {
   mkdir,
   mkdtemp,
@@ -145,16 +144,8 @@ async function main() {
     }
     // Existing persistent databases never migrate implicitly on application startup.
     await assertSchemaReady(pool);
-    const tokenFile = join(root, "api-token");
-    if (!(await exists(tokenFile)))
-      await writeFile(tokenFile, randomBytes(32).toString("hex"), {
-        flag: "wx",
-        mode: 0o600,
-      });
-    const token = (await readFile(tokenFile, "utf8")).trim();
-    if (!/^[a-f0-9]{64}$/.test(token)) throw new Error("Invalid local token");
     server = serve({
-      fetch: createApp(new PostgresBrands(pool), token, {
+      fetch: createApp(new PostgresBrands(pool), {
         dashboard: new PostgresDashboard(pool),
         reviews: new PostgresReviews(pool), reviewInspector: new ReviewInspector(new PostgresReviews(pool)),
         submissions: new PostgresSubmissions(pool), acceptSubmissions: false,

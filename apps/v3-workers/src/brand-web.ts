@@ -24,7 +24,7 @@ import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { TemporalSchedules } from "../../v3-api/src/schedules/service.js";
 import { scheduleSourceReader } from "../../v3-api/src/schedules/source-reader.js";
-const schema=z.strictObject({databaseUrl:z.string(),token:z.string().min(32),port:z.union([z.literal(4188),z.literal(4189)]),webRoot:z.string(),delivery:z.unknown(),ui:z.array(z.strictObject({clusterId:z.string(),baseUrl:z.url()}))});
+const schema=z.strictObject({databaseUrl:z.string(),port:z.union([z.literal(4188),z.literal(4189)]),webRoot:z.string(),delivery:z.unknown(),ui:z.array(z.strictObject({clusterId:z.string(),baseUrl:z.url()}))});
 async function main(){
   if(process.env.V3_BRAND_WEB_ENABLED!=="true"||!process.env.V3_BRAND_WEB_CONFIG)throw Error("Web opt-in required");
   const c=schema.parse(await readGncPrivateJson(process.env.V3_BRAND_WEB_CONFIG)),delivery=parseDeliverySettings(c.databaseUrl,c.delivery),origin=`http://127.0.0.1:${c.port}`;
@@ -38,7 +38,7 @@ async function main(){
   const submissions=new PostgresSubmissions(db),journal=new PostgresDelivery(db),reviews=new PostgresReviews(db);
   const client=new Client({connection,namespace:delivery.target.namespace});
   const schedules=new TemporalSchedules(client,{clusterId:delivery.target.clusterId,namespace:delivery.target.namespace,taskQueue:"v3.schedule.intake.workflow.v1.schedule-v1"},scheduleSourceReader(db));
-  const app=createApp(new PostgresBrands(db),c.token,{submissions,delivery:journal,acceptSubmissions:true,schedules,dashboard:new PostgresDashboard(db,c.ui),reviews,reviewInspector:new ReviewInspector(reviews),collectionUi:{environment:"isolated-live",temporalUi:c.ui}});
+  const app=createApp(new PostgresBrands(db),{submissions,delivery:journal,acceptSubmissions:true,schedules,dashboard:new PostgresDashboard(db,c.ui),reviews,reviewInspector:new ReviewInspector(reviews),collectionUi:{environment:"isolated-live",temporalUi:c.ui}});
   const coordinator=delivery.channelTargets
     ?new RoutedDeliveryCoordinator(submissions,journal,delivery.channelTargets,target=>new TemporalGateway(client,target),delivery.target)
     :new DeliveryCoordinator(submissions,journal,new TemporalGateway(client,delivery.target));
@@ -52,7 +52,7 @@ async function main(){
       if(url.pathname.startsWith("/api/v3/")){
         if(req.headers["x-v3-client"]!=="local-workspace"||(req.headers["sec-fetch-site"]&&req.headers["sec-fetch-site"]!=="same-origin")||(req.method!=="GET"&&req.headers.origin!==origin))return deny();
         const chunks:Buffer[]=[];let size=0;for await(const chunk of req){size+=chunk.length;if(size>16384)return deny(413);chunks.push(chunk);}
-        const headers=new Headers({authorization:`Bearer ${c.token}`});
+        const headers=new Headers();
         for(const name of ["content-type","idempotency-key"])if(typeof req.headers[name]==="string")headers.set(name,req.headers[name]);
         const response=await app.request(url.pathname+url.search,{method:req.method??"GET",headers,...(size?{body:Buffer.concat(chunks)}:{})});
         res.writeHead(response.status,{"Content-Type":"application/json"});res.end(await response.text());return;

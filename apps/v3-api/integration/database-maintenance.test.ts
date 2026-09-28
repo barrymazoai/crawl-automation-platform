@@ -154,7 +154,7 @@ describe.sequential("explicit isolated database lifecycle", () => {
       ...options, env: { ...options.env, V3_DATABASE_URL: "" },
     })).rejects.toThrow("V3 database operation failed");
     await expect(exec(process.execPath, ["--import", "tsx", "src/server.ts"], {
-      ...options, env: { ...options.env, V3_DATABASE_URL: target.databaseUrl!, V3_API_TOKEN: "test-token-".repeat(8) },
+      ...options, env: { ...options.env, V3_DATABASE_URL: target.databaseUrl! },
     })).rejects.toThrow("V3 API startup/shutdown failed");
   });
 });

@@ -33,7 +33,7 @@ const ctl = (c, id) => { try { return JSON.parse(execFileSync(m.node, [root + '/
   catch (e) { const t = String(e.stdout ?? '').trim().split('\n').pop(); try { return JSON.parse(t); } catch { throw e; } } };
 async function api(path, method = 'GET', body, key) {
   const c = apiConfig();
-  const r = await fetch(`http://${c.host ?? '127.0.0.1'}:${c.port}/api/v3${path}`, { method, headers: { authorization: `Bearer ${c.token}`,
+  const r = await fetch(`http://${c.host ?? '127.0.0.1'}:${c.port}/api/v3${path}`, { method, headers: {
     ...(body ? { 'content-type': 'application/json' } : {}), ...(key ? { 'Idempotency-Key': key } : {}) }, ...(body ? { body: JSON.stringify(body) } : {}) });
   const v = await r.json().catch(() => null); if (!r.ok) throw Error(`API ${r.status} ${JSON.stringify(v)}`); return v;
 }

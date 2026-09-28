@@ -99,14 +99,13 @@ describe("real Temporal Schedule and shared business intake", () => {
     expect(await matching("2027-11-07T00:00:00Z","2027-11-08T00:00:00Z")).toEqual(["2027-11-07T05:30:00.000Z","2027-11-07T06:30:00.000Z"]);
   });
   it("HTTP boundary is disabled by default and validates request keys and input",async()=>{
-    const {brand,source}=await fixture(), token="isolated-schedule-http-token-long-enough";
+    const {brand,source}=await fixture();
     const path=`/api/v3/brands/${brand.id}/sources/${source.id}/schedule`;
-    const headers={Authorization:`Bearer ${token}`,"Content-Type":"application/json","Idempotency-Key":randomUUID()};
-    const closed=createApp(brands,token);
-    expect((await closed.request(path)).status).toBe(401);
+    const headers={"Content-Type":"application/json","Idempotency-Key":randomUUID()};
+    const closed=createApp(brands);
     expect(await(await closed.request(path,{headers})).json()).toEqual({enabled:false,item:null});
     expect((await closed.request(path,{method:"POST",headers,body:JSON.stringify({rule,sourceRevision:2})})).status).toBe(503);
-    const app=createApp(brands,token,{schedules:service});
+    const app=createApp(brands, {schedules:service});
     const res=await app.request(path,{method:"POST",headers,body:JSON.stringify({rule,sourceRevision:2})});
     expect(res.status).toBe(201); owned.push((await res.json()).scheduleId);
   });

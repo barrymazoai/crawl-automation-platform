@@ -23,7 +23,7 @@ async function main() {
   try {
     // Read-only startup capability check. Never auto-migrate a database at boot.
     await assertSchemaReady(pool);
-    const app = createApp(new PostgresBrands(pool), config.token, {
+    const app = createApp(new PostgresBrands(pool), {
       dashboard: new PostgresDashboard(pool, loadTemporalUi(process.env)),
       reviews: new PostgresReviews(pool), reviewInspector: new ReviewInspector(new PostgresReviews(pool)),
       submissions: new PostgresSubmissions(pool), acceptSubmissions: false,
