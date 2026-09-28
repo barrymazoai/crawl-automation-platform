@@ -95,6 +95,8 @@ if (cmd === 'source') {
     const j = m.jobs.find(x => x.id === p.id); if (!j || j.entry !== p.newEntry) throw Error('job not switched: ' + p.id);
     if (p.cfg) { const c = JSON.parse(fs.readFileSync(p.cfg, 'utf8')), id = buildOf(dirname(p.newEntry));
       if (c.expectedBuildId !== id) { c.expectedBuildId = id; fs.writeFileSync(p.cfg + '.next', JSON.stringify(c, null, 2), { mode: 0o600 }); fs.renameSync(p.cfg + '.next', p.cfg); } }
+    // A failed start leaves the service loaded-but-exited; the control tool starts only an explicitly stopped service.
+    ctl('stop', p.id);
     const s = ctl('start', p.id), ready = s.jobs?.find(x => x.id === p.id)?.ready ?? false;
     started.push({ id: p.id, ready });
     if (!ready) break;
