@@ -1,4 +1,4 @@
-// Manual, Server 一 only. Turns a finished Amazon brand scan (scan-cli.mjs results and evidence, pulled from Server 二
+// Manual, Server 一 only. Turns a finished Amazon brand scan (scan-cli.mjs or store-scan-cli.mjs results and evidence, pulled from Server 二
 // into brand-entry/scan-runs/<name>/) into product queue input. Every product found goes to the queue: a product with a
 // saved formula only takes a fresh page observation (amazon-formula-once-v1), a product without one gets its formula.
 // Report-only unless --write; never queues anything itself.
@@ -30,7 +30,8 @@ try {
     if (r.codec !== 'amazon-brand-scan-result/1' || r.id !== c.id) { problems.push({ brand: info.brandName, reason: 'result identity' }); continue; }
     if (r.state === 'review' && !partial) { problems.push({ brand: info.brandName, reason: 'scan review: ' + r.code, products: r.asins.length }); continue; }
     // Products are used only from pages whose original bytes are here and match the result.
-    const bad = r.pages.find(p => { const f = `${dir}/evidence/${sha(p.url)}.html`; return !fs.existsSync(f) || sha(fs.readFileSync(f)) !== p.sha256; });
+    // Store pages that redirected away from the store were skipped and have no archive.
+    const bad = r.pages.filter(p => !p.skipped).find(p => { const f = `${dir}/evidence/${sha(p.url)}.html`; return !fs.existsSync(f) || sha(fs.readFileSync(f)) !== p.sha256; });
     if (bad) { problems.push({ brand: info.brandName, reason: 'page archive missing or changed', page: bad.page }); continue; }
     const asins = r.asins.filter(a => /^[A-Z0-9]{10}$/.test(a));
     const mine = asins.filter(a => { if (owner.has(a)) return false; owner.set(a, info.brandName); return true; });
