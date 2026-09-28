@@ -1,4 +1,5 @@
 // Brand scan: every product of each brand in the manifest, newest first, page by page.
+// Sites: Amazon Brand-filter searches / brand pages (amazon-brand-scan/1) and GNC brand pages (gnc-brand-scan/1).
 // Standalone and finite: no Temporal, R2, database or browser. Search pages only; product
 // pages are never fetched here (the product queue does that under its own admission rules).
 // Every response is archived byte-for-byte and read back before it is parsed; a page that was
@@ -10,6 +11,15 @@ import { request } from 'node:https';
 import { request as httpRequest } from 'node:http';
 import { resolve, join } from 'node:path';
 import { scanAddress, scanPageUrl, scanPage } from '../../../../packages/v3-channels/src/amazon-brand-search.mjs';
+import { gncScanAddress, gncScanPageUrl, gncScanPage } from '../../../../packages/v3-channels/src/gnc-brand-scan.mjs';
+
+// One profile per site. GNC pages state their total, so a GNC scan can prove it read every tile.
+const profiles = {
+  'amazon-brand-scan/1': { address: scanAddress, pageUrl: scanPageUrl, parse: scanPage, sort: 'date-desc-rank', result: 'amazon-brand-scan-result/1', ids: 'asins',
+    complete: (p, pages) => p.nextPage === null },
+  'gnc-brand-scan/1': { address: gncScanAddress, pageUrl: gncScanPageUrl, parse: gncScanPage, sort: 'new-arrivals', result: 'gnc-brand-scan-result/1', ids: 'ids',
+    complete: (p, pages) => p.nextPage === null && p.totalResults !== null && pages.reduce((n, x) => n + x.cards, 0) === p.totalResults },
+};
 
 const hash = bytes => createHash('sha256').update(bytes).digest('hex');
 const read = async p => JSON.parse(await fs.readFile(p, 'utf8'));
@@ -23,12 +33,13 @@ const code = e => /^BRAND_(SEARCH|SCAN)\.[A-Z_]+$/.test(e?.message ?? '') ? e.me
 const [command, rootArg, keyFile] = process.argv.slice(2), root = resolve(rootArg ?? '.');
 if (!['run', 'status'].includes(command)) throw Error('Usage: scan-cli.mjs run|status <run-dir> [private-key-file]');
 const manifest = await read(join(root, 'manifest.json'));
-if (manifest.codec !== 'amazon-brand-scan/1' || !(Number.isInteger(manifest.concurrency) && manifest.concurrency >= 1 && manifest.concurrency <= 50) ||
+const profile = profiles[manifest.codec];
+if (!profile || !(Number.isInteger(manifest.concurrency) && manifest.concurrency >= 1 && manifest.concurrency <= 50) ||
     !(Number.isInteger(manifest.maxPages) && manifest.maxPages >= 1 && manifest.maxPages <= 50) ||
     !Array.isArray(manifest.candidates) || !manifest.candidates.length || manifest.candidates.length > 2000) throw Error('BRAND_SCAN.MANIFEST');
 const ids = new Set();
 for (const c of manifest.candidates) {
-  if (!/^[a-f0-9-]{36}$/.test(c?.id ?? '') || ids.has(c.id) || scanAddress(c.url).page !== 1) throw Error('BRAND_SCAN.MANIFEST');
+  if (!/^[a-f0-9-]{36}$/.test(c?.id ?? '') || ids.has(c.id) || profile.address(c.url).page !== 1) throw Error('BRAND_SCAN.MANIFEST');
   ids.add(c.id);
 }
 const limit = manifest.concurrency, maxPages = manifest.maxPages;
@@ -56,7 +67,7 @@ if (command === 'status') {
   };
   const timer = setInterval(() => { publish(halt ? 'draining' : 'running').catch(() => { halt = true; fatal = 'BRAND_SCAN.PROGRESS_WRITE'; }); }, 5000);
   async function capture(url) {
-    url = scanAddress(url).url;
+    url = profile.address(url).url;
     const stem = join(root, 'evidence', hash(url)), receiptPath = stem + '.json';
     if (await exists(receiptPath)) {
       const r = await read(receiptPath), b = await fs.readFile(stem + '.html');
@@ -93,30 +104,31 @@ if (command === 'status') {
       if ([401, 403, 429].includes(result.status)) { halt = true; fatal = 'BRAND_SCAN.PROVIDER_ADMISSION'; }
       if (result.status !== 200) throw Error('BRAND_SCAN.HTTP_STATUS');
       if (!String(receipt.contentType).includes('text/html') || receipt.encoding && receipt.encoding !== 'identity') throw Error('BRAND_SCAN.CONTENT_TYPE');
-      if (result.headers['sa-final-url'] && scanAddress(result.headers['sa-final-url']).url !== url) throw Error('BRAND_SCAN.REDIRECT');
+      if (result.headers['sa-final-url']) { let final = null; try { final = profile.address(result.headers['sa-final-url']).url; } catch {} if (final !== url) throw Error('BRAND_SCAN.REDIRECT'); }
       return { receipt, html: bytes.toString('utf8') };
     } finally { active--; }
   }
   async function one(c) {
     const file = join(root, 'results', c.id + '.json');
-    const tally = r => { complete++; r.state === 'complete' ? full++ : r.state === 'capped' ? capped++ : review++; pages += r.pages.length; products += r.asins.length; };
+    const tally = r => { complete++; r.state === 'complete' ? full++ : r.state === 'capped' ? capped++ : review++; pages += r.pages.length; products += (r.asins ?? r.ids).length; };
     if (await exists(file)) { tally(await read(file)); return; }
     const intent = join(root, 'attempts', c.id + '.json');
-    const base = scanAddress(c.url).url, asins = [], seen = new Set();
-    const out = { codec: 'amazon-brand-scan-result/1', id: c.id, url: base, sort: 'date-desc-rank', state: 'review', code: null,
-      maxPages, pages: [], asins, totalResults: null, catalogEnumerationComplete: false, databaseImported: false };
+    const base = profile.address(c.url).url, asins = [], seen = new Set(), items = {};
+    const out = { codec: profile.result, id: c.id, url: base, sort: profile.sort, state: 'review', code: null,
+      maxPages, pages: [], [profile.ids]: asins, totalResults: null, catalogEnumerationComplete: false, databaseImported: false };
+    if (profile.ids === 'ids') out.items = items;
     try {
       if (await exists(intent)) throw Error('BRAND_SCAN.PRIOR_ATTEMPT_UNRESOLVED');
       await save(intent, { at: new Date().toISOString(), id: c.id });
       for (let n = 1; ; n++) {
-        const got = await capture(scanPageUrl(base, n));
-        const p = scanPage(got.html, got.receipt.url);
-        const fresh = p.organic.filter(a => !seen.has(a)); for (const a of fresh) { seen.add(a); asins.push(a); }
+        const got = await capture(profile.pageUrl(base, n));
+        const p = profile.parse(got.html, got.receipt.url);
+        const fresh = p.organic.filter(a => !seen.has(a)); for (const a of fresh) { seen.add(a); asins.push(a); if (p.items) items[a] = p.items[a]; }
         out.pages.push({ page: n, url: got.receipt.url, sha256: got.receipt.sha256, byteSize: got.receipt.byteSize, capturedAt: got.receipt.capturedAt,
           organic: p.organic.length, newOnPage: fresh.length, sponsored: p.sponsored, cards: p.cards, nextPage: p.nextPage, totalResults: p.totalResults, brandFilterSelected: p.brandFilterSelected });
         if (n === 1) out.totalResults = p.totalResults;
         // End of list: no next page, or a page that adds nothing new (Amazon repeats the last page past the end).
-        if (p.nextPage === null || !p.organic.length || !fresh.length) { out.state = 'complete'; out.catalogEnumerationComplete = p.nextPage === null; break; }
+        if (p.nextPage === null || !p.organic.length || !fresh.length) { out.state = 'complete'; out.catalogEnumerationComplete = profile.complete(p, out.pages); break; }
         if (n >= maxPages) { out.state = 'capped'; out.code = 'BRAND_SCAN.PAGE_LIMIT'; break; }
       }
     } catch (e) {

@@ -9,12 +9,14 @@ import { createHash } from 'node:crypto';
 import { join, resolve } from 'node:path';
 import pg from 'pg';
 import { searchAddress, filterIdentity, productAddress, productByline, organicAsins, scanAddress, scanPageUrl } from '../../../../packages/v3-channels/src/amazon-brand-search.mjs';
+import { gncScanAddress, gncScanPageUrl } from '../../../../packages/v3-channels/src/gnc-brand-scan.mjs';
 const root = resolve(process.argv[2]), manifest = JSON.parse(await fs.readFile(join(root, 'manifest.json'), 'utf8'));
 const clean = n => n.normalize('NFKC').replace(/\s+/g, ' ').trim();
-// Brand scan runs (amazon-brand-scan/1) may fetch only the listed brand URLs, pages 1..maxPages, newest first.
-const scan = manifest.codec === 'amazon-brand-scan/1';
+// Brand scan runs may fetch only the listed brand URLs, pages 1..maxPages, newest first (Amazon or GNC).
+const scanSite = { 'amazon-brand-scan/1': { address: raw => scanAddress(raw).url, pageUrl: scanPageUrl }, 'gnc-brand-scan/1': { address: raw => gncScanAddress(raw).url, pageUrl: gncScanPageUrl } }[manifest.codec];
+const scan = !!scanSite;
 if (scan && !(Number.isInteger(manifest.maxPages) && manifest.maxPages >= 1 && manifest.maxPages <= 50)) throw Error('MANIFEST');
-const allowedScan = new Set(scan ? manifest.candidates.flatMap(c => Array.from({ length: manifest.maxPages }, (_, i) => scanPageUrl(c.url, i + 1))) : []);
+const allowedScan = new Set(scan ? manifest.candidates.flatMap(c => Array.from({ length: manifest.maxPages }, (_, i) => scanSite.pageUrl(c.url, i + 1))) : []);
 const allowedNames = new Set(scan ? [] : manifest.candidates.flatMap(c => c.names.map(clean)));
 const allowedAsins = new Set(scan ? [] : manifest.candidates.flatMap(c => [c.identity?.asin, ...(c.identity?.asins ?? [])]).filter(Boolean));
 // Set only when the user explicitly authorized refetching despite a recent attempt (2026-09-24).
@@ -79,7 +81,7 @@ async function once(url, product) {
       await ledger({ asin: productAddress(url).asin, event: 'FETCHED', status: result.status, sha256: hash(bytes), bytes: bytes.length, finalUrl: result.finalUrl ?? null });
       if (result.finalUrl && productAddress(result.finalUrl).asin !== productAddress(url).asin) throw Error('REDIRECT');
       learn(url, bytes);
-    } else if (scan) { if (result.finalUrl && scanAddress(result.finalUrl).url !== url) throw Error('REDIRECT'); }
+    } else if (scan) { if (result.finalUrl) { let final = null; try { final = scanSite.address(result.finalUrl); } catch {} if (final !== url) throw Error('REDIRECT'); } }
     else { if (result.finalUrl && searchAddress(result.finalUrl) !== url) throw Error('REDIRECT'); if (result.status === 200) learnResults(url, bytes); }
     return result;
   } finally { active--; }
@@ -90,10 +92,10 @@ const server = createServer(async (req, res) => {
     const u = new URL(req.url, 'http://localhost');
     if (u.pathname === '/health') { res.setHeader('content-type','application/json'); res.end(JSON.stringify({ active, peak, calls, charged, concurrency })); return; }
     if (u.pathname !== '/capture') throw Error('PATH');
-    const raw = u.searchParams.get('url'), product = /\/dp\//.test(new URL(raw).pathname);
+    const raw = u.searchParams.get('url'), product = !scan && /\/dp\//.test(new URL(raw).pathname);
     let url;
     if (product) { const p = productAddress(raw); if (!allowedAsins.has(p.asin)) throw Error('ASIN'); url = p.url; }
-    else if (scan) { url = scanAddress(raw).url; if (!allowedScan.has(url)) throw Error('NAME'); }
+    else if (scan) { url = scanSite.address(raw); if (!allowedScan.has(url)) throw Error('NAME'); }
     else { url = searchAddress(raw); if (!allowedNames.has(new URL(url).searchParams.get('k'))) throw Error('NAME'); if (new URL(url).searchParams.has('rh')) filterIdentity(url); }
     let work = pending.get(url);
     if (!work) { work = once(url, product); pending.set(url, work); }

@@ -79,6 +79,36 @@ describe('brand scan runner', () => {
     } finally { server.close(); await fs.rm(dir, { recursive: true, force: true }); }
   }, 30000);
 
+  it('scans GNC brand pages (200 per page) and proves completeness from the stated total', async () => {
+    const dir = await fs.mkdtemp(join(os.tmpdir(), 'brand-scan-gnc-'));
+    const gncTile = (sku: string) => `<li class="grid-tile"><div class="product-tile" data-itemid="${sku}"><a href="https://www.gnc.com/protein/${sku}.html">P</a></div></li>`;
+    const gncPage = (skus: string[], total: number, next: number | null) => `<html><body><input class="product-custom-count" data-actual-productcount="${total}.0"/>` +
+      `<ul class="search-result-items">${skus.map(gncTile).join('')}</ul>` +
+      (next === null ? '' : `<div class="load-more-products" data-grid-url="/brands/big/?srule=new-arrivals&amp;start=${next}&amp;sz=200"></div>`) + '</body></html>';
+    const seen: string[] = [];
+    const server: Server = createServer((req, res) => {
+      const target = new URL(new URL(req.url!, 'http://x').searchParams.get('url')!); seen.push(target.href);
+      const start = Number(target.searchParams.get('start'));
+      const body = target.pathname === '/brands/small/' ? gncPage(['100001', '100002', '100001'], 3, null)
+        : start === 0 ? gncPage(['200001', '200002'], 3, 200) : gncPage(['200003'], 3, null);
+      res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'sa-credit-cost': '10' }); res.end(body);
+    });
+    await new Promise<void>(ok => server.listen(0, '127.0.0.1', ok));
+    try {
+      const ids = [{ id: '10000000-0000-4000-8000-000000000000', url: 'https://www.gnc.com/brands/small/' }, { id: '20000000-0000-4000-8000-000000000000', url: 'https://www.gnc.com/brands/big/' }];
+      await fs.writeFile(join(dir, 'manifest.json'), JSON.stringify({ codec: 'gnc-brand-scan/1', concurrency: 2, maxPages: 5, candidates: ids }));
+      await fs.writeFile(join(dir, 'key'), `http://127.0.0.1:${(server.address() as { port: number }).port}/capture`);
+      await run(process.execPath, [cli, 'run', dir, join(dir, 'key')]);
+      const small = JSON.parse(await fs.readFile(join(dir, 'results', ids[0]!.id + '.json'), 'utf8'));
+      expect(small).toMatchObject({ codec: 'gnc-brand-scan-result/1', state: 'complete', ids: ['100001', '100002'], totalResults: 3, catalogEnumerationComplete: true, sort: 'new-arrivals' });
+      expect(small.items['100001']).toBe('https://www.gnc.com/protein/100001.html');
+      const big = JSON.parse(await fs.readFile(join(dir, 'results', ids[1]!.id + '.json'), 'utf8'));
+      expect(big).toMatchObject({ state: 'complete', ids: ['200001', '200002', '200003'], catalogEnumerationComplete: true });
+      expect(seen.every(u => u.includes('srule=new-arrivals') && u.includes('sz=200'))).toBe(true);
+      expect(seen).toHaveLength(3);
+    } finally { server.close(); await fs.rm(dir, { recursive: true, force: true }); }
+  }, 30000);
+
   it('rejects a manifest with a non-scan URL or a duplicate id', async () => {
     const dir = await fs.mkdtemp(join(os.tmpdir(), 'brand-scan-'));
     try {
