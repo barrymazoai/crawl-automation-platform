@@ -22,7 +22,10 @@ const sha = s => createHash('sha256').update(s).digest('hex');
 const uuid = s => { const h = sha(s).slice(0, 32).split(''); h[12] = '4'; h[16] = '8'; const v = h.join(''); return [v.slice(0, 8), v.slice(8, 12), v.slice(12, 16), v.slice(16, 20), v.slice(20)].join('-'); };
 const web = JSON.parse(fs.readFileSync(m.jobs.find(j => j.id === 'brand-web').env.V3_BRAND_WEB_CONFIG, 'utf8'));
 async function api(path, method = 'GET', body, key) {
-  const r = await fetch(`http://127.0.0.1:${web.port}/api/v3${path}`, { method, headers: { authorization: `Bearer ${web.token}`, ...(body ? { 'content-type': 'application/json' } : {}), ...(key ? { 'Idempotency-Key': key } : {}) }, ...(body ? { body: JSON.stringify(body) } : {}) });
+  // brand-web accepts only its local workspace client (it adds the Bearer token itself); writes carry its own Origin.
+  const origin = `http://127.0.0.1:${web.port}`;
+  const r = await fetch(`${origin}/api/v3${path}`, { method, headers: { 'X-V3-Client': 'local-workspace', ...(method !== 'GET' ? { Origin: origin } : {}),
+    ...(body ? { 'content-type': 'application/json' } : {}), ...(key ? { 'Idempotency-Key': key } : {}) }, ...(body ? { body: JSON.stringify(body) } : {}) });
   const v = await r.json().catch(() => null); if (!r.ok) throw Error(`API ${r.status} ${JSON.stringify(v)}`); return v;
 }
 const findSource = async () => (await api(`/brands/${BRAND.id}/sources?limit=100`)).items.find(s => s.channel === 'swanson' && s.url === BRAND.url) ?? null;
