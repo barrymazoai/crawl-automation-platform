@@ -20,7 +20,7 @@ import { dtcExecutionIdentity } from './dtc-execution.js';
 
 const execution=()=>dtcExecutionIdentity(Context.current().info.workflowExecution);
 async function main(){
- if(process.platform!=='win32'||process.env.V3_DTC_BROWSER_ENABLED!=='true'||!process.env.V3_DTC_BROWSER_CONFIG)throw Error('DTC.WINDOWS_REQUIRED');
+ if(!['win32','darwin'].includes(process.platform)||process.env.V3_DTC_BROWSER_ENABLED!=='true'||!process.env.V3_DTC_BROWSER_CONFIG)throw Error('DTC.WINDOWS_REQUIRED');
  const config=DtcBrowserConfigSchema.parse(await readGncPrivateJson(process.env.V3_DTC_BROWSER_CONFIG));
  const root=dirname(fileURLToPath(import.meta.url)),buildId=await artifactBuildId((await readdir(root)).filter(n=>n.endsWith('.js')).sort().map(n=>join(root,n)));
  await workerProcess(new RoleRegistry('business',['catalog-source','capture','file'].map(role=>({role:`dtc-${role}`,capability:`dtc.${role}`,compatibility:'dtc-live-v2',contractVersion:1,kind:'activity' as const,buildId,testOnly:false,sessionScoped:true as const,
