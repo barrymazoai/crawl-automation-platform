@@ -44,47 +44,54 @@ export function isIngredientHeading(raw: string): boolean {
   if (/\b(?:supplement|nutrition)\s+facts\b|amount\s+per\s+serving|daily\s+value|contains\s*:|may\s+contain|allergen/i.test(text)) return false;
   return text.length <= 80;
 }
+/** The rule that fired and where: row index and printed name, or the section concerned. */
+export type LabelFinding = { code: string; detail: string };
 export function assessLabelCandidate(candidate: LabelCandidate) {
-  const codes = new Set<string>();
+  const codes = new Set<string>(), findings: LabelFinding[] = [];
+  // Every code keeps the first place that raised it, so a Review can say which row broke which rule.
+  const flag = (code: string, detail: string) => { if (!codes.has(code)) findings.push({ code, detail }); codes.add(code); };
+  const rowText = (row: { name: { text: string }; amount: { text: string } | null }, index: number) =>
+    `row ${index} "${row.name.text.slice(0, 80)}"${row.amount ? ` amount "${row.amount.text.slice(0, 30)}"` : ""}`;
   let componentCount = 0;
   for (const column of candidate.formula?.columns ?? []) {
     let activeGroup: number | null = null;
     column.rows.forEach((row, index) => {
-      if ((row.amountStatus === "printed") !== (row.amount !== null)) codes.add("LABEL.AMOUNT_STATE_CONFLICT");
+      if ((row.amountStatus === "printed") !== (row.amount !== null)) flag("LABEL.AMOUNT_STATE_CONFLICT", `${rowText(row, index)}: status ${row.amountStatus} but amount ${row.amount ? "present" : "missing"}`);
       if (row.kind === "group_header") {
-        if (row.amountStatus !== "not_applicable" || row.amount !== null || row.dailyValue !== null) codes.add("LABEL.HEADER_VALUE_CONFLICT");
-      } else if (row.amountStatus === "not_applicable") codes.add("LABEL.AMOUNT_STATE_CONFLICT");
-      if (row.amountStatus === "unreadable") codes.add("LABEL.AMOUNT_UNREADABLE");
+        if (row.amountStatus !== "not_applicable" || row.amount !== null || row.dailyValue !== null) flag("LABEL.HEADER_VALUE_CONFLICT", `${rowText(row, index)}: a group header carries a value`);
+      } else if (row.amountStatus === "not_applicable") flag("LABEL.AMOUNT_STATE_CONFLICT", `${rowText(row, index)}: ${row.kind} marked not_applicable${row.dailyValue ? ` (label prints only %DV "${row.dailyValue.text}")` : ""}`);
+      if (row.amountStatus === "unreadable") flag("LABEL.AMOUNT_UNREADABLE", `${rowText(row, index)}: amount unreadable`);
       if (row.kind === "blend_component") {
         componentCount++;
         const parent = row.parentRowIndex === null ? undefined : column.rows[row.parentRowIndex];
         if (row.parentRowIndex === null || row.parentRowIndex >= index || row.parentRowIndex !== activeGroup ||
-            !parent || !["group_header", "blend_total"].includes(parent.kind)) codes.add("LABEL.PARENT_INVALID");
+            !parent || !["group_header", "blend_total"].includes(parent.kind)) flag("LABEL.PARENT_INVALID", `${rowText(row, index)}: component parent ${row.parentRowIndex} is not the open group`);
         // A declared blend total may legitimately omit individual component amounts.
-        if (row.amountStatus === "not_declared" && parent?.kind !== "blend_total") codes.add("LABEL.AMOUNT_MISSING");
+        if (row.amountStatus === "not_declared" && parent?.kind !== "blend_total") flag("LABEL.AMOUNT_MISSING", `${rowText(row, index)}: component without amount outside a blend total`);
       } else {
-        if (row.parentRowIndex !== null) codes.add("LABEL.PARENT_INVALID");
+        if (row.parentRowIndex !== null) flag("LABEL.PARENT_INVALID", `${rowText(row, index)}: ${row.kind} has a parent`);
         activeGroup = row.kind === "group_header" || row.kind === "blend_total" ? index : null;
-        if (row.kind !== "group_header" && row.amountStatus === "not_declared") codes.add("LABEL.AMOUNT_MISSING");
+        if (row.kind !== "group_header" && row.amountStatus === "not_declared") flag("LABEL.AMOUNT_MISSING", `${rowText(row, index)}: no amount${row.dailyValue ? ` (label prints only %DV "${row.dailyValue.text}")` : ""}`);
       }
       if ((row.kind === "group_header" || row.kind === "blend_total") &&
-          (column.rows[index + 1]?.kind !== "blend_component" || column.rows[index + 1]?.parentRowIndex !== index)) codes.add("LABEL.GROUP_EMPTY");
+          (column.rows[index + 1]?.kind !== "blend_component" || column.rows[index + 1]?.parentRowIndex !== index)) flag("LABEL.GROUP_EMPTY", `${rowText(row, index)}: ${row.kind} not followed by its own component (next: ${column.rows[index + 1] ? `${column.rows[index + 1]!.kind} "${column.rows[index + 1]!.name.text.slice(0, 60)}"` : "end of column"})`);
     });
   }
   const hasIngredients = componentCount > 0 || !!candidate.otherIngredients;
   if (candidate.otherIngredients) {
-    if (!isIngredientHeading(candidate.otherIngredients.heading.text)) codes.add("LABEL.INGREDIENT_HEADING_INVALID");
-    if (candidate.otherIngredients.items.some(i => /\b(?:contains\s*:|may\s+contain|manufactured\s+(?:in|on)|shared\s+equipment)/i.test(i.text))) codes.add("LABEL.INGREDIENT_ROLE_INVALID");
+    if (!isIngredientHeading(candidate.otherIngredients.heading.text)) flag("LABEL.INGREDIENT_HEADING_INVALID", `ingredient heading "${candidate.otherIngredients.heading.text.slice(0, 80)}" is not an ingredients heading`);
+    if (candidate.otherIngredients.items.some(i => /\b(?:contains\s*:|may\s+contain|manufactured\s+(?:in|on)|shared\s+equipment)/i.test(i.text))) flag("LABEL.INGREDIENT_ROLE_INVALID", "an ingredient item is an allergen/manufacturing statement");
   }
-  if (!candidate.formula && candidate.formulaComplete || !hasIngredients && candidate.ingredientsComplete) codes.add("LABEL.COMPLETENESS_CONFLICT");
-  if (candidate.formula && (!candidate.formula.servingSize || !candidate.formulaComplete)) codes.add("LABEL.FORMULA_INCOMPLETE");
-  if (hasIngredients && !candidate.ingredientsComplete) codes.add("LABEL.INGREDIENTS_INCOMPLETE");
-  if (candidate.issues.some(i => ["UNREADABLE", "AMBIGUOUS", "METADATA_CONFLICT"].includes(i.code))) codes.add("LABEL.EVIDENCE_UNCERTAIN");
+  if (!candidate.formula && candidate.formulaComplete || !hasIngredients && candidate.ingredientsComplete) flag("LABEL.COMPLETENESS_CONFLICT", "marked complete with nothing extracted");
+  if (candidate.formula && (!candidate.formula.servingSize || !candidate.formulaComplete)) flag("LABEL.FORMULA_INCOMPLETE", !candidate.formula.servingSize ? "formula has no serving size" : "model marked the formula incomplete");
+  if (hasIngredients && !candidate.ingredientsComplete) flag("LABEL.INGREDIENTS_INCOMPLETE", candidate.otherIngredients ? "model marked the ingredient list incomplete" : "only blend components, no Other Ingredients list");
+  const uncertain = candidate.issues.find(i => ["UNREADABLE", "AMBIGUOUS", "METADATA_CONFLICT"].includes(i.code));
+  if (uncertain) flag("LABEL.EVIDENCE_UNCERTAIN", `model reported ${uncertain.code}${"detail" in uncertain && uncertain.detail ? `: ${String(uncertain.detail).slice(0, 160)}` : ""}`);
   if (candidate.formula && candidate.issues.some(i => i.code === "FORMULA_MISSING") ||
-      hasIngredients && candidate.issues.some(i => i.code === "INGREDIENTS_MISSING")) codes.add("LABEL.COMPLETENESS_CONFLICT");
-  if (!candidate.formula && !hasIngredients) codes.add("LABEL.CORE_MISSING");
+      hasIngredients && candidate.issues.some(i => i.code === "INGREDIENTS_MISSING")) flag("LABEL.COMPLETENESS_CONFLICT", "extracted content contradicts a reported missing section");
+  if (!candidate.formula && !hasIngredients) flag("LABEL.CORE_MISSING", `no formula and no ingredients${candidate.issues[0] && "detail" in candidate.issues[0] && candidate.issues[0].detail ? `; model: ${String(candidate.issues[0].detail).slice(0, 160)}` : ""}`);
   return { status: codes.size ? "review" as const : candidate.formula && hasIngredients ? "candidate" as const : "partial" as const,
-    codes: [...codes] };
+    codes: [...codes], findings };
 }
 
 /** Small projection for structural comparison; group identity is never the printed name. */

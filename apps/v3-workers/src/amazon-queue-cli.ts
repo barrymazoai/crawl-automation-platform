@@ -31,8 +31,12 @@ async function main() {
     if (command === "status") return print(await queue.status());
     if (command === "items") {
       const state = z.enum(["queued", "ready", "running", "review", "completed"]).parse(args[0] ?? "running");
-      return print((await db.query(`SELECT item_id,campaign_id,state,attempt,request_id,last_error,input->'entries'->0->'entry'->>'listingId' AS asin
-        FROM amazon_queue_item WHERE state=$1 ORDER BY updated_at DESC LIMIT 1000`, [state])).rows);
+      const limit = z.coerce.number().int().min(1).max(10000).parse(args[1] ?? 1000);
+      // `reason` is the settlement's one-line why (Review only); older attempts settled before it existed show null.
+      return print((await db.query(`SELECT i.item_id,i.campaign_id,i.state,i.attempt,i.request_id,i.last_error,i.input->'entries'->0->'entry'->>'listingId' AS asin,
+        a.proof->'reason'->>'summary' AS reason
+        FROM amazon_queue_item i LEFT JOIN amazon_queue_attempt a ON a.request_id=i.request_id
+        WHERE i.state=$1 ORDER BY i.updated_at DESC LIMIT $2`, [state, limit])).rows);
     }
     if (command === "add") {
       const manifest = await json(args[0]!);

@@ -83,6 +83,18 @@ describe("ScraperAPI explicit, single-submission transport (no live calls)", () 
     const send = vi.fn(async () => res), transport = new ScraperApiTransport(selection, privateConfig, send);
     await expect(transport.get(target, undefined, {}, signal())).rejects.toThrow("SCRAPERAPI.REDIRECT_UNVERIFIED"); expect(send).toHaveBeenCalledTimes(1);
   });
+  it("a rejected redirect records where it pointed, never the provider URL or key", async () => {
+    const foreign = vi.fn(async () => { const r = response(302); r.headers["location"] = "https://evil.example/x?y=1"; return r; });
+    const error = await new ScraperApiTransport(selection, privateConfig, foreign).get(target, undefined, {}, signal()).catch(e => e);
+    expect(error.code).toBe("SCRAPERAPI.REDIRECT_UNVERIFIED");
+    expect(error.details).toEqual({ status: 302, target: target.href, location: "https://evil.example/x?y=1" });
+    const leaky = vi.fn(async () => { const r = response(302); r.headers["location"] = `https://api.scraperapi.com/?api_key=${privateConfig.apiKey}`; return r; });
+    const hidden = await new ScraperApiTransport(selection, privateConfig, leaky).get(target, undefined, {}, signal()).catch(e => e);
+    expect(JSON.stringify(hidden.details)).not.toContain(privateConfig.apiKey); expect(hidden.details.location).toBeUndefined();
+    const moved = response(); moved.headers["sa-final-url"] = "https://www.swansonvitamins.com/products/other";
+    const final = await new ScraperApiTransport(selection, privateConfig, vi.fn(async () => moved)).get(target, undefined, {}, signal()).catch(e => e);
+    expect(final.details).toMatchObject({ status: 200, finalUrl: "https://www.swansonvitamins.com/products/other" });
+  });
   it("redacts provider exceptions", async () => {
     const transport = new ScraperApiTransport(selection, privateConfig, async () => { throw Error(`https://api.scraperapi.com/?api_key=${privateConfig.apiKey}`); });
     await expect(transport.get(target, undefined, {}, signal())).rejects.toThrow(/^SCRAPERAPI.EXECUTION_UNKNOWN$/);

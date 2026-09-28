@@ -106,7 +106,7 @@ async function readAmazonHtmlBytes(route: HttpRoute, rawUrl: string, abort: Abor
     if (admissionDeadline !== undefined && Date.now() > admissionDeadline) throw new ChannelError('AMAZON.HTML_ADMISSION_EXPIRED');
     const got = await abortable(route.transport.get(url, address, { accept: "text/html" }, signal).then(r => { if (signal.aborted) { r.close(); signal.throwIfAborted(); } return r; }), signal);
     response = got; signal.throwIfAborted();
-    if (got.status >= 300 && got.status < 400) throw new ChannelError("AMAZON.REDIRECT_UNVERIFIED");
+    if (got.status >= 300 && got.status < 400) throw new ChannelError("AMAZON.REDIRECT_UNVERIFIED", { status: got.status });
     if ([403, 406, 429, 503].includes(got.status)) throw new ChannelError("AMAZON.ACCESS_CHALLENGE");
     if ([404, 410].includes(got.status)) throw new ChannelError("AMAZON.NOT_FOUND");
     if (got.status !== 200) throw new ChannelError("AMAZON.HTTP_STATUS");
@@ -124,7 +124,8 @@ async function readAmazonHtmlBytes(route: HttpRoute, rawUrl: string, abort: Abor
       size += next.value.byteLength; if (size > AMAZON_HTTP_POLICY.maxBytes) throw new ChannelError("AMAZON.PAGE_LIMIT");
       chunks.push(next.value);
     }
-    if (!size) throw new ChannelError("AMAZON.PAGE_EMPTY");
+    if (!size) throw new ChannelError("AMAZON.PAGE_EMPTY", { status: got.status, contentType: got.headers["content-type"] ?? "(none)",
+      declaredLength: got.headers["content-length"] ?? "(none)", receivedBytes: 0 });
     return Buffer.concat(chunks);
   } finally { clearTimeout(timer); response?.close(); }
 }

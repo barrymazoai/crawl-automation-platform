@@ -1,5 +1,8 @@
 import { Parser } from "htmlparser2";
-export class ChannelError extends Error { constructor(readonly code: string) { super(code); this.name = "ChannelError"; } }
+export class ChannelError extends Error {
+  /** `details` holds diagnostic facts for the Review (status, sizes, URLs without credentials), never page content. */
+  constructor(readonly code: string, readonly details?: Readonly<Record<string, string | number>>) { super(code); this.name = "ChannelError"; }
+}
 export type HtmlNode = { tag: string; attrs: Record<string, string>; parent: HtmlNode | null; children: HtmlNode[]; text: string; start: number; end: number };
 export const CHANNEL_LIMITS = Object.freeze({ bytes: 4 * 1024 * 1024, nodes: 100000, depth: 128 });
 export function parseHtml(html: string) {

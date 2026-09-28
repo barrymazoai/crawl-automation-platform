@@ -12,6 +12,7 @@ import { proofIssue, terminalStatuses } from "../../v3-api/src/delivery/proof-po
 import { ApiError } from "../../v3-api/src/errors.js";
 import { scopeForSubmission } from "./brand-pipeline.js";
 import type { AmazonLinkBatch } from "./amazon-link-batches.js";
+import { queueReviewReason } from "./amazon-queue-reason.js";
 import { QueueAdmissionRejected, type AmazonQueuePorts, type QueueInspection } from "./amazon-queue.js";
 
 type Node = { workflowId: string; runId: string; type: string; status: string; pending: number; events: any[]; parent?: { workflowId: string; runId: string } };
@@ -171,7 +172,15 @@ export class AmazonQueueTemporal implements AmazonQueuePorts {
     const closed = await this.journal.record(batch.requestId, proof.root);
     if (closed.state !== "CLOSED") fail("CLOSURE_UNCONFIRMED");
     const stop = (await this.db.query("SELECT stop_requested_at FROM amazon_queue_attempt WHERE request_id=$1", [batch.requestId])).rows[0];
-    return { status: settledStatus(proof.root.status, proof.trees, batch.entries.length, !!stop?.stop_requested_at), proof };
+    const status = settledStatus(proof.root.status, proof.trees, batch.entries.length, !!stop?.stop_requested_at);
+    if (status !== "review") return { status, proof };
+    // A Review says why in the queue itself (`crawler-queue items review`), so nobody has to dig through R2 to find out.
+    let reason;
+    try {
+      const records = (await this.db.query("SELECT record FROM review_record WHERE record->'observation'->>'requestId'=$1 ORDER BY registered_at LIMIT 40", [batch.requestId])).rows.map(r => r.record);
+      reason = queueReviewReason(proof.trees.find(n => n.type === "AmazonCatalogProductWorkflow")?.result, records);
+    } catch { reason = { summary: "reason unavailable", items: [] }; }
+    return { status, proof: { ...proof, reason } };
   }
   async stop(batch: AmazonLinkBatch) {
     await this.db.query("UPDATE amazon_queue_attempt SET stop_requested_at=coalesce(stop_requested_at,clock_timestamp()) WHERE request_id=$1 AND outcome='running'", [batch.requestId]);

@@ -27,6 +27,16 @@ import { AmazonLinkStore } from "./amazon-link-store.js";
 import { recoveredAmazonFailure } from './amazon-terminal-proof.js';
 import { recordException, describeError, listingOf } from './process-exceptions.js';
 import { AmazonStagedFiles } from './amazon-staged-files.js';
+/** At most 8 primitive facts, strings capped at 300 chars; anything else is dropped rather than recorded. */
+function causeFacts(raw: unknown): Record<string, string | number> | undefined {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return undefined;
+  const out: Record<string, string | number> = {};
+  for (const [k, v] of Object.entries(raw).slice(0, 8)) {
+    if (!/^[A-Za-z][A-Za-z0-9]{0,39}$/.test(k)) continue;
+    if (typeof v === "number" && Number.isFinite(v)) out[k] = v; else if (typeof v === "string") out[k] = v.slice(0, 300);
+  }
+  return Object.keys(out).length ? out : undefined;
+}
 import { PostgresAmazonHtmlFetchGate } from './amazon-html-fetch.js';
 
 const execution = () => { const e = Context.current().info.workflowExecution; if (!e) throw Error("AMAZON.WORKFLOW_REQUIRED"); return e; };
@@ -202,7 +212,8 @@ async function main() {
           // The failure path must never fail: an unrecognized cause is recorded as such, never thrown (2026-09-17: a
           // rejected cause code left 30 products without any record and held their batch slots for hours).
           if (typeof raw.causeCode !== "string" || !/^[A-Z][A-Z0-9]*\.[A-Z0-9_]+$/.test(raw.causeCode)) raw = { ...raw, causeCode: "AMAZON.CAUSE_UNRECOGNIZED" };
-          return writeAmazonReview(job, raw.code, raw.causeCode, {}, s);
+          const facts = causeFacts(raw.causeDetails);
+          return writeAmazonReview(job, raw.code, raw.causeCode, facts ? { causeDetails: facts } : {}, s);
         } };
 
         else {
@@ -257,7 +268,9 @@ async function main() {
             recordException(db, { kind: "activity", service: `amazon-${role}`, workflowType: ctx.info.workflowType, workflowId: ctx.info.workflowExecution?.workflowId, runId: ctx.info.workflowExecution?.runId,
               activity: name, attempt: ctx.info.attempt, requestId: p.requestId, listingId: p.listingId, code: code === "AMAZON.ACTIVITY_UNRESOLVED" ? d.code : code,
               errorName: d.name, message: d.message, outcome: "step-failed", detail: { taskQueue: ctx.info.taskQueue } });
-            throw ApplicationFailure.nonRetryable("Inspect retained Amazon evidence", code); }
+            // Diagnostic facts (status, redirect target, sizes) ride along so the Review can say why, not just what.
+            const facts = causeFacts((error as { details?: unknown })?.details);
+            throw facts ? ApplicationFailure.nonRetryable("Inspect retained Amazon evidence", code, facts) : ApplicationFailure.nonRetryable("Inspect retained Amazon evidence", code); }
           finally { clearInterval(timer); }
         }])) };
       } catch (error) { await dispose(); throw error; }

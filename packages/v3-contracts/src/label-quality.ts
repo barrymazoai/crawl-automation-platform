@@ -1,18 +1,23 @@
-import { assessLabelCandidate, type LabelImageCandidate, type LabelCandidate } from "./label-extraction.js";
+import { assessLabelCandidate, type LabelImageCandidate, type LabelCandidate, type LabelFinding } from "./label-extraction.js";
 
 /** Opt-in quality/1: evidence consistency, not an assertion that pixels were read correctly. */
 export function labelImageIntegrityCodes(candidate: LabelImageCandidate) {
-  const codes = new Set<string>();
-  for (const column of candidate.formula?.columns ?? []) for (const row of column.rows) {
-    if (row.kind !== "blend_component") continue;
+  return [...new Set(labelImageIntegrityFindings(candidate).map(f => f.code))];
+}
+/** Same checks as labelImageIntegrityCodes, naming the component or item that failed each one. */
+export function labelImageIntegrityFindings(candidate: LabelImageCandidate): LabelFinding[] {
+  const findings: LabelFinding[] = [];
+  for (const column of candidate.formula?.columns ?? []) column.rows.forEach((row, index) => {
+    if (row.kind !== "blend_component") return;
     const percentages = row.name.evidence.match(/\d+(?:\.\d+)?\s*%/g) ?? [];
     // A percentage explicitly quoted on this component cannot disappear from its amount.
     if (percentages.length && (percentages.length !== 1 || !row.amount ||
       row.amountStatus !== "printed" || row.amount.text.replace(/\s/g, "") !== percentages[0]!.replace(/\s/g, "")))
-      codes.add("LABEL.AMOUNT_EVIDENCE_CONFLICT");
-  }
-  if (candidate.otherIngredients?.items.some(i => /^\s*\([^()]+\)\s*$/.test(i.text))) codes.add("LABEL.INGREDIENT_BOUNDARY");
-  return [...codes];
+      findings.push({ code: "LABEL.AMOUNT_EVIDENCE_CONFLICT", detail: `row ${index} "${row.name.text.slice(0, 80)}": name quotes ${percentages.join(", ")} but amount is ${row.amount ? `"${row.amount.text.slice(0, 30)}"` : row.amountStatus}` });
+  });
+  const bad = candidate.otherIngredients?.items.find(i => /^\s*\([^()]+\)\s*$/.test(i.text));
+  if (bad) findings.push({ code: "LABEL.INGREDIENT_BOUNDARY", detail: `ingredient item "${bad.text.slice(0, 80)}" is only a parenthesis` });
+  return findings;
 }
 
 /** Split the original IMAGE transcription only, retaining parenthesized subingredients. */
