@@ -94,9 +94,12 @@ export class ChannelLabelPlans {
         skipped.push(source.id);decisions.push({id:source.id,reason:"complete_label_already_selected"});continue;
       }
       if(source.kind==="file-image"&&selectedIndex>=0&&order.indexOf(source.id)>selectedIndex)throw Error("CHANNEL.LABEL_SELECTION_UNVERIFIED");
-      // An executed empty OCR has no registration from which source() can reconstruct a vision task.
-      // A later complete label may cover it only after the saved input and exact Review identity are verified.
-      if(source.kind==="file-image"&&selectedImageId!==null&&source.id!==selectedImageId&&state.status==="review"){
+      // An executed empty OCR has no registration from which source() can reconstruct a vision task, so it is skipped
+      // once the saved input and exact Review identity are verified. This holds whether or not another image was
+      // selected: an image with no text cannot hold a label, and the product is still judged on its other sources.
+      // (2026-09-28: requiring a selection stopped 179 products at CHANNEL.LABEL_PREPARATION_UNVERIFIED; in a sample of
+      // 16, 10 had a readable facts panel in another image and every flagged image was a photo with no label text.)
+      if(source.kind==="file-image"&&source.id!==selectedImageId&&state.status==="review"){
         const raw=await this.inspection.review(state.reviewId);
         if(raw){
           const r=ReviewRecordSchema.parse(raw);

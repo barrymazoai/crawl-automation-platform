@@ -149,6 +149,17 @@ it.each([true,false])("verified empty OCR before a complete label collects and r
  const counts={...f.counts};await f.bridge.singleManifest(selection.request,new AbortController().signal);
  expect(f.counts).toEqual(counts);expect(await f.reviews.read(skipped.state.reviewId)).toEqual(review);
 });
+it("verified empty OCR is skipped even when no image is a complete label, so the product is judged on its other sources",async()=>{
+ runtime.parallelOcr=true;const {f}=await emptyFirstImage();
+ const original=f.activities.interpretImage!,complete=structuredClone(f.imageCandidate.value);
+ // Every labelled image lacks Other Ingredients, so no single image is complete and nothing is selected.
+ f.activities.interpretImage=async raw=>{f.imageCandidate.value=structuredClone(complete);f.imageCandidate.value.otherIngredients=null;f.imageCandidate.value.ingredientsComplete=false;return original(raw);};
+ const result=await ChannelSavedLabelWorkflow(f.entry) as {status:string;code?:string};
+ expect(result.code).not.toBe("CHANNEL.LABEL_PREPARATION_UNVERIFIED");
+ const selection=JSON.parse(Buffer.from((await f.remote.read(`v3/channel-labels/${f.input.operationId}/selection.json`,100000))!).toString());
+ expect(selection.request.selectedImageId).toBeNull();
+ expect(selection.decisions.find((d:any)=>d.id==="image-0")).toMatchObject({reason:"verified_empty_ocr",code:"OCR.EMPTY"});
+});
 it.each(["missing-review","foreign-observation","foreign-operation","wrong-fingerprint","wrong-review-id","not-executed","different-code","missing-input","missing-original"])("empty OCR cannot authorize collection with %s",async mode=>{
  const {f,first}=await emptyFirstImage(),prepare=f.activities.prepareChannelSingleLabelManifest;
  f.activities.prepareChannelSingleLabelManifest=async raw=>{
@@ -173,10 +184,17 @@ it.each(["missing-review","foreign-observation","foreign-operation","wrong-finge
  expect(f.collected.size).toBe(0);expect(f.counts).toMatchObject({ocr:2,vision:1});
  expect(f.remote.data.has(`v3/channel-labels/${f.input.operationId}/manifest.json`)).toBe(false);
 });
-it("empty OCR remains blocking when no complete image was selected",async()=>{
+it("all-empty OCR is treated like all keyword-not-matched: no vision, judged on the page text alone",async()=>{
  const {f}=await emptyFirstImage();for(const s of f.manifest.sources)if(s.kind==="file-image")f.emptyOcr.add(s.plan.imageId);
- expect(await ChannelSavedLabelWorkflow(f.entry)).toMatchObject({status:"review"});
- expect(f.collected.size).toBe(0);expect(f.counts.vision).toBe(0);
+ // Same outcome as "keyword not matched" on every image, which collects from a complete page text.
+ expect(await ChannelSavedLabelWorkflow(f.entry)).toMatchObject({status:"collected"});
+ expect(f.counts.vision).toBe(0);expect(f.collected.size).toBe(1);
+});
+it("all keyword-not-matched images collect from the page text alone",async()=>{
+ const f=await setup();f.input.evidencePolicy="label-image-first/5";
+ for(const s of f.manifest.sources)if(s.kind==="file-image")f.nonmatch.add(s.plan.imageId);
+ expect(await ChannelSavedLabelWorkflow(f.entry)).toMatchObject({status:"collected"});
+ expect(f.counts.vision).toBe(0);expect(f.collected.size).toBe(1);
 });
 it("single label cannot use an unverified image receipt as completeness proof",async()=>{
  const f=await setup();f.input.evidencePolicy="label-image-first/5";
