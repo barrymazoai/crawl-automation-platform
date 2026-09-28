@@ -19,7 +19,9 @@ const code = e => /^BRAND_SEARCH\.[A-Z_]+$/.test(e?.message ?? '') ? e.message :
 const [command, rootArg, keyFile] = process.argv.slice(2), root = resolve(rootArg ?? '.');
 if (!['run', 'status'].includes(command)) throw Error('Usage: search-cli.mjs run|status <run-dir> [private-key-file]');
 const manifest = await read(join(root, 'manifest.json'));
-if (manifest.codec !== 'amazon-brand-search/1' || manifest.concurrency !== 50 || !Array.isArray(manifest.candidates) || manifest.candidates.length > 2000) throw Error('BRAND_SEARCH.MANIFEST');
+if (manifest.codec !== 'amazon-brand-search/1' || !(Number.isInteger(manifest.concurrency) && manifest.concurrency >= 1 && manifest.concurrency <= 50) || !Array.isArray(manifest.candidates) || manifest.candidates.length > 2000) throw Error('BRAND_SEARCH.MANIFEST');
+// The ScraperAPI plan allows 50 simultaneous requests shared with other projects; the manifest sets our share.
+const limit = manifest.concurrency;
 const names = c => [...new Set((c.names ?? []).filter(n => typeof n === 'string').map(n => n.normalize('NFKC').replace(/\s+/g, ' ').trim()).filter(n => n.length > 0 && n.length <= 80 && !/[\x00-\x1f]/.test(n)))];
 if (command === 'status') {
   const progress = await read(join(root, 'progress.json')).catch(() => null);
@@ -39,7 +41,7 @@ if (command === 'status') {
   const publish = state => {
     const progress = { at: new Date().toISOString(), startedAt, pid: process.pid, state, fatal, total: manifest.candidates.length,
       complete, verified, storeLinks, review, remaining: manifest.candidates.length - complete, activeRequests: active, peakRequests: peak,
-      submittedRequests: requests, credits, concurrencyLimit: 50, databaseImported: false };
+      submittedRequests: requests, credits, concurrencyLimit: limit, databaseImported: false };
     publishing = publishing.then(() => atomic(join(root, 'progress.json'), progress)); return publishing;
   };
   const timer = setInterval(() => { publish(halt ? 'draining' : 'running').catch(() => { halt = true; fatal = 'BRAND_SEARCH.PROGRESS_WRITE'; }); }, 5000);
@@ -62,7 +64,7 @@ if (command === 'status') {
       for (const [k, v] of Object.entries(broker ? { url } : { api_key: key, country_code: 'us', follow_redirect: 'false', url })) endpoint.searchParams.set(k, v);
       active++; requests++; peak = Math.max(peak, active);
       try {
-        if (active > 50) throw Error('BRAND_SEARCH.CONCURRENCY');
+        if (active > limit) throw Error('BRAND_SEARCH.CONCURRENCY');
         const result = await new Promise((ok, bad) => {
           const req = (broker ? httpRequest : request)(endpoint, { agent: false, signal: AbortSignal.timeout(broker ? 105000 : 90000), headers: { accept: 'text/html', 'accept-encoding': 'identity' } }, res => {
             let size = 0; const chunks = [];
@@ -166,7 +168,7 @@ if (command === 'status') {
   }
   try {
     await publish('running');
-    await Promise.all(Array.from({ length: 50 }, async () => {
+    await Promise.all(Array.from({ length: limit }, async () => {
       try { while (!halt) { const c = manifest.candidates[cursor++]; if (!c) break; await one(c); } }
       catch (e) { halt = true; fatal = code(e); process.exitCode = 1; }
     }));

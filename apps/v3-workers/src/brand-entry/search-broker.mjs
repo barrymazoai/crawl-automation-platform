@@ -28,6 +28,8 @@ const limit = manifest.candidates.length * 3 + allowedAsins.size + discoveryLimi
 // Search-discovered ASINs become fetchable only from search pages this broker fetched itself.
 const discoverNames = new Set(manifest.candidates.filter(c => c.identity?.discoverFromSearch).flatMap(c => c.names.map(clean)));
 const learnResults = (url, bytes) => { try { const u = new URL(url); if (!u.searchParams.has('rh') && discoverNames.has(u.searchParams.get('k'))) for (const a of organicAsins(bytes.toString('utf8'), 6)) allowedAsins.add(a); } catch {} };
+const concurrency = manifest.concurrency;
+if (!(Number.isInteger(concurrency) && concurrency >= 1 && concurrency <= 50)) throw Error('MANIFEST');
 let active = 0, peak = 0, calls = 0, charged = 0;
 const pending = new Map();
 const learn = (url, bytes) => {
@@ -41,7 +43,7 @@ async function once(url, product) {
     if (product) learn(url, bytes); else learnResults(url, bytes);
     return { status: receipt.status, headers: { ...receipt.headers, 'sa-credit-cost': '0' }, bytes };
   } catch (e) { if (e.code !== 'ENOENT') throw e; }
-  if (active >= 50 || calls >= limit) throw Error('LIMIT');
+  if (active >= concurrency || calls >= limit) throw Error('LIMIT');
   if (product) {
     // Shared rolling 24h admission: any attempt on this ASIN (captured or not) blocks a paid fetch.
     const { asin } = productAddress(url);
@@ -81,7 +83,7 @@ const server = createServer(async (req, res) => {
   if (req.socket.remoteAddress !== '100.84.91.3' || req.method !== 'GET') { res.writeHead(403).end(); return; }
   try {
     const u = new URL(req.url, 'http://localhost');
-    if (u.pathname === '/health') { res.setHeader('content-type','application/json'); res.end(JSON.stringify({ active, peak, calls, charged, concurrency: 50 })); return; }
+    if (u.pathname === '/health') { res.setHeader('content-type','application/json'); res.end(JSON.stringify({ active, peak, calls, charged, concurrency })); return; }
     if (u.pathname !== '/capture') throw Error('PATH');
     const raw = u.searchParams.get('url'), product = /\/dp\//.test(new URL(raw).pathname);
     let url;
