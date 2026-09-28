@@ -22,6 +22,8 @@ gallery:[...document.querySelectorAll('slideshow-slide .product-media img')].map
 variantPicker:{unmapped:[...document.querySelectorAll('input[role="radio"]')].filter(i=>!i.hasAttribute('data-connected-product-url')||!i.hasAttribute('data-variant-id')).length,
 options:[...document.querySelectorAll('input[role="radio"][data-connected-product-url][data-variant-id]')].map(i=>({group:i.name,label:i.value,url:new URL(i.getAttribute('data-connected-product-url'),location.href).href,variantId:i.getAttribute('data-variant-id'),selected:i.checked,available:i.getAttribute('data-option-available')==='true'}))},
 sections:[...document.querySelectorAll('details')].filter(d=>['Product Details','Product Facts'].includes(d.querySelector('summary')?.innerText.trim())).map(d=>({heading:d.querySelector('summary').innerText.trim(),text:d.innerText}))}; })()`;
+/** The same product projection for a static page (swanson-http.ts runs it in a linkedom document). */
+export const swansonProductExpression = product;
 
 /** Public DOM only: no scripts, window globals, credentials or whole-page HTML leave the browser. */
 export class SwansonEgoReader {

@@ -7,7 +7,10 @@ const bytes = (v: unknown) => Buffer.from(JSON.stringify(v));
 // Family option evidence has its own retained receipt. Keep the product projection
 // compatible with the already deployed independent label consumers.
 const productProjection=(raw:unknown)=>{const {variantPicker: _options,...p}=SwansonRenderedProductSchema.parse(raw);return p;};
-type Settings = Pick<ChannelPlanInput, "text" | "ocr" | "visionConfigFingerprint"> & { egressId: string };
+// projectionModule/factsPolicy are set only for ScraperAPI captures (swanson.http-projection, text-facts-first/1); omitted
+// fields keep the existing Ego intents byte-identical, because settings are part of each capture's retained intent.
+type Settings = Pick<ChannelPlanInput, "text" | "ocr" | "visionConfigFingerprint"> & { egressId: string;
+  projectionModule?: "swanson.http-projection"; factsPolicy?: "text-facts-first/1" };
 export interface SwansonProductPort { capture(job: SwansonProductJob, signal: AbortSignal): Promise<unknown> }
 
 /** Capture only. Planning, each image transfer and browser close are other atomic calls. */
@@ -23,12 +26,12 @@ export class SwansonLiveProduct {
     parseSwansonRenderedProduct(p, d.entry.url, identity);
     const owner = { schemaVersion: 1, requestId: d.catalogId, observationId: `swanson-${sha256(bytes([d.discoveryId, identity]))}`,
       brandId: d.scope.brandId, sourceId: d.scope.sourceId, ...identity };
-    const encoded = bytes(p), { egressId, ...providers } = this.settings;
+    const encoded = bytes(p), { egressId, projectionModule, ...providers } = this.settings;
     const sourcePlan = ChannelPlanInputSchema.parse({ operationId: `plan-${sha256(bytes(job))}`, owner, channel: "swanson", parserVersion: "swanson-rendered/1",
       expectedUrl: d.entry.url, binding: { sessionId: job.sessionId, egressId }, ...providers,
       source: { schemaVersion: 1, artifactId: `source-${sha256(bytes(job))}`, observationId: owner.observationId, sourceId: owner.sourceId, ...identity,
         kind: "result-json", mediaType: "application/json", objectKey: `${this.key(job)}/projection.json`, byteSize: encoded.length, sha256: sha256(encoded),
-        producer: { operationId: job.operationId, module: "swanson.browser-projection", implementationVersion: "swanson-rendered/1" } } });
+        producer: { operationId: job.operationId, module: projectionModule ?? "swanson.browser-projection", implementationVersion: "swanson-rendered/1" } } });
     return SwansonProductCaptureSchema.parse({ job, sourcePlan });
   }
   async inspect(raw: unknown, signal: AbortSignal) {

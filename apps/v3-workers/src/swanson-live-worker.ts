@@ -9,8 +9,10 @@ import { Client, Connection } from "@temporalio/client";
 import { CatalogPageInputSchema, CollectionWorkflowInput, BrandCollectionPlanSchema, BrandCollectionProgressSchema,
   SwansonProductCaptureSchema, SwansonProductHandoffSchema, ChannelLabelInputSchema, ReviewRecordSchema, observationIdentity } from "@crawl-automation/v3-contracts";
 import { createR2Objects, RetainedPublication, ArtifactResolver, FileCopies, sha256 } from "@crawl-automation/v3-artifacts";
-import { EgoTaskPages, EgoFileTransport, AcquireFileModule, FileEvidence, systemDns, type SourceAccess } from "@crawl-automation/v3-acquisition";
-import { SwansonCatalogSource, SwansonEgoReader, SwansonLiveProduct, ChannelProductPlans } from "@crawl-automation/v3-channels";
+import { EgoTaskPages, EgoFileTransport, AcquireFileModule, FileEvidence, systemDns, createHttpRoute, DirectHttpsTransport, SystemHttpsTransport,
+  type SourceAccess, type FileTransport } from "@crawl-automation/v3-acquisition";
+import { SwansonCatalogSource, SwansonEgoReader, SwansonLiveProduct, ChannelProductPlans, SwansonHttpReader, SwansonHtmlArchive } from "@crawl-automation/v3-channels";
+import { SwansonLinkCatalog } from "./swanson-link-catalog.js";
 import { TextLocalStore } from "@crawl-automation/v3-text";
 import { PostgresReviews } from "@crawl-automation/v3-review";
 import { RoleRegistry, artifactBuildId, workerProcess } from "@crawl-automation/v3-worker-runtime";
@@ -39,12 +41,22 @@ async function main() {
         await db.query("SELECT discovery_id FROM catalog_discovery LIMIT 0");
         const local = await TextLocalStore.open(config.journalRoot), copies = await FileCopies.open(config.cacheRoot);
         const publication = new RetainedPublication(local, r2.store), reviews = new PostgresReviews(db), admission = new PostgresResourceAdmission(resourceDb);
-        const pages = new EgoTaskPages(config.browser, await TextLocalStore.open(config.pageJournalRoot));
+        // scraperapi mode: no owned page. The lane permit (browserResource) is still required for every capture call.
+        const http = config.capture.mode === "scraperapi" ? createHttpRoute(config.capture.route, { scraperApi: config.capture.scraperApi }) : undefined;
+        const reader = http ? new SwansonHttpReader(http) : undefined;
+        const pages = config.browser ? new EgoTaskPages(config.browser, await TextLocalStore.open(config.pageJournalRoot)) : undefined;
+        const requirePages = () => { if (!pages) throw Error("SWANSON.CAPTURE_UNAVAILABLE"); return pages; };
         const requireBrowser = async () => { const e = execution(); await admission.requireHeld(config.browserResource, e.workflowId, e.runId); };
+        // One archived download per capture operation; the family page and the variant page are separate operations.
+        const archiveFor = (job: { operationId: string; sessionId: string; discovery: { entry: { url: string; listingId: string; variantId: string | null }; scope: { sourceId: string } } }, role: "family" | "product") =>
+          new SwansonHtmlArchive(publication, { operationId: `${job.operationId}-${role}`, sessionId: job.sessionId, url: job.discovery.entry.url,
+            sourceId: job.discovery.scope.sourceId, listingId: job.discovery.entry.listingId, variantId: job.discovery.entry.variantId });
         const jobs = new SwansonProductJobs(db, publication, { scope: config.scope, queues: config.productQueues, resources: config.productResources });
         const verifyJob = (raw: unknown, s: AbortSignal) => jobs.verify(raw, execution().workflowId, s);
         const families=new SwansonFamilies(publication,{capture:async(job,signal,retain)=>{
-          await requireBrowser();return pages.using(`${job.sessionId}-family`,signal,async browser=>{
+          await requireBrowser();
+          if(reader){const p=await reader.product(job.discovery.entry.url,signal,archiveFor(job,"family"));await retain(p);return p;}
+          return requirePages().using(`${job.sessionId}-family`,signal,async browser=>{
             const p=await new SwansonEgoReader(browser).product(job.discovery.entry.url,signal);await retain(p);return p;
           });
         }});
@@ -52,9 +64,13 @@ async function main() {
           if(!connection){const t=runtime.transport;connection=await Connection.connect({address:runtime.address,connectTimeout:"15 seconds",...(t.mode==="mtls"?{tls:{serverNameOverride:t.serverName,serverRootCACertificate:await readFile(t.caFile),clientCertPair:{crt:await readFile(t.certFile),key:await readFile(t.keyFile)}}}:{})});}
           return new Client({connection,namespace:runtime.namespace});
         };
+        // projectionModule/factsPolicy only when set, so existing Ego capture intents stay identical.
         const products = new SwansonLiveProduct(publication, { text: config.sourceText, ocr: config.ocr,
-          visionConfigFingerprint: config.sourceVisionConfigFingerprint, egressId: config.egressId }, {
-          capture: async (job, signal) => { await requireBrowser(); return new SwansonEgoReader(await pages.open(job.sessionId, signal)).product(job.discovery.entry.url, signal); },
+          visionConfigFingerprint: config.sourceVisionConfigFingerprint, egressId: config.egressId,
+          ...(reader ? { projectionModule: "swanson.http-projection" as const } : {}), ...(config.factsPolicy ? { factsPolicy: config.factsPolicy } : {}) }, {
+          capture: async (job, signal) => { await requireBrowser();
+            if (reader) return reader.product(job.discovery.entry.url, signal, archiveFor(job, "product"));
+            return new SwansonEgoReader(await requirePages().open(job.sessionId, signal)).product(job.discovery.entry.url, signal); },
         });
         const plans = new ChannelProductPlans(publication, new ArtifactResolver(copies, r2.store), reviews);
         const files = new FileEvidence({ local, remote: r2.store, copies, reviews });
@@ -67,18 +83,21 @@ async function main() {
         };
         const catalog = new SwansonCatalogSource(publication, config.brandName, { capture: async (input, signal, retain) => {
           await requireBrowser();
-          return pages.using(`swanson-catalog-${sha256(Buffer.from(JSON.stringify(input)))}`, signal,
+          return requirePages().using(`swanson-catalog-${sha256(Buffer.from(JSON.stringify(input)))}`, signal,
             async browser => {
               const { projection } = await new SwansonEgoReader(browser).catalog(input.cursor??config.scope.rootUrl, config.brandName, signal);
               await retain(projection); // Preserve evidence before the exact owned page is closed.
               return projection;
             });
         } });
+        const list = config.productList ? new SwansonLinkCatalog(publication, config.productList) : undefined;
+        const fromList = (catalogId: string) => !!list && list.list.requestId === catalogId;
         const catalogIdentity = async (id: string, scope: unknown) => {
           await submission(id);
           if (!equal(scope, config.scope) || execution().workflowId !== `v3-collection-${id}-catalog`) throw Error("SWANSON.SCOPE_CONFLICT");
         };
-        const ledger = new PostgresCatalog(db, async p => { await catalogIdentity(p.input.catalogId, p.input.scope); await catalog.verify(p, AbortSignal.timeout(30000)); });
+        const ledger = new PostgresCatalog(db, async p => { await catalogIdentity(p.input.catalogId, p.input.scope);
+          await (fromList(p.input.catalogId) ? list!.verify(p, AbortSignal.timeout(30000)) : catalog.verify(p, AbortSignal.timeout(30000))); });
         const prepareBrand = async (raw: unknown) => {
           const input = CollectionWorkflowInput.parse(raw);
           if (!equal(await submission(input.requestId), input) || execution().workflowId !== `v3-collection-${input.requestId}`) throw Error("SWANSON.WORKFLOW_IDENTITY");
@@ -89,6 +108,7 @@ async function main() {
         if (role === "catalog-source") handlers = { readCatalogPage: async (raw, s) => {
           const input = CatalogPageInputSchema.parse(raw); await submission(input.catalogId);
           if (!equal(input.scope, config.scope) || execution().workflowId !== `v3-collection-${input.catalogId}-catalog`) throw Error("SWANSON.SCOPE_CONFLICT");
+          if (fromList(input.catalogId)) return list!.read(input, s);
           if(input.page>=(config.maxPages??1))throw Error("SWANSON.PAGINATION_LIMIT");
           if(input.page>0){const previous=(await db.query("SELECT record FROM catalog_page WHERE catalog_id=$1 AND page_index=$2",[input.catalogId,input.page-1])).rows[0];
             if(previous?.record.completion!=="more"||previous.record.nextCursor!==input.cursor)throw Error("SWANSON.PAGINATION_CONFLICT");}
@@ -142,7 +162,8 @@ async function main() {
         else if (role === "capture") handlers = {
           enumerateSwansonFamily:async(raw,s)=>families.capture(await verifyJob(raw,s),s),
           captureSwansonProduct: async (raw, s) => products.capture(await verifyJob(raw, s), s),
-          closeSwansonProductPage: async (raw, s) => { const job = await verifyJob(raw, s); await requireBrowser(); return pages.close(job.sessionId, s); },
+          closeSwansonProductPage: async (raw, s) => { const job = await verifyJob(raw, s); await requireBrowser();
+            return reader ? { status: "not-opened" as const, taskId: job.sessionId, targetId: null } : requirePages().close(job.sessionId, s); },
         };
         else if (role === "file") handlers = { acquireSwansonFile: async (raw, s) => {
           const captured = SwansonProductCaptureSchema.parse({ job: raw.job, sourcePlan: raw.sourcePlan }), job = await verifyJob(captured.job, s);
@@ -150,9 +171,13 @@ async function main() {
           const url = await plans.fileSource(captured.sourcePlan, raw.input, s);
           const access: SourceAccess = { acquire: async input => {
             if (!equal(input, raw.input)) throw Error("SOURCE.SESSION_MISMATCH");
-            await requireBrowser(); const browser = await pages.open(job.sessionId, s); let released = false;
+            // Originals: through the owned page in browser mode; a pinned direct HTTPS GET to the image CDN in scraperapi mode.
+            let transport: FileTransport;
+            if (reader) transport = config.capture.mode === "scraperapi" && config.capture.dns === "none" ? new SystemHttpsTransport() : new DirectHttpsTransport();
+            else { await requireBrowser(); transport = new EgoFileTransport({ browser: await requirePages().open(job.sessionId, s), pageUrl: captured.sourcePlan.expectedUrl, allowedUrls: [url] }, config.egressId); }
+            let released = false;
             return { owner: observationIdentity(input), sourceId: input.sourceId, resourceId: input.resourceId, binding: input.binding, url,
-              allowedOrigins: ["https://www.swansonvitamins.com"], transport: new EgoFileTransport({ browser, pageUrl: captured.sourcePlan.expectedUrl, allowedUrls: [url] }, config.egressId),
+              allowedOrigins: ["https://www.swansonvitamins.com"], transport,
               headersFor: () => ({}), assertActive: () => { if (released) throw Error("SOURCE.SESSION_UNAVAILABLE"); }, release: async () => { released = true; } };
           } };
           return new AcquireFileModule(files, { access, dns: systemDns }).run(raw.input, s);
@@ -200,6 +225,8 @@ async function main() {
           const timer = setInterval(() => ctx.heartbeat(), 2000);
           try { return await fn(raw, ctx.cancellationSignal); }
           catch (error) { ctx.cancellationSignal.throwIfAborted(); const code = error instanceof Error && /^(SWANSON|SOURCE|CATALOG|ARTIFACT)\.[A-Z_]+$/.test(error.message) ? error.message : "SWANSON.ACTIVITY_UNRESOLVED";
+            // Provider/network codes (SCRAPERAPI.*, NETWORK.*, CHANNEL.*) stay mapped for the review contract, but are logged.
+            if (code === "SWANSON.ACTIVITY_UNRESOLVED") console.error(JSON.stringify({ event: "SWANSON_ACTIVITY_ERROR", activity: name, code: (error as { code?: unknown })?.code ?? null, message: String((error as Error)?.message ?? error).slice(0, 300) }));
             throw ApplicationFailure.nonRetryable("Inspect retained Swanson evidence", code); }
           finally { clearInterval(timer); }
         }])) };

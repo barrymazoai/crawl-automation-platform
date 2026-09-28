@@ -134,10 +134,10 @@ describe("AmazonHttpReader over the ScraperAPI route", () => {
   });
 });
 
-it("a static-HTML projection is admitted as rendered source provenance for Amazon only", async () => {
+it("a static-HTML projection is admitted as rendered source provenance for Amazon and Swanson only", async () => {
   const { ChannelPlanInputSchema } = await import("@crawl-automation/v3-contracts");
   const owner = { schemaVersion: 1 as const, requestId: "req-1", observationId: "amazon-obs-1", brandId: "brand-1", sourceId: "source-1", listingId: "B009RT5NBG", variantId: null };
-  const plan = (channel: "amazon" | "swanson", module: string) => ChannelPlanInputSchema.safeParse({ operationId: "plan-1", owner: { ...owner, variantId: channel === "swanson" ? "v1" : null }, channel, parserVersion: `${channel}-rendered/1`,
+  const plan = (channel: "amazon" | "swanson" | "dtc", module: string) => ChannelPlanInputSchema.safeParse({ operationId: "plan-1", owner: { ...owner, variantId: channel === "swanson" ? "v1" : null }, channel, parserVersion: `${channel}-rendered/1`,
     expectedUrl: "https://www.amazon.com/dp/B009RT5NBG", binding: { sessionId: "amazon-page-1", egressId: "direct/1" },
     source: { schemaVersion: 1, artifactId: "source-1", observationId: owner.observationId, sourceId: owner.sourceId, listingId: owner.listingId, variantId: channel === "swanson" ? "v1" : null,
       kind: "result-json", mediaType: "application/json", objectKey: "v3/amazon-products/op-1/projection.json", sha256: "a".repeat(64), byteSize: 10,
@@ -146,6 +146,8 @@ it("a static-HTML projection is admitted as rendered source provenance for Amazo
     ocr: { schemaVersion: 1, module: "ocr.file", implementationVersion: "1", policyVersion: "1", resultSchemaVersion: 2, configFingerprint: "b".repeat(64) }, visionConfigFingerprint: "c".repeat(64) });
   expect(plan("amazon", "amazon.http-projection").success).toBe(true);
   expect(plan("amazon", "amazon.browser-projection").success).toBe(true);
-  expect(plan("swanson", "swanson.http-projection").success).toBe(false);
+  expect(plan("swanson", "swanson.http-projection").success).toBe(true);
+  expect(plan("swanson", "amazon.http-projection").success).toBe(false);
+  expect(plan("dtc", "dtc.http-projection").success).toBe(false);
   expect(plan("amazon", "amazon.ego-projection").success).toBe(false);
 });
