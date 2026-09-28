@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir } from "node:fs/promises";
+import { mkdtemp, mkdir, readdir, access } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -7,7 +7,7 @@ import { CodexTextProvider, codexTextConnection, type CodexConnectionOptions } f
 import { CodexRpc } from "./codex-rpc.js";
 const fixture = fileURLToPath(new URL("./codex.fixture.mjs", import.meta.url));
 const request = { operationId: "operation", prompt: "evidence", outputSchema: { type: "object" } };
-async function setup(scenario = "internal-recovery") {
+async function setup(scenario = "success") {
   const root = await mkdtemp(join(tmpdir(), "v3-codex-provider-"));
   const home = join(root, "auth"); await mkdir(home, { mode: 0o700 });
   const config = { settings: { provider: "fixture", model: "fixture-model", reasoningEffort: "high" },
@@ -19,15 +19,18 @@ async function setup(scenario = "internal-recovery") {
   });
   return { config, provider, connections };
 }
-it("runs multiple internal recoveries in one owned process and passes explicit settings", async () => {
+it("runs one owned process with explicit settings and retries disabled", async () => {
   const f = await setup();
   try {
     expect(await f.provider.interpret(request, AbortSignal.timeout(4000))).toContain('"formula"');
     expect(f.connections).toHaveLength(1);
-    expect(f.provider.policy).toMatchObject({ executionRetries: 0, internalModelRequests: "codex-managed" });
+    expect(f.provider.policy).toMatchObject({ executionRetries: 0, internalModelRequests: "no-retries" });
     expect(f.connections[0]!.env).toMatchObject({ ALL_PROXY: "http://existing-proxy" });
     expect(f.connections[0]!.env).not.toHaveProperty("R2_SECRET");
-    expect(f.connections[0]!.args.join(" ")).not.toMatch(/retries|dangerously|danger-full-access/);
+    expect(f.connections[0]!.args.join(" ")).not.toMatch(/dangerously|danger-full-access/);
+    expect(f.connections[0]!.args).toContain("model_providers.fixture.request_max_retries=0");
+    expect(f.connections[0]!.args).toContain("model_providers.fixture.stream_max_retries=0");
+    expect(await readdir(f.config.workRoot)).toEqual([]);
   } finally { await f.provider.close(); }
 });
 it("never restarts a failed business execution", async () => {
@@ -35,6 +38,7 @@ it("never restarts a failed business execution", async () => {
   try {
     await expect(f.provider.interpret(request, AbortSignal.timeout(4000))).rejects.toThrow();
     expect(f.connections).toHaveLength(1);
+    await expect(access(f.connections[0]!.cwd)).rejects.toThrow();
   } finally { await f.provider.close(); }
 });
 it("isolates concurrent operations with different working directories and processes", async () => {

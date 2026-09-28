@@ -37,7 +37,7 @@ async function main(){
       const dispose=async()=>{await modules?.close();r2.close();if(resourceDb&&resourceDb!==db)await resourceDb.end();await db?.end();};
       try{
         if(db)await db.query("SELECT review_id FROM review_record LIMIT 0");
-        modules=await channelLabelRole({root:join(c.root,role),...(db?{db}:{}),...(resourceDb?{resourceDb}:{}),remote:r2.store,storageId:c.storageId,
+        modules=await channelLabelRole({root:join(c.root,role),stopRoot:join(c.root,"resource-lifecycle"),...(db?{db}:{}),...(resourceDb?{resourceDb}:{}),remote:r2.store,storageId:c.storageId,
           ...(c.codex?{codex:c.codex}:{}),...(c.ocrProvider?{ocrProvider:c.ocrProvider}:{}),role,hostId:runtime.hostId});
         await modules.check();
         console.log(JSON.stringify({event:"CHANNEL_ROLE_PREPARED",role,hostId:runtime.hostId,modules:modules.constructed}));

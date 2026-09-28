@@ -78,20 +78,19 @@ describe("R2 adapter with actual AWS SDK serialization and fake transport",()=>{
   });
 });
 
-describe("transient transport failures are retried; decided answers are not",()=>{
-  const flaky=(fails:number,then:(request:Request)=>Promise<Reply>)=>{let n=0;return async(request:Request)=>{if(n++<fails){const e=new Error("read ECONNRESET");(e as {code?:string}).code="ECONNRESET";throw e;}return then(request);};};
-  it("a reset mid-request is retried and the object still arrives",async()=>{
-    const seen:Request[]=[];const store=setup(flaky(2,async r=>{seen.push(r);return reply("hello");}),{retries:3});
-    expect(await store.read("sources/a.png",20,new AbortController().signal)).toEqual(Buffer.from("hello"));expect(seen).toHaveLength(1);
-  },15000);
-  it("a reset on an immutable put is retried; a 412 on the retry means the first attempt landed",async()=>{
-    let calls=0;const store=setup(flaky(1,async()=>{calls++;return reply("",412);}),{retries:3});
-    expect(await store.create("sources/b.png",Buffer.from("x"),"image/png",new AbortController().signal)).toBe("exists");expect(calls).toBe(1);
-  },15000);
-  it("404 and size limits are answers, not retried; exhausted retries surface as unavailable",async()=>{
-    let calls=0;const missing=setup(async()=>{calls++;return {statusCode:404,headers:{},body:Readable.from([Buffer.from("<Error><Code>NoSuchKey</Code></Error>")])};},{retries:3});
-    expect(await missing.read("sources/none.png",20,new AbortController().signal)).toBeNull();expect(calls).toBe(1);
-    const dead=setup(flaky(99,async()=>reply("never")),{retries:2});
-    await expect(dead.read("sources/c.png",20,new AbortController().signal)).rejects.toMatchObject({code:"ARTIFACT.UNAVAILABLE"});
-  },20000);
+describe("all transport failures are terminal, even with legacy retries configured",()=>{
+  it.each([undefined,429,500,503])("one read and one write for failure %s",async status=>{
+    let calls=0;
+    const store=setup(async()=>{calls++;throw Object.assign(Error("transport lost"),{code:"ECONNRESET",$metadata:{httpStatusCode:status}});},{retries:5});
+    await expect(store.read("sources/a.png",20,new AbortController().signal)).rejects.toMatchObject({code:"ARTIFACT.UNAVAILABLE"});
+    expect(calls).toBe(1);
+    await expect(store.create("sources/b.png",Buffer.from("x"),"image/png",new AbortController().signal)).rejects.toMatchObject({code:"ARTIFACT.UPLOAD_UNKNOWN"});
+    expect(calls).toBe(2);
+  });
+  it("a body stream reset closes the body without a second GET",async()=>{
+    let calls=0;const body=new Readable({read(){this.destroy(Object.assign(Error("reset"),{code:"ECONNRESET"}));}});
+    const store=setup(async()=>{calls++;return{statusCode:200,headers:{},body};},{retries:5});
+    await expect(store.read("sources/a.png",20,new AbortController().signal)).rejects.toMatchObject({code:"ARTIFACT.UNAVAILABLE"});
+    expect(calls).toBe(1);expect(body.destroyed).toBe(true);
+  });
 });

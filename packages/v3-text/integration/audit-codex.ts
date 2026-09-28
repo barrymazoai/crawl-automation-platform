@@ -1,5 +1,7 @@
 // Explicit local audit: real CLI, synthetic loopback Responses endpoint, no real account/model.
 import { createServer } from "node:http";
+import { hostname } from "node:os";
+if (!/^(barrydeMac-mini|servers-Mac-mini)(?:\.|$)/.test(hostname())) throw Error("Run provider audit on Mac mini");
 import { mkdtemp, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { CodexRpc } from "../src/codex-rpc.js";
@@ -60,14 +62,15 @@ await new Promise<void>((resolve, reject) => { server.once("error", reject); ser
 const address = server.address();
 if (!address || typeof address === "string")
     throw Error();
-const off = ["shell_tool", "unified_exec", "shell_snapshot", "apps", "browser_use", "browser_use_external", "computer_use", "code_mode", "code_mode_host", "multi_agent", "multi_agent_v2", "hooks", "plugin_hooks", "plugins", "remote_plugin", "memories", "goals", "image_generation", "view_image", "sleep_tool", "tool_suggest", "skill_search", "skill_mcp_dependency_install", "unbounded_connection_retries"];
+const off = ["shell_tool", "unified_exec", "shell_snapshot", "apps", "browser_use", "browser_use_external", "computer_use", "code_mode", "code_mode_host", "multi_agent", "multi_agent_v2", "hooks", "plugin_hooks", "plugins", "remote_plugin", "memories", "goals", "image_generation", "view_image", "tool_suggest", "skill_search", "skill_mcp_dependency_install"];
 const args = ["app-server", "--stdio", "-c", 'model_provider="audit"', "-c", 'model_providers.audit.name="Local audit"', "-c", `model_providers.audit.base_url="http://127.0.0.1:${address.port}/v1"`, "-c", 'model_providers.audit.wire_api="responses"', "-c", "model_providers.audit.request_max_retries=0", "-c", "model_providers.audit.stream_max_retries=0", "-c", "model_providers.audit.supports_websockets=false", "-c", 'web_search="disabled"', "-c", "project_doc_max_bytes=0", ...off.flatMap(k => ["--disable", k])];
 const makeRpc = () => new CodexRpc({ executable: process.env.V3_CODEX_AUDIT_BIN ?? "/Users/songtianjian/.nvm/versions/node/v22.17.0/bin/codex", args, cwd: root,
     env: { PATH: process.env.PATH, HOME: root, CODEX_HOME: root, TMPDIR: root } });
 let provider: CodexTextProvider | undefined;
 try {
-    // This synthetic service uses zero HTTP retries to keep fault tests short; not a production policy.
-    await writeFile(join(root, "config.toml"), `model_provider="audit"\n[model_providers.audit]\nname="Local audit"\nbase_url="http://127.0.0.1:${address.port}/v1"\nwire_api="responses"\nrequest_max_retries=0\nstream_max_retries=0\nsupports_websockets=false\n`, { mode: 0o600 });
+    // Deliberately configure the old defaults. Production command-line overrides
+    // must force zero retries, even when a retained private home asks for more.
+    await writeFile(join(root, "config.toml"), `model_provider="audit"\n[model_providers.audit]\nname="Local audit"\nbase_url="http://127.0.0.1:${address.port}/v1"\nwire_api="responses"\nrequest_max_retries=4\nstream_max_retries=5\nsupports_websockets=false\n`, { mode: 0o600 });
     // Pick an advertised name ONLY for the synthetic loopback test; never configure a user's Worker.
     let auditModel = "crawler-v3-deliberately-unavailable-model";
     if (mode !== "preflight-missing") {

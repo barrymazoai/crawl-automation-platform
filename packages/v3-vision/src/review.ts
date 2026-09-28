@@ -13,7 +13,7 @@ export function visionReviewWriter(local: ObjectStore, reviews: { append(record:
         executionFact: outcome.candidate ? "executed" : outcome.code === "VISION.CONFIG_MISMATCH" ? "not_executed" : "unknown",
         evidenceKey: outcome.evidenceKey, blockedBy: null, automaticRetry: false },
       observation: owner, rawError: { name: "VisionReview", message: outcome.code, stack: null,
-        details: { task, evidenceKey: outcome.evidenceKey } },
+        details: { task, evidenceKey: outcome.evidenceKey, ...(outcome.detail ? { cause: outcome.detail } : {}) } },
       candidate: outcome.candidate ? { schema: task.input.extractionProtocol ? "label-extraction/1" : "vision-candidate/1",
         value: outcome.candidate } : null, inspection: { kind: "none" } });
     const bytes = Buffer.from(JSON.stringify(record)), key = `vision-reviews/${record.reviewId}.json`;

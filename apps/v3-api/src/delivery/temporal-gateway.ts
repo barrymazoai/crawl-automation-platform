@@ -26,6 +26,14 @@ export class TemporalGateway implements WorkflowGateway {
     }));
   }
   async inspect(submission: CollectionSubmission): Promise<ExecutionProof> {
+    return this.inspectExecution(submission, false);
+  }
+  /** Root identity only. This is NOT a settlement receipt: callers must separately
+   * verify every descendant, activity, page and resource before recording closure. */
+  async inspectUnsettledRoot(submission: CollectionSubmission): Promise<ExecutionProof> {
+    return this.inspectExecution(submission, true);
+  }
+  private async inspectExecution(submission: CollectionSubmission, rootOnly: boolean): Promise<ExecutionProof> {
     try {
       return await this.client.connection.withDeadline(Date.now() + 15000, async () => {
       const description = await this.client.workflow.getHandle(submission.workflowId).describe();
@@ -48,7 +56,7 @@ export class TemporalGateway implements WorkflowGateway {
       if (status === "RUNNING" || status === "CONTINUED_AS_NEW") return proof;
       // Brand descendants use ABANDON. A failed/cancelled/timed-out parent is NOT proof
       // that browser/provider work stopped; keep intake guard for evidence-based review.
-      if(this.target.workflowType==="BrandCollectionWorkflow"&&status!=="COMPLETED")throw new InspectionError("UNCONFIRMED_TERMINAL");
+      if(!rootOnly&&this.target.workflowType==="BrandCollectionWorkflow"&&status!=="COMPLETED")throw new InspectionError("UNCONFIRMED_TERMINAL");
       const closed = await this.client.connection.workflowService.getWorkflowExecutionHistory({ ...request, historyEventFilterType: 2 });
       const event = closed.history?.events?.[0];
       const attribute = event && ({
@@ -59,7 +67,7 @@ export class TemporalGateway implements WorkflowGateway {
         TIMED_OUT: event.workflowExecutionTimedOutEventAttributes,
       })[status];
       if (!event || !attribute || !event.eventTime || !event.eventId) throw new InspectionError("UNCONFIRMED_TERMINAL");
-      if(this.target.workflowType==="BrandCollectionWorkflow"){
+      if(this.target.workflowType==="BrandCollectionWorkflow"&&status==="COMPLETED"){
         const payloads=event.workflowExecutionCompletedEventAttributes?.result?.payloads;
         const result=payloads?.length===1?defaultPayloadConverter.fromPayload(payloads[0]!):null;
         if(!result||typeof result!=="object"||!("codec" in result)||result.codec!=="brand-collection-settled/1"||!("requestId" in result)||result.requestId!==submission.requestId||!("settled" in result)||result.settled!==true)

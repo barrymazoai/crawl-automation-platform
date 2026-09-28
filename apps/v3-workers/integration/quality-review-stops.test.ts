@@ -52,11 +52,38 @@ it('resumes a stop proof whose claim exists after a failed upload, without anoth
   await f.stops.run(f.context,'interpretText',f.input,model);
   const key='v3/resource-stop/permit-1.json',create=f.remote.create.bind(f.remote);let failed=true;
   f.remote.create=async(k,b)=>{if(k===key&&failed)throw Error('synthetic upload unavailable');return create(k,b);};
-  await expect(f.verify()).rejects.toThrow('RESOURCE.STOP_PUBLICATION_UNAVAILABLE');
+  expect(await f.verify()).toMatchObject({status:'stopped'});
   expect(f.remote.data.has(key)).toBe(false);const claimKey='v3/publication-claims/'+sha256(Buffer.from(key))+'.json',claim=f.remote.data.get(claimKey);expect(claim).toBeDefined();
   failed=false;const verifier=new QualityReviewStops(new RetainedPublication(f.local,f.remote),{read:async()=>f.review},true);
   expect(await verifier.verify({request:f.request,activityName:'interpretText',outcome:f.outcome},AbortSignal.timeout(3000))).toMatchObject({status:'stopped'});
   expect(f.remote.data.get(claimKey)).toEqual(claim);expect(model).toHaveBeenCalledOnce();expect(f.review.failure.code).toBe('TEXT.LABEL_GROUP_EMPTY');
+ }finally{log.mockRestore();}
+});
+
+it('cold verifier uses durable local proof during a complete R2 outage and preserves the business Review',async()=>{
+ const f=setup(true),log=vi.spyOn(console,'error').mockImplementation(()=>{});
+ const model=vi.fn(async()=>{f.stops.closed();return f.outcome;});
+ f.remote.read=async()=>{throw Error('synthetic R2 outage');};f.remote.create=async()=>{throw Error('no R2 writes');};
+ try{
+  expect(await f.stops.run(f.context,'interpretText',f.input,model)).toEqual(f.outcome);
+  const cold=new QualityReviewStops(new RetainedPublication(f.local,f.remote),{read:async()=>f.review},true);
+  expect(await cold.verify({request:f.request,activityName:'interpretText',outcome:f.outcome},AbortSignal.timeout(1000))).toMatchObject({status:'stopped'});
+  expect(f.local.data.has('v3/resource-stop/permit-1.json')).toBe(true);expect(model).toHaveBeenCalledOnce();
+  expect(f.review.failure.code).toBe('TEXT.LABEL_GROUP_EMPTY');
+ }finally{log.mockRestore();}
+});
+it.each([false,true])('tracked failure before/after provider start only releases proven stopped work (started=%s)',async started=>{
+ const f=setup(true),s=new QualityReviewStops(new RetainedPublication(f.local,f.remote),{read:async()=>f.review},true,true);
+ const ctx={...f.context,activityId:f.request.permitId},err=Error('input/provider failure');
+ await expect(s.run(ctx,'interpretText',f.input,async()=>{if(started)s.started();throw err;})).rejects.toBe(err);
+ const cold=new QualityReviewStops(new RetainedPublication(f.local,f.remote),{read:async()=>f.review},true);
+ expect(await cold.verify({request:f.request,activityName:'interpretText',activityId:ctx.activityId,outcome:{status:'failed'}},AbortSignal.timeout(1000))).toMatchObject({status:started?'unknown':'stopped'});
+});
+it('a failed local write cannot be treated as a durable stopped proof',async()=>{
+ const f=setup(true),log=vi.spyOn(console,'error').mockImplementation(()=>{});
+ f.local.create=async()=>{throw Error('disk unavailable');};
+ try{await expect(f.stops.run(f.context,'interpretText',f.input,async()=>{f.stops.closed();return f.outcome;})).rejects.toThrow('disk unavailable');
+ expect(await f.verify()).toMatchObject({status:'unknown'});
  }finally{log.mockRestore();}
 });
 it('reconciles lost conditional PUT replies by exact readback',async()=>{

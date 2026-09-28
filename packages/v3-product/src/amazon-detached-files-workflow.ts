@@ -5,6 +5,9 @@ const same=(a:unknown,b:unknown)=>JSON.stringify(a)===JSON.stringify(b);
 const invalid=()=>{throw ApplicationFailure.nonRetryable('Amazon staged file identity conflict','AMAZON.STAGE_IDENTITY_CONFLICT');};
 function code(error:unknown){let current=error;for(let n=0;n<8&&current&&typeof current==='object';n++){const e=current as {type?:unknown;cause?:unknown};if(typeof e.type==='string'&&/^(AMAZON|SOURCE|ACQUIRE|ARTIFACT|RESOURCE|SCRAPERAPI|CHANNEL)\.[A-Z_]+$/.test(e.type))return e.type;current=e.cause;}return 'AMAZON.FILE_PUBLICATION_UNRESOLVED';}
 
+/** The diagnostic facts the failing Activity attached (redirect target, status, sizes); the review role validates them. */
+function details(error:unknown):unknown{let current=error;for(let n=0;n<8&&current&&typeof current==='object';n++){const e=current as {details?:unknown;cause?:unknown};if(Array.isArray(e.details)&&e.details.length)return e.details[0];current=e.cause;}return undefined;}
+
 /** All origin bytes and local checks finish before page close/lease release.
  * Cloud-only file Activities can then overlap the next product's browser phase. */
 export async function detachedAmazonProduct(job:AmazonProductJob,inputQueue:string,call:(queue:string,name:string,value:unknown)=>Promise<unknown>){
@@ -38,7 +41,9 @@ export async function detachedAmazonProduct(job:AmazonProductJob,inputQueue:stri
   for(const [i,source]of files.entries()){const f=staged.files[i]!;if(f.sourceId!==source.id||!same(f.record.input,source.plan.acquire)||f.record.file.artifactId!==source.plan.imageId)invalid();}
  };
  const review=async(error:unknown,stage:'AMAZON.BROWSER_PHASE_UNRESOLVED'|'AMAZON.FILE_PUBLICATION_UNRESOLVED')=>{
-  const r=AcquisitionReviewSchema.parse(await call(job.queues.review,'reviewAmazonProduct',{job,code:stage,causeCode:code(error)}));if(r.operationId!==job.operationId)invalid();return r;
+  // Say why, not only what: the cause's facts go into the Review so a redirect or empty page can be told apart later.
+  const facts=patched('amazon-review-cause-details-v1')?details(error):undefined;
+  const r=AcquisitionReviewSchema.parse(await call(job.queues.review,'reviewAmazonProduct',{job,code:stage,causeCode:code(error),...(facts?{causeDetails:facts}:{})}));if(r.operationId!==job.operationId)invalid();return r;
  };
  if(dedup){const recent=RecentAttemptSchema.parse(await call(job.queues.plan,'inspectRecentAttempt',{schemaVersion:1,listingId:job.discovery.entry.listingId,withinHours:24}));
   if(recent.attemptedAt)return{status:'skipped',code:'AMAZON.RECENTLY_ATTEMPTED',listingId:job.discovery.entry.listingId,attemptedAt:recent.attemptedAt,previous:recent.kind};}

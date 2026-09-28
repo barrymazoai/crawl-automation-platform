@@ -11,8 +11,8 @@ import {fixture} from '../../../packages/v3-text/src/testing.fixture.js';
 import {MemoryObjects} from '../../../packages/v3-results/src/testing.fixture.js';
 import {QualityReviewStops} from '../src/quality-review-stops.js';
 
-it('Mini Temporal: lost stop-proof PUT recovers; persistent failure ends sibling waits without another model invocation',async()=>{
- if(!/^barrydeMac-mini(?:\.|$)/.test(hostname()))throw Error('Run integration on Mac mini');
+it('Mini Temporal: failed stop-proof PUT is not retried; sibling waits end without another model invocation',async()=>{
+ if(!/^(barrydeMac-mini|servers-Mac-mini)(?:\.|$)/.test(hostname()))throw Error('Run integration on Mac mini');
  const env=await TestWorkflowEnvironment.createLocal({server:{ip:'127.0.0.1',ui:false,executable:{type:'cached-download',version:'v1.8.3'}}});
  const workflowBundle={codePath:join(dirname(fileURLToPath(import.meta.url)),'resource-stall-workflows.cjs')};
  try{for(const permanent of [false,true]){
@@ -30,16 +30,16 @@ it('Mini Temporal: lost stop-proof PUT recovers; persistent failure ends sibling
   }}),running=w.run();running.catch(()=>{});
   try{
    const h=await env.client.workflow.start('ResourceStallFixture',{workflowId:queue,taskQueue:queue,args:[queue],workflowExecutionTimeout:'45 seconds'}),result=await h.result();
-   expect({permanent,text,image,held:held.size,result}).toMatchObject({permanent,text:1,image:permanent?0:1,held:permanent?1:0});expect(review.failure.code).toBe('TEXT.LABEL_GROUP_EMPTY');
-   expect(result.map((r:any)=>r.status)).toEqual(permanent?['rejected','rejected']:['fulfilled','fulfilled']);
-   if(permanent)expect(result.map((r:any)=>r.code)).toEqual(['RESOURCE.REVIEW_STOP_UNVERIFIED','RESOURCE.OWNER_QUARANTINED']);
+   expect({permanent,text,image,held:held.size,result}).toMatchObject({permanent,text:1,image:0,held:1});expect(review.failure.code).toBe('TEXT.LABEL_GROUP_EMPTY');
+   expect(result.map((r:any)=>r.status)).toEqual(['rejected','rejected']);
+   expect(result.map((r:any)=>r.code)).toEqual(['RESOURCE.REVIEW_STOP_UNVERIFIED','RESOURCE.OWNER_QUARANTINED']);
    const history=await h.fetchHistory();expect(history.events!.length).toBeLessThan(150);await Worker.runReplayHistory({workflowBundle},history,queue);
   }finally{w.shutdown();await running;}
  }}finally{await env.teardown();}
 },120000);
 
 it('Mini Temporal: errors and cancellation verify stopped work, release once and preserve the original failure',async()=>{
- if(!/^barrydeMac-mini(?:\.|$)/.test(hostname()))throw Error('Run integration on Mac mini');
+ if(!/^(barrydeMac-mini|servers-Mac-mini)(?:\.|$)/.test(hostname()))throw Error('Run integration on Mac mini');
  const env=await TestWorkflowEnvironment.createLocal({server:{ip:'127.0.0.1',ui:false,executable:{type:'cached-download',version:'v1.8.3'}}});
  const workflowBundle={codePath:join(dirname(fileURLToPath(import.meta.url)),'resource-stall-workflows.cjs')};
  try{for(const mode of ['error','cancel','unknown']){

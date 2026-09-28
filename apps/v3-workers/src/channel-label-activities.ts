@@ -37,7 +37,7 @@ export async function channelLabelActivities(options:{root:string;remote:ObjectS
   const textProvider=!options.providerRole||options.providerRole==="text"?await CodexTextProvider.open(config,environment):undefined;
   const visionProvider=!options.providerRole||options.providerRole==="vision"?await CodexVisionProvider.open(visionConfig,environment):undefined;
   const textEvidence=new TextEvidence(artifacts,results),textHandoff=new TextHandoff(local,remote,new PostgresTextRegistry(db),textEvidence,storageId);
-  const text=new TextModule({provider:{provider:"codex-app-server/2",supported:textMeta,policy:{executionRetries:0,internalModelRequests:"codex-managed",toolAccess:"runtime-profile",modelFallback:false,networkSwitching:false},close:async()=>{await textProvider?.close();},
+  const text=new TextModule({provider:{provider:"codex-app-server/2",supported:textMeta,policy:{executionRetries:0,internalModelRequests:"no-retries",toolAccess:"runtime-profile",modelFallback:false,networkSwitching:false},close:async()=>{await textProvider?.close();},
     interpret:async(...args)=>{if(options.readOnlyProviders||!textProvider)throw Error("COLD_PROVIDER_FORBIDDEN");counts.text++;const response=await textProvider.interpret(...args,()=>stops.closed());stops.returned(response);return response;}},handoff:textHandoff,reviews,nodeId:"mini-channel-label"});
   const textReceipt=new ResolveTextReceipt({results:textHandoff,local,reviews,remoteReviews:new RemoteReviews(remote)});
   const visionHandoff=new VisionHandoff(local,remote,new PostgresVisionRegistry(db),storageId,async(task,signal)=>{await screen.verifiedText(task.input.selection,signal);});

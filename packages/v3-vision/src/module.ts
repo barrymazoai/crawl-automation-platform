@@ -7,7 +7,7 @@ import { decodeVisionResult } from "./protocol.js";
 import type { VisionProvider } from "./provider.js";
 
 export type VisionOutcome = { status: "candidate" | "partial" | "review"; code: string | null; candidate: ReturnType<typeof decodeVisionResult>["candidate"] | null;
-  evidenceKey: string; replayed: boolean; automaticRetry: false };
+  evidenceKey: string; replayed: boolean; automaticRetry: false; /** Codex's own redacted reason for a failed turn. */ detail?: string };
 export interface VisionDependencies {
   provider: VisionProvider;
   store: ObjectStore;
@@ -19,7 +19,9 @@ export interface VisionDependencies {
 }
 const intentSchema = z.strictObject({ fingerprint: z.string(), nonce: z.uuid(), input: VisionInputSchema });
 const responseSchema = z.strictObject({ fingerprint: z.string(), raw: z.string().max(250000), sha256: z.string() });
-const failureSchema = z.strictObject({ fingerprint: z.string(), code: z.string().regex(/^VISION\.[A-Z_]+$/), executionFact: z.enum(["not_executed", "executed", "unknown"]) });
+// `detail` is optional so failure evidence written before it existed still replays.
+const failureSchema = z.strictObject({ fingerprint: z.string(), code: z.string().regex(/^VISION\.[A-Z_]+$/), executionFact: z.enum(["not_executed", "executed", "unknown"]),
+  detail: z.string().max(600).optional() });
 /** Durable execution boundary. The result is evidence, not a DB registration or ingestion receipt. */
 export class VisionModule {
   constructor(private readonly deps: VisionDependencies) {}
@@ -27,8 +29,8 @@ export class VisionModule {
     const input = VisionInputSchema.parse(raw);
     const prefix = `v3/vision/${input.operationId}`, evidenceKey = `${prefix}/response.json`;
     const fingerprint = digest(JSON.stringify(["vision-input/1", input, this.deps.provider.fingerprint]));
-    const review = (code: string, replayed = false, key = `${prefix}/intent.json`): VisionOutcome =>
-      ({ status: "review", code, candidate: null, evidenceKey: key, replayed, automaticRetry: false });
+    const review = (code: string, replayed = false, key = `${prefix}/intent.json`, detail?: string): VisionOutcome =>
+      ({ status: "review", code, candidate: null, evidenceKey: key, replayed, automaticRetry: false, ...(detail ? { detail } : {}) });
     const decode = (bytes: Uint8Array, replayed: boolean): VisionOutcome => {
       const stored = responseSchema.parse(JSON.parse(Buffer.from(bytes).toString("utf8")));
       if (stored.fingerprint !== fingerprint || digest(stored.raw) !== stored.sha256) throw Error("VISION.EVIDENCE_CONFLICT");
@@ -51,7 +53,7 @@ export class VisionModule {
       if (failure) {
         const f = failureSchema.parse(JSON.parse(Buffer.from(failure).toString()));
         if (f.fingerprint !== fingerprint) return review("VISION.INPUT_CONFLICT", true);
-        return review(f.code, true, `${prefix}/failure.json`);
+        return review(f.code, true, `${prefix}/failure.json`, f.detail);
       }
       return review("VISION.EXECUTION_UNKNOWN", true);
     }
@@ -67,11 +69,12 @@ export class VisionModule {
     let rawResponse: string;
     try { rawResponse = await this.deps.provider.interpret(input.selection.image, bytes, signal); }
     catch (e) {
-      const error = z.object({ code: z.string().regex(/^VISION\.[A-Z_]+$/), executionFact: z.enum(["not_executed", "executed", "unknown"]) }).safeParse(e);
+      const error = z.object({ code: z.string().regex(/^VISION\.[A-Z_]+$/), executionFact: z.enum(["not_executed", "executed", "unknown"]),
+        detail: z.string().max(600).optional() }).safeParse(e);
       const failure = { fingerprint, ...(error.success ? error.data : { code: "VISION.EXECUTION_UNKNOWN", executionFact: "unknown" }) };
       // Cancellation does not erase failure evidence; persistence has an independent bounded lifetime.
       await this.deps.localEvidence.create(`${prefix}/failure.json`, Buffer.from(JSON.stringify(failure)), "application/json", AbortSignal.timeout(10000));
-      return review(failure.code, false, `${prefix}/failure.json`);
+      return review(failure.code, false, `${prefix}/failure.json`, "detail" in failure ? failure.detail : undefined);
     }
     if (Buffer.byteLength(rawResponse) > 250000) return review("VISION.OUTPUT_LIMIT");
     const output = Buffer.from(JSON.stringify({ fingerprint, raw: rawResponse, sha256: digest(rawResponse) }));

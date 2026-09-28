@@ -1,5 +1,5 @@
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
-import { TextError } from "./errors.js";
+import { TextError, describeCodexError } from "./errors.js";
 type Message = {
     id?: number | string;
     method?: string;
@@ -76,7 +76,7 @@ export class CodexRpc {
                 throw Error();
             this.pending.delete(message.id);
             if (message.error !== undefined)
-                pending.reject(new TextError("TEXT.CODEX_REQUEST_FAILED"));
+                pending.reject(new TextError("TEXT.CODEX_REQUEST_FAILED", "unknown", describeCodexError(message.error)));
             else if ("result" in message)
                 pending.resolve(message.result);
             return;

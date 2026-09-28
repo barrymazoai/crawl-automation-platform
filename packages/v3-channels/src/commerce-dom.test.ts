@@ -19,8 +19,9 @@ function read(main:ReturnType<typeof offer>[],selected:ReturnType<typeof offer>[
 it('reads the split visible main price while ignoring hidden subscription tiers',()=>{
  expect(read([offer('16.99'),offer('16.10',false),offer('15.21',false)])).toMatchObject({price:'$16.99',currency:'USD',availability:'In Stock'});
 });
-it('conflicting visible main prices remain unknown even with a selected offer',()=>{
- expect(read([offer('16.99'),offer('16.10')],[offer('16.99')]).price).toBeNull();
+it('conflicting main variants require the explicitly selected offer, otherwise stay unknown',()=>{
+ expect(read([offer('16.99'),offer('16.10')],[offer('16.99')]).price).toBe('$16.99');
+ expect(read([offer('16.99'),offer('16.10')])).toMatchObject({price:null,priceStatus:'ambiguous'});
 });
 it('uses a selected purchase offer only when the main price is absent',()=>{
  expect(read([],[offer('10.45')],null)).toMatchObject({price:'$10.45',currency:null});

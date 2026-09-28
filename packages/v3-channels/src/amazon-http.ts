@@ -6,6 +6,7 @@ import { abortable, transportAddress, permittedUrl, systemDns, requireCapability
 import { amazonProductExpression } from "./amazon-ego.js";
 import { amazonProductAddress, parseAmazonRenderedProduct } from "./amazon-rendered.js";
 import { ChannelError } from "./html-evidence.js";
+import { AmazonHtmlArchive, type ArchivedAmazonHtml, type AmazonHtmlFetchGate } from './amazon-html-archive.js';
 
 /** Bounded raw HTML read of one public product page. No JS execution, cookies, redirects or retries. */
 export const AMAZON_HTTP_POLICY = Object.freeze({ timeoutMs: 75000, maxBytes: 6 * 1024 * 1024, redirects: 0,
@@ -83,24 +84,17 @@ export function parseAmazonStaticHtml(html: string, pageUrl: string, fetchedVia?
   return AmazonRenderedProductSchema.parse(projection);
 }
 
-/** Provider-side transients seen under load: an empty body, a soft challenge, a provider hiccup. Each is retried a
- * bounded number of times on the same route (ScraperAPI rotates its own exit IP); never a route change or escalation. */
-const AMAZON_HTTP_TRANSIENT = new Set(["AMAZON.PAGE_EMPTY", "AMAZON.ACCESS_CHALLENGE", "AMAZON.HTTP_STATUS", "SCRAPERAPI.EXECUTION_UNKNOWN", "SCRAPERAPI.PROVIDER_FAILURE", "SCRAPERAPI.THROTTLED", "SCRAPERAPI.REDIRECT_UNVERIFIED"]);
-export const AMAZON_HTTP_RETRY = { attempts: 3, delaysMs: [2000, 5000] };
+const decodeHtml = (bytes: Uint8Array) => {
+  try { return new TextDecoder('utf-8', { fatal: true }).decode(bytes); }
+  catch { throw new ChannelError('AMAZON.ENCODING'); }
+};
+/** Explicit one-shot transport primitive. Product capture must use the archive-gated reader below. */
 export async function readAmazonHtml(route: HttpRoute, rawUrl: string, abort: AbortSignal, dns: DnsResolver = systemDns): Promise<string> {
-  for (let n = 1; ; n++) {
-    try { return await readAmazonHtmlOnce(route, rawUrl, abort, dns); }
-    catch (error) {
-      abort.throwIfAborted();
-      const code = error instanceof Error ? error.message : "";
-      if (n >= AMAZON_HTTP_RETRY.attempts || !AMAZON_HTTP_TRANSIENT.has(code)) throw error;
-      await new Promise(r => setTimeout(r, AMAZON_HTTP_RETRY.delaysMs[Math.min(n - 1, AMAZON_HTTP_RETRY.delaysMs.length - 1)] ?? 0));
-    }
-  }
+  return decodeHtml(await readAmazonHtmlBytes(route, rawUrl, abort, dns));
 }
-/** One bounded GET of a public Amazon page through the configured route (ScraperAPI). Challenge/redirect/status
- * outcomes are typed errors; the caller above decides which of them deserve another attempt. */
-async function readAmazonHtmlOnce(route: HttpRoute, rawUrl: string, abort: AbortSignal, dns: DnsResolver): Promise<string> {
+/** One bounded GET of a public Amazon page through the configured route (ScraperAPI).
+ * Errors terminate this download; neither this reader nor its product adapter retries. */
+async function readAmazonHtmlBytes(route: HttpRoute, rawUrl: string, abort: AbortSignal, dns: DnsResolver, admissionDeadline?: number): Promise<Uint8Array> {
   requireCapability(route, "http");
   const url = permittedUrl(rawUrl, AMAZON_HTTP_POLICY.origins);
   const controller = new AbortController(), signal = AbortSignal.any([abort, controller.signal]);
@@ -109,9 +103,10 @@ async function readAmazonHtmlOnce(route: HttpRoute, rawUrl: string, abort: Abort
   try {
     const address = await abortable(transportAddress(url, route.transport, dns, signal), signal);
     signal.throwIfAborted();
+    if (admissionDeadline !== undefined && Date.now() > admissionDeadline) throw new ChannelError('AMAZON.HTML_ADMISSION_EXPIRED');
     const got = await abortable(route.transport.get(url, address, { accept: "text/html" }, signal).then(r => { if (signal.aborted) { r.close(); signal.throwIfAborted(); } return r; }), signal);
     response = got; signal.throwIfAborted();
-    if (got.status >= 300 && got.status < 400) throw new ChannelError("AMAZON.REDIRECT_UNVERIFIED");
+    if (got.status >= 300 && got.status < 400) throw new ChannelError("AMAZON.REDIRECT_UNVERIFIED", { status: got.status });
     if ([403, 406, 429, 503].includes(got.status)) throw new ChannelError("AMAZON.ACCESS_CHALLENGE");
     if ([404, 410].includes(got.status)) throw new ChannelError("AMAZON.NOT_FOUND");
     if (got.status !== 200) throw new ChannelError("AMAZON.HTTP_STATUS");
@@ -129,9 +124,9 @@ async function readAmazonHtmlOnce(route: HttpRoute, rawUrl: string, abort: Abort
       size += next.value.byteLength; if (size > AMAZON_HTTP_POLICY.maxBytes) throw new ChannelError("AMAZON.PAGE_LIMIT");
       chunks.push(next.value);
     }
-    if (!size) throw new ChannelError("AMAZON.PAGE_EMPTY");
-    try { return new TextDecoder("utf-8", { fatal: true }).decode(Buffer.concat(chunks)); }
-    catch { throw new ChannelError("AMAZON.ENCODING"); }
+    if (!size) throw new ChannelError("AMAZON.PAGE_EMPTY", { status: got.status, contentType: got.headers["content-type"] ?? "(none)",
+      declaredLength: got.headers["content-length"] ?? "(none)", receivedBytes: 0 });
+    return Buffer.concat(chunks);
   } finally { clearTimeout(timer); response?.close(); }
 }
 
@@ -139,16 +134,42 @@ async function readAmazonHtmlOnce(route: HttpRoute, rawUrl: string, abort: Abort
  * Delivery context cannot be set on a proxied request, so a postal-code requirement is rejected, not ignored. */
 export class AmazonHttpReader {
   readonly fetchedVia: FetchedVia;
-  constructor(private readonly route: HttpRoute, private readonly dns: DnsResolver = systemDns) {
+  constructor(private readonly route: HttpRoute, private readonly dns: DnsResolver = systemDns, private readonly fetchGate?: AmazonHtmlFetchGate) {
     requireCapability(route, "http");
     const s = route.selection;
     this.fetchedVia = Object.freeze({ mode: "http", routeId: s.routeId, egressId: s.egressId, provider: s.mode === "scraperapi" ? s.providerPolicy : s.mode });
   }
-  async product(url: string, signal: AbortSignal, retain?: (raw: unknown) => Promise<void>, postalCode?: string): Promise<AmazonRenderedProduct> {
+  private projection(url: string, saved: ArchivedAmazonHtml): AmazonRenderedProduct {
+    const p = parseAmazonStaticHtml(decodeHtml(saved.bytes), url, saved.fetchedVia ?? this.fetchedVia);
+    return AmazonRenderedProductSchema.parse({ ...p, capturedAt: saved.capturedAt, originalHtml: saved.source });
+  }
+  /** Offline continuation: never invokes the transport, including when the archive is missing. */
+  async archivedProduct(url: string, signal: AbortSignal, archive: AmazonHtmlArchive): Promise<AmazonRenderedProduct | null> {
+    if (archive.job.discovery.entry.url !== url) throw new ChannelError('AMAZON.HTML_ARCHIVE_IDENTITY');
+    const saved = await archive.inspect(signal);
+    return saved ? this.projection(url, saved) : null;
+  }
+  async product(url: string, signal: AbortSignal, retain?: (raw: unknown) => Promise<void>, postalCode?: string, archive?: AmazonHtmlArchive): Promise<AmazonRenderedProduct> {
     if (postalCode !== undefined) throw new ChannelError("AMAZON.DELIVERY_POLICY_UNSUPPORTED");
+    if (!archive) throw new ChannelError('AMAZON.HTML_ARCHIVE_REQUIRED');
+    if (archive.job.discovery.entry.url !== url) throw new ChannelError('AMAZON.HTML_ARCHIVE_IDENTITY');
     const address = amazonProductAddress(url);
-    const html = await readAmazonHtml(this.route, url, signal, this.dns);
-    const p = parseAmazonStaticHtml(html, url, this.fetchedVia);
+    let saved = await archive.inspect(signal);
+    if (!saved) {
+      if (!this.fetchGate) throw new ChannelError('AMAZON.HTML_FETCH_GATE_REQUIRED');
+      await archive.beginDownload(signal);
+      const admissionDeadline = Date.now() + 5000;
+      const admission = await this.fetchGate.acquire(archive.job, signal);
+      if (admission.kind === 'reuse') {
+        saved = await archive.reuse(new AmazonHtmlArchive(archive.publication, admission.job), signal);
+        // Reconcile an R2 success whose database acknowledgment was lost. No provider retry.
+        await this.fetchGate.complete(admission.job, saved.capturedAt, signal);
+      } else {
+        saved = await archive.save(await readAmazonHtmlBytes(this.route, url, signal, this.dns, admissionDeadline), signal, { fetchedVia: this.fetchedVia });
+        await this.fetchGate.complete(archive.job, saved.capturedAt, signal);
+      }
+    }
+    const p = this.projection(url, saved);
     if (p.asin !== address.asin) throw new ChannelError("AMAZON.ASIN_CONFLICT");
     await retain?.(p);
     parseAmazonRenderedProduct(p, url, { listingId: address.asin, variantId: null });

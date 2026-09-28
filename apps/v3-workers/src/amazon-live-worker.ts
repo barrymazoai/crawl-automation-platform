@@ -1,3 +1,4 @@
+import { withActivityDeadline } from "./activity-deadline.js";
 import { readFile, readdir } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -11,7 +12,7 @@ import { CatalogPageInputSchema, CatalogDiscoverySchema, AmazonProductJobSchema,
   AmazonProductCaptureSchema, AmazonProductHandoffSchema, ChannelLabelInputSchema, ReviewRecordSchema, observationIdentity } from "@crawl-automation/v3-contracts";
 import { createR2Objects, RetainedPublication, ArtifactResolver, FileCopies, sha256, ActivityObjectReads } from "@crawl-automation/v3-artifacts";
 import { EgoTaskPages, EgoFileTransport, DirectHttpsTransport, SystemHttpsTransport, createHttpRoute, AcquireFileModule, FileEvidence, acquireFile, systemDns, dohDns, type SourceAccess, type FileTransport } from "@crawl-automation/v3-acquisition";
-import { AmazonCatalogSource, AmazonEgoReader, AmazonHttpReader, AmazonLiveProduct, ChannelProductPlans } from "@crawl-automation/v3-channels";
+import { AmazonCatalogSource, AmazonEgoReader, AmazonHttpReader, AmazonHtmlArchive, AmazonLiveProduct, ChannelProductPlans } from "@crawl-automation/v3-channels";
 import { TextLocalStore } from "@crawl-automation/v3-text";
 import { PostgresReviews } from "@crawl-automation/v3-review";
 import { RoleRegistry, artifactBuildId, workerProcess } from "@crawl-automation/v3-worker-runtime";
@@ -22,9 +23,21 @@ import { scopeForSubmission } from "./brand-pipeline.js";
 import { AmazonLiveConfigSchema } from "./amazon-live-config.js";
 import { readGncPrivateJson } from "./gnc-config.js";
 import { AmazonLinkCatalog } from "./amazon-link-batches.js";
+import { AmazonLinkStore } from "./amazon-link-store.js";
 import { recoveredAmazonFailure } from './amazon-terminal-proof.js';
 import { recordException, describeError, listingOf } from './process-exceptions.js';
 import { AmazonStagedFiles } from './amazon-staged-files.js';
+/** At most 8 primitive facts, strings capped at 300 chars; anything else is dropped rather than recorded. */
+function causeFacts(raw: unknown): Record<string, string | number> | undefined {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return undefined;
+  const out: Record<string, string | number> = {};
+  for (const [k, v] of Object.entries(raw).slice(0, 8)) {
+    if (!/^[A-Za-z][A-Za-z0-9]{0,39}$/.test(k)) continue;
+    if (typeof v === "number" && Number.isFinite(v)) out[k] = v; else if (typeof v === "string") out[k] = v.slice(0, 300);
+  }
+  return Object.keys(out).length ? out : undefined;
+}
+import { PostgresAmazonHtmlFetchGate } from './amazon-html-fetch.js';
 
 const execution = () => { const e = Context.current().info.workflowExecution; if (!e) throw Error("AMAZON.WORKFLOW_REQUIRED"); return e; };
 async function main() {
@@ -46,6 +59,8 @@ async function main() {
         const publication = new RetainedPublication(local, remote), reviews = new PostgresReviews(db), admission = new PostgresResourceAdmission(resourceDb);
         // scraperapi mode: no owned page. The lane permit (`browserResource`) is still required for every capture-phase call.
         const http = config.capture.mode === "scraperapi" ? createHttpRoute(config.capture.route, { scraperApi: config.capture.scraperApi }) : undefined;
+        if (http) await db.query('SELECT operation_id,site,asin,job,requested_at,captured_at FROM amazon_html_fetch LIMIT 0');
+        const fetchGate = new PostgresAmazonHtmlFetchGate(db, (job, signal) => new AmazonHtmlArchive(publication, job).inspect(signal));
         const pages = config.browser ? new EgoTaskPages(config.browser, await TextLocalStore.open(config.pageJournalRoot)) : undefined;
         const requirePages = () => { if (!pages) throw Error("AMAZON.CAPTURE_UNAVAILABLE"); return pages; };
         const requireBrowser = async () => { const e = execution(); await admission.requireHeld(config.browserResource, e.workflowId, e.runId); };
@@ -57,11 +72,11 @@ async function main() {
         const fileTransport = async (sessionId: string, pageUrl: string, url: string, s: AbortSignal): Promise<FileTransport> =>
           http ? (config.capture.mode==='scraperapi'&&config.capture.dns==='none' ? new SystemHttpsTransport() : new DirectHttpsTransport()) : new EgoFileTransport({ browser: await requirePages().open(sessionId, s), pageUrl, allowedUrls: [url] }, config.egressId);
         const notOpened = (sessionId: string) => ({ status: "not-opened" as const, taskId: sessionId, targetId: null });
-        const links = new Map((config.linkBatches ?? []).map(b => [b.requestId, b]));
+        const links = new AmazonLinkStore(db, config.linkBatches);
         const jobsFor = async (raw: unknown) => {
           const discovery = CatalogDiscoverySchema.parse(raw);
           await submission(discovery.catalogId);
-          const batch = links.get(discovery.catalogId), scope = batch?.scope ?? config.scope;
+          const batch = await links.get(discovery.catalogId), scope = batch?.scope ?? config.scope;
           if (batch && !batch.entries.some(x => equal(x.entry, discovery.entry))) throw Error("AMAZON.LINK_ENTRY_CONFLICT");
           return new AmazonProductJobs(db, publication, { scope, queues: config.productQueues, resources: config.productResources,
             ...(config.capture.mode === "scraperapi" && config.capture.stopAfter === "observation" ? { stopAfter: "observation" as const } : {}) });
@@ -89,9 +104,15 @@ async function main() {
         };
         const products = new AmazonLiveProduct(publication, { text: config.sourceText, ocr: config.ocr,
           visionConfigFingerprint: config.sourceVisionConfigFingerprint, egressId: config.egressId }, {
-          capture: async (job, signal) => { await requireBrowser(); return http ? new AmazonHttpReader(http).product(job.discovery.entry.url, signal)
+          capture: async (job, signal) => { await requireBrowser(); return http ? new AmazonHttpReader(http, undefined, fetchGate).product(job.discovery.entry.url, signal, undefined, undefined, new AmazonHtmlArchive(publication, job))
             : new AmazonEgoReader(await requirePages().open(job.sessionId, signal)).product(job.discovery.entry.url, signal, undefined, config.deliveryPostalCode); },
-        }, [...links.keys()]);
+          restore: async (job, signal) => http ? new AmazonHttpReader(http).archivedProduct(job.discovery.entry.url, signal, new AmazonHtmlArchive(publication, job)) : null,
+        }, async job => {
+          const batch = await links.get(job.discovery.catalogId);
+          if (!batch) return false;
+          if (!equal(batch.scope, job.discovery.scope) || !batch.entries.some(x => equal(x.entry, job.discovery.entry))) throw Error("AMAZON.LINK_ENTRY_CONFLICT");
+          return true;
+        });
         const plans = new ChannelProductPlans(publication, new ArtifactResolver(copies, remote), reviews);
         const files = new FileEvidence({ local, remote, copies, reviews });
         const staging = new AmazonStagedFiles({publication,copies,files,storageId:sha256(Buffer.from(JSON.stringify([hostname(),config.journalRoot,config.cacheRoot]))),
@@ -111,7 +132,7 @@ async function main() {
           const row = (await db.query("SELECT snapshot FROM collection_submission WHERE request_id=$1", [id])).rows[0];
           if (!row) throw Error("AMAZON.SUBMISSION_REQUIRED");
           const input = CollectionWorkflowInput.parse({ version: 1, requestId: id, snapshot: row.snapshot });
-          if (!equal(scopeForSubmission(input), links.get(id)?.scope ?? config.scope)) throw Error("AMAZON.SCOPE_CONFLICT");
+          if (!equal(scopeForSubmission(input), (await links.get(id))?.scope ?? config.scope)) throw Error("AMAZON.SCOPE_CONFLICT");
           return input;
         };
         const catalog = new AmazonCatalogSource(publication, {brandName:config.brandName,pages:config.catalogPages,asins:config.selectedAsins}, { capture: async (input, signal, retain) => {
@@ -123,16 +144,16 @@ async function main() {
               return projection;
             });
         } });
-        const catalogFor = (id: string) => links.has(id) ? new AmazonLinkCatalog(publication, links.get(id)) : catalog;
+        const catalogFor = async (id: string) => { const batch = await links.get(id); return batch ? new AmazonLinkCatalog(publication, batch) : catalog; };
         const catalogIdentity = async (id: string, scope: unknown) => {
           await submission(id);
-          if (!equal(scope, links.get(id)?.scope ?? config.scope) || execution().workflowId !== `v3-collection-${id}-catalog`) throw Error("AMAZON.SCOPE_CONFLICT");
+          if (!equal(scope, (await links.get(id))?.scope ?? config.scope) || execution().workflowId !== `v3-collection-${id}-catalog`) throw Error("AMAZON.SCOPE_CONFLICT");
         };
-        const ledger = new PostgresCatalog(db, async p => { await catalogIdentity(p.input.catalogId, p.input.scope); await catalogFor(p.input.catalogId).verify(p, AbortSignal.timeout(30000)); });
+        const ledger = new PostgresCatalog(db, async p => { await catalogIdentity(p.input.catalogId, p.input.scope); await (await catalogFor(p.input.catalogId)).verify(p, AbortSignal.timeout(30000)); });
         const prepareBrand = async (raw: unknown) => {
           const input = CollectionWorkflowInput.parse(raw);
           if (!equal(await submission(input.requestId), input) || execution().workflowId !== `v3-collection-${input.requestId}`) throw Error("AMAZON.WORKFLOW_IDENTITY");
-          const batch = links.get(input.requestId);
+          const batch = await links.get(input.requestId);
           return BrandCollectionPlanSchema.parse({ catalogQueue: config.catalogQueue, catalog: { catalogId: input.requestId, scope: batch?.scope ?? config.scope,
             productWorkflow: "AmazonCatalogProductWorkflow", queues: config.catalogQueues,
             resources: batch ? { ...config.catalogResources, activities: {} } : config.catalogResources, maxPages: batch ? 1 : config.maxPages??1 } });
@@ -141,7 +162,7 @@ async function main() {
         if (role === "catalog-source") handlers = { readCatalogPage: async (raw, s) => {
           const input = CatalogPageInputSchema.parse(raw); await submission(input.catalogId);
           await catalogIdentity(input.catalogId, input.scope);
-          if (links.has(input.catalogId)) return catalogFor(input.catalogId).read(input, s);
+          if (await links.get(input.catalogId)) return (await catalogFor(input.catalogId)).read(input, s);
           if(input.page>=(config.maxPages??1))throw Error("AMAZON.PAGINATION_LIMIT");
           if(input.page>0){const previous=(await db.query("SELECT record FROM catalog_page WHERE catalog_id=$1 AND page_index=$2",[input.catalogId,input.page-1])).rows[0];
             if(previous?.record.completion!=="more"||previous.record.nextCursor!==input.cursor)throw Error("AMAZON.PAGINATION_CONFLICT");}
@@ -191,7 +212,8 @@ async function main() {
           // The failure path must never fail: an unrecognized cause is recorded as such, never thrown (2026-09-17: a
           // rejected cause code left 30 products without any record and held their batch slots for hours).
           if (typeof raw.causeCode !== "string" || !/^[A-Z][A-Z0-9]*\.[A-Z0-9_]+$/.test(raw.causeCode)) raw = { ...raw, causeCode: "AMAZON.CAUSE_UNRECOGNIZED" };
-          return writeAmazonReview(job, raw.code, raw.causeCode, {}, s);
+          const facts = causeFacts(raw.causeDetails);
+          return writeAmazonReview(job, raw.code, raw.causeCode, facts ? { causeDetails: facts } : {}, s);
         } };
 
         else {
@@ -210,7 +232,7 @@ async function main() {
               if (e.runId !== d.execution.runId || e.type !== "AmazonCatalogProductWorkflow" || held.rowCount) continue;
               if (e.status.name === "COMPLETED") { finished++; continue; }
               if (e.status.name === "RUNNING" || e.status.name === "CONTINUED_AS_NEW") continue;
-              if (links.has(id) && e.status.name === "FAILED" && await recoveredAmazonFailure(d.record,e.runId,db,resourceDb,r2.store,AbortSignal.timeout(30000))) { finished++; continue; }
+              if (await links.get(id) && e.status.name === "FAILED" && await recoveredAmazonFailure(d.record,e.runId,db,resourceDb,r2.store,AbortSignal.timeout(30000))) { finished++; continue; }
               // Any other end (failed, terminated, timed out, cancelled) must not hold the request open: the product goes
               // to review with the workflow's own failure as the cause, and the exception is recorded (2026-09-17).
               const wf = { workflowType: e.type, workflowId: d.record.workflowId, runId: e.runId }, listingId = d.record.entry?.listingId ?? null;
@@ -236,8 +258,8 @@ async function main() {
         return { kind: "activity" as const, dispose, activities: Object.fromEntries(Object.entries(handlers).map(([name, fn]) => [name, async (raw: unknown) => {
           const ctx = Context.current(); if (ctx.info.attempt !== 1 && !["prepareBrandCollection", "inspectBrandCollection"].includes(name)) throw ApplicationFailure.nonRetryable("Inspect existing evidence", "AMAZON.RETRY_DENIED");
           const timer = setInterval(() => ctx.heartbeat(), 2000);
-          try { return await remote.run(() => fn(raw, ctx.cancellationSignal), stats => console.log(JSON.stringify({event:"ARTIFACT_READ_SCOPE",activity:name,...stats}))); }
-          catch (error) { ctx.cancellationSignal.throwIfAborted(); const code = error instanceof Error && /^(AMAZON|SOURCE|CATALOG|ARTIFACT|SCRAPERAPI|NETWORK|CHANNEL)\.[A-Z_]+$/.test(error.message) ? error.message : "AMAZON.ACTIVITY_UNRESOLVED";
+          try { return await remote.run(() => withActivityDeadline(ctx.cancellationSignal,signal=>fn(raw, signal)), stats => console.log(JSON.stringify({event:"ARTIFACT_READ_SCOPE",activity:name,...stats}))); }
+          catch (error) { ctx.cancellationSignal.throwIfAborted(); const code = error instanceof Error && /^(AMAZON|SOURCE|CATALOG|ARTIFACT|SCRAPERAPI|NETWORK|CHANNEL|EXECUTION)\.[A-Z_]+$/.test(error.message) ? error.message : "AMAZON.ACTIVITY_UNRESOLVED";
             // The failure only carries a code; the underlying error stays in the worker log for diagnosis.
             const e = error as { name?: string; message?: string; code?: string; cause?: { name?: string; message?: string; code?: string } };
             console.error(JSON.stringify({ event: "AMAZON_ACTIVITY_FAILED", activity: name, workflowId: ctx.info.workflowExecution?.workflowId, code, error: { name: e?.name, message: String(e?.message ?? "").slice(0, 500), code: e?.code },
@@ -246,7 +268,9 @@ async function main() {
             recordException(db, { kind: "activity", service: `amazon-${role}`, workflowType: ctx.info.workflowType, workflowId: ctx.info.workflowExecution?.workflowId, runId: ctx.info.workflowExecution?.runId,
               activity: name, attempt: ctx.info.attempt, requestId: p.requestId, listingId: p.listingId, code: code === "AMAZON.ACTIVITY_UNRESOLVED" ? d.code : code,
               errorName: d.name, message: d.message, outcome: "step-failed", detail: { taskQueue: ctx.info.taskQueue } });
-            throw ApplicationFailure.nonRetryable("Inspect retained Amazon evidence", code); }
+            // Diagnostic facts (status, redirect target, sizes) ride along so the Review can say why, not just what.
+            const facts = causeFacts((error as { details?: unknown })?.details);
+            throw facts ? ApplicationFailure.nonRetryable("Inspect retained Amazon evidence", code, facts) : ApplicationFailure.nonRetryable("Inspect retained Amazon evidence", code); }
           finally { clearInterval(timer); }
         }])) };
       } catch (error) { await dispose(); throw error; }

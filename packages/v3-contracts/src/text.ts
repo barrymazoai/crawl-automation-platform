@@ -153,6 +153,6 @@ export const PreparedTextWorkflowInputSchema = z.strictObject({
     queues: z.strictObject({ text: z.string().min(1).max(255), receipts: z.string().min(1).max(255) }),
 });
 export function textActivityOptions(taskQueue: string) {
-    return { taskQueue, startToCloseTimeout: "5 minutes" as const, scheduleToCloseTimeout: "15 minutes" as const,
-        heartbeatTimeout: "10 seconds" as const, retry: { maximumAttempts: 1 } };
+    return { taskQueue, startToCloseTimeout: "12 minutes" as const, scheduleToCloseTimeout: "30 minutes" as const,
+        heartbeatTimeout: 0, retry: { maximumAttempts: 1 } };
 }

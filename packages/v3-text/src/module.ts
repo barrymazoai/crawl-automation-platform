@@ -19,7 +19,7 @@ export function textPrompt(input: TextInput, fullText: string) {
 export class TextModule {
     constructor(private readonly deps: TextDependencies) {
         const p = deps.provider.policy;
-        if (p.executionRetries !== 0 || p.internalModelRequests !== "codex-managed" || p.toolAccess !== "runtime-profile" || p.modelFallback !== false || p.networkSwitching !== false)
+        if (p.executionRetries !== 0 || p.internalModelRequests !== "no-retries" || p.toolAccess !== "runtime-profile" || p.modelFallback !== false || p.networkSwitching !== false)
             throw new TextError("TEXT.PROVIDER_POLICY", "not_executed");
     }
     async run(raw: unknown, signal: AbortSignal): Promise<TextActivityOutcome> {
@@ -97,7 +97,8 @@ export class TextModule {
                 failure: { schemaVersion: 1, requestId: input.requestId, observationId: input.observationId, operationId: input.operationId,
                     inputFingerprint: input.inputFingerprint, stage: "codex.text", category: "PROCESSING", code, executionFact: fact,
                     evidenceKey: key, blockedBy: input.source.kind === "ocr" && fact === "not_executed" ? input.source.registration.input.operationId : null, automaticRetry: false },
-                observation: textObservation(input), rawError: { name: "TextStageError", message: code, stack: null, details: { code, executionFact: fact } },
+                observation: textObservation(input), rawError: { name: "TextStageError", message: code, stack: null,
+                    details: { code, executionFact: fact, ...(e instanceof TextError && e.detail ? { cause: e.detail } : {}) } },
                 candidate: output ? { schema: "text-output/1", value: output } : response !== null ? { schema: "text-raw-response/1", value: { rawResponse: response } } : null,
                 inspection: { kind: "none" } });
             try {

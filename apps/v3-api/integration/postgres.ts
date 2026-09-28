@@ -7,9 +7,11 @@ import { join } from "node:path";
 import { promisify } from "node:util";
 import pg from "pg";
 import { loadMigrations, migrate } from "../src/bootstrap/schema.js";
+import { startDockerTestDatabase } from "./postgres-docker.js";
 
 const exec = promisify(execFile);
 export async function startTestDatabase(options: { tcp?: boolean; empty?: boolean } = {}) {
+  if (process.env.V3_TEST_POSTGRES_DOCKER_IMAGE) return startDockerTestDatabase(process.env.V3_TEST_POSTGRES_DOCKER_IMAGE, options.empty);
   const root = await mkdtemp(join(tmpdir(), "v3-api-"));
   const data = join(root, "data"),
     socket = join(root, "socket");

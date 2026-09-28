@@ -25,7 +25,7 @@ export const channelLabelRoutes:Record<string,string[]>={
 };
 
 /** Fixed role factories; shared objects are created once, only when that role needs them. */
-export async function channelLabelRole(o:{role:string;hostId:string;root:string;remote:ObjectStore;db?:pg.Pool;resourceDb?:pg.Pool;storageId:string;
+export async function channelLabelRole(o:{role:string;hostId:string;root:string;stopRoot?:string;remote:ObjectStore;db?:pg.Pool;resourceDb?:pg.Pool;storageId:string;
  codex?:Record<string,unknown>;ocrProvider?:ConstructorParameters<typeof MultipartOcr>[0]}){
  if(!channelLabelRoutes[o.role])throw Error("CHANNEL.ROLE_UNKNOWN");
  if(!o.hostId)throw Error("CHANNEL.HOST_REQUIRED");
@@ -46,7 +46,11 @@ export async function channelLabelRole(o:{role:string;hostId:string;root:string;
  // Assembly both writes its own Review and reads the source Reviews it must account for; only the read needs the
  // fallback, so the ledger stays the single place anything is written.
  const assemblyReviews={append:(r:Parameters<ReviewWriter["append"]>[0])=>reviews.append(r),read:(id:string)=>readReviews.read(id)};
- const publication=new RetainedPublication(local,remote),stops=new QualityReviewStops(publication,stopReviews,true);
+ const publication=new RetainedPublication(local,remote);
+ // Roles keep separate artifact journals, but their exact execution stop proofs
+ // share a local durable directory so the resources role can verify during R2 outages.
+ const stopLocal=o.stopRoot?await TextLocalStore.open(o.stopRoot):local;
+ const stops=new QualityReviewStops(new RetainedPublication(stopLocal,remote),stopReviews,true,true);
  const closers:Array<()=>Promise<void>>=[],checks:Array<()=>Promise<void>>=[];
  const constructed:string[]=[];
  function once<T>(name:string,create:()=>Promise<T>){let value:Promise<T>|undefined;return()=>value??=(constructed.push(name),create());}
@@ -69,7 +73,7 @@ export async function channelLabelRole(o:{role:string;hostId:string;root:string;
    async(source,s)=>(await saved()).resolve(source,{id:source.id,status:"unresolved"},s),await core(),{file:async(source,s)=>source.kind==="file-image"&&!!await(await files()).inspect(source.plan.acquire,s),image:async(source,s)=>{
      if(source.kind!=="image")throw Error("CHANNEL.LABEL_IDENTITY_CONFLICT");
      return (await(await visionHandoff()).readLabelCandidate(source.task,s)).candidate;
-   },review:id=>readReviews.read(id)}));
+   },review:id=>readReviews.read(id),reviewSource:async(source,state,s)=>(await saved()).resolve(source,state,s)}));
  const assembly=once("label-assembly",async()=>new LabelProductAssembly({local,remote,reviews:assemblyReviews,readSource:async(source,s)=>{
    if(source.kind==="image")return{id:source.id,kind:"image",...await(await visionHandoff()).readLabelCandidate(source.task,s)};
    const facts=await(await textHandoff()).inspect(source.task,s);
@@ -88,8 +92,8 @@ export async function channelLabelRole(o:{role:string;hostId:string;root:string;
  case "page-text":{const m=new PreparePageText(await pages());activities.preparePageText=(r,s)=>m.run(r,s);break;}
  case "image-prepare":{const m=new PrepareImageOcr(await files());activities.prepareImageOcr=(r,s)=>m.run(r,s);break;}
  case "ocr":{
-  const p=new MultipartOcr(o.ocrProvider!);closers.push(()=>p.close());constructed.push("ocr-provider");
-  const m=new OcrFileModule({provider:{provider:p.provider,supported:p.supported,close:()=>p.close(),recognize:(f,b,s)=>p.recognize(f,b,s,response=>stops.returned(response))},artifacts:await artifacts(),intents:new OcrIntents(remote,o.hostId,storageId),results:await results(),reviews,mode:o.db?"register":"upload-only"});
+  const p=new MultipartOcr(o.ocrProvider!,undefined,process.env.V3_OCR_TRACE==="true"?event=>console.log(JSON.stringify({event:"OCR_HTTP_TRACE",...event})):undefined);closers.push(()=>p.close());constructed.push("ocr-provider");
+  const m=new OcrFileModule({provider:{provider:p.provider,supported:p.supported,close:()=>p.close(),recognize:(f,b,s)=>{stops.started();return p.recognize(f,b,s,response=>stops.returned(response));}},artifacts:await artifacts(),intents:new OcrIntents(remote,o.hostId,storageId),results:await results(),reviews,mode:o.db?"register":"upload-only"});
   activities.ocrFile=(r,s)=>m.run(r,s);break;
  }
  case "ocr-receipts":{const m=new ResolveOcrReceipt({results:await results(),local,reviews,remoteReviews});activities.resolveOcrReceipt=(r,s)=>m.run(r,s);break;}
@@ -97,14 +101,14 @@ export async function channelLabelRole(o:{role:string;hostId:string;root:string;
  case "core":{const m=await core();activities.prepareSwansonLabelCore=(r,s)=>m.run(r,s);break;}
  case "text":{
   const p=await CodexTextProvider.open(o.codex!,environment);closers.push(()=>p.close());constructed.push("text-provider");checks.push(()=>p.check(AbortSignal.timeout(30000)));
-  const m=new TextModule({provider:{provider:p.provider,supported:p.supported,policy:p.policy,close:()=>p.close(),interpret:async(...args)=>{const result=await p.interpret(...args,()=>stops.closed());stops.returned(result);return result;}},handoff:await textHandoff(),reviews,nodeId:o.hostId,mode:o.db?"register":"upload-only"});
+  const m=new TextModule({provider:{provider:p.provider,supported:p.supported,policy:p.policy,close:()=>p.close(),interpret:async(...args)=>{stops.started();const result=await p.interpret(...args,()=>stops.closed());stops.returned(result);return result;}},handoff:await textHandoff(),reviews,nodeId:o.hostId,mode:o.db?"register":"upload-only"});
   activities.interpretText=(r,s)=>m.run(r,s);break;
  }
  case "text-receipts":{const m=new ResolveTextReceipt({results:await textHandoff(),local,reviews,remoteReviews});activities.resolveTextReceipt=(r,s)=>m.run(r,s);break;}
  case "vision":{
   const meta=CodexVisionProvider.describe(o.codex!),p=await CodexVisionProvider.open(o.codex!,environment);closers.push(()=>p.close());constructed.push("vision-provider");
   checks.push(async()=>{if(o.db)await assertLabelVisionRegistrySchema(o.db,meta.extractionProtocol);await p.check(AbortSignal.timeout(30000));});
-  const h=await visionHandoff(),m=new VisionModule({provider:{fingerprint:meta.configFingerprint,extractionProtocol:meta.extractionProtocol,interpret:async(...args)=>{const result=await p.interpret(...args,()=>stops.closed());stops.returned(result);return result;}},store:remote,localEvidence:local,
+  const h=await visionHandoff(),m=new VisionModule({provider:{fingerprint:meta.configFingerprint,extractionProtocol:meta.extractionProtocol,interpret:async(...args)=>{stops.started();const result=await p.interpret(...args,()=>stops.closed());stops.returned(result);return result;}},store:remote,localEvidence:local,
     verifiedOcrText:async(s,a)=>o.db?(await screen()).verifiedText(s,a):(await remoteScreen()).verifiedText(s,a),resolve:async(f,a,owner)=>(await(await artifacts()).resolve(f,owner,a)).bytes});
   const record=visionReviewWriter(local,reviews);
   activities.interpretImage=async(raw,signal)=>{const task=VisionTaskSchema.parse(raw);if(task.configFingerprint!==meta.configFingerprint)throw Error("VISION.CONFIG_MISMATCH");

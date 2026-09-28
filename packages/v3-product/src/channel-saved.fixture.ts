@@ -20,7 +20,7 @@ export async function channelSavedFixture(prepareFiles=true,channel:"swanson"|"d
         producer:{operationId:"synthetic-capture",module:`${channel}.browser-projection`,implementationVersion:`${channel}-rendered/1`}}}});
   const bridge=new ChannelLabelPlans({inspect:async()=>plan},new RetainedPublication(f.local,f.remote),(s,abort)=>f.saved.resolve(s,{id:s.id,status:"unresolved"},abort),undefined,{file:async(source,s)=>source.kind==="file-image"&&!!await f.fileEvidence.inspect(source.plan.acquire,s),image:async(source,s)=>{
     if(source.kind!=="image")throw Error("not image");return (await f.visionHandoff.readLabelCandidate(source.task,s)).candidate;
-  },review:id=>f.reviews.read(id)});
+  },review:id=>f.reviews.read(id),reviewSource:(source,state,s)=>f.saved.resolve(source,state,s)});
   const activities={...f.activities,acquireSourceFile:f.activities.acquireSourceFile!,interpretText:f.activities.interpretText!,ocrFile:f.activities.ocrFile!,loadChannelLabelPlan:(raw:unknown)=>bridge.load(raw,signal()),
     resolveOcrReceipt:f.activities.resolveOcrReceipt!,resolveTextReceipt:f.activities.resolveTextReceipt!,
     inspectChannelLabelImage:(raw:unknown)=>bridge.imageCheck(raw,signal()),prepareChannelSingleLabelManifest:(raw:unknown)=>bridge.singleManifest(raw,signal()),

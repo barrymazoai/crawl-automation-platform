@@ -1,6 +1,5 @@
 import {randomUUID} from 'node:crypto';
 import {isDeepStrictEqual} from 'node:util';
-import {setTimeout as delay} from 'node:timers/promises';
 import {sha256,type RetainedPublication} from '@crawl-automation/v3-artifacts';
 
 export const resourceReturnKey=(c:{workflowId:string;runId:string;activityName:string;activityId:string})=>
@@ -14,7 +13,7 @@ export async function publishStoppedEvidence(publication:RetainedPublication,key
  const legacyKey=`v3/model-returns/${sha256(Buffer.from(JSON.stringify([inv.workflowId,inv.runId,inv.activityName,inv.operationId])))}.json`;
  let expected:string|null=null;
  if(evidence.codec==='model-return-attestation/1'&&typeof evidence.reviewId==='string')expected=legacyKey;
- if(evidence.codec==='resource-return-attestation/2'&&['owned-process','provider-response'].includes(inv.stop)&&['review','failed'].includes(evidence.outcome?.status))
+ if(evidence.codec==='resource-return-attestation/2'&&['owned-process','provider-response','not-started'].includes(inv.stop)&&!(inv.stop==='not-started'&&inv.started)&&['review','failed'].includes(evidence.outcome?.status))
   expected=inv.activityId.startsWith('permit-')?resourceReturnKey(inv):legacyKey;
  if(['owned-model-review-stop/1','owned-resource-stop/2'].includes(evidence.codec)&&evidence.request?.workflowId===inv.workflowId&&evidence.request?.runId===inv.runId){
   if(evidence.codec==='owned-model-review-stop/1'&&typeof evidence.reviewId!=='string')conflict();
@@ -29,7 +28,8 @@ export async function publishStoppedEvidence(publication:RetainedPublication,key
   if(Object.keys(c).sort().join(',')!=='key,nonce,sha256'||c.key!==key||c.sha256!==digest||typeof c.nonce!=='string'||!/^[a-f0-9-]{36}$/.test(c.nonce))conflict();return c;};
  await publication.retain(key,bytes,'application/json',lifetime);
  let stage='read-proof';
- for(let attempt=1;attempt<=3;attempt++){
+ {
+  const attempt=1;
   const started=Date.now();
   const io=()=>AbortSignal.any([lifetime,AbortSignal.timeout(8000)]);
   try{
@@ -39,10 +39,12 @@ export async function publishStoppedEvidence(publication:RetainedPublication,key
    if(remoteClaim&&localClaim&&!isDeepStrictEqual(claim(remoteClaim),claim(localClaim)))conflict();
    stage='retain-claim';await publication.local.create(claimKey,chosen,'application/json',lifetime);
    const retained=await publication.local.read(claimKey,4096,lifetime);if(!retained)throw Error('RESOURCE.STOP_EVIDENCE_CONFLICT');if(!isDeepStrictEqual(claim(retained),claim(chosen)))conflict();
-   if(!remoteClaim){stage='create-claim';await publication.remote.create(claimKey,retained,'application/json',io());}
+   if(!remoteClaim){stage='create-claim';try{await publication.remote.create(claimKey,retained,'application/json',io());}
+    catch(error){const found=await publication.remote.read(claimKey,4096,io());if(!found)throw error;if(!isDeepStrictEqual(claim(found),claim(retained)))conflict();}}
    stage='verify-claim';const shared=await publication.remote.read(claimKey,4096,io());if(!shared)throw Error('RESOURCE.STOP_PUBLICATION_UNAVAILABLE');
    if(!isDeepStrictEqual(claim(shared),claim(retained)))conflict();
-   stage='create-proof';await publication.remote.create(key,bytes,'application/json',io());
+   stage='create-proof';try{await publication.remote.create(key,bytes,'application/json',io());}
+   catch(error){if(check(await publication.remote.read(key,bytes.length,io())))return;throw error;}
    stage='verify-proof';if(check(await publication.remote.read(key,bytes.length,io())))return;
    throw Error('RESOURCE.STOP_PUBLICATION_UNAVAILABLE');
   }catch(error){
@@ -51,8 +53,20 @@ export async function publishStoppedEvidence(publication:RetainedPublication,key
     code:/^(ARTIFACT|RESOURCE)\.[A-Z_]+$/.test(e.code??e.message??'')?(e.code??e.message):'RESOURCE.STOP_IO_UNKNOWN',
     name:/^[A-Za-z]{1,50}$/.test(e.name??'')?e.name:'Error',...(e.diagnostics?{io:e.diagnostics}:{})}));
    if(e.message==='RESOURCE.STOP_EVIDENCE_CONFLICT')throw error;
-   lifetime.throwIfAborted();if(attempt===3)throw Error('RESOURCE.STOP_PUBLICATION_UNAVAILABLE');
-   await delay(200,undefined,{signal:lifetime});
+   signal.throwIfAborted();throw Error('RESOURCE.STOP_PUBLICATION_UNAVAILABLE');
   }
+ }
+}
+
+/** Remote replication is separate from proof that the execution has ended.
+ * Only an exact durable local readback permits this fallback; conflicts never do. */
+export async function retainStoppedEvidence(publication:RetainedPublication,key:string,bytes:Buffer,signal:AbortSignal){
+ try{await publishStoppedEvidence(publication,key,bytes,signal);return;}
+ catch(error){
+  if((error as Error).message!=='RESOURCE.STOP_PUBLICATION_UNAVAILABLE')throw error;
+  signal.throwIfAborted();
+  const saved=await publication.local.read(key,bytes.length,signal);
+  if(!saved||sha256(saved)!==sha256(bytes))throw Error('RESOURCE.STOP_EVIDENCE_CONFLICT');
+  console.error(JSON.stringify({event:'RESOURCE_STOP_RETAINED_LOCAL',key,sha256:sha256(bytes),remotePublication:'pending'}));
  }
 }

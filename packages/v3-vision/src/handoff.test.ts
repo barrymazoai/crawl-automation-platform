@@ -5,6 +5,7 @@ import { VisionHandoff, PostgresVisionRegistry, type VisionRegistry } from "./ha
 import { VisionModule } from "./module.js";
 import { selection, bytes, candidate } from "./testing.fixture.js";
 import { visionReviewWriter } from "./review.js";
+import { CodexError } from "@crawl-automation/v3-codex";
 
 async function setup(raw = JSON.stringify(candidate)) {
   const local = new MemoryObjects(), remote = new MemoryObjects(), records = new Map<string, VisionRecord>();
@@ -76,4 +77,31 @@ it("Review is locally retained before append and contains passive error evidence
     evidenceKey: "v3/vision/vision-1/response.json", replayed: false, automaticRetry: false }, signal());
   expect(Object.keys(result)).toEqual(["reviewId"]);
   expect(result.reviewId).toMatch(/^vision-/); expect(record).toMatchObject({ failure: { automaticRetry: false, executionFact: "executed" } });
+});
+it("a failed turn's reason survives into its failure evidence, its replay, and its Review", async () => {
+  const local = new MemoryObjects(), remote = new MemoryObjects();
+  const task = { input: { operationId: "vision-2", selection: selection() }, configFingerprint: "a".repeat(64) };
+  remote.data.set(task.input.selection.image.objectKey, bytes);
+  const provider = { fingerprint: task.configFingerprint,
+    interpret: vi.fn(async () => { throw new CodexError("VISION.CODEX_TURN_FAILED", "unknown", "unexpected status 429 | usageLimitExceeded"); }) };
+  const make = () => new VisionModule({ provider, store: remote, localEvidence: local, verifiedOcrText: async () => "Supplement Facts", resolve: async () => bytes });
+  const first = await make().run(task.input, signal());
+  expect(first).toMatchObject({ status: "review", code: "VISION.CODEX_TURN_FAILED", detail: "unexpected status 429 | usageLimitExceeded" });
+  expect(JSON.parse(Buffer.from(local.data.get("v3/vision/vision-2/failure.json")!).toString()).detail).toBe("unexpected status 429 | usageLimitExceeded");
+  const replay = await make().run(task.input, signal());
+  expect(replay).toMatchObject({ replayed: true, code: "VISION.CODEX_TURN_FAILED", detail: "unexpected status 429 | usageLimitExceeded" });
+  expect(provider.interpret).toHaveBeenCalledOnce(); // the reason never buys a second model call
+  let record: any;
+  await visionReviewWriter(local, { append: async r => { record = r; return { reviewId: r.reviewId }; } })(task, first, signal());
+  expect(record.rawError.details.cause).toBe("unexpected status 429 | usageLimitExceeded");
+});
+it("failure evidence written before the reason existed still replays", async () => {
+  const local = new MemoryObjects(), remote = new MemoryObjects();
+  const task = { input: { operationId: "vision-3", selection: selection() }, configFingerprint: "a".repeat(64) };
+  remote.data.set(task.input.selection.image.objectKey, bytes);
+  const provider = { fingerprint: task.configFingerprint, interpret: vi.fn(async () => { throw new CodexError("VISION.CODEX_TURN_FAILED"); }) };
+  const make = () => new VisionModule({ provider, store: remote, localEvidence: local, verifiedOcrText: async () => "Supplement Facts", resolve: async () => bytes });
+  const first = await make().run(task.input, signal());
+  expect(first).not.toHaveProperty("detail");
+  expect(await make().run(task.input, signal())).toMatchObject({ replayed: true, code: "VISION.CODEX_TURN_FAILED" });
 });

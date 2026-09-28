@@ -53,7 +53,7 @@ export function fixture(text = "Vitamin C 10 mg\nIngredients: water") {
     const unsigned = { ...owner, ...supported, operationId: `text-${id}`, source: { kind: "prepared" as const, document: ref }, range: { start: 0, end: text.length } };
     const input = TextInputSchema.parse({ ...unsigned, inputFingerprint: textFingerprint(unsigned, hashText) });
     let calls = 0, ocrInspections = 0;
-    const provider: TextProvider = { provider: "fixture/1", supported, policy: { executionRetries: 0, internalModelRequests: "codex-managed", toolAccess: "runtime-profile", modelFallback: false, networkSwitching: false },
+    const provider: TextProvider = { provider: "fixture/1", supported, policy: { executionRetries: 0, internalModelRequests: "no-retries", toolAccess: "runtime-profile", modelFallback: false, networkSwitching: false },
         interpret: async () => { calls++; return JSON.stringify({ formula: null, ingredients: { items: [{ text, start: 0, end: text.length }] } }); }, close: async () => { } };
     const cache = { read: async () => null, retain: async () => { } };
     const evidence = new TextEvidence(new ArtifactResolver(cache, remote), { inspect: async () => { ocrInspections++; throw Error("must not inspect OCR for prepared text"); } });

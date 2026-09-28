@@ -6,7 +6,21 @@ import type { Address, FileTransport, Response } from "./ports.js";
 import { abortable } from "./core.js";
 
 export class ScraperApiError extends Error {
-  constructor(readonly code: "SCRAPERAPI.CONFIG_INVALID" | "SCRAPERAPI.AUTH" | "SCRAPERAPI.THROTTLED" | "SCRAPERAPI.PROVIDER_FAILURE" | "SCRAPERAPI.EXECUTION_UNKNOWN" | "SCRAPERAPI.REDIRECT_UNVERIFIED" | "SCRAPERAPI.CAPABILITY_UNAVAILABLE") { super(code); this.name = "ScraperApiError"; }
+  constructor(readonly code: "SCRAPERAPI.CONFIG_INVALID" | "SCRAPERAPI.AUTH" | "SCRAPERAPI.THROTTLED" | "SCRAPERAPI.PROVIDER_FAILURE" | "SCRAPERAPI.EXECUTION_UNKNOWN" | "SCRAPERAPI.REDIRECT_UNVERIFIED" | "SCRAPERAPI.CAPABILITY_UNAVAILABLE",
+    /** Diagnostic facts for the Review (status and redirect target only; never the provider URL or key). */
+    readonly details?: Readonly<Record<string, string | number>>) { super(code); this.name = "ScraperApiError"; }
+}
+/** Keep only an Amazon-side URL (origin + path + query, 300 chars). A provider URL would carry the key, so it is never kept. */
+function redirectFacts(raw: Record<string, string | number | undefined>) {
+  const out: Record<string, string | number> = {};
+  for (const [k, v] of Object.entries(raw)) {
+    if (typeof v === "number") out[k] = v;
+    else if (typeof v === "string") {
+      try { const u = new URL(v, raw.target as string); if (u.hostname !== "api.scraperapi.com" && !u.searchParams.has("api_key")) out[k] = u.href.slice(0, 300); }
+      catch { out[k] = "(unparseable)"; }
+    }
+  }
+  return out;
 }
 const PrivateConfig = z.strictObject({ apiKey: z.string().min(8).max(512).regex(/^[A-Za-z0-9_-]+$/),
   allowedOrigins: z.array(z.string().url()).min(1).max(32) });
@@ -78,10 +92,12 @@ export class ScraperApiTransport implements FileTransport {
       }
       if (response.status === 401) throw new ScraperApiError("SCRAPERAPI.AUTH");
       if (response.status === 429) throw new ScraperApiError("SCRAPERAPI.THROTTLED");
-      if (response.status >= 300 && response.status < 400) throw new ScraperApiError("SCRAPERAPI.REDIRECT_UNVERIFIED");
+      if (response.status >= 300 && response.status < 400) throw new ScraperApiError("SCRAPERAPI.REDIRECT_UNVERIFIED",
+        redirectFacts({ status: response.status, target: target.href, location: response.headers["location"] }));
       if (![200, 404, 410].includes(response.status)) throw new ScraperApiError("SCRAPERAPI.PROVIDER_FAILURE");
       const final = response.headers["sa-final-url"];
-      if (final && new URL(final).href !== target.href) throw new ScraperApiError("SCRAPERAPI.REDIRECT_UNVERIFIED");
+      if (final && new URL(final).href !== target.href) throw new ScraperApiError("SCRAPERAPI.REDIRECT_UNVERIFIED",
+        redirectFacts({ status: response.status, target: target.href, finalUrl: final }));
       // Only data-plane headers escape. Provider endpoint/key, set-cookie and redirects never do.
       const safeHeaders = Object.fromEntries(["content-type", "content-length", "content-encoding"].map(k => [k, response!.headers[k]]));
       let closed = false;

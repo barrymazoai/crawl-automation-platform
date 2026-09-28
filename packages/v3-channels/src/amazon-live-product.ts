@@ -3,6 +3,7 @@ import { AmazonProductJobSchema, AmazonProductCaptureSchema, AmazonRenderedProdu
   type ChannelPlanInput, type AmazonProductJob } from "@crawl-automation/v3-contracts";
 import { RetainedPublication, sha256 } from "@crawl-automation/v3-artifacts";
 import { parseAmazonRenderedProduct, amazonProductAddress, amazonStoreAddress } from "./amazon-rendered.js";
+import { amazonProductOwner } from './amazon-html-archive.js';
 const bytes = (v: unknown) => Buffer.from(JSON.stringify(v));
 // Preserve the selected ASIN and all public gallery-selection evidence.
 const productProjection=(raw:unknown)=>AmazonRenderedProductSchema.parse(raw);
@@ -17,22 +18,33 @@ const identityOnly = (intent: unknown) => {
   return { settings: v?.settings,
     job: { codec: job.codec, discovery: job.discovery, operationId: job.operationId, sessionId: job.sessionId } };
 };
-export interface AmazonProductPort { capture(job: AmazonProductJob, signal: AbortSignal): Promise<unknown> }
+export interface AmazonProductPort {
+  capture(job: AmazonProductJob, signal: AbortSignal): Promise<unknown>;
+  /** Only retained original HTML may complete an existing unfinished capture. No provider calls. */
+  restore?(job: AmazonProductJob, signal: AbortSignal): Promise<unknown | null>;
+}
 
 /** Capture only. Planning, each image transfer and browser close are other atomic calls. */
 export class AmazonLiveProduct {
   constructor(readonly publication: RetainedPublication, readonly settings: Settings, readonly browser?: AmazonProductPort,
-    readonly linkRequestIds: readonly string[] = []) {}
+    readonly linkRequestIds: readonly string[] | ((job: AmazonProductJob) => Promise<boolean>) = []) {}
   private key(job: AmazonProductJob) { return `v3/amazon-products/${job.operationId}`; }
-  private derive(job: AmazonProductJob, raw: unknown) {
+  private async derive(job: AmazonProductJob, raw: unknown) {
     const p = productProjection(raw), d = job.discovery;
-    const imported = this.linkRequestIds.includes(d.catalogId) && d.source.producer.module === "amazon.link-list" && d.source.producer.implementationVersion === "amazon-link-batch/1";
-    if (amazonProductAddress(d.entry.url).asin !== d.entry.listingId || p.asin !== d.entry.listingId || d.entry.variantId !== null || (!imported && amazonStoreAddress(p.storeUrl).id !== amazonStoreAddress(d.scope.rootUrl).id))
+    const authorized = typeof this.linkRequestIds === "function" ? await this.linkRequestIds(job) : this.linkRequestIds.includes(d.catalogId);
+    const imported = authorized && d.source.producer.module === "amazon.link-list" && d.source.producer.implementationVersion === "amazon-link-batch/1";
+    if (amazonProductAddress(d.entry.url).asin !== d.entry.listingId || p.asin !== d.entry.listingId || d.entry.variantId !== null || (!imported && (p.storeUrl === null || amazonStoreAddress(p.storeUrl).id !== amazonStoreAddress(d.scope.rootUrl).id)))
       throw Error("AMAZON.IDENTITY_UNVERIFIED");
     const identity = { listingId: p.asin, variantId: null };
     parseAmazonRenderedProduct(p, d.entry.url, identity);
-    const owner = { schemaVersion: 1, requestId: d.catalogId, observationId: `amazon-${sha256(bytes([d.discoveryId, identity]))}`,
-      brandId: d.scope.brandId, sourceId: d.scope.sourceId, ...identity };
+    const owner = amazonProductOwner(job);
+    if (p.originalHtml) {
+      const ref = p.originalHtml;
+      if (ref.objectKey !== `${this.key(job)}/original.html` || ref.producer.operationId !== job.operationId ||
+        ref.producer.module !== 'amazon.http-original' || ref.producer.implementationVersion !== 'amazon-html/1' ||
+        ref.observationId !== owner.observationId || ref.sourceId !== owner.sourceId || ref.listingId !== owner.listingId || ref.variantId !== null)
+        throw Error('AMAZON.HTML_ARCHIVE_IDENTITY');
+    }
     const encoded = bytes(p), { egressId, ...providers } = this.settings;
     const sourcePlan = ChannelPlanInputSchema.parse({ operationId: `plan-${sha256(bytes(job))}`, owner, channel: "amazon", parserVersion: "amazon-rendered/1",
       expectedUrl: d.entry.url, binding: { sessionId: job.sessionId, egressId }, ...providers,
@@ -51,7 +63,7 @@ export class AmazonLiveProduct {
     if (!p) return null;
     if (!intent) throw Error("AMAZON.PRODUCT_INTENT_MISSING");
     const product = productProjection(JSON.parse(Buffer.from(p).toString()));
-    return { captured: this.derive(job, product), product };
+    return { captured: await this.derive(job, product), product };
   }
   async inspect(raw: unknown, signal: AbortSignal) {
     return (await this.inspectProduct(raw, signal))?.captured ?? null;
@@ -71,10 +83,11 @@ export class AmazonLiveProduct {
     if (old) return old;
     if (!this.browser) throw Error("AMAZON.CAPTURE_UNAVAILABLE");
     const key = this.key(job);
-    if (await this.publication.remote.create(`${key}/intent.json`, bytes({ job, settings: this.settings }), "application/json", signal) !== "created")
-      throw Error("AMAZON.CAPTURE_UNRESOLVED");
-    const projection = productProjection(await this.browser.capture(job, signal));
-    const result = this.derive(job, projection);
+    const created = await this.publication.remote.create(`${key}/intent.json`, bytes({ job, settings: this.settings }), "application/json", signal);
+    const rawProjection = created === 'created' ? await this.browser.capture(job, signal) : await this.browser.restore?.(job, signal);
+    if (!rawProjection) throw Error('AMAZON.CAPTURE_UNRESOLVED');
+    const projection = productProjection(rawProjection);
+    const result = await this.derive(job, projection);
     await this.publication.publish(result.sourcePlan.source.objectKey, bytes(projection), "application/json", signal);
     const confirmed = await this.inspect(job, signal);
     if (!confirmed || !equal(confirmed, result)) throw Error("AMAZON.CAPTURE_UNRESOLVED");

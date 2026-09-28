@@ -6,7 +6,7 @@ export interface TextProvider {
     // Business execution boundary. Internal Codex model requests are not business retries.
     readonly policy: {
         executionRetries: 0;
-        internalModelRequests: "codex-managed";
+        internalModelRequests: "no-retries";
         toolAccess: "runtime-profile";
         modelFallback: false;
         networkSwitching: false;

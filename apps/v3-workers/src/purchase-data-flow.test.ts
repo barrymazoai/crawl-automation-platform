@@ -10,7 +10,8 @@ const signal=()=>AbortSignal.timeout(10000);
 
 it.each([false,true])('old/new capture survives cold image binding, label planning and lossless export: conditions=%s',async present=>{
  const f=amazonFixture(),conditions=purchaseFixture();
- const commerce={codec:'public-product-commerce/1',sku:null,price:'$7.99',currency:'USD',listPrice:null,rating:null,reviewCount:null,availability:'In Stock',context:['One-time purchase'],...(present?{purchaseConditions:conditions}:{})};
+ const salesVolume={text:'1K+ bought in past month',lowerBound:'1000',approximate:true,period:'past_month',selector:'#socialProofingAsinFaceout_feature_div'};
+ const commerce={codec:'public-product-commerce/1',sku:null,price:'$7.99',currency:'USD',listPrice:null,rating:null,reviewCount:null,availability:'In Stock',context:['One-time purchase'],...(present?{purchaseConditions:conditions,salesVolume}:{})};
  Object.assign(f.product,{commerce});
  const job=await f.job(),capture=await f.live.capture(job,signal()),original=Buffer.from(f.remote.data.get(capture.sourcePlan.source.objectKey)!);
  expect((await f.plans.run(capture.sourcePlan,signal())).status).toBe('prepared');
@@ -26,7 +27,7 @@ it.each([false,true])('old/new capture survives cold image binding, label planni
   capturedAt:f.product.capturedAt,listing:{channel:'amazon',url:f.url,externalId:f.product.asin},metrics,evidence:[{objectKey:capture.sourcePlan.source.objectKey,sha256:capture.sourcePlan.source.sha256}],capture:{projection:f.product}};
  const value=convertHistoryInput(raw),output=productServiceMaterial(value),item=(output.metrics[0] as any).items[0];
  expect(output.retained.raw).toEqual(raw);expect(item.price).toBe('7.99');
- if(present){expect(metrics.extras?.purchaseConditions).toEqual(conditions);expect(item.extras.purchaseConditions).toEqual(conditions);}
+ if(present){expect(metrics.extras?.purchaseConditions).toEqual(conditions);expect(item.extras.purchaseConditions).toEqual(conditions);expect(item.unitsSold).toBe(1000);expect(item.unitsSoldPeriod).toBe('trailing_30d');expect(item.extras.retainedMetrics.extras.salesVolume).toEqual(salesVolume);}
  else {expect(metrics.extras).not.toHaveProperty('purchaseConditions');expect(item.extras).not.toHaveProperty('purchaseConditions');}
  expect(f.remote.data.get(capture.sourcePlan.source.objectKey)).toEqual(original);
 });
