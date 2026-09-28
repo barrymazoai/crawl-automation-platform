@@ -113,19 +113,19 @@ if (command === 'status') {
     const tally = r => { complete++; r.state === 'complete' ? full++ : r.state === 'capped' ? capped++ : review++; pages += r.pages.length; products += (r.asins ?? r.ids).length; };
     if (await exists(file)) { tally(await read(file)); return; }
     const intent = join(root, 'attempts', c.id + '.json');
-    const base = profile.address(c.url).url, asins = [], seen = new Set(), items = {};
+    const base = profile.address(c.url).url, asins = [], seen = new Set(), items = {}, kinds = {};
     const out = { codec: profile.result, id: c.id, url: base, sort: profile.sort, state: 'review', code: null,
       maxPages, pages: [], [profile.ids]: asins, totalResults: null, catalogEnumerationComplete: false, databaseImported: false };
-    if (profile.ids === 'ids') out.items = items;
+    if (profile.ids === 'ids') { out.items = items; out.kinds = kinds; }
     try {
       if (await exists(intent)) throw Error('BRAND_SCAN.PRIOR_ATTEMPT_UNRESOLVED');
       await save(intent, { at: new Date().toISOString(), id: c.id });
       for (let n = 1; ; n++) {
         const got = await capture(profile.pageUrl(base, n));
         const p = profile.parse(got.html, got.receipt.url);
-        const fresh = p.organic.filter(a => !seen.has(a)); for (const a of fresh) { seen.add(a); asins.push(a); if (p.items) items[a] = p.items[a]; }
+        const fresh = p.organic.filter(a => !seen.has(a)); for (const a of fresh) { seen.add(a); asins.push(a); if (p.items) items[a] = p.items[a]; if (p.kinds) kinds[a] = p.kinds[a]; }
         out.pages.push({ page: n, url: got.receipt.url, sha256: got.receipt.sha256, byteSize: got.receipt.byteSize, capturedAt: got.receipt.capturedAt,
-          organic: p.organic.length, newOnPage: fresh.length, sponsored: p.sponsored, cards: p.cards, nextPage: p.nextPage, totalResults: p.totalResults, brandFilterSelected: p.brandFilterSelected });
+          organic: p.organic.length, newOnPage: fresh.length, sponsored: p.sponsored, cards: p.cards, ...(p.promotions ? { promotions: p.promotions } : {}), nextPage: p.nextPage, totalResults: p.totalResults, brandFilterSelected: p.brandFilterSelected });
         if (n === 1) out.totalResults = p.totalResults;
         // End of list: no next page, or a page that adds nothing new (Amazon repeats the last page past the end).
         if (p.nextPage === null || !p.organic.length || !fresh.length) { out.state = 'complete'; out.catalogEnumerationComplete = profile.complete(p, out.pages); break; }

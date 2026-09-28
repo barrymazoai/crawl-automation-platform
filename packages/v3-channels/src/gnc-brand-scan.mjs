@@ -27,18 +27,27 @@ export function gncScanPage(html, requestedUrl) {
   // A real challenge page has no product grid and a verification form; the RateLimiter URL in the site config is not one.
   const grid = d.querySelector('.search-result-items');
   if (!grid && /verify (?:that )?you are (?:a )?human|px-captcha|captcha-container|Access Denied/i.test(html)) fail('ACCESS_CHALLENGE');
-  const tiles = grid ? [...grid.querySelectorAll('li.grid-tile')] : [];
-  const items = new Map(), organic = [];
+  const all = grid ? [...grid.querySelectorAll('li.grid-tile')] : [];
+  const items = new Map(), kinds = new Map(), organic = [];
+  // A product tile carries data-itemid and its product page link (/<category>/<id>.html). The id is a 6-digit SKU, or a
+  // family id (e.g. GNCTotalLeanLeanShake12Pack: one product with several flavours/sizes behind "View Options").
+  // Promotion tiles (sale banners) have neither and are not products.
+  const tiles = all.filter(t => t.querySelector('[data-itemid]'));
   for (const t of tiles) {
+    const id = t.querySelector('[data-itemid]').getAttribute('data-itemid') ?? '';
+    if (!/^[A-Za-z0-9][A-Za-z0-9_-]{0,99}$/.test(id)) fail('TILE_IDENTITY');
     const link = [...t.querySelectorAll('a[href]')].map(a => { try { return new URL(a.getAttribute('href'), 'https://www.gnc.com'); } catch { return null; } })
-      .find(u => u && u.hostname === 'www.gnc.com' && /\/\d{6}\.html$/.test(u.pathname));
-    const sku = t.querySelector('[data-itemid]')?.getAttribute('data-itemid') ?? link?.pathname.match(/\/(\d{6})\.html$/)?.[1] ?? null;
-    if (!/^\d{6}$/.test(sku ?? '')) fail('TILE_IDENTITY');
-    if (!items.has(sku)) { items.set(sku, link ? `https://www.gnc.com${link.pathname}` : null); organic.push(sku); }
+      .find(u => u && u.hostname === 'www.gnc.com' && u.pathname.endsWith(`/${id}.html`) && !/demandware\.store/.test(u.pathname));
+    if (!link) fail('TILE_IDENTITY');
+    if (!items.has(id)) { items.set(id, `https://www.gnc.com${link.pathname}`); kinds.set(id, /^\d{6}$/.test(id) ? 'sku' : 'family'); organic.push(id); }
   }
+  const promotions = all.length - tiles.length;
+  // The visible "N Results" is the brand total. data-actual-productcount is only this page's count (GNC house brand
+  // 2026-09-28: "585 Results" with data-actual-productcount="200.0"), so it is a fallback when the text is missing.
+  const totalText = text(d.getElementById('results-products')).match(/(\d[\d,]*)\s+Results\b/)?.[1]
+    ?? text(d.body).match(/\bof\s+(\d[\d,]*)\s+Results\b/)?.[1];
   const countInput = d.querySelector('.product-custom-count[data-actual-productcount]');
-  const totalText = text(d.body).match(/(\d[\d,]*)\s+Results\b/)?.[1];
-  const total = countInput ? Number(countInput.getAttribute('data-actual-productcount')) : totalText ? Number(totalText.replaceAll(',', '')) : null;
+  const total = totalText ? Number(totalText.replaceAll(',', '')) : countInput ? Number(countInput.getAttribute('data-actual-productcount')) : null;
   if (tiles.length && total === null) fail('COUNT_MISSING');
   let nextPage = null;
   const more = d.querySelector('.load-more-products[data-grid-url], [data-grid-url].load-more') ?? d.querySelector('a[rel="next"][href]');
@@ -48,6 +57,8 @@ export function gncScanPage(html, requestedUrl) {
     if (start !== address.page * GNC_PAGE_SIZE) fail('PAGINATION');
     nextPage = address.page + 1;
   }
-  return { url: address.url, page: address.page, organic, items: Object.fromEntries(items), sponsored: 0, cards: tiles.length, nextPage,
+  // The load-more button can come without a link; a stated total beyond this page means there is a next page.
+  if (nextPage === null && tiles.length && total !== null && total > address.page * GNC_PAGE_SIZE) nextPage = address.page + 1;
+  return { url: address.url, page: address.page, organic, items: Object.fromEntries(items), kinds: Object.fromEntries(kinds), promotions, sponsored: 0, cards: tiles.length, nextPage,
     brandFilterSelected: null, totalResults: Number.isFinite(total) ? total : null, totalIsLowerBound: false };
 }
