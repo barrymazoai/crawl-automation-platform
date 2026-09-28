@@ -58,6 +58,8 @@ await build({...common,outDir:base+'/plan',entry:['src/channel-plan-worker.ts']}
 await build({...common,outDir:base+'/web',entry:['src/brand-web.ts']});
 await build({...common,outDir:base+'/amazon',entry:['src/amazon-live-worker.ts']});
 await build({...common,outDir:base+'/swanson',entry:['src/swanson-live-worker.ts']});
+// The independent health monitor and launchd control (manual-control.mjs imports it).
+await build({...common,outDir:base+'/us-control',entry:['src/deployment-launchd.ts']});
 await build({...common,outDir:base+'/queue',entry:['src/amazon-queue-cli.ts']});
 await cp('src/amazon-queue-health.mjs',base+'/queue/amazon-queue-health.mjs');
 await cp('src/amazon-queue-recovery.mjs',base+'/queue/amazon-queue-recovery.mjs');
