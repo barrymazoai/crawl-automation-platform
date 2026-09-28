@@ -63,6 +63,12 @@ it("final preparation failure produces passive categorized Review",async()=>{
   const f=await setup();f.activities.prepareChannelLabelManifest=async()=>{throw Error("unavailable");};
   expect(await ChannelSavedLabelWorkflow(f.entry)).toMatchObject({status:"review",automaticRetry:false,code:"CHANNEL.LABEL_PREPARATION_UNVERIFIED"});
 });
+it("a failed manifest keeps its own code with the Review",async()=>{
+  const f=await setup();let sent:any;f.activities.prepareChannelLabelManifest=async()=>{throw ApplicationFailure.nonRetryable("Inspect retained channel evidence","CHANNEL.LABEL_NO_SOURCE");};
+  const review=f.activities.reviewChannelProduct!;f.activities.reviewChannelProduct=async(raw:any)=>{sent=raw;return review(raw);};
+  expect(await ChannelSavedLabelWorkflow(f.entry)).toMatchObject({status:"review",code:"CHANNEL.LABEL_PREPARATION_UNVERIFIED"});
+  expect(sent.failures).toEqual([{sourceId:"manifest",code:"CHANNEL.LABEL_NO_SOURCE",executionFact:"executed"}]);
+});
 it("cancellation is not converted into a success or an automatic retry",async()=>{
   const f=await setup();f.activities.loadChannelLabelPlan=async()=>{throw Error("cancelled");};
   await expect(ChannelSavedLabelWorkflow(f.entry)).rejects.toThrow("cancelled");expect(f.counts.ocr).toBe(0);

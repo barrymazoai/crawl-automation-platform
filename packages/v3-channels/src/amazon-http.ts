@@ -92,6 +92,17 @@ const decodeHtml = (bytes: Uint8Array) => {
 export async function readAmazonHtml(route: HttpRoute, rawUrl: string, abort: AbortSignal, dns: DnsResolver = systemDns): Promise<string> {
   return decodeHtml(await readAmazonHtmlBytes(route, rawUrl, abort, dns));
 }
+/** Amazon sometimes answers a /dp/<id> request with its /clp/<same id>?lv=shuf interstitial instead of the product page
+ * (2026-09-28: all 17 recorded redirects; the same request later returns the product). That is the page not being
+ * delivered, not the product moving or being unlisted, so it gets its own code. Any other redirect stays unverified. */
+function undelivered(error: unknown, url: string): unknown {
+  const e = error as { code?: unknown; details?: Record<string, string | number> };
+  if (e?.code !== "SCRAPERAPI.REDIRECT_UNVERIFIED" || !e.details) return error;
+  const asin = new URL(url).pathname.match(/\/dp\/([A-Z0-9]{10})/)?.[1];
+  const to = String(e.details.finalUrl ?? e.details.location ?? "");
+  let path = ""; try { path = new URL(to, url).pathname; } catch { return error; }
+  return asin && path === `/clp/${asin}` ? new ChannelError("AMAZON.PAGE_NOT_DELIVERED", { kind: "interstitial", ...e.details }) : error;
+}
 /** One bounded GET of a public Amazon page through the configured route (ScraperAPI).
  * Errors terminate this download; neither this reader nor its product adapter retries. */
 async function readAmazonHtmlBytes(route: HttpRoute, rawUrl: string, abort: AbortSignal, dns: DnsResolver, admissionDeadline?: number): Promise<Uint8Array> {
@@ -104,7 +115,8 @@ async function readAmazonHtmlBytes(route: HttpRoute, rawUrl: string, abort: Abor
     const address = await abortable(transportAddress(url, route.transport, dns, signal), signal);
     signal.throwIfAborted();
     if (admissionDeadline !== undefined && Date.now() > admissionDeadline) throw new ChannelError('AMAZON.HTML_ADMISSION_EXPIRED');
-    const got = await abortable(route.transport.get(url, address, { accept: "text/html" }, signal).then(r => { if (signal.aborted) { r.close(); signal.throwIfAborted(); } return r; }), signal);
+    const got = await abortable(route.transport.get(url, address, { accept: "text/html" }, signal).then(r => { if (signal.aborted) { r.close(); signal.throwIfAborted(); } return r; }), signal)
+      .catch(error => { throw undelivered(error, url.href); });
     response = got; signal.throwIfAborted();
     if (got.status >= 300 && got.status < 400) throw new ChannelError("AMAZON.REDIRECT_UNVERIFIED", { status: got.status });
     if ([403, 406, 429, 503].includes(got.status)) throw new ChannelError("AMAZON.ACCESS_CHALLENGE");
@@ -124,7 +136,8 @@ async function readAmazonHtmlBytes(route: HttpRoute, rawUrl: string, abort: Abor
       size += next.value.byteLength; if (size > AMAZON_HTTP_POLICY.maxBytes) throw new ChannelError("AMAZON.PAGE_LIMIT");
       chunks.push(next.value);
     }
-    if (!size) throw new ChannelError("AMAZON.PAGE_EMPTY", { status: got.status, contentType: got.headers["content-type"] ?? "(none)",
+    // An empty 200 is the provider not delivering the page (2026-09-28: 31 of 290, and refetches succeed), not an empty product page.
+    if (!size) throw new ChannelError("AMAZON.PAGE_NOT_DELIVERED", { kind: "empty-body", status: got.status, contentType: got.headers["content-type"] ?? "(none)",
       declaredLength: got.headers["content-length"] ?? "(none)", receivedBytes: 0 });
     return Buffer.concat(chunks);
   } finally { clearTimeout(timer); response?.close(); }

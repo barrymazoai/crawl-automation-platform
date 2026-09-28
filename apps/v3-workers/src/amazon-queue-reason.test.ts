@@ -29,3 +29,8 @@ it("never throws on records it does not understand", () => {
     { failure: { code: "LABEL.X", stage: "product.label.assembly" }, candidate: { value: { result: { provenance: [{ kind: "image", candidate: { broken: true } }] } } } }]).summary)
     .toContain("LABEL.X");
 });
+it("a stopped label preparation says which step and which sources", () => {
+  const r = queueReviewReason({ status: "review" }, [{ failure: { stage: "channel.label-input", code: "CHANNEL.LABEL_PREPARATION_UNVERIFIED" },
+    rawError: { details: { failures: [{ sourceId: "manifest", code: "CHANNEL.LABEL_NO_SOURCE" }], states: [{ id: "image-1", status: "unresolved" }, { id: "image-2", status: "not_matched" }] } } }]);
+  expect(r.summary).toContain("manifest: CHANNEL.LABEL_NO_SOURCE"); expect(r.summary).toContain("unresolved sources: image-1 unresolved");
+});

@@ -33,6 +33,13 @@ function detailOf(r: Record_): string | undefined {
     const codes = ((r.rawError?.details as { codes?: unknown } | undefined)?.codes ?? []) as string[];
     return [codes.length ? `codes ${codes.join(",")}` : "", ...lines.slice(0, 3)].filter(Boolean).join(" | ") || undefined;
   }
+  if (stage === "channel.label-input") {
+    // Which step stopped preparation: the manifest's own code, and any source whose state never resolved.
+    const failures = ((details?.failures ?? []) as { sourceId?: string; code?: string }[]).map(f => `${f.sourceId}: ${f.code}`);
+    const states = (details?.states ?? []) as { id?: string; status?: string }[];
+    const unresolved = states.filter(s => s.status === "unresolved" || s.status === "rejected").map(s => `${s.id} ${s.status}`);
+    return [...failures, ...(unresolved.length ? [`unresolved sources: ${unresolved.slice(0, 6).join(", ")}`] : [])].join("; ") || undefined;
+  }
   if (stage === "ocr.file") return imageOf(r.inspection?.input?.file?.objectKey) ? `image ${imageOf(r.inspection?.input?.file?.objectKey)} has no text` : undefined;
   if (stage === "codex.vision") {
     const parsed = LabelImageCandidateSchema.safeParse(r.candidate?.value);
@@ -64,7 +71,7 @@ export function queueReviewReason(product: { status?: unknown; code?: unknown } 
   }
   // The product's own code decides; image-level Reviews explain it. Capture and label rule failures lead the summary.
   // A marketing image with no panel (VISION.LABEL_CORE_MISSING) is expected noise, so it goes last.
-  const rank = (i: ReasonItem) => i.stage.startsWith("amazon.") ? 0 : i.stage === "product.label.assembly" ? 1 : i.code === "VISION.LABEL_CORE_MISSING" ? 5
+  const rank = (i: ReasonItem) => i.stage.startsWith("amazon.") ? 0 : i.stage === "product.label.assembly" || i.stage === "channel.label-input" ? 1 : i.code === "VISION.LABEL_CORE_MISSING" ? 5
     : i.stage === "codex.vision" ? 2 : i.stage === "ocr.file" ? 3 : 4;
   const ordered = [...items].sort((a, b) => rank(a) - rank(b));
   const decisive = items.find(i => i.stage === "product.label.assembly") ?? items.find(i => i.stage.startsWith("amazon."));

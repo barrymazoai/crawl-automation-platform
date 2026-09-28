@@ -15,7 +15,7 @@ const json = async (path: string) => JSON.parse(await readFile(resolve(path), "u
 const print = (value: unknown) => console.log(JSON.stringify(value));
 async function main() {
   const [configPath, command, ...args] = process.argv.slice(2);
-  if (!configPath || !command) throw Error("Usage: amazon-queue-cli <private-config.json> status|items|add|pause|resume|configure|requeue|run|audit-old|close-audited");
+  if (!configPath || !command) throw Error("Usage: amazon-queue-cli <private-config.json> status|items|add|pause|resume|configure|requeue|undelivered|run|audit-old|close-audited");
   const config = configSchema.parse(await readGncPrivateJson(resolve(configPath)));
   const amazon = AmazonLiveConfigSchema.parse(await readGncPrivateJson(config.amazonConfigFile));
   const db = new pg.Pool({ connectionString: amazon.database.connectionString, ssl: amazon.database.tls ? { rejectUnauthorized: true } : false,
@@ -47,6 +47,14 @@ async function main() {
     if (command === "resume") { await queue.resume(); return print(await queue.status()); }
     if (command === "configure") { await queue.configure(Number(args[0]), Number(args[1])); return print(await queue.status()); }
     if (command === "requeue") return print(await queue.requeue(await json(args[0]!)));
+    if (command === "undelivered") {
+      // Reviews whose page the provider never delivered (empty body, /clp/ interstitial): print their item ids so an
+      // operator can decide to pass them to requeue. Listing never requeues anything by itself.
+      return print((await db.query(`SELECT i.item_id FROM amazon_queue_item i JOIN amazon_queue_attempt a ON a.request_id=i.request_id
+        WHERE i.state='review' AND (a.proof->'reason'->>'summary' LIKE '%AMAZON.PAGE_NOT_DELIVERED%' OR a.proof->'reason'->>'summary' LIKE '%AMAZON.PAGE_EMPTY%'
+          OR (a.proof->'reason'->>'summary' LIKE '%SCRAPERAPI.REDIRECT_UNVERIFIED%' AND a.proof->'reason'->>'summary' LIKE '%/clp/%'))
+        ORDER BY i.updated_at`)).rows.map(r => r.item_id));
+    }
     if (!["run", "audit-old", "close-audited"].includes(command)) throw Error("QUEUE.UNKNOWN_COMMAND");
     if (amazon.capture.mode !== "scraperapi") throw Error("QUEUE.REQUEST_CAPTURE_REQUIRED");
     const web = z.object({ databaseUrl: z.string(), delivery: z.unknown() }).parse(await readGncPrivateJson(config.webConfigFile));

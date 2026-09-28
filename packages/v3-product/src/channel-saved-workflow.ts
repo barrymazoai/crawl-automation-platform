@@ -159,7 +159,13 @@ export async function runChannelLabelWorkflow(raw:unknown,progress?:ChannelSourc
   try{result=ChannelLabelManifestResultSchema.parse(await call(queues.manifest,single?"prepareChannelSingleLabelManifest":"prepareChannelLabelManifest",single?{input,states:[...states,...notStarted],selectedImageId}:input));}
   catch(error){
     if(isCancellation(error))throw error;
-    const r=AcquisitionReviewSchema.parse(await call(queues.review,"reviewChannelProduct",{input,states,code:"CHANNEL.LABEL_PREPARATION_UNVERIFIED"}));
+    // Keep the manifest step's own code with the Review (e.g. CHANNEL.LABEL_NO_SOURCE, ARTIFACT.UNAVAILABLE), which
+    // otherwise disappears behind the generic preparation code.
+    let cause:string|undefined;
+    if(patched("channel-manifest-failure-cause-v1"))for(let e:unknown=error,n=0;n<6&&e&&typeof e==="object";n++,e=(e as {cause?:unknown}).cause)
+      if(e instanceof ApplicationFailure&&/^[A-Z]+\.[A-Z_]+$/.test(e.type??"")){cause=e.type!;break;}
+    const r=AcquisitionReviewSchema.parse(await call(queues.review,"reviewChannelProduct",{input,states,code:"CHANNEL.LABEL_PREPARATION_UNVERIFIED",
+      ...(cause?{failures:[{sourceId:"manifest",code:cause,executionFact:"executed"}]}:{})}));
     if(r.operationId!==input.operationId)invalid();return r;
   }
   if(!same(result.input,input)||!same(result.manifest.observation,owner)||result.manifest.operationId!==input.operationId||result.manifest.evidencePolicy!==input.evidencePolicy)invalid();

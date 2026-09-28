@@ -18,12 +18,12 @@ const route = { routeId: "route-test", version: "scraperapi/1", egressId: "scrap
   countryCode: "us", sessionNumber: null, responseMode: "html" as const, providerPolicy: "scraperapi-sync/1" as const };
 const gate = { acquire: async () => ({ kind: 'download' as const }), complete: async () => {} };
 const privateConfig = { apiKey: "fake-key-000000", allowedOrigins: ["https://www.amazon.com"] };
-function fakeRoute(reply: (target: URL) => { status: number; type?: string; body: string }): HttpRoute & { calls: URL[] } {
+function fakeRoute(reply: (target: URL) => { status: number; type?: string; body: string; headers?: Record<string, string> }): HttpRoute & { calls: URL[] } {
   const calls: URL[] = [];
   const transport = new ScraperApiTransport(route, privateConfig, async (providerUrl): Promise<Response> => {
     const target = new URL(providerUrl.searchParams.get("url")!); calls.push(target);
     const r = reply(target), bytes = Buffer.from(r.body);
-    return { status: r.status, headers: { "content-type": r.type ?? "text/html;charset=UTF-8", "content-length": String(bytes.length) },
+    return { status: r.status, headers: { "content-type": r.type ?? "text/html;charset=UTF-8", "content-length": String(bytes.length), ...r.headers },
       body: (async function* () { yield bytes; })(), close: () => {} };
   });
   return { selection: route, transport, capabilities: transport.capabilities, calls };
@@ -122,6 +122,15 @@ describe("AmazonHttpReader over the ScraperAPI route", () => {
     await expect(readAmazonHtml(fakeRoute(() => ({ status: 200, type: "application/json", body: "{}" })), url("B0G963NB8Q"), AbortSignal.timeout(5000))).rejects.toThrow("AMAZON.NOT_HTML");
     await expect(readAmazonHtml(fakeRoute(() => ({ status: 200, body: "x".repeat(AMAZON_HTTP_POLICY.maxBytes + 1) })), url("B0G963NB8Q"), AbortSignal.timeout(5000))).rejects.toThrow("AMAZON.PAGE_LIMIT");
     await expect(readAmazonHtml(fakeRoute(() => ({ status: 200, body: "<html></html>" })), "https://evil.example/dp/B0G963NB8Q", AbortSignal.timeout(5000))).rejects.toThrow("SOURCE.ORIGIN_BLOCKED");
+  });
+  it("an empty body or Amazon's /clp/ interstitial for the same ASIN is a page not delivered, with its facts", async () => {
+    const empty = await readAmazonHtml(fakeRoute(() => ({ status: 200, body: "" })), url("B0G963NB8Q"), AbortSignal.timeout(5000)).catch(e => e);
+    expect(empty.code).toBe("AMAZON.PAGE_NOT_DELIVERED"); expect(empty.details).toMatchObject({ kind: "empty-body", status: 200, receivedBytes: 0 });
+    const clp = await readAmazonHtml(fakeRoute(() => ({ status: 200, body: "<html></html>", headers: { "sa-final-url": "https://www.amazon.com/clp/B0G963NB8Q?lv=shuf&channelId=500" } })), url("B0G963NB8Q"), AbortSignal.timeout(5000)).catch(e => e);
+    expect(clp.code).toBe("AMAZON.PAGE_NOT_DELIVERED"); expect(clp.details).toMatchObject({ kind: "interstitial", finalUrl: "https://www.amazon.com/clp/B0G963NB8Q?lv=shuf&channelId=500" });
+    // Any other target, including another ASIN's interstitial, stays an unverified redirect.
+    for (const to of ["https://www.amazon.com/clp/B0013LAQS6?lv=shuf", "https://www.amazon.com/dp/B0013LAQS6"])
+      await expect(readAmazonHtml(fakeRoute(() => ({ status: 200, body: "<html></html>", headers: { "sa-final-url": to } })), url("B0G963NB8Q"), AbortSignal.timeout(5000))).rejects.toThrow("SCRAPERAPI.REDIRECT_UNVERIFIED");
   });
 });
 

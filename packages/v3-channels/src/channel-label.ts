@@ -143,6 +143,9 @@ export class ChannelLabelPlans {
       }
       sources.push(resolved.source);
     }
+    // Every source skipped (empty OCR, no keyword, no page text): there is no label to assemble. Say so instead of
+    // failing the manifest schema (2026-09-28: B0C9GW92VV).
+    if(!sources.length)throw Error("CHANNEL.LABEL_NO_SOURCE");
     const result=ChannelLabelManifestResultSchema.parse({input,manifest:{operationId:input.operationId,observation:input.sourcePlan.owner,evidencePolicy:input.evidencePolicy,sources},skipped});
     await this.publication.publish(`v3/channel-labels/${input.operationId}/selection.json`,bytes({request,decisions}),"application/json",signal);
     await this.publication.publish(`v3/channel-labels/${input.operationId}/manifest.json`,bytes(result),"application/json",signal);

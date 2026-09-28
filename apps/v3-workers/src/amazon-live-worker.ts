@@ -192,7 +192,10 @@ async function main() {
         else if (role === "capture") handlers = {
           captureAmazonProduct: async (raw, s) => products.capture(await verifyJob(raw, s), s),
           stageAmazonProductFiles: (raw,s) => staging.stage(raw,s),
-          closeAmazonProductPage: async (raw, s) => { const job = await verifyJob(raw, s); if (http) return notOpened(job.sessionId); await requireBrowser(); return requirePages().close(job.sessionId, s); },
+          // No page exists on the HTTP route, so answer before verifyJob: its R2 read failing (2026-09-28, B0GGLM2XLT) left the
+          // queue waiting forever on a cleanup proof for a page that never existed. The queue audit still matches this
+          // input and taskId against the capture job exactly.
+          closeAmazonProductPage: async (raw, s) => { if (http) return notOpened(AmazonProductJobSchema.parse(raw).sessionId); const job = await verifyJob(raw, s); await requireBrowser(); return requirePages().close(job.sessionId, s); },
         };
         else if (role === "file") handlers = { acquireAmazonFile: async (raw, s) => {
           const captured = AmazonProductCaptureSchema.parse({ job: raw.job, sourcePlan: raw.sourcePlan }), job = await verifyJob(captured.job, s);
