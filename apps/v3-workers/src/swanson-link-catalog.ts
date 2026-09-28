@@ -4,10 +4,10 @@ import { CatalogPageInputSchema, CatalogPageSchema, ArtifactRefSchema, type Cata
 import { RetainedPublication, sha256, verifyBytes } from "@crawl-automation/v3-artifacts";
 import { swansonProductAddress } from "@crawl-automation/v3-channels";
 
-/** A Swanson product list (family pages /p/<handle>, e.g. from the products.json brand scan). Positive input
- * provenance for one catalog request, never a website coverage claim: completion is always "unknown". */
+/** A Swanson product list (family pages /p/<handle>, e.g. from the products.json brand scan) for the worker's one
+ * configured brand scope. Positive input provenance, never a website coverage claim: completion is always "unknown". */
 export const SwansonProductListSchema = z.strictObject({
-  codec: z.literal("swanson-product-list/1"), requestId: z.uuid(),
+  codec: z.literal("swanson-product-list/1"),
   urls: z.array(z.string().url().max(4096)).min(1).max(100),
 }).superRefine((l, ctx) => {
   const handles = new Set<string>();
@@ -27,7 +27,7 @@ export class SwansonLinkCatalog {
   constructor(readonly publication: RetainedPublication, raw: unknown) { this.list = SwansonProductListSchema.parse(raw); }
   private derive(raw: unknown): CatalogPage {
     const input = CatalogPageInputSchema.parse(raw), l = this.list;
-    if (input.catalogId !== l.requestId || input.scope.channel !== "swanson" || input.page !== 0 || input.cursor !== null) throw Error("SWANSON.LINK_SCOPE_CONFLICT");
+    if (input.scope.channel !== "swanson" || input.page !== 0 || input.cursor !== null) throw Error("SWANSON.LINK_SCOPE_CONFLICT");
     const body = bytes(l), id = sha256(bytes(input));
     const source = ArtifactRefSchema.parse({ schemaVersion: 1, artifactId: `links-${id}`, observationId: `links-${id}`,
       sourceId: input.scope.sourceId, listingId: "catalog", variantId: null, kind: "result-json", mediaType: "application/json",

@@ -91,7 +91,8 @@ async function main() {
             });
         } });
         const list = config.productList ? new SwansonLinkCatalog(publication, config.productList) : undefined;
-        const fromList = (catalogId: string) => !!list && list.list.requestId === catalogId;
+        // The worker accepts only its configured scope (submission()), so a configured list is that brand's catalog.
+        const fromList = (_catalogId: string) => !!list;
         const catalogIdentity = async (id: string, scope: unknown) => {
           await submission(id);
           if (!equal(scope, config.scope) || execution().workflowId !== `v3-collection-${id}-catalog`) throw Error("SWANSON.SCOPE_CONFLICT");
