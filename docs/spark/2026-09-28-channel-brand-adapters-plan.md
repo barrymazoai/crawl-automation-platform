@@ -157,7 +157,27 @@ Same Nordic Naturals and Garden of Life search pages, read at three stores: The 
    - `pnpm --filter @crawl-automation/v3-workers test:integration` for the queue.
    - Replay of saved Amazon and Swanson histories with `Worker.runReplayHistory`, to prove the patched workflows still replay.
 
-## Phase 3: Swanson
+## Phase 3: Swanson — brand scan done 2026-09-28 (ScraperAPI, user direction)
+
+- **The brand grid page is drawn by script.** Shopify's own collection JSON is complete instead:
+  - `/collections/brand-<slug>/products.json?limit=250&page=N` through ScraperAPI, 1 credit, no challenge.
+  - It returns every product with its id, handle, publish date, and each variant's SKU, availability and price.
+  - A page shorter than 250 ends the list, so the scan is proven complete.
+- **Code:** `swanson-brand-scan.mjs` and the `swanson-brand-scan/1` profile in `scan-cli.mjs`, commit `6c4f5af`.
+- **Pilot results** (6 credits):
+
+  | Brand | Products | Pages | Unavailable | Newest |
+  |---|---|---|---|---|
+  | NOW Foods | 821 | 4 | 38 | 2026-08-17 |
+  | Life Extension | 155 | 1 | 0 | 2026-09-25 |
+  | Healthy Origins | 65 | 1 | 2 | 2025-05-19 |
+
+  All three are complete.
+- **All 422 brands:** about 450 requests, roughly 450 credits.
+- **Sizes are separate products.** Each size is its own Shopify product; the grid groups them into families (Healthy Origins: 65 products, 44 families).
+- **Product pages carry the facts as text.** The embedded `supplementFacts` text has the full Supplement Facts (serving size, amounts, Other Ingredients), so the formula can come from text alone, like GNC. `/products/<handle>` redirects to `/p/<handle>`.
+
+### Still to build (original phase 3 items)
 
 1. Listing scan: a standalone runner around `swanson-catalog-source.ts` for any brand URL (it has paging and end-of-list proof already). Raise the 10-page limit for large brands.
 2. Worker: add a link-batch path to `swanson-live-worker.ts`, like Amazon's (`AmazonLinkStore`, `catalogFor`), so it accepts any brand's batch rather than one configured scope.
