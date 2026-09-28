@@ -8,11 +8,15 @@ import { request } from 'node:https';
 import { createHash } from 'node:crypto';
 import { join, resolve } from 'node:path';
 import pg from 'pg';
-import { searchAddress, filterIdentity, productAddress, productByline, organicAsins } from '../../../../packages/v3-channels/src/amazon-brand-search.mjs';
+import { searchAddress, filterIdentity, productAddress, productByline, organicAsins, scanAddress, scanPageUrl } from '../../../../packages/v3-channels/src/amazon-brand-search.mjs';
 const root = resolve(process.argv[2]), manifest = JSON.parse(await fs.readFile(join(root, 'manifest.json'), 'utf8'));
 const clean = n => n.normalize('NFKC').replace(/\s+/g, ' ').trim();
-const allowedNames = new Set(manifest.candidates.flatMap(c => c.names.map(clean)));
-const allowedAsins = new Set(manifest.candidates.flatMap(c => [c.identity?.asin, ...(c.identity?.asins ?? [])]).filter(Boolean));
+// Brand scan runs (amazon-brand-scan/1) may fetch only the listed brand URLs, pages 1..maxPages, newest first.
+const scan = manifest.codec === 'amazon-brand-scan/1';
+if (scan && !(Number.isInteger(manifest.maxPages) && manifest.maxPages >= 1 && manifest.maxPages <= 50)) throw Error('MANIFEST');
+const allowedScan = new Set(scan ? manifest.candidates.flatMap(c => Array.from({ length: manifest.maxPages }, (_, i) => scanPageUrl(c.url, i + 1))) : []);
+const allowedNames = new Set(scan ? [] : manifest.candidates.flatMap(c => c.names.map(clean)));
+const allowedAsins = new Set(scan ? [] : manifest.candidates.flatMap(c => [c.identity?.asin, ...(c.identity?.asins ?? [])]).filter(Boolean));
 // Set only when the user explicitly authorized refetching despite a recent attempt (2026-09-24).
 const skipAdmission = manifest.admission === 'user-authorized-refetch';
 const deployment = JSON.parse(await fs.readFile('/Users/server/apps/crawler-v3/live/deployment.json', 'utf8'));
@@ -24,7 +28,7 @@ const hash = b => createHash('sha256').update(b).digest('hex');
 const save = async (p, b) => { const f = await fs.open(p, 'wx', 0o600); try { await f.writeFile(b); await f.sync(); } finally { await f.close(); } };
 const ledger = v => fs.appendFile(join(root, 'product-fetches.jsonl'), JSON.stringify({ at: new Date().toISOString(), ...v }) + '\n');
 const discoveryLimit = manifest.candidates.reduce((n, c) => n + (c.identity?.discoverFromSearch ? (c.identity.maxProducts ?? 4) : 0), 0);
-const limit = manifest.candidates.length * 3 + allowedAsins.size + discoveryLimit;
+const limit = scan ? allowedScan.size : manifest.candidates.length * 3 + allowedAsins.size + discoveryLimit;
 // Search-discovered ASINs become fetchable only from search pages this broker fetched itself.
 const discoverNames = new Set(manifest.candidates.filter(c => c.identity?.discoverFromSearch).flatMap(c => c.names.map(clean)));
 const learnResults = (url, bytes) => { try { const u = new URL(url); if (!u.searchParams.has('rh') && discoverNames.has(u.searchParams.get('k'))) for (const a of organicAsins(bytes.toString('utf8'), 6)) allowedAsins.add(a); } catch {} };
@@ -40,7 +44,7 @@ async function once(url, product) {
   try {
     const receipt = JSON.parse(await fs.readFile(stem + '.json', 'utf8')), bytes = await fs.readFile(stem + '.html');
     if (hash(bytes) !== receipt.sha256) throw Error('ARCHIVE');
-    if (product) learn(url, bytes); else learnResults(url, bytes);
+    if (product) learn(url, bytes); else if (!scan) learnResults(url, bytes);
     return { status: receipt.status, headers: { ...receipt.headers, 'sa-credit-cost': '0' }, bytes };
   } catch (e) { if (e.code !== 'ENOENT') throw e; }
   if (active >= concurrency || calls >= limit) throw Error('LIMIT');
@@ -75,7 +79,8 @@ async function once(url, product) {
       await ledger({ asin: productAddress(url).asin, event: 'FETCHED', status: result.status, sha256: hash(bytes), bytes: bytes.length, finalUrl: result.finalUrl ?? null });
       if (result.finalUrl && productAddress(result.finalUrl).asin !== productAddress(url).asin) throw Error('REDIRECT');
       learn(url, bytes);
-    } else { if (result.finalUrl && searchAddress(result.finalUrl) !== url) throw Error('REDIRECT'); if (result.status === 200) learnResults(url, bytes); }
+    } else if (scan) { if (result.finalUrl && scanAddress(result.finalUrl).url !== url) throw Error('REDIRECT'); }
+    else { if (result.finalUrl && searchAddress(result.finalUrl) !== url) throw Error('REDIRECT'); if (result.status === 200) learnResults(url, bytes); }
     return result;
   } finally { active--; }
 }
@@ -88,6 +93,7 @@ const server = createServer(async (req, res) => {
     const raw = u.searchParams.get('url'), product = /\/dp\//.test(new URL(raw).pathname);
     let url;
     if (product) { const p = productAddress(raw); if (!allowedAsins.has(p.asin)) throw Error('ASIN'); url = p.url; }
+    else if (scan) { url = scanAddress(raw).url; if (!allowedScan.has(url)) throw Error('NAME'); }
     else { url = searchAddress(raw); if (!allowedNames.has(new URL(url).searchParams.get('k'))) throw Error('NAME'); if (new URL(url).searchParams.has('rh')) filterIdentity(url); }
     let work = pending.get(url);
     if (!work) { work = once(url, product); pending.set(url, work); }
@@ -99,5 +105,5 @@ const server = createServer(async (req, res) => {
   }
 });
 server.requestTimeout = 110000;
-server.listen(19419, '100.76.126.12', () => console.log(JSON.stringify({ event:'BROKER_READY', pid:process.pid, bind:'100.76.126.12:19419', allowedSource:'100.84.91.3', candidates:manifest.candidates.length, productAsins:allowedAsins.size })));
+server.listen(19419, '100.76.126.12', () => console.log(JSON.stringify({ event:'BROKER_READY', pid:process.pid, bind:'100.76.126.12:19419', allowedSource:'100.84.91.3', candidates:manifest.candidates.length, productAsins:allowedAsins.size, scanPages:allowedScan.size })));
 process.once('SIGTERM', () => { server.close(); db?.end(); }); process.once('SIGINT', () => { server.close(); db?.end(); });

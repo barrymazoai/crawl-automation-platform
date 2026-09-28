@@ -55,6 +55,73 @@ export function organicAsins(html, limit = 10) {
   }
   return [...seen];
 }
+// Brand scan: every product of a brand, newest first. Two stored brand URL shapes are accepted:
+// a verified Brand-filter search (k, i=hpc, rh=n:<node>,p_123:<id>) and an Amazon brand page
+// (srs=<node>, rh=p_89:<name>). Tracking parameters are dropped; page 1 carries no page parameter.
+export const SCAN_SORT = 'date-desc-rank';
+export const SCAN_MAX_PAGES = 50;
+export function scanAddress(raw) {
+  const u = new URL(raw, 'https://www.amazon.com');
+  if (u.origin !== 'https://www.amazon.com' || u.username || u.password || u.pathname !== '/s') fail('URL');
+  const sort = u.searchParams.get('s'); if (sort !== null && sort !== SCAN_SORT) fail('URL');
+  const pageRaw = u.searchParams.get('page') ?? '1';
+  if (!/^[1-9]\d{0,2}$/.test(pageRaw) || Number(pageRaw) > SCAN_MAX_PAGES) fail('URL');
+  const page = Number(pageRaw), rh = u.searchParams.get('rh') ?? '', result = new URL('https://www.amazon.com/s');
+  let kind, brandFilter;
+  if (u.searchParams.has('srs')) {
+    const srs = u.searchParams.get('srs');
+    if (!/^\d{1,20}$/.test(srs) || !/^p_89:[^,|]{1,80}$/.test(rh) || u.searchParams.has('k') || u.searchParams.has('i')) fail('URL');
+    kind = 'brand-page'; brandFilter = rh;
+    result.searchParams.set('srs', srs); result.searchParams.set('rh', rh);
+  } else {
+    const id = filterIdentity(`https://www.amazon.com/s?${new URLSearchParams({ k: u.searchParams.get('k') ?? '', i: u.searchParams.get('i') ?? '', rh })}`);
+    kind = 'brand-filter-search'; brandFilter = id.brandFilter;
+    for (const k of ['k', 'i', 'rh']) result.searchParams.set(k, u.searchParams.get(k));
+  }
+  result.searchParams.set('s', SCAN_SORT);
+  if (page > 1) result.searchParams.set('page', String(page));
+  if (kind === 'brand-filter-search') result.searchParams.set('dc', '');
+  return { url: result.href, kind, page, brandFilter };
+}
+export const scanPageUrl = (base, page) => { const u = new URL(scanAddress(base).url); if (page > 1) u.searchParams.set('page', String(page)); else u.searchParams.delete('page'); return scanAddress(u.href).url; };
+const SPONSORED = '[data-component-type="s-sponsored-label-marker"],.puis-sponsored-label-text,a[href*="/sspa/click"],a[href*="sponsored-ads.amazon.com"]';
+// One scanned result page. Only the main result slot counts: carousels elsewhere on the page
+// carry other brands' ASINs. The applied Brand filter must still be selected, otherwise the
+// page lists other brands too (Amazon silently drops filters on some requests).
+export function scanPage(html, requestedUrl) {
+  if (/validateCaptcha|Robot Check|Enter the characters you see below/i.test(html)) fail('ACCESS_CHALLENGE');
+  const address = scanAddress(requestedUrl);
+  const { document: d } = parseHTML(html);
+  for (const e of d.querySelectorAll('script,style')) e.remove();
+  const cards = [...d.querySelectorAll('.s-main-slot [data-component-type="s-search-result"][data-asin]')]
+    .filter(e => /^[A-Z0-9]{10}$/.test(e.getAttribute('data-asin') ?? ''));
+  const organic = [], seen = new Set(); let sponsored = 0;
+  for (const e of cards) {
+    const asin = e.getAttribute('data-asin');
+    if (e.querySelector(SPONSORED)) { sponsored++; continue; }
+    if (!seen.has(asin)) { seen.add(asin); organic.push(asin); }
+  }
+  let brandFilterSelected = null;
+  if (address.kind === 'brand-filter-search') {
+    const facet = d.getElementById(address.brandFilter.replace(':', '/'));
+    brandFilterSelected = !!facet?.querySelector('input[type="checkbox"][checked]');
+    if (cards.length && !brandFilterSelected) fail('FILTER_LOST');
+  }
+  const selected = text(d.querySelector('.s-pagination-selected'));
+  if (selected && Number(selected) !== address.page) fail('PAGE_MISMATCH');
+  if (!selected && address.page > 1 && cards.length) fail('PAGE_MISMATCH');
+  let nextPage = null;
+  const next = d.querySelector('a.s-pagination-next[href]');
+  if (next && cards.length) {
+    const n = Number(new URL(next.getAttribute('href'), 'https://www.amazon.com').searchParams.get('page'));
+    if (n !== address.page + 1) fail('PAGINATION');
+    nextPage = n;
+  }
+  const info = text(d.querySelector('[data-component-type="s-result-info-bar"]'));
+  const total = info.match(/of\s+(over\s+)?([\d,]+)\s+results/i);
+  return { url: address.url, page: address.page, organic, sponsored, cards: cards.length, nextPage, brandFilterSelected,
+    totalResults: total ? Number(total[2].replaceAll(',', '')) : null, totalIsLowerBound: !!total?.[1] };
+}
 export const HEALTH_NODE = 'n:3760901';
 // Amazon sometimes links a brand option through an SEO path such as
 // /Align-Health-Household/s?k=Align&rh=n:3760901,p_123:232433 without i=hpc. Only

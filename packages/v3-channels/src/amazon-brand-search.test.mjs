@@ -50,3 +50,53 @@ test('organic result ASINs skip sponsored cards and keep page order',()=>{
  const html=`<div class="s-main-slot">${card('B000000001','<span class="puis-sponsored-label-text">Sponsored</span>')}${card('B000000002')}${card('bad')}${card('B000000003')}</div>`;
  assert.deepEqual(organicAsins(html),['B000000002','B000000003']);assert.deepEqual(organicAsins(html,1),['B000000002']);
 });
+import { scanAddress, scanPageUrl, scanPage } from './amazon-brand-search.mjs';
+import { readFileSync } from 'node:fs';
+const stored = 'https://www.amazon.com/s?k=Herb+Pharm&i=hpc&rh=n%3A3760901%2Cp_123%3A383950&dc=';
+const scan1 = 'https://www.amazon.com/s?k=Herb+Pharm&i=hpc&rh=n%3A3760901%2Cp_123%3A383950&s=date-desc-rank&dc=';
+const scanPageHtml = ({ page = 1, asins = ['B00014FRVW'], sponsored = [], next = true, checked = true, facet = 'p_123/383950', total = '341', carousel = [] } = {}) =>
+  `<ul><li id="${facet}"><a class="s-navigation-item"><input type="checkbox" ${checked ? 'checked' : ''}>Herb Pharm</a></li></ul>` +
+  `<div data-component-type="s-result-info-bar">1-24 of ${total} results for "Herb Pharm"</div>` +
+  `<div class="s-main-slot">${asins.map(a => `<div data-component-type="s-search-result" data-asin="${a}"><h2>x</h2></div>`).join('')}` +
+  `${sponsored.map(a => `<div data-component-type="s-search-result" data-asin="${a}"><span class="puis-sponsored-label-text">Sponsored</span></div>`).join('')}</div>` +
+  `<div class="carousel">${carousel.map(a => `<div data-asin="${a}"></div>`).join('')}</div>` +
+  `<span class="s-pagination-item s-pagination-selected">${page}</span>` +
+  (next ? `<a class="s-pagination-item s-pagination-next" href="/s?k=Herb+Pharm&amp;page=${page + 1}&amp;qid=1">Next</a>` : '<span class="s-pagination-next s-pagination-disabled">Next</span>');
+test('scan address: stored brand URLs become newest-first pages; tracking removed; other sorts and shapes rejected', () => {
+  assert.deepEqual(scanAddress(stored), { url: scan1, kind: 'brand-filter-search', page: 1, brandFilter: 'p_123:383950' });
+  assert.equal(scanPageUrl(stored, 3), scan1.replace('&dc=', '&page=3&dc='));
+  assert.equal(scanAddress(scan1.replace('&dc=', '&page=3&dc=&qid=9&xpid=abc&ref=sr_pg_2')).page, 3);
+  assert.equal(scanPageUrl(scanPageUrl(stored, 3), 1), scan1);
+  const brandPage = 'https://www.amazon.com/s?srs=119148022011&rh=p_89%3AFreak%2BShake';
+  assert.equal(scanAddress(brandPage).url, brandPage + '&s=date-desc-rank');
+  assert.equal(scanAddress(brandPage).kind, 'brand-page');
+  assert.throws(() => scanAddress(stored.replace('i=hpc', 'i=aps')), /URL/);
+  assert.throws(() => scanAddress(stored + '&s=price-asc-rank'), /URL/);
+  assert.throws(() => scanAddress(stored + '&page=0'), /URL/);
+  assert.throws(() => scanAddress(stored + '&page=51'), /URL/);
+  assert.throws(() => scanAddress(stored.replace('383950', '383950%2Cp_123%3A1')), /SCOPE/);
+  assert.throws(() => scanAddress('https://www.amazon.com/s?srs=1&rh=p_89%3AA%2Cp_123%3A2'), /URL/);
+  assert.throws(() => scanAddress('https://evil.example/s?k=a&i=hpc'), /URL/);
+});
+test('scan page: organic main-slot ASINs only, next page, total, brand filter still applied', () => {
+  const p = scanPage(scanPageHtml({ asins: ['B00014FRVW', 'B00014FRVW', 'B0000000A1'], sponsored: ['B0SPONSOR1'], carousel: ['B0CAROUSEL'] }), scan1);
+  assert.deepEqual(p.organic, ['B00014FRVW', 'B0000000A1']);
+  assert.equal(p.sponsored, 1); assert.equal(p.nextPage, 2); assert.equal(p.totalResults, 341); assert.equal(p.brandFilterSelected, true);
+  const last = scanPage(scanPageHtml({ page: 2, next: false }), scanPageUrl(stored, 2));
+  assert.equal(last.nextPage, null); assert.equal(last.page, 2);
+  const empty = scanPage('<div class="s-main-slot"></div>', scanPageUrl(stored, 2));
+  assert.deepEqual(empty.organic, []); assert.equal(empty.nextPage, null);
+});
+test('scan page: lost filter, wrong page, skipped page link and challenge stop the brand', () => {
+  assert.throws(() => scanPage(scanPageHtml({ checked: false }), scan1), /FILTER_LOST/);
+  assert.throws(() => scanPage(scanPageHtml({ facet: 'p_123/1' }), scan1), /FILTER_LOST/);
+  assert.throws(() => scanPage(scanPageHtml({ page: 1 }), scanPageUrl(stored, 2)), /PAGE_MISMATCH/);
+  assert.throws(() => scanPage(scanPageHtml().replace('page=2', 'page=4'), scan1), /PAGINATION/);
+  assert.throws(() => scanPage('Robot Check', scan1), /CHALLENGE/);
+});
+test('scan page: the retained Herb Pharm ScraperAPI page (2026-09-23) parses as page 1 of a paged brand list', () => {
+  const html = readFileSync(new URL('../../../docs/quality/evidence/2026-09-23-brand-scraperapi-check/02-filtered.original.html', import.meta.url), 'utf8');
+  const p = scanPage(html, stored);
+  assert.equal(p.organic.length + p.sponsored, 24); assert.ok(p.organic.length >= 20);
+  assert.equal(p.nextPage, 2); assert.equal(p.totalResults, 341); assert.equal(p.brandFilterSelected, true);
+});
