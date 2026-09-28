@@ -73,6 +73,16 @@ export function verifyStoppedTree(nodes: Node[]) {
   }
 }
 
+/** The product workflows' own results decide the queue outcome. Review records are not consulted: a collected product
+ * normally leaves per-image Reviews behind (an empty-OCR lifestyle photo, a marketing image with no panel), and counting
+ * those turned collected products into queue Reviews (2026-09-28: 6 of 123 reruns; the 298 "stored but Review" of 09-26). */
+export function settledStatus(root: string, trees: readonly { type: string; status: string; result?: { status?: unknown } | undefined }[], entries: number, stopRequested: boolean) {
+  if (root !== "COMPLETED") return stopRequested ? "interrupted" : "review";
+  const products = trees.filter(n => n.type === "AmazonCatalogProductWorkflow");
+  const successful = products.length === entries && products.every(n => n.status === "COMPLETED" && ["collected", "observed", "skipped"].includes(n.result?.status as string));
+  return successful ? "completed" : "review";
+}
+
 export class AmazonQueueTemporal implements AmazonQueuePorts {
   readonly submissions: PostgresSubmissions;
   readonly journal: PostgresDelivery;
@@ -161,11 +171,7 @@ export class AmazonQueueTemporal implements AmazonQueuePorts {
     const closed = await this.journal.record(batch.requestId, proof.root);
     if (closed.state !== "CLOSED") fail("CLOSURE_UNCONFIRMED");
     const stop = (await this.db.query("SELECT stop_requested_at FROM amazon_queue_attempt WHERE request_id=$1", [batch.requestId])).rows[0];
-    const reviews = (await this.db.query("SELECT 1 FROM review_record WHERE record->'observation'->>'requestId'=$1 LIMIT 1", [batch.requestId])).rowCount;
-    const products = proof.trees.filter(n => n.type === "AmazonCatalogProductWorkflow");
-    const successful = products.length === batch.entries.length && products.every(n => n.status === "COMPLETED" && ["collected", "observed", "skipped"].includes(n.result?.status));
-    const status = proof.root.status === "COMPLETED" ? (reviews || !successful ? "review" : "completed") : stop?.stop_requested_at ? "interrupted" : "review";
-    return { status, proof };
+    return { status: settledStatus(proof.root.status, proof.trees, batch.entries.length, !!stop?.stop_requested_at), proof };
   }
   async stop(batch: AmazonLinkBatch) {
     await this.db.query("UPDATE amazon_queue_attempt SET stop_requested_at=coalesce(stop_requested_at,clock_timestamp()) WHERE request_id=$1 AND outcome='running'", [batch.requestId]);

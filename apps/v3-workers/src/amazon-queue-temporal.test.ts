@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { expect, it, vi } from "vitest";
 import { defaultPayloadConverter } from "@temporalio/common";
-import { executionTree, verifyStoppedTree } from "./amazon-queue-temporal.js";
+import { executionTree, settledStatus, verifyStoppedTree } from "./amazon-queue-temporal.js";
 const payload = (x: unknown) => ({ payloads: [defaultPayloadConverter.toPayload(x)] });
 function tree() {
   const job = { sessionId: "exact-owned-session" };
@@ -36,4 +36,16 @@ it("follows recorded descendants, rejects reset runs and children whose start is
   expect(cancel).not.toHaveBeenCalled();
   changed = true; await expect(executionTree(client, "root", root)).rejects.toThrow("RUN_CHANGED");
   changed = false; unknown = true; await expect(executionTree(client, "root", root)).rejects.toThrow("CHILD_START_UNKNOWN");
+});
+it("a collected product settles completed even when its skipped images left Reviews", () => {
+  const product = (status: string, result?: string) => ({ type: "AmazonCatalogProductWorkflow", status, result: result === undefined ? undefined : { status: result } });
+  const catalog = { type: "CatalogWorkflow", status: "COMPLETED", result: { status: "incomplete" } };
+  expect(settledStatus("COMPLETED", [catalog, product("COMPLETED", "collected")], 1, false)).toBe("completed");
+  expect(settledStatus("COMPLETED", [catalog, product("COMPLETED", "observed")], 1, false)).toBe("completed");
+  expect(settledStatus("COMPLETED", [catalog, product("COMPLETED", "review")], 1, false)).toBe("review");
+  expect(settledStatus("COMPLETED", [catalog, product("FAILED")], 1, false)).toBe("review");
+  expect(settledStatus("COMPLETED", [catalog], 1, false)).toBe("review");
+  expect(settledStatus("COMPLETED", [product("COMPLETED", "collected"), product("COMPLETED", "review")], 2, false)).toBe("review");
+  expect(settledStatus("TERMINATED", [product("COMPLETED", "collected")], 1, true)).toBe("interrupted");
+  expect(settledStatus("TERMINATED", [product("COMPLETED", "collected")], 1, false)).toBe("review");
 });
