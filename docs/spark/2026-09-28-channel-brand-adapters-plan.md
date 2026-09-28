@@ -180,11 +180,40 @@ Same Nordic Naturals and Garden of Life search pages, read at three stores: The 
 2. New code: product page parser (label images, price, members-only price and warehouse vs online stock recorded as seen), `CostcoCatalogProductWorkflow`, worker roles.
 3. Product ID: the Costco item number.
 
-## Phase 6: GNC
+## Phase 6: GNC (updated 2026-09-28 after checks)
 
-1. First re-test site access in Ego. The 09-09 run stopped at a human-verification page (`GNC.ACCESS_CHALLENGE`). If it still blocks, GNC waits.
-2. Listing scan: loop `start=N&sz=30` with `parseGncCatalog`.
-3. Formula once in `gnc-leased-workflow.ts` after `prepareGncProduct`, behind `patched('gnc-formula-once-v1')`, with `inspectExistingFormula` registered in the `gnc-product-input` role.
+User direction: GNC, Swanson, Costco and Whole Foods pages can be fetched through ScraperAPI like Amazon.
+
+Checked through ScraperAPI (6 requests, 60 credits, no challenge). A plain HTML request is enough for both the brand page and the product page.
+
+**Brand scan: done.** `gnc-brand-scan.mjs` + `scan-cli.mjs` (`gnc-brand-scan/1`), commits `003f28a`, `13723bc`.
+- `/brands/<slug>/?srule=new-arrivals&start=N&sz=200`: a whole brand fits on 1–3 pages.
+- The visible "(N Results)" is the brand total, so a scan proves it read every product. Pilot results:
+
+  | Brand | Products | Pages |
+  |---|---|---|
+  | Nordic Naturals | 4/4 | 1 |
+  | Optimum Nutrition | 48/48 | 1 |
+  | GNC house brand | 585/585 (576 SKUs + 9 families) | 3 |
+
+- Promotion tiles are skipped.
+- `data-actual-productcount` is only the count on that page.
+- GNC's own list (`/department/brands/`) has 275 brands. A full scan is about 300 pages, roughly 3,000 credits.
+
+**Formula from HTML: done.** `factsPolicy: 'html-table-first/1'`, commit `76d9c50`.
+- GNC product pages carry the full Supplement Facts as an HTML table: serving size, every ingredient with amount, and Other Ingredients.
+- A complete table is the only formula source: no image download, OCR or vision. An incomplete table keeps the images.
+
+**Product page through ScraperAPI: checked.**
+- 877080: 0.9 s, 10 credits. It has the JSON-LD product (SKU), the facts table and the image links.
+- The existing `parseGncProduct` reads it: title, brand, 4 images, facts complete (8 ingredient rows).
+
+**Still to build: a GNC product path like Amazon's.** Today's GNC worker captures in a browser, and only for products listed one by one in its private config (`grants`), so it cannot take a brand's product list.
+1. A GNC product task: fetch the page through ScraperAPI (as `AmazonHttpReader`), archive the original HTML before parsing, record metrics, then formula once.
+2. Formula from the HTML table (`html-table-first/1`). Images, only when needed, are downloaded directly from GNC's image server.
+3. Family products: expand the variants from the product page before queueing.
+4. Queue: the shared queue from phase 2, fed by the GNC scan results.
+5. The formula-once check must filter by channel and variant: a GNC 6-digit SKU must never match another site's product ID.
 
 ## Phase 7: Re-scans (manual only)
 
