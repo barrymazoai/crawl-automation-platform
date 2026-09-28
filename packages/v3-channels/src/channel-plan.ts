@@ -7,6 +7,7 @@ import { acquiredImageId, FILE_CONFIG_FINGERPRINT, PAGE_CONFIG_FINGERPRINT } fro
 import { parseDtcRenderedProduct } from "./dtc-rendered.js";
 import { parseAmazonRenderedProduct } from "./amazon-rendered.js";
 import { parseSwansonRenderedProduct } from "./swanson-rendered.js";
+import { factsTextComplete, factsTextFromHtml } from "./facts-text.js";
 import { ChannelError } from "./html-evidence.js";
 const encode = (v: unknown) => Buffer.from(JSON.stringify(v));
 const decode = (b: Uint8Array) => JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(b));
@@ -33,13 +34,16 @@ export class ChannelProductPlans {
       kind: "source-html", mediaType: "text/html", objectKey: `v3/channel-plans/${input.operationId}/derived.html`, byteSize: bytes.length, sha256: sha256(bytes),
       producer: { operationId: input.operationId, module: "channel.product-input", implementationVersion: "channel-plan/1" } }) : null;
     const sources: ChannelProductPlan["manifest"]["sources"] = [], files: ChannelProductPlan["files"] = [];
+    // text-facts-first/1: complete facts text of the selected product is the only, required formula source; no image.
+    const facts = product.factsCandidates.filter(f => f.scope === "selected-product").map(f => factsTextFromHtml(f.html)).join("\n");
+    const textOnly = input.factsPolicy === "text-facts-first/1" && !!fragment && factsTextComplete(facts).complete;
     if (fragment) {
       const raw = PagePrepareInputSchema.parse({ ...input.owner, operationId: id("page"), module: "page.prepare", implementationVersion: "1",
         policyVersion: "1", configFingerprint: PAGE_CONFIG_FINGERPRINT, page: fragment, inputFingerprint: "0".repeat(64) });
       const page = PagePrepareInputSchema.parse({ ...raw, inputFingerprint: sha256(Buffer.from(acquisitionFingerprintMaterial(raw))) });
-      sources.push({ id: "page", kind: "page", required: false, plan: { page, textOperationId: id("text"), text: input.text } });
+      sources.push({ id: "page", kind: "page", required: textOnly, plan: { page, textOperationId: id("text"), text: input.text } });
     }
-    for (const [index, image] of product.imageCandidates.entries()) {
+    if (!textOnly) for (const [index, image] of product.imageCandidates.entries()) {
       if (image.variantId !== input.owner.variantId) throw new ChannelError("CHANNEL.VARIANT_CONFLICT");
       const raw = FileAcquireInputSchema.parse({ ...input.owner, operationId: id(`file-${index}`), module: "file.acquire", implementationVersion: "1",
         policyVersion: "1", configFingerprint: FILE_CONFIG_FINGERPRINT, resourceId: id(`resource-${index}`), binding: input.binding,

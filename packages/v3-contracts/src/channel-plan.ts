@@ -11,6 +11,10 @@ export const ChannelPlanInputSchema = z.strictObject({
   parserVersion: z.enum(["swanson-rendered/1", "amazon-rendered/1", "dtc-rendered/1"]), expectedUrl: z.string().url().max(4096), source: ArtifactRefSchema,
   binding: SourceBindingSchema, text: TextCompatibilitySchema.refine(c => c.resultSchemaVersion === 2),
   ocr: ProcessingCompatibilitySchema.refine(c => c.resultSchemaVersion === 2), visionConfigFingerprint: Sha256Schema,
+  // Omitted: page text plus every product image (download, OCR, vision), as before. text-facts-first/1: when the
+  // selected product's own facts text is complete, that text is the only (required) formula source and no image is
+  // planned; incomplete facts keep the images. Opt-in requires a NEW plan operation.
+  factsPolicy: z.literal("text-facts-first/1").optional(),
 }).superRefine((i, ctx) => {
   try { assertArtifactBelongsTo(i.source, i.owner); } catch { ctx.addIssue({ code: "custom", message: "Source owner conflict" }); }
   // A projection comes from an owned browser page or, for Amazon, from one static HTTP fetch through a provider route.

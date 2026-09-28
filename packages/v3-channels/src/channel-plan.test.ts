@@ -124,3 +124,23 @@ it("different products get disjoint downstream operation IDs", async () => {
   const ids = (r: typeof ra) => r.manifest.sources.flatMap(s => s.kind === "file-image" ? [s.plan.acquire.operationId, s.plan.ocrOperationId, s.visionOperationId] : s.kind === "page" ? [s.plan.page.operationId, s.plan.textOperationId] : []);
   expect(ids(ra).filter(i => ids(rb).includes(i))).toEqual([]);
 });
+it.each(["swanson-product-public.json", "swanson-second-public.json"])("text-facts-first: %s complete facts text is the only, required source; no image is planned", async name => {
+  const f = fixture(name), input = ChannelPlanInputSchema.parse({ ...f.input, factsPolicy: "text-facts-first/1" });
+  const r = await f.plans.run(input, signal()); expect(r.status).toBe("prepared"); if (r.status !== "prepared") throw Error("unexpected Review");
+  expect(r.manifest.sources.map(s => [s.kind, s.required])).toEqual([["page", true]]);
+  expect((await f.plans.inspect(input, signal()))!.files).toEqual([]);
+});
+it("text-facts-first keeps the images when the facts text is incomplete", async () => {
+  const f = fixture(), p = structuredClone(f.p) as { sections: { heading: string; text: string }[] };
+  for (const s of p.sections) if (s.heading === "Product Facts") s.text = s.text.replace(/Other Ingredients[\s\S]*/i, "");
+  const bytes = Buffer.from(JSON.stringify(p)); f.remote.data.set(f.input.source.objectKey, bytes);
+  const input = ChannelPlanInputSchema.parse({ ...f.input, factsPolicy: "text-facts-first/1", source: { ...f.input.source, sha256: sha256(bytes), byteSize: bytes.length } });
+  const r = await f.plans.run(input, signal()); if (r.status !== "prepared") throw Error(r.status);
+  expect(r.manifest.sources.map(s => [s.kind, s.required])).toEqual([["page", false], ["file-image", false], ["file-image", false], ["file-image", false]]);
+});
+it("an existing plan operation cannot be switched to text-facts-first", async () => {
+  const f = fixture(); expect((await f.plans.run(f.input, signal())).status).toBe("prepared");
+  const puts = f.remote.create.mock.calls.length;
+  expect(await f.plans.run({ ...f.input, factsPolicy: "text-facts-first/1" }, signal())).toMatchObject({ status: "review", code: "CHANNEL.PLAN_CONFLICT" });
+  expect(f.remote.create).toHaveBeenCalledTimes(puts);
+});
