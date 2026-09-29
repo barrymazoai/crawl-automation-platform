@@ -25,19 +25,62 @@ export function evidenceLines(input: Pick<TextInput, "range">, text: string) {
         return line;
     });
 }
+/**
+ * What the caller knows about where a quote may sit, used only when its words occur more than once in the cited
+ * lines (2026-09-29: 85% of label TEXT.CITATION_INVALID Reviews were correct quotes of words repeated on one long
+ * line, e.g. "Chicken" in "Chicken Meal, Chicken, Chicken Fat"). A quote found exactly once behaves as before.
+ */
+export interface AnchorContext {
+    /** Printed order: occurrences starting before this offset belong to earlier rows or items. */
+    after?: number;
+    /** Spans other quotes already hold; the same printed words are never quoted twice. */
+    taken?: readonly { start: number; end: number }[];
+    /** An ingredient-list item: the occurrence must be a whole list entry, not part of a longer one. */
+    listItem?: boolean;
+    /** A formula row's own amount, which the printed row name may enclose ("Includes 5 g Added Sugars"). */
+    enclosed?: string;
+}
+const escapeToken = (t: string) => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+const wordChar = /[\p{L}\p{N}]/u;
+/** The occurrence does not start or end inside a longer word. */
+function wholeWords(text: string, start: number, end: number) {
+    return !(wordChar.test(text[start - 1] ?? "") && wordChar.test(text[start]!)) && !(wordChar.test(text[end] ?? "") && wordChar.test(text[end - 1]!));
+}
+/** Between list separators (or a line/heading edge) on both sides: `, Chicken,` but not `Chicken Fat`. */
+function wholeEntry(text: string, start: number, end: number) {
+    const before = text.slice(0, start).replace(/[ \t]+$/u, ""), after = text.slice(end).replace(/^[ \t]+/u, "");
+    return (!before || /[,;:(\n]$/u.test(before)) && (!after || /^[,;.)\n]/u.test(after));
+}
+/** Patterns for the quoted words; with an enclosed amount, also the name with that amount inside it. */
+function patterns(tokens: string[], enclosed?: string) {
+    const join = (words: string[]) => words.map(escapeToken).join("\\s+");
+    const inner = enclosed?.trim().split(/\s+/u) ?? [];
+    return [join(tokens), ...(inner.length ? tokens.slice(1).map((_, i) => join([...tokens.slice(0, i + 1), ...inner, ...tokens.slice(i + 1)])) : [])];
+}
 /** Only whitespace can differ. Store the exact original substring, including OCR line breaks. */
-export function resolveAnchor(a: Anchor, lines: ReturnType<typeof evidenceLines>, text: string): Quote {
+export function resolveAnchor(a: Anchor, lines: ReturnType<typeof evidenceLines>, text: string, context?: AnchorContext): Quote {
     const first = lines[a.fromLine - 1], last = lines[a.toLine - 1];
     if (!first || !last || a.toLine < a.fromLine || a.toLine - a.fromLine > 50) return fail("TEXT.CITATION_INVALID");
     const tokens = a.text.trim().split(/\s+/u);
-    const pattern = tokens.map(t => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("\\s+");
-    if (!pattern) return fail("TEXT.CITATION_INVALID");
-    const matches = [...text.slice(first.start, last.end).matchAll(new RegExp(pattern, "gu"))];
-    if (matches.length !== 1) return fail("TEXT.CITATION_INVALID");
-    const match = matches[0]!, start = first.start + match.index!, end = start + match[0].length;
+    if (!tokens[0]) return fail("TEXT.CITATION_INVALID");
+    const window = text.slice(first.start, last.end);
+    const find = (pattern: string) => [...window.matchAll(new RegExp(pattern, "gu"))].map(m => ({ start: first.start + m.index!, end: first.start + m.index! + m[0].length }));
+    let found = find(patterns(tokens)[0]!);
+    // The printed name encloses the row's own amount; only when the quoted words alone are not on the line.
+    if (!found.length && context?.enclosed) found = patterns(tokens, context.enclosed).slice(1).flatMap(find);
     // The declared span must be tight; a broad window cannot conceal a wrong line id.
-    if (start > first.end || end <= last.start) return fail("TEXT.CITATION_INVALID");
-    return { text: text.slice(start, end), start, end };
+    const tight = (q: { start: number; end: number }) => q.start <= first.end && q.end > last.start;
+    if (found.length === 1) {
+        const [{ start, end }] = found as [{ start: number; end: number }];
+        if (!tight({ start, end })) return fail("TEXT.CITATION_INVALID");
+        return { text: text.slice(start, end), start, end };
+    }
+    if (!found.length || !context) return fail("TEXT.CITATION_INVALID");
+    const free = (q: { start: number; end: number }) => !(context.taken ?? []).some(t => q.start < t.end && t.start < q.end);
+    const chosen = found.find(q => tight(q) && wholeWords(text, q.start, q.end) && (!context.listItem || wholeEntry(text, q.start, q.end)) &&
+        q.start >= (context.after ?? 0) && free(q));
+    if (!chosen) return fail("TEXT.CITATION_INVALID");
+    return { text: text.slice(chosen.start, chosen.end), start: chosen.start, end: chosen.end };
 }
 const otherHeading = /\b(?:other|oher)\s+ingredients\s*:/i;
 const warning = /\b(?:contains\s*:|manufactured\s+(?:in|on)|processed\s+(?:in|on)|shared\s+equipment|may\s+contain)/i;

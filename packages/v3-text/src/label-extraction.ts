@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { isIngredientHeading, LabelTextWireSchema, LabelTextCandidateSchema, assessLabelCandidate, type TextInput } from "@crawl-automation/v3-contracts";
-import { evidenceLines, resolveAnchor } from "./extraction.js";
+import { evidenceLines, resolveAnchor, type AnchorContext } from "./extraction.js";
 
 export const labelTextPolicyVersion = "label-text/4";
 export const labelTextOutputSchema = z.toJSONSchema(LabelTextWireSchema);
@@ -20,15 +20,31 @@ export function decodeLabelText(scope: Scope, text: string, response: string, po
   for (const offset of [start, end]) if (offset > 0 && /[\uD800-\uDBFF]/.test(text[offset - 1]!) && /[\uDC00-\uDFFF]/.test(text[offset] ?? "")) throw Error("LABEL.TEXT_RANGE");
   const wire = LabelTextWireSchema.parse(JSON.parse(response)), lines = evidenceLines(scope, text);
   const covered: { text: string; start: number; end: number }[] = [];
-  const field = (a: Anchor) => {
-    const q = resolveAnchor(a, lines, text); covered.push(q); return q;
+  // Repeated words are placed by printed order and by what other quotes already hold (see AnchorContext).
+  const field = (a: Anchor, context: AnchorContext = {}) => {
+    const q = resolveAnchor(a, lines, text, { taken: covered, ...context }); covered.push(q); return q;
   };
-  const optional = (a: Parameters<typeof field>[0] | null) => a ? field(a) : null;
+  const optional = (a: Anchor | null, context?: AnchorContext) => a ? field(a, context) : null;
+  type WireRow = NonNullable<typeof wire.formula>["columns"][number]["rows"][number];
+  const rows = (list: WireRow[]) => {
+    let after = 0;
+    return list.map(r => {
+      const name = field(r.name, { after, ...(r.amount ? { enclosed: r.amount.text } : {}) });
+      after = name.end;
+      // A row's own amount and DV follow its name; they may sit inside a name that encloses the amount.
+      const own = { after: name.start, taken: covered.filter(q => q !== name) };
+      return { ...r, name, amount: optional(r.amount, own), dailyValue: optional(r.dailyValue, own) };
+    });
+  };
+  const ingredients = (other: NonNullable<typeof wire.otherIngredients>) => {
+    const heading = field(other.heading);
+    let after = heading.end;
+    return { heading, items: other.items.map(item => { const q = field(item, { after, listItem: true }); after = q.end; return q; }) };
+  };
   const candidate = LabelTextCandidateSchema.parse({ ...wire,
     formula: wire.formula ? { servingSize: optional(wire.formula.servingSize), servingsPerContainer: optional(wire.formula.servingsPerContainer),
-      columns: wire.formula.columns.map(c => ({ heading: optional(c.heading), rows: c.rows.map(r => ({ ...r,
-        name: field(r.name), amount: optional(r.amount), dailyValue: optional(r.dailyValue) })) })) } : null,
-    otherIngredients: wire.otherIngredients ? { heading: field(wire.otherIngredients.heading), items: wire.otherIngredients.items.map(field) } : null,
+      columns: wire.formula.columns.map(c => ({ heading: optional(c.heading), rows: rows(c.rows) })) } : null,
+    otherIngredients: wire.otherIngredients ? ingredients(wire.otherIngredients) : null,
     exclusions: wire.exclusions.map(e => ({ ...e, quote: field(e.quote) })),
   });
   const assessment = assessLabelCandidate(candidate), codes = new Set(assessment.codes);

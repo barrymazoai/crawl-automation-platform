@@ -1,0 +1,177 @@
+{
+ "codec": "label-extraction/1",
+ "formula": {
+  "servingSize": {
+   "fromLine": 3,
+   "toLine": 3,
+   "text": "1 Level Scoop (5 grams)"
+  },
+  "servingsPerContainer": {
+   "fromLine": 5,
+   "toLine": 5,
+   "text": "60"
+  },
+  "columns": [
+   {
+    "heading": {
+     "fromLine": 7,
+     "toLine": 7,
+     "text": "Amount Per Serving % Daily Value"
+    },
+    "rows": [
+     {
+      "kind": "nutrient",
+      "name": {
+       "fromLine": 9,
+       "toLine": 9,
+       "text": "Calories"
+      },
+      "amount": {
+       "fromLine": 9,
+       "toLine": 9,
+       "text": "20"
+      },
+      "dailyValue": null,
+      "amountStatus": "printed",
+      "parentRowIndex": null
+     },
+     {
+      "kind": "nutrient",
+      "name": {
+       "fromLine": 10,
+       "toLine": 10,
+       "text": "Total Carbohydrate"
+      },
+      "amount": {
+       "fromLine": 10,
+       "toLine": 10,
+       "text": "5 g"
+      },
+      "dailyValue": {
+       "fromLine": 10,
+       "toLine": 10,
+       "text": "2%"
+      },
+      "amountStatus": "printed",
+      "parentRowIndex": null
+     },
+     {
+      "kind": "nutrient",
+      "name": {
+       "fromLine": 11,
+       "toLine": 11,
+       "text": "Total Sugars"
+      },
+      "amount": {
+       "fromLine": 11,
+       "toLine": 11,
+       "text": "5 g"
+      },
+      "dailyValue": null,
+      "amountStatus": "printed",
+      "parentRowIndex": null
+     },
+     {
+      "kind": "nutrient",
+      "name": {
+       "fromLine": 12,
+       "toLine": 12,
+       "text": "Includes Added Sugars"
+      },
+      "amount": {
+       "fromLine": 12,
+       "toLine": 12,
+       "text": "5 g"
+      },
+      "dailyValue": {
+       "fromLine": 12,
+       "toLine": 12,
+       "text": "10%"
+      },
+      "amountStatus": "printed",
+      "parentRowIndex": null
+     },
+     {
+      "kind": "nutrient",
+      "name": {
+       "fromLine": 13,
+       "toLine": 13,
+       "text": "D-Ribose"
+      },
+      "amount": {
+       "fromLine": 13,
+       "toLine": 13,
+       "text": "5 g"
+      },
+      "dailyValue": {
+       "fromLine": 13,
+       "toLine": 13,
+       "text": "\u2020"
+      },
+      "amountStatus": "printed",
+      "parentRowIndex": null
+     }
+    ]
+   }
+  ]
+ },
+ "otherIngredients": {
+  "heading": {
+   "fromLine": 18,
+   "toLine": 18,
+   "text": "Other Ingredients:"
+  },
+  "items": [
+   {
+    "fromLine": 18,
+    "toLine": 18,
+    "text": "None"
+   }
+  ]
+ },
+ "formulaComplete": true,
+ "ingredientsComplete": true,
+ "exclusions": [
+  {
+   "quote": {
+    "fromLine": 1,
+    "toLine": 1,
+    "text": "Supplement Facts"
+   },
+   "reason": "heading"
+  },
+  {
+   "quote": {
+    "fromLine": 3,
+    "toLine": 3,
+    "text": "Serving Size"
+   },
+   "reason": "metadata"
+  },
+  {
+   "quote": {
+    "fromLine": 5,
+    "toLine": 5,
+    "text": "Servings Per Container"
+   },
+   "reason": "metadata"
+  },
+  {
+   "quote": {
+    "fromLine": 15,
+    "toLine": 15,
+    "text": "\u2020 Daily Value not established."
+   },
+   "reason": "footnote"
+  },
+  {
+   "quote": {
+    "fromLine": 16,
+    "toLine": 16,
+    "text": "Percent Daily Values are based on a 2,000 calorie diet."
+   },
+   "reason": "footnote"
+  }
+ ],
+ "issues": []
+}
