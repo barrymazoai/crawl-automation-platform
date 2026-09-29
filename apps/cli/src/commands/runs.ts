@@ -7,7 +7,11 @@ type Channel = "amazon" | "gnc" | "swanson" | "dtc";
 
 export function registerRunCommands(program: Command, api: () => ApiClient): void {
   const runs = program.command("runs").description("Submit, watch and stop runs");
+  registerSubmitCommands(runs, api);
+  registerWatchCommands(runs, api);
+}
 
+function registerSubmitCommands(runs: Command, api: () => ApiClient): void {
   runs
     .command("submit")
     .description("Collect one brand on one channel")
@@ -24,6 +28,24 @@ export function registerRunCommands(program: Command, api: () => ApiClient): voi
       print(await api().runs.submit.mutate(input));
     });
 
+  runs
+    .command("product")
+    .description("Collect one product page; its channel and brand come from the source")
+    .requiredOption("--source <id>", "the brand's source ID on the product's channel")
+    .requiredOption("--url <url>", "the product page")
+    .option("--request <id>", "request ID; repeat the same one to retry safely", randomUUID())
+    .action(async (options: { source: string; url: string; request: string }) => {
+      const input = {
+        kind: "product" as const,
+        requestId: options.request,
+        sourceId: options.source,
+        url: options.url,
+      };
+      print(await api().runs.submit.mutate(input));
+    });
+}
+
+function registerWatchCommands(runs: Command, api: () => ApiClient): void {
   runs
     .command("list")
     .description("Recent runs, newest first")
