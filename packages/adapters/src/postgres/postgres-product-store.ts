@@ -45,21 +45,33 @@ function toProduct(raw: unknown): CollectedProduct {
   };
 }
 
-/** `collected_product`, newest first, paged by operation ID. */
+/** A cursor is `<collectedAt>|<operationId>` of the last item on the previous page. */
+function parseCursor(cursor: string | undefined): [string | null, string | null] {
+  const separator = cursor?.indexOf("|") ?? -1;
+  if (!cursor || separator < 1) {
+    return [null, null];
+  }
+  return [cursor.slice(0, separator), cursor.slice(separator + 1)];
+}
+
+/** `collected_product`, newest first by collection time. */
 export class PostgresProductStore implements ProductStore {
   constructor(private readonly database: Database) {}
 
   async list(query: ProductList): Promise<ProductPage> {
+    const [collectedAt, operationId] = parseCursor(query.before);
     const rows = await this.database.query(
       `SELECT operation_id, collected_at, record FROM collected_product
-       WHERE ($1::text IS NULL OR operation_id < $1)
-         AND ($2::text IS NULL OR record->'observation'->>'sourceId' = $2)
-         AND ($3::text IS NULL OR record->'observation'->>'listingId' = $3)
-       ORDER BY operation_id DESC LIMIT $4`,
-      [query.before ?? null, query.sourceId ?? null, query.listingId ?? null, query.limit + 1],
+       WHERE ($1::timestamptz IS NULL OR (collected_at, operation_id) < ($1::timestamptz, $2::text))
+         AND ($3::text IS NULL OR record->'observation'->>'sourceId' = $3)
+         AND ($4::text IS NULL OR record->'observation'->>'listingId' = $4)
+       ORDER BY collected_at DESC, operation_id DESC LIMIT $5`,
+      [collectedAt, operationId, query.sourceId ?? null, query.listingId ?? null, query.limit + 1],
     );
     const items = rows.slice(0, query.limit).map(toProduct);
-    const nextCursor = rows.length > query.limit ? (items.at(-1)?.operationId ?? null) : null;
+    const last = items.at(-1);
+    const nextCursor =
+      rows.length > query.limit && last ? `${last.collectedAt}|${last.operationId}` : null;
     return { items, nextCursor };
   }
 }

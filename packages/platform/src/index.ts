@@ -4,5 +4,6 @@ export * from "./database/database.js";
 export * from "./errors/app-error.js";
 export * from "./errors/define-errors.js";
 export * from "./errors/platform-errors.js";
+export * from "./health/heartbeat.js";
 export * from "./logger/create-logger.js";
 export * from "./temporal/connect-temporal.js";
