@@ -4,15 +4,19 @@ import {
   assertProcessingResultMatches,
   textObservation,
   type ArtifactRef,
+  type OcrInput,
+  type OcrRegistration,
   type TextInput,
 } from "@crawl-automation/v3-contracts";
 import type { ArtifactResolver } from "@crawl-automation/v3-artifacts";
-import type { OcrResultHandoff } from "@crawl-automation/v3-results";
 import { isAppError } from "@crawl-automation/platform";
 import { textFailure } from "../errors.js";
 import { splitsCharacter } from "../protocol/text-range.js";
 import type { LabelCorePolicies } from "./label-core-policy.js";
 import { textLimits } from "../limits.js";
+import type { ResultFacts } from "../../results/result-kind.js";
+
+type OcrFacts = ResultFacts<OcrRegistration>;
 
 export interface SourceText {
   text: string;
@@ -22,9 +26,9 @@ export interface SourceText {
 
 export interface TextEvidenceDeps {
   artifacts: Pick<ArtifactResolver, "resolve">;
-  ocr: Pick<OcrResultHandoff, "inspect">;
+  ocr: { inspect(input: OcrInput, signal: AbortSignal): Promise<OcrFacts> };
   /** Cloud mode only: a worker without a ledger verifies OCR-sourced text against the remote bytes. */
-  remoteOcr?: Pick<OcrResultHandoff, "inspectRemote">;
+  remoteOcr?: { inspectRemote(input: OcrInput, signal: AbortSignal): Promise<OcrFacts> };
   labelCores: LabelCorePolicies;
 }
 

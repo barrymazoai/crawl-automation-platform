@@ -50,6 +50,11 @@ GitHub Actions (`.github/workflows/ci.yml`) runs everything on every push to mai
 
 ## Libraries, not hand-written code
 
+Before writing any piece that a framework or library might already do (an HTTP client or server, parsing, file
+formats, retries, queues, text layout, …), search the internet for a maintained library first — not only this
+repository's current dependencies — and choose from what is found. Write it ourselves only when nothing suitable
+exists, and say why in the commit.
+
 | Need | Library |
 |---|---|
 | HTTP API | tRPC on Hono (`@hono/trpc-server`), zod for input |
@@ -57,6 +62,8 @@ GitHub Actions (`.github/workflows/ci.yml`) runs everything on every push to mai
 | Dates and durations | date-fns |
 | Wiring | awilix, one container per app |
 | Command-line arguments | commander |
+| Calling an HTTP API that has an OpenAPI document (e.g. the OCR API) | openapi-typescript (generated types) + openapi-fetch |
+| IP address ranges | ipaddr.js |
 | Tests | vitest |
 
 ## Shared code

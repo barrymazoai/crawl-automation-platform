@@ -69,7 +69,7 @@ module.exports = {
       from: { path: layer("processing") },
       to: {
         path: "^packages/v3-",
-        pathNot: "^packages/v3-(contracts|artifacts|codex|review|results)/",
+        pathNot: "^packages/v3-(contracts|artifacts|codex|review)/",
       },
     },
     {

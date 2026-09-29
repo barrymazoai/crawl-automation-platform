@@ -1,4 +1,5 @@
 import type { TextCompatibility, TextInput, TextRecord } from "@crawl-automation/v3-contracts";
+import type { ResultFacts, ResultRegistry } from "../results/result-kind.js";
 import type { SourceText } from "./evidence/text-evidence.js";
 
 /** The model client: one call per task, no retries, no fallback model. */
@@ -21,10 +22,7 @@ export interface TextModel {
 }
 
 /** The result ledger (`processing_result`). A cloud worker has none. */
-export interface TextResultRegistry {
-  read(operationId: string): Promise<TextRecord | null>;
-  register(record: TextRecord): Promise<void>;
-}
+export type TextResultRegistry = ResultRegistry<TextRecord>;
 
 /** Where a task's source text comes from. */
 export interface TextSource {
@@ -32,9 +30,4 @@ export interface TextSource {
 }
 
 /** What is known about a task's result: computed here, durable in R2, registered in the ledger. */
-export interface TextFacts {
-  computedLocal: boolean;
-  artifactDurable: boolean;
-  resultRegistered: boolean;
-  record: TextRecord | null;
-}
+export type TextFacts = ResultFacts<TextRecord>;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { MemoryStore } from "../testing/memory-store.js";
+import { MemoryStore } from "../../testing/memory-store.js";
 import { signal, textFixture } from "../testing/text-fixture.js";
 import { TextReceipt } from "./text-receipt.js";
 

@@ -19,7 +19,7 @@ export const governed = [
 const shortNamesAllowed = ["_", "i", "x", "y"];
 
 export default tseslint.config(
-  { ignores: ["**/dist/**", "**/node_modules/**"] },
+  { ignores: ["**/dist/**", "**/node_modules/**", "**/*.generated.ts"] },
   {
     files: governed,
     extends: [js.configs.recommended, ...tseslint.configs.strict],

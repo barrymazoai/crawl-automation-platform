@@ -1,8 +1,8 @@
-import { defineErrors, errorCodeOf, isAppError, type AppError } from "@crawl-automation/platform";
+import { defineErrors, isAppError, type AppError } from "@crawl-automation/platform";
 import { CodexError } from "@crawl-automation/v3-codex";
+import { recordedFact, stepFailure, type ExecutionFact } from "../step/step-failure.js";
 
-/** Whether the model ran before the failure: decides whether a Review may say "not executed". */
-export type ExecutionFact = "not_executed" | "executed" | "unknown";
+export type { ExecutionFact } from "../step/step-failure.js";
 
 const processing = (message: string) => ({ category: "PROCESSING" as const, message });
 const artifact = (message: string) => ({ category: "ARTIFACT" as const, message });
@@ -73,24 +73,13 @@ export function isTextErrorCode(code: string): code is TextErrorCode {
   return Object.hasOwn(textErrors.codes, code);
 }
 
-/**
- * A text failure that records whether the model had already run and, when another error caused it, that error's
- * code (or name), so the Review keeps the real reason.
- */
+/** A text failure that records whether the model had already run and, when another error caused it, its code. */
 export function textFailure(
   code: TextErrorCode,
   executionFact: ExecutionFact = "unknown",
   cause?: unknown,
 ): AppError {
-  const causeCode = cause === undefined ? null : (errorCodeOf(cause) ?? errorName(cause));
-  return textErrors.create(code, {
-    details: { executionFact, ...(causeCode ? { cause: causeCode } : {}) },
-    ...(cause === undefined ? {} : { cause }),
-  });
-}
-
-function errorName(error: unknown): string | null {
-  return error instanceof Error ? error.name : null;
+  return stepFailure(textErrors, code, { fact: executionFact, cause });
 }
 
 /**
@@ -118,6 +107,5 @@ export function executionFactOf(error: unknown): ExecutionFact | null {
   if (!error.code.startsWith("TEXT.")) {
     return null;
   }
-  const fact = error.details["executionFact"];
-  return fact === "not_executed" || fact === "executed" || fact === "unknown" ? fact : null;
+  return recordedFact(error);
 }

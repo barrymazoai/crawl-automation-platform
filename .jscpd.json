@@ -2,8 +2,18 @@
   "threshold": 0,
   "minLines": 12,
   "minTokens": 80,
-  "reporters": ["console"],
-  "ignore": ["**/*.test.ts", "**/dist/**", "**/node_modules/**", "**/fixtures/**"],
-  "format": ["typescript"],
+  "reporters": [
+    "console"
+  ],
+  "ignore": [
+    "**/*.test.ts",
+    "**/dist/**",
+    "**/node_modules/**",
+    "**/fixtures/**",
+    "**/*.generated.ts"
+  ],
+  "format": [
+    "typescript"
+  ],
   "absolute": false
 }

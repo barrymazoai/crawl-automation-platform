@@ -5,6 +5,7 @@ import {
   TextInputSchema,
   textFingerprint,
   type ArtifactRef,
+  type TextRecord,
 } from "@crawl-automation/v3-contracts";
 import { TextEvidence } from "../evidence/text-evidence.js";
 import type { LabelCorePolicies } from "../evidence/label-core-policy.js";
@@ -13,8 +14,8 @@ import { hashText } from "../results/text-record.js";
 import { TextResultRecovery } from "../results/text-result-recovery.js";
 import { TextResults } from "../results/text-results.js";
 import { TextStep } from "../step/text-step.js";
-import { MemoryReviews, MemoryTextRegistry } from "./memory-ledgers.js";
-import { MemoryStore } from "./memory-store.js";
+import { MemoryRegistry, MemoryReviews } from "../../testing/memory-ledgers.js";
+import { MemoryStore } from "../../testing/memory-store.js";
 
 export const signal = () => new AbortController().signal;
 
@@ -157,7 +158,7 @@ function wire(parts: {
   };
   const artifacts = new ArtifactResolver(cache, parts.remote);
   const evidence = new TextEvidence({ artifacts, ocr: unusedOcr, labelCores: parts.labelCores });
-  const registry = new MemoryTextRegistry();
+  const registry = new MemoryRegistry<TextRecord>();
   const reviews = new MemoryReviews();
   const deps = {
     local: parts.local,

@@ -12,6 +12,7 @@ export * from "./protocol/label-decoder.js";
 export * from "./protocol/label-instructions.js";
 export * from "./protocol/resolve-anchor.js";
 export * from "./protocol/text-protocol.js";
+export * from "./results/text-kind.js";
 export * from "./results/text-record.js";
 export * from "./results/text-result-recovery.js";
 export * from "./results/text-results.js";

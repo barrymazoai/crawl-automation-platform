@@ -31,7 +31,10 @@ catalog:
   antd: ^5.27.5
   drizzle-orm: ^0.44.5
   hono: ^4.8.2
+  ipaddr.js: ^2.5.0
   lucide-react: ^0.546.0
+  openapi-fetch: ^0.17.0
+  openapi-typescript: ^7.13.0
   pg: ^8.16.3
   pino: ^10.1.0
   pino-pretty: ^13.1.2

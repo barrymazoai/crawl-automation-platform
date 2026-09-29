@@ -6,7 +6,7 @@ import {
 } from "@crawl-automation/v3-contracts";
 import { describe, expect, it } from "vitest";
 import { hashText } from "../results/text-record.js";
-import { MemoryStore } from "../testing/memory-store.js";
+import { MemoryStore } from "../../testing/memory-store.js";
 import { signal, textFixture } from "../testing/text-fixture.js";
 import type { LabelCorePolicies } from "./label-core-policy.js";
 import { TextEvidence } from "./text-evidence.js";

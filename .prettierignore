@@ -22,3 +22,4 @@
 !packages/platform/**
 **/dist/**
 **/node_modules/**
+**/*.generated.ts

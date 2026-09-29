@@ -1,21 +1,27 @@
 import {
   TextOutputSchema,
   textIdentity,
+  type ReviewRecord,
   type TextActivityOutcome,
   type TextInput,
+  type TextOutput,
+  type TextRecord,
 } from "@crawl-automation/v3-contracts";
 import type { PrivateReviewReader, ReviewWriter } from "@crawl-automation/v3-review";
-import { textFailure, type ExecutionFact } from "../errors.js";
-import type { TextFacts, TextModel } from "../ports.js";
+import { ProcessingStep, type StepAttempt, type StepFailure } from "../../step/processing-step.js";
+import type { ExecutionFact } from "../../step/step-failure.js";
+import { executionFactOf, isKnownTextFailure, textFailure } from "../errors.js";
+import type { SourceText } from "../evidence/text-evidence.js";
+import { textLimits } from "../limits.js";
+import type { TextModel } from "../ports.js";
 import {
   decodeTextResult,
   textOutputSchema,
   textProtocolPrompt,
 } from "../protocol/text-protocol.js";
 import type { TextResults } from "../results/text-results.js";
-import { admittedInput, assertSafeModel, finishedOutcome } from "./task-admission.js";
-import { recordTextReview, textReview } from "./text-review.js";
-import { textLimits } from "../limits.js";
+import { admittedInput, assertSafeModel } from "./task-admission.js";
+import { textReview } from "./text-review.js";
 
 export interface TextStepDeps {
   model: TextModel;
@@ -26,76 +32,45 @@ export interface TextStepDeps {
   mode?: "register" | "upload-only";
 }
 
-interface Attempt {
-  input: TextInput;
-  fact: ExecutionFact;
-  response: string | null;
-  output: ReturnType<typeof TextOutputSchema.parse> | null;
-}
+const handoffCodes = {
+  incomplete: "TEXT.HANDOFF_INCOMPLETE",
+  unknown: "TEXT.HANDOFF_UNKNOWN",
+  reviewUnknown: "TEXT.REVIEW_UNKNOWN",
+} as const;
 
-/**
- * The text step: reads the task's source text, calls the model once, checks every quote, stores and registers the
- * result. Any failure becomes a Review that records whether the model ran; nothing is retried.
- */
-export class TextStep {
+/** The text step: calls the model once on the task's source text and checks every quote of its answer. */
+export class TextStep extends ProcessingStep<
+  TextInput,
+  TextOutput,
+  TextRecord,
+  TextActivityOutcome,
+  SourceText
+> {
   constructor(private readonly deps: TextStepDeps) {
+    super(deps);
     assertSafeModel(deps.model);
   }
 
-  async run(raw: unknown, signal: AbortSignal): Promise<TextActivityOutcome> {
-    const attempt: Attempt = {
-      input: admittedInput(raw, this.deps.model),
-      fact: "not_executed",
-      response: null,
-      output: null,
-    };
-    try {
-      return await this.execute(attempt, signal);
-    } catch (error) {
-      const found = await this.finishedMeanwhile(attempt.input);
-      if (found) {
-        return found;
-      }
-      const review = textReview({ ...attempt, error, aborted: signal.aborted });
-      await recordTextReview(this.deps.reviews, review);
-      return {
-        status: "review",
-        operationId: attempt.input.operationId,
-        reviewId: review.reviewId,
-        code: review.failure.code,
-        automaticRetry: false,
-      };
-    }
+  protected admit(raw: unknown): TextInput {
+    return admittedInput(raw, this.deps.model);
   }
 
-  private async execute(attempt: Attempt, signal: AbortSignal): Promise<TextActivityOutcome> {
-    const { input } = attempt;
-    const { results } = this.deps;
-    signal.throwIfAborted();
-    const previous = await results.inspect(input, signal);
-    const completed = this.outcome(input, previous);
-    if (completed) {
-      return completed;
-    }
-    if (previous.record) {
-      throw textFailure("TEXT.HANDOFF_INCOMPLETE", "executed");
-    }
-    const source = await results.resolveSource(input, signal);
-    attempt.fact = "unknown";
-    await results.claimIntent(input, this.deps.nodeId, signal);
-    signal.throwIfAborted();
-    await this.callModel(attempt, source.text, signal);
-    return this.storeAndRegister(attempt, signal);
+  protected readEvidence(input: TextInput, signal: AbortSignal): Promise<SourceText> {
+    return this.deps.results.resolveSource(input, signal);
+  }
+
+  protected claim(input: TextInput, signal: AbortSignal): Promise<void> {
+    return this.deps.results.claimIntent(input, this.deps.nodeId, signal);
   }
 
   /** The one model call: the raw answer is kept before it is checked, so a Review can show it. */
-  private async callModel(
-    attempt: Attempt,
-    sourceText: string,
+  protected async call(
+    attempt: StepAttempt<TextInput>,
+    source: SourceText,
     signal: AbortSignal,
-  ): Promise<void> {
+  ): Promise<TextOutput> {
     const { input } = attempt;
-    const prompt = textProtocolPrompt(input, sourceText);
+    const prompt = textProtocolPrompt(input, source.text);
     const request = {
       operationId: input.operationId,
       prompt,
@@ -106,60 +81,53 @@ export class TextStep {
     if (Buffer.byteLength(response) > textLimits.responseBytes) {
       throw textFailure("TEXT.OUTPUT_LIMIT", "executed");
     }
-    attempt.response = response;
+    attempt.candidate = { schema: "text-raw-response/1", value: { rawResponse: response } };
     await this.deps.results.retainResponse(input, response);
-    const candidate = decodeTextResult(input, sourceText, response);
-    const provider = this.deps.model.provider;
-    const identity = textIdentity(input);
-    attempt.output = TextOutputSchema.parse({
-      ...identity,
-      provider,
+    const candidate = decodeTextResult(input, source.text, response);
+    const output = TextOutputSchema.parse({
+      ...textIdentity(input),
+      provider: this.deps.model.provider,
       rawResponse: response,
       candidate,
     });
+    attempt.candidate = { schema: "text-output/1", value: output };
+    return output;
   }
 
-  /** Stores the checked output, uploads it, and registers it (in cloud mode the receipt registers it). */
-  private async storeAndRegister(
-    attempt: Attempt,
-    signal: AbortSignal,
-  ): Promise<TextActivityOutcome> {
-    const { input, output } = attempt;
-    const { results } = this.deps;
-    if (!output) {
-      throw textFailure("TEXT.HANDOFF_INCOMPLETE", "executed");
-    }
-    await results.capture(input, output, AbortSignal.timeout(textLimits.retentionMs));
-    signal.throwIfAborted();
-    await results.uploadMissing(input, signal);
-    const facts = this.uploadOnly
-      ? await results.inspect(input, signal)
-      : await results.register(input, signal);
-    const registered = this.outcome(input, facts);
-    if (!registered) {
-      throw textFailure("TEXT.HANDOFF_UNKNOWN", "executed");
-    }
-    return registered;
+  protected settled(input: TextInput, record: TextRecord, registered: boolean) {
+    const status = registered ? ("registered" as const) : ("uploaded" as const);
+    return {
+      status,
+      operationId: input.operationId,
+      result: record.result,
+      completion: record.completion,
+    };
   }
 
-  private get uploadOnly() {
-    return this.deps.mode === "upload-only";
+  /** The failure's own code (the text step's or the model client's); otherwise cancelled or unclassified. */
+  protected classify(error: unknown, aborted: boolean) {
+    const fallback = aborted ? "TEXT.CANCELLED" : "TEXT.UNCLASSIFIED";
+    return {
+      code: isKnownTextFailure(error) ? error.code : fallback,
+      fact: executionFactOf(error),
+    };
   }
 
-  private outcome(input: TextInput, facts: TextFacts): TextActivityOutcome | null {
-    return finishedOutcome(input, facts, this.uploadOnly);
+  protected review(attempt: StepAttempt<TextInput>, failure: StepFailure): ReviewRecord {
+    return textReview(attempt, failure);
   }
 
-  /** After a failure, a result that was in fact completed still counts; absence is never assumed. */
-  private async finishedMeanwhile(input: TextInput): Promise<TextActivityOutcome | null> {
-    try {
-      return this.outcome(
-        input,
-        await this.deps.results.inspect(input, AbortSignal.timeout(textLimits.retentionMs)),
-      );
-    } catch {
-      // Whether it finished cannot be shown now; the failure is recorded as a Review instead.
-      return null;
-    }
+  protected reviewed(input: TextInput, review: ReviewRecord): TextActivityOutcome {
+    return {
+      status: "review",
+      operationId: input.operationId,
+      reviewId: review.reviewId,
+      code: review.failure.code,
+      automaticRetry: false,
+    };
+  }
+
+  protected fail(reason: keyof typeof handoffCodes, fact?: ExecutionFact) {
+    return textFailure(handoffCodes[reason], fact);
   }
 }

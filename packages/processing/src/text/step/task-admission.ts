@@ -1,11 +1,10 @@
 import {
   TextCompatibilitySchema,
   parseTextInput,
-  type TextActivityOutcome,
   type TextInput,
 } from "@crawl-automation/v3-contracts";
 import { textFailure } from "../errors.js";
-import type { TextFacts, TextModel } from "../ports.js";
+import type { TextModel } from "../ports.js";
 import { hashText } from "../results/text-record.js";
 
 /** The model client must never retry, fall back to another model or switch network. */
@@ -36,25 +35,4 @@ export function admittedInput(raw: unknown, model: TextModel): TextInput {
     throw textFailure("TEXT.INVALID_INPUT", "not_executed");
   }
   return input;
-}
-
-/** A result counts once registered, or, in cloud mode, once durable in R2. */
-export function finishedOutcome(
-  input: TextInput,
-  facts: TextFacts,
-  uploadOnly: boolean,
-): TextActivityOutcome | null {
-  const { record } = facts;
-  if (!record || !facts.artifactDurable) {
-    return null;
-  }
-  const refs = {
-    operationId: input.operationId,
-    result: record.result,
-    completion: record.completion,
-  };
-  if (facts.resultRegistered) {
-    return { status: "registered", ...refs };
-  }
-  return uploadOnly ? { status: "uploaded", ...refs } : null;
 }
