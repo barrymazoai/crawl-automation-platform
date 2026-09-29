@@ -63,8 +63,8 @@ Every service is started by hand; nothing starts at boot or login. Code reaches 
 |---|---|---|
 | 1 | Guardrails: ESLint, Prettier, dependency-cruiser, jscpd, lefthook, CI, `test:v3` | Done |
 | 2 | `packages/platform`: config, logger, database, Temporal client, error registry. Storage and fetch move in with the channels in phase 5. | Done |
-| 3 | `packages/app` + `packages/adapters` + `apps/api` (tRPC on Hono) + `apps/cli`. Done: runs (submit brand, list, get, cancel, settle), resources and permits, fleet, delivery runner. Next: queue, brands, reviews, products, then switch Server 一 from `collection-api`. | In progress |
-| 4 | Run lifecycle: cancel, permit and guard release on every ending, resource kinds | |
+| 3 | `packages/app` + `packages/adapters` + `apps/api` (tRPC on Hono) + `apps/cli`: runs, queue, brands, reviews, products, resources and permits, fleet, delivery runner. In production on Server 一 since 2026-09-29 as job `collection-api` (release `api-bb2e622`, port 4188). | Done |
+| 4 | Run lifecycle: cancel, permit and guard release on every ending, resource kinds | Next |
 | 5 | Channel interface; Swanson, then Amazon, GNC, DTC; Costco and Whole Foods | |
 | 6 | Grouped worker processes, generated job list, one deploy command, old scripts archived | |
 

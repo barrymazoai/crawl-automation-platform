@@ -67,3 +67,25 @@ describe("DeliveryRunner", () => {
     expect(coordinator.reconcile).not.toHaveBeenCalled();
   });
 });
+
+describe("DeliveryRunner backoff", () => {
+  it("does not check a failing request again on the next sweep", async () => {
+    const scan = scanOf([cursor("stuck")]);
+    const coordinator = {
+      reconcile: vi.fn(async (_requestId: string) => {
+        throw new Error("cannot route");
+      }),
+    };
+    const runner = new DeliveryRunner(
+      { scan, coordinator, isPaused: async () => false, log: silent },
+      { batchSize: 10, concurrency: 1, intervalMs: 100 },
+    );
+    const signal = new AbortController().signal;
+
+    await runner.tick(signal);
+    await runner.tick(signal);
+    await runner.tick(signal);
+
+    expect(coordinator.reconcile).toHaveBeenCalledTimes(1);
+  });
+});

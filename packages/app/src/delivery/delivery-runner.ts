@@ -2,6 +2,7 @@ import { setTimeout as delay } from "node:timers/promises";
 import type { Logger } from "@crawl-automation/platform";
 import { z } from "zod";
 import type { DeliveryScan, ScanCursor } from "./ports.js";
+import { RetryBackoff } from "./retry-backoff.js";
 
 export const DeliveryRunnerOptionsSchema = z
   .strictObject({
@@ -31,6 +32,7 @@ export interface DeliveryRunnerDeps {
 export class DeliveryRunner {
   private after: ScanCursor | null = null;
   private through: ScanCursor | null = null;
+  private readonly backoff = new RetryBackoff();
 
   constructor(
     private readonly deps: DeliveryRunnerDeps,
@@ -78,14 +80,19 @@ export class DeliveryRunner {
     await Promise.all(Array.from({ length: this.options.concurrency }, consume));
   }
 
-  /** A failure is logged and the sweep moves on; later rows still run. */
+  /** A failure is logged, the request waits before its next check, and the sweep moves on. */
   private async reconcileOne(requestId: string): Promise<void> {
+    if (this.backoff.isWaiting(requestId)) {
+      return;
+    }
     const log = this.deps.log.child({ requestId });
     try {
       await this.deps.coordinator.reconcile(requestId);
+      this.backoff.succeeded(requestId);
       log.debug("delivery reconciled");
     } catch (error) {
-      log.warn({ err: error }, "delivery reconcile failed");
+      const waitMs = this.backoff.failed(requestId);
+      log.warn({ err: error, nextCheckInMs: waitMs }, "delivery reconcile failed");
     }
   }
 }
