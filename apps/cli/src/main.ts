@@ -2,7 +2,10 @@
 import { TRPCClientError } from "@trpc/client";
 import { Command } from "commander";
 import { createApiClient, type ApiClient } from "./client.js";
+import { registerBrandCommands } from "./commands/brands.js";
+import { registerQueueCommands } from "./commands/queue.js";
 import { registerResourceCommands } from "./commands/resources.js";
+import { registerResultCommands } from "./commands/results.js";
 import { registerRunCommands } from "./commands/runs.js";
 
 const program = new Command("crawler")
@@ -11,6 +14,9 @@ const program = new Command("crawler")
 
 const api = (): ApiClient => createApiClient(program.opts<{ api: string }>().api);
 registerRunCommands(program, api);
+registerQueueCommands(program, api);
+registerBrandCommands(program, api);
+registerResultCommands(program, api);
 registerResourceCommands(program, api);
 
 /** Shows an API error by its code, so the reason is clear without a stack trace. */

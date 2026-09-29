@@ -6,8 +6,10 @@ import { createHttpApp, listen } from "./server.js";
 async function main(): Promise<void> {
   const config = await loadApiConfig();
   const container = await buildContainer(config);
-  const { log, runs, resources, fleet, deliveryRunner, database, temporal } = container.cradle;
-  const server = await listen(createHttpApp({ runs, resources, fleet }), config.api);
+  const { log, deliveryRunner, database, temporal } = container.cradle;
+  const { runs, queue, brands, reviews, products, resources, fleet } = container.cradle;
+  const context = { runs, queue, brands, reviews, products, resources, fleet };
+  const server = await listen(createHttpApp(context), config.api);
   log.info({ host: config.api.host, port: config.api.port }, "api listening");
 
   const stop = new AbortController();

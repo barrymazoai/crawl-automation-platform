@@ -37,3 +37,4 @@ export * from "./dtc-cdp.js";
 export * from "./dtc-live-product.js";
 
 export * from "./dtc-catalog-source.js";
+export * from "./amazon-link-batch.js";

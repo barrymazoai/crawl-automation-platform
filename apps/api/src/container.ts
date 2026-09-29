@@ -1,18 +1,26 @@
 import { access } from "node:fs/promises";
 import {
   FleetStatusFiles,
+  PostgresBrandStore,
   PostgresDeliveryJournal,
   PostgresDeliveryScan,
+  PostgresProductStore,
+  PostgresQueueStore,
   PostgresResourceStore,
+  PostgresReviewStore,
   PostgresRunStore,
   TemporalWorkflowStarter,
   TemporalWorkflowTree,
 } from "@crawl-automation/adapters";
 import {
+  BrandService,
   DeliveryCoordinator,
   DeliveryRunner,
   FleetService,
+  ProductService,
+  QueueService,
   ResourceService,
+  ReviewService,
   RunService,
 } from "@crawl-automation/app";
 import {
@@ -23,7 +31,7 @@ import {
   type Logger,
   type TemporalClient,
 } from "@crawl-automation/platform";
-import { asFunction, asValue, createContainer, InjectionMode } from "awilix";
+import { asFunction, asValue, createContainer, InjectionMode, type AwilixContainer } from "awilix";
 import type { ApiConfig } from "./config.js";
 
 /** Everything the API is built from. Adapters are created once and shared. */
@@ -37,10 +45,16 @@ export interface ApiParts {
   workflowTree: TemporalWorkflowTree;
   deliveryCoordinator: DeliveryCoordinator;
   runs: RunService;
+  queue: QueueService;
+  brands: BrandService;
+  reviews: ReviewService;
+  products: ProductService;
   resources: ResourceService;
   fleet: FleetService;
   deliveryRunner: DeliveryRunner;
 }
+
+type Parts = AwilixContainer<ApiParts>;
 
 const exists = (path: string) =>
   access(path).then(
@@ -49,14 +63,18 @@ const exists = (path: string) =>
   );
 
 /** The composition root: the one place that knows which database, Temporal and files are used. */
-export async function buildContainer(config: ApiConfig) {
+export async function buildContainer(config: ApiConfig): Promise<Parts> {
   const log = createLogger({ name: "api", level: config.log.level });
   const temporal = await connectTemporal(config.temporal);
   const container = createContainer<ApiParts>({ injectionMode: InjectionMode.PROXY, strict: true });
+  container.register({ config: asValue(config), log: asValue(log), temporal: asValue(temporal) });
+  registerAdapters(container);
+  registerServices(container);
+  return container;
+}
+
+function registerAdapters(container: Parts): void {
   container.register({
-    config: asValue(config),
-    log: asValue(log),
-    temporal: asValue(temporal),
     database: asFunction((parts: ApiParts) =>
       createDatabase(parts.config.database, parts.log),
     ).singleton(),
@@ -68,30 +86,47 @@ export async function buildContainer(config: ApiConfig) {
       (parts: ApiParts) => new TemporalWorkflowTree(parts.temporal.client),
     ).singleton(),
     deliveryCoordinator: asFunction(deliveryCoordinator).singleton(),
-    runs: asFunction(runService).singleton(),
-    resources: asFunction(resourceService).singleton(),
+  });
+}
+
+function registerServices(container: Parts): void {
+  container.register({
+    runs: asFunction(
+      (parts: ApiParts) =>
+        new RunService({
+          runs: parts.runStore,
+          tree: parts.workflowTree,
+          permits: parts.resourceStore,
+          log: parts.log,
+        }),
+    ).singleton(),
+    queue: asFunction(
+      (parts: ApiParts) =>
+        new QueueService({ queue: new PostgresQueueStore(parts.database), log: parts.log }),
+    ).singleton(),
+    brands: asFunction(
+      (parts: ApiParts) =>
+        new BrandService({ brands: new PostgresBrandStore(parts.database), log: parts.log }),
+    ).singleton(),
+    reviews: asFunction(
+      (parts: ApiParts) => new ReviewService({ reviews: new PostgresReviewStore(parts.database) }),
+    ).singleton(),
+    products: asFunction(
+      (parts: ApiParts) =>
+        new ProductService({ products: new PostgresProductStore(parts.database) }),
+    ).singleton(),
+    resources: asFunction(
+      (parts: ApiParts) =>
+        new ResourceService({
+          resources: parts.resourceStore,
+          workflows: parts.workflowTree,
+          log: parts.log,
+        }),
+    ).singleton(),
     fleet: asFunction(
       (parts: ApiParts) => new FleetService({ source: new FleetStatusFiles(parts.config.fleet) }),
     ).singleton(),
     deliveryRunner: asFunction(deliveryRunner).singleton(),
-  });
-  return container;
-}
-
-function runService(parts: ApiParts): RunService {
-  return new RunService({
-    runs: parts.runStore,
-    tree: parts.workflowTree,
-    permits: parts.resourceStore,
-    log: parts.log,
-  });
-}
-
-function resourceService(parts: ApiParts): ResourceService {
-  return new ResourceService({
-    resources: parts.resourceStore,
-    workflows: parts.workflowTree,
-    log: parts.log,
   });
 }
 

@@ -637,6 +637,9 @@ importers:
       '@crawl-automation/v3-contracts':
         specifier: workspace:*
         version: link:../v3-contracts
+      '@crawl-automation/v3-review':
+        specifier: workspace:*
+        version: link:../v3-review
       '@temporalio/client':
         specifier: 1.23.0
         version: 1.23.0
@@ -668,6 +671,9 @@ importers:
       '@crawl-automation/platform':
         specifier: workspace:*
         version: link:../platform
+      '@crawl-automation/v3-channels':
+        specifier: workspace:*
+        version: link:../v3-channels
       '@crawl-automation/v3-contracts':
         specifier: workspace:*
         version: link:../v3-contracts

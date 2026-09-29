@@ -1,9 +1,21 @@
-import type { FleetService, ResourceService, RunService } from "@crawl-automation/app";
+import type {
+  BrandService,
+  FleetService,
+  ProductService,
+  QueueService,
+  ResourceService,
+  ReviewService,
+  RunService,
+} from "@crawl-automation/app";
 import { isAppError, type AppError } from "@crawl-automation/platform";
 import { initTRPC, TRPCError } from "@trpc/server";
 
 export interface ApiContext {
   runs: RunService;
+  queue: QueueService;
+  brands: BrandService;
+  reviews: ReviewService;
+  products: ProductService;
   resources: ResourceService;
   fleet: FleetService;
 }
@@ -13,7 +25,12 @@ type TrpcCode = TRPCError["code"];
 const conflictCodes = new Set([
   "RUN.SOURCE_BUSY",
   "RUN.REVISION_CONFLICT",
-  "RUN.REQUEST_ID_CONFLICT",
+  "REQUEST.ID_CONFLICT",
+  "BRAND.REVISION_CONFLICT",
+  "BRAND.DUPLICATE",
+  "QUEUE.IMPORT_CONFLICT",
+  "QUEUE.CLEANUP_PENDING",
+  "QUEUE.REQUEUE_NOT_SETTLED",
   "RUN.STILL_RUNNING",
   "RUN.RECENTLY_STOPPED",
   "PERMIT.OWNER_RUNNING",

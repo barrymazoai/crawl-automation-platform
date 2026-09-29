@@ -8,3 +8,8 @@ export * from "./runs/ports.js";
 export * from "./runs/run-service.js";
 export * from "./resources/resource-service.js";
 export * from "./fleet/fleet-service.js";
+export * from "./queue/queue-model.js";
+export * from "./queue/queue-service.js";
+export * from "./brands/brand-service.js";
+export * from "./reviews/review-service.js";
+export * from "./products/product-service.js";

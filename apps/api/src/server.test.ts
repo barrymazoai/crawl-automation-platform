@@ -1,15 +1,21 @@
-import type { FleetService, ResourceService, RunService } from "@crawl-automation/app";
+import type { RunService } from "@crawl-automation/app";
 import { appErrors } from "@crawl-automation/app";
 import { describe, expect, it, vi } from "vitest";
 import { createHttpApp } from "./server.js";
 
 const runId = "11111111-1111-4111-8111-111111111111";
 
+/** Only the runs service is exercised here; the others are never called. */
 function appWith(runs: Partial<RunService>) {
+  const unused = {} as never;
   return createHttpApp({
     runs: runs as RunService,
-    resources: {} as ResourceService,
-    fleet: {} as FleetService,
+    queue: unused,
+    brands: unused,
+    reviews: unused,
+    products: unused,
+    resources: unused,
+    fleet: unused,
   });
 }
 

@@ -1,11 +1,9 @@
-import { createHash } from "node:crypto";
 import { appErrors, type BrandRun } from "@crawl-automation/app";
 import type { Queryable } from "@crawl-automation/platform";
 import { CollectionSnapshot } from "@crawl-automation/v3-contracts";
 import { z } from "zod";
-import { storeErrors } from "../errors.js";
+import { oncePerRequest } from "./request-receipt.js";
 
-const Receipt = z.object({ operation: z.string(), fingerprint: z.string(), result: z.unknown() });
 const SourceRow = z.object({
   enabled: z.boolean(),
   revision: z.number(),
@@ -17,54 +15,25 @@ const SourceRow = z.object({
   url: z.string(),
 });
 
-/** The receipt names the operation the same way the earlier API did, so its replays stay compatible. */
-function receiptOf(run: BrandRun) {
-  const operation = `collection.submit:${run.brandId}:${run.sourceId}`;
-  const input = JSON.stringify({ sourceRevision: run.sourceRevision ?? null });
-  return { operation, fingerprint: createHash("sha256").update(input).digest("hex") };
-}
+const Accepted = z.object({ requestId: z.string() });
 
 /**
- * Accepts a brand run in the caller's transaction. Returns the request ID, which is also the run ID.
- * A repeated request ID with the same input returns the earlier run; different input is refused.
+ * Accepts a brand run in the caller's transaction and returns the run ID (its request ID). Repeating the same
+ * request returns the earlier run. The operation name matches the earlier API, so its receipts stay valid.
  */
 export async function acceptBrandRun(tx: Queryable, run: BrandRun): Promise<string> {
-  await tx.query("SET LOCAL lock_timeout = '3s'");
-  const { operation, fingerprint } = receiptOf(run);
-  const inserted = await tx.query(
-    `INSERT INTO api_request_receipt (request_id, operation, fingerprint) VALUES ($1, $2, $3)
-     ON CONFLICT DO NOTHING RETURNING request_id`,
-    [run.requestId, operation, fingerprint],
-  );
-  if (inserted.length === 0) {
-    return replayedRun(tx, run.requestId, { operation, fingerprint });
-  }
-  const snapshot = await lockedSnapshot(tx, run);
-  await insertSubmission(tx, run.requestId, snapshot);
-  await tx.query("UPDATE api_request_receipt SET result = $2::jsonb WHERE request_id = $1", [
-    run.requestId,
-    JSON.stringify({ requestId: run.requestId, snapshot }),
-  ]);
-  return run.requestId;
-}
-
-async function replayedRun(
-  tx: Queryable,
-  requestId: string,
-  expected: { operation: string; fingerprint: string },
-): Promise<string> {
-  const rows = await tx.query(
-    "SELECT operation, fingerprint, result FROM api_request_receipt WHERE request_id = $1 FOR UPDATE",
-    [requestId],
-  );
-  const receipt = Receipt.parse(rows[0]);
-  if (receipt.operation !== expected.operation || receipt.fingerprint !== expected.fingerprint) {
-    throw appErrors.create("RUN.REQUEST_ID_CONFLICT", { details: { requestId } });
-  }
-  if (receipt.result == null) {
-    throw storeErrors.create("STORE.RECEIPT_INCOMPLETE", { details: { requestId } });
-  }
-  return requestId;
+  const key = {
+    requestId: run.requestId,
+    operation: `collection.submit:${run.brandId}:${run.sourceId}`,
+    input: { sourceRevision: run.sourceRevision ?? null },
+    parse: (stored: unknown) => Accepted.parse(stored),
+  };
+  const accepted = await oncePerRequest(tx, key, async () => {
+    const snapshot = await lockedSnapshot(tx, run);
+    await insertSubmission(tx, run.requestId, snapshot);
+    return { requestId: run.requestId };
+  });
+  return accepted.requestId;
 }
 
 /** Freezes the source and brand name; locking the source serialises edits with this run. */

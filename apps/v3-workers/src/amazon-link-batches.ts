@@ -1,32 +1,10 @@
 import { isDeepStrictEqual as equal } from "node:util";
-import { z } from "zod";
-import { CatalogScopeSchema, CatalogEntrySchema, CatalogPageInputSchema, CatalogPageSchema, ArtifactRefSchema, type CatalogPage } from "@crawl-automation/v3-contracts";
+import { CatalogPageInputSchema, CatalogPageSchema, ArtifactRefSchema, type CatalogPage } from "@crawl-automation/v3-contracts";
 import { RetainedPublication, sha256, verifyBytes } from "@crawl-automation/v3-artifacts";
-import { amazonProductAddress } from "@crawl-automation/v3-channels";
 
-// An imported list is positive input provenance, never a website coverage claim.
-export const AmazonLinkBatchSchema = z.strictObject({
-  codec: z.literal("amazon-link-batch/1"), requestId: z.uuid(),
-  scope: CatalogScopeSchema.refine(s => s.channel === "amazon"),
-  candidateManifestSha256: z.string().regex(/^[a-f0-9]{64}$/),
-  entries: z.array(z.strictObject({ entry: CatalogEntrySchema,
-    candidateId: z.string().regex(/^[a-f0-9]{64}$/),
-    historyListingId: z.string().regex(/^[a-f0-9]{64}$/),
-  // One bounded request can keep the normal Temporal pipeline occupied. Browser
-  // and provider permits still control execution; this is not browser concurrency.
-  })).min(1).max(10),
-}).superRefine((b, ctx) => {
-  const ids = new Set<string>();
-  for (const { entry } of b.entries) {
-    try {
-      const a = amazonProductAddress(entry.url);
-      if (a.asin !== entry.listingId || a.url !== entry.url || entry.variantId !== null || entry.kind !== "product" || ids.has(a.asin)) throw Error();
-      ids.add(a.asin);
-    } catch { ctx.addIssue({ code: "custom", message: "Unique canonical selected Amazon ASIN required" }); }
-  }
-});
-export const AmazonLinkBatchesSchema = z.array(AmazonLinkBatchSchema).max(2000).refine(b => new Set(b.map(x => x.requestId)).size === b.length);
-export type AmazonLinkBatch = z.infer<typeof AmazonLinkBatchSchema>;
+// The batch schema lives in v3-channels so the new API can validate queue imports with the same rules.
+export { AmazonLinkBatchSchema, AmazonLinkBatchesSchema, type AmazonLinkBatch } from "@crawl-automation/v3-channels";
+import { AmazonLinkBatchSchema, type AmazonLinkBatch } from "@crawl-automation/v3-channels";
 const bytes = (v: unknown) => Buffer.from(JSON.stringify(v));
 
 export class AmazonLinkCatalog {
