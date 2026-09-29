@@ -14,13 +14,17 @@
     "test": "vitest run src"
   },
   "dependencies": {
+    "@crawl-automation/channels-core": "workspace:*",
     "@crawl-automation/platform": "workspace:*",
+    "@crawl-automation/v3-artifacts": "workspace:*",
     "@crawl-automation/v3-channels": "workspace:*",
     "@crawl-automation/v3-contracts": "workspace:*",
+    "@crawl-automation/workflows": "workspace:*",
     "date-fns": "^4.1.0",
     "zod": "catalog:"
   },
   "devDependencies": {
+    "@crawl-automation/channel-swanson": "workspace:*",
     "@types/node": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"

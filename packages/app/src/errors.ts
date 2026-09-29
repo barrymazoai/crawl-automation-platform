@@ -30,6 +30,14 @@ export const appErrors = defineErrors({
     category: "VALIDATION",
     message: "A brand or source like this already exists.",
   },
+  "PIPELINE.PLAN_UNVERIFIED": {
+    category: "ARTIFACT",
+    message: "The formula plan for this product is missing or no longer matches its evidence.",
+  },
+  "PIPELINE.EXECUTION_CONFLICT": {
+    category: "IDENTITY",
+    message: "This product is already linked to a different workflow.",
+  },
   "REVIEW.NOT_FOUND": { category: "VALIDATION", message: "Review not found." },
   "QUEUE.IMPORT_CONFLICT": {
     category: "VALIDATION",

@@ -10,3 +10,5 @@ export * from "./postgres/postgres-brand-store.js";
 export * from "./postgres/postgres-product-store.js";
 export * from "./postgres/postgres-queue-store.js";
 export * from "./postgres/postgres-review-store.js";
+export * from "./postgres/postgres-execution-registry.js";
+export * from "./postgres/postgres-formula-index.js";

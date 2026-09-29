@@ -1,6 +1,6 @@
-import { appErrors, type ReviewStore } from "@crawl-automation/app";
+import { appErrors, type ReviewLedger, type ReviewStore } from "@crawl-automation/app";
 import type { Database } from "@crawl-automation/platform";
-import type { ReviewListQuery } from "@crawl-automation/v3-contracts";
+import type { ReviewListQuery, ReviewRecord } from "@crawl-automation/v3-contracts";
 import { PostgresReviews, ReviewError, ReviewInspector } from "@crawl-automation/v3-review";
 
 type PgQueryable = ConstructorParameters<typeof PostgresReviews>[0];
@@ -47,5 +47,22 @@ export class PostgresReviewStore implements ReviewStore {
       }
       throw error;
     }
+  }
+}
+
+/** Writes Reviews into `review_record` through `v3-review`, which checks each record. */
+export class PostgresReviewLedger implements ReviewLedger {
+  private readonly reviews: PostgresReviews;
+
+  constructor(database: Database) {
+    this.reviews = new PostgresReviews(pgStyle(database));
+  }
+
+  read(reviewId: string): Promise<ReviewRecord | null> {
+    return this.reviews.read(reviewId);
+  }
+
+  append(record: ReviewRecord): Promise<unknown> {
+    return this.reviews.append(record);
   }
 }

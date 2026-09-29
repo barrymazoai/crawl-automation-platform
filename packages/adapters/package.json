@@ -18,6 +18,7 @@
     "@crawl-automation/platform": "workspace:*",
     "@crawl-automation/v3-contracts": "workspace:*",
     "@crawl-automation/v3-review": "workspace:*",
+    "@crawl-automation/workflows": "workspace:*",
     "@temporalio/client": "1.23.0",
     "@temporalio/common": "1.23.0",
     "@temporalio/proto": "1.23.0",
