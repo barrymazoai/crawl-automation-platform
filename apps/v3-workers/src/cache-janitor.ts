@@ -95,7 +95,7 @@ export function guardCodexLog(file: string): "guarded" | "absent" | "no_logs_tab
 
 /** Offline diagnostic-only rebuild. Preserve Codex migration metadata and the
  * exact schema, without deleting millions of indexed rows on a slow disk. */
-export async function compactCodexLog(file: string) {
+export async function compactCodexLog(file: string, isCodexRunning: () => Promise<boolean> = codexRunning) {
   const scratch=file+'.rebuild-'+randomUUID(),old=new DatabaseSync(file,{timeout:5000});
   let next:DatabaseSync|undefined;
   try {
@@ -117,7 +117,7 @@ export async function compactCodexLog(file: string) {
   }catch(error){next?.close();await rm(scratch,{force:true});throw error;}finally{old.close();}
   try {
     // Recheck immediately before replacement; never remove an active provider's DB.
-    if(await codexRunning())throw Error('JANITOR.CODEX_LOG_BUSY');
+    if(await isCodexRunning())throw Error('JANITOR.CODEX_LOG_BUSY');
     for(const suffix of ['-wal','-shm']){const st=await lstat(file+suffix).catch(()=>null);if(st?.isSymbolicLink()||(suffix==='-wal'&&st&&st.size>0))throw Error('JANITOR.CODEX_LOG_BUSY');if(st)await rm(file+suffix);}
     await rename(scratch,file);
   }finally{await rm(scratch,{force:true});}
@@ -185,7 +185,7 @@ export type SweepResult = { freeGBBefore: number; freeGBAfter: number; urgent: b
   codexLog?: { sizeBytes: number; removed: boolean; reason: string; guard: string } };
 
 /** One pass. `apply: false` reports exactly what it would remove and touches nothing. */
-export async function sweep(raw: z.input<typeof JanitorConfigSchema>, opts: { apply: boolean; codexRunning: boolean; now?: number },
+export async function sweep(raw: z.input<typeof JanitorConfigSchema>, opts: { apply: boolean; codexRunning: boolean; now?: number; isCodexRunning?: () => Promise<boolean> },
   signal: AbortSignal): Promise<SweepResult> {
   const config=JanitorConfigSchema.parse(raw);
   for (const rule of config.rules) assertRuleSafe(config.root, rule);
@@ -228,7 +228,7 @@ export async function sweep(raw: z.input<typeof JanitorConfigSchema>, opts: { ap
     if (opts.apply) { try {
       guard = guardCodexLog(file);
       if(removable&&guard==='guarded'){
-        await compactCodexLog(file);compacted=true;
+        await compactCodexLog(file,opts.isCodexRunning);compacted=true;
       }
     } catch { guard = "busy"; } }
     codexLog = { sizeBytes: total, removed: compacted, reason, guard };
