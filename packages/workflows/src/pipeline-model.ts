@@ -50,12 +50,23 @@ export const CaptureResultSchema = z.discriminatedUnion("status", [
     sourcePlan: ChannelPlanInputSchema,
     /** Whether the page's own facts text is complete enough to read the formula without images. */
     factsComplete: z.boolean(),
+    /** The page's facts as text, for the sibling-formula label check (absent in earlier histories). */
+    labelText: z.string().max(200_000).nullable().optional(),
+    /** The product's family as the adapter read it; checked by the reuse activity (absent in earlier histories). */
+    family: z.unknown().optional(),
   }),
   AcquisitionReviewSchema,
-  /** The revisit found the listing gone or superseded; the sighting is recorded and the product ends here. */
+  /** The revisit found the listing unlisted; the sighting and its reason are recorded and the product ends here. */
   z.strictObject({
     status: z.literal("listing"),
-    state: z.enum(["gone", "superseded"]),
+    state: z.literal("unlisted"),
+    // The same reasons as channels-core's UNLISTED_REASONS (this package does not depend on channels-core).
+    reason: z.enum([
+      "not_found",
+      "redirected_to_other_product",
+      "redirected_away",
+      "identity_conflict",
+    ]),
     operationId: ExecutionIdSchema,
     observationId: z.string().regex(/^[a-f0-9]{64}$/),
     listingId: z.string().min(1).max(200),
@@ -83,6 +94,25 @@ export type FormulaKey = z.infer<typeof FormulaKeySchema>;
 export const FormulaRequestSchema = FormulaKeySchema.extend({ runId: z.uuid() });
 export type FormulaRequest = z.infer<typeof FormulaRequestSchema>;
 
+/** A product without a formula of its own, with what its page showed: its family and its facts text. */
+export const SiblingReuseRequestSchema = FormulaRequestSchema.extend({
+  family: z.unknown(),
+  labelText: z.string().max(200_000).nullable(),
+});
+export type SiblingReuseRequest = z.infer<typeof SiblingReuseRequestSchema>;
+
+/** A sibling's formula linked after a passed label check, or full extraction with the reason why not. */
+export const SiblingReuseResultSchema = z.discriminatedUnion("status", [
+  z.strictObject({
+    status: z.literal("reused"),
+    formulaOperationId: z.string().min(1).max(300),
+    linkId: z.string().regex(/^[a-f0-9]{64}$/),
+    siblingListingId: z.string().min(1).max(200),
+    siblingVariantId: z.string().min(1).max(200).nullable(),
+  }),
+  z.strictObject({ status: z.literal("extract"), reason: z.string().min(1).max(120) }),
+]);
+
 export const LabelHandoffRequestSchema = z.strictObject({
   pipeline: ProductPipelineInputSchema,
   sourcePlan: ChannelPlanInputSchema,
@@ -107,6 +137,7 @@ export type ReviewRequest = z.infer<typeof ReviewRequestSchema>;
 export interface PipelineActivities {
   captureProduct(input: ProductPipelineInput): Promise<unknown>;
   findKnownFormula(request: FormulaRequest): Promise<unknown>;
+  reuseSiblingFormula(request: SiblingReuseRequest): Promise<unknown>;
   prepareLabelHandoff(request: LabelHandoffRequest): Promise<ChannelSavedLabelWorkflowInput>;
   acquireProductFile(request: FileRequest): Promise<FileAcquireOutcome>;
   reviewProduct(request: ReviewRequest): Promise<AcquisitionReview>;

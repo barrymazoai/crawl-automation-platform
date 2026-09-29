@@ -1,16 +1,20 @@
 import {
   PostgresExecutionRegistry,
   PostgresFormulaIndex,
+  PostgresFormulaLinks,
   PostgresListingStates,
   PostgresReviewLedger,
 } from "@crawl-automation/adapters";
 import {
+  FormulaLookup,
   LabelHandoffs,
   PipelineCapture,
   ProductReviews,
+  SiblingFormulaReuse,
   recordSighting,
 } from "@crawl-automation/app";
 import { swansonAdapter } from "@crawl-automation/channel-swanson";
+import { gncAdapter } from "@crawl-automation/channels-gnc";
 import {
   ChannelRegistry,
   HttpCapture,
@@ -62,6 +66,8 @@ export interface WorkerParts {
   pipelineCapture: PipelineCapture;
   productFiles: ProductFiles;
   formulaIndex: PostgresFormulaIndex;
+  formulaLookup: FormulaLookup;
+  siblingReuse: SiblingFormulaReuse;
   labelHandoffs: LabelHandoffs;
   productReviews: ProductReviews;
 }
@@ -84,7 +90,7 @@ export async function buildContainer(config: WorkerConfig): Promise<Parts> {
     local: asValue(await TextLocalStore.open(storage.journalRoot)),
     copies: asValue(await FileCopies.open(storage.cacheRoot)),
     // Channels this worker can collect. A new channel is one adapter added here.
-    registry: asValue(new ChannelRegistry([swansonAdapter])),
+    registry: asValue(new ChannelRegistry([swansonAdapter, gncAdapter])),
     fileTransport: asValue(
       config.files.resolve === "system" ? new SystemHttpsTransport() : new DirectHttpsTransport(),
     ),
@@ -115,13 +121,21 @@ function registerStores(container: Parts): void {
 function registerServices(container: Parts): void {
   container.register({
     productCapture: asFunction(captureService).singleton(),
-    // A revisit that finds the listing gone or superseded records that sighting instead of a Review.
+    // A revisit that finds the listing unlisted records that sighting (with its reason) instead of a Review.
     pipelineCapture: asFunction(({ productCapture, database }: WorkerParts) => {
       const listingStates = new PostgresListingStates(database);
       const listings = { record: (raw: unknown) => recordSighting(listingStates, raw) };
       return new PipelineCapture({ capture: productCapture, listings });
     }).singleton(),
     productFiles: asFunction(filesService).singleton(),
+    // Formula once across the channel's formula family, then a size or pack sibling's formula after a label check.
+    formulaLookup: asFunction(
+      ({ formulaIndex }: WorkerParts) => new FormulaLookup(formulaIndex),
+    ).singleton(),
+    siblingReuse: asFunction(
+      ({ formulaIndex, database }: WorkerParts) =>
+        new SiblingFormulaReuse({ index: formulaIndex, links: new PostgresFormulaLinks(database) }),
+    ).singleton(),
     labelHandoffs: asFunction(
       ({ registry, channelPlans, publication, database, config }: WorkerParts) =>
         new LabelHandoffs({

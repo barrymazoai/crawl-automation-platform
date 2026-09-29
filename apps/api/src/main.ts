@@ -9,13 +9,24 @@ async function heartbeat() {
   return path ? startHeartbeat(path, "api") : { stop: async () => undefined };
 }
 
-/** Starts the API, the delivery runner, the queue dispatcher and the cleanup loop; stops them cleanly on SIGTERM or SIGINT. */
+/** Starts the API, the delivery runner, the queue dispatcher, brand scans and the cleanup loop; stops them cleanly on SIGTERM or SIGINT. */
 async function main(): Promise<void> {
   const config = await loadApiConfig();
   const container = await buildContainer(config);
   const { log, deliveryRunner, queueDispatcher, cleanup, database, temporal } = container.cradle;
   const { runs, queue, brands, reviews, products, resources, fleet } = container.cradle;
-  const context = { runs, queue, brands, reviews, products, resources, fleet };
+  const { brandScans, brandSources, runner: brandScanRunner } = container.cradle.brandScanParts;
+  const context = {
+    runs,
+    queue,
+    brands,
+    reviews,
+    products,
+    resources,
+    fleet,
+    brandScans,
+    brandSources,
+  };
   const server = await listen(
     createHttpApp({ ...context, listingStates: container.cradle.listingStates }),
     config.api,
@@ -29,6 +40,7 @@ async function main(): Promise<void> {
   await Promise.all([
     deliveryRunner.run(stop.signal),
     queueDispatcher.run(stop.signal),
+    brandScanRunner?.run(stop.signal),
     cleanup.run(stop.signal),
   ]);
 

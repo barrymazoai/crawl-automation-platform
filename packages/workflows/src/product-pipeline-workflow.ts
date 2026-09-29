@@ -10,6 +10,7 @@ import {
   type PlanActivities,
   type ProductPipelineInput,
 } from "./pipeline-model.js";
+import { reuseSiblingFormula } from "./sibling-reuse.js";
 import { streamLabel } from "./stream-label.js";
 
 /** One attempt per Activity: a failure becomes a Review, never an automatic retry of paid or model work. */
@@ -54,7 +55,7 @@ async function collect(
   const captured = CaptureResultSchema.parse(
     await gate("captureProduct", () => pipeline.captureProduct(input)),
   );
-  // A Review, or a listing the revisit found gone or superseded (recorded as a sighting, not a failure).
+  // A Review, or a listing the revisit found unlisted (recorded as a sighting with its reason, not a failure).
   if (captured.status !== "captured") {
     return captured;
   }
@@ -77,6 +78,10 @@ async function collect(
       operationId: known.operationId,
       observation: sourcePlan.owner,
     };
+  }
+  const reused = await reuseSiblingFormula({ input, pipeline, captured });
+  if (reused) {
+    return reused;
   }
   if (outcome.status === "review") {
     return outcome;

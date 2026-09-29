@@ -80,9 +80,9 @@ export const appErrors = defineErrors({
     category: "ARTIFACT",
     message: "A different listing observation is already recorded under this key.",
   },
-  "LISTING.OBSERVED_ID_MISSING": {
+  "LISTING.REASON_EVIDENCE_MISSING": {
     category: "VALIDATION",
-    message: "A superseded listing must name the listing its page belongs to now.",
+    message: "An unlisted sighting must carry its reason and that reason's evidence.",
   },
   "LISTING.DELIVERY_NOT_CONFIGURED": {
     category: "RUNTIME",
@@ -105,5 +105,25 @@ export const appErrors = defineErrors({
   "DELIVERY.CLUSTER_MISMATCH": {
     category: "RUNTIME",
     message: "A delivery target points at a different Temporal cluster.",
+  },
+  "BRAND_SCAN.NO_SOURCES": {
+    category: "VALIDATION",
+    message: "The channel has no enabled brand sources to scan.",
+  },
+  "BRAND_SCAN.SOURCE_DISABLED": {
+    category: "VALIDATION",
+    message: "Only an enabled brand source can be scanned.",
+  },
+  "BRAND_SCAN.CHANNEL_UNSUPPORTED": {
+    category: "VALIDATION",
+    message: "This channel has no brand-scan reader.",
+  },
+  "BRAND_SCAN.BROWSER_NOT_CONFIGURED": {
+    category: "RUNTIME",
+    message: "This channel is scanned in a browser, and no browser is configured for it here.",
+  },
+  "BRAND_SCAN.NOT_CONFIGURED": {
+    category: "RUNTIME",
+    message: "Brand scans need their settings (R2 and ScraperAPI) in this process's config.",
   },
 });

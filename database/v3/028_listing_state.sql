@@ -1,6 +1,7 @@
 BEGIN;
 -- Listing states (docs/quality/2026-09-18-product-service-listing-state-prompt.md): what a direct revisit of a known
--- listing showed: gone (404/410, or redirected to no product), superseded (the page is now another listing), live.
+-- listing showed: unlisted, with exactly why, or live. Owner rule 2026-09-29, every channel: a page that no longer
+-- exists, redirects to a different product, redirects to no product, or shows another product's ID is unlisted.
 -- Each sighting is a fact written once. The crawler never marks a listing delisted; the product database decides.
 
 CREATE TABLE listing_state_observation (
@@ -11,18 +12,27 @@ CREATE TABLE listing_state_observation (
   variant_id text CHECK (variant_id IS NULL OR char_length(variant_id) BETWEEN 1 AND 200),
   brand_id uuid,
   run_id uuid,
-  state text NOT NULL CHECK (state IN ('gone', 'superseded', 'live')),
-  -- probe, causeCode, httpStatus, observedExternalId, artifactKey.
+  state text NOT NULL CHECK (state IN ('unlisted', 'live')),
+  reason text CHECK (reason IN ('not_found', 'redirected_to_other_product', 'redirected_away', 'identity_conflict')),
+  -- probe, causeCode, httpStatus, observedExternalId, finalUrl, artifactKey.
   evidence jsonb NOT NULL CHECK (jsonb_typeof(evidence) = 'object'),
   source text NOT NULL CHECK (char_length(source) BETWEEN 1 AND 300),
   captured_at timestamptz NOT NULL,
   registered_at timestamptz NOT NULL DEFAULT clock_timestamp(),
-  -- A superseded listing always names the listing its page belongs to now.
-  CHECK (state <> 'superseded' OR coalesce(evidence->>'observedExternalId', '') <> '')
+  -- An unlisted listing always says why; a live one never has a reason.
+  CHECK ((state = 'unlisted') = (reason IS NOT NULL)),
+  -- Each reason carries its evidence: the status of a missing page, the other product and where a redirect landed.
+  CHECK (reason IS DISTINCT FROM 'not_found' OR evidence->>'httpStatus' IN ('404', '410')),
+  CHECK (reason NOT IN ('redirected_to_other_product', 'identity_conflict')
+    OR coalesce(evidence->>'observedExternalId', '') <> ''),
+  CHECK (reason NOT IN ('redirected_to_other_product', 'redirected_away')
+    OR coalesce(evidence->>'finalUrl', '') <> '')
 );
 CREATE INDEX listing_state_by_listing
   ON listing_state_observation (channel, listing_id, variant_id, captured_at DESC);
 CREATE INDEX listing_state_by_brand ON listing_state_observation (channel, brand_id, captured_at DESC);
+CREATE INDEX listing_state_by_reason ON listing_state_observation (channel, reason, captured_at DESC)
+  WHERE reason IS NOT NULL;
 CREATE FUNCTION preserve_listing_state_observation() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN RAISE EXCEPTION 'A listing state observation is immutable' USING ERRCODE = '23514'; END;
 $$;

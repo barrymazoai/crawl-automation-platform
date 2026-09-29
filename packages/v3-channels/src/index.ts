@@ -1,4 +1,4 @@
-export { GncAdapter, GncError, GNC_POLICY, parseGncCatalog, parseGncProduct } from "./gnc.js";
+export { GncAdapter, GncError, GNC_POLICY, gncFactsTableComplete, parseGncCatalog, parseGncProduct } from "./gnc.js";
 export type { GncPageReader } from "./gnc.js";
 export { GncBrowserReader, type GncBrowserGrant } from "./gnc-browser.js";
 export { GncHttpReader, GNC_HTTP_POLICY, type GncHttpGrant } from "./gnc-http.js";

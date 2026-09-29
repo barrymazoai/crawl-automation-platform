@@ -35,8 +35,12 @@ export interface ListingStateItem {
   clientRef: string;
   listing: { channel: string; externalId: string; variantId: string | null };
   capturedAt: string;
-  state: ListingObservation["state"];
-  evidence: ListingObservation["evidence"] & { observationId: string };
+  /** The product service's own states; every unlisted reason is `gone` there (see listing-delivery.ts). */
+  state: "gone" | "live";
+  evidence: ListingObservation["evidence"] & {
+    observationId: string;
+    reason: ListingObservation["reason"];
+  };
   source: string;
 }
 

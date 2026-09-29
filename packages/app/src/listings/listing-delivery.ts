@@ -34,14 +34,20 @@ export function listingStateBatches(
   }));
 }
 
+/**
+ * One sighting as the product service's item. Every unlisted reason is sent as `gone`: the owner's rule is that a
+ * listing whose page is missing, redirects to a different product or away, or shows another product's ID is unlisted
+ * in every case. The reason, the other product's ID (`observedExternalId`) and where a redirect landed travel as
+ * evidence, so the product database still sees exactly why (and may link a successor from the observed ID).
+ */
 function batchItem(observation: ListingObservation): ListingStateItem {
-  const { channel, listingId, variantId, capturedAt } = observation;
+  const { channel, listingId, variantId, capturedAt, reason } = observation;
   return {
     clientRef: `${channel}:${listingId}:${variantId ?? "-"}:${capturedAt}`,
     listing: { channel, externalId: listingId, variantId },
     capturedAt,
-    state: observation.state,
-    evidence: { ...observation.evidence, observationId: observation.observationId },
+    state: observation.state === "unlisted" ? "gone" : "live",
+    evidence: { ...observation.evidence, reason, observationId: observation.observationId },
     source: observation.source,
   };
 }

@@ -24,7 +24,12 @@ export type HtmlCapture = z.infer<typeof HtmlCaptureSchema>;
  * earlier archives have neither and stay readable.
  */
 export const FetchedViaSchema = z.strictObject({
-  mode: z.literal("http"),
+  mode: z.enum(["http", "browser"]),
+  /** The store a browser had chosen, for a channel priced by store (Whole Foods); absent otherwise. */
+  storeId: z
+    .string()
+    .regex(/^\d{1,12}$/)
+    .optional(),
   routeId: z.string(),
   egressId: z.string(),
   provider: z.string(),

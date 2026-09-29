@@ -1,6 +1,10 @@
 import type { ChannelAdapter, ParsedProduct } from "../adapter.js";
 import { channelErrors } from "../errors.js";
-import { goneSighting, movedSighting, type ListingSighting } from "../pipeline/listing-sighting.js";
+import {
+  movedSighting,
+  notFoundSighting,
+  type ListingSighting,
+} from "../pipeline/listing-sighting.js";
 import type { ArchivedHtml, OriginalHtmlArchive } from "./original-html-archive.js";
 import type { PageFetcher } from "./page-fetch.js";
 import { decodeHtml } from "./read-html.js";
@@ -12,16 +16,18 @@ export interface CapturedProduct {
   capturedAt: string;
 }
 
-/** A readable product page, or what the revisit showed instead: the listing is gone or superseded. */
+/** A readable product page, or what the revisit showed instead: the listing is unlisted, and why. */
 export type HttpCaptureResult =
   ({ status: "page" } & CapturedProduct) | { status: "sighting"; sighting: ListingSighting };
 
 type Download = { page: ArchivedHtml } | { sighting: ListingSighting };
 
 /**
- * Product-page capture for any channel, through ScraperAPI: read the archive first; only when nothing is archived,
+ * Product-page capture for any channel, through its page fetcher (ScraperAPI; the browser only for the channels
+ * that declare it): read the archive first; only when nothing is archived,
  * record the intent, download once, archive, read back, then let the channel adapter parse the archived bytes.
- * A page that is gone (404/410) or was redirected to another listing is reported as a sighting, not parsed.
+ * A page that no longer exists (404/410) or was redirected to another product or away from any product is reported
+ * as an unlisted sighting, not parsed.
  */
 export class HttpCapture {
   constructor(private readonly pages: PageFetcher) {}
@@ -31,9 +37,9 @@ export class HttpCapture {
     archive: OriginalHtmlArchive,
     signal: AbortSignal,
   ): Promise<HttpCaptureResult> {
-    if (!adapter.captureModes.includes("http")) {
+    if (!adapter.captureModes.includes(this.pages.mode)) {
       throw channelErrors.create("CHANNEL.CAPTURE_MODE_UNSUPPORTED", {
-        details: { channel: adapter.id, mode: "http" },
+        details: { channel: adapter.id, mode: this.pages.mode },
       });
     }
     const archived = await archive.inspect(signal);
@@ -60,7 +66,7 @@ export class HttpCapture {
     };
   }
 
-  /** Records the intent, downloads once and archives; a page that no longer exists is a `gone` sighting. */
+  /** Records the intent, downloads once and archives; a page that no longer exists is a `not_found` sighting. */
   private async download(
     adapter: ChannelAdapter,
     archive: OriginalHtmlArchive,
@@ -72,9 +78,9 @@ export class HttpCapture {
     try {
       page = await this.pages.fetchPage(request, signal);
     } catch (error) {
-      const gone = goneSighting(error);
-      if (gone) {
-        return { sighting: gone };
+      const unlisted = notFoundSighting(error);
+      if (unlisted) {
+        return { sighting: unlisted };
       }
       throw error;
     }

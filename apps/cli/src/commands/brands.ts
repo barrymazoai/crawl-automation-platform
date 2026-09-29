@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { Command } from "commander";
 import type { ApiClient } from "../client.js";
 import { print } from "../print.js";
+import { registerBrandScanCommands } from "./brand-scans.js";
 
 type Channel = "amazon" | "gnc" | "swanson" | "dtc";
 
@@ -27,6 +28,7 @@ export function registerBrandCommands(program: Command, api: () => ApiClient): v
     .action(async (brandId: string) => print(await api().brands.get.query({ brandId })));
 
   registerSourceCommands(brands, api);
+  registerBrandScanCommands(brands, api);
 }
 
 /** A brand's URLs on each channel: list, add, enable. */

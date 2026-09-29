@@ -81,7 +81,7 @@ const endedReasons: Partial<Record<string, QueueReason>> = {
 export function settledOutcome(execution: RunExecution): SettledOutcome | null {
   if (execution.status === "COMPLETED") {
     const result = PipelineResultSchema.safeParse(execution.result);
-    // `listing`: the revisit found the listing gone or superseded and recorded that sighting; the run is done.
+    // `listing`: the revisit found the listing unlisted and recorded that sighting with its reason; the run is done.
     if (result.success && ["collected", "listing"].includes(result.data.status)) {
       return { state: "completed", reason: null };
     }

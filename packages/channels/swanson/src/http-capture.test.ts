@@ -89,23 +89,33 @@ describe("HttpCapture with the Swanson adapter", () => {
 });
 
 describe("a revisit of a Swanson listing that is no longer that product", () => {
-  it("reports a page that answers 404 as gone, archiving nothing", async () => {
+  it("reports a page that answers 404 as unlisted (not found), archiving nothing", async () => {
     const { remote, capture: http, archive } = setup(404);
     const result = await http.capture(swansonAdapter, archive(), signal());
     expect(result).toMatchObject({
       status: "sighting",
-      sighting: { state: "gone", causeCode: "CAPTURE.NOT_FOUND", httpStatus: 404 },
+      sighting: {
+        state: "unlisted",
+        reason: "not_found",
+        causeCode: "LISTING.NOT_FOUND",
+        httpStatus: 404,
+      },
     });
     expect(remote.data.has("v3/swanson-html/swanson-capture-test/original.html")).toBe(false);
   });
 
-  it("reports a redirect to another product as superseded by that product's handle", async () => {
+  it("reports a redirect to a different product as unlisted, naming that product's handle", async () => {
     const moved = "https://www.swansonvitamins.com/p/healthy-origins-d-ribose-new";
     const { capture: http, archive } = setup(200, moved);
     const result = await http.capture(swansonAdapter, archive(), signal());
     expect(result).toMatchObject({
       status: "sighting",
-      sighting: { state: "superseded", observedListingId: "healthy-origins-d-ribose-new" },
+      sighting: {
+        state: "unlisted",
+        reason: "redirected_to_other_product",
+        observedListingId: "healthy-origins-d-ribose-new",
+        finalUrl: moved,
+      },
     });
   });
 });

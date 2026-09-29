@@ -1,6 +1,7 @@
 import {
   CreateBrandSchema,
   CreateSourceSchema,
+  ImportSourcesSchema,
   ListSourcesSchema,
   ToggleSourceSchema,
   UpdateBrandSchema,
@@ -9,6 +10,20 @@ import {
 import { Id, ListQuery } from "@crawl-automation/v3-contracts";
 import { z } from "zod";
 import { procedure, router } from "../trpc.js";
+
+/** Scans a request names; `sourceIds` or a `channel` (all its enabled sources). */
+const ScanRequestInput = z.strictObject({
+  requestId: z.uuid(),
+  sourceIds: z.array(z.uuid()).min(1).max(1_000).optional(),
+  channel: z.enum(["swanson", "gnc", "dtc", "costco", "wholefoods"]).optional(),
+});
+const ScanListInput = z
+  .strictObject({
+    channel: z.enum(["swanson", "gnc", "dtc", "costco", "wholefoods"]).optional(),
+    state: z.enum(["queued", "running", "complete", "partial", "review"]).optional(),
+    limit: z.number().int().min(1).max(1_000).optional(),
+  })
+  .optional();
 
 export const brandsRouter = router({
   list: procedure
@@ -34,6 +49,19 @@ export const brandsRouter = router({
   updateSource: procedure
     .input(UpdateSourceSchema)
     .mutation(({ ctx, input }) => ctx.brands.updateSource(input)),
+
+  /** Scans brands: every product each brand lists goes into the shared queue (the runner reads the pages). */
+  scan: procedure
+    .input(ScanRequestInput)
+    .mutation(({ ctx, input }) => ctx.brandScans.request(input)),
+
+  /** Brand scans, newest first, with what each found. */
+  scans: procedure.input(ScanListInput).query(({ ctx, input }) => ctx.brandScans.list(input ?? {})),
+
+  /** Adds a channel's brand directory as disabled sources; loose and missing name matches come back for review. */
+  importSources: procedure
+    .input(ImportSourcesSchema)
+    .mutation(({ ctx, input }) => ctx.brandSources.import(input)),
 
   /** Enable or disable a source; only an enabled source can run. */
   toggleSource: procedure

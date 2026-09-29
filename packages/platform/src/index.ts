@@ -12,3 +12,4 @@ export * from "./storage/object-store.js";
 export * from "./storage/storage-errors.js";
 export * from "./storage/local-object-store.js";
 export * from "./fetch/index.js";
+export * from "./browser/index.js";

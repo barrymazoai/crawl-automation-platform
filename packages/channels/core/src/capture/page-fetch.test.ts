@@ -168,36 +168,48 @@ describe("HttpCapture", () => {
     return new HttpCapture(new ScraperApiPages(fake, settings)).capture(adapter, archive, signal());
   };
 
-  it("reports a page that answers 404 as a gone sighting, not a failure", async () => {
+  it("reports a page that answers 404 as unlisted (not found), not a failure", async () => {
     expect(await captureWith({ status: 404 })).toEqual({
       status: "sighting",
       sighting: {
-        state: "gone",
-        causeCode: "CAPTURE.NOT_FOUND",
+        state: "unlisted",
+        reason: "not_found",
+        causeCode: "LISTING.NOT_FOUND",
         httpStatus: 404,
         observedListingId: null,
+        finalUrl: null,
         archiveKey: null,
       },
     });
   });
 
-  it("reports a redirect to another product as superseded, naming that product", async () => {
-    const result = await captureWith({ url: `${ORIGIN}/product/999111.html` });
+  it("reports a redirect to a different product as unlisted, naming that product and where it landed", async () => {
+    const landed = `${ORIGIN}/product/999111.html`;
+    const result = await captureWith({ url: landed });
     expect(result).toMatchObject({
       status: "sighting",
       sighting: {
-        state: "superseded",
+        state: "unlisted",
+        reason: "redirected_to_other_product",
+        causeCode: "LISTING.REDIRECTED_TO_OTHER_PRODUCT",
         observedListingId: "999111",
-        causeCode: "LISTING.SUPERSEDED",
+        finalUrl: landed,
       },
     });
   });
 
-  it("reports a redirect to a page that is no product as gone", async () => {
-    const result = await captureWith({ url: `${ORIGIN}/brands/gnc/` });
+  it("reports a redirect to a page that is no product as unlisted (redirected away)", async () => {
+    const landed = `${ORIGIN}/brands/gnc/`;
+    const result = await captureWith({ url: landed });
     expect(result).toMatchObject({
       status: "sighting",
-      sighting: { state: "gone", causeCode: "LISTING.REDIRECTED_AWAY", observedListingId: null },
+      sighting: {
+        state: "unlisted",
+        reason: "redirected_away",
+        causeCode: "LISTING.REDIRECTED_AWAY",
+        observedListingId: null,
+        finalUrl: landed,
+      },
     });
   });
 

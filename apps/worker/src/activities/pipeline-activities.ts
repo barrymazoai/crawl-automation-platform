@@ -34,8 +34,9 @@ export function pipelineActivities(parts: WorkerParts) {
       parts.pipelineCapture.capture(ProductPipelineInputSchema.parse(raw), signal),
     findKnownFormula: (raw: unknown) => {
       const { runId: _runId, ...key } = FormulaRequestSchema.parse(raw);
-      return parts.formulaIndex.findKnown(key);
+      return parts.formulaLookup.findKnown(key);
     },
+    reuseSiblingFormula: (raw: unknown) => parts.siblingReuse.reuse(raw),
     prepareLabelHandoff: (raw: unknown, signal: AbortSignal) => {
       const request = LabelHandoffRequestSchema.parse(raw);
       return parts.labelHandoffs.prepare(

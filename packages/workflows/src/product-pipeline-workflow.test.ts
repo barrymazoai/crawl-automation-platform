@@ -5,6 +5,8 @@ const env = vi.hoisted(() => ({
   start: vi.fn(),
   signals: [] as Array<[string, unknown]>,
   held: false,
+  /** Whether the history being run carries the patch markers (false: a history recorded before them). */
+  patched: true,
 }));
 
 vi.mock("@temporalio/workflow", () => {
@@ -26,7 +28,7 @@ vi.mock("@temporalio/workflow", () => {
       workflowId: "product-run-1",
       runId: "00000000-0000-4000-8000-000000000001",
     }),
-    patched: () => true,
+    patched: () => env.patched,
     sleep: async () => undefined,
     isCancellation: (error: unknown) => (error as { type?: string }).type === "CANCELLED",
     CancellationScope: { nonCancellable: (run: () => unknown) => run() },
@@ -76,6 +78,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   env.signals = [];
   env.held = false;
+  env.patched = true;
 });
 
 async function setup() {
@@ -93,6 +96,10 @@ async function setup() {
       return { status: "captured", sourcePlan, factsComplete: false };
     }),
     findKnownFormula: vi.fn(async (): Promise<unknown> => null),
+    reuseSiblingFormula: vi.fn(async (): Promise<unknown> => ({
+      status: "extract",
+      reason: "FORMULA.NO_SIBLING_FORMULA",
+    })),
     prepareLabelHandoff: vi.fn(async () => {
       expect(env.held).toBe(false);
       return { input: { operationId: "label-1" } };
@@ -181,16 +188,17 @@ it("a capture Review is returned as is, releases the lane and starts nothing els
   expect(plan.prepareChannelProduct).not.toHaveBeenCalled();
 });
 
-it("a listing the revisit found gone ends there as a sighting, not a Review", async () => {
+it("a listing the revisit found unlisted ends there as a sighting, not a Review", async () => {
   const { pipeline, plan, resource } = await setup();
   const sighted = {
     status: "listing",
-    state: "gone",
+    state: "unlisted",
+    reason: "not_found",
     operationId: "pipeline-capture-1",
     observationId: "a".repeat(64),
     listingId: "synthetic",
     variantId: null,
-    causeCode: "CAPTURE.NOT_FOUND",
+    causeCode: "LISTING.NOT_FOUND",
   };
   pipeline.captureProduct.mockResolvedValue(sighted);
 
@@ -233,4 +241,77 @@ it("cancellation passes through without a Review", async () => {
 
   await expect(ProductPipelineWorkflow(input)).rejects.toMatchObject({ type: "CANCELLED" });
   expect(pipeline.reviewProduct).not.toHaveBeenCalled();
+});
+
+const family = {
+  differsBy: "size",
+  group: "Size",
+  selectedLabel: "120 Caps",
+  members: [
+    {
+      listingId: "sibling",
+      variantId: null,
+      url: "https://www.swansonvitamins.com/p/sibling",
+      label: "60 Caps",
+    },
+  ],
+};
+
+async function withFamily() {
+  const parts = await setup();
+  // The capture mock checks the lane permit is held; read its answer as the gate would.
+  env.held = true;
+  const captured = (await parts.pipeline.captureProduct()) as Record<string, unknown>;
+  env.held = false;
+  parts.pipeline.captureProduct.mockResolvedValue({
+    ...captured,
+    family,
+    labelText: "D-Ribose 5 g",
+  });
+  return parts;
+}
+
+it("a size sibling's formula, once its label check passes, is reused without reading any label", async () => {
+  const { pipeline, plan } = await withFamily();
+  pipeline.reuseSiblingFormula.mockResolvedValue({
+    status: "reused",
+    formulaOperationId: "formula-sibling",
+    linkId: "b".repeat(64),
+    siblingListingId: "sibling",
+    siblingVariantId: null,
+  });
+
+  expect(await ProductPipelineWorkflow(input)).toMatchObject({
+    status: "collected",
+    reusedFormula: true,
+    operationId: "formula-sibling",
+    reusedFrom: { listingId: "sibling", variantId: null },
+  });
+  expect(pipeline.reuseSiblingFormula).toHaveBeenCalledWith(
+    expect.objectContaining({ family, labelText: "D-Ribose 5 g", channel: "swanson" }),
+  );
+  expect(plan.prepareChannelProduct).toHaveBeenCalledOnce();
+  expect(env.start).not.toHaveBeenCalled();
+});
+
+it("without a passed label check the product is extracted as before", async () => {
+  const { pipeline } = await withFamily();
+
+  expect(await ProductPipelineWorkflow(input)).toEqual({
+    status: "collected",
+    operationId: "label-1",
+  });
+  expect(pipeline.reuseSiblingFormula).toHaveBeenCalledOnce();
+  expect(env.start).toHaveBeenCalled();
+});
+
+it("a history recorded before the reuse patch replays without the reuse activity", async () => {
+  const { pipeline } = await withFamily();
+  env.patched = false;
+
+  expect(await ProductPipelineWorkflow(input)).toEqual({
+    status: "collected",
+    operationId: "label-1",
+  });
+  expect(pipeline.reuseSiblingFormula).not.toHaveBeenCalled();
 });

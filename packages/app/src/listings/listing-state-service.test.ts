@@ -24,7 +24,13 @@ class MemoryListingStates implements ListingStateStore {
   list = vi.fn(async () => [...this.rows.values()]);
   counts = vi.fn(async () => ({
     channel: "swanson",
-    byState: { gone: 0, superseded: 0, live: 0 },
+    byState: { unlisted: 0, live: 0 },
+    byReason: {
+      not_found: 0,
+      redirected_to_other_product: 0,
+      redirected_away: 0,
+      identity_conflict: 0,
+    },
     undelivered: 0,
   }));
   async undelivered() {
@@ -43,12 +49,14 @@ function sighting(changes: Record<string, unknown> = {}) {
     variantId: null,
     brandId,
     runId: "7b0c6a52-3a47-4f5b-9a4e-4c3c1f0a9d11",
-    state: "gone",
+    state: "unlisted",
+    reason: "not_found",
     evidence: {
       probe: "direct-revisit",
-      causeCode: "CAPTURE.NOT_FOUND",
+      causeCode: "LISTING.NOT_FOUND",
       httpStatus: 404,
       observedExternalId: null,
+      finalUrl: null,
       artifactKey: null,
     },
     source: "crawler-v3:product-run:pipeline-1",
@@ -74,12 +82,47 @@ describe("ListingStateService", () => {
     expect(other.observationId).not.toBe(first.observationId);
   });
 
-  it("refuses a superseded listing that does not name the listing it became", async () => {
+  it.each([
+    ["no reason", { reason: null }, ["reason"]],
+    [
+      "a redirect to another product without that product or where it landed",
+      {
+        reason: "redirected_to_other_product",
+        evidence: { ...sighting().evidence, httpStatus: 200 },
+      },
+      ["observedExternalId", "finalUrl"],
+    ],
+    [
+      "a 404 without its status",
+      { evidence: { ...sighting().evidence, httpStatus: null } },
+      ["httpStatus"],
+    ],
+    ["a live listing with a reason", { state: "live" }, ["no reason for a live listing"]],
+  ])("refuses an unlisted sighting with %s", async (_case, changes, missing) => {
     const { store, service } = setup();
-    await expect(service.record(sighting({ state: "superseded" }))).rejects.toMatchObject({
-      code: "LISTING.OBSERVED_ID_MISSING",
+    await expect(service.record(sighting(changes))).rejects.toMatchObject({
+      code: "LISTING.REASON_EVIDENCE_MISSING",
+      details: { missing },
     });
     expect(store.rows.size).toBe(0);
+  });
+
+  it("records a redirect to a different product as unlisted, naming that product", async () => {
+    const { service } = setup();
+    const moved = await service.record(
+      sighting({
+        reason: "redirected_to_other_product",
+        evidence: {
+          probe: "direct-revisit",
+          causeCode: "LISTING.REDIRECTED_TO_OTHER_PRODUCT",
+          httpStatus: 200,
+          observedExternalId: "new-handle",
+          finalUrl: "https://www.swansonvitamins.com/p/new-handle",
+          artifactKey: "v3/swanson-html/run-1/original.html",
+        },
+      }),
+    );
+    expect(moved).toMatchObject({ state: "unlisted", reason: "redirected_to_other_product" });
   });
 
   it("refuses a state that is not a listing state", async () => {
@@ -124,7 +167,7 @@ describe("listing state delivery", () => {
     expect(store.delivered).toHaveLength(0);
   });
 
-  it("sends one batch per channel in the product database's shape and records its answers", async () => {
+  it("sends every unlisted reason as the product database's gone, with the reason as evidence", async () => {
     const { store, service } = setup();
     const gone = await service.record(sighting());
     await service.record(
@@ -145,7 +188,7 @@ describe("listing state delivery", () => {
     expect(batch?.items[0]).toMatchObject({
       listing: { channel: "swanson", externalId: "old-handle" },
       state: "gone",
-      evidence: { httpStatus: 404, observationId: gone.observationId },
+      evidence: { reason: "not_found", httpStatus: 404, observationId: gone.observationId },
     });
   });
 });

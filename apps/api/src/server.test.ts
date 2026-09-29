@@ -17,6 +17,8 @@ function appWith(runs: Partial<RunService>) {
     resources: unused,
     fleet: unused,
     listingStates: unused,
+    brandScans: unused,
+    brandSources: unused,
   });
 }
 

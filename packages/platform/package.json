@@ -21,6 +21,7 @@
     "@crawl-automation/v3-contracts": "workspace:*",
     "@temporalio/client": "1.23.0",
     "@temporalio/worker": "1.23.0",
+    "execa": "catalog:",
     "pg": "catalog:",
     "pino": "catalog:",
     "undici": "catalog:",

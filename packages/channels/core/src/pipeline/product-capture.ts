@@ -44,7 +44,14 @@ export class ProductCapture {
       { parsed: captured.parsed, planning },
       signal,
     );
-    return { status: "captured", sourcePlan, factsComplete: captured.parsed.facts.complete };
+    const { parsed } = captured;
+    return {
+      status: "captured",
+      sourcePlan,
+      factsComplete: parsed.facts.complete,
+      labelText: parsed.facts.text,
+      family: adapter.productFamily?.(parsed) ?? null,
+    };
   }
 
   private archive(

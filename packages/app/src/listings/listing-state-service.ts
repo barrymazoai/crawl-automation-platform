@@ -10,6 +10,7 @@ import {
   type ListingObservation,
 } from "./listing-model.js";
 import type { ListingStateStore } from "./ports.js";
+import { missingEvidence } from "./unlisted-evidence.js";
 
 /** Records one sighting once; its identity is the listing and the source that saw it. */
 export async function recordSighting(
@@ -17,8 +18,11 @@ export async function recordSighting(
   raw: unknown,
 ): Promise<ListingObservation> {
   const sighting = ListingSightingInputSchema.parse(raw);
-  if (sighting.state === "superseded" && !sighting.evidence.observedExternalId) {
-    throw appErrors.create("LISTING.OBSERVED_ID_MISSING");
+  const missing = missingEvidence(sighting);
+  if (missing.length > 0) {
+    throw appErrors.create("LISTING.REASON_EVIDENCE_MISSING", {
+      details: { state: sighting.state, reason: sighting.reason, missing },
+    });
   }
   const { channel, listingId, variantId, source } = sighting;
   const key = JSON.stringify(["listing-state/1", channel, listingId, variantId, source]);
@@ -51,8 +55,8 @@ export class ListingStateService {
   }
 
   /**
-   * Queues a direct revisit for each listing a full scan no longer showed. The revisit's own sighting (gone,
-   * superseded or live) is what gets recorded; absence alone never is.
+   * Queues a direct revisit for each listing a full scan no longer showed. The revisit's own sighting (unlisted
+   * with its reason, or live) is what gets recorded; absence alone never is.
    */
   async requestRevisits(raw: unknown): Promise<{ queued: number }> {
     const missing = MissingFromScanSchema.parse(raw);

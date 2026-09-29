@@ -1,5 +1,6 @@
 import type { ChannelPlanInput } from "@crawl-automation/v3-contracts";
 import type { ChannelId } from "../adapter.js";
+import type { ProductFamily } from "../product-family.js";
 import type { ListingSighting } from "./listing-sighting.js";
 
 /** One product of one run, as the pipeline asks for it. */
@@ -25,9 +26,13 @@ export type ProductCaptureResult =
       sourcePlan: ChannelPlanInput;
       /** Whether the page's own facts text is complete enough to read the formula without images. */
       factsComplete: boolean;
+      /** The page's supplement facts as text, for the sibling-formula label check; null when absent. */
+      labelText: string | null;
+      /** The product's family as its page shows it; null when the adapter reads none. */
+      family: ProductFamily | null;
     }
   | {
-      /** The revisit showed the listing is gone or superseded; nothing was parsed or planned. */
+      /** The revisit showed the listing is unlisted (the reason is recorded); nothing was parsed or planned. */
       status: "sighted";
       listingId: string;
       variantId: string | null;

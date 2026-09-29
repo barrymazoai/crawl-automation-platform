@@ -6,6 +6,8 @@ import type {
 } from "@crawl-automation/v3-contracts";
 import type { z } from "zod";
 import type { CaptureMode } from "./capture.js";
+import type { ProductFamily } from "./product-family.js";
+import type { BrandScanReader } from "./listing/brand-scan.js";
 
 /** Price, rating, review count and availability as a product page shows them. */
 export type CommerceEvidence = z.infer<typeof CommerceEvidenceSchema>;
@@ -103,8 +105,12 @@ export interface ChannelAdapter<Rendered = unknown> {
   /** Where product images may be downloaded from; defaults to the page origins. */
   readonly fileOrigins?: readonly string[];
   readonly planning?: ChannelPlanning<Rendered>;
+  /** How this channel lists one brand's products, for brand scans (through ScraperAPI). */
+  readonly brandScan?: BrandScanReader;
   /** Normalises a product URL and returns its identity; refuses URLs of other sites. */
   productAddress(url: string): ProductAddress;
   /** Reads one archived product page. Throws a channel error code when the page is not a readable product. */
   parseProduct(page: FetchedPage): ParsedProduct<Rendered>;
+  /** The product's family as its page shows it (other sizes, flavours…); null when the page shows none. */
+  productFamily?(parsed: ParsedProduct<Rendered>): ProductFamily | null;
 }

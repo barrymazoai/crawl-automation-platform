@@ -23,12 +23,14 @@ function sighting(changes: Record<string, unknown> = {}) {
     variantId: null,
     brandId,
     runId: "7b0c6a52-3a47-4f5b-9a4e-4c3c1f0a9d11",
-    state: "gone",
+    state: "unlisted",
+    reason: "not_found",
     evidence: {
       probe: "direct-revisit",
-      causeCode: "CAPTURE.NOT_FOUND",
+      causeCode: "LISTING.NOT_FOUND",
       httpStatus: 404,
       observedExternalId: null,
+      finalUrl: null,
       artifactKey: null,
     },
     source: "crawler-v3:product-run:gnc-1",
@@ -56,7 +58,12 @@ describe.skipIf(!hasPostgres)("listing states against a real PostgreSQL", () => 
     const first = await recordSighting(store, sighting());
     const again = await recordSighting(store, sighting({ capturedAt: "2026-09-29T11:00:00.000Z" }));
     expect(again).toEqual(first);
-    const different = { ...sighting(), observationId: first.observationId, state: "live" as const };
+    const different = {
+      ...sighting(),
+      observationId: first.observationId,
+      state: "live" as const,
+      reason: null,
+    };
     await expect(store.record(different as never)).rejects.toMatchObject({
       code: "LISTING.OBSERVATION_CONFLICT",
     });
@@ -69,35 +76,62 @@ describe.skipIf(!hasPostgres)("listing states against a real PostgreSQL", () => 
     await expect(database.query("DELETE FROM listing_state_observation")).rejects.toThrow();
   });
 
-  it("refuses a superseded sighting without the listing it became, in the table itself", async () => {
-    const bad = { ...sighting({ state: "superseded", source: "crawler-v3:product-run:gnc-2" }) };
+  it.each([
+    ["an unlisted sighting without a reason", { reason: null }],
+    ["a live sighting with a reason", { state: "live" }],
+    [
+      "a redirect to another product without that product",
+      { reason: "redirected_to_other_product" },
+    ],
+    [
+      "a missing page without a 404 or 410",
+      { evidence: { ...sighting().evidence, httpStatus: 500 } },
+    ],
+  ])("the table itself refuses %s", async (_case, changes) => {
+    const bad = sighting({ ...changes, source: "crawler-v3:product-run:gnc-2" });
     await expect(
       store.record({ ...(bad as never), observationId: "c".repeat(64) }),
     ).rejects.toThrow();
   });
 
   it("lists, counts and marks delivery", async () => {
-    const superseded = await recordSighting(
+    const redirected = await recordSighting(
       store,
       sighting({
         listingId: "877081",
-        state: "superseded",
+        reason: "redirected_to_other_product",
         source: "crawler-v3:product-run:gnc-3",
-        evidence: { ...sighting().evidence, observedExternalId: "999111", httpStatus: 200 },
+        evidence: {
+          ...sighting().evidence,
+          causeCode: "LISTING.REDIRECTED_TO_OTHER_PRODUCT",
+          observedExternalId: "999111",
+          finalUrl: "https://www.gnc.com/product/999111.html",
+          httpStatus: 200,
+        },
       }),
     );
     expect(await store.list({ channel: "gnc", brandId, limit: 10 })).toHaveLength(2);
     expect(await store.counts({ channel: "gnc", brandId })).toEqual({
       channel: "gnc",
-      byState: { gone: 1, superseded: 1, live: 0 },
+      byState: { unlisted: 2, live: 0 },
+      byReason: {
+        not_found: 1,
+        redirected_to_other_product: 1,
+        redirected_away: 0,
+        identity_conflict: 0,
+      },
       undelivered: 2,
     });
     await store.markDelivered([
-      { observationId: superseded.observationId, status: "ok", response: { events: [] } },
+      { observationId: redirected.observationId, status: "ok", response: { events: [] } },
     ]);
     const pending = await store.undelivered(10);
     expect(pending.map((row) => row.listingId)).toEqual(["877080"]);
-    const delivered = await store.list({ channel: "gnc", state: "superseded", limit: 10 });
+    const delivered = await store.list({
+      channel: "gnc",
+      reason: "redirected_to_other_product",
+      limit: 10,
+    });
     expect(delivered[0]?.deliveredAt).not.toBeNull();
   });
 });

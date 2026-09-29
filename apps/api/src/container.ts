@@ -37,10 +37,12 @@ import {
   type TemporalClient,
 } from "@crawl-automation/platform";
 import { swansonAdapter } from "@crawl-automation/channel-swanson";
+import { gncAdapter } from "@crawl-automation/channels-gnc";
 import { ChannelRegistry } from "@crawl-automation/channels-core";
 import { asFunction, asValue, createContainer, InjectionMode, type AwilixContainer } from "awilix";
 import type { ApiConfig } from "./config.js";
 import { evidenceReaders } from "./evidence-readers.js";
+import { brandScanParts, type BrandScanParts } from "./brand-scan-parts.js";
 import { listingStateService, queueDispatcher, queueService } from "./queue-parts.js";
 
 /** Everything the API is built from. Adapters are created once and shared. */
@@ -61,6 +63,7 @@ export interface ApiParts {
   resources: ResourceService;
   fleet: FleetService;
   listingStates: ListingStateService;
+  brandScanParts: BrandScanParts;
   deliveryRunner: DeliveryRunner;
   queueDispatcher: QueueDispatcher;
   cleanup: CleanupService;
@@ -141,10 +144,15 @@ function registerServices(container: Parts): void {
   });
 }
 
-/** The background loops the API process runs: delivery of accepted runs, the product queue, cleanup. */
+/** The background loops the API process runs: delivery of accepted runs, the product queue, brand scans, cleanup. */
 function registerLoops(container: Parts): void {
   container.register({
     deliveryRunner: asFunction(deliveryRunner).singleton(),
+    // Brand scans: their services, and their runner when this process has scan settings.
+    brandScanParts: asFunction((parts: ApiParts) =>
+      brandScanParts({ ...parts, settings: parts.config.brandScans }),
+    ).singleton(),
+
     queueDispatcher: asFunction((parts: ApiParts) =>
       queueDispatcher(
         {
@@ -172,7 +180,7 @@ function productRuns(parts: ApiParts): ProductRuns {
   return new ProductRuns({
     store: new PostgresProductRunStore(parts.database),
     starter: new TemporalPipelineStarter(parts.temporal.client),
-    registry: new ChannelRegistry([swansonAdapter]),
+    registry: new ChannelRegistry([swansonAdapter, gncAdapter]),
     targets: parts.config.pipeline,
   });
 }

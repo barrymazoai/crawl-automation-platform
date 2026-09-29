@@ -1,0 +1,117 @@
+import type { ChannelRegistry } from "@crawl-automation/channels-core";
+import { errorCodeOf, type Logger } from "@crawl-automation/platform";
+import { z } from "zod";
+import type { BrowserBrandScanners } from "../brand-scans/ports.js";
+import { sourceUrlOf } from "../brand-scans/scan-readers.js";
+import { ScanChannelSchema, type ScanChannel } from "../brand-scans/scan-model.js";
+
+/** A channel's brand list, as the site's brand directory shows it (name and brand listing URL). */
+export const ImportSourcesSchema = z.strictObject({
+  channel: ScanChannelSchema,
+  entries: z
+    .array(z.strictObject({ name: z.string().min(1).max(200), url: z.url().max(2000) }))
+    .min(1)
+    .max(2_000),
+});
+export type ImportSources = z.infer<typeof ImportSourcesSchema>;
+type Entry = ImportSources["entries"][number];
+
+export interface BrandName {
+  brandId: string;
+  name: string;
+}
+
+/** `brand` names, and new `brand_source` rows written disabled (an existing row is left as it is). */
+export interface BrandSourceImportStore {
+  brandNames(): Promise<BrandName[]>;
+  addDisabledSources(
+    rows: readonly { brandId: string; channel: ScanChannel; url: string }[],
+  ): Promise<{ created: number; existing: number }>;
+}
+
+export interface SourceImportResult {
+  created: number;
+  existing: number;
+  /** The site's name matched no brand exactly, but one or more after ignoring case, marks and punctuation. */
+  looseMatches: (Entry & { candidates: string[] })[];
+  unmatched: Entry[];
+  /** Not this channel's brand listing URL. */
+  refused: (Entry & { code: string })[];
+}
+
+/** Lower case, trademark marks dropped, `&` as `and`, and only letters and digits kept. */
+const looseKey = (name: string) =>
+  name
+    .toLowerCase()
+    .replace(/[®™©]/g, "")
+    .replace(/&/g, "and")
+    .replace(/[^a-z0-9]/g, "");
+
+/**
+ * Imports a channel's brand directory as brand sources: an exact (case-insensitive) name match becomes a disabled
+ * source, to be enabled by hand; loose and missing matches come back as a review list, never guessed.
+ */
+export class BrandSourceImport {
+  constructor(
+    private readonly deps: {
+      store: BrandSourceImportStore;
+      registry: ChannelRegistry;
+      browsers: BrowserBrandScanners;
+      log: Logger;
+    },
+  ) {}
+
+  async import(raw: unknown): Promise<SourceImportResult> {
+    const { channel, entries } = ImportSourcesSchema.parse(raw);
+    const normalise = sourceUrlOf(this.deps, channel);
+    const brands = await this.deps.store.brandNames();
+    const exact = new Map(brands.map((brand) => [brand.name.toLowerCase(), brand]));
+    const result: SourceImportResult = {
+      created: 0,
+      existing: 0,
+      looseMatches: [],
+      unmatched: [],
+      refused: [],
+    };
+    const rows: { brandId: string; channel: ScanChannel; url: string }[] = [];
+    for (const entry of entries) {
+      const url = this.sourceUrl(normalise, entry, result);
+      const brand = url ? exact.get(entry.name.toLowerCase()) : undefined;
+      if (url && brand) {
+        rows.push({ brandId: brand.brandId, channel, url });
+      } else if (url) {
+        this.review(entry, brands, result);
+      }
+    }
+    const written =
+      rows.length > 0
+        ? await this.deps.store.addDisabledSources(rows)
+        : { created: 0, existing: 0 };
+    this.deps.log.info(
+      { channel, ...written, loose: result.looseMatches.length },
+      "brand sources imported",
+    );
+    return { ...result, ...written };
+  }
+
+  private sourceUrl(normalise: (url: string) => string, entry: Entry, result: SourceImportResult) {
+    try {
+      return normalise(entry.url);
+    } catch (error) {
+      result.refused.push({ ...entry, code: errorCodeOf(error) ?? "BRAND_SCAN.URL" });
+      return null;
+    }
+  }
+
+  private review(entry: Entry, brands: readonly BrandName[], result: SourceImportResult): void {
+    const key = looseKey(entry.name);
+    const candidates = brands
+      .filter((brand) => key && looseKey(brand.name) === key)
+      .map((brand) => brand.name);
+    if (candidates.length > 0) {
+      result.looseMatches.push({ ...entry, candidates });
+    } else {
+      result.unmatched.push(entry);
+    }
+  }
+}

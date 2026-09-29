@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { ExecutionIdSchema } from "./artifacts.js";
-export const ChannelNameSchema = z.enum(["amazon", "swanson", "dtc"]);
+export const ChannelNameSchema = z.enum(["amazon", "swanson", "dtc", "wholefoods", "gnc"]);
 const url = z.string().url().max(4096);
 export const ChannelEntrySchema = z.strictObject({ listingId: ExecutionIdSchema, variantId: ExecutionIdSchema.nullable(), url,
   title: z.string().max(4000).nullable() });

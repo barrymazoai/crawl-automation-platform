@@ -4,6 +4,7 @@ import {
   type ScraperApiOptions,
 } from "@crawl-automation/platform";
 import type { ChannelId, HttpPolicy } from "../adapter.js";
+import type { CaptureMode } from "../capture.js";
 import { channelErrors } from "../errors.js";
 import type { FetchedVia } from "./original-html-archive.js";
 import { checkPage } from "./read-html.js";
@@ -21,8 +22,9 @@ export interface FetchedHtml {
   fetchedVia: FetchedVia;
 }
 
-/** Fetches one product page. */
+/** Fetches one product page, in one capture mode; a channel is captured only by a fetcher of a mode it declares. */
 export interface PageFetcher {
+  readonly mode: CaptureMode;
   fetchPage(request: PageRequest, signal: AbortSignal): Promise<FetchedHtml>;
 }
 
@@ -47,6 +49,8 @@ function withDefaults(defaults: ScraperApiOptions, own: ChannelOptions = {}): Sc
 
 /** Product pages through ScraperAPI, with the options the channel's settings choose. */
 export class ScraperApiPages implements PageFetcher {
+  readonly mode = "http";
+
   constructor(
     private readonly client: Pick<ScraperApiClient, "get" | "provider">,
     private readonly settings: ScraperApiCaptureSettings,

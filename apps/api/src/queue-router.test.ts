@@ -14,6 +14,8 @@ function appWith(queue: Partial<QueueService>) {
     resources: unused,
     fleet: unused,
     listingStates: unused,
+    brandScans: unused,
+    brandSources: unused,
   });
 }
 

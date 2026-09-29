@@ -78,7 +78,7 @@ describe("settledOutcome", () => {
       { state: "review", reason: "SOURCE.GONE" },
     ],
     [
-      { status: "COMPLETED", result: { status: "listing", state: "gone" } },
+      { status: "COMPLETED", result: { status: "listing", state: "unlisted" } },
       { state: "completed", reason: null },
     ],
     [

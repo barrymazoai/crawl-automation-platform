@@ -30,14 +30,15 @@ export class PostgresListingStates implements ListingStateStore {
       observation.brandId,
       observation.runId,
       observation.state,
+      observation.reason,
       JSON.stringify(observation.evidence),
       observation.source,
       observation.capturedAt,
     ];
     await this.database.query(
       `INSERT INTO listing_state_observation (observation_id, channel, listing_id, variant_id, brand_id, run_id,
-         state, evidence, source, captured_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9, $10) ON CONFLICT (observation_id) DO NOTHING`,
+         state, reason, evidence, source, captured_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10, $11) ON CONFLICT (observation_id) DO NOTHING`,
       values,
     );
     const saved = await this.read(observation.observationId);
@@ -55,12 +56,14 @@ export class PostgresListingStates implements ListingStateStore {
        LEFT JOIN listing_state_delivery d USING (observation_id)
        WHERE o.channel = $1 AND ($2::uuid IS NULL OR o.brand_id = $2)
          AND ($3::text IS NULL OR o.listing_id = $3) AND ($4::text IS NULL OR o.state = $4)
-       ORDER BY o.captured_at DESC, o.observation_id LIMIT $5`,
+         AND ($5::text IS NULL OR o.reason = $5)
+       ORDER BY o.captured_at DESC, o.observation_id LIMIT $6`,
       [
         query.channel,
         query.brandId ?? null,
         query.listingId ?? null,
         query.state ?? null,
+        query.reason ?? null,
         query.limit,
       ],
     );
@@ -110,6 +113,7 @@ function sameSighting(saved: ListingObservation, observation: NewListingObservat
     "brandId",
     "runId",
     "state",
+    "reason",
     "evidence",
     "source",
   ] as const;

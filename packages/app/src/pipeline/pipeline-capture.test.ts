@@ -33,52 +33,62 @@ const sighted = (sighting: ListingSighting): ProductCaptureResult => ({
 });
 
 describe("PipelineCapture", () => {
-  it("ends a gone listing as a recorded sighting, not a Review", async () => {
+  it("ends a missing page as an unlisted sighting (not found), not a Review", async () => {
     const { recorded, pipeline } = captureAnswering(
       sighted({
-        state: "gone",
-        causeCode: "CAPTURE.NOT_FOUND",
+        state: "unlisted",
+        reason: "not_found",
+        causeCode: "LISTING.NOT_FOUND",
         httpStatus: 404,
         observedListingId: null,
+        finalUrl: null,
         archiveKey: null,
       }),
     );
     expect(await pipeline.capture(request, signal())).toEqual({
       status: "listing",
-      state: "gone",
+      state: "unlisted",
+      reason: "not_found",
       operationId: "pipeline-1",
       observationId: "b".repeat(64),
       listingId: "old-handle",
       variantId: null,
-      causeCode: "CAPTURE.NOT_FOUND",
+      causeCode: "LISTING.NOT_FOUND",
     });
     expect(recorded[0]).toMatchObject({
       channel: "swanson",
       brandId: request.brandId,
       runId: request.runId,
-      state: "gone",
+      state: "unlisted",
+      reason: "not_found",
       evidence: { probe: "direct-revisit", httpStatus: 404, observedExternalId: null },
       source: "crawler-v3:product-run:pipeline-1",
     });
   });
 
-  it("records a superseded listing with the listing its page belongs to now", async () => {
+  it("records a redirect to a different product as unlisted, naming that product and where it landed", async () => {
+    const landed = "https://www.swansonvitamins.com/p/new-handle";
     const { recorded, pipeline } = captureAnswering(
       sighted({
-        state: "superseded",
-        causeCode: "LISTING.SUPERSEDED",
+        state: "unlisted",
+        reason: "redirected_to_other_product",
+        causeCode: "LISTING.REDIRECTED_TO_OTHER_PRODUCT",
         httpStatus: 200,
         observedListingId: "new-handle",
+        finalUrl: landed,
         archiveKey: "v3/swanson-html/pipeline-1/original.html",
       }),
     );
     expect(await pipeline.capture(request, signal())).toMatchObject({
       status: "listing",
-      state: "superseded",
+      state: "unlisted",
+      reason: "redirected_to_other_product",
     });
     expect(recorded[0]).toMatchObject({
+      reason: "redirected_to_other_product",
       evidence: {
         observedExternalId: "new-handle",
+        finalUrl: landed,
         artifactKey: "v3/swanson-html/pipeline-1/original.html",
       },
     });

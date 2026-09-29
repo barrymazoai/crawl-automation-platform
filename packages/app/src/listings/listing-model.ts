@@ -1,13 +1,18 @@
+import { UNLISTED_REASONS } from "@crawl-automation/channels-core";
 import { z } from "zod";
 import { QueueChannelSchema, QueuedProductSchema } from "../queue/queue-model.js";
 
 /**
  * What a direct revisit showed about a known listing (docs/quality/2026-09-18-product-service-listing-state-prompt.md):
- * `gone` (the page no longer exists), `superseded` (the page is now another listing), `live` (still on sale). The
- * crawler records each sighting as a fact; only the product database decides whether a listing is delisted.
+ * `unlisted` (with the reason) or `live` (still on sale). Owner rule 2026-09-29, every channel: a redirect to a
+ * different product is unlisted, and every unlisted sighting records exactly why. The crawler records each sighting as
+ * a fact; only the product database decides whether a listing is delisted.
  */
-export const ListingStateSchema = z.enum(["gone", "superseded", "live"]);
+export const ListingStateSchema = z.enum(["unlisted", "live"]);
 export type ListingState = z.infer<typeof ListingStateSchema>;
+
+export const UnlistedReasonSchema = z.enum(UNLISTED_REASONS);
+export type UnlistedReasonName = z.infer<typeof UnlistedReasonSchema>;
 
 const listingId = z.string().min(1).max(200);
 
@@ -16,8 +21,10 @@ export const ListingEvidenceSchema = z.strictObject({
   probe: z.enum(["direct-revisit"]),
   causeCode: z.string().min(1).max(120),
   httpStatus: z.number().int().min(100).max(599).nullable(),
-  /** The listing the page belongs to now; required for `superseded`. */
+  /** The other product the page belongs to now; required for `redirected_to_other_product` and `identity_conflict`. */
   observedExternalId: listingId.nullable(),
+  /** Where a redirect landed; required for `redirected_to_other_product` and `redirected_away`. */
+  finalUrl: z.url().max(2048).nullable(),
   /** Where the page that showed it is archived in R2, when one was archived. */
   artifactKey: z.string().min(1).max(1024).nullable(),
 });
@@ -31,6 +38,8 @@ export const ListingSightingInputSchema = z.strictObject({
   brandId: z.uuid().nullable(),
   runId: z.uuid().nullable(),
   state: ListingStateSchema,
+  /** Why the listing is unlisted; null exactly when it is `live`. */
+  reason: UnlistedReasonSchema.nullable(),
   evidence: ListingEvidenceSchema,
   source: z.string().min(1).max(300),
   capturedAt: z.iso.datetime(),
@@ -49,6 +58,7 @@ export const ListingQuerySchema = z.strictObject({
   brandId: z.uuid().optional(),
   listingId: listingId.optional(),
   state: ListingStateSchema.optional(),
+  reason: UnlistedReasonSchema.optional(),
   limit: z.number().int().min(1).max(1000).default(200),
 });
 export type ListingQuery = z.infer<typeof ListingQuerySchema>;
@@ -56,10 +66,11 @@ export type ListingQuery = z.infer<typeof ListingQuerySchema>;
 export const ListingCountsQuerySchema = ListingQuerySchema.pick({ channel: true, brandId: true });
 export type ListingCountsQuery = z.infer<typeof ListingCountsQuerySchema>;
 
-/** Sightings per state, and how many are still waiting to be sent. */
+/** Sightings per state and per unlisted reason, and how many are still waiting to be sent. */
 export interface ListingCounts {
   channel: string;
   byState: Record<ListingState, number>;
+  byReason: Record<UnlistedReasonName, number>;
   undelivered: number;
 }
 

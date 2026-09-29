@@ -1,10 +1,4 @@
-import type { FormulaKey } from "@crawl-automation/workflows";
 import type { ChannelPlanInput, ReviewRecord } from "@crawl-automation/v3-contracts";
-
-/** A formula already collected for this channel's product (listing and variant), if any. */
-export interface FormulaIndex {
-  findKnown(key: FormulaKey): Promise<{ operationId: string } | null>;
-}
 
 /** The workflow that collected an observation, so a product links back to its run. */
 export interface ExecutionRef {

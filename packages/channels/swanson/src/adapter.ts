@@ -15,6 +15,8 @@ import {
   swansonProductAddress,
   swansonVariantChoices,
 } from "@crawl-automation/v3-channels";
+import { swansonFamily } from "./family.js";
+import { swansonBrandScan } from "./brand-scan.js";
 import { swansonLabelCore } from "./label-core.js";
 import type {
   ChannelProductEvidence,
@@ -65,6 +67,7 @@ export const swansonAdapter: ChannelAdapter<SwansonRenderedProduct> = {
   id: "swanson",
   captureModes: ["http"],
   httpPolicy: SWANSON_HTTP_POLICY,
+  brandScan: swansonBrandScan,
   planning: {
     channel: "swanson",
     parserVersion: "swanson-rendered/1",
@@ -74,6 +77,7 @@ export const swansonAdapter: ChannelAdapter<SwansonRenderedProduct> = {
     labelCore: swansonLabelCore,
   },
   productAddress,
+  productFamily: swansonFamily,
   parseProduct(page: FetchedPage): ParsedProduct<SwansonRenderedProduct> {
     const rendered = parseSwansonStaticHtml(page.html, page.url, page.capturedAt, (element) =>
       pageText(element.innerHTML),

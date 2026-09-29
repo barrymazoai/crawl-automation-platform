@@ -14,6 +14,8 @@ function appWith(listingStates: Partial<ListingStateService>) {
     resources: unused,
     fleet: unused,
     listingStates: listingStates as ListingStateService,
+    brandScans: unused,
+    brandSources: unused,
   });
 }
 
@@ -23,7 +25,13 @@ describe("listing state procedures", () => {
   it("counts one channel's sightings", async () => {
     const answer: ListingCounts = {
       channel: "swanson",
-      byState: { gone: 2, superseded: 1, live: 0 },
+      byState: { unlisted: 3, live: 0 },
+      byReason: {
+        not_found: 2,
+        redirected_to_other_product: 1,
+        redirected_away: 0,
+        identity_conflict: 0,
+      },
       undelivered: 3,
     };
     const counts = vi.fn(async () => answer);

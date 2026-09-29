@@ -10,6 +10,7 @@ import { R2ScopeSchema } from "@crawl-automation/v3-artifacts";
 import { DeliveryTarget, ResourceGateSchema } from "@crawl-automation/v3-contracts";
 import { ProductPipelineInputSchema } from "@crawl-automation/workflows";
 import { z } from "zod";
+import { BrandScanSettingsSchema } from "./brand-scan-config.js";
 
 const absolutePath = z.string().refine(isAbsolute, "Must be an absolute path");
 
@@ -59,6 +60,12 @@ export const ApiConfigSchema = z.strictObject({
       storageId: z.string().min(1),
     })
     .optional(),
+  /**
+   * Brand scans: listing pages through ScraperAPI, archived in R2 (written, unlike `storage`). Without this section
+   * scan requests answer BRAND_SCAN.NOT_CONFIGURED; brand-source import works either way. `ego` and `wholefoods`
+   * together enable Whole Foods scans in the Ego browser (an owner-approved browser case).
+   */
+  brandScans: BrandScanSettingsSchema.optional(),
   /** The product queue of every channel but Amazon: how often its dispatcher runs a round. */
   queue: z
     .strictObject({ dispatcher: QueueDispatcherOptionsSchema.default({ intervalMs: 5_000 }) })
