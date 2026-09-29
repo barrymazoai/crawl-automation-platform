@@ -1,6 +1,6 @@
 {
-  "name": "@crawl-automation/v3-product",
-  "version": "0.0.1",
+  "name": "@crawl-automation/workflows",
+  "version": "0.1.0",
   "private": true,
   "type": "module",
   "exports": {
@@ -8,31 +8,25 @@
       "types": "./src/index.ts",
       "import": "./src/index.ts"
     },
-    "./workflow": {
-      "types": "./src/workflow.ts",
-      "import": "./src/workflow.ts"
-    },
-    "./resource-workflow": {
-      "types": "./src/resource-workflow.ts",
-      "import": "./src/resource-workflow.ts"
+    "./workflows": {
+      "types": "./src/workflows.ts",
+      "import": "./src/workflows.ts"
     }
   },
   "scripts": {
-    "build": "tsc --noEmit && tsdown",
     "check-types": "tsc --noEmit",
     "test": "vitest run src"
   },
   "dependencies": {
     "@crawl-automation/v3-contracts": "workspace:*",
-    "@crawl-automation/v3-vision": "workspace:*",
-    "@crawl-automation/v3-artifacts": "workspace:*",
+    "@crawl-automation/v3-product": "workspace:*",
     "@temporalio/workflow": "1.23.0",
     "zod": "catalog:"
   },
   "devDependencies": {
+    "@crawl-automation/v3-channels": "workspace:*",
     "@types/node": "catalog:",
     "typescript": "catalog:",
-    "tsdown": "catalog:",
     "vitest": "catalog:"
   }
 }
