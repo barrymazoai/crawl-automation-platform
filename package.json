@@ -23,7 +23,8 @@
     "check:types": "turbo check-types",
     "check": "pnpm lint && pnpm check:deps && pnpm check:dupes && pnpm check:types",
     "test:v3": "vitest run --no-cache --config vitest.v3.config.ts",
-    "prepare": "lefthook install"
+    "prepare": "lefthook install",
+    "smoke": "pnpm --filter @crawl-automation/api --filter @crawl-automation/cli smoke"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.5",

@@ -7,13 +7,14 @@ import {
 } from "@crawl-automation/v3-contracts";
 import { WorkflowNotFoundError, type Client } from "@temporalio/client";
 import { defaultPayloadConverter } from "@temporalio/common";
-import { temporal } from "@temporalio/proto";
+// @temporalio/proto is CommonJS: its values come from the default export; the named import is types only.
+import proto, { type temporal } from "@temporalio/proto";
 
 type HistoryEvent = temporal.api.history.v1.IHistoryEvent;
 type Started = temporal.api.history.v1.IWorkflowExecutionStartedEventAttributes;
 
 const CLOSE_EVENT =
-  temporal.api.enums.v1.HistoryEventFilterType.HISTORY_EVENT_FILTER_TYPE_CLOSE_EVENT;
+  proto.temporal.api.enums.v1.HistoryEventFilterType.HISTORY_EVENT_FILTER_TYPE_CLOSE_EVENT;
 
 interface Execution {
   namespace: string;

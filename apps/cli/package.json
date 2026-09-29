@@ -9,7 +9,8 @@
   "scripts": {
     "check-types": "tsc --noEmit",
     "test": "vitest run src",
-    "start": "tsx src/main.ts"
+    "start": "tsx src/main.ts",
+    "smoke": "tsx src/main.ts --help"
   },
   "dependencies": {
     "@crawl-automation/api": "workspace:*",

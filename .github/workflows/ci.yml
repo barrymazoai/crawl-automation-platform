@@ -49,3 +49,6 @@ jobs:
 
       - name: Unit tests
         run: pnpm test:v3
+
+      - name: Modules load under Node (not only under vitest)
+        run: pnpm smoke
