@@ -1,11 +1,13 @@
-import{it,expect,vi}from'vitest';import{runInNewContext}from'node:vm';import{DtcCdpReader}from'./dtc-cdp.js';import{DtcSitePolicySchema}from'@crawl-automation/v3-contracts';
+import{it,expect,vi}from'vitest';import{runInNewContext}from'node:vm';import{DtcCdpReader,type DtcRetain}from'./dtc-cdp.js';import{DtcSitePolicySchema,DtcDecisionSchema,DtcRenderedProductSchema,type DtcSnapshot}from'@crawl-automation/v3-contracts';
+type DtcDecision=ReturnType<typeof DtcDecisionSchema.parse>;
+type Node=DtcSnapshot['nodes'][number];
 const url='https://brand.example/products/one';
 function fixture(){const site=DtcSitePolicySchema.parse({origin:'https://brand.example',brandName:'Example',catalogPages:['https://brand.example/collections/all'],productPathPrefix:'/products/',catalogRoot:'main',productRoot:'main',imageOrigins:['https://brand.example'],galleryControls:['button.gallery'],maxDecisions:2,selectedUrls:null});
- const node=(index:number,tag:string,text:string,extra={})=>({index,tag,text,href:null,src:null,width:0,height:0,control:false,...extra});
- const snapshot={url,title:'One',capturedAt:'2026-09-11T00:00:00.000Z',nodes:[node(0,'h1','One'),node(1,'p','Ingredients'),node(2,'img','Label',{src:'https://brand.example/label.jpg',width:800,height:900}),node(3,'button','Buy')]};
- const decision={action:'capture',title:0,sections:[1],links:[],images:[2],control:null,reason:'none'};
- const port={guard:vi.fn(),list:vi.fn(async()=>[{id:'owned',type:'page',url}]),create:vi.fn(),close:vi.fn(),call:vi.fn(async(_id:string,method:string,params:any)=>method==='Page.captureScreenshot'?{data:Buffer.from('png-fixture').toString('base64')}:method==='Runtime.evaluate'?{result:{value:params.expression.startsWith('location.href')?true:snapshot}}:{})};
- const decider={decide:vi.fn(async()=>decision)},retain=vi.fn(async()=> 'v3/snapshot.json');
+ const node=(index:number,tag:string,text:string,extra:Partial<Node>={}):Node=>({index,tag,text,href:null,src:null,width:0,height:0,control:false,...extra});
+ const snapshot:DtcSnapshot={url,title:'One',capturedAt:'2026-09-11T00:00:00.000Z',nodes:[node(0,'h1','One'),node(1,'p','Ingredients'),node(2,'img','Label',{src:'https://brand.example/label.jpg',width:800,height:900}),node(3,'button','Buy')]};
+ const decision:DtcDecision={action:'capture',title:0,sections:[1],links:[],images:[2],control:null,reason:'none'};
+ const port={guard:vi.fn(),list:vi.fn(async()=>[{id:'owned',type:'page',url}]),create:vi.fn(),close:vi.fn(),call:vi.fn(async(_id:string,method:string,params:any):Promise<any>=>method==='Page.captureScreenshot'?{data:Buffer.from('png-fixture').toString('base64')}:method==='Runtime.evaluate'?{result:{value:params.expression.startsWith('location.href')?true:snapshot}}:{})};
+ const decider={decide:vi.fn(async()=>decision)},retain=vi.fn<DtcRetain>(async()=> 'v3/snapshot.json');
  const reader=new DtcCdpReader({taskId:'test',targetId:'owned',config:{endpoint:'http://127.0.0.1:9222/',instanceId:'id',pauseFile:'/pause'}},port,site,decider,retain);return{reader,port,site,snapshot,decision,decider,retain};}
 it('saves screenshot and DOM before Codex; selected evidence is observed original URL/text',async()=>{const f=fixture();f.decider.decide.mockImplementation(async()=>{expect(f.retain).toHaveBeenCalledOnce();return f.decision;});expect(await f.reader.read(url,'product',AbortSignal.timeout(1000))).toMatchObject({title:'One',images:['https://brand.example/label.jpg'],selectedOnly:true});expect(f.port.call.mock.calls.some(c=>c[1]==='Page.navigate')).toBe(false);});
 it.each(['invented','small','foreign','buy'])('rejects unsafe/unobserved %s choice',async mode=>{const f=fixture();if(mode==='invented')f.decision.images=[999];if(mode==='small')f.snapshot.nodes[2]!.width=100;if(mode==='foreign')f.snapshot.nodes[2]!.src='https://evil.example/a.jpg';if(mode==='buy'){f.decision.action='click';f.decision.control=3 as any;}await expect(f.reader.read(url,'product',AbortSignal.timeout(1000))).rejects.toThrow();expect(f.port.call.mock.calls.some(c=>c[1]==='Input.dispatchMouseEvent')).toBe(false);});
@@ -16,7 +18,7 @@ it('actual generated snapshot JS compiles and selects only HTTPS public links/im
 
 function galleryFixture(){
  const f=fixture();f.site.maxDecisions=4;
- const node=(index:number,tag:string,text:string,extra={})=>({index,tag,text,href:null,src:null,width:0,height:0,control:false,...extra});
+ const node=(index:number,tag:string,text:string,extra:Partial<Node>={}):Node=>({index,tag,text,href:null,src:null,width:0,height:0,control:false,...extra});
  f.snapshot.nodes[2]!.src='https://brand.example/front.jpg';
  f.snapshot.nodes.push(node(4,'button','Load image 2 in gallery view',{control:true}),node(5,'img','Label thumbnail',{src:'https://brand.example/label-small.jpg',width:86,height:86}),node(7,'button','Load image 3 in gallery view',{control:true}),node(8,'img','Back thumbnail',{src:'https://brand.example/back-small.jpg',width:86,height:86}));
  const sources=['https://brand.example/front.jpg','https://brand.example/label.jpg','https://brand.example/back.jpg'];let slide=0,settleReads=0;
@@ -82,6 +84,6 @@ it('dismisses an allowlisted preview before opening the next thumbnail',async()=
   if(method==='Input.dispatchMouseEvent'&&params.type==='mouseReleased')clicks++;
   return base(id,method,params);
  });
- expect((await f.reader.read(url,'product',AbortSignal.timeout(5000))).images).toHaveLength(3);
+ expect(DtcRenderedProductSchema.parse(await f.reader.read(url,'product',AbortSignal.timeout(5000))).images).toHaveLength(3);
  expect(dismissed).toBe(1);
 });

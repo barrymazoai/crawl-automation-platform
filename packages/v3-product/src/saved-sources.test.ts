@@ -1,3 +1,4 @@
+import { fileURLToPath } from "node:url";
 import { expect, it } from "vitest";
 import { PageEvidence, PreparePageModule, PreparePageText } from "../../v3-acquisition/src/page-handoff.js";
 import { pageInput } from "../../v3-acquisition/src/testing.fixture.js";
@@ -88,7 +89,7 @@ async function pdf(empty = false) {
   const source: Extract<SavedEvidenceSource, { kind: "pdf-text" }> = { id: "pdf-page", kind: "pdf-text", required: true,
     plan: { extraction, textOperationId: "pdf-interpret", text: { schemaVersion: 1, module: "codex.text", implementationVersion: "codex-text/2",
       policyVersion: "anchored/2", resultSchemaVersion: 2, configFingerprint: "b".repeat(64) } } };
-  const engine = await PdfSubprocess.open({ pythonExecutable: resolve("../v3-pdf/.venv/bin/python"), workRoot: join(root, "attempts") });
+  const engine = await PdfSubprocess.open({ pythonExecutable: fileURLToPath(new URL("../../v3-pdf/.venv/bin/python", import.meta.url)), workRoot: join(root, "attempts") });
   const receipt = await new PdfModule(deps, engine).run(extraction, signal());
   const prepared = await new PdfTextPreparation(deps).run({ plan: source.plan, receipt }, signal());
   const resolver = new SavedSourceEvidence({ remote, reviews, pages: { inspect: async () => null }, ocr: { read: async () => null },

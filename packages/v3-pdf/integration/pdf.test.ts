@@ -1,3 +1,4 @@
+import { fileURLToPath } from "node:url";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { mkdtemp, readFile, writeFile, stat, symlink } from "node:fs/promises";
@@ -9,7 +10,7 @@ import { inputFor, nutritionPdf } from "./helpers.js";
 import { sha256 } from "@crawl-automation/v3-artifacts";
 import { runProcess } from "../src/process.js";
 
-const python = resolve(".venv", process.platform === "win32" ? "Scripts/python.exe" : "bin/python");
+const python = resolve(fileURLToPath(new URL("..", import.meta.url)), ".venv", process.platform === "win32" ? "Scripts/python.exe" : "bin/python");
 const signal = new AbortController().signal;
 let root: string, adapter: PdfSubprocess;
 beforeAll(async () => {

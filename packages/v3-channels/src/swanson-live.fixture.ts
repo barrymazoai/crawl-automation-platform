@@ -1,3 +1,4 @@
+import { fileURLToPath } from "node:url";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { vi } from "vitest";
@@ -12,7 +13,7 @@ export class SwansonMemory implements ObjectStore {
   async create(key: string, bytes: Uint8Array) { if (this.data.has(key)) return "exists" as const; this.data.set(key, Buffer.from(bytes)); return "created" as const; }
 }
 export function swansonLiveFixture() {
-  const root = process.env.V3_CHANNEL_FIXTURE_ROOT; if (!root) throw Error("Mini fixture root required");
+  const root = process.env.V3_CHANNEL_FIXTURE_ROOT ?? fileURLToPath(new URL("./fixtures/", import.meta.url));
   const sample = (name: string) => JSON.parse(readFileSync(join(root, name), "utf8"));
   const projection = sample("swanson-catalog-public.json"), product = sample("swanson-product-public.json");
   const scope = { brandId: "brand", sourceId: "swanson", channel: "swanson" as const, region: "US",

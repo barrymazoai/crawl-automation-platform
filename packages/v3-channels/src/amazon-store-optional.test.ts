@@ -44,7 +44,8 @@ it.each(['store-scope', 'unregistered', 'wrong-producer', 'wrong-version'])('mis
   expect(f.remote.data.has(`v3/amazon-products/${job.operationId}/projection.json`)).toBe(false);
 });
 
-it.each(['foreign-store', 'invalid-store', 'foreign-asin', 'foreign-origin'])('registered imports still reject %s', async mode => {
+// A plain Amazon URL is a valid byline link since b07e7d8, so only foreign stores, ASINs and origins are rejected.
+it.each(['foreign-store', 'foreign-asin', 'foreign-origin'])('registered imports still reject %s', async mode => {
   const f = amazonFixture(), job = await f.job();
   job.discovery.source.producer = { ...job.discovery.source.producer, module: 'amazon.link-list', implementationVersion: 'amazon-link-batch/1' };
   const p = { ...f.product, storeUrl: null as string | null };

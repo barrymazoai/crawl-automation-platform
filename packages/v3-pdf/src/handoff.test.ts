@@ -1,3 +1,4 @@
+import { fileURLToPath } from "node:url";
 import { mkdtemp, readFile, readdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -12,7 +13,7 @@ const signal = () => AbortSignal.timeout(10000);
 async function setup(module: "pdf.inspect" | "pdf.render" | "pdf.text" = "pdf.render") {
   const root = await mkdtemp(join(tmpdir(), "v3-pdf-handoff-")), source = nutritionPdf(), input = inputFor(source, module);
   const remote = new MemoryObjects(), journal = new MemoryObjects(), reviews = new MemoryReviews(); remote.data.set(input.pdf.objectKey, source);
-  const engine = await PdfSubprocess.open({ pythonExecutable: resolve(".venv/bin/python"), workRoot: join(root, "attempts") });
+  const engine = await PdfSubprocess.open({ pythonExecutable: fileURLToPath(new URL("../.venv/bin/python", import.meta.url)), workRoot: join(root, "attempts") });
   const run = vi.spyOn(engine, "run"), deps = { remote, journal, reviews, copies: await FileCopies.open(join(root, "cache")) };
   return { root, source, input, deps, run, engine, module: new PdfModule(deps, engine) };
 }

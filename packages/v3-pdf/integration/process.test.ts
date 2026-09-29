@@ -1,3 +1,4 @@
+import { fileURLToPath } from "node:url";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -7,7 +8,7 @@ import { runProcess } from "../src/process.js";
 let cwd: string;
 beforeAll(async () => { cwd = await mkdtemp(join(tmpdir(), "pdf-process-")); });
 const run = (mode: string, signal = new AbortController().signal, timeoutMs = 5000) => runProcess({
-  executable: resolve(".venv", process.platform === "win32" ? "Scripts/python.exe" : "bin/python"),
+  executable: resolve(fileURLToPath(new URL("..", import.meta.url)), ".venv", process.platform === "win32" ? "Scripts/python.exe" : "bin/python"),
   args: ["-I", resolve("integration/fixtures/process.py"), mode], cwd, stdin: "{}", timeoutMs, signal,
 });
 it.each(["stdout", "stderr", "bad", "extra"])("bounds protocol: %s", async mode => {

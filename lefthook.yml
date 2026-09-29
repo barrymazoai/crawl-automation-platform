@@ -1,0 +1,15 @@
+# Checks before every commit and push (docs/architecture/CODING_RULES.md).
+pre-commit:
+  parallel: true
+  commands:
+    format:
+      glob: "{apps/{api,worker,cli},packages/{app,workflows,channels,processing,platform}}/**/*.ts"
+      run: pnpm exec prettier --check {staged_files}
+    lint:
+      glob: "{apps/{api,worker,cli},packages/{app,workflows,channels,processing,platform}}/**/*.ts"
+      run: pnpm exec eslint --max-warnings 0 {staged_files}
+
+pre-push:
+  commands:
+    check:
+      run: pnpm check

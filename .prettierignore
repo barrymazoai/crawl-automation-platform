@@ -1,0 +1,22 @@
+# Prettier formats only the restructured packages; older code is formatted as it moves.
+*
+!apps/
+!apps/api/
+!apps/api/**
+!apps/worker/
+!apps/worker/**
+!apps/cli/
+!apps/cli/**
+!packages/
+!packages/app/
+!packages/app/**
+!packages/workflows/
+!packages/workflows/**
+!packages/channels/
+!packages/channels/**
+!packages/processing/
+!packages/processing/**
+!packages/platform/
+!packages/platform/**
+**/dist/**
+**/node_modules/**

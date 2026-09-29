@@ -1,3 +1,4 @@
+import { fileURLToPath } from "node:url";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, it, vi } from "vitest";
@@ -5,8 +6,7 @@ import { SwansonRenderedProductSchema, ChannelPlanInputSchema, type ReviewRecord
 import { sha256, ArtifactResolver, RetainedPublication, type ObjectStore } from "@crawl-automation/v3-artifacts";
 import { parseSwansonRenderedProduct, swansonProductAddress } from "./swanson-rendered.js";
 import { ChannelProductPlans, channelPlanKey } from "./channel-plan.js";
-const root = process.env.V3_CHANNEL_FIXTURE_ROOT;
-if (!root) throw Error("Set V3_CHANNEL_FIXTURE_ROOT to the retained public fixtures on Mac mini");
+const root = process.env.V3_CHANNEL_FIXTURE_ROOT ?? fileURLToPath(new URL("./fixtures/", import.meta.url));
 const sample = (name = "swanson-product-public.json") => SwansonRenderedProductSchema.parse(JSON.parse(readFileSync(join(root, name), "utf8")));
 const ownerOf = (p = sample()) => ({ schemaVersion: 1 as const, requestId: "channel-test", observationId: `obs-${p.selectedForms[0]!.productId}`,
   brandId: "ac-grace", sourceId: "swanson", listingId: p.selectedForms[0]!.productId, variantId: p.selectedForms[0]!.variantIds[0]! });

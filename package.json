@@ -15,12 +15,27 @@
     "test": "vitest run packages apps/backend/src --no-cache && pnpm --dir crawl-products test",
     "dev:web": "pnpm --filter @crawl-automation/web dev",
     "dev:backend": "pnpm --filter @crawl-automation/backend dev",
-    "start:browser-node": "pnpm build && pnpm --filter @crawl-automation/browser-node start"
+    "start:browser-node": "pnpm build && pnpm --filter @crawl-automation/browser-node start",
+    "lint": "eslint --max-warnings 0 --no-error-on-unmatched-pattern apps/api apps/worker apps/cli packages/app packages/workflows packages/channels packages/processing packages/platform && prettier --check --no-error-on-unmatched-pattern apps/api apps/worker apps/cli packages/app packages/workflows packages/channels packages/processing packages/platform",
+    "format": "prettier --write --no-error-on-unmatched-pattern apps/api apps/worker apps/cli packages/app packages/workflows packages/channels packages/processing packages/platform",
+    "check:deps": "depcruise --config .dependency-cruiser.cjs --include-only \"^(apps/(api|worker|cli)|packages/(app|workflows|channels|processing|platform))/\" apps packages",
+    "check:dupes": "jscpd --config .jscpd.json --pattern \"{apps/{api,worker,cli},packages/{app,workflows,channels,processing,platform}}/src/**/*.ts\" .",
+    "check:types": "turbo check-types",
+    "check": "pnpm lint && pnpm check:deps && pnpm check:dupes && pnpm check:types",
+    "test:v3": "vitest run --no-cache --config vitest.v3.config.ts",
+    "prepare": "lefthook install"
   },
   "devDependencies": {
+    "@eslint/js": "^9.39.5",
     "@types/node": "catalog:",
+    "dependency-cruiser": "^16.10.4",
+    "eslint": "^9.39.5",
+    "jscpd": "^4.3.0",
+    "lefthook": "^1.13.6",
+    "prettier": "^3.9.9",
     "turbo": "^2.8.12",
     "typescript": "catalog:",
+    "typescript-eslint": "^8.71.0",
     "vitest": "catalog:"
   }
 }

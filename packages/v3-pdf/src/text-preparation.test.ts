@@ -1,3 +1,4 @@
+import { fileURLToPath } from "node:url";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -14,7 +15,7 @@ async function setup(content?: string) {
   const root = await mkdtemp(join(tmpdir(), "v3-pdf-text-")), bytes = nutritionPdf(2, content), extraction = inputFor(bytes, "pdf.text", "extract", 1);
   const remote = new MemoryObjects(), journal = new MemoryObjects(), reviews = new MemoryReviews(); remote.data.set(extraction.pdf.objectKey, bytes);
   const deps = { remote, journal, reviews, copies: await FileCopies.open(join(root, "cache")) };
-  const engine = await PdfSubprocess.open({ pythonExecutable: resolve(".venv/bin/python"), workRoot: join(root, "attempts") }), run = vi.spyOn(engine, "run");
+  const engine = await PdfSubprocess.open({ pythonExecutable: fileURLToPath(new URL("../.venv/bin/python", import.meta.url)), workRoot: join(root, "attempts") }), run = vi.spyOn(engine, "run");
   const module = new PdfModule(deps, engine), prep = new PdfTextPreparation(deps);
   const plan = PdfTextPlanSchema.parse({ extraction, textOperationId: "interpret", text: { schemaVersion: 1, module: "codex.text",
     implementationVersion: "text/1", policyVersion: "policy/1", resultSchemaVersion: 2, configFingerprint: "a".repeat(64) } });

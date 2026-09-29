@@ -1,3 +1,4 @@
+import { fileURLToPath } from "node:url";
 import { expect,it } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -36,7 +37,7 @@ it("a real aria-labelled next page is a continuation, but a disabled next link i
  expect(parseSwansonRenderedCatalog(p,url,p.title).completion).toBe("displayed_listing_complete");
 });
 it("real Mini public catalog matches both independently captured product URLs",()=>{
-  const root=process.env.V3_CHANNEL_FIXTURE_ROOT;if(!root)throw Error("Fixture root required");
+  const root=process.env.V3_CHANNEL_FIXTURE_ROOT ?? fileURLToPath(new URL("./fixtures/", import.meta.url));
   const p=JSON.parse(readFileSync(join(root,"swanson-catalog-public.json"),"utf8")),r=parseSwansonRenderedCatalog(p,url,"A.C. Grace Company");
   const expected=["swanson-product-public.json","swanson-second-public.json"].map(name=>JSON.parse(readFileSync(join(root,name),"utf8")).url);
   expect(r.entries.map(e=>e.url).sort()).toEqual(expected.sort());expect(r.reportedTotal).toBe(2);expect(r.completion).toBe("displayed_listing_complete");

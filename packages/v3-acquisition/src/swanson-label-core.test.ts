@@ -1,3 +1,4 @@
+import { fileURLToPath } from "node:url";
 import {readFileSync} from "node:fs";
 import {join} from "node:path";
 import {expect,it} from "vitest";
@@ -8,7 +9,7 @@ import {sha256} from "@crawl-automation/v3-artifacts";
 const escape=(s:string)=>`<pre>${s.replace(/&/g,"&amp;").replace(/</g,"&lt;")}</pre>`;
 const text="Supplement Facts\nServing Size 1 Softgel\nAmount Per Serving\nBlend\n125 mg\nOther Ingredients: Gelatin, water.\n\nSuggested Use: one daily\nWarning: consult doctor";
 it.each(["swanson-product-public.json","swanson-second-public.json"])("isolates actual label without rewriting %s",name=>{
- const root=process.env.V3_CHANNEL_FIXTURE_ROOT;if(!root)throw Error("Fixture root required");
+ const root=process.env.V3_CHANNEL_FIXTURE_ROOT ?? fileURLToPath(new URL("../../v3-channels/src/fixtures/", import.meta.url));
  const p=JSON.parse(readFileSync(join(root,name),"utf8")),form=p.selectedForms[0],product=parseSwansonRenderedProduct(p,p.url,{listingId:form.productId,variantId:form.variantIds[0]});
  const core=extractSwansonLabelCore(product.factsCandidates[0]!.html+"\n"+product.detailsHtml);
  expect(core).toContain("Other Ingredients: BSE-free gelatin (capsule), vegetable glycerine, double-distilled and deionized water.");
