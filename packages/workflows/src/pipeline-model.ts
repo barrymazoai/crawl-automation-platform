@@ -10,6 +10,7 @@ import {
   type FileAcquireOutcome,
 } from "@crawl-automation/v3-contracts";
 import { z } from "zod";
+import type { LabelWorkflowInput } from "./label/label-model.js";
 
 export const PipelineChannelSchema = z.enum([
   "amazon",
@@ -34,15 +35,35 @@ export const ProductPipelineInputSchema = z.strictObject({
   queues: z.strictObject({
     /** The pipeline worker host: capture, handoff, files, Reviews, formula lookup. */
     activities: z.string().min(1).max(200),
-    /** The existing channel-plan worker: saves metrics and plans the formula sources. */
+    /** The formula planner (the pipeline worker hosts it too): plans the formula sources. */
     plan: z.string().min(1).max(200),
-    /** The existing label workflow worker. */
+    /** Where the Label workflow runs. */
     label: z.string().min(1).max(200),
+    /** Pages only a browser can read (Whole Foods), on the machine that runs Ego. */
+    browser: z.string().min(1).max(200).optional(),
   }),
   /** Permit gates; `captureProduct` must take the capture lane. */
   resources: ResourceGateSchema,
 });
 export type ProductPipelineInput = z.infer<typeof ProductPipelineInputSchema>;
+
+/** The revisit found the listing unlisted; the sighting and its reason are recorded and the product ends here. */
+export const ListingResultSchema = z.strictObject({
+  status: z.literal("listing"),
+  state: z.literal("unlisted"),
+  // The same reasons as channels-core's UNLISTED_REASONS (this package does not depend on channels-core).
+  reason: z.enum([
+    "not_found",
+    "redirected_to_other_product",
+    "redirected_away",
+    "identity_conflict",
+  ]),
+  operationId: ExecutionIdSchema,
+  observationId: z.string().regex(/^[a-f0-9]{64}$/),
+  listingId: z.string().min(1).max(200),
+  variantId: z.string().min(1).max(200).nullable(),
+  causeCode: z.string().min(1).max(120),
+});
 
 export const CaptureResultSchema = z.discriminatedUnion("status", [
   z.strictObject({
@@ -56,23 +77,7 @@ export const CaptureResultSchema = z.discriminatedUnion("status", [
     family: z.unknown().optional(),
   }),
   AcquisitionReviewSchema,
-  /** The revisit found the listing unlisted; the sighting and its reason are recorded and the product ends here. */
-  z.strictObject({
-    status: z.literal("listing"),
-    state: z.literal("unlisted"),
-    // The same reasons as channels-core's UNLISTED_REASONS (this package does not depend on channels-core).
-    reason: z.enum([
-      "not_found",
-      "redirected_to_other_product",
-      "redirected_away",
-      "identity_conflict",
-    ]),
-    operationId: ExecutionIdSchema,
-    observationId: z.string().regex(/^[a-f0-9]{64}$/),
-    listingId: z.string().min(1).max(200),
-    variantId: z.string().min(1).max(200).nullable(),
-    causeCode: z.string().min(1).max(120),
-  }),
+  ListingResultSchema,
 ]);
 export type CaptureResult = z.infer<typeof CaptureResultSchema>;
 
@@ -138,7 +143,10 @@ export interface PipelineActivities {
   captureProduct(input: ProductPipelineInput): Promise<unknown>;
   findKnownFormula(request: FormulaRequest): Promise<unknown>;
   reuseSiblingFormula(request: SiblingReuseRequest): Promise<unknown>;
+  /** The earlier per-channel label workflow's input (kept for histories recorded before the shared one). */
   prepareLabelHandoff(request: LabelHandoffRequest): Promise<ChannelSavedLabelWorkflowInput>;
+  /** The shared Label workflow's input for the planned product. */
+  prepareLabelTask(request: LabelHandoffRequest): Promise<LabelWorkflowInput>;
   acquireProductFile(request: FileRequest): Promise<FileAcquireOutcome>;
   reviewProduct(request: ReviewRequest): Promise<AcquisitionReview>;
 }
@@ -146,4 +154,21 @@ export interface PipelineActivities {
 /** The existing channel-plan worker's activity: saves metrics, then plans the formula sources. */
 export interface PlanActivities {
   prepareChannelProduct(sourcePlan: ChannelPlanInput): Promise<unknown>;
+}
+
+/** A page read in the browser: its listing and the metrics it showed, or the listing's unlisted sighting, or a Review. */
+export const BrowserCaptureResultSchema = z.discriminatedUnion("status", [
+  z.strictObject({
+    status: z.literal("captured"),
+    listingId: z.string().min(1).max(200),
+    variantId: z.string().min(1).max(200).nullable(),
+    archiveKey: z.string().min(1).max(1024),
+  }),
+  AcquisitionReviewSchema,
+  ListingResultSchema,
+]);
+
+/** The browser worker's activity (Server 二): reads one product page in Ego and archives it before parsing. */
+export interface BrowserActivities {
+  captureBrowserProduct(input: ProductPipelineInput): Promise<unknown>;
 }

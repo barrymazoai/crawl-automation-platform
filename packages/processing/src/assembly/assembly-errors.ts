@@ -6,6 +6,9 @@ const ingest = (message: string) => ({ category: "INGEST" as const, message });
 
 /** Errors of label assembly, packaging evidence and collection. The codes are stored in Reviews and kept as they are. */
 export const assemblyErrors = defineErrors({
+  "LABEL_PRODUCT.TEXT_UNVERIFIED": artifact(
+    "A text source is not registered and durable, so assembly cannot read it.",
+  ),
   "LABEL_PRODUCT.IDENTITY_CONFLICT": artifact("A label source belongs to another product."),
   "LABEL_PRODUCT.BARRIER_INCOMPLETE": validation("Not every label source has finished."),
   "LABEL_PRODUCT.RECEIPT_INVALID": artifact("A label source's receipt contradicts its evidence."),

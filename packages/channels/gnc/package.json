@@ -21,6 +21,7 @@
     "htmlparser2": "10.1.0"
   },
   "devDependencies": {
+    "@crawl-automation/v3-artifacts": "workspace:*",
     "@types/node": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"

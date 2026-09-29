@@ -18,6 +18,14 @@ export const storeErrors = defineErrors({
     category: "IDENTITY",
     message: "An earlier request with this ID did not finish; use a new request ID.",
   },
+  "RESOURCE.IDENTITY_CONFLICT": {
+    category: "IDENTITY",
+    message: "A different permit request is already stored under this permit ID.",
+  },
+  "RESOURCE.NOT_CONFIGURED": {
+    category: "RUNTIME",
+    message: "The resource is not configured, or the request needs more than its whole capacity.",
+  },
   "STORE.UNEXPECTED_ROW": {
     category: "IDENTITY",
     message: "A stored row has an unexpected shape.",

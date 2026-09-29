@@ -1,4 +1,8 @@
-import { PostgresBrandScans, PostgresBrandSourceImport } from "@crawl-automation/adapters";
+import {
+  PostgresBrandScans,
+  PostgresBrandSourceImport,
+  TemporalBrowserScans,
+} from "@crawl-automation/adapters";
 import {
   BrandScanRunner,
   BrandScanService,
@@ -10,13 +14,10 @@ import {
 import { swansonAdapter } from "@crawl-automation/channel-swanson";
 import { ChannelRegistry, ListingPages } from "@crawl-automation/channels-core";
 import { gncAdapter } from "@crawl-automation/channels-gnc";
+import { wholeFoodsBrandSourceUrl } from "@crawl-automation/channels-wholefoods";
 import {
-  WholeFoodsBrandScan,
-  wholeFoodsBrandSourceUrl,
-} from "@crawl-automation/channels-wholefoods";
-import {
-  EgoPages,
   ScraperApiClient,
+  type TemporalClient,
   type Database,
   type Logger,
   type ObjectStore,
@@ -27,21 +28,19 @@ import type { BrandScanSettings } from "./brand-scan-config.js";
 /** The channels brand scans read with their adapters' ScraperAPI readers. */
 const scanRegistry = () => new ChannelRegistry([swansonAdapter, gncAdapter]);
 
-/** Whole Foods in the Ego browser, when this machine has Ego and the store configured; otherwise not scanned here. */
-function browserScanners(settings: BrandScanSettings, remote: ObjectStore): BrowserBrandScanners {
-  const { ego, wholefoods } = settings;
-  if (!ego || !wholefoods) {
+/** Whole Foods, scanned in Ego on the browser machine through its task queue; absent without that queue. */
+function browserScanners(
+  settings: BrandScanSettings,
+  temporal: TemporalClient,
+): BrowserBrandScanners {
+  if (!settings.browserQueue) {
     return {};
   }
-  const scanner = new WholeFoodsBrandScan({
-    browser: new EgoPages(ego),
-    remote,
-    store: wholefoods,
-  });
+  const scans = new TemporalBrowserScans(temporal.client, settings.browserQueue);
   return {
     wholefoods: {
       sourceUrl: wholeFoodsBrandSourceUrl,
-      scan: (request, signal) => scanner.scan(request, signal),
+      scan: (request, signal) => scans.scan({ channel: "wholefoods", ...request }, signal),
     },
   };
 }
@@ -81,13 +80,14 @@ export function brandScanParts(parts: {
   queue: QueueService;
   listingStates: ListingStateService;
   settings: BrandScanSettings | undefined;
+  temporal: TemporalClient;
   log: Logger;
 }): BrandScanParts {
   const { database, settings, log } = parts;
   const registry = scanRegistry();
   const store = new PostgresBrandScans(database);
   const remote = settings ? createR2Objects(settings.r2, settings.r2Credentials).store : null;
-  const browsers = settings && remote ? browserScanners(settings, remote) : {};
+  const browsers = settings ? browserScanners(settings, parts.temporal) : {};
   const brandSources = new BrandSourceImport({
     store: new PostgresBrandSourceImport(database),
     registry,

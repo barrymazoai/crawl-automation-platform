@@ -72,14 +72,20 @@ function parseProduct(page: FetchedPage): ParsedProduct<GncRendered> {
 
 /**
  * gnc.com. Product and brand pages are fetched through ScraperAPI as plain HTML (checked 2026-09-28: no challenge);
- * each size and flavour has its own 6-digit SKU page. The formula planner does not read GNC pages yet, so there is
- * no `planning` until the shared label workflow (M5) takes GNC.
+ * each size and flavour has its own 6-digit SKU page. The planner reads the product evidence as the projection;
+ * with a complete facts table (text facts first) that table is the only formula source.
  */
 export const gncAdapter: ChannelAdapter<GncRendered> = {
   id: "gnc",
   captureModes: ["http"],
   httpPolicy: { origins: [GNC_ORIGIN], maxBytes: 2 * 1024 * 1024, timeoutMs: 70_000 },
   brandScan: gncBrandScan,
+  planning: {
+    channel: "gnc",
+    parserVersion: "gnc-rendered/1",
+    projectionModule: "gnc.http-projection",
+    projection: (rendered: GncRendered) => evidenceOf(rendered.product),
+  },
   productAddress: gncProductAddress,
   parseProduct,
   productFamily: gncProductFamily,

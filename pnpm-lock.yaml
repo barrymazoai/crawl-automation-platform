@@ -681,9 +681,15 @@ importers:
       '@crawl-automation/channels-gnc':
         specifier: workspace:*
         version: link:../../packages/channels/gnc
+      '@crawl-automation/channels-wholefoods':
+        specifier: workspace:*
+        version: link:../../packages/channels/wholefoods
       '@crawl-automation/platform':
         specifier: workspace:*
         version: link:../../packages/platform
+      '@crawl-automation/processing':
+        specifier: workspace:*
+        version: link:../../packages/processing
       '@crawl-automation/v3-acquisition':
         specifier: workspace:*
         version: link:../../packages/v3-acquisition
@@ -743,6 +749,34 @@ importers:
       vitest:
         specifier: ^4.1.1
         version: 4.1.11(@types/node@22.20.1)(vite@7.3.6(@types/node@22.20.1)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.51.2)(tsx@4.23.12)(yaml@2.9.0))
+
+  ops/deploy:
+    dependencies:
+      '@crawl-automation/platform':
+        specifier: workspace:*
+        version: link:../../packages/platform
+      commander:
+        specifier: ^14.0.3
+        version: 14.0.3
+      execa:
+        specifier: 'catalog:'
+        version: 10.0.1
+      zod:
+        specifier: 'catalog:'
+        version: 4.4.3
+    devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 22.20.1
+      tsx:
+        specifier: 'catalog:'
+        version: 4.23.12
+      typescript:
+        specifier: 'catalog:'
+        version: 5.9.3
+      vitest:
+        specifier: 'catalog:'
+        version: 3.2.7(@types/node@22.20.1)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.51.2)(tsx@4.23.12)(yaml@2.9.0)
 
   packages/adapters:
     dependencies:
@@ -891,6 +925,9 @@ importers:
         specifier: 10.1.0
         version: 10.1.0
     devDependencies:
+      '@crawl-automation/v3-artifacts':
+        specifier: workspace:*
+        version: link:../../v3-artifacts
       '@types/node':
         specifier: 'catalog:'
         version: 22.20.1

@@ -1,11 +1,6 @@
 import { BrandScanRunnerSettingsSchema } from "@crawl-automation/app";
 import { CHANNEL_IDS } from "@crawl-automation/channels-core";
-import { WholeFoodsStoreSchema } from "@crawl-automation/channels-wholefoods";
-import {
-  EgoSettingsSchema,
-  ScraperApiAccessSchema,
-  ScraperApiOptionChoicesSchema,
-} from "@crawl-automation/platform";
+import { ScraperApiAccessSchema, ScraperApiOptionChoicesSchema } from "@crawl-automation/platform";
 import { R2ScopeSchema } from "@crawl-automation/v3-artifacts";
 import { ScraperApiRouteSchema } from "@crawl-automation/v3-contracts";
 import { z } from "zod";
@@ -29,9 +24,10 @@ export const BrandScanSettingsSchema = z.strictObject({
     concurrent: 4,
     staleMs: 1_800_000,
   }),
-  /** The Ego browser on this machine, for Whole Foods scans; absent means Whole Foods is not scanned here. */
-  ego: EgoSettingsSchema.optional(),
-  /** The Whole Foods store every page is read for (owner decision: The Alameda, store 10259). */
-  wholefoods: WholeFoodsStoreSchema.optional(),
+  /**
+   * The browser machine's task queue (Server 二), where Whole Foods listings are scanned in Ego; absent means Whole
+   * Foods is not scanned. This process never drives a browser: the store and Ego settings live on that worker.
+   */
+  browserQueue: z.string().min(1).max(200).optional(),
 });
 export type BrandScanSettings = z.infer<typeof BrandScanSettingsSchema>;

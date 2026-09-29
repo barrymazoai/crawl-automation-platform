@@ -11,6 +11,7 @@ export default defineConfig({
       "apps/{api,worker,cli}/src/**/*.test.ts",
       "packages/{adapters,app,workflows,processing,platform}/src/**/*.test.ts",
       "packages/channels/*/src/**/*.test.ts",
+      "ops/deploy/src/**/*.test.ts",
     ],
     exclude: ["**/node_modules/**", "**/dist/**"],
     // Some archive tests do real hashing and I/O; 5 s is too short when the whole suite runs in parallel.

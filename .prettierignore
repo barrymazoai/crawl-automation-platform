@@ -7,6 +7,9 @@
 !apps/worker/**
 !apps/cli/
 !apps/cli/**
+!ops/
+!ops/deploy/
+!ops/deploy/**
 !packages/
 !packages/adapters/
 !packages/adapters/**

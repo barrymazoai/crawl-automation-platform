@@ -9,6 +9,7 @@ import {
   CancellationScope,
   ParentClosePolicy,
   WorkflowIdReusePolicy,
+  patched,
   startChild,
   workflowInfo,
   type ChildWorkflowHandle,
@@ -29,17 +30,38 @@ export interface LabelStep {
   manifest: Manifest;
 }
 
+/** The signals each label workflow understands (the shared one, and the earlier per-channel one). */
+interface StreamSignals {
+  workflowType: string;
+  ready: string;
+  sealed: string;
+}
+
+const SHARED: StreamSignals = {
+  workflowType: "LabelWorkflow",
+  ready: "labelSourceReady",
+  sealed: "labelStreamSealed",
+};
+const EARLIER: StreamSignals = {
+  workflowType: "ChannelStreamingLabelWorkflow",
+  ready: "channelSourceReady",
+  sealed: "channelStreamSealed",
+};
+
 /**
- * Reads the formula with the existing label workflow. The page source is ready at once; each label image is
- * downloaded, then handed to the label workflow as soon as its receipt exists. The stream is sealed on every ending.
+ * Reads the formula with the Label workflow. The page source is ready at once; each label image is downloaded, then
+ * handed to the label workflow as soon as its receipt exists. The stream is sealed on every ending. Histories
+ * recorded before the shared Label workflow keep replaying the earlier per-channel one.
  */
 export async function streamLabel(step: LabelStep): Promise<unknown> {
-  const handoff = await step.pipeline.prepareLabelHandoff({
-    pipeline: step.input,
-    sourcePlan: step.sourcePlan,
-  });
+  const shared = patched("shared-label-workflow-v1");
+  const request = { pipeline: step.input, sourcePlan: step.sourcePlan };
+  const handoff = shared
+    ? await step.pipeline.prepareLabelTask(request)
+    : await step.pipeline.prepareLabelHandoff(request);
+  const signals = shared ? SHARED : EARLIER;
   const labelId = handoff.input.operationId;
-  const child: LabelChild = await startChild("ChannelStreamingLabelWorkflow", {
+  const child: LabelChild = await startChild(signals.workflowType, {
     workflowId: `${workflowInfo().workflowId}-label`,
     taskQueue: step.input.queues.label,
     args: [handoff],
@@ -48,9 +70,9 @@ export async function streamLabel(step: LabelStep): Promise<unknown> {
     retry: { maximumAttempts: 1 },
   });
   const seal = (status: "closed" | "failed") =>
-    child.signal("channelStreamSealed", { operationId: labelId, status });
+    child.signal(signals.sealed, { operationId: labelId, status });
   try {
-    const review = await feedFiles(step, child, labelId);
+    const review = await feedFiles(step, { child, labelId, signal: signals.ready });
     await seal(review ? "failed" : "closed");
     const result = await child.result();
     return review ?? result;
@@ -63,9 +85,9 @@ export async function streamLabel(step: LabelStep): Promise<unknown> {
 /** Downloads each label image and signals it to the label workflow; a file Review stops the feed. */
 async function feedFiles(
   step: LabelStep,
-  child: LabelChild,
-  labelId: string,
+  target: { child: LabelChild; labelId: string; signal: string },
 ): Promise<FileAcquireOutcome | null> {
+  const { child, labelId } = target;
   for (const source of step.manifest.sources) {
     if (source.kind !== "file-image") {
       continue;
@@ -87,7 +109,7 @@ async function feedFiles(
     if (receipt.status === "review") {
       return receipt;
     }
-    await child.signal("channelSourceReady", {
+    await child.signal(target.signal, {
       operationId: labelId,
       sourceId: source.id,
       file: receipt.file,

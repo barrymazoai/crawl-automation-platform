@@ -10,6 +10,7 @@ import {
   type PlanActivities,
   type ProductPipelineInput,
 } from "./pipeline-model.js";
+import { collectInBrowser } from "./browser-product.js";
 import { reuseSiblingFormula } from "./sibling-reuse.js";
 import { streamLabel } from "./stream-label.js";
 
@@ -32,7 +33,9 @@ export async function ProductPipelineWorkflow(raw: unknown): Promise<unknown> {
     ...once,
   });
   try {
-    return await collect(input, pipeline);
+    // Pages only a browser can read have no formula planner: their formula comes from the formula family.
+    const browser = input.channel === "wholefoods";
+    return await (browser ? collectInBrowser(input, pipeline) : collect(input, pipeline));
   } catch (error) {
     if (isCancellation(error)) {
       throw error;

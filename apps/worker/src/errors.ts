@@ -6,4 +6,9 @@ export const workerErrors = defineErrors({
     category: "RUNTIME",
     message: "This activity must be called from a workflow.",
   },
+  "WORKER.PROCESSING_SETTINGS_MISSING": {
+    category: "RUNTIME",
+    message:
+      "This worker's config has no settings for this label step (Codex, OCR API or processing).",
+  },
 });

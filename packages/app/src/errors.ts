@@ -38,6 +38,14 @@ export const appErrors = defineErrors({
     category: "ARTIFACT",
     message: "The formula plan for this product is missing or no longer matches its evidence.",
   },
+  "PIPELINE.LABEL_SETTINGS_MISSING": {
+    category: "RUNTIME",
+    message: "This worker has no settings for the shared Label workflow (its queues).",
+  },
+  "PIPELINE.REVIEW_UNVERIFIED": {
+    category: "ARTIFACT",
+    message: "The label product's Review could not be read back from the ledger.",
+  },
   "PIPELINE.EXECUTION_CONFLICT": {
     category: "IDENTITY",
     message: "This product is already linked to a different workflow.",

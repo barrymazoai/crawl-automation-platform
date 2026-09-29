@@ -1,4 +1,5 @@
 import {
+  type PostgresResourceAdmission,
   PostgresExecutionRegistry,
   PostgresFormulaIndex,
   PostgresFormulaLinks,
@@ -8,6 +9,8 @@ import {
 import {
   FormulaLookup,
   LabelHandoffs,
+  type LabelReviews,
+  type LabelTasks,
   PipelineCapture,
   ProductReviews,
   SiblingFormulaReuse,
@@ -23,18 +26,11 @@ import {
   ProductSourcePlans,
   ScraperApiPages,
 } from "@crawl-automation/channels-core";
-import {
-  createDatabase,
-  createLogger,
-  ScraperApiClient,
-  type Database,
-  type Logger,
-} from "@crawl-automation/platform";
+import { createDatabase, createLogger, ScraperApiClient } from "@crawl-automation/platform";
 import {
   DirectHttpsTransport,
   FileEvidence,
   SystemHttpsTransport,
-  type FileTransport,
 } from "@crawl-automation/v3-acquisition";
 import {
   ArtifactResolver,
@@ -45,31 +41,26 @@ import {
 import { ChannelProductPlans } from "@crawl-automation/v3-channels";
 import { TextLocalStore } from "@crawl-automation/v3-text";
 import { asFunction, asValue, createContainer, InjectionMode, type AwilixContainer } from "awilix";
+import { buildBrowserParts, type BrowserParts } from "./browser/browser-parts.js";
 import type { WorkerConfig } from "./config.js";
+import type { CoreParts } from "./core-parts.js";
+import {
+  buildAdmission,
+  buildLabelParts,
+  buildLabelReviews,
+  buildLabelTasks,
+  type LabelParts,
+} from "./label/label-parts.js";
 
-type R2 = ReturnType<typeof createR2Objects>;
-
-/** Everything the pipeline worker is built from. */
-export interface WorkerParts {
-  config: WorkerConfig;
-  log: Logger;
-  database: Database;
-  r2: R2;
-  local: TextLocalStore;
-  copies: FileCopies;
-  publication: RetainedPublication;
-  registry: ChannelRegistry;
-  fileTransport: FileTransport;
-  reviewLedger: PostgresReviewLedger;
-  channelPlans: ChannelProductPlans;
-  productCapture: ProductCapture;
-  pipelineCapture: PipelineCapture;
-  productFiles: ProductFiles;
-  formulaIndex: PostgresFormulaIndex;
-  formulaLookup: FormulaLookup;
-  siblingReuse: SiblingFormulaReuse;
-  labelHandoffs: LabelHandoffs;
-  productReviews: ProductReviews;
+/** Everything the pipeline worker is built from: the base services, then the parts built from them. */
+export interface WorkerParts extends CoreParts {
+  /** The label steps (only built when a label role first uses them). */
+  label: LabelParts;
+  labelTasks: LabelTasks;
+  labelReviews: LabelReviews;
+  admission: PostgresResourceAdmission;
+  /** Whole Foods in Ego (the browser machine only). */
+  browser: BrowserParts;
 }
 
 export type Parts = AwilixContainer<WorkerParts>;
@@ -97,6 +88,13 @@ export async function buildContainer(config: WorkerConfig): Promise<Parts> {
   });
   registerStores(container);
   registerServices(container);
+  container.register({
+    label: asFunction(buildLabelParts).singleton(),
+    labelTasks: asFunction(buildLabelTasks).singleton(),
+    labelReviews: asFunction(buildLabelReviews).singleton(),
+    admission: asFunction(buildAdmission).singleton(),
+    browser: asFunction(buildBrowserParts).singleton(),
+  });
   return container;
 }
 

@@ -14,6 +14,7 @@ export const governed = [
   "packages/channels/*/src/**/*.ts",
   "packages/processing/src/**/*.ts",
   "packages/platform/src/**/*.ts",
+  "ops/deploy/src/**/*.ts",
 ];
 
 const shortNamesAllowed = ["_", "i", "x", "y"];

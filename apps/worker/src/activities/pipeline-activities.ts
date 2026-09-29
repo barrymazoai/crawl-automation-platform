@@ -44,6 +44,13 @@ export function pipelineActivities(parts: WorkerParts) {
         signal,
       );
     },
+    prepareLabelTask: (raw: unknown, signal: AbortSignal) => {
+      const request = LabelHandoffRequestSchema.parse(raw);
+      return parts.labelTasks.prepare({ ...request, execution: callingExecution(parts) }, signal);
+    },
+    // The formula planner: saves the plan of the product's formula sources (queue `plan` of the pipeline input).
+    prepareChannelProduct: (raw: unknown, signal: AbortSignal) =>
+      parts.channelPlans.run(raw, signal),
     acquireProductFile: (raw: unknown, signal: AbortSignal) => {
       const { pipeline, sourcePlan, acquire } = FileRequestSchema.parse(raw);
       return parts.productFiles.acquire({ channel: pipeline.channel, sourcePlan, acquire }, signal);

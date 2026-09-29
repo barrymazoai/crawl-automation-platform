@@ -82,4 +82,16 @@ END;
 $$;
 CREATE TRIGGER queue_attempt_identity BEFORE UPDATE OR DELETE ON queue_attempt
   FOR EACH ROW EXECUTE FUNCTION preserve_queue_attempt();
+
+-- The services' database role: lists are added, never changed; items and attempts move through their states; each
+-- channel's control row is seeded here and only updated afterwards.
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'v3_runtime') THEN
+    GRANT SELECT, UPDATE ON queue_control TO v3_runtime;
+    GRANT SELECT, INSERT ON link_batch TO v3_runtime;
+    GRANT SELECT, INSERT, UPDATE ON queue_item, queue_attempt TO v3_runtime;
+  END IF;
+END;
+$$;
 COMMIT;

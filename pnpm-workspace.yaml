@@ -2,6 +2,7 @@ packages:
   - apps/*
   - packages/*
   - packages/channels/*
+  - ops/*
   - crawl-products
 
 catalog:

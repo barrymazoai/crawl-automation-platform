@@ -1,5 +1,6 @@
 import type {
   CaptureRequest,
+  ListingSighting,
   ProductCapture,
   UnlistedReason,
 } from "@crawl-automation/channels-core";
@@ -17,16 +18,26 @@ export interface SightedProduct {
   causeCode: string;
 }
 
-type Captured = Awaited<ReturnType<ProductCapture["capture"]>>;
+type Sighted = {
+  status: "sighted";
+  listingId: string;
+  variantId: string | null;
+  sighting: ListingSighting;
+};
 
 /**
- * The pipeline's capture step: capture the product page, and when the revisit shows the listing is unlisted,
- * record that sighting with its reason (a fact for the product database, not a failure) and end the product there.
+ * The pipeline's capture step, for any capture (ScraperAPI pages with a formula plan, or browser pages): capture the
+ * product page, and when the revisit shows the listing is unlisted, record that sighting with its reason (a fact for
+ * the product database, not a failure) and end the product there.
  */
-export class PipelineCapture {
+export class PipelineCapture<
+  Captured extends { status: string } = Awaited<ReturnType<ProductCapture["capture"]>>,
+> {
   constructor(
     private readonly deps: {
-      capture: Pick<ProductCapture, "capture">;
+      capture: {
+        capture(request: CaptureRequest, signal: AbortSignal): Promise<Captured | Sighted>;
+      };
       listings: { record(raw: unknown): Promise<ListingObservation> };
     },
   ) {}
@@ -34,10 +45,10 @@ export class PipelineCapture {
   async capture(
     request: CaptureRequest,
     signal: AbortSignal,
-  ): Promise<Exclude<Captured, { status: "sighted" }> | SightedProduct> {
+  ): Promise<Exclude<Captured, Sighted> | SightedProduct> {
     const captured = await this.deps.capture.capture(request, signal);
-    if (captured.status !== "sighted") {
-      return captured;
+    if (!isSighted(captured)) {
+      return captured as Exclude<Captured, Sighted>;
     }
     const { sighting, listingId, variantId } = captured;
     const observation = await this.deps.listings.record({
@@ -70,4 +81,8 @@ export class PipelineCapture {
       causeCode: sighting.causeCode,
     };
   }
+}
+
+function isSighted(captured: { status: string }): captured is Sighted {
+  return captured.status === "sighted";
 }

@@ -1,0 +1,25 @@
+import { BrowserScanInputSchema, ProductPipelineInputSchema } from "@crawl-automation/workflows";
+import type { WorkerParts } from "../container.js";
+import { guarded } from "./activity-guard.js";
+
+/**
+ * The browser machine's activities (Server 二, where Ego runs): a Whole Foods product page captured for the pipeline,
+ * and a Whole Foods brand listing scanned for the API's brand scan. The store is set before the first page.
+ */
+export function browserActivities(parts: WorkerParts) {
+  const handlers = {
+    captureBrowserProduct: async (raw: unknown, signal: AbortSignal) => {
+      const input = ProductPipelineInputSchema.parse(raw);
+      await parts.browser.ensureStore(input.url, signal);
+      return parts.browser.capture.capture(input, signal);
+    },
+    scanBrandInBrowser: async (raw: unknown, signal: AbortSignal) => {
+      const { scanId, sourceUrl } = BrowserScanInputSchema.parse(raw);
+      await parts.browser.ensureStore(sourceUrl, signal);
+      return parts.browser.scanner.scan({ scanId, sourceUrl }, signal);
+    },
+  };
+  return Object.fromEntries(
+    Object.entries(handlers).map(([name, handler]) => [name, guarded(name, handler, parts.log)]),
+  );
+}

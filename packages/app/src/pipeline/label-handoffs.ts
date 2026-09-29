@@ -6,13 +6,19 @@ import {
   type ChannelPlanInput,
   type ResourceGate,
 } from "@crawl-automation/v3-contracts";
-import type { ProductPipelineInput } from "@crawl-automation/workflows";
+import type { LabelWorkflowInput, ProductPipelineInput } from "@crawl-automation/workflows";
 import type { z } from "zod";
 import { appErrors } from "../errors.js";
 import type { EvidencePublisher, ExecutionRef, ExecutionRegistry, PlanReader } from "./ports.js";
 
 type LabelInput = z.infer<typeof ChannelLabelInputSchema>;
 export type LabelHandoff = z.infer<typeof ChannelSavedLabelWorkflowInputSchema>;
+
+/** The shared Label workflow's queues and permits, from the worker's config. */
+export interface SharedLabelSettings {
+  queues: LabelWorkflowInput["queues"];
+  resources?: ResourceGate | undefined;
+}
 
 /** The label workflow's model settings, task queues and permits, from the worker's config. */
 export interface LabelSettings {
@@ -21,6 +27,8 @@ export interface LabelSettings {
   evidencePolicy: LabelInput["evidencePolicy"];
   queues: LabelHandoff["queues"];
   resources: ResourceGate;
+  /** The shared Label workflow's queues and permits (`LabelTasks`); absent, only the earlier workflow is built. */
+  shared?: SharedLabelSettings | undefined;
 }
 
 export interface LabelHandoffDeps {

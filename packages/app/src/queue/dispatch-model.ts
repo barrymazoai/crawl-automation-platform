@@ -64,7 +64,12 @@ export interface RunCanceller {
 /** A reason recorded on a Review item: a code from the application's error registry. */
 export type QueueReason = keyof typeof appErrors.codes;
 
-const PipelineResultSchema = z.object({ status: z.string(), code: z.string().optional() });
+// A label assembly Review names its causes as `codes`; every other Review as `code`.
+const PipelineResultSchema = z.object({
+  status: z.string(),
+  code: z.string().optional(),
+  codes: z.array(z.string()).optional(),
+});
 
 /** Temporal statuses of a workflow that ended without completing, and the reason each is recorded with. */
 const endedReasons: Partial<Record<string, QueueReason>> = {
@@ -80,16 +85,24 @@ const endedReasons: Partial<Record<string, QueueReason>> = {
  */
 export function settledOutcome(execution: RunExecution): SettledOutcome | null {
   if (execution.status === "COMPLETED") {
-    const result = PipelineResultSchema.safeParse(execution.result);
-    // `listing`: the revisit found the listing unlisted and recorded that sighting with its reason; the run is done.
-    if (result.success && ["collected", "listing"].includes(result.data.status)) {
-      return { state: "completed", reason: null };
-    }
-    const reviewed = result.success && result.data.status === "review";
-    const fallback: QueueReason = reviewed ? "QUEUE.RUN_REVIEW" : "QUEUE.OUTCOME_UNRECOGNIZED";
-    const reason = reviewed ? (result.data.code ?? fallback) : fallback;
-    return { state: "review", reason };
+    return completedOutcome(execution.result);
   }
   const ended = endedReasons[execution.status];
   return ended ? { state: "review", reason: ended } : null;
+}
+
+/** A completed run: collected or unlisted is done; a Review keeps its own code; anything else is unrecognized. */
+function completedOutcome(raw: unknown): SettledOutcome {
+  const result = PipelineResultSchema.safeParse(raw);
+  // `listing`: the revisit found the listing unlisted and recorded that sighting with its reason; the run is done.
+  if (result.success && ["collected", "listing"].includes(result.data.status)) {
+    return { state: "completed", reason: null };
+  }
+  if (!result.success || result.data.status !== "review") {
+    return { state: "review", reason: "QUEUE.OUTCOME_UNRECOGNIZED" };
+  }
+  return {
+    state: "review",
+    reason: result.data.code ?? result.data.codes?.[0] ?? "QUEUE.RUN_REVIEW",
+  };
 }

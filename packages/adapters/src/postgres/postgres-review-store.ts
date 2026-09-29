@@ -67,7 +67,8 @@ export class PostgresReviewLedger implements ReviewLedger {
     return this.reviews.read(reviewId);
   }
 
-  append(record: ReviewRecord): Promise<unknown> {
+  /** The ledger's receipt (ID, record hash), which the processing steps read back. */
+  append(record: ReviewRecord): ReturnType<PostgresReviews["append"]> {
     return this.reviews.append(record);
   }
 }

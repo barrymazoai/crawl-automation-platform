@@ -90,10 +90,10 @@ describe.skipIf(!hasPostgres)("pipeline stores against a real PostgreSQL", () =>
     const index = new PostgresFormulaIndex(database);
 
     expect(
-      await index.findKnown({ channel: "swanson", listingId: "123", variantId: "456" }),
+      await index.findKnown({ channels: ["swanson"], listingId: "123", variantId: "456" }),
     ).toBeNull();
     expect(
-      await index.findKnown({ channel: "swanson", listingId: "123", variantId: null }),
+      await index.findKnown({ channels: ["swanson"], listingId: "123", variantId: null }),
     ).toBeNull();
   });
 

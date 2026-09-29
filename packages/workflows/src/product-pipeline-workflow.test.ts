@@ -104,6 +104,10 @@ async function setup() {
       expect(env.held).toBe(false);
       return { input: { operationId: "label-1" } };
     }),
+    prepareLabelTask: vi.fn(async () => {
+      expect(env.held).toBe(false);
+      return { input: { operationId: "label-1" } };
+    }),
     acquireProductFile: vi.fn(async ({ acquire }: Acquire): Promise<unknown> => ({
       status: "durable",
       operationId: acquire.operationId,
@@ -146,23 +150,37 @@ it("captures on the lane, plans, then streams every label image to the label wor
   });
 
   expect(env.start).toHaveBeenCalledWith(
-    "ChannelStreamingLabelWorkflow",
+    "LabelWorkflow",
     expect.objectContaining({
       workflowId: "product-run-1-label",
       taskQueue: "label",
       parentClosePolicy: "REQUEST_CANCEL",
     }),
   );
+  expect(pipeline.prepareLabelTask).toHaveBeenCalledOnce();
+  expect(pipeline.prepareLabelHandoff).not.toHaveBeenCalled();
   expect(pipeline.acquireProductFile).toHaveBeenCalled();
   const names = env.signals.map(([name]) => name);
-  expect(names.filter((name) => name === "channelSourceReady")).toHaveLength(
+  expect(names.filter((name) => name === "labelSourceReady")).toHaveLength(
     pipeline.acquireProductFile.mock.calls.length,
   );
   expect(env.signals.at(-1)).toEqual([
-    "channelStreamSealed",
+    "labelStreamSealed",
     { operationId: "label-1", status: "closed" },
   ]);
   expect(env.held).toBe(false);
+});
+
+it("a history recorded before the shared Label workflow keeps streaming to the earlier per-channel one", async () => {
+  const { pipeline } = await setup();
+  env.patched = false;
+
+  await ProductPipelineWorkflow(input);
+
+  expect(env.start).toHaveBeenCalledWith("ChannelStreamingLabelWorkflow", expect.anything());
+  expect(pipeline.prepareLabelHandoff).toHaveBeenCalledOnce();
+  expect(pipeline.prepareLabelTask).not.toHaveBeenCalled();
+  expect(env.signals.at(-1)?.[0]).toBe("channelStreamSealed");
 });
 
 it("a known formula still saves the metrics but reads no label", async () => {
