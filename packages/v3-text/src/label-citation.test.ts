@@ -25,6 +25,12 @@ describe("label quotes of words printed more than once", () => {
     expect(result.codes).not.toContain("TEXT.CITATION_INVALID");
   });
 
+  it("the whole real D-Ribose answer is now a candidate, standard FDA footnote included", () => {
+    const { result } = decode(dRibose, answer);
+    expect(result.codes).toEqual([]);
+    expect(result.status).toBe("candidate");
+  });
+
   it("places each '5 g' on its own row, in printed order", () => {
     const { text, result } = decode(dRibose, answer);
     const amounts = rowsOf(result).slice(1).map(row => row.amount!);

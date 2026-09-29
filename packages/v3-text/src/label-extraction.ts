@@ -73,7 +73,10 @@ export function decodeLabelText(scope: Scope, text: string, response: string, po
       if(exactOther||exactPrefix||footnote)continue;
     }
     const allowed = e.reason === "heading" ? /^(?:supplement\s+facts|nutrition\s+facts|view\s+nutrition\s+label|serving\s+size\s*:?|servings?\s+per\s+container\s*:?|amounts?\s+per\s+serving|%\s*(?:dv|daily\s+value))$/i.test(q)
-      : e.reason === "footnote" ? /^[*+†]+\s*(?:percent\s+daily\s+values|daily\s+values?)/i.test(q)
+      // The FDA's standard footnote may stand alone, without a leading symbol:
+      // "Percent Daily Values are based on a 2,000 calorie diet." (2026-09-29, Swanson label core text).
+      : e.reason === "footnote" ? /^[*+†]+\s*(?:percent\s+daily\s+values|daily\s+values?)/i.test(q) ||
+        /^[*+†]*\s*percent\s+daily\s+values?\s+(?:\(dv\)\s+)?are\s+based\s+on\s+a\s+2,?000\s+calorie\s+diet\.?$/i.test(q)
       : e.reason === "allergen" ? /^(?:contains\s*:|may\s+contain|manufactured\s+(?:in|on)|processed\s+(?:in|on))/i.test(q)
       : e.reason === "directions" ? /^(?:suggested\s+use|directions)\s*:/i.test(q) && !/supplement\s+facts|other\s+ingredients/i.test(q)
       : ["label-text/3","label-text/4"].includes(policyVersion)&&e.reason==="noise"&&/^(?:consisting of|and)$/i.test(q)&&!!candidate.formula&&
