@@ -11,7 +11,8 @@
   },
   "scripts": {
     "check-types": "tsc --noEmit",
-    "test": "vitest run src"
+    "test": "vitest run src",
+    "test:integration": "vitest run integration --testTimeout=120000"
   },
   "dependencies": {
     "@crawl-automation/app": "workspace:*",
@@ -28,6 +29,7 @@
   "devDependencies": {
     "@types/node": "catalog:",
     "typescript": "catalog:",
-    "vitest": "catalog:"
+    "vitest": "catalog:",
+    "pg": "catalog:"
   }
 }

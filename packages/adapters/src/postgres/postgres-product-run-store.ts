@@ -43,8 +43,15 @@ export class PostgresProductRunStore implements ProductRunStore {
   async accept(run: ProductRun & ProductSource): Promise<AcceptedProductRun> {
     await this.database.query(
       `INSERT INTO product_run (run_id, source_id, brand_id, channel, url, workflow_id)
-       VALUES ($1, $2, $3, $4, $5, 'product-run-' || $1::text) ON CONFLICT (run_id) DO NOTHING`,
-      [run.requestId, run.sourceId, run.brandId, run.channel, run.url],
+       VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT (run_id) DO NOTHING`,
+      [
+        run.requestId,
+        run.sourceId,
+        run.brandId,
+        run.channel,
+        run.url,
+        `product-run-${run.requestId}`,
+      ],
     );
     const stored = RunRow.parse((await this.database.query(SELECT_RUN, [run.requestId]))[0]);
     if (stored.sourceId !== run.sourceId || stored.url !== run.url) {

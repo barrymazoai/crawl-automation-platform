@@ -8,6 +8,7 @@ export const governed = [
   "apps/worker/src/**/*.ts",
   "apps/cli/src/**/*.ts",
   "packages/adapters/src/**/*.ts",
+  "packages/adapters/integration/**/*.ts",
   "packages/app/src/**/*.ts",
   "packages/workflows/src/**/*.ts",
   "packages/channels/*/src/**/*.ts",
