@@ -39,6 +39,12 @@ function selectedIdentity(rendered: SwansonRenderedProduct): {
   return { listingId: form.productId, variantId };
 }
 
+/** The projection the formula planner reads: the rendered page without the family option list. */
+function projection(rendered: SwansonRenderedProduct): unknown {
+  const { variantPicker: _options, ...product } = rendered;
+  return product;
+}
+
 /** The selected product's supplement facts as text, judged by the shared completeness rule. */
 function factsOf(evidence: ChannelProductEvidence): FactsText {
   const selected = evidence.factsCandidates.find(
@@ -57,15 +63,24 @@ export const swansonAdapter: ChannelAdapter<SwansonRenderedProduct> = {
   id: "swanson",
   captureModes: ["http"],
   httpPolicy: SWANSON_HTTP_POLICY,
+  planning: {
+    channel: "swanson",
+    parserVersion: "swanson-rendered/1",
+    projectionModule: "swanson.http-projection",
+    projection,
+    corePolicy: "swanson-label-core/1",
+  },
   productAddress,
   parseProduct(page: FetchedPage): ParsedProduct<SwansonRenderedProduct> {
     const rendered = parseSwansonStaticHtml(page.html, page.url, page.capturedAt);
-    const evidence = parseSwansonRenderedProduct(rendered, page.url, selectedIdentity(rendered));
+    const identity = selectedIdentity(rendered);
+    const evidence = parseSwansonRenderedProduct(rendered, page.url, identity);
     const variants = swansonVariantChoices(rendered).choices.map((choice) =>
       productAddress(choice.url),
     );
     return {
       channel: "swanson",
+      identity,
       rendered,
       evidence,
       commerce: rendered.commerce ?? null,

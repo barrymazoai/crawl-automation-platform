@@ -708,6 +708,9 @@ importers:
       '@crawl-automation/v3-artifacts':
         specifier: workspace:*
         version: link:../../v3-artifacts
+      '@crawl-automation/v3-channels':
+        specifier: workspace:*
+        version: link:../../v3-channels
       '@crawl-automation/v3-contracts':
         specifier: workspace:*
         version: link:../../v3-contracts
@@ -799,6 +802,9 @@ importers:
       '@temporalio/client':
         specifier: 1.23.0
         version: 1.23.0
+      '@temporalio/worker':
+        specifier: 1.23.0
+        version: 1.23.0(@swc/helpers@0.5.23)(lightningcss@1.32.0)
       pg:
         specifier: 'catalog:'
         version: 8.23.0

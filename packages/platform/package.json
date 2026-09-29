@@ -7,6 +7,10 @@
     ".": {
       "types": "./src/index.ts",
       "import": "./src/index.ts"
+    },
+    "./temporal-worker": {
+      "types": "./src/temporal-worker/index.ts",
+      "import": "./src/temporal-worker/index.ts"
     }
   },
   "scripts": {
@@ -16,6 +20,7 @@
   "dependencies": {
     "@crawl-automation/v3-contracts": "workspace:*",
     "@temporalio/client": "1.23.0",
+    "@temporalio/worker": "1.23.0",
     "pg": "catalog:",
     "pino": "catalog:",
     "zod": "catalog:"

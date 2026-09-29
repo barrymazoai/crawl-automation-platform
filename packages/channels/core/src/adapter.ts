@@ -1,4 +1,6 @@
 import type {
+  ChannelLabelInput,
+  ChannelPlanInput,
   ChannelProductEvidence,
   CommerceEvidenceSchema,
 } from "@crawl-automation/v3-contracts";
@@ -34,9 +36,16 @@ export interface FactsText {
   missing: string[];
 }
 
+/** The product's identity as the page itself states it (Swanson: product ID and selected variant ID). */
+export interface ProductIdentity {
+  listingId: string;
+  variantId: string | null;
+}
+
 /** What a channel adapter reads from one product page. */
 export interface ParsedProduct<Rendered = unknown> {
   channel: ChannelId;
+  identity: ProductIdentity;
   /** The channel's own page projection; archived as-is and used again by the formula planner. */
   rendered: Rendered;
   /** Channel-independent product evidence: identity, title, facts candidates, images. */
@@ -56,6 +65,21 @@ export interface HttpPolicy {
 }
 
 /**
+ * How the formula planner (the existing channel-plan worker) reads this channel's page projection. Only channels
+ * the planner knows have one; the others cannot yet run the formula step.
+ */
+export interface ChannelPlanning<Rendered = unknown> {
+  channel: ChannelPlanInput["channel"];
+  parserVersion: ChannelPlanInput["parserVersion"];
+  /** Names who produced the projection, e.g. `swanson.http-projection`. */
+  projectionModule: string;
+  /** The part of the rendered page the planner reads. */
+  projection(rendered: Rendered): unknown;
+  /** The label workflow's channel-specific core step, when the channel has one. */
+  corePolicy?: ChannelLabelInput["corePolicy"];
+}
+
+/**
  * Everything specific to one website. The shared pipeline asks the adapter; the adapter never talks to the
  * database, Temporal or permits, and never imports another channel.
  */
@@ -65,6 +89,9 @@ export interface ChannelAdapter<Rendered = unknown> {
   readonly captureModes: readonly CaptureMode[];
   /** Required when `captureModes` includes `http`. */
   readonly httpPolicy?: HttpPolicy;
+  /** Where product images may be downloaded from; defaults to the page origins. */
+  readonly fileOrigins?: readonly string[];
+  readonly planning?: ChannelPlanning<Rendered>;
   /** Normalises a product URL and returns its identity; refuses URLs of other sites. */
   productAddress(url: string): ProductAddress;
   /** Reads one archived product page. Throws a channel error code when the page is not a readable product. */

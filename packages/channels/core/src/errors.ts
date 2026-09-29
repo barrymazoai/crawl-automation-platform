@@ -11,6 +11,10 @@ export const channelErrors = defineErrors({
     category: "RUNTIME",
     message: "This channel cannot be captured in the configured mode.",
   },
+  "CHANNEL.PLANNING_UNSUPPORTED": {
+    category: "RUNTIME",
+    message: "The formula planner cannot read this channel's pages yet.",
+  },
   "CHANNEL.CAPTURE_LANE_MISMATCH": {
     category: "RUNTIME",
     message:
@@ -51,6 +55,14 @@ export const channelErrors = defineErrors({
   "CAPTURE.ARCHIVE_CONFLICT": {
     category: "ARTIFACT",
     message: "A different page is already archived for this capture.",
+  },
+  "CAPTURE.FILE_REQUEST_MISMATCH": {
+    category: "VALIDATION",
+    message: "The file download asked for is not the one the plan names.",
+  },
+  "CAPTURE.FILE_SESSION_ENDED": {
+    category: "SOURCE",
+    message: "The file download's session has already ended.",
   },
   "CAPTURE.ARCHIVE_UNVERIFIED": {
     category: "ARTIFACT",
