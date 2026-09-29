@@ -52,19 +52,19 @@ it.each([
   await expect(run(connection([value]))).rejects.toMatchObject({ message: "TEXT.CODEX_PREFLIGHT_INVALID", executionFact: "not_executed" });
 });
 it("reads past a match to reject conflicts on later pages", async () => {
-  await expect(run(connection([{ data: [entry], nextCursor: "second" }, done()]))).rejects.toThrow("TEXT.CODEX_CATALOG_AMBIGUOUS");
+  await expect(run(connection([{ data: [entry], nextCursor: "second" }, done()]))).rejects.toThrow(expect.objectContaining({ code: "TEXT.CODEX_CATALOG_AMBIGUOUS" }));
 });
 it("does not accept a partial catalog when a later page fails", async () => {
   await expect(run(connection([{ data: [entry], nextCursor: "second" }, new TextError("TEXT.CODEX_REQUEST_FAILED")]))).rejects.toMatchObject({ code: "TEXT.CODEX_REQUEST_FAILED", executionFact: "not_executed" });
 });
 it("bounds repeated cursors", async () => {
   const rpc = connection([{ data: [], nextCursor: "loop" }, { data: [], nextCursor: "loop" }]);
-  await expect(run(rpc)).rejects.toThrow("TEXT.CODEX_CATALOG_CURSOR_LOOP");
+  await expect(run(rpc)).rejects.toThrow(expect.objectContaining({ code: "TEXT.CODEX_CATALOG_CURSOR_LOOP" }));
   expect(rpc.calls).toHaveLength(3);
 });
 it("bounds the total pages even when every cursor is new", async () => {
   const rpc = connection(Array.from({ length: 20 }, (_, index) => ({ data: [], nextCursor: `${index}` })));
-  await expect(run(rpc)).rejects.toThrow("TEXT.CODEX_CATALOG_LIMIT");
+  await expect(run(rpc)).rejects.toThrow(expect.objectContaining({ code: "TEXT.CODEX_CATALOG_LIMIT" }));
   expect(rpc.calls).toHaveLength(21);
 });
 it("accepts new effort names only when explicitly advertised", async () => {
@@ -73,12 +73,12 @@ it("accepts new effort names only when explicitly advertised", async () => {
 it("does not cache a positive response across operations", async () => {
   const rpc = connection([done(), done([])]);
   await run(rpc);
-  await expect(run(rpc)).rejects.toThrow("TEXT.CODEX_MODEL_UNAVAILABLE");
+  await expect(run(rpc)).rejects.toThrow(expect.objectContaining({ code: "TEXT.CODEX_MODEL_UNAVAILABLE" }));
 });
 it("does not send a read after cancellation or invalid settings", async () => {
   const rpc = connection();
   await expect(run(rpc, settings, AbortSignal.abort())).rejects.toMatchObject({ executionFact: "not_executed" });
-  await expect(run(rpc, { ...settings, reasoningEffort: "" })).rejects.toThrow("TEXT.CODEX_PREFLIGHT_INVALID");
+  await expect(run(rpc, { ...settings, reasoningEffort: "" })).rejects.toThrow(expect.objectContaining({ code: "TEXT.CODEX_PREFLIGHT_INVALID" }));
   expect(rpc.calls).toEqual([]);
 });
 it("sanitizes an unexpected read error", async () => {
@@ -86,7 +86,7 @@ it("sanitizes an unexpected read error", async () => {
 });
 it.each([{ custom: {} }, { custom: { enabled: true } }])("rejects active MCP configuration independently of internal request counts", async servers => {
   const rpc = connection([done()], "fixture", servers);
-  await expect(run(rpc)).rejects.toThrow("TEXT.CODEX_RUNTIME_PROFILE");
+  await expect(run(rpc)).rejects.toThrow(expect.objectContaining({ code: "TEXT.CODEX_RUNTIME_PROFILE" }));
   expect(rpc.calls).toHaveLength(1);
 });
 it("accepts explicitly disabled MCP entries in the text-only runtime profile", async () => {

@@ -39,63 +39,63 @@ it("resolves absolute UTF-16 offsets for a nonzero range, emoji and CRLF", () =>
 it.each([
     a(0, "Protein"), a(100, "Protein"), a(3, "Protein", 2), a(2, "Protein", 3), a(3, "Iron"),
 ])("rejects fabricated/wrong/non-tight anchors %j", anchor => {
-    const { input } = setup(); expect(() => resolveAnchor(anchor, evidenceLines(input, source), source)).toThrow("TEXT.CITATION_INVALID");
+    const { input } = setup(); expect(() => resolveAnchor(anchor, evidenceLines(input, source), source)).toThrow(expect.objectContaining({ code: "TEXT.CITATION_INVALID" }));
 });
 it("rejects ambiguous repeated citations and treats regex characters literally", () => {
     const text = "10 mg 10 mg\nVitamin (C)+"; const { input } = setup(text), lines = evidenceLines(input, text);
-    expect(() => resolveAnchor(a(1, "10 mg"), lines, text)).toThrow("TEXT.CITATION_INVALID");
+    expect(() => resolveAnchor(a(1, "10 mg"), lines, text)).toThrow(expect.objectContaining({ code: "TEXT.CITATION_INVALID" }));
     expect(resolveAnchor(a(2, "Vitamin (C)+"), lines, text).text).toBe("Vitamin (C)+");
 });
 it("rejects omitted nutrients even with otherwise correct citations", () => {
     const { decode } = setup(), raw = response(); raw.formula.nutrients.splice(0, 1); raw.ingredients.items[0]!.parentNutrientIndex = 0; raw.ingredients.items[1]!.parentNutrientIndex = 0;
-    expect(() => decode(raw)).toThrow("TEXT.EXTRACTION_INCOMPLETE");
+    expect(() => decode(raw)).toThrow(expect.objectContaining({ code: "TEXT.EXTRACTION_INCOMPLETE" }));
 });
 it("rejects omitted ingredients within an otherwise covered line", () => {
     const { decode } = setup(), raw = response(); raw.ingredients.items.splice(1, 1);
-    expect(() => decode(raw)).toThrow("TEXT.EXTRACTION_INCOMPLETE");
+    expect(() => decode(raw)).toThrow(expect.objectContaining({ code: "TEXT.EXTRACTION_INCOMPLETE" }));
 });
 it.each(["marketing", "noise", "heading"])("cannot launder an omitted nutrient as %s", reason => {
     const { decode } = setup(), raw = response(); raw.excluded.push({ quote: a(3, "Protein"), reason });
-    expect(() => decode(raw)).toThrow("TEXT.COVERAGE_UNCERTAIN");
+    expect(() => decode(raw)).toThrow(expect.objectContaining({ code: "TEXT.COVERAGE_UNCERTAIN" }));
 });
 it("does not split apple cider vinegar at a line break", () => {
     const { decode } = setup(), raw = response(); raw.ingredients.items.splice(2, 1,
         { quote: a(8, "organic apple"), role: "other", parentNutrientIndex: null },
         { quote: a(9, "cider vinegar"), role: "other", parentNutrientIndex: null });
-    expect(() => decode(raw)).toThrow("TEXT.INGREDIENT_BOUNDARY");
+    expect(() => decode(raw)).toThrow(expect.objectContaining({ code: "TEXT.INGREDIENT_BOUNDARY" }));
 });
 it("does not merge comma-separated ingredients", () => {
     const { decode } = setup(), raw = response(); raw.ingredients.items.splice(0, 2,
         { quote: a(7, "Collagen, Ashwagandha"), role: "blend_component", parentNutrientIndex: 1 });
-    expect(() => decode(raw)).toThrow("TEXT.INGREDIENT_BOUNDARY");
+    expect(() => decode(raw)).toThrow(expect.objectContaining({ code: "TEXT.INGREDIENT_BOUNDARY" }));
 });
 it("requires a valid blend parent and keeps other ingredients out of blends", () => {
     const { decode } = setup(), raw = response(); raw.ingredients.items[0]!.parentNutrientIndex = 0;
-    expect(() => decode(raw)).toThrow("TEXT.ROLE_INVALID");
+    expect(() => decode(raw)).toThrow(expect.objectContaining({ code: "TEXT.ROLE_INVALID" }));
     raw.ingredients.items[0]!.parentNutrientIndex = 1;
     Object.assign(raw.ingredients.items[2]!, { role: "blend_component", parentNutrientIndex: 1 });
-    expect(() => decode(raw)).toThrow("TEXT.ROLE_INVALID");
+    expect(() => decode(raw)).toThrow(expect.objectContaining({ code: "TEXT.ROLE_INVALID" }));
 });
 it("requires explicit Other ingredients context and rejects allergen tails", () => {
     const { decode } = setup("wheat, sesame, shellfish, fish, egg.");
-    expect(() => decode({ formula: null, ingredients: { items: [{ quote: a(1, "wheat"), role: "other", parentNutrientIndex: null }] }, excluded: [], issues: [] })).toThrow("TEXT.ROLE_INVALID");
+    expect(() => decode({ formula: null, ingredients: { items: [{ quote: a(1, "wheat"), role: "other", parentNutrientIndex: null }] }, excluded: [], issues: [] })).toThrow(expect.objectContaining({ code: "TEXT.ROLE_INVALID" }));
 });
 it("never promotes Contains items into ingredients", () => {
     const { decode } = setup(), raw = response(); raw.ingredients.items.push({ quote: a(10, "Egg"), role: "other", parentNutrientIndex: null });
-    expect(() => decode(raw)).toThrow("TEXT.ROLE_INVALID");
+    expect(() => decode(raw)).toThrow(expect.objectContaining({ code: "TEXT.ROLE_INVALID" }));
 });
 it("explicit missing/ambiguous input does not register even with full coverage", () => {
-    expect(() => setup().decode({ ...response(), issues: ["missing_text"] })).toThrow("TEXT.INPUT_INCOMPLETE");
+    expect(() => setup().decode({ ...response(), issues: ["missing_text"] })).toThrow(expect.objectContaining({ code: "TEXT.INPUT_INCOMPLETE" }));
 });
 it("empty content cannot pass just because fields are nullable", () => {
-    expect(() => setup().decode({ formula: null, ingredients: null, excluded: [], issues: [] })).toThrow("TEXT.EXTRACTION_INCOMPLETE");
+    expect(() => setup().decode({ formula: null, ingredients: null, excluded: [], issues: [] })).toThrow(expect.objectContaining({ code: "TEXT.EXTRACTION_INCOMPLETE" }));
 });
 it("coverage includes supplementary Unicode letters, not only individual UTF-16 units", () => {
-    expect(() => setup("𠮷").decode({ formula: null, ingredients: null, excluded: [], issues: [] })).toThrow("TEXT.EXTRACTION_INCOMPLETE");
+    expect(() => setup("𠮷").decode({ formula: null, ingredients: null, excluded: [], issues: [] })).toThrow(expect.objectContaining({ code: "TEXT.EXTRACTION_INCOMPLETE" }));
 });
 it("an alternate serving cannot hide missing nutrients on a single-column label", () => {
     const raw = response(); raw.excluded.push({ quote: a(4, "9 g"), reason: "alternate_serving" });
-    expect(() => setup().decode(raw)).toThrow("TEXT.COVERAGE_UNCERTAIN");
+    expect(() => setup().decode(raw)).toThrow(expect.objectContaining({ code: "TEXT.COVERAGE_UNCERTAIN" }));
 });
 it("wire JSON schema is strict, no offsets, and old output version cannot wrap V2", () => {
     expect(JSON.stringify(z.toJSONSchema(AnchoredExtractionSchema))).not.toContain('"start"');
@@ -114,7 +114,7 @@ it("V2 handoff re-decodes raw evidence on fresh-cache replay, without a second m
     const record = f.registry.data.get(input.operationId)!;
     const output = JSON.parse(Buffer.from(f.remote.data.get(record.result.objectKey)!).toString());
     output.candidate.ingredients.items[0].parentNutrientIndex = 0;
-    await expect(f.handoff.capture(input, output, signal())).rejects.toThrow("TEXT.RESULT_INTEGRITY");
+    await expect(f.handoff.capture(input, output, signal())).rejects.toThrow(expect.objectContaining({ code: "TEXT.RESULT_INTEGRITY" }));
 });
 it("quality failures retain raw responses and redelivery never calls the model again", async () => {
     const { input, f } = setup(); let calls = 0;

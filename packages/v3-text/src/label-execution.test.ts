@@ -47,7 +47,7 @@ it("a replacement receipt reader re-decodes with no model, upload or registratio
 it("wrong policy and wrong provider configuration cannot start a model turn", async () => {
   const f = setup(); expect(TextInputSchema.safeParse({ ...f.input, policyVersion: "anchored/2" }).success).toBe(false);
   const wrong = { ...f.input, configFingerprint: "b".repeat(64) }; wrong.inputFingerprint = textFingerprint(wrong, hashText);
-  await expect(f.module.run(wrong, signal())).rejects.toThrow("TEXT.INVALID_INPUT");
+  await expect(f.module.run(wrong, signal())).rejects.toThrow(expect.objectContaining({ code: "TEXT.INVALID_INPUT" }));
   expect(f.interpret).not.toHaveBeenCalled(); expect(f.remote.writes).toBe(0);
 });
 it("quality failures preserve the raw response and do not execute again on redelivery", async () => {
@@ -96,7 +96,7 @@ it("new quote fields and output version cannot be forged at handoff", async () =
   const output = TextOutputSchema.parse(JSON.parse(Buffer.from(f.remote.data.get(r.result.objectKey)!).toString()));
   expect(TextOutputSchema.safeParse({ ...output, resultSchemaVersion: 2 }).success).toBe(false);
   const candidate = TextCandidateV3Schema.parse(output.candidate); candidate.formula!.servingsPerContainer!.start++;
-  expect(() => assertTextQuotes(candidate, f.input, f.text)).toThrow("TEXT.CITATION_INVALID");
+  expect(() => assertTextQuotes(candidate, f.input, f.text)).toThrow("TEXT.CITATION_INVALID") // contracts error: message only;
   await expect(f.handoff.capture(f.input, { ...output, candidate }, signal())).rejects.toThrow();
 });
 it("new prepared tasks are accepted by their workflow envelope but not the legacy product manifest", () => {

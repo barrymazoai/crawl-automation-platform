@@ -713,6 +713,9 @@ importers:
       '@crawl-automation/platform':
         specifier: workspace:*
         version: link:../platform
+      '@crawl-automation/processing':
+        specifier: workspace:*
+        version: link:../processing
       '@crawl-automation/v3-contracts':
         specifier: workspace:*
         version: link:../v3-contracts
@@ -922,6 +925,40 @@ importers:
         specifier: 'catalog:'
         version: 3.2.7(@types/node@22.20.1)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.51.2)(tsx@4.23.12)(yaml@2.9.0)
 
+  packages/processing:
+    dependencies:
+      '@crawl-automation/platform':
+        specifier: workspace:*
+        version: link:../platform
+      '@crawl-automation/v3-artifacts':
+        specifier: workspace:*
+        version: link:../v3-artifacts
+      '@crawl-automation/v3-codex':
+        specifier: workspace:*
+        version: link:../v3-codex
+      '@crawl-automation/v3-contracts':
+        specifier: workspace:*
+        version: link:../v3-contracts
+      '@crawl-automation/v3-results':
+        specifier: workspace:*
+        version: link:../v3-results
+      '@crawl-automation/v3-review':
+        specifier: workspace:*
+        version: link:../v3-review
+      zod:
+        specifier: 'catalog:'
+        version: 4.4.3
+    devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 22.20.1
+      typescript:
+        specifier: 'catalog:'
+        version: 5.9.3
+      vitest:
+        specifier: 'catalog:'
+        version: 3.2.7(@types/node@22.20.1)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.51.2)(tsx@4.23.12)(yaml@2.9.0)
+
   packages/runtime:
     dependencies:
       '@crawl-automation/contracts':
@@ -995,6 +1032,9 @@ importers:
       '@aws-sdk/client-s3':
         specifier: 'catalog:'
         version: 3.1118.0
+      '@crawl-automation/platform':
+        specifier: workspace:*
+        version: link:../platform
       '@crawl-automation/v3-contracts':
         specifier: workspace:*
         version: link:../v3-contracts
@@ -1253,6 +1293,15 @@ importers:
 
   packages/v3-text:
     dependencies:
+      '@crawl-automation/adapters':
+        specifier: workspace:*
+        version: link:../adapters
+      '@crawl-automation/platform':
+        specifier: workspace:*
+        version: link:../platform
+      '@crawl-automation/processing':
+        specifier: workspace:*
+        version: link:../processing
       '@crawl-automation/v3-acquisition':
         specifier: workspace:*
         version: link:../v3-acquisition

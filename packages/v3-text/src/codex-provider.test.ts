@@ -51,7 +51,7 @@ it("isolates concurrent operations with different working directories and proces
 });
 it("startup check only reads capabilities without a turn", async () => {
   const f = await setup("catalog-provider");
-  try { await expect(f.provider.check(AbortSignal.timeout(4000))).rejects.toThrow("TEXT.CODEX_CATALOG_PROVIDER_MISMATCH"); }
+  try { await expect(f.provider.check(AbortSignal.timeout(4000))).rejects.toThrow(expect.objectContaining({ code: "TEXT.CODEX_CATALOG_PROVIDER_MISMATCH" })); }
   finally { await f.provider.close(); }
 });
 it("rejects new work after close without spawning", async () => {

@@ -7,11 +7,9 @@ export class ArtifactError extends Error {
   constructor(readonly code: ArtifactCode,readonly diagnostics?:{name?:string;code?:string;status?:number;requestId?:string}) { super(code); this.name = "ArtifactError"; }
 }
 
-// No delete, list, overwrite, URLs, or implicit retry in either port.
-export interface ObjectStore {
-  read(key: string, maxBytes: number, signal: AbortSignal): Promise<Uint8Array | null>;
-  create(key: string, bytes: Uint8Array, mediaType: string, signal: AbortSignal): Promise<"created" | "exists">;
-}
+// No delete, list, overwrite, URLs, or implicit retry in either port. The object store interface lives in the
+// platform layer; it is re-exported here for the old packages.
+export type { ObjectStore } from "@crawl-automation/platform";
 export interface LocalCopies {
   read(ref: ArtifactRef, signal: AbortSignal): Promise<Uint8Array | null>;
   retain(ref: ArtifactRef, bytes: Uint8Array, signal: AbortSignal): Promise<void>;

@@ -14,3 +14,4 @@ export * from "./postgres/postgres-execution-registry.js";
 export * from "./postgres/postgres-formula-index.js";
 export * from "./postgres/postgres-product-run-store.js";
 export * from "./temporal/temporal-pipeline-starter.js";
+export * from "./postgres/postgres-text-registry.js";

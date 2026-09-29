@@ -7,6 +7,10 @@
     ".": {
       "types": "./src/index.ts",
       "import": "./src/index.ts"
+    },
+    "./text-registry": {
+      "types": "./src/postgres/postgres-text-registry.ts",
+      "import": "./src/postgres/postgres-text-registry.ts"
     }
   },
   "scripts": {
@@ -17,6 +21,7 @@
   "dependencies": {
     "@crawl-automation/app": "workspace:*",
     "@crawl-automation/platform": "workspace:*",
+    "@crawl-automation/processing": "workspace:*",
     "@crawl-automation/v3-contracts": "workspace:*",
     "@crawl-automation/v3-review": "workspace:*",
     "@crawl-automation/workflows": "workspace:*",

@@ -26,8 +26,8 @@ it.each(["malformed", "envelope", "crash", "server-request", "oversized"])("reje
 it("times out one request without reconnecting", async () => {
     const connection = rpc("silence");
     try {
-        await expect(connection.request("initialize", {}, new AbortController().signal, 40)).rejects.toThrow("TEXT.CODEX_TIMEOUT");
-        await expect(connection.initialize(new AbortController().signal)).rejects.toThrow("TEXT.CODEX_TIMEOUT");
+        await expect(connection.request("initialize", {}, new AbortController().signal, 40)).rejects.toThrow(expect.objectContaining({ code: "TEXT.CODEX_TIMEOUT" }));
+        await expect(connection.initialize(new AbortController().signal)).rejects.toThrow(expect.objectContaining({ code: "TEXT.CODEX_TIMEOUT" }));
     }
     finally {
         await connection.close();
@@ -42,7 +42,7 @@ it("separate child sessions process concurrently without shared active-thread st
     expect(new Set(values).size).toBe(1);
 });
 it("rejects an effective reasoning effort mismatch before starting a model turn", async () => {
-    await expect(runCodexTextTurn(rpc("wrong-effort"), input, AbortSignal.timeout(3000))).rejects.toThrow("TEXT.CODEX_CONFIG_MISMATCH");
+    await expect(runCodexTextTurn(rpc("wrong-effort"), input, AbortSignal.timeout(3000))).rejects.toThrow(expect.objectContaining({ code: "TEXT.CODEX_CONFIG_MISMATCH" }));
 });
 it.each(["low", "medium", "high"])("passes the selected effort through both thread config and turn params: %s", async reasoningEffort => {
     expect(await runCodexTextTurn(rpc("success"), { ...input, reasoningEffort }, AbortSignal.timeout(3000))).toContain('"formula"');
@@ -66,7 +66,7 @@ it("still enforces the overall execution deadline during internal recovery", asy
     await expect(runCodexTextTurn(rpc("internal-hang"), input, new AbortController().signal, 150)).rejects.toThrow();
 });
 it("rejects a reported model reroute instead of accepting another model's answer", async () => {
-    await expect(runCodexTextTurn(rpc("rerouted"), input, AbortSignal.timeout(3000))).rejects.toThrow("TEXT.CODEX_CONFIG_MISMATCH");
+    await expect(runCodexTextTurn(rpc("rerouted"), input, AbortSignal.timeout(3000))).rejects.toThrow(expect.objectContaining({ code: "TEXT.CODEX_CONFIG_MISMATCH" }));
 });
 
 it.each(["internal-recovery","internal-hang"])("the first error closes the child without accepting subsequent output: %s",async scenario=>{

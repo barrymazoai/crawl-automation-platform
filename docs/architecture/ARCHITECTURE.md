@@ -64,8 +64,9 @@ Every service is started by hand; nothing starts at boot or login. Code reaches 
 | 1 | Guardrails: ESLint, Prettier, dependency-cruiser, jscpd, lefthook, CI, `test:v3` | Done |
 | 2 | `packages/platform`: config, logger, database, Temporal client, error registry. Storage and fetch move in with the channels in phase 5. | Done |
 | 3 | `packages/app` + `packages/adapters` + `apps/api` (tRPC on Hono) + `apps/cli`: runs, queue, brands, reviews, products, resources and permits, fleet, delivery runner. In production on Server 一 since 2026-09-29 as job `collection-api` (release `api-bb2e622`, port 4188). | Done |
-| 4 | Run lifecycle: cancel, permit and guard release on every ending, resource kinds | Next |
-| 5 | Channel interface; Swanson, then Amazon, GNC, DTC; Costco and Whole Foods | |
+| 4 | Run lifecycle: cancel, permit and guard release on every ending, resource kinds | Done |
+| 5 | Channel interface; Swanson, then Amazon, GNC, DTC; Costco and Whole Foods | 5.1–5.3 done: `packages/channels/core` + Swanson adapter, shared `ProductPipelineWorkflow` (`packages/workflows`), pipeline worker (`apps/worker`), product runs through the API; live on Server 一 since 2026-09-29 |
+| 5M | Label processing merge: the per-channel copies of label processing (Swanson/DTC, Amazon, GNC) become one, in `packages/processing` (plan file, "Label processing merge" M1–M8) | M1 done: the text step (quote placement, label and anchored protocols, results, receipt, Codex text client) in `processing/src/text`; `v3-text` is a facade over it. Intended change: a local-store failure now records its own `STORAGE.*` code in the Review (was `TEXT.OUTPUT_LIMIT` / `TEXT.LOCAL_CONFIG`) |
 | 6 | Grouped worker processes, generated job list, one deploy command, old scripts archived | |
 
 Code outside the new folders (`apps/v3-*`, `packages/v3-*`) keeps running in production until its replacement is

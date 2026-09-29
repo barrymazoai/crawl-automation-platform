@@ -15,6 +15,7 @@
     "r2:objects": "pnpm build && node scripts/live-r2.mjs --objects-only"
   },
   "dependencies": {
+    "@crawl-automation/platform": "workspace:*",
     "@crawl-automation/v3-contracts": "workspace:*",
     "@aws-sdk/client-s3": "catalog:",
     "zod": "catalog:"

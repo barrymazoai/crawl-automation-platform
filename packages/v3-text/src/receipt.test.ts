@@ -63,12 +63,12 @@ it("Review acknowledgment loss is read back, failed persistence is not reported 
   expect(f.reviews.records.size).toBe(1);
   const unavailable = new ResolveTextReceipt({ results: f.handoff, local: f.local, reviews: {
     read: async () => null, append: async () => { throw Error("private connection details"); } } });
-  await expect(unavailable.run({ input: f.input, outcome: null }, signal())).rejects.toThrow("TEXT_RECEIPT.REVIEW_UNVERIFIED");
+  await expect(unavailable.run({ input: f.input, outcome: null }, signal())).rejects.toThrow(expect.objectContaining({ code: "TEXT_RECEIPT.REVIEW_UNVERIFIED" }));
   expect(f.local.data.size).toBe(2);
 });
 it("bad fingerprint fails before model/evidence access and prepared workflow rejects legacy inputs", async () => {
   const f = fixture();
-  await expect(resolver(f).run({ input: { ...f.input, inputFingerprint: "b".repeat(64) }, outcome: null }, signal())).rejects.toThrow("TEXT.INPUT_CONFLICT");
+  await expect(resolver(f).run({ input: { ...f.input, inputFingerprint: "b".repeat(64) }, outcome: null }, signal())).rejects.toThrow("TEXT.INPUT_CONFLICT") // contracts error: message only;
   expect(f.reviews.records.size).toBe(0); expect(f.calls()).toBe(0);
   const queues = { text: "text", receipts: "receipt" };
   expect(PreparedTextWorkflowInputSchema.safeParse({ task: f.input, queues }).success).toBe(false);

@@ -76,7 +76,7 @@ describe("extractive text module", () => {
     });
     it("refuses conflicting input fingerprints before provider or intent writes", async () => {
         const f = fixture();
-        await expect(f.module.run({ ...f.input, range: { start: 1, end: 5 } }, signal())).rejects.toThrow("TEXT.INVALID_INPUT");
+        await expect(f.module.run({ ...f.input, range: { start: 1, end: 5 } }, signal())).rejects.toThrow(expect.objectContaining({ code: "TEXT.INVALID_INPUT" }));
         expect(f.calls()).toBe(0);
         expect(f.remote.writes).toBe(0);
         expect(TextInputSchema.safeParse({ ...f.input, listingId: "other" }).success).toBe(false);
@@ -147,7 +147,7 @@ describe("extractive text module", () => {
     it("refuses capture of another operation's otherwise valid candidate", async () => {
         const f = fixture(), candidate = TextCandidateSchema.parse({ formula: null, ingredients: null });
         const output: TextOutput = { ...textIdentity(f.input), operationId: "other-op", provider: "fixture/1", candidate, rawResponse: JSON.stringify(candidate) };
-        await expect(f.handoff.capture(f.input, output, signal())).rejects.toThrow("TEXT.RESULT_INTEGRITY");
+        await expect(f.handoff.capture(f.input, output, signal())).rejects.toThrow(expect.objectContaining({ code: "TEXT.RESULT_INTEGRITY" }));
         expect(f.local.writes).toBe(0);
     });
     it("a corrupt durable result is not accepted or recomputed", async () => {

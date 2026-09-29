@@ -27,6 +27,6 @@ it("a Worker configured for another effort rejects the task before any provider 
   const high = codexTextCompatibility(settings, "profile/1"), low = codexTextCompatibility({ ...settings, reasoningEffort: "low" }, "profile/1");
   Object.assign(f.provider, { supported: high });
   const input = { ...f.input, ...low }; input.inputFingerprint = textFingerprint(input, hashText);
-  await expect(f.module.run(input, signal())).rejects.toThrow("TEXT.INVALID_INPUT");
+  await expect(f.module.run(input, signal())).rejects.toThrow(expect.objectContaining({ code: "TEXT.INVALID_INPUT" }));
   expect(f.calls()).toBe(0); expect(f.remote.writes).toBe(0);
 });

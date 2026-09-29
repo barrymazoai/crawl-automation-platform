@@ -16,6 +16,9 @@
     "test:integration": "vitest run integration --hookTimeout=60000 --testTimeout=30000"
   },
   "dependencies": {
+    "@crawl-automation/adapters": "workspace:*",
+    "@crawl-automation/platform": "workspace:*",
+    "@crawl-automation/processing": "workspace:*",
     "@crawl-automation/v3-acquisition": "workspace:*",
     "@crawl-automation/v3-codex": "workspace:*",
     "@crawl-automation/v3-contracts": "workspace:*",

@@ -61,7 +61,7 @@ describe("label quotes of words printed more than once", () => {
   it("a repeated word with no free whole occurrence left is refused", () => {
     const lines = [...dRibose.slice(0, -1), "Other Ingredients: Banana, Banana Chips"];
     const items = ["Banana", "Banana", "Banana Chips"].map(text => ({ fromLine: 18, toLine: 18, text }));
-    expect(() => decode(lines, { ...answer, otherIngredients: { ...answer.otherIngredients, items } })).toThrow("TEXT.CITATION_INVALID");
+    expect(() => decode(lines, { ...answer, otherIngredients: { ...answer.otherIngredients, items } })).toThrow(expect.objectContaining({ code: "TEXT.CITATION_INVALID" }));
   });
 
   it("still refuses a name that is not printed", () => {

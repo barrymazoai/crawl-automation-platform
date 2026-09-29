@@ -33,7 +33,7 @@ it("unsafe provider policy rejects startup and disposes prepared resources", asy
     Object.assign(f.provider.policy, { executionRetries: 1 });
     const role = createTextRole({ buildId: "a".repeat(64), compatibility: "fixture-v1", testOnly: true,
         prepare: async () => ({ dependencies: f.deps, dispose }) });
-    await expect(role.prepare(config(), signal())).rejects.toThrow("TEXT.PROVIDER_POLICY");
+    await expect(role.prepare(config(), signal())).rejects.toThrow(expect.objectContaining({ code: "TEXT.PROVIDER_POLICY" }));
     expect(dispose).toHaveBeenCalledOnce();
 });
 it("the Worker Activity executes an explicit grouped-label task and returns only durable references", async () => {

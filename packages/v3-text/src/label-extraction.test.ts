@@ -61,7 +61,7 @@ it("Contains is not an ingredient and a line wrap is not a delimiter", () => {
 });
 it("a forged exact quote or reordered formula is rejected", () => {
   const f = fixture(), rows = f.wire.formula!.columns[0]!.rows;
-  rows[5]!.amount!.text = "999 mg"; expect(() => f.decode()).toThrow("TEXT.CITATION_INVALID");
+  rows[5]!.amount!.text = "999 mg"; expect(() => f.decode()).toThrow(expect.objectContaining({ code: "TEXT.CITATION_INVALID" }));
   rows[5]!.amount!.text = "200 mg"; [rows[5], rows[6]] = [rows[6]!, rows[5]!];
   expect(f.decode().codes).toContain("LABEL.ROW_ORDER_INVALID");
 });

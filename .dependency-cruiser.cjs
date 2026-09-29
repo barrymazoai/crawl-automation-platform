@@ -62,7 +62,22 @@ module.exports = {
       from: { path: layer("(api|cli|worker|adapters|app|workflows|channels|processing|platform)") },
       to: { path: "^apps/(v3-api|v3-workers|backend|web|browser-node)/" },
     },
-    { name: "no-circular", severity: "error", from: {}, to: { circular: true } },
+    {
+      // The old packages processing still calls until they move into it or the platform (restructure M1-M4).
+      name: "processing-imports-only-listed-old-packages",
+      severity: "error",
+      from: { path: layer("processing") },
+      to: {
+        path: "^packages/v3-",
+        pathNot: "^packages/v3-(contracts|artifacts|codex|review|results)/",
+      },
+    },
+    {
+      name: "no-circular",
+      severity: "error",
+      from: { path: layer("(api|cli|worker|adapters|app|workflows|channels|processing|platform)") },
+      to: { circular: true },
+    },
   ],
   options: {
     doNotFollow: { path: "node_modules" },

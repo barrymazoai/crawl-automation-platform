@@ -18,7 +18,7 @@
     "start:browser-node": "pnpm build && pnpm --filter @crawl-automation/browser-node start",
     "lint": "eslint --max-warnings 0 --no-error-on-unmatched-pattern apps/api apps/worker apps/cli packages/adapters packages/app packages/workflows packages/channels packages/processing packages/platform && prettier --check --no-error-on-unmatched-pattern apps/api apps/worker apps/cli packages/adapters packages/app packages/workflows packages/channels packages/processing packages/platform",
     "format": "prettier --write --no-error-on-unmatched-pattern apps/api apps/worker apps/cli packages/adapters packages/app packages/workflows packages/channels packages/processing packages/platform",
-    "check:deps": "depcruise --config .dependency-cruiser.cjs --include-only \"^(apps/(api|worker|cli)|packages/(adapters|app|workflows|channels|processing|platform))/\" apps packages",
+    "check:deps": "depcruise --config .dependency-cruiser.cjs --include-only \"^(apps/(api|worker|cli)|packages/(adapters|app|workflows|channels|processing|platform|v3-[^/]+))/\" apps packages",
     "check:dupes": "jscpd --config .jscpd.json --pattern \"{apps/{api,worker,cli},packages/{adapters,app,workflows,channels,processing,platform}}/src/**/*.ts\" .",
     "check:types": "turbo check-types",
     "check": "pnpm lint && pnpm check:deps && pnpm check:dupes && pnpm check:types",

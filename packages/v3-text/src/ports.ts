@@ -1,36 +1,16 @@
-import type { TextCompatibility, TextInput, TextRecord } from "@crawl-automation/v3-contracts";
+// Moved to @crawl-automation/processing (text/ports). Kept as names for the old workers until they retire.
+import type { TextInput } from "@crawl-automation/v3-contracts";
+
 export { CodexError as TextError } from "@crawl-automation/v3-codex";
-export interface TextProvider {
-    readonly provider: string;
-    readonly supported: TextCompatibility;
-    // Business execution boundary. Internal Codex model requests are not business retries.
-    readonly policy: {
-        executionRetries: 0;
-        internalModelRequests: "no-retries";
-        toolAccess: "runtime-profile";
-        modelFallback: false;
-        networkSwitching: false;
-    };
-    interpret(request: {
-        operationId: string;
-        prompt: string;
-        outputSchema: object;
-    }, signal: AbortSignal): Promise<string>;
-    close(): Promise<void>;
-}
-export interface TextRegistry {
-    read(id: string): Promise<TextRecord | null>;
-    register(record: TextRecord): Promise<void>;
-}
+export type {
+  TextFacts,
+  TextModel as TextProvider,
+  TextResultRegistry as TextRegistry,
+} from "@crawl-automation/processing";
+
+/** A `pg`-style query port: the old workers pass a pg pool. */
 export interface QueryPort {
-    query(sql: string, params?: unknown[]): Promise<{
-        rows: Record<string, unknown>[];
-    }>;
+  query(sql: string, params?: unknown[]): Promise<{ rows: Record<string, unknown>[] }>;
 }
-export type TextFacts = {
-    computedLocal: boolean;
-    artifactDurable: boolean;
-    resultRegistered: boolean;
-    record: TextRecord | null;
-};
+
 export type TextRequest = TextInput;

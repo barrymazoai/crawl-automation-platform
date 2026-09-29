@@ -8,3 +8,6 @@ export * from "./errors/platform-errors.js";
 export * from "./health/heartbeat.js";
 export * from "./logger/create-logger.js";
 export * from "./temporal/connect-temporal.js";
+export * from "./storage/object-store.js";
+export * from "./storage/storage-errors.js";
+export * from "./storage/local-object-store.js";
