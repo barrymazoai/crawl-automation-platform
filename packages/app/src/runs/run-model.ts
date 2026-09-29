@@ -59,6 +59,8 @@ export interface WorkflowMember {
 export interface HeldPermit {
   permitId: string;
   workflowId: string;
+  /** The owner's Temporal run ID, so its stop can be checked exactly. */
+  runId: string;
   resources: string[];
   grantedAt: string;
 }

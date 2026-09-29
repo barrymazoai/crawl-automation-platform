@@ -6,6 +6,7 @@ import type {
   RunSummary,
   WorkflowMember,
 } from "./run-model.js";
+import type { StopEvidence } from "../stops/stop-policy.js";
 
 /** Runs as stored in Postgres (submission, source guard, delivery record, catalog tables). */
 export interface RunStore {
@@ -25,6 +26,8 @@ export interface RunStore {
 export interface WorkflowTree {
   members(rootWorkflowId: string): Promise<WorkflowMember[]>;
   cancel(workflowId: string): Promise<void>;
+  /** What Temporal shows about one execution; null when Temporal cannot find it. */
+  stopEvidence(workflowId: string, runId: string): Promise<StopEvidence | null>;
 }
 
 export interface PermitStore {

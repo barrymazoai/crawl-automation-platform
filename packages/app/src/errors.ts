@@ -11,9 +11,10 @@ export const appErrors = defineErrors({
     category: "VALIDATION",
     message: "The run still has running workflows; cancel it first.",
   },
-  "RUN.RECENTLY_STOPPED": {
+  "RUN.STOP_NOT_PROVEN": {
     category: "VALIDATION",
-    message: "A workflow of this run stopped less than two minutes ago; settle it a little later.",
+    message:
+      "A workflow of this run holds a permit and has not provably stopped (an Activity is pending or it closed under 5 minutes ago).",
   },
   "REQUEST.ID_CONFLICT": {
     category: "VALIDATION",
@@ -47,9 +48,10 @@ export const appErrors = defineErrors({
     category: "VALIDATION",
     message: "The workflow holding this permit is still running.",
   },
-  "PERMIT.OWNER_RECENTLY_STOPPED": {
+  "PERMIT.STOP_NOT_PROVEN": {
     category: "VALIDATION",
-    message: "The workflow holding this permit stopped less than two minutes ago.",
+    message:
+      "The workflow holding this permit has not provably stopped (an Activity is pending, it closed under 5 minutes ago, or Temporal cannot find it).",
   },
   "DELIVERY.CHANNEL_NOT_CONFIGURED": {
     category: "RUNTIME",

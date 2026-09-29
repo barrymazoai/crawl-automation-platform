@@ -1,12 +1,12 @@
 import type { Logger } from "@crawl-automation/platform";
-import { differenceInSeconds } from "date-fns";
 import { appErrors } from "../errors.js";
+import { judgePermits } from "../stops/judge-permits.js";
 import type { PermitStore, RunStore, WorkflowTree } from "./ports.js";
 import type { RunDetail, RunFilter, RunSummary, SubmitRun, WorkflowMember } from "./run-model.js";
 
-/** A stopped workflow's last Activity may still be finishing; wait this long before settling. */
-const SETTLE_AFTER_SECONDS = 120;
 const CANCEL_BATCH = 20;
+/** How many ended-but-unsettled runs one cleanup sweep looks at. */
+const SWEEP_LIMIT = 200;
 
 export interface RunServiceDeps {
   runs: RunStore;
@@ -59,32 +59,51 @@ export class RunService {
   }
 
   /**
-   * Releases what a finished run still holds: its permits and its source guard. Refused while any of its
-   * workflows runs or stopped less than two minutes ago.
+   * Releases what an ended run still holds: its permits and its source guard. Refused while any of its
+   * workflows runs, or while a permit's owner has not provably stopped.
    */
   async settle(runId: string): Promise<SettleResult> {
     const summary = await this.summary(runId);
     const members = await this.deps.tree.members(summary.workflowId);
-    this.assertSettleable(runId, members);
+    if (members.some(isRunning)) {
+      throw appErrors.create("RUN.STILL_RUNNING", { details: { runId } });
+    }
     const held = await this.deps.permits.heldBy(memberIds(summary, members));
-    const permitIds = held.map((permit) => permit.permitId);
-    const result = await this.deps.runs.settle(runId, permitIds);
+    const judged = await judgePermits(held, this.deps.tree, this.now());
+    const unproven = judged.filter((entry) => entry.verdict !== "stopped");
+    if (unproven.length > 0) {
+      const workflows = unproven.map((entry) => entry.permit.workflowId);
+      throw appErrors.create("RUN.STOP_NOT_PROVEN", { details: { runId, workflows } });
+    }
+    const result = await this.deps.runs.settle(
+      runId,
+      held.map((permit) => permit.permitId),
+    );
     this.deps.log.info({ runId, ...result }, "run settled");
     return { runId, ...result };
   }
 
-  private assertSettleable(runId: string, members: WorkflowMember[]): void {
-    if (members.some(isRunning)) {
-      throw appErrors.create("RUN.STILL_RUNNING", { details: { runId } });
+  /**
+   * Settles runs whose root ended without a clean completion (failed or cancelled) once nothing of theirs runs
+   * or holds a permit. Permits are released separately, by evidence, before this runs.
+   */
+  async settleStopped(): Promise<SettleResult[]> {
+    const active = await this.deps.runs.list({ active: true, limit: SWEEP_LIMIT });
+    const ended = active.filter((run) => run.delivery?.lastIssue === "UNCONFIRMED_TERMINAL");
+    const settled: SettleResult[] = [];
+    for (const run of ended) {
+      const members = await this.deps.tree.members(run.workflowId);
+      const held = await this.deps.permits.heldBy(memberIds(run, members));
+      if (members.length > 0 && !members.some(isRunning) && held.length === 0) {
+        settled.push({ runId: run.runId, ...(await this.deps.runs.settle(run.runId, [])) });
+        this.deps.log.info({ runId: run.runId }, "ended run settled automatically");
+      }
     }
-    const now = this.deps.now?.() ?? new Date();
-    const recent = members.some(
-      (member) =>
-        member.closedAt && differenceInSeconds(now, member.closedAt) < SETTLE_AFTER_SECONDS,
-    );
-    if (recent) {
-      throw appErrors.create("RUN.RECENTLY_STOPPED", { details: { runId } });
-    }
+    return settled;
+  }
+
+  private now(): Date {
+    return this.deps.now?.() ?? new Date();
   }
 
   private async summary(runId: string): Promise<RunSummary> {

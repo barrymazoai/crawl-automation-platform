@@ -32,6 +32,10 @@ export const ApiConfigSchema = z.strictObject({
     }),
   }),
   fleet: z.strictObject({ monitorStatus: absolutePath, queueHealth: absolutePath }),
+  /** How often ended work is checked: permits of stopped owners released, ended runs settled. */
+  cleanup: z.strictObject({ intervalMs: z.number().int().min(10_000).max(3_600_000) }).default({
+    intervalMs: 60_000,
+  }),
 });
 export type ApiConfig = z.infer<typeof ApiConfigSchema>;
 

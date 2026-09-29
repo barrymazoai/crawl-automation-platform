@@ -13,12 +13,14 @@ const ResourceRow = z.object({
 const PermitRow = z.object({
   permitId: z.string(),
   workflowId: z.string(),
+  runId: z.string(),
   resources: z.array(z.string()),
   grantedAt: z.date(),
 });
 
 const selectHeld = `
   SELECT p.permit_id AS "permitId", p.request->>'workflowId' AS "workflowId",
+    p.request->>'runId' AS "runId",
     array_agg(n.resource_id ORDER BY n.resource_id) AS resources, p.granted_at AS "grantedAt"
   FROM resource_permit p JOIN resource_permit_need n USING (permit_id)
   WHERE p.released_at IS NULL`;

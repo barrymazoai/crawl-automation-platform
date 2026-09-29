@@ -1,7 +1,7 @@
 import type { Logger } from "@crawl-automation/platform";
-import { differenceInSeconds } from "date-fns";
 import { appErrors } from "../errors.js";
-import type { HeldPermit, WorkflowMember } from "../runs/run-model.js";
+import type { HeldPermit } from "../runs/run-model.js";
+import { judgePermits, type StopEvidenceReader } from "../stops/judge-permits.js";
 
 export interface ResourceState {
   resourceId: string;
@@ -18,18 +18,17 @@ export interface ResourceStore {
   release(permitId: string): Promise<boolean>;
 }
 
-export interface WorkflowStatusReader {
-  status(workflowId: string): Promise<WorkflowMember | null>;
+export interface ReleaseSweep {
+  released: string[];
+  kept: number;
 }
 
-const RELEASE_AFTER_SECONDS = 120;
-
-/** Resource capacity, health and held permits; releases a permit only after its owner has stopped. */
+/** Resource capacity, health and held permits. A permit is released only when its owner provably stopped. */
 export class ResourceService {
   constructor(
     private readonly deps: {
       resources: ResourceStore;
-      workflows: WorkflowStatusReader;
+      workflows: StopEvidenceReader;
       log: Logger;
       now?: () => Date;
     },
@@ -48,24 +47,43 @@ export class ResourceService {
     if (!permit) {
       throw appErrors.create("PERMIT.NOT_FOUND", { details: { permitId } });
     }
-    const owner = await this.deps.workflows.status(permit.workflowId);
-    this.assertOwnerStopped(permit, owner);
+    const [judged] = await judgePermits([permit], this.deps.workflows, this.now());
+    if (judged?.verdict === "running") {
+      throw appErrors.create("PERMIT.OWNER_RUNNING", {
+        details: { workflowId: permit.workflowId },
+      });
+    }
+    if (judged?.verdict !== "stopped") {
+      throw appErrors.create("PERMIT.STOP_NOT_PROVEN", {
+        details: { workflowId: permit.workflowId },
+      });
+    }
     const released = await this.deps.resources.release(permitId);
     this.deps.log.info({ permitId, workflowId: permit.workflowId, released }, "permit released");
     return { permitId, released };
   }
 
-  private assertOwnerStopped(permit: HeldPermit, owner: WorkflowMember | null): void {
-    if (owner?.status === "RUNNING") {
-      throw appErrors.create("PERMIT.OWNER_RUNNING", {
-        details: { workflowId: permit.workflowId },
-      });
+  /** Releases every held permit whose owner provably stopped; the rest stay held. */
+  async releaseStopped(): Promise<ReleaseSweep> {
+    const judged = await judgePermits(
+      await this.deps.resources.held(),
+      this.deps.workflows,
+      this.now(),
+    );
+    const released: string[] = [];
+    for (const { permit, verdict } of judged) {
+      if (verdict === "stopped" && (await this.deps.resources.release(permit.permitId))) {
+        released.push(permit.permitId);
+        this.deps.log.info(
+          { permitId: permit.permitId, workflowId: permit.workflowId },
+          "stopped owner's permit released",
+        );
+      }
     }
-    const now = this.deps.now?.() ?? new Date();
-    if (owner?.closedAt && differenceInSeconds(now, owner.closedAt) < RELEASE_AFTER_SECONDS) {
-      throw appErrors.create("PERMIT.OWNER_RECENTLY_STOPPED", {
-        details: { workflowId: permit.workflowId },
-      });
-    }
+    return { released, kept: judged.length - released.length };
+  }
+
+  private now(): Date {
+    return this.deps.now?.() ?? new Date();
   }
 }

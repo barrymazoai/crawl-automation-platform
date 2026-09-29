@@ -14,6 +14,7 @@ import {
 } from "@crawl-automation/adapters";
 import {
   BrandService,
+  CleanupService,
   DeliveryCoordinator,
   DeliveryRunner,
   FleetService,
@@ -52,6 +53,7 @@ export interface ApiParts {
   resources: ResourceService;
   fleet: FleetService;
   deliveryRunner: DeliveryRunner;
+  cleanup: CleanupService;
 }
 
 type Parts = AwilixContainer<ApiParts>;
@@ -70,6 +72,7 @@ export async function buildContainer(config: ApiConfig): Promise<Parts> {
   container.register({ config: asValue(config), log: asValue(log), temporal: asValue(temporal) });
   registerAdapters(container);
   registerServices(container);
+  registerLoops(container);
   return container;
 }
 
@@ -126,7 +129,22 @@ function registerServices(container: Parts): void {
     fleet: asFunction(
       (parts: ApiParts) => new FleetService({ source: new FleetStatusFiles(parts.config.fleet) }),
     ).singleton(),
+  });
+}
+
+/** The background loops the API process runs: delivery of accepted runs, and cleanup of ended work. */
+function registerLoops(container: Parts): void {
+  container.register({
     deliveryRunner: asFunction(deliveryRunner).singleton(),
+    cleanup: asFunction(
+      (parts: ApiParts) =>
+        new CleanupService({
+          resources: parts.resources,
+          runs: parts.runs,
+          log: parts.log,
+          intervalMs: parts.config.cleanup.intervalMs,
+        }),
+    ).singleton(),
   });
 }
 

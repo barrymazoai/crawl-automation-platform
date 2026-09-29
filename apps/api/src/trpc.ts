@@ -32,9 +32,9 @@ const conflictCodes = new Set([
   "QUEUE.CLEANUP_PENDING",
   "QUEUE.REQUEUE_NOT_SETTLED",
   "RUN.STILL_RUNNING",
-  "RUN.RECENTLY_STOPPED",
+  "RUN.STOP_NOT_PROVEN",
   "PERMIT.OWNER_RUNNING",
-  "PERMIT.OWNER_RECENTLY_STOPPED",
+  "PERMIT.STOP_NOT_PROVEN",
 ]);
 
 /** Maps an application error code to the HTTP-level tRPC code. */
