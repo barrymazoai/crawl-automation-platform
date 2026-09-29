@@ -1,9 +1,11 @@
 import type {
+  CapturedPage,
   CaptureRequest,
   ListingSighting,
   ProductCapture,
   UnlistedReason,
 } from "@crawl-automation/channels-core";
+import type { CaptureRun } from "../history/capture-history.js";
 import type { ListingObservation } from "../listings/listing-model.js";
 
 /** The listing a revisit found unlisted (and why), as the pipeline returns it instead of a Review. */
@@ -39,16 +41,20 @@ export class PipelineCapture<
         capture(request: CaptureRequest, signal: AbortSignal): Promise<Captured | Sighted>;
       };
       listings: { record(raw: unknown): Promise<ListingObservation> };
+      /** The metrics history; every captured page adds one point. */
+      history?: { record(page: CapturedPage, run: CaptureRun): Promise<unknown> };
+      /** Told when a metrics point could not be stored (the capture itself still counts). */
+      onHistoryPending?(error: unknown, page: CapturedPage): void;
     },
   ) {}
 
   async capture(
     request: CaptureRequest,
     signal: AbortSignal,
-  ): Promise<Exclude<Captured, Sighted> | SightedProduct> {
+  ): Promise<WithoutPage<Exclude<Captured, Sighted>> | SightedProduct> {
     const captured = await this.deps.capture.capture(request, signal);
     if (!isSighted(captured)) {
-      return captured as Exclude<Captured, Sighted>;
+      return this.withMetrics(request, captured as Exclude<Captured, Sighted>);
     }
     const { sighting, listingId, variantId } = captured;
     const observation = await this.deps.listings.record({
@@ -81,7 +87,35 @@ export class PipelineCapture<
       causeCode: sighting.causeCode,
     };
   }
+
+  /**
+   * Records the page's metrics point, then hands the workflow the capture without the page (its payload stays as
+   * before). As in the earlier history projection, a history write that fails never turns a captured product into
+   * a Review: the original page stays archived, so the point can be recorded again from it.
+   */
+  private async withMetrics<Result>(
+    request: CaptureRequest,
+    captured: Result,
+  ): Promise<WithoutPage<Result>> {
+    const { page, ...rest } = captured as Result & { page?: CapturedPage };
+    if (page && this.deps.history) {
+      const run = {
+        runId: request.runId,
+        operationId: request.operationId,
+        brandId: request.brandId,
+        sourceId: request.sourceId,
+      };
+      try {
+        await this.deps.history.record(page, run);
+      } catch (error) {
+        this.deps.onHistoryPending?.(error, page);
+      }
+    }
+    return rest as WithoutPage<Result>;
+  }
 }
+
+type WithoutPage<Result> = Omit<Result, "page">;
 
 function isSighted(captured: { status: string }): captured is Sighted {
   return captured.status === "sighted";

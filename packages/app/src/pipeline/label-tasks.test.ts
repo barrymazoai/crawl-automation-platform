@@ -3,6 +3,7 @@ import { ChannelRegistry } from "@crawl-automation/channels-core";
 import { swansonLiveFixture } from "@crawl-automation/v3-channels/testing/swanson-live";
 import type { ReviewRecord } from "@crawl-automation/v3-contracts";
 import type { ProductPipelineInput } from "@crawl-automation/workflows";
+import type { SharedLabelSettings } from "./label-handoffs.js";
 import { describe, expect, it, vi } from "vitest";
 import { LabelReviews } from "./label-reviews.js";
 import { LabelTasks } from "./label-tasks.js";
@@ -23,7 +24,9 @@ const pipeline: ProductPipelineInput = {
 
 const shared = { queues: { activities: "label", ocr: "label-ocr", model: "label-model" } };
 
-async function setup(options: { planned?: unknown; withShared?: boolean } = {}) {
+async function setup(
+  options: { planned?: unknown; withShared?: boolean; shared?: SharedLabelSettings } = {},
+) {
   const fixture = swansonLiveFixture();
   const { sourcePlan } = await fixture.live.capture(await fixture.job(), signal());
   const saved = new Map<string, Uint8Array>();
@@ -47,7 +50,7 @@ async function setup(options: { planned?: unknown; withShared?: boolean } = {}) 
       evidencePolicy: "label-image-first/5",
       queues: {} as never,
       resources: { queue: "resource", activities: {}, maxWaitSeconds: 900 },
-      ...(options.withShared === false ? {} : { shared }),
+      ...(options.withShared === false ? {} : { shared: options.shared ?? shared }),
     },
   });
   const execution = { clusterId: "c", namespace: "n", workflowId: "w", runId: "r" };
@@ -73,6 +76,26 @@ describe("LabelTasks", () => {
     expect(task.input.plan.input).toEqual(sourcePlan);
     expect(saved.has("v3/product-runs/pipeline-capture-1/label-task.json")).toBe(true);
     expect(executions.register).toHaveBeenCalledWith(sourcePlan.owner.observationId, execution);
+  });
+
+  it("label permits release on a Review, with no review-stop check (the worker hosts no stop verifier)", async () => {
+    const needs = [{ resourceId: "mini-model-account", units: 1 }];
+    const resources = {
+      queue: "resource",
+      reviewStopCheck: true,
+      activities: { interpretText: needs },
+      maxWaitSeconds: 900,
+    };
+    const { tasks, sourcePlan, execution } = await setup({ shared: { ...shared, resources } });
+
+    const task = await tasks.prepare({ pipeline, sourcePlan, execution }, signal());
+
+    expect(task.resources).toEqual({
+      queue: "resource",
+      releaseOnReview: true,
+      activities: { interpretText: needs },
+      maxWaitSeconds: 900,
+    });
   });
 
   it("refuses without the shared workflow's settings, and without a saved plan", async () => {

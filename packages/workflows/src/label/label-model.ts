@@ -1,5 +1,6 @@
 import {
   ExecutionIdSchema,
+  ImageOcrPrepareOutcomeSchema,
   LabelEvidencePolicySchema,
   LabelProductManifestSchema,
   LabelProductSourceSchema,
@@ -55,6 +56,16 @@ export type Source = Manifest["sources"][number];
 export type ImageSource = Extract<Source, { kind: "file-image" }>;
 export type State = z.infer<typeof ProductEvidenceJoinSchema.shape.states.element>;
 export type Status = "unresolved" | "rejected" | "registered" | "not_matched";
+
+/** Image preparation's answer: an OCR task or a Review, or a downloaded PDF skipped (PDFs are not processed). */
+export const ImagePrepareSchema = z.union([
+  ImageOcrPrepareOutcomeSchema,
+  z.strictObject({
+    status: z.literal("skipped"),
+    operationId: ExecutionIdSchema,
+    reason: z.literal("pdf"),
+  }),
+]);
 
 export const LoadedPlanSchema = z.strictObject({
   input: LabelTaskSchema,

@@ -13,6 +13,7 @@ export interface CapturedProduct {
   parsed: ParsedProduct;
   /** Where the original page is archived, for the formula planner and for later reanalysis. */
   archiveKey: string;
+  archiveSha256: string;
   capturedAt: string;
 }
 
@@ -62,6 +63,7 @@ export class HttpCapture {
       status: "page",
       parsed,
       archiveKey: saved.source.objectKey,
+      archiveSha256: saved.source.sha256,
       capturedAt: saved.capturedAt,
     };
   }

@@ -94,14 +94,50 @@ describe("PipelineCapture", () => {
     });
   });
 
-  it("passes a readable product page on unchanged and records nothing", async () => {
+  it("passes a readable product page on without its page record, and records no sighting", async () => {
     const page = {
       status: "captured",
       sourcePlan: {},
       factsComplete: true,
     } as ProductCaptureResult;
     const { listings, pipeline } = captureAnswering(page);
-    expect(await pipeline.capture(request, signal())).toBe(page);
+    expect(await pipeline.capture(request, signal())).toEqual(page);
     expect(listings.record).not.toHaveBeenCalled();
+  });
+
+  it("records one metrics point for a captured page and hands the workflow the capture without it", async () => {
+    const shown = { channel: "swanson", archive: { objectKey: "k", sha256: "a".repeat(64) } };
+    const captured = { status: "captured", factsComplete: true, page: shown };
+    const history = { record: vi.fn(async () => ({ inserted: true })) };
+    const pipeline = new PipelineCapture({
+      capture: { capture: vi.fn(async () => captured as unknown as ProductCaptureResult) },
+      listings: { record: vi.fn() },
+      history,
+    });
+    expect(await pipeline.capture(request, signal())).toEqual({
+      status: "captured",
+      factsComplete: true,
+    });
+    expect(history.record).toHaveBeenCalledWith(shown, {
+      runId: request.runId,
+      operationId: request.operationId,
+      brandId: request.brandId,
+      sourceId: request.sourceId,
+    });
+  });
+
+  it("a metrics point that cannot be stored never fails the capture; it is reported as pending", async () => {
+    const shown = { channel: "swanson", archive: { objectKey: "k", sha256: "a".repeat(64) } };
+    const captured = { status: "captured", page: shown };
+    const failure = new Error("database unreachable");
+    const onHistoryPending = vi.fn();
+    const pipeline = new PipelineCapture({
+      capture: { capture: vi.fn(async () => captured as unknown as ProductCaptureResult) },
+      listings: { record: vi.fn() },
+      history: { record: vi.fn(async () => Promise.reject(failure)) },
+      onHistoryPending,
+    });
+    expect(await pipeline.capture(request, signal())).toEqual({ status: "captured" });
+    expect(onHistoryPending).toHaveBeenCalledWith(failure, shown);
   });
 });

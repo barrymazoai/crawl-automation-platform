@@ -5,6 +5,7 @@ import { OriginalHtmlArchive } from "../capture/original-html-archive.js";
 import { channelErrors } from "../errors.js";
 import type { ChannelRegistry } from "../registry.js";
 import type { CaptureRequest, ProductCaptureResult } from "./capture-request.js";
+import { capturedPage } from "./captured-page.js";
 import type { ProductSourcePlans } from "./source-plans.js";
 
 export interface ProductCaptureDeps {
@@ -51,6 +52,7 @@ export class ProductCapture {
       factsComplete: parsed.facts.complete,
       labelText: parsed.facts.text,
       family: adapter.productFamily?.(parsed) ?? null,
+      page: capturedPage(adapter, address, captured),
     };
   }
 

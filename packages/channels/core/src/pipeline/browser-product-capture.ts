@@ -3,11 +3,19 @@ import type { HttpCapture } from "../capture/http-capture.js";
 import { OriginalHtmlArchive } from "../capture/original-html-archive.js";
 import type { ChannelRegistry } from "../registry.js";
 import type { CaptureRequest } from "./capture-request.js";
+import { capturedPage, type CapturedPage } from "./captured-page.js";
 import type { ListingSighting } from "./listing-sighting.js";
 
 /** A page read in the browser: its listing and archive, or the listing's unlisted sighting. */
 export type BrowserCaptureResult =
-  | { status: "captured"; listingId: string; variantId: string | null; archiveKey: string }
+  | {
+      status: "captured";
+      listingId: string;
+      variantId: string | null;
+      archiveKey: string;
+      /** What the page showed, for the metrics history (recorded by the pipeline, not passed to the workflow). */
+      page: CapturedPage;
+    }
   | { status: "sighted"; listingId: string; variantId: string | null; sighting: ListingSighting };
 
 /**
@@ -43,6 +51,12 @@ export class BrowserProductCapture {
     if (captured.status === "sighting") {
       return { status: "sighted", listingId, variantId, sighting: captured.sighting };
     }
-    return { status: "captured", listingId, variantId, archiveKey: captured.archiveKey };
+    return {
+      status: "captured",
+      listingId,
+      variantId,
+      archiveKey: captured.archiveKey,
+      page: capturedPage(adapter, address, captured),
+    };
   }
 }

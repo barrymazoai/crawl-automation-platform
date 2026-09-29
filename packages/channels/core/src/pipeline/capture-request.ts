@@ -1,6 +1,7 @@
 import type { ChannelPlanInput } from "@crawl-automation/v3-contracts";
 import type { ChannelId } from "../adapter.js";
 import type { ProductFamily } from "../product-family.js";
+import type { CapturedPage } from "./captured-page.js";
 import type { ListingSighting } from "./listing-sighting.js";
 
 /** One product of one run, as the pipeline asks for it. */
@@ -30,6 +31,8 @@ export type ProductCaptureResult =
       labelText: string | null;
       /** The product's family as its page shows it; null when the adapter reads none. */
       family: ProductFamily | null;
+      /** What the page showed, for the metrics history (recorded by the pipeline, not passed to the workflow). */
+      page: CapturedPage;
     }
   | {
       /** The revisit showed the listing is unlisted (the reason is recorded); nothing was parsed or planned. */

@@ -1,7 +1,7 @@
 import type { ChannelRegistry } from "@crawl-automation/channels-core";
 import { LabelPlanInputSchema } from "@crawl-automation/processing";
 import { sha256 } from "@crawl-automation/v3-artifacts";
-import type { ChannelPlanInput } from "@crawl-automation/v3-contracts";
+import type { ChannelPlanInput, ResourceGate } from "@crawl-automation/v3-contracts";
 import {
   LabelWorkflowInputSchema,
   type LabelWorkflowInput,
@@ -43,7 +43,7 @@ export class LabelTasks {
     const task = LabelWorkflowInputSchema.parse({
       input: this.labelTask(pipeline, sourcePlan),
       queues: shared.queues,
-      ...(shared.resources ? { resources: shared.resources } : {}),
+      ...(shared.resources ? { resources: labelGates(shared.resources) } : {}),
     });
     const key = `v3/product-runs/${pipeline.operationId}/label-task.json`;
     await this.deps.evidence.publish(
@@ -74,4 +74,15 @@ export class LabelTasks {
       ...(corePolicy ? { corePolicy } : {}),
     });
   }
+}
+
+/**
+ * The Label workflow's permits: every gated label call (OCR API, Codex text or vision) is one request whose Review
+ * receipt already means nothing runs outside it, so a Review releases its permit at once (`releaseOnReview`). There is
+ * no review-stop check: the new worker does not host the old review-stop verifier, and requiring one would hold
+ * every Reviewed call's permit as "stop unverified".
+ */
+function labelGates(resources: ResourceGate): ResourceGate {
+  const { reviewStopCheck: _unused, ...gates } = resources;
+  return { ...gates, releaseOnReview: true };
 }

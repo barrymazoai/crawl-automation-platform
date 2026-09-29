@@ -121,6 +121,18 @@ describe("ProductCapture with the Swanson adapter", () => {
     expect(planned.status).toBe("prepared");
   });
 
+  it("returns what the page showed for the metrics history: its commerce, history ID and archived original", async () => {
+    const { remote, capture } = setup();
+
+    const { page } = captured(await capture.capture(request, signal()));
+
+    expect(page).toMatchObject({ channel: "swanson", capturedAt: expect.any(String) });
+    expect(page.externalId).toMatch(/^([A-Z][A-Z0-9-]{2,30}|shopify-variant:.+)$/);
+    expect(page.commerce?.price).toBeTruthy();
+    expect(remote.data.has(page.archive.objectKey)).toBe(true);
+    expect(page.archive.sha256).toMatch(/^[a-f0-9]{64}$/);
+  });
+
   it("a second capture of the same operation reads the archive and pays nothing", async () => {
     const { fetches, capture } = setup();
 

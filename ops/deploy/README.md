@@ -72,15 +72,16 @@ task queue with its own limits; the process a job runs is named by `V3_WORKER_PR
 Unknown roles are refused. The label roles are added with their workers (phase M5). A config without `processes`
 keeps its old `taskQueue` and runs as the `pipeline` process.
 
-## Database: migrations 026–030
+## Database: migrations 026–031
 
-| Migration | Adds                                                                               | Runtime role (`v3_runtime`) gets                                                                                           |
-| --------- | ---------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| 026       | comment on `review_record` (raw evidence over the API)                             | —                                                                                                                          |
-| 027       | shared product queue: `queue_control`, `link_batch`, `queue_item`, `queue_attempt` | SELECT, UPDATE on `queue_control`; SELECT, INSERT on `link_batch`; SELECT, INSERT, UPDATE on `queue_item`, `queue_attempt` |
-| 028       | listing state: `listing_state_observation`, `listing_state_delivery`               | SELECT, INSERT                                                                                                             |
-| 029       | `formula_link`                                                                     | SELECT, INSERT                                                                                                             |
-| 030       | `brand_scan`                                                                       | SELECT, INSERT, UPDATE                                                                                                     |
+| Migration | Adds                                                                                                             | Runtime role (`v3_runtime`) gets                                                                                           |
+| --------- | ---------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| 026       | comment on `review_record` (raw evidence over the API)                                                           | —                                                                                                                          |
+| 027       | shared product queue: `queue_control`, `link_batch`, `queue_item`, `queue_attempt`                               | SELECT, UPDATE on `queue_control`; SELECT, INSERT on `link_batch`; SELECT, INSERT, UPDATE on `queue_item`, `queue_attempt` |
+| 028       | listing state: `listing_state_observation`, `listing_state_delivery`                                             | SELECT, INSERT                                                                                                             |
+| 029       | `formula_link`                                                                                                   | SELECT, INSERT                                                                                                             |
+| 030       | `brand_scan`                                                                                                     | SELECT, INSERT, UPDATE                                                                                                     |
+| 031       | `product_history_source`, `_listing`, `_listing_source`, `_observation`, `_observation_source` (metrics history) | SELECT, INSERT                                                                                                             |
 
 Each migration grants these itself when the role exists. Run them with `--migrate` (or the migration tool
 directly); never replay SQL by hand.

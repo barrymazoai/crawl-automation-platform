@@ -113,4 +113,6 @@ export interface ChannelAdapter<Rendered = unknown> {
   parseProduct(page: FetchedPage): ParsedProduct<Rendered>;
   /** The product's family as its page shows it (other sizes, flavours…); null when the page shows none. */
   productFamily?(parsed: ParsedProduct<Rendered>): ProductFamily | null;
+  /** The product ID the metrics history keys this listing by; the address's listing ID when absent. */
+  externalId?(parsed: ParsedProduct<Rendered>): string;
 }

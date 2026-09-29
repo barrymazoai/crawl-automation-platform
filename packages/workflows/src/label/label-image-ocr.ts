@@ -1,5 +1,4 @@
 import {
-  ImageOcrPrepareOutcomeSchema,
   KeywordReceiptSchema,
   OcrActivityOutcomeSchema,
   OcrReceiptOutcomeSchema,
@@ -10,7 +9,7 @@ import {
 import { isCancellation } from "@temporalio/workflow";
 import { isAdmissionFailure, notePermitFailure, type LabelRun } from "./label-run.js";
 import { sameJson } from "./same.js";
-import type { ImageSource, State, Status } from "./label-model.js";
+import { ImagePrepareSchema, type ImageSource, type State, type Status } from "./label-model.js";
 
 /** An image after OCR: a final state (Review, rejected…), or its keyword selection for the label source step. */
 export type OcrOutcome =
@@ -31,9 +30,13 @@ export async function ocrImage(run: LabelRun, source: ImageSource): Promise<OcrO
     if (!(await run.stream.ready(source))) {
       return stateOf(source, "unresolved", false);
     }
-    const prepared = ImageOcrPrepareOutcomeSchema.parse(
+    const prepared = ImagePrepareSchema.parse(
       await run.call("activities", "prepareImageOcr", { plan: source.plan, receipt: null }),
     );
+    if (prepared.status === "skipped") {
+      // A PDF is not processed: like an image without a label, it is simply not a label source.
+      return stateOf(source, "not_matched");
+    }
     if (prepared.status === "review") {
       return prepared.operationId === source.plan.acquire.operationId
         ? {

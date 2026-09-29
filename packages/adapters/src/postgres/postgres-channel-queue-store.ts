@@ -35,6 +35,28 @@ export class PostgresChannelQueueStore implements QueueStore {
     if (input.channel === "amazon") {
       throw appErrors.create("RUN.CHANNEL_UNSUPPORTED", { details: { channel: input.channel } });
     }
+    return this.addList(input);
+  }
+
+  /**
+   * Amazon products held in the shared queue until Amazon's product runs move onto it (5.5). Amazon's own queue
+   * still runs on its old tables, so the shared queue's Amazon row stays paused and these items wait `queued`.
+   */
+  holdAmazonProducts(list: Omit<AddProducts, "channel">): Promise<{ added: number }> {
+    return this.addList({ ...list, channel: "amazon" });
+  }
+
+  /** The brand's Amazon source (its enabled amazon.com root first), or null when the brand has none. */
+  async amazonSourceOf(brandId: string): Promise<string | null> {
+    const rows = await this.database.query<{ id: string }>(
+      `SELECT id FROM brand_source WHERE brand_id = $1 AND channel = 'amazon'
+       ORDER BY enabled DESC, (url = 'https://www.amazon.com/') DESC, created_at, id LIMIT 1`,
+      [brandId],
+    );
+    return rows[0]?.id ?? null;
+  }
+
+  private addList(input: ProductList): Promise<{ added: number }> {
     return this.locked(input.channel, async (tx) => {
       await assertSourcesOnChannel(tx, input);
       if (!(await insertBatch(tx, input))) {
@@ -125,8 +147,11 @@ export class PostgresChannelQueueStore implements QueueStore {
   }
 }
 
+/** A product list of any channel, as the shared tables hold it. */
+type ProductList = Omit<AddProducts, "channel"> & { channel: QueueChannel };
+
 /** Every product's brand source exists and belongs to this channel, or nothing is added. */
-async function assertSourcesOnChannel(tx: Queryable, input: AddProducts): Promise<void> {
+async function assertSourcesOnChannel(tx: Queryable, input: ProductList): Promise<void> {
   const sourceIds = [...new Set(input.products.map((product) => product.sourceId))];
   const rows = await tx.query<{ found: number }>(
     "SELECT count(*)::int AS found FROM brand_source WHERE id = ANY($1::uuid[]) AND channel = $2",
@@ -140,7 +165,7 @@ async function assertSourcesOnChannel(tx: Queryable, input: AddProducts): Promis
 }
 
 /** True for a new list; false for the same list added again; a different list under the same ID is refused. */
-async function insertBatch(tx: Queryable, input: AddProducts): Promise<boolean> {
+async function insertBatch(tx: Queryable, input: ProductList): Promise<boolean> {
   const hash = sha256(input);
   const inserted = await tx.query(
     `INSERT INTO link_batch (batch_id, channel, label, item_count, record_hash) VALUES ($1, $2, $3, $4, $5)
@@ -161,7 +186,7 @@ async function insertBatch(tx: Queryable, input: AddProducts): Promise<boolean> 
 }
 
 /** One item per product of the list; the same product twice in one list is one item. */
-async function insertItems(tx: Queryable, input: AddProducts): Promise<number> {
+async function insertItems(tx: Queryable, input: ProductList): Promise<number> {
   const rows = input.products.map((product) => ({
     item_id: sha256([input.channel, input.batchId, product.listingId, product.variantId]),
     source_id: product.sourceId,

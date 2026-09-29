@@ -26,4 +26,5 @@ export * from "./stops/judge-permits.js";
 export * from "./cleanup/cleanup-service.js";
 export * from "./pipeline/index.js";
 export * from "./formula/index.js";
+export * from "./history/index.js";
 export * from "./listings/index.js";

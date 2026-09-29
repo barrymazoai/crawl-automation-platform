@@ -44,6 +44,7 @@ export async function collectInBrowser(
   if (known) {
     return { status: "collected", reusedFormula: true, operationId: known.operationId, listingId };
   }
+  await pipeline.requestAmazonFormula({ brandId: input.brandId, listingId });
   return pipeline.reviewProduct({
     pipeline: input,
     code: "PIPELINE.FORMULA_PENDING",

@@ -167,14 +167,13 @@ describe("image OCR task", () => {
     });
   });
 
-  it("a PDF is never passed off as an OCR-ready image", async () => {
+  it("a PDF is skipped, never OCR'd and never a Review (PDFs are not processed)", async () => {
     const fixture = imageSetup("source-pdf");
     expect(
       await fixture.step.run({ plan: fixture.plan, receipt: fixture.receipt }, signal()),
-    ).toMatchObject({
-      status: "review",
-      code: "IMAGE.PDF_ROUTE_REQUIRED",
-    });
+    ).toEqual({ status: "skipped", operationId: fixture.input.operationId, reason: "pdf" });
+    expect(fixture.deps.reviews.records.size).toBe(0);
+    expect(fixture.deps.remote.writes).toBe(0);
   });
 
   it("a download that is not durable is a Review, kept locally first", async () => {

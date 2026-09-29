@@ -16,6 +16,7 @@ import {
   swansonVariantChoices,
 } from "@crawl-automation/v3-channels";
 import { swansonFamily } from "./family.js";
+import { swansonExternalId } from "./history-id.js";
 import { swansonBrandScan } from "./brand-scan.js";
 import { swansonLabelCore } from "./label-core.js";
 import type {
@@ -78,6 +79,7 @@ export const swansonAdapter: ChannelAdapter<SwansonRenderedProduct> = {
   },
   productAddress,
   productFamily: swansonFamily,
+  externalId: swansonExternalId,
   parseProduct(page: FetchedPage): ParsedProduct<SwansonRenderedProduct> {
     const rendered = parseSwansonStaticHtml(page.html, page.url, page.capturedAt, (element) =>
       pageText(element.innerHTML),

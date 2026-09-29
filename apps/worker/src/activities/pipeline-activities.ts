@@ -1,4 +1,5 @@
 import {
+  AmazonFormulaRequestSchema,
   FileRequestSchema,
   FormulaRequestSchema,
   LabelHandoffRequestSchema,
@@ -57,6 +58,10 @@ export function pipelineActivities(parts: WorkerParts) {
     },
     reviewProduct: (raw: unknown, signal: AbortSignal) =>
       parts.productReviews.review(ReviewRequestSchema.parse(raw), signal),
+    requestAmazonFormula: (raw: unknown) => {
+      const { brandId, listingId } = AmazonFormulaRequestSchema.parse(raw);
+      return parts.amazonFormulaRequests.request({ brandId, asin: listingId });
+    },
   };
   return Object.fromEntries(
     Object.entries(handlers).map(([name, handler]) => [name, guarded(name, handler, parts.log)]),

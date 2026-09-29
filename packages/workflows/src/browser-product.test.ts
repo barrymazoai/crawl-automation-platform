@@ -62,6 +62,7 @@ function setup() {
   const pipeline = {
     findKnownFormula: vi.fn(async (): Promise<unknown> => ({ operationId: "amazon-formula-1" })),
     reviewProduct: vi.fn(async () => pendingReview),
+    requestAmazonFormula: vi.fn(async (): Promise<unknown> => ({ status: "queued" })),
   };
   const plan = { prepareChannelProduct: vi.fn() };
   env.activities = { browser, pipeline, plan };
@@ -85,14 +86,19 @@ it("reads a Whole Foods page in the browser and takes the formula of the same AS
     expect.objectContaining({ channel: "wholefoods", listingId: "B002CQU54Q" }),
   );
   expect(plan.prepareChannelProduct).not.toHaveBeenCalled();
+  expect(pipeline.requestAmazonFormula).not.toHaveBeenCalled();
 });
 
-it("an ASIN with no formula yet ends in a Review naming why, with no label reading", async () => {
+it("an ASIN with no formula yet is held for Amazon and ends in a Review naming why, with no label reading", async () => {
   const { pipeline } = setup();
   pipeline.findKnownFormula.mockResolvedValue(null);
 
   expect(await ProductPipelineWorkflow(input)).toEqual(pendingReview);
 
+  expect(pipeline.requestAmazonFormula).toHaveBeenCalledWith({
+    brandId: input.brandId,
+    listingId: "B002CQU54Q",
+  });
   expect(pipeline.reviewProduct).toHaveBeenCalledWith(
     expect.objectContaining({
       code: "PIPELINE.FORMULA_PENDING",

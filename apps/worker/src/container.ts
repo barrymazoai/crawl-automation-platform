@@ -1,12 +1,13 @@
 import {
   type PostgresResourceAdmission,
+  PostgresChannelQueueStore,
   PostgresExecutionRegistry,
   PostgresFormulaIndex,
   PostgresFormulaLinks,
-  PostgresListingStates,
   PostgresReviewLedger,
 } from "@crawl-automation/adapters";
 import {
+  AmazonFormulaRequests,
   FormulaLookup,
   LabelHandoffs,
   type LabelReviews,
@@ -14,10 +15,10 @@ import {
   PipelineCapture,
   ProductReviews,
   SiblingFormulaReuse,
-  recordSighting,
 } from "@crawl-automation/app";
 import { swansonAdapter } from "@crawl-automation/channel-swanson";
 import { gncAdapter } from "@crawl-automation/channels-gnc";
+import { amazonProductForAsin } from "@crawl-automation/channels-wholefoods";
 import {
   ChannelRegistry,
   HttpCapture,
@@ -42,6 +43,7 @@ import { ChannelProductPlans } from "@crawl-automation/v3-channels";
 import { TextLocalStore } from "@crawl-automation/v3-text";
 import { asFunction, asValue, createContainer, InjectionMode, type AwilixContainer } from "awilix";
 import { buildBrowserParts, type BrowserParts } from "./browser/browser-parts.js";
+import { captureRecords } from "./capture-records.js";
 import type { WorkerConfig } from "./config.js";
 import type { CoreParts } from "./core-parts.js";
 import {
@@ -120,10 +122,9 @@ function registerServices(container: Parts): void {
   container.register({
     productCapture: asFunction(captureService).singleton(),
     // A revisit that finds the listing unlisted records that sighting (with its reason) instead of a Review.
-    pipelineCapture: asFunction(({ productCapture, database }: WorkerParts) => {
-      const listingStates = new PostgresListingStates(database);
-      const listings = { record: (raw: unknown) => recordSighting(listingStates, raw) };
-      return new PipelineCapture({ capture: productCapture, listings });
+    // Every captured page also adds one metrics-history point.
+    pipelineCapture: asFunction(({ productCapture, database, log }: WorkerParts) => {
+      return new PipelineCapture({ capture: productCapture, ...captureRecords({ database, log }) });
     }).singleton(),
     productFiles: asFunction(filesService).singleton(),
     // Formula once across the channel's formula family, then a size or pack sibling's formula after a label check.
@@ -133,6 +134,14 @@ function registerServices(container: Parts): void {
     siblingReuse: asFunction(
       ({ formulaIndex, database }: WorkerParts) =>
         new SiblingFormulaReuse({ index: formulaIndex, links: new PostgresFormulaLinks(database) }),
+    ).singleton(),
+    // A Whole Foods ASIN with no Amazon formula is held once in Amazon's queue for its formula.
+    amazonFormulaRequests: asFunction(
+      ({ database }: WorkerParts) =>
+        new AmazonFormulaRequests({
+          queue: new PostgresChannelQueueStore(database),
+          amazonProduct: amazonProductForAsin,
+        }),
     ).singleton(),
     labelHandoffs: asFunction(
       ({ registry, channelPlans, publication, database, config }: WorkerParts) =>

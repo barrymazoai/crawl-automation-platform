@@ -1,5 +1,4 @@
-import { PostgresListingStates } from "@crawl-automation/adapters";
-import { PipelineCapture, recordSighting } from "@crawl-automation/app";
+import { PipelineCapture } from "@crawl-automation/app";
 import {
   BrowserPages,
   BrowserProductCapture,
@@ -15,6 +14,7 @@ import {
   type WholeFoodsStore,
 } from "@crawl-automation/channels-wholefoods";
 import { EgoPages } from "@crawl-automation/platform";
+import { captureRecords } from "../capture-records.js";
 import type { CoreParts } from "../core-parts.js";
 import { workerErrors } from "../errors.js";
 
@@ -45,11 +45,9 @@ export function buildBrowserParts(parts: CoreParts): BrowserParts {
   const registry = new ChannelRegistry([wholeFoodsAdapter(store)]);
   const http = new HttpCapture(pages);
   const capture = new BrowserProductCapture({ registry, http, publication: parts.publication });
-  const listingStates = new PostgresListingStates(parts.database);
-  const listings = { record: (raw: unknown) => recordSighting(listingStates, raw) };
   let storeSet: Promise<unknown> | null = null;
   return {
-    capture: new PipelineCapture<BrowserCaptureResult>({ capture, listings }),
+    capture: new PipelineCapture<BrowserCaptureResult>({ capture, ...captureRecords(parts) }),
     scanner: new WholeFoodsBrandScan({ browser: ego, remote: parts.r2.store, store }),
     async ensureStore(productUrl, signal) {
       storeSet ??= ensureWholeFoodsStore(

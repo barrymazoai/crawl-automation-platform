@@ -149,14 +149,23 @@ export interface PipelineActivities {
   prepareLabelTask(request: LabelHandoffRequest): Promise<LabelWorkflowInput>;
   acquireProductFile(request: FileRequest): Promise<FileAcquireOutcome>;
   reviewProduct(request: ReviewRequest): Promise<AcquisitionReview>;
+  /** Holds an ASIN that has no Amazon formula yet in Amazon's queue, once per ASIN. */
+  requestAmazonFormula(request: AmazonFormulaRequest): Promise<unknown>;
 }
 
-/** The existing channel-plan worker's activity: saves metrics, then plans the formula sources. */
+/** An ASIN seen on a channel that shares Amazon's formulas, without an Amazon formula yet. */
+export const AmazonFormulaRequestSchema = z.strictObject({
+  brandId: z.uuid(),
+  listingId: z.string().min(1).max(200),
+});
+export type AmazonFormulaRequest = z.infer<typeof AmazonFormulaRequestSchema>;
+
+/** The formula planner's activity: plans the formula sources (metrics are recorded at capture). */
 export interface PlanActivities {
   prepareChannelProduct(sourcePlan: ChannelPlanInput): Promise<unknown>;
 }
 
-/** A page read in the browser: its listing and the metrics it showed, or the listing's unlisted sighting, or a Review. */
+/** A page read in the browser (its metrics are recorded at capture), or the listing's unlisted sighting, or a Review. */
 export const BrowserCaptureResultSchema = z.discriminatedUnion("status", [
   z.strictObject({
     status: z.literal("captured"),

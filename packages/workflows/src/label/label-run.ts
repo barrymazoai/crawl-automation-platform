@@ -20,9 +20,9 @@ export interface LabelRun {
 }
 
 export function labelRun(entry: LabelWorkflowInput, stream: LabelStream): LabelRun {
-  // Image-first tasks stop after the first complete label, so a Review must prove its execution stopped.
-  const requireReviewStop = entry.input.evidencePolicy === "label-image-first/5";
-  const gate = resourceGate(entry.resources, { requireReviewStop });
+  // Label calls release their permits on a Review (see the app's label gates); no review-stop proof is required,
+  // since the worker hosts no review-stop verifier.
+  const gate = resourceGate(entry.resources);
   const call = (kind: QueueKind, name: string, value: unknown) =>
     gate(name, (binding) => {
       // One attempt per activity: a failure is a Review, never an automatic retry of paid or model work.

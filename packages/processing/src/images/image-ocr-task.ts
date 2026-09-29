@@ -36,6 +36,10 @@ export interface ImageOcrTaskDeps {
 }
 
 const MAX_TASK_BYTES = 65_536;
+
+/** A prepared OCR task or a Review, as before; or a downloaded PDF, which is skipped (PDFs are not processed). */
+export type ImageOcrTaskOutcome =
+  ImageOcrPrepareOutcome | { status: "skipped"; operationId: string; reason: "pdf" };
 type Receipt = FileAcquireOutcome | null;
 
 /**
@@ -45,7 +49,7 @@ type Receipt = FileAcquireOutcome | null;
 export class ImageOcrTask {
   constructor(private readonly deps: ImageOcrTaskDeps) {}
 
-  async run(raw: unknown, signal: AbortSignal): Promise<ImageOcrPrepareOutcome> {
+  async run(raw: unknown, signal: AbortSignal): Promise<ImageOcrTaskOutcome> {
     const { plan, receipt } = ImageOcrPrepareInputSchema.parse(raw);
     try {
       this.assertSameImage(plan, receipt);
@@ -103,7 +107,8 @@ export class ImageOcrTask {
       throw imageFailure("IMAGE.IDENTITY_CONFLICT");
     }
     if (record.file.kind !== "source-image") {
-      throw imageFailure("IMAGE.PDF_ROUTE_REQUIRED");
+      // PDFs are not processed (owner decision, 2026-09-30): the file is skipped, never a Review.
+      return { status: "skipped" as const, operationId: input.operationId, reason: "pdf" as const };
     }
     const unsigned = {
       ...observationIdentity(input),
