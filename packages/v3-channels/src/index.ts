@@ -14,6 +14,7 @@ export * from "./amazon.js";
 export * from "./swanson.js";
 export * from "./swanson-rendered.js";
 export * from "./channel-plan.js";
+export * from "./gnc-rendered.js";
 export * from "./channel-brand.js";
 export * from "./swanson-ego.js";
 export * from "./channel-label.js";

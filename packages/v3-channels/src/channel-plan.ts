@@ -7,6 +7,7 @@ import { acquiredImageId, FILE_CONFIG_FINGERPRINT, PAGE_CONFIG_FINGERPRINT } fro
 import { parseDtcRenderedProduct } from "./dtc-rendered.js";
 import { parseAmazonRenderedProduct } from "./amazon-rendered.js";
 import { parseSwansonRenderedProduct } from "./swanson-rendered.js";
+import { parseGncRenderedProduct } from "./gnc-rendered.js";
 import { factsTextComplete, factsTextFromHtml } from "./facts-text.js";
 import { ChannelError } from "./html-evidence.js";
 const encode = (v: unknown) => Buffer.from(JSON.stringify(v));
@@ -24,7 +25,7 @@ export class ChannelProductPlans {
     const source = await this.resolver.resolve(input.source, input.owner, signal);
     if (!equal(source.ref, input.source)) throw new ChannelError("CHANNEL.SOURCE_CONFLICT");
     verifyBytes(input.source, source.bytes, 4 * 1024 * 1024);
-    const product = (input.channel === "dtc" ? parseDtcRenderedProduct : input.channel === "amazon" ? parseAmazonRenderedProduct : parseSwansonRenderedProduct)(decode(source.bytes), input.expectedUrl, input.owner);
+    const product = (input.channel === "dtc" ? parseDtcRenderedProduct : input.channel === "amazon" ? parseAmazonRenderedProduct : input.channel === "gnc" ? parseGncRenderedProduct : parseSwansonRenderedProduct)(decode(source.bytes), input.expectedUrl, input.owner);
     const id = (role: string) => `chp-${sha256(encode([input.operationId, role]))}`;
     // Escaped DOM text, explicitly derived; never claimed to be the original full-page HTML.
     const html = [...product.factsCandidates.filter(f => f.scope === "selected-product").map(f => f.html), product.detailsHtml].filter(Boolean).join("\n");
@@ -123,7 +124,7 @@ export class ChannelProductPlans {
       // Lost acknowledgements must not turn an already verified completion into a false processing failure.
       if (!signal.aborted) try { const complete = await this.inspect(input, AbortSignal.timeout(10000)); if (complete) return this.result(complete); } catch { /* read only */ }
       const message = error instanceof Error ? error.message : "";
-      const code = signal.aborted ? "CHANNEL.CANCELLED" : /^(CHANNEL|SWANSON|AMAZON|DTC|ARTIFACT)\.[A-Z_]+$/.test(message) ? message : "CHANNEL.PLAN_UNRESOLVED";
+      const code = signal.aborted ? "CHANNEL.CANCELLED" : /^(CHANNEL|SWANSON|AMAZON|DTC|GNC|ARTIFACT)\.[A-Z_]+$/.test(message) ? message : "CHANNEL.PLAN_UNRESOLVED";
       const id = `chp-${channelPlanFingerprint(input)}`, key = `v3/channel-plan-reviews/${id}.json`, keep = AbortSignal.timeout(10000);
       const proposed = ReviewRecordSchema.parse({ schemaVersion: 1, reviewId: id, occurredAt: new Date().toISOString(), observation: input.owner,
         failure: { schemaVersion: 1, requestId: input.owner.requestId, observationId: input.owner.observationId, operationId: input.operationId,
