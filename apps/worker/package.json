@@ -1,0 +1,36 @@
+{
+  "name": "@crawl-automation/worker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "check-types": "tsc --noEmit",
+    "test": "vitest run src",
+    "build": "tsdown && tsx src/bundle-workflows.ts"
+  },
+  "dependencies": {
+    "@crawl-automation/adapters": "workspace:*",
+    "@crawl-automation/app": "workspace:*",
+    "@crawl-automation/channel-swanson": "workspace:*",
+    "@crawl-automation/channels-core": "workspace:*",
+    "@crawl-automation/platform": "workspace:*",
+    "@crawl-automation/v3-acquisition": "workspace:*",
+    "@crawl-automation/v3-artifacts": "workspace:*",
+    "@crawl-automation/v3-channels": "workspace:*",
+    "@crawl-automation/v3-contracts": "workspace:*",
+    "@crawl-automation/v3-text": "workspace:*",
+    "@crawl-automation/workflows": "workspace:*",
+    "@temporalio/activity": "1.23.0",
+    "@temporalio/common": "1.23.0",
+    "@temporalio/worker": "1.23.0",
+    "awilix": "^13.0.5",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "tsdown": "catalog:",
+    "tsx": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}

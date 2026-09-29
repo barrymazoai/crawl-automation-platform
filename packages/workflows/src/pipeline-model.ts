@@ -2,10 +2,11 @@ import {
   AcquisitionReviewSchema,
   ChannelPlanInputSchema,
   ExecutionIdSchema,
+  FileAcquireInputSchema,
   ResourceGateSchema,
+  ReviewCodeSchema,
   ChannelSavedLabelWorkflowInputSchema,
   type ChannelPlanInput,
-  type FileAcquireInput,
   type FileAcquireOutcome,
 } from "@crawl-automation/v3-contracts";
 import { z } from "zod";
@@ -61,30 +62,40 @@ export const KnownFormulaSchema = z
   .strictObject({ operationId: z.string().min(1).max(300) })
   .nullable();
 
-export interface FormulaKey {
-  channel: z.infer<typeof PipelineChannelSchema>;
-  listingId: string;
-  variantId: string | null;
-}
+export const FormulaKeySchema = z.strictObject({
+  channel: PipelineChannelSchema,
+  listingId: z.string().min(1).max(200),
+  variantId: z.string().min(1).max(200).nullable(),
+});
+export type FormulaKey = z.infer<typeof FormulaKeySchema>;
 
-/** The pipeline worker host's activities. */
+export const LabelHandoffRequestSchema = z.strictObject({
+  pipeline: ProductPipelineInputSchema,
+  sourcePlan: ChannelPlanInputSchema,
+});
+export type LabelHandoffRequest = z.infer<typeof LabelHandoffRequestSchema>;
+
+export const FileRequestSchema = z.strictObject({
+  pipeline: ProductPipelineInputSchema,
+  sourcePlan: ChannelPlanInputSchema,
+  acquire: FileAcquireInputSchema,
+});
+export type FileRequest = z.infer<typeof FileRequestSchema>;
+
+export const ReviewRequestSchema = z.strictObject({
+  pipeline: ProductPipelineInputSchema,
+  code: ReviewCodeSchema,
+  causeCode: z.string().max(120).nullable(),
+});
+export type ReviewRequest = z.infer<typeof ReviewRequestSchema>;
+
+/** The pipeline worker host's activities. Each validates its input with the schema above. */
 export interface PipelineActivities {
   captureProduct(input: ProductPipelineInput): Promise<unknown>;
   findKnownFormula(key: FormulaKey): Promise<unknown>;
-  prepareLabelHandoff(input: {
-    pipeline: ProductPipelineInput;
-    sourcePlan: ChannelPlanInput;
-  }): Promise<ChannelSavedLabelWorkflowInput>;
-  acquireProductFile(input: {
-    pipeline: ProductPipelineInput;
-    sourcePlan: ChannelPlanInput;
-    acquire: FileAcquireInput;
-  }): Promise<FileAcquireOutcome>;
-  reviewProduct(input: {
-    pipeline: ProductPipelineInput;
-    code: string;
-    causeCode: string | null;
-  }): Promise<AcquisitionReview>;
+  prepareLabelHandoff(request: LabelHandoffRequest): Promise<ChannelSavedLabelWorkflowInput>;
+  acquireProductFile(request: FileRequest): Promise<FileAcquireOutcome>;
+  reviewProduct(request: ReviewRequest): Promise<AcquisitionReview>;
 }
 
 /** The existing channel-plan worker's activity: saves metrics, then plans the formula sources. */

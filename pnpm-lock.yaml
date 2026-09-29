@@ -619,6 +619,73 @@ importers:
         specifier: 'catalog:'
         version: 3.2.7(@types/node@22.20.1)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.51.2)(tsx@4.23.12)(yaml@2.9.0)
 
+  apps/worker:
+    dependencies:
+      '@crawl-automation/adapters':
+        specifier: workspace:*
+        version: link:../../packages/adapters
+      '@crawl-automation/app':
+        specifier: workspace:*
+        version: link:../../packages/app
+      '@crawl-automation/channel-swanson':
+        specifier: workspace:*
+        version: link:../../packages/channels/swanson
+      '@crawl-automation/channels-core':
+        specifier: workspace:*
+        version: link:../../packages/channels/core
+      '@crawl-automation/platform':
+        specifier: workspace:*
+        version: link:../../packages/platform
+      '@crawl-automation/v3-acquisition':
+        specifier: workspace:*
+        version: link:../../packages/v3-acquisition
+      '@crawl-automation/v3-artifacts':
+        specifier: workspace:*
+        version: link:../../packages/v3-artifacts
+      '@crawl-automation/v3-channels':
+        specifier: workspace:*
+        version: link:../../packages/v3-channels
+      '@crawl-automation/v3-contracts':
+        specifier: workspace:*
+        version: link:../../packages/v3-contracts
+      '@crawl-automation/v3-text':
+        specifier: workspace:*
+        version: link:../../packages/v3-text
+      '@crawl-automation/workflows':
+        specifier: workspace:*
+        version: link:../../packages/workflows
+      '@temporalio/activity':
+        specifier: 1.23.0
+        version: 1.23.0
+      '@temporalio/common':
+        specifier: 1.23.0
+        version: 1.23.0
+      '@temporalio/worker':
+        specifier: 1.23.0
+        version: 1.23.0(@swc/helpers@0.5.23)(lightningcss@1.32.0)
+      awilix:
+        specifier: ^13.0.5
+        version: 13.0.5
+      zod:
+        specifier: 'catalog:'
+        version: 4.4.3
+    devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 22.20.1
+      tsdown:
+        specifier: 'catalog:'
+        version: 0.15.12(@emnapi/core@1.11.3)(@emnapi/runtime@1.11.3)(typescript@5.9.3)
+      tsx:
+        specifier: 'catalog:'
+        version: 4.23.12
+      typescript:
+        specifier: 'catalog:'
+        version: 5.9.3
+      vitest:
+        specifier: 'catalog:'
+        version: 3.2.7(@types/node@22.20.1)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.51.2)(tsx@4.23.12)(yaml@2.9.0)
+
   crawl-products:
     dependencies:
       playwright-core:

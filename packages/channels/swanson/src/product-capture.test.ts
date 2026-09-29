@@ -5,6 +5,7 @@ import {
   HttpCapture,
   ProductCapture,
   ProductSourcePlans,
+  type PlanSettings,
 } from "@crawl-automation/channels-core";
 import {
   ScraperApiTransport,
@@ -46,10 +47,10 @@ const selection = {
   responseMode: "html" as const,
   providerPolicy: "scraperapi-sync/1" as const,
 };
-const settings = {
+const settings: PlanSettings = {
   text: {
     schemaVersion: 1 as const,
-    module: "codex.text",
+    module: "codex.text" as const,
     implementationVersion: "codex-text/2",
     policyVersion: "anchored/2",
     resultSchemaVersion: 2 as const,
