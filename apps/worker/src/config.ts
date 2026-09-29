@@ -27,10 +27,7 @@ export const WorkerConfigSchema = z.strictObject({
   /** The pipeline's task queue: the product workflow and its activities both run here. */
   taskQueue: z.string().min(1).max(200),
   maxConcurrentActivities: z.number().int().min(1).max(64).default(4),
-  /**
-   * How long the deployment control waits for this worker's first heartbeat when starting it (it reads this field).
-   * Loading the workflow bundle takes about a minute, longer than its default wait.
-   */
+  /** Unused; kept so configs written on 2026-09-29 stay valid. */
   startupTimeoutMs: z.number().int().min(1_000).max(600_000).optional(),
   storage: z.strictObject({
     r2: R2ScopeSchema,
@@ -71,7 +68,11 @@ export const WorkerConfigSchema = z.strictObject({
 });
 export type WorkerConfig = z.infer<typeof WorkerConfigSchema>;
 
-/** The worker's settings come from one private JSON file named by `V3_WORKER_CONFIG`. */
+/**
+ * The worker's settings come from one private JSON file named by `V3_PIPELINE_CONFIG`. Not `V3_WORKER_CONFIG`: the
+ * deployment control reads that variable as an old-style worker config and then also requires a role and build ID
+ * in the health file, so the pipeline worker would never count as ready.
+ */
 export function loadWorkerConfig(env: NodeJS.ProcessEnv = process.env): Promise<WorkerConfig> {
-  return loadConfig(WorkerConfigSchema, env["V3_WORKER_CONFIG"] ?? "");
+  return loadConfig(WorkerConfigSchema, env["V3_PIPELINE_CONFIG"] ?? "");
 }
