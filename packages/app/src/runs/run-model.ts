@@ -47,6 +47,8 @@ export interface CatalogProgress {
   catalogPages: number;
   discovered: number;
   closure: "complete" | "incomplete" | null;
+  /** Why the catalog closed incomplete, e.g. `RESOURCE.WAIT_LIMIT`; null when complete or still open. */
+  closureFailure: string | null;
 }
 
 export interface WorkflowMember {

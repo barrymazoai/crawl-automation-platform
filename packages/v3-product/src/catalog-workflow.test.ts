@@ -43,6 +43,17 @@ it.each(["source", "commit", "dispatch", "start"])("%s failure closes incomplete
   const f = setup(); const fn = mode === "source" ? f.source.readCatalogPage : mode === "commit" ? f.ledger.commitCatalogPage : mode === "dispatch" ? f.ledger.recordCatalogDispatch : runtime.starts;
   fn.mockRejectedValue(Error("lost acknowledgement")); expect(await CatalogWorkflow(f.input)).toEqual({ status: "incomplete" }); expect(fn).toHaveBeenCalledTimes(1);
 });
+it("a failure that carries an error code closes the catalog with that code, not the step label", async () => {
+  const f = setup();
+  f.source.readCatalogPage.mockRejectedValue(Object.assign(Error("activity failed"), { cause: { type: "RESOURCE.WAIT_LIMIT" } }));
+  expect(await CatalogWorkflow(f.input)).toEqual({ status: "incomplete" });
+  expect(f.ledger.closeCatalog).toHaveBeenCalledWith(expect.objectContaining({ failure: "RESOURCE.WAIT_LIMIT" }));
+});
+it("a failure without a code keeps the step label", async () => {
+  const f = setup(); f.ledger.commitCatalogPage.mockRejectedValue(Error("lost acknowledgement"));
+  await CatalogWorkflow(f.input);
+  expect(f.ledger.closeCatalog).toHaveBeenCalledWith(expect.objectContaining({ failure: "CATALOG.COMMIT_UNRESOLVED" }));
+});
 it("cancellation propagates without manufacturing catalog completion", async () => {
   const f = setup(); f.source.readCatalogPage.mockRejectedValue(Error("cancelled")); await expect(CatalogWorkflow(f.input)).rejects.toThrow("cancelled"); expect(f.ledger.closeCatalog).not.toHaveBeenCalled();
 });

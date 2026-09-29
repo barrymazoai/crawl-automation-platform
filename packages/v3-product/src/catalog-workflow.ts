@@ -9,6 +9,13 @@ type Ledger = {
   recordCatalogDispatch(input: { discovery: CatalogDiscovery; workflowId: string; runId: string }): Promise<void>;
   closeCatalog(input: { catalogId: string; scope: CatalogWorkflowInput["scope"]; failure: string | null }): Promise<{ status: "complete" | "incomplete" }>;
 };
+/** The error code a failure carries: an Activity's ApplicationFailure type, or the workflow's own failure type. */
+function failureCode(error: unknown): string | null {
+  const own = (error as { type?: unknown } | null)?.type;
+  const cause = (error as { cause?: { type?: unknown } } | null)?.cause?.type;
+  const code = typeof cause === "string" ? cause : typeof own === "string" ? own : null;
+  return code && /^[A-Z][A-Z0-9_]*\.[A-Z0-9_.]{1,90}$/.test(code) ? code : null;
+}
 /** One bounded page at a time; children outlive catalog failure, closure and Continue-As-New. */
 export async function CatalogWorkflow(raw: unknown): Promise<unknown> {
   const input = CatalogWorkflowInputSchema.parse(raw), ledger = proxyActivities<Ledger>(options(input.queues.ledger));
@@ -39,7 +46,10 @@ export async function CatalogWorkflow(raw: unknown): Promise<unknown> {
     } catch (error) {
       if (isCancellation(error)) throw error;
       // Unknown dispatch is not automatically repeated. Already-started children are untouched.
-      return ledger.closeCatalog({ catalogId: input.catalogId, scope: input.scope, failure });
+      // Record the real cause (e.g. RESOURCE.WAIT_LIMIT) instead of only the step that failed; older runs replay
+      // without the marker and keep the step label.
+      const cause = patched("catalog-failure-cause-v1") ? failureCode(error) : null;
+      return ledger.closeCatalog({ catalogId: input.catalogId, scope: input.scope, failure: cause ?? failure });
     }
     if (page.completion !== "more") return ledger.closeCatalog({ catalogId: input.catalogId, scope: input.scope, failure: null });
     cursor = page.nextCursor; pageIndex++;

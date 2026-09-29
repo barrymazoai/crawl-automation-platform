@@ -69,6 +69,7 @@ const Progress = z.object({
   catalogPages: z.number(),
   discovered: z.number(),
   closure: z.enum(["complete", "incomplete"]).nullable(),
+  closureFailure: z.string().nullable(),
 });
 
 /** A brand run's catalog has the run ID as its catalog ID. */
@@ -77,7 +78,8 @@ export async function catalogProgress(db: Queryable, runId: string): Promise<Cat
     `SELECT
        (SELECT count(*)::int FROM catalog_page WHERE catalog_id = $1) AS "catalogPages",
        (SELECT count(*)::int FROM catalog_discovery WHERE catalog_id = $1) AS "discovered",
-       (SELECT status FROM catalog_closure WHERE catalog_id = $1) AS "closure"`,
+       (SELECT status FROM catalog_closure WHERE catalog_id = $1) AS "closure",
+       (SELECT record->>'failure' FROM catalog_closure WHERE catalog_id = $1) AS "closureFailure"`,
     [runId],
   );
   return Progress.parse(rows[0]);

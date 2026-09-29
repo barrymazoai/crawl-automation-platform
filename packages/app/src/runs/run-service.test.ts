@@ -55,7 +55,12 @@ function setup({ members, held = [], evidence = null }: Setup) {
     accept: vi.fn(async () => summary),
     list: vi.fn(async () => [summary]),
     find: vi.fn(async (id: string) => (id === runId ? summary : null)),
-    catalogProgress: vi.fn(async () => ({ catalogPages: 1, discovered: 65, closure: null })),
+    catalogProgress: vi.fn(async () => ({
+      catalogPages: 1,
+      discovered: 65,
+      closure: null,
+      closureFailure: null,
+    })),
     settle: vi.fn(async (_id: string, permitIds: string[]) => ({
       permitsReleased: permitIds.length,
       guardReleased: true,
