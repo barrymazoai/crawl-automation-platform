@@ -7,6 +7,7 @@ import { swansonProductExpression } from "./swanson-ego.js";
 import { swansonProductAddress } from "./swanson-rendered.js";
 import { ChannelError } from "./html-evidence.js";
 import { SwansonHtmlArchive } from "./swanson-html-archive.js";
+import { staticInnerText } from "./static-inner-text.js";
 
 /** Bounded raw HTML read of one public Swanson product page (ScraperAPI route). No JS, cookies, redirects or retries. */
 export const SWANSON_HTTP_POLICY = Object.freeze({ timeoutMs: 75000, maxBytes: 6 * 1024 * 1024, origins: Object.freeze(["https://www.swansonvitamins.com"]) });
@@ -34,6 +35,8 @@ export function parseSwansonStaticHtml(html: string, pageUrl: string, capturedAt
   define(HTMLMetaElement.prototype, "content", function () { return this.getAttribute("content") ?? ""; });
   define(HTMLInputElement.prototype, "checked", function () { return this.hasAttribute("checked"); });
   define(HTMLInputElement.prototype, "value", function () { return this.getAttribute("value") ?? ""; });
+  // What a visitor reads: rows and paragraphs on their own lines (a DOM without layout joins them into one line).
+  define(HTMLElement.prototype, "innerText", function () { return staticInnerText(this as never); });
   let raw: Record<string, unknown>;
   try {
     raw = runInNewContext(swansonProductExpression, { document, URL, location: { href: pageUrl, origin: "https://www.swansonvitamins.com" },

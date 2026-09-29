@@ -27,6 +27,11 @@ export const WorkerConfigSchema = z.strictObject({
   /** The pipeline's task queue: the product workflow and its activities both run here. */
   taskQueue: z.string().min(1).max(200),
   maxConcurrentActivities: z.number().int().min(1).max(64).default(4),
+  /**
+   * How long the deployment control waits for this worker's first heartbeat when starting it (it reads this field).
+   * Loading the workflow bundle takes about a minute, longer than its default wait.
+   */
+  startupTimeoutMs: z.number().int().min(1_000).max(600_000).optional(),
   storage: z.strictObject({
     r2: R2ScopeSchema,
     r2Credentials: z.strictObject({

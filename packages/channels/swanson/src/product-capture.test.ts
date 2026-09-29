@@ -17,6 +17,7 @@ import {
   RetainedPublication,
   type ObjectStore,
 } from "@crawl-automation/v3-artifacts";
+import { extractSwansonLabelCore } from "@crawl-automation/v3-acquisition";
 import { ChannelProductPlans, SWANSON_HTTP_POLICY } from "@crawl-automation/v3-channels";
 import { describe, expect, it, vi } from "vitest";
 import { swansonAdapter } from "./adapter.js";
@@ -33,9 +34,20 @@ class Memory implements ObjectStore {
   });
 }
 
-const body = gunzipSync(
-  readFileSync(new URL("./fixtures/healthy-origins-d-ribose.html.gz", import.meta.url)),
-);
+/** Real archived pages (see fixtures/README.md). */
+const pages = {
+  dRibose: {
+    file: "healthy-origins-d-ribose.html.gz",
+    url: "https://www.swansonvitamins.com/p/healthy-origins-natural-d-ribose-10-6-oz-pwdr",
+  },
+  ubiquinol: {
+    file: "healthy-origins-ubiquinol-variant.html.gz",
+    url: "https://www.swansonvitamins.com/p/healthy-origins-ubiquinol-kaneka-qh-100-mg-60-sgels?variant=46318812168330",
+  },
+};
+type Page = (typeof pages)[keyof typeof pages];
+const pageBytes = (page: Page) =>
+  gunzipSync(readFileSync(new URL(`./fixtures/${page.file}`, import.meta.url)));
 const selection = {
   routeId: "route-test",
   version: "scraperapi/1",
@@ -71,13 +83,14 @@ const settings: PlanSettings = {
 const request = {
   runId: "7b0c6a52-3a47-4f5b-9a4e-4c3c1f0a9d11",
   channel: "swanson" as const,
-  url: "https://www.swansonvitamins.com/p/healthy-origins-natural-d-ribose-10-6-oz-pwdr",
+  url: pages.dRibose.url,
   brandId: "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d",
   sourceId: "1a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d",
   operationId: "pipeline-capture-1",
 };
 
-function setup() {
+function setup(page: Page = pages.dRibose) {
+  const body = pageBytes(page);
   const remote = new Memory();
   const publication = new RetainedPublication(new Memory(), remote);
   const fetches = vi.fn(async (): Promise<Response> => ({
@@ -136,4 +149,23 @@ describe("ProductCapture with the Swanson adapter", () => {
     expect(fetches).toHaveBeenCalledOnce();
     expect(second).toEqual(first);
   });
+
+  // 2026-09-29: the static reader ran table rows together, and the Swanson label core refused every HTTP capture
+  // with LABEL_CORE.TABLE_UNVERIFIED (Serving Size / Amount Per Serving must start their own lines).
+  it.each(Object.entries(pages))(
+    "the planner's facts fragment of %s passes the Swanson label core",
+    async (_name, page) => {
+      const { remote, capture, plans } = setup(page);
+
+      const { sourcePlan } = await capture.capture({ ...request, url: page.url }, signal());
+      const planned = await plans.run(sourcePlan, signal());
+
+      expect(planned.status).toBe("prepared");
+      const fragment = remote.data.get(`v3/channel-plans/${sourcePlan.operationId}/derived.html`);
+      const facts = extractSwansonLabelCore(Buffer.from(fragment ?? []).toString());
+      expect(facts).toMatch(/^Serving Size\b/m);
+      expect(facts).toMatch(/^Amount Per Serving\b/m);
+      expect(facts).toMatch(/^Other Ingredients:/m);
+    },
+  );
 });
