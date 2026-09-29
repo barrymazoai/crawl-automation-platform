@@ -167,12 +167,21 @@ importers:
       '@crawl-automation/app':
         specifier: workspace:*
         version: link:../../packages/app
+      '@crawl-automation/channel-swanson':
+        specifier: workspace:*
+        version: link:../../packages/channels/swanson
+      '@crawl-automation/channels-core':
+        specifier: workspace:*
+        version: link:../../packages/channels/core
       '@crawl-automation/platform':
         specifier: workspace:*
         version: link:../../packages/platform
       '@crawl-automation/v3-contracts':
         specifier: workspace:*
         version: link:../../packages/v3-contracts
+      '@crawl-automation/workflows':
+        specifier: workspace:*
+        version: link:../../packages/workflows
       '@hono/node-server':
         specifier: 'catalog:'
         version: 1.19.17(hono@4.13.5)

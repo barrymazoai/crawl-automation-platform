@@ -3,8 +3,8 @@ import { z } from "zod";
 import type { Channel } from "../delivery/delivery-coordinator.js";
 
 /**
- * A run of one brand on one channel. Product and product-list runs are added with the shared channel
- * pipeline; until then single Amazon products go through the queue.
+ * A run of one brand on one channel, or of one product page. A product run's channel and brand come from its
+ * source; its URL must be a product page of that channel. Single Amazon products still go through the queue.
  */
 export const SubmitRunSchema = z.discriminatedUnion("kind", [
   z.strictObject({
@@ -14,9 +14,16 @@ export const SubmitRunSchema = z.discriminatedUnion("kind", [
     sourceId: Id,
     sourceRevision: z.number().int().positive().optional(),
   }),
+  z.strictObject({
+    kind: z.literal("product"),
+    requestId: Id,
+    sourceId: Id,
+    url: z.url({ protocol: /^https$/ }).max(4096),
+  }),
 ]);
 export type SubmitRun = z.infer<typeof SubmitRunSchema>;
 export type BrandRun = Extract<SubmitRun, { kind: "brand" }>;
+export type ProductRun = Extract<SubmitRun, { kind: "product" }>;
 
 export const RunFilterSchema = z.strictObject({
   channel: z.enum(["amazon", "gnc", "swanson", "dtc"]).optional(),
@@ -27,12 +34,15 @@ export const RunFilterSchema = z.strictObject({
 export type RunFilter = z.infer<typeof RunFilterSchema>;
 
 export interface RunSummary {
+  kind: "brand" | "product";
   runId: string;
   workflowId: string;
   channel: Channel;
   brandId: string;
   brandName: string;
   sourceId: string;
+  /** The product page of a product run; null for a brand run. */
+  url: string | null;
   createdAt: string;
   /** True while the run blocks new runs of the same source. */
   guardHeld: boolean;

@@ -4,6 +4,10 @@ import { defineErrors } from "@crawl-automation/platform";
 export const appErrors = defineErrors({
   "RUN.NOT_FOUND": { category: "VALIDATION", message: "Run not found." },
   "RUN.SOURCE_NOT_FOUND": { category: "VALIDATION", message: "Brand source not found." },
+  "RUN.CHANNEL_UNSUPPORTED": {
+    category: "VALIDATION",
+    message: "Product runs are not set up for this channel yet.",
+  },
   "RUN.SOURCE_DISABLED": { category: "VALIDATION", message: "Enable the source before a run." },
   "RUN.SOURCE_BUSY": { category: "VALIDATION", message: "This source already has an active run." },
   "RUN.REVISION_CONFLICT": { category: "VALIDATION", message: "Source changed; reload it first." },

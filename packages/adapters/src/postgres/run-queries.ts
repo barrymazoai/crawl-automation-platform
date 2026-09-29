@@ -2,6 +2,7 @@ import type { CatalogProgress, RunFilter, RunSummary } from "@crawl-automation/a
 import type { Queryable } from "@crawl-automation/platform";
 import { CollectionSnapshot, DeliveryIssue, ExecutionStatus } from "@crawl-automation/v3-contracts";
 import { z } from "zod";
+import { findProductRun, listProductRuns } from "./product-run-queries.js";
 
 const RunRow = z.object({
   runId: z.string(),
@@ -29,12 +30,14 @@ function toSummary(raw: unknown): RunSummary {
   const row = RunRow.parse(raw);
   const state = row.closedAt ? "CLOSED" : row.deliveryRunId ? "CONFIRMED" : "START_UNKNOWN";
   return {
+    kind: "brand",
     runId: row.runId,
     workflowId: row.workflowId,
     channel: row.snapshot.channel,
     brandId: row.snapshot.brandId,
     brandName: row.snapshot.brandName,
     sourceId: row.snapshot.sourceId,
+    url: null,
     createdAt: row.createdAt.toISOString(),
     guardHeld: row.guardHeld,
     delivery: row.hasDelivery
@@ -48,7 +51,18 @@ function toSummary(raw: unknown): RunSummary {
   };
 }
 
+/** Brand and product runs together, newest first. */
 export async function listRuns(db: Queryable, filter: RunFilter): Promise<RunSummary[]> {
+  const [brands, products] = await Promise.all([
+    listBrandRuns(db, filter),
+    listProductRuns(db, filter),
+  ]);
+  return [...brands, ...products]
+    .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
+    .slice(0, filter.limit);
+}
+
+async function listBrandRuns(db: Queryable, filter: RunFilter): Promise<RunSummary[]> {
   const rows = await db.query(
     `${selectRuns}
      WHERE ($1::text IS NULL OR r.snapshot->>'channel' = $1)
@@ -62,7 +76,7 @@ export async function listRuns(db: Queryable, filter: RunFilter): Promise<RunSum
 
 export async function findRun(db: Queryable, runId: string): Promise<RunSummary | null> {
   const rows = await db.query(`${selectRuns} WHERE r.request_id = $1`, [runId]);
-  return rows[0] ? toSummary(rows[0]) : null;
+  return rows[0] ? toSummary(rows[0]) : findProductRun(db, runId);
 }
 
 const Progress = z.object({

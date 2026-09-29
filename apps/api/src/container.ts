@@ -4,11 +4,13 @@ import {
   PostgresBrandStore,
   PostgresDeliveryJournal,
   PostgresDeliveryScan,
+  PostgresProductRunStore,
   PostgresProductStore,
   PostgresQueueStore,
   PostgresResourceStore,
   PostgresReviewStore,
   PostgresRunStore,
+  TemporalPipelineStarter,
   TemporalWorkflowStarter,
   TemporalWorkflowTree,
 } from "@crawl-automation/adapters";
@@ -18,6 +20,7 @@ import {
   DeliveryCoordinator,
   DeliveryRunner,
   FleetService,
+  ProductRuns,
   ProductService,
   QueueService,
   ResourceService,
@@ -32,6 +35,8 @@ import {
   type Logger,
   type TemporalClient,
 } from "@crawl-automation/platform";
+import { swansonAdapter } from "@crawl-automation/channel-swanson";
+import { ChannelRegistry } from "@crawl-automation/channels-core";
 import { asFunction, asValue, createContainer, InjectionMode, type AwilixContainer } from "awilix";
 import type { ApiConfig } from "./config.js";
 
@@ -100,6 +105,7 @@ function registerServices(container: Parts): void {
           runs: parts.runStore,
           tree: parts.workflowTree,
           permits: parts.resourceStore,
+          productRuns: productRuns(parts),
           log: parts.log,
         }),
     ).singleton(),
@@ -145,6 +151,16 @@ function registerLoops(container: Parts): void {
           intervalMs: parts.config.cleanup.intervalMs,
         }),
     ).singleton(),
+  });
+}
+
+/** Product runs: started straight away on the shared pipeline. A channel is enabled by its adapter and config. */
+function productRuns(parts: ApiParts): ProductRuns {
+  return new ProductRuns({
+    store: new PostgresProductRunStore(parts.database),
+    starter: new TemporalPipelineStarter(parts.temporal.client),
+    registry: new ChannelRegistry([swansonAdapter]),
+    targets: parts.config.pipeline,
   });
 }
 

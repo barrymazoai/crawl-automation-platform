@@ -6,7 +6,8 @@ import {
   TemporalConfigSchema,
   loadConfig,
 } from "@crawl-automation/platform";
-import { DeliveryTarget } from "@crawl-automation/v3-contracts";
+import { DeliveryTarget, ResourceGateSchema } from "@crawl-automation/v3-contracts";
+import { ProductPipelineInputSchema } from "@crawl-automation/workflows";
 import { z } from "zod";
 
 const absolutePath = z.string().refine(isAbsolute, "Must be an absolute path");
@@ -31,6 +32,16 @@ export const ApiConfigSchema = z.strictObject({
       intervalMs: 1_000,
     }),
   }),
+  /** Product runs: the pipeline's task queues, and the permits each channel's capture takes. */
+  pipeline: z
+    .strictObject({
+      queues: ProductPipelineInputSchema.shape.queues,
+      channels: z.partialRecord(
+        z.enum(["amazon", "gnc", "swanson", "dtc"]),
+        z.strictObject({ resources: ResourceGateSchema }),
+      ),
+    })
+    .default({ queues: { activities: "none", plan: "none", label: "none" }, channels: {} }),
   fleet: z.strictObject({ monitorStatus: absolutePath, queueHealth: absolutePath }),
   /** How often ended work is checked: permits of stopped owners released, ended runs settled. */
   cleanup: z.strictObject({ intervalMs: z.number().int().min(10_000).max(3_600_000) }).default({

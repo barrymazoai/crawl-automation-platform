@@ -2,6 +2,7 @@ import type { Logger } from "@crawl-automation/platform";
 import { appErrors } from "../errors.js";
 import { judgePermits } from "../stops/judge-permits.js";
 import type { PermitStore, RunStore, WorkflowTree } from "./ports.js";
+import type { ProductRuns } from "./product-runs.js";
 import type { RunDetail, RunFilter, RunSummary, SubmitRun, WorkflowMember } from "./run-model.js";
 
 const CANCEL_BATCH = 20;
@@ -12,6 +13,7 @@ export interface RunServiceDeps {
   runs: RunStore;
   tree: WorkflowTree;
   permits: PermitStore;
+  productRuns: Pick<ProductRuns, "submit">;
   log: Logger;
   now?: () => Date;
 }
@@ -25,10 +27,16 @@ export interface SettleResult {
 export class RunService {
   constructor(private readonly deps: RunServiceDeps) {}
 
-  /** Accepts a run. The delivery runner starts its workflow within seconds. */
+  /**
+   * Accepts a run. A brand run's workflow is started by the delivery runner within seconds; a product run's
+   * workflow is started before this returns.
+   */
   async submit(run: SubmitRun): Promise<RunSummary> {
-    const accepted = await this.deps.runs.accept(run);
-    this.deps.log.info({ runId: accepted.runId, channel: accepted.channel }, "run accepted");
+    const accepted =
+      run.kind === "brand"
+        ? await this.deps.runs.accept(run)
+        : await this.summary(await this.deps.productRuns.submit(run));
+    this.deps.log.info({ runId: accepted.runId, kind: run.kind }, "run accepted");
     return accepted;
   }
 

@@ -15,12 +15,14 @@ const minutesAgo = (minutes: number) => new Date(now.getTime() - minutes * 60_00
 const runId = "11111111-1111-4111-8111-111111111111";
 
 const summary: RunSummary = {
+  kind: "brand",
   runId,
   workflowId: `v3-collection-${runId}`,
   channel: "swanson",
   brandId: "22222222-2222-4222-8222-222222222222",
   brandName: "Healthy Origins",
   sourceId: "33333333-3333-4333-8333-333333333333",
+  url: null,
   createdAt: "2026-09-29T11:00:00.000Z",
   guardHeld: true,
   delivery: {
@@ -72,8 +74,9 @@ function setup({ members, held = [], evidence = null }: Setup) {
     stopEvidence: vi.fn(async () => evidence),
   };
   const permits: PermitStore = { heldBy: vi.fn(async () => held) };
-  const service = new RunService({ runs, tree, permits, log: silent, now: () => now });
-  return { service, runs, tree };
+  const productRuns = { submit: vi.fn(async () => runId) };
+  const service = new RunService({ runs, tree, permits, productRuns, log: silent, now: () => now });
+  return { service, runs, tree, productRuns };
 }
 
 const stoppedEvidence: StopEvidence = {

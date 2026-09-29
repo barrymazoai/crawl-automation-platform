@@ -19,8 +19,11 @@
   "dependencies": {
     "@crawl-automation/adapters": "workspace:*",
     "@crawl-automation/app": "workspace:*",
+    "@crawl-automation/channel-swanson": "workspace:*",
+    "@crawl-automation/channels-core": "workspace:*",
     "@crawl-automation/platform": "workspace:*",
     "@crawl-automation/v3-contracts": "workspace:*",
+    "@crawl-automation/workflows": "workspace:*",
     "@hono/node-server": "catalog:",
     "@hono/trpc-server": "^0.4.2",
     "@trpc/server": "^11.19.0",
