@@ -9,7 +9,7 @@ import { OcrFileModule } from "./module.js";
 import { png, setup, signal } from "./testing.fixture.js";
 
 // Captured synthetic responses only. This test never contacts the real OCR endpoint.
-const evidence = JSON.parse(await readFile(new URL("../../../docs/plane/evidence/CRAWLV3-20/live-results.json", import.meta.url), "utf8")) as {
+const evidence = JSON.parse(await readFile(new URL("./fixtures/live-ocr-results.json", import.meta.url), "utf8")) as {
   details: { label: string; rawResponse: unknown }[];
 };
 let server: Server, endpoint: string;

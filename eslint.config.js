@@ -30,6 +30,7 @@ export default tseslint.config(
       complexity: ["error", 10],
       "id-length": ["error", { min: 2, exceptions: shortNamesAllowed, properties: "never" }],
       "no-empty": ["error", { allowEmptyCatch: false }],
+      curly: ["error", "all"],
       "no-console": "error",
       "no-restricted-imports": [
         "error",

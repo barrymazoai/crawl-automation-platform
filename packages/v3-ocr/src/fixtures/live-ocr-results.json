@@ -1,0 +1,810 @@
+{
+  "date": "2026-09-06",
+  "task": "CRAWLV3-20",
+  "endpoint": "http://192.168.0.6:8081/ocr?min_score=0.3",
+  "headChecks": 1,
+  "ocrPosts": 5,
+  "automaticClientRetries": 0,
+  "gatewayReportedAttempts": 5,
+  "syntheticOnly": true,
+  "sourceRoot": "/private/tmp/crawlv3-20-live-piDrFl",
+  "single": {
+    "success": true,
+    "clientMs": 290.302333
+  },
+  "parallel": {
+    "success": true,
+    "peakClientInFlight": 4,
+    "wallMs": 525.775041,
+    "distinctWorkerPids": 4,
+    "distinctBackendPorts": 4,
+    "results": [
+      {
+        "label": "BRAVO",
+        "clientMs": 501.85412500000007,
+        "requestId": "73e6c871fd3d"
+      },
+      {
+        "label": "CHARLIE",
+        "clientMs": 504.89141600000005,
+        "requestId": "ac145cfb59ac"
+      },
+      {
+        "label": "DELTA",
+        "clientMs": 275.068209,
+        "requestId": "c2662d68bda4"
+      },
+      {
+        "label": "ECHO",
+        "clientMs": 508.703542,
+        "requestId": "6afb3d9f25c8"
+      }
+    ]
+  },
+  "details": [
+    {
+      "label": "ALPHA",
+      "requestSha256": "188889fd70b426313cfb967f07ec9a1267227b6d9644f882af43fc90c3e2b618",
+      "responseSha256": "4c57e63ec11f13c83855c242b26766eabc97a177a2dd4ffefdfabd09920a2495",
+      "exactTextMatch": true,
+      "requestId": "3524bf82e047",
+      "workerPid": 19416,
+      "backendPort": 18081,
+      "gatewayAttemptCount": 1,
+      "queueWaitMs": 0,
+      "gatewayQueueWaitMs": 0,
+      "lines": 5,
+      "scoresValid": true,
+      "polygonsValid": true,
+      "rawResponse": {
+        "detector": "PP-OCRv5_mobile_det",
+        "recognizer": "en_PP-OCRv5_mobile_rec",
+        "elapsed_ms": 239.7,
+        "queue_wait_ms": 0,
+        "predict_ms": 239.6,
+        "postprocess_ms": 0.1,
+        "line_count": 5,
+        "text": "SYNTHETIC OCR TEST\nSAMPLE ALPHA\nVitamin C 101 mg\nIngredients: ascorbic acid, cellulose.\nNOT A REAL PRODUCT",
+        "lines": [
+          {
+            "text": "SYNTHETIC OCR TEST",
+            "score": 0.995143,
+            "polygon": [
+              [
+                37,
+                36
+              ],
+              [
+                460,
+                36
+              ],
+              [
+                460,
+                82
+              ],
+              [
+                37,
+                82
+              ]
+            ]
+          },
+          {
+            "text": "SAMPLE ALPHA",
+            "score": 0.984378,
+            "polygon": [
+              [
+                36,
+                112
+              ],
+              [
+                332,
+                112
+              ],
+              [
+                332,
+                163
+              ],
+              [
+                36,
+                163
+              ]
+            ]
+          },
+          {
+            "text": "Vitamin C 101 mg",
+            "score": 0.990467,
+            "polygon": [
+              [
+                36,
+                180
+              ],
+              [
+                344,
+                191
+              ],
+              [
+                342,
+                246
+              ],
+              [
+                34,
+                235
+              ]
+            ]
+          },
+          {
+            "text": "Ingredients: ascorbic acid, cellulose.",
+            "score": 0.976177,
+            "polygon": [
+              [
+                34,
+                260
+              ],
+              [
+                655,
+                256
+              ],
+              [
+                655,
+                316
+              ],
+              [
+                35,
+                320
+              ]
+            ]
+          },
+          {
+            "text": "NOT A REAL PRODUCT",
+            "score": 0.991296,
+            "polygon": [
+              [
+                35,
+                338
+              ],
+              [
+                463,
+                338
+              ],
+              [
+                463,
+                391
+              ],
+              [
+                35,
+                391
+              ]
+            ]
+          }
+        ],
+        "request_id": "3524bf82e047",
+        "worker_pid": 19416,
+        "http_total_ms": 246.9,
+        "backend_port": 18081,
+        "gateway_queue_wait_ms": 0,
+        "gateway_total_ms": 250.7,
+        "gateway_attempts": [
+          {
+            "attempt": 1,
+            "backend_port": 18081,
+            "elapsed_ms": 250.7,
+            "status": 200
+          }
+        ]
+      }
+    },
+    {
+      "label": "BRAVO",
+      "requestSha256": "4ebbdfd77323914a630c5de12fd6e371dd8bb325fc0136c9917c56ebbf7f0b9c",
+      "responseSha256": "a91b9784fe12f74ac5155a7b1d872ac8b7ad5388c7acc31544e737a0c014d652",
+      "exactTextMatch": true,
+      "requestId": "73e6c871fd3d",
+      "workerPid": 19532,
+      "backendPort": 18082,
+      "gatewayAttemptCount": 1,
+      "queueWaitMs": 0,
+      "gatewayQueueWaitMs": 0,
+      "lines": 5,
+      "scoresValid": true,
+      "polygonsValid": true,
+      "rawResponse": {
+        "detector": "PP-OCRv5_mobile_det",
+        "recognizer": "en_PP-OCRv5_mobile_rec",
+        "elapsed_ms": 452.1,
+        "queue_wait_ms": 0,
+        "predict_ms": 451.9,
+        "postprocess_ms": 0.1,
+        "line_count": 5,
+        "text": "SYNTHETIC OCR TEST\nSAMPLE BRAVO\nVitamin C 202 mg\nIngredients: ascorbic acid, cellulose.\nNOT A REAL PRODUCT",
+        "lines": [
+          {
+            "text": "SYNTHETIC OCR TEST",
+            "score": 0.998105,
+            "polygon": [
+              [
+                37,
+                35
+              ],
+              [
+                460,
+                35
+              ],
+              [
+                460,
+                82
+              ],
+              [
+                37,
+                82
+              ]
+            ]
+          },
+          {
+            "text": "SAMPLE BRAVO",
+            "score": 0.999843,
+            "polygon": [
+              [
+                34,
+                110
+              ],
+              [
+                339,
+                110
+              ],
+              [
+                339,
+                167
+              ],
+              [
+                34,
+                167
+              ]
+            ]
+          },
+          {
+            "text": "Vitamin C 202 mg",
+            "score": 0.999597,
+            "polygon": [
+              [
+                34,
+                181
+              ],
+              [
+                345,
+                189
+              ],
+              [
+                344,
+                246
+              ],
+              [
+                33,
+                238
+              ]
+            ]
+          },
+          {
+            "text": "Ingredients: ascorbic acid, cellulose.",
+            "score": 0.976177,
+            "polygon": [
+              [
+                34,
+                260
+              ],
+              [
+                655,
+                256
+              ],
+              [
+                655,
+                316
+              ],
+              [
+                35,
+                320
+              ]
+            ]
+          },
+          {
+            "text": "NOT A REAL PRODUCT",
+            "score": 0.991296,
+            "polygon": [
+              [
+                35,
+                338
+              ],
+              [
+                463,
+                338
+              ],
+              [
+                463,
+                391
+              ],
+              [
+                35,
+                391
+              ]
+            ]
+          }
+        ],
+        "request_id": "73e6c871fd3d",
+        "worker_pid": 19532,
+        "http_total_ms": 456.4,
+        "backend_port": 18082,
+        "gateway_queue_wait_ms": 0,
+        "gateway_total_ms": 464.9,
+        "gateway_attempts": [
+          {
+            "attempt": 1,
+            "backend_port": 18082,
+            "elapsed_ms": 464.9,
+            "status": 200
+          }
+        ]
+      }
+    },
+    {
+      "label": "CHARLIE",
+      "requestSha256": "05384ada0c1586f55282a6504127fc1032e0b1431ee7756e18c9d29a4e4533af",
+      "responseSha256": "c512b09f19f12e939632d28625e012989ea162f3b60b43f6f75f185edceb62b0",
+      "exactTextMatch": true,
+      "requestId": "ac145cfb59ac",
+      "workerPid": 8800,
+      "backendPort": 18083,
+      "gatewayAttemptCount": 1,
+      "queueWaitMs": 0,
+      "gatewayQueueWaitMs": 0,
+      "lines": 5,
+      "scoresValid": true,
+      "polygonsValid": true,
+      "rawResponse": {
+        "detector": "PP-OCRv5_mobile_det",
+        "recognizer": "en_PP-OCRv5_mobile_rec",
+        "elapsed_ms": 450.5,
+        "queue_wait_ms": 0,
+        "predict_ms": 450.4,
+        "postprocess_ms": 0.1,
+        "line_count": 5,
+        "text": "SYNTHETIC OCR TEST\nSAMPLE CHARLIE\nVitamin C 303 mg\nIngredients: ascorbic acid, cellulose.\nNOT A REAL PRODUCT",
+        "lines": [
+          {
+            "text": "SYNTHETIC OCR TEST",
+            "score": 0.998125,
+            "polygon": [
+              [
+                37,
+                36
+              ],
+              [
+                460,
+                36
+              ],
+              [
+                460,
+                83
+              ],
+              [
+                37,
+                83
+              ]
+            ]
+          },
+          {
+            "text": "SAMPLE CHARLIE",
+            "score": 0.998544,
+            "polygon": [
+              [
+                36,
+                110
+              ],
+              [
+                370,
+                112
+              ],
+              [
+                370,
+                167
+              ],
+              [
+                35,
+                165
+              ]
+            ]
+          },
+          {
+            "text": "Vitamin C 303 mg",
+            "score": 0.999857,
+            "polygon": [
+              [
+                35,
+                180
+              ],
+              [
+                345,
+                190
+              ],
+              [
+                343,
+                247
+              ],
+              [
+                33,
+                237
+              ]
+            ]
+          },
+          {
+            "text": "Ingredients: ascorbic acid, cellulose.",
+            "score": 0.974136,
+            "polygon": [
+              [
+                34,
+                260
+              ],
+              [
+                655,
+                257
+              ],
+              [
+                655,
+                317
+              ],
+              [
+                35,
+                320
+              ]
+            ]
+          },
+          {
+            "text": "NOT A REAL PRODUCT",
+            "score": 0.99344,
+            "polygon": [
+              [
+                35,
+                339
+              ],
+              [
+                463,
+                339
+              ],
+              [
+                463,
+                392
+              ],
+              [
+                35,
+                392
+              ]
+            ]
+          }
+        ],
+        "request_id": "ac145cfb59ac",
+        "worker_pid": 8800,
+        "http_total_ms": 454.8,
+        "backend_port": 18083,
+        "gateway_queue_wait_ms": 0,
+        "gateway_total_ms": 462.6,
+        "gateway_attempts": [
+          {
+            "attempt": 1,
+            "backend_port": 18083,
+            "elapsed_ms": 462.5,
+            "status": 200
+          }
+        ]
+      }
+    },
+    {
+      "label": "DELTA",
+      "requestSha256": "f94d5fa60a04c9c970f65b4cb1498a638567a88735a48d7c41883a921edd069c",
+      "responseSha256": "1e02b5fdd48c0385716c1deca188971b7eea4857eca36917caf6e614ef2649ef",
+      "exactTextMatch": true,
+      "requestId": "c2662d68bda4",
+      "workerPid": 19416,
+      "backendPort": 18081,
+      "gatewayAttemptCount": 1,
+      "queueWaitMs": 0,
+      "gatewayQueueWaitMs": 0,
+      "lines": 5,
+      "scoresValid": true,
+      "polygonsValid": true,
+      "rawResponse": {
+        "detector": "PP-OCRv5_mobile_det",
+        "recognizer": "en_PP-OCRv5_mobile_rec",
+        "elapsed_ms": 227,
+        "queue_wait_ms": 0,
+        "predict_ms": 226.8,
+        "postprocess_ms": 0.2,
+        "line_count": 5,
+        "text": "SYNTHETIC OCR TEST\nSAMPLE DELTA\nVitamin C 404 mg\nIngredients: ascorbic acid, cellulose.\nNOT A REAL PRODUCT",
+        "lines": [
+          {
+            "text": "SYNTHETIC OCR TEST",
+            "score": 0.995143,
+            "polygon": [
+              [
+                37,
+                36
+              ],
+              [
+                460,
+                36
+              ],
+              [
+                460,
+                82
+              ],
+              [
+                37,
+                82
+              ]
+            ]
+          },
+          {
+            "text": "SAMPLE DELTA",
+            "score": 0.975997,
+            "polygon": [
+              [
+                35,
+                111
+              ],
+              [
+                328,
+                111
+              ],
+              [
+                328,
+                165
+              ],
+              [
+                35,
+                165
+              ]
+            ]
+          },
+          {
+            "text": "Vitamin C 404 mg",
+            "score": 0.972251,
+            "polygon": [
+              [
+                36,
+                181
+              ],
+              [
+                344,
+                190
+              ],
+              [
+                343,
+                244
+              ],
+              [
+                34,
+                235
+              ]
+            ]
+          },
+          {
+            "text": "Ingredients: ascorbic acid, cellulose.",
+            "score": 0.976177,
+            "polygon": [
+              [
+                34,
+                260
+              ],
+              [
+                655,
+                256
+              ],
+              [
+                655,
+                316
+              ],
+              [
+                35,
+                320
+              ]
+            ]
+          },
+          {
+            "text": "NOT A REAL PRODUCT",
+            "score": 0.991296,
+            "polygon": [
+              [
+                35,
+                338
+              ],
+              [
+                463,
+                338
+              ],
+              [
+                463,
+                391
+              ],
+              [
+                35,
+                391
+              ]
+            ]
+          }
+        ],
+        "request_id": "c2662d68bda4",
+        "worker_pid": 19416,
+        "http_total_ms": 230.8,
+        "backend_port": 18081,
+        "gateway_queue_wait_ms": 0,
+        "gateway_total_ms": 235.8,
+        "gateway_attempts": [
+          {
+            "attempt": 1,
+            "backend_port": 18081,
+            "elapsed_ms": 235.7,
+            "status": 200
+          }
+        ]
+      }
+    },
+    {
+      "label": "ECHO",
+      "requestSha256": "7ee74d4be45d3033071eef4936088547b7476789a835df4f615726dc3a75db33",
+      "responseSha256": "bbdc8601442336d5807e6abd1838564367d811edf2eaa59f278645a22655c90d",
+      "exactTextMatch": true,
+      "requestId": "6afb3d9f25c8",
+      "workerPid": 20096,
+      "backendPort": 18084,
+      "gatewayAttemptCount": 1,
+      "queueWaitMs": 0,
+      "gatewayQueueWaitMs": 0,
+      "lines": 5,
+      "scoresValid": true,
+      "polygonsValid": true,
+      "rawResponse": {
+        "detector": "PP-OCRv5_mobile_det",
+        "recognizer": "en_PP-OCRv5_mobile_rec",
+        "elapsed_ms": 460.8,
+        "queue_wait_ms": 0,
+        "predict_ms": 460.7,
+        "postprocess_ms": 0.1,
+        "line_count": 5,
+        "text": "SYNTHETIC OCR TEST\nSAMPLE ECHO\nVitamin C 505 mg\nIngredients: ascorbic acid, cellulose.\nNOT A REAL PRODUCT",
+        "lines": [
+          {
+            "text": "SYNTHETIC OCR TEST",
+            "score": 0.997806,
+            "polygon": [
+              [
+                36,
+                36
+              ],
+              [
+                460,
+                34
+              ],
+              [
+                460,
+                81
+              ],
+              [
+                37,
+                84
+              ]
+            ]
+          },
+          {
+            "text": "SAMPLE ECHO",
+            "score": 0.998859,
+            "polygon": [
+              [
+                35,
+                111
+              ],
+              [
+                317,
+                111
+              ],
+              [
+                317,
+                166
+              ],
+              [
+                35,
+                166
+              ]
+            ]
+          },
+          {
+            "text": "Vitamin C 505 mg",
+            "score": 0.972547,
+            "polygon": [
+              [
+                36,
+                181
+              ],
+              [
+                344,
+                190
+              ],
+              [
+                343,
+                244
+              ],
+              [
+                34,
+                235
+              ]
+            ]
+          },
+          {
+            "text": "Ingredients: ascorbic acid, cellulose.",
+            "score": 0.984527,
+            "polygon": [
+              [
+                35,
+                261
+              ],
+              [
+                654,
+                257
+              ],
+              [
+                654,
+                314
+              ],
+              [
+                36,
+                318
+              ]
+            ]
+          },
+          {
+            "text": "NOT A REAL PRODUCT",
+            "score": 0.999573,
+            "polygon": [
+              [
+                35,
+                340
+              ],
+              [
+                462,
+                338
+              ],
+              [
+                462,
+                388
+              ],
+              [
+                36,
+                390
+              ]
+            ]
+          }
+        ],
+        "request_id": "6afb3d9f25c8",
+        "worker_pid": 20096,
+        "http_total_ms": 464.9,
+        "backend_port": 18084,
+        "gateway_queue_wait_ms": 0,
+        "gateway_total_ms": 470.7,
+        "gateway_attempts": [
+          {
+            "attempt": 1,
+            "backend_port": 18084,
+            "elapsed_ms": 470.7,
+            "status": 200
+          }
+        ]
+      }
+    }
+  ],
+  "scope": {
+    "tested": "legacy OCR endpoint directly using native HTTP test harness",
+    "newV3AdapterAccepted": false,
+    "newV3WorkerTested": false,
+    "productionChanges": false,
+    "r2OrDatabaseWrites": false,
+    "serviceInternalRetryPolicyAudited": false,
+    "maximumCapacityEstablished": false
+  }
+}

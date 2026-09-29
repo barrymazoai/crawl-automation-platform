@@ -61,8 +61,8 @@ Every service is started by hand; nothing starts at boot or login. Code reaches 
 | Phase | Content | Status |
 |---|---|---|
 | 1 | Guardrails: ESLint, Prettier, dependency-cruiser, jscpd, lefthook, CI, `test:v3` | Done |
-| 2 | `packages/platform` | Next |
-| 3 | `packages/app` + `apps/api` (tRPC on Hono) + `apps/cli` | |
+| 2 | `packages/platform`: config, logger, database, Temporal client, error registry. Storage and fetch move in with the channels in phase 5. | Done |
+| 3 | `packages/app` + `apps/api` (tRPC on Hono) + `apps/cli` | Next |
 | 4 | Run lifecycle: cancel, permit and guard release on every ending, resource kinds | |
 | 5 | Channel interface; Swanson, then Amazon, GNC, DTC; Costco and Whole Foods | |
 | 6 | Grouped worker processes, generated job list, one deploy command, old scripts archived | |
