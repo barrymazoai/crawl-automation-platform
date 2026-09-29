@@ -15,6 +15,8 @@
   },
   "dependencies": {
     "@crawl-automation/channels-core": "workspace:*",
+    "@crawl-automation/v3-acquisition": "workspace:*",
+    "@crawl-automation/v3-artifacts": "workspace:*",
     "@crawl-automation/v3-channels": "workspace:*",
     "@crawl-automation/v3-contracts": "workspace:*"
   },

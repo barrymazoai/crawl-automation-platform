@@ -48,6 +48,13 @@ export interface ParsedProduct<Rendered = unknown> {
   facts: FactsText;
 }
 
+/** How a channel's pages may be fetched over HTTP: only from these origins, within these limits. */
+export interface HttpPolicy {
+  origins: readonly string[];
+  maxBytes: number;
+  timeoutMs: number;
+}
+
 /**
  * Everything specific to one website. The shared pipeline asks the adapter; the adapter never talks to the
  * database, Temporal or permits, and never imports another channel.
@@ -56,6 +63,8 @@ export interface ChannelAdapter<Rendered = unknown> {
   readonly id: ChannelId;
   /** The capture modes this website supports, preferred first. */
   readonly captureModes: readonly CaptureMode[];
+  /** Required when `captureModes` includes `http`. */
+  readonly httpPolicy?: HttpPolicy;
   /** Normalises a product URL and returns its identity; refuses URLs of other sites. */
   productAddress(url: string): ProductAddress;
   /** Reads one archived product page. Throws a channel error code when the page is not a readable product. */

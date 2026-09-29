@@ -6,6 +6,7 @@ import type {
   ProductAddress,
 } from "@crawl-automation/channels-core";
 import {
+  SWANSON_HTTP_POLICY,
   factsTextComplete,
   factsTextFromHtml,
   parseSwansonRenderedProduct,
@@ -55,6 +56,7 @@ function factsOf(evidence: ChannelProductEvidence): FactsText {
 export const swansonAdapter: ChannelAdapter<SwansonRenderedProduct> = {
   id: "swanson",
   captureModes: ["http"],
+  httpPolicy: SWANSON_HTTP_POLICY,
   productAddress,
   parseProduct(page: FetchedPage): ParsedProduct<SwansonRenderedProduct> {
     const rendered = parseSwansonStaticHtml(page.html, page.url, page.capturedAt);

@@ -702,6 +702,12 @@ importers:
       '@crawl-automation/platform':
         specifier: workspace:*
         version: link:../../platform
+      '@crawl-automation/v3-acquisition':
+        specifier: workspace:*
+        version: link:../../v3-acquisition
+      '@crawl-automation/v3-artifacts':
+        specifier: workspace:*
+        version: link:../../v3-artifacts
       '@crawl-automation/v3-contracts':
         specifier: workspace:*
         version: link:../../v3-contracts
@@ -724,6 +730,12 @@ importers:
       '@crawl-automation/channels-core':
         specifier: workspace:*
         version: link:../core
+      '@crawl-automation/v3-acquisition':
+        specifier: workspace:*
+        version: link:../../v3-acquisition
+      '@crawl-automation/v3-artifacts':
+        specifier: workspace:*
+        version: link:../../v3-artifacts
       '@crawl-automation/v3-channels':
         specifier: workspace:*
         version: link:../../v3-channels
