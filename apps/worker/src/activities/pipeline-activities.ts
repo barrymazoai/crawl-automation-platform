@@ -1,6 +1,6 @@
 import {
   FileRequestSchema,
-  FormulaKeySchema,
+  FormulaRequestSchema,
   LabelHandoffRequestSchema,
   ProductPipelineInputSchema,
   ReviewRequestSchema,
@@ -31,8 +31,11 @@ function callingExecution(parts: WorkerParts) {
 export function pipelineActivities(parts: WorkerParts) {
   const handlers = {
     captureProduct: (raw: unknown, signal: AbortSignal) =>
-      parts.productCapture.capture(ProductPipelineInputSchema.parse(raw), signal),
-    findKnownFormula: (raw: unknown) => parts.formulaIndex.findKnown(FormulaKeySchema.parse(raw)),
+      parts.pipelineCapture.capture(ProductPipelineInputSchema.parse(raw), signal),
+    findKnownFormula: (raw: unknown) => {
+      const { runId: _runId, ...key } = FormulaRequestSchema.parse(raw);
+      return parts.formulaIndex.findKnown(key);
+    },
     prepareLabelHandoff: (raw: unknown, signal: AbortSignal) => {
       const request = LabelHandoffRequestSchema.parse(raw);
       return parts.labelHandoffs.prepare(

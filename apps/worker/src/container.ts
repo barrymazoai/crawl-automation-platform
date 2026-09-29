@@ -1,9 +1,15 @@
 import {
   PostgresExecutionRegistry,
   PostgresFormulaIndex,
+  PostgresListingStates,
   PostgresReviewLedger,
 } from "@crawl-automation/adapters";
-import { LabelHandoffs, ProductReviews } from "@crawl-automation/app";
+import {
+  LabelHandoffs,
+  PipelineCapture,
+  ProductReviews,
+  recordSighting,
+} from "@crawl-automation/app";
 import { swansonAdapter } from "@crawl-automation/channel-swanson";
 import {
   ChannelRegistry,
@@ -11,15 +17,16 @@ import {
   ProductCapture,
   ProductFiles,
   ProductSourcePlans,
+  ScraperApiPages,
 } from "@crawl-automation/channels-core";
 import {
   createDatabase,
   createLogger,
+  ScraperApiClient,
   type Database,
   type Logger,
 } from "@crawl-automation/platform";
 import {
-  createHttpRoute,
   DirectHttpsTransport,
   FileEvidence,
   SystemHttpsTransport,
@@ -52,6 +59,7 @@ export interface WorkerParts {
   reviewLedger: PostgresReviewLedger;
   channelPlans: ChannelProductPlans;
   productCapture: ProductCapture;
+  pipelineCapture: PipelineCapture;
   productFiles: ProductFiles;
   formulaIndex: PostgresFormulaIndex;
   labelHandoffs: LabelHandoffs;
@@ -107,6 +115,12 @@ function registerStores(container: Parts): void {
 function registerServices(container: Parts): void {
   container.register({
     productCapture: asFunction(captureService).singleton(),
+    // A revisit that finds the listing gone or superseded records that sighting instead of a Review.
+    pipelineCapture: asFunction(({ productCapture, database }: WorkerParts) => {
+      const listingStates = new PostgresListingStates(database);
+      const listings = { record: (raw: unknown) => recordSighting(listingStates, raw) };
+      return new PipelineCapture({ capture: productCapture, listings });
+    }).singleton(),
     productFiles: asFunction(filesService).singleton(),
     labelHandoffs: asFunction(
       ({ registry, channelPlans, publication, database, config }: WorkerParts) =>
@@ -127,12 +141,23 @@ function registerServices(container: Parts): void {
 
 function captureService(parts: WorkerParts): ProductCapture {
   const { config, registry, publication, fileTransport } = parts;
-  const route = createHttpRoute(config.capture.route, { scraperApi: config.capture.scraperApi });
+  const { route, scraperApi, channels } = config.capture;
+  const pages = new ScraperApiPages(new ScraperApiClient(scraperApi), {
+    routeId: route.routeId,
+    egressId: route.egressId,
+    defaults: {
+      countryCode: route.countryCode,
+      sessionNumber: route.sessionNumber,
+      render: route.responseMode === "rendered-html",
+      premium: false,
+    },
+    channels,
+  });
   // Planned image downloads are bound to the file transport's egress.
   const settings = { ...config.plan, egressId: fileTransport.egressId };
   return new ProductCapture({
     registry,
-    http: new HttpCapture(route),
+    http: new HttpCapture(pages),
     publication,
     sourcePlans: new ProductSourcePlans(publication, settings),
   });

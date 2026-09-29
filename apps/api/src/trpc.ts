@@ -1,6 +1,7 @@
 import type {
   BrandService,
   FleetService,
+  ListingStateService,
   ProductService,
   QueueService,
   ResourceService,
@@ -18,6 +19,7 @@ export interface ApiContext {
   products: ProductService;
   resources: ResourceService;
   fleet: FleetService;
+  listingStates: ListingStateService;
 }
 
 type TrpcCode = TRPCError["code"];

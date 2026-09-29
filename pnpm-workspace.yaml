@@ -17,6 +17,7 @@ catalog:
   '@tanstack/react-query': ^5.72.2
   '@tanstack/react-router': ^1.120.3
   '@types/node': ^22.13.14
+  '@types/html-to-text': ^9.0.4
   '@types/archiver': ^6.0.3
   '@types/unzipper': ^0.10.11
   '@types/pg': ^8.15.5
@@ -31,6 +32,7 @@ catalog:
   antd: ^5.27.5
   drizzle-orm: ^0.44.5
   hono: ^4.8.2
+  html-to-text: ^10.0.1
   ipaddr.js: ^2.5.0
   lucide-react: ^0.546.0
   openapi-fetch: ^0.17.0
@@ -43,6 +45,7 @@ catalog:
   tailwindcss: ^4.1.18
   tsdown: ^0.15.4
   tsx: ^4.20.5
+  undici: ^8.11.2
   typescript: ^5.8.3
   vite: ^6.3.5
   vitest: ^3.2.4

@@ -1,8 +1,11 @@
 import { isAbsolute } from "node:path";
 import type { LabelSettings } from "@crawl-automation/app";
+import { CHANNEL_IDS } from "@crawl-automation/channels-core";
 import {
   DatabaseConfigSchema,
   LogConfigSchema,
+  ScraperApiAccessSchema,
+  ScraperApiOptionChoicesSchema,
   TemporalConfigSchema,
   loadConfig,
 } from "@crawl-automation/platform";
@@ -40,13 +43,15 @@ export const WorkerConfigSchema = z.strictObject({
     /** Local copies of R2 evidence already read. */
     cacheRoot: absolutePath,
   }),
-  /** Product pages as static HTML through ScraperAPI; the key stays in this private file. */
+  /** Product pages through ScraperAPI; the key stays in this private file. */
   capture: z.strictObject({
-    route: ScraperApiRouteSchema,
-    scraperApi: z.strictObject({
-      apiKey: z.string().min(8).max(512),
-      allowedOrigins: z.array(z.url()).min(1).max(32),
+    /** The route's name, egress and default options (country, session; `rendered-html` means render). */
+    route: ScraperApiRouteSchema.refine((route) => route.responseMode !== "binary", {
+      message: "Product pages are HTML",
     }),
+    scraperApi: ScraperApiAccessSchema,
+    /** A channel's own ScraperAPI options over the route's, e.g. `{ "gnc": { "premium": true } }`. */
+    channels: z.partialRecord(z.enum(CHANNEL_IDS), ScraperApiOptionChoicesSchema).default({}),
   }),
   /** How image hosts are resolved: pinned by this worker (`direct`) or by the system (`system`). */
   files: z.strictObject({ resolve: z.enum(["direct", "system"]) }).default({ resolve: "direct" }),

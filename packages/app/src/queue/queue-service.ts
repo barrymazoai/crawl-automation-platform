@@ -2,6 +2,7 @@ import type { Logger } from "@crawl-automation/platform";
 import type {
   AddToQueue,
   PauseQueue,
+  QueueChannel,
   QueueItemsQuery,
   QueueItemView,
   QueueLimits,
@@ -10,48 +11,61 @@ import type {
   Requeue,
 } from "./queue-model.js";
 
+export interface QueueServiceDeps {
+  /** Amazon's existing queue tables (amazon_queue_*), kept as they are. */
+  amazon: QueueStore;
+  /** The shared queue tables every other channel uses. */
+  channels: QueueStore;
+  log: Logger;
+}
+
 /**
- * The product queue: add products, pause and resume intake, set how many run at once, and queue finished
- * products again. The queue runner process picks the work up; nothing here starts a workflow directly.
+ * The product queue of every channel: add products, pause and resume intake, set how many run at once, and queue
+ * finished products again. The queue dispatcher starts the work; nothing here starts a workflow directly.
  */
 export class QueueService {
-  constructor(private readonly deps: { queue: QueueStore; log: Logger }) {}
+  constructor(private readonly deps: QueueServiceDeps) {}
 
-  status(): Promise<QueueStatus> {
-    return this.deps.queue.status();
+  status(channel: QueueChannel): Promise<QueueStatus> {
+    return this.store(channel).status(channel);
   }
 
   items(query: QueueItemsQuery): Promise<QueueItemView[]> {
-    return this.deps.queue.items(query);
+    return this.store(query.channel).items(query);
   }
 
   async add(input: AddToQueue): Promise<{ added: number }> {
-    const result = await this.deps.queue.add(input);
-    this.deps.log.info({ campaignId: input.campaignId, ...result }, "products queued");
+    const result = await this.store(input.channel).add(input);
+    const list = input.channel === "amazon" ? input.campaignId : input.batchId;
+    this.deps.log.info({ channel: input.channel, list, ...result }, "products queued");
     return result;
   }
 
   async setLimits(limits: QueueLimits): Promise<QueueStatus> {
-    await this.deps.queue.setLimits(limits);
+    await this.store(limits.channel).setLimits(limits);
     this.deps.log.info(limits, "queue limits set");
-    return this.deps.queue.status();
+    return this.status(limits.channel);
   }
 
   async pause(options: PauseQueue): Promise<QueueStatus> {
-    await this.deps.queue.pause(options);
+    await this.store(options.channel).pause(options);
     this.deps.log.info(options, options.force ? "queue stopping" : "queue draining");
-    return this.deps.queue.status();
+    return this.status(options.channel);
   }
 
-  async resume(): Promise<QueueStatus> {
-    await this.deps.queue.resume();
-    this.deps.log.info("queue resumed");
-    return this.deps.queue.status();
+  async resume(channel: QueueChannel): Promise<QueueStatus> {
+    await this.store(channel).resume(channel);
+    this.deps.log.info({ channel }, "queue resumed");
+    return this.status(channel);
   }
 
   async requeue(input: Requeue): Promise<{ requeued: number }> {
-    const result = await this.deps.queue.requeue(input);
-    this.deps.log.info(result, "products queued again");
+    const result = await this.store(input.channel).requeue(input);
+    this.deps.log.info({ channel: input.channel, ...result }, "products queued again");
     return result;
+  }
+
+  private store(channel: QueueChannel): QueueStore {
+    return channel === "amazon" ? this.deps.amazon : this.deps.channels;
   }
 }

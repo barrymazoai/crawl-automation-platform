@@ -2,7 +2,13 @@ import { describe, expect, it, vi } from "vitest";
 import { ReviewService, type ReviewStore } from "./review-service.js";
 
 function storeWith(review: unknown): ReviewStore {
-  return { list: vi.fn(), summary: vi.fn(), inspect: vi.fn(), find: vi.fn(async () => review) };
+  return {
+    list: vi.fn(),
+    summary: vi.fn(),
+    inspect: vi.fn(),
+    find: vi.fn(async () => review),
+    read: vi.fn(async () => null),
+  };
 }
 
 describe("ReviewService.get", () => {

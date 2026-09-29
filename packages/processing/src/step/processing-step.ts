@@ -1,8 +1,7 @@
 import type { AppError } from "@crawl-automation/platform";
 import type { ReviewRecord } from "@crawl-automation/v3-contracts";
 import type { PrivateReviewReader, ReviewWriter } from "@crawl-automation/v3-review";
-import type { ProcessingInput, ResultFacts, StoredRecord } from "../results/result-kind.js";
-import type { ResultStore } from "../results/result-store.js";
+import type { ResultFacts } from "../results/result-kind.js";
 import { recordStepReview } from "./step-review.js";
 import type { ExecutionFact } from "./step-failure.js";
 
@@ -20,12 +19,16 @@ export interface StepFailure {
   fact: ExecutionFact;
 }
 
-export interface StepDeps<
-  TInput extends ProcessingInput,
-  TOutput,
-  TRecord extends StoredRecord<TInput>,
-> {
-  results: ResultStore<TInput, TOutput, TRecord>;
+/** What the step needs from a result store (the shared ResultStore, or a kind's own when its records differ). */
+export interface StepResults<TInput, TOutput, TRecord> {
+  inspect(input: TInput, signal: AbortSignal): Promise<ResultFacts<TRecord>>;
+  capture(input: TInput, output: TOutput, signal: AbortSignal): Promise<void>;
+  uploadMissing(input: TInput, signal: AbortSignal): Promise<ResultFacts<TRecord>>;
+  register(input: TInput, signal: AbortSignal): Promise<ResultFacts<TRecord>>;
+}
+
+export interface StepDeps<TInput, TOutput, TRecord> {
+  results: StepResults<TInput, TOutput, TRecord>;
   reviews: ReviewWriter & PrivateReviewReader;
   /** "register" writes the ledger; "upload-only" (cloud mode) leaves registration to the receipt step. */
   mode?: "register" | "upload-only";
@@ -39,13 +42,7 @@ const RETENTION_MS = 10_000;
  * service once, then keep, upload and register the result. Any failure becomes a Review recording whether the
  * service ran; nothing is retried. Subclasses supply the service call and their own records.
  */
-export abstract class ProcessingStep<
-  TInput extends ProcessingInput,
-  TOutput,
-  TRecord extends StoredRecord<TInput>,
-  TOutcome,
-  TEvidence,
-> {
+export abstract class ProcessingStep<TInput, TOutput, TRecord, TOutcome, TEvidence> {
   constructor(private readonly stepDeps: StepDeps<TInput, TOutput, TRecord>) {}
 
   /** The task, valid and for exactly the service this worker runs. */

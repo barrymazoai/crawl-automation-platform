@@ -1,4 +1,4 @@
-import { ProductListSchema } from "@crawl-automation/app";
+import { ProductListSchema, ReviewRecheckInputSchema } from "@crawl-automation/app";
 import { ReviewListQuerySchema } from "@crawl-automation/v3-contracts";
 import { z } from "zod";
 import { procedure, router } from "../trpc.js";
@@ -19,6 +19,16 @@ export const reviewsRouter = router({
   inspect: procedure
     .input(ReviewIdSchema)
     .query(({ ctx, input }) => ctx.reviews.inspect(input.reviewId)),
+
+  /** The full Review record with its evidence files from R2 (raw content; private network only). */
+  evidence: procedure
+    .input(ReviewIdSchema)
+    .query(({ ctx, input }) => ctx.reviews.evidence(input.reviewId)),
+
+  /** Whether stored model answers pass today's decoding rules. Reads only: no model call, no writes. */
+  recheck: procedure
+    .input(ReviewRecheckInputSchema)
+    .query(({ ctx, input }) => ctx.reviews.recheck(input)),
 });
 
 export const productsRouter = router({

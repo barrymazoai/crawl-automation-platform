@@ -33,7 +33,8 @@ export function parseRecord(raw: unknown): ReviewRecord {
         throw new ReviewError("REVIEW.INVALID_RECORD");
     }
 }
-// Explicit allowlist: neither raw errors, candidate bytes, nor inspection inputs enter HTTP/logs.
+// Explicit allowlist for list/get: neither raw errors, candidate bytes, nor inspection inputs enter these answers or
+// logs. The full record is returned only by the private-network reviews.evidence procedure (owner decision 2026-09-29).
 export function publicRecord(record: ReviewRecord, registeredAt: string) {
     return { reviewId: record.reviewId, occurredAt: record.occurredAt, registeredAt,
         failure: record.failure, observation: record.observation, recordHash: digest(record),

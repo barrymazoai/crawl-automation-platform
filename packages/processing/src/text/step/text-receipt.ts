@@ -10,6 +10,7 @@ import {
 } from "@crawl-automation/v3-contracts";
 import {
   ProcessingReceipt,
+  registeredInputIs,
   type ReceiptDeps,
   type ReceiptFailureReason,
   type ReceiptKind,
@@ -31,6 +32,8 @@ const textReceiptKind: ReceiptKind<TextInput, TextRecord, TextReceiptOutcome> = 
     return { input: parseTextInput(request.input, hashText), outcome: request.outcome };
   },
   parseRecord: (raw) => TextRecordSchema.parse(raw),
+  task: (input) => input,
+  ownsRegistration: registeredInputIs,
   reviewedStage: "codex.text",
   observation: textObservation,
   ownsReview: () => true,

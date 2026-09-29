@@ -6,7 +6,6 @@ import {
   PostgresDeliveryScan,
   PostgresProductRunStore,
   PostgresProductStore,
-  PostgresQueueStore,
   PostgresResourceStore,
   PostgresReviewStore,
   PostgresRunStore,
@@ -23,6 +22,8 @@ import {
   ProductRuns,
   ProductService,
   QueueService,
+  type ListingStateService,
+  type QueueDispatcher,
   ResourceService,
   ReviewService,
   RunService,
@@ -39,6 +40,8 @@ import { swansonAdapter } from "@crawl-automation/channel-swanson";
 import { ChannelRegistry } from "@crawl-automation/channels-core";
 import { asFunction, asValue, createContainer, InjectionMode, type AwilixContainer } from "awilix";
 import type { ApiConfig } from "./config.js";
+import { evidenceReaders } from "./evidence-readers.js";
+import { listingStateService, queueDispatcher, queueService } from "./queue-parts.js";
 
 /** Everything the API is built from. Adapters are created once and shared. */
 export interface ApiParts {
@@ -57,7 +60,9 @@ export interface ApiParts {
   products: ProductService;
   resources: ResourceService;
   fleet: FleetService;
+  listingStates: ListingStateService;
   deliveryRunner: DeliveryRunner;
+  queueDispatcher: QueueDispatcher;
   cleanup: CleanupService;
 }
 
@@ -109,17 +114,12 @@ function registerServices(container: Parts): void {
           log: parts.log,
         }),
     ).singleton(),
-    queue: asFunction(
-      (parts: ApiParts) =>
-        new QueueService({ queue: new PostgresQueueStore(parts.database), log: parts.log }),
-    ).singleton(),
+    queue: asFunction((parts: ApiParts) => queueService(parts.database, parts.log)).singleton(),
     brands: asFunction(
       (parts: ApiParts) =>
         new BrandService({ brands: new PostgresBrandStore(parts.database), log: parts.log }),
     ).singleton(),
-    reviews: asFunction(
-      (parts: ApiParts) => new ReviewService({ reviews: new PostgresReviewStore(parts.database) }),
-    ).singleton(),
+    reviews: asFunction(reviewService).singleton(),
     products: asFunction(
       (parts: ApiParts) =>
         new ProductService({ products: new PostgresProductStore(parts.database) }),
@@ -135,13 +135,26 @@ function registerServices(container: Parts): void {
     fleet: asFunction(
       (parts: ApiParts) => new FleetService({ source: new FleetStatusFiles(parts.config.fleet) }),
     ).singleton(),
+    listingStates: asFunction((parts: ApiParts) =>
+      listingStateService(parts.database, parts.queue),
+    ).singleton(),
   });
 }
 
-/** The background loops the API process runs: delivery of accepted runs, and cleanup of ended work. */
+/** The background loops the API process runs: delivery of accepted runs, the product queue, cleanup. */
 function registerLoops(container: Parts): void {
   container.register({
     deliveryRunner: asFunction(deliveryRunner).singleton(),
+    queueDispatcher: asFunction((parts: ApiParts) =>
+      queueDispatcher(
+        {
+          ...parts,
+          productRuns: productRuns(parts),
+          isPaused: () => exists(parts.config.delivery.pauseFile),
+        },
+        parts.config.queue.dispatcher,
+      ),
+    ).singleton(),
     cleanup: asFunction(
       (parts: ApiParts) =>
         new CleanupService({
@@ -162,6 +175,15 @@ function productRuns(parts: ApiParts): ProductRuns {
     registry: new ChannelRegistry([swansonAdapter]),
     targets: parts.config.pipeline,
   });
+}
+
+/** Reviews from the ledger; their evidence from R2 when the API has storage settings. */
+function reviewService(parts: ApiParts): ReviewService {
+  const reviews = new PostgresReviewStore(parts.database);
+  const storage = parts.config.storage;
+  return new ReviewService(
+    storage ? { reviews, evidence: evidenceReaders(storage).readers } : { reviews },
+  );
 }
 
 function deliveryCoordinator(parts: ApiParts): DeliveryCoordinator {

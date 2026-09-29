@@ -3,6 +3,7 @@ import { TRPCClientError } from "@trpc/client";
 import { Command } from "commander";
 import { createApiClient, type ApiClient } from "./client.js";
 import { registerBrandCommands } from "./commands/brands.js";
+import { registerListingCommands } from "./commands/listings.js";
 import { registerQueueCommands } from "./commands/queue.js";
 import { registerResourceCommands } from "./commands/resources.js";
 import { registerResultCommands } from "./commands/results.js";
@@ -18,6 +19,7 @@ registerQueueCommands(program, api);
 registerBrandCommands(program, api);
 registerResultCommands(program, api);
 registerResourceCommands(program, api);
+registerListingCommands(program, api);
 
 /** Shows an API error by its code, so the reason is clear without a stack trace. */
 function report(error: unknown): void {

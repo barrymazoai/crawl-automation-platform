@@ -43,6 +43,10 @@ export const appErrors = defineErrors({
     message: "This product is already linked to a different workflow.",
   },
   "REVIEW.NOT_FOUND": { category: "VALIDATION", message: "Review not found." },
+  "REVIEW.EVIDENCE_NOT_CONFIGURED": {
+    category: "RUNTIME",
+    message: "This API has no storage settings, so it cannot read Review evidence.",
+  },
   "QUEUE.IMPORT_CONFLICT": {
     category: "VALIDATION",
     message: "A product in this list is already queued with different details.",
@@ -54,6 +58,35 @@ export const appErrors = defineErrors({
   "QUEUE.REQUEUE_NOT_SETTLED": {
     category: "VALIDATION",
     message: "Only completed or Review products can be queued again.",
+  },
+  "QUEUE.SOURCE_CHANNEL_MISMATCH": {
+    category: "VALIDATION",
+    message: "A product's brand source does not exist or belongs to another channel.",
+  },
+  "QUEUE.RUN_FAILED": { category: "SCHEDULER", message: "The product run's workflow failed." },
+  "QUEUE.RUN_CANCELLED": { category: "SCHEDULER", message: "The product run was cancelled." },
+  "QUEUE.RUN_TERMINATED": { category: "SCHEDULER", message: "The product run was terminated." },
+  "QUEUE.RUN_TIMED_OUT": { category: "SCHEDULER", message: "The product run timed out." },
+  "QUEUE.RUN_REVIEW": { category: "PROCESSING", message: "The product ended in a Review." },
+  "QUEUE.OUTCOME_UNRECOGNIZED": {
+    category: "SCHEDULER",
+    message: "The product run completed with a result the queue does not recognize.",
+  },
+  "QUEUE.STOPPED_BEFORE_START": {
+    category: "SCHEDULER",
+    message: "The queue was stopped before this product's run started.",
+  },
+  "LISTING.OBSERVATION_CONFLICT": {
+    category: "ARTIFACT",
+    message: "A different listing observation is already recorded under this key.",
+  },
+  "LISTING.OBSERVED_ID_MISSING": {
+    category: "VALIDATION",
+    message: "A superseded listing must name the listing its page belongs to now.",
+  },
+  "LISTING.DELIVERY_NOT_CONFIGURED": {
+    category: "RUNTIME",
+    message: "Sending listing states to the product database is not enabled.",
   },
   "PERMIT.NOT_FOUND": { category: "VALIDATION", message: "Permit not found or already released." },
   "PERMIT.OWNER_RUNNING": {

@@ -52,6 +52,16 @@ export const CaptureResultSchema = z.discriminatedUnion("status", [
     factsComplete: z.boolean(),
   }),
   AcquisitionReviewSchema,
+  /** The revisit found the listing gone or superseded; the sighting is recorded and the product ends here. */
+  z.strictObject({
+    status: z.literal("listing"),
+    state: z.enum(["gone", "superseded"]),
+    operationId: ExecutionIdSchema,
+    observationId: z.string().regex(/^[a-f0-9]{64}$/),
+    listingId: z.string().min(1).max(200),
+    variantId: z.string().min(1).max(200).nullable(),
+    causeCode: z.string().min(1).max(120),
+  }),
 ]);
 export type CaptureResult = z.infer<typeof CaptureResultSchema>;
 
@@ -68,6 +78,10 @@ export const FormulaKeySchema = z.strictObject({
   variantId: z.string().min(1).max(200).nullable(),
 });
 export type FormulaKey = z.infer<typeof FormulaKeySchema>;
+
+/** The formula lookup's input: the key, and the run asking (so its log lines carry the run ID). */
+export const FormulaRequestSchema = FormulaKeySchema.extend({ runId: z.uuid() });
+export type FormulaRequest = z.infer<typeof FormulaRequestSchema>;
 
 export const LabelHandoffRequestSchema = z.strictObject({
   pipeline: ProductPipelineInputSchema,
@@ -92,7 +106,7 @@ export type ReviewRequest = z.infer<typeof ReviewRequestSchema>;
 /** The pipeline worker host's activities. Each validates its input with the schema above. */
 export interface PipelineActivities {
   captureProduct(input: ProductPipelineInput): Promise<unknown>;
-  findKnownFormula(key: FormulaKey): Promise<unknown>;
+  findKnownFormula(request: FormulaRequest): Promise<unknown>;
   prepareLabelHandoff(request: LabelHandoffRequest): Promise<ChannelSavedLabelWorkflowInput>;
   acquireProductFile(request: FileRequest): Promise<FileAcquireOutcome>;
   reviewProduct(request: ReviewRequest): Promise<AcquisitionReview>;

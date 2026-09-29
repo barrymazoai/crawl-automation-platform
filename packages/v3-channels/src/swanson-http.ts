@@ -17,7 +17,10 @@ const CHALLENGE = /<title>\s*(?:Just a moment|Attention Required)|id="challenge-
 /** Static product page -> the same projection the Ego reader produces: the shared DOM expression runs in a linkedom
  * document (checked on 2026-09-28: h1, canonical /p/<handle>, one product form and variant input, gallery, size radios
  * and the Product Facts section are all server-rendered). Scripts are removed so innerText is what a visitor reads. */
-export function parseSwansonStaticHtml(html: string, pageUrl: string, capturedAt: string): SwansonRenderedProduct {
+/** How an element's visible text is read from static HTML; the new channel adapters pass the shared html-to-text one. */
+export type StaticElementText = (element: { innerHTML: string }) => string;
+export function parseSwansonStaticHtml(html: string, pageUrl: string, capturedAt: string,
+  elementText: StaticElementText = staticInnerText as never): SwansonRenderedProduct {
   if (CHALLENGE.test(html)) throw new ChannelError("SWANSON.ACCESS_CHALLENGE");
   swansonProductAddress(pageUrl);
   const { document, HTMLElement, HTMLImageElement, HTMLAnchorElement, HTMLLinkElement, HTMLInputElement, HTMLMetaElement } = parseHTML(html);
@@ -36,7 +39,7 @@ export function parseSwansonStaticHtml(html: string, pageUrl: string, capturedAt
   define(HTMLInputElement.prototype, "checked", function () { return this.hasAttribute("checked"); });
   define(HTMLInputElement.prototype, "value", function () { return this.getAttribute("value") ?? ""; });
   // What a visitor reads: rows and paragraphs on their own lines (a DOM without layout joins them into one line).
-  define(HTMLElement.prototype, "innerText", function () { return staticInnerText(this as never); });
+  define(HTMLElement.prototype, "innerText", function () { return elementText(this as never); });
   let raw: Record<string, unknown>;
   try {
     raw = runInNewContext(swansonProductExpression, { document, URL, location: { href: pageUrl, origin: "https://www.swansonvitamins.com" },

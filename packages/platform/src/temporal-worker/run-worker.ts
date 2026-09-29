@@ -1,6 +1,8 @@
 import { NativeConnection, Worker, type WorkerOptions } from "@temporalio/worker";
 import type { TemporalConfig } from "../config/schemas.js";
+import type { Logger } from "../logger/create-logger.js";
 import { temporalConnectionOptions } from "../temporal/connect-temporal.js";
+import { installTemporalLogger } from "./temporal-logger.js";
 
 export interface WorkerSpec {
   taskQueue: string;
@@ -8,6 +10,8 @@ export interface WorkerSpec {
   workflowBundlePath?: string;
   activities: NonNullable<WorkerOptions["activities"]>;
   maxConcurrentActivities: number;
+  /** The process logger; the Temporal SDK's own lines then go through it too. */
+  log?: Logger;
 }
 
 export interface RunningWorker {
@@ -18,6 +22,9 @@ export interface RunningWorker {
 
 /** The one place that runs a Temporal worker: connects, polls one task queue, and stops on request. */
 export async function runWorker(config: TemporalConfig, spec: WorkerSpec): Promise<RunningWorker> {
+  if (spec.log) {
+    installTemporalLogger(spec.log);
+  }
   const { tls } = await temporalConnectionOptions(config);
   const connection = await NativeConnection.connect({
     address: config.address,

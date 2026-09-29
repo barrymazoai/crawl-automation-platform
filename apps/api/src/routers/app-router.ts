@@ -1,5 +1,6 @@
 import { procedure, router } from "../trpc.js";
 import { brandsRouter } from "./brands.js";
+import { listingStatesRouter } from "./listings.js";
 import { queueRouter } from "./queue.js";
 import { resourcesRouter } from "./resources.js";
 import { productsRouter, reviewsRouter } from "./results.js";
@@ -12,6 +13,7 @@ export const appRouter = router({
   reviews: reviewsRouter,
   products: productsRouter,
   resources: resourcesRouter,
+  listingStates: listingStatesRouter,
   /** Which workers are up, and whether the queue may start new work. */
   fleet: router({ status: procedure.query(({ ctx }) => ctx.fleet.status()) }),
 });

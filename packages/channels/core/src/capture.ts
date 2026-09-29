@@ -1,7 +1,10 @@
 import { channelErrors } from "./errors.js";
 
-/** How a page is fetched: through an HTTP provider (ScraperAPI) or a real browser (Ego). */
-export type CaptureMode = "http" | "browser";
+/**
+ * How a product page is fetched: only through ScraperAPI. A browser is used for brand scanning alone (Amazon Store
+ * pages, Whole Foods), never for product pages (docs/spark/2026-09-28-channel-brand-adapters-plan.md).
+ */
+export type CaptureMode = "http";
 
 /** What a limited resource is. A permit's kind must match the work it guards. */
 export type ResourceKind = "browser" | "http-lane" | "file-lane" | "model" | "ocr" | "cpu";
@@ -12,7 +15,7 @@ export interface CaptureLane {
   kind: ResourceKind;
 }
 
-const laneKindFor: Record<CaptureMode, ResourceKind> = { http: "http-lane", browser: "browser" };
+const laneKindFor: Record<CaptureMode, ResourceKind> = { http: "http-lane" };
 
 /** The permit kind a capture mode needs. */
 export function captureLaneKind(mode: CaptureMode): ResourceKind {

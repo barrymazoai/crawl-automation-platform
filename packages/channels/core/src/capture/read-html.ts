@@ -1,17 +1,15 @@
-import {
-  abortable,
-  permittedUrl,
-  requireCapability,
-  transportAddress,
-  type DnsResolver,
-  type HttpRoute,
-  type Response,
-} from "@crawl-automation/v3-acquisition";
-import type { HttpPolicy } from "../adapter.js";
 import { channelErrors } from "../errors.js";
 
 const challengeStatuses = new Set([403, 406, 429, 503]);
 const goneStatuses = new Set([404, 410]);
+
+/** What the page fetch answered, before its bytes count as a page. */
+export interface PageAnswer {
+  status: number;
+  contentType: string | null;
+  contentEncoding: string | null;
+  bytes: Uint8Array;
+}
 
 /** The refusal code for a non-200 status, or null for 200. */
 function statusRefusal(status: number) {
@@ -27,67 +25,21 @@ function statusRefusal(status: number) {
   return status === 200 ? null : ("CAPTURE.HTTP_STATUS" as const);
 }
 
-/** Refuses anything but a plain, uncompressed HTML 200 answer. */
-function checkResponse(response: Response): void {
-  const refusal = statusRefusal(response.status);
+/** Refuses anything but a plain, uncompressed, non-empty HTML 200 answer. */
+export function checkPage(answer: PageAnswer): void {
+  const refusal = statusRefusal(answer.status);
   if (refusal) {
-    throw channelErrors.create(refusal, { details: { status: response.status } });
+    throw channelErrors.create(refusal, { details: { status: answer.status } });
   }
-  if (!/^text\/html(?:\s*;|$)/i.test(response.headers["content-type"] ?? "")) {
+  if (!/^text\/html(?:\s*;|$)/i.test(answer.contentType ?? "")) {
     throw channelErrors.create("CAPTURE.NOT_HTML");
   }
-  const encoding = response.headers["content-encoding"]?.trim().toLowerCase();
+  const encoding = answer.contentEncoding?.trim().toLowerCase();
   if (encoding && encoding !== "identity") {
     throw channelErrors.create("CAPTURE.ENCODING", { details: { encoding } });
   }
-}
-
-async function readBody(response: Response, maxBytes: number, signal: AbortSignal) {
-  const chunks: Uint8Array[] = [];
-  let size = 0;
-  const iterator = response.body[Symbol.asyncIterator]();
-  for (;;) {
-    signal.throwIfAborted();
-    const next = await abortable(Promise.resolve(iterator.next()), signal);
-    if (next.done) {
-      break;
-    }
-    size += next.value.byteLength;
-    if (size > maxBytes) {
-      throw channelErrors.create("CAPTURE.PAGE_LIMIT", { details: { maxBytes } });
-    }
-    chunks.push(next.value);
-  }
-  if (size === 0) {
+  if (answer.bytes.byteLength === 0) {
     throw channelErrors.create("CAPTURE.PAGE_NOT_DELIVERED");
-  }
-  return Buffer.concat(chunks);
-}
-
-export interface HtmlRequest {
-  route: HttpRoute;
-  url: string;
-  policy: HttpPolicy;
-  dns: DnsResolver;
-}
-
-/** One bounded GET of a public page through the configured route. No redirects, cookies or retries. */
-export async function readHtmlBytes(request: HtmlRequest, abort: AbortSignal): Promise<Uint8Array> {
-  const { route, policy, dns } = request;
-  requireCapability(route, "http");
-  const url = permittedUrl(request.url, policy.origins);
-  const signal = AbortSignal.any([abort, AbortSignal.timeout(policy.timeoutMs)]);
-  let response: Response | undefined;
-  try {
-    const address = await abortable(transportAddress(url, route.transport, dns, signal), signal);
-    response = await abortable(
-      route.transport.get(url, address, { accept: "text/html" }, signal),
-      signal,
-    );
-    checkResponse(response);
-    return await readBody(response, policy.maxBytes, signal);
-  } finally {
-    response?.close();
   }
 }
 

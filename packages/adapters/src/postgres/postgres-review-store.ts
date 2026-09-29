@@ -16,7 +16,7 @@ function pgStyle(database: Database): PgQueryable {
   return { query } as unknown as PgQueryable;
 }
 
-/** Reviews stored by `v3-review` in `review_record`. Read-only. */
+/** Reviews stored by `v3-review` in `review_record`. Read-only; `read` returns the full record (evidence API). */
 export class PostgresReviewStore implements ReviewStore {
   private readonly reviews: PostgresReviews;
   private readonly inspector: ReviewInspector;
@@ -36,6 +36,11 @@ export class PostgresReviewStore implements ReviewStore {
 
   find(reviewId: string): Promise<unknown> {
     return this.reviews.get(reviewId);
+  }
+
+  /** The full stored record, checked; for the read-only Review evidence procedures. */
+  read(reviewId: string): Promise<ReviewRecord | null> {
+    return this.reviews.read(reviewId);
   }
 
   async inspect(reviewId: string): Promise<unknown> {

@@ -1,5 +1,5 @@
 import type { RetainedPublication } from "@crawl-automation/v3-artifacts";
-import type { ChannelAdapter } from "../adapter.js";
+import type { ChannelAdapter, ProductAddress } from "../adapter.js";
 import { HttpCapture } from "../capture/http-capture.js";
 import { OriginalHtmlArchive } from "../capture/original-html-archive.js";
 import { channelErrors } from "../errors.js";
@@ -29,7 +29,16 @@ export class ProductCapture {
         details: { channel: request.channel },
       });
     }
-    const captured = await this.deps.http.capture(adapter, this.archive(adapter, request), signal);
+    const address = adapter.productAddress(request.url);
+    const captured = await this.deps.http.capture(
+      adapter,
+      this.archive(adapter, { request, address }),
+      signal,
+    );
+    if (captured.status === "sighting") {
+      const { listingId, variantId } = address;
+      return { status: "sighted", listingId, variantId, sighting: captured.sighting };
+    }
     const sourcePlan = await this.deps.sourcePlans.publish(
       request,
       { parsed: captured.parsed, planning },
@@ -38,11 +47,14 @@ export class ProductCapture {
     return { status: "captured", sourcePlan, factsComplete: captured.parsed.facts.complete };
   }
 
-  private archive(adapter: ChannelAdapter, request: CaptureRequest): OriginalHtmlArchive {
-    const address = adapter.productAddress(request.url);
+  private archive(
+    adapter: ChannelAdapter,
+    target: { request: CaptureRequest; address: ProductAddress },
+  ): OriginalHtmlArchive {
+    const { request, address } = target;
     return new OriginalHtmlArchive(this.deps.publication, {
       channel: adapter.id,
-      maxBytes: adapter.httpPolicy?.maxBytes ?? 0,
+      maxBytes: adapter.httpPolicy.maxBytes,
       capture: {
         operationId: request.operationId,
         sessionId: request.operationId,

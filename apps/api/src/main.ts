@@ -9,21 +9,28 @@ async function heartbeat() {
   return path ? startHeartbeat(path, "api") : { stop: async () => undefined };
 }
 
-/** Starts the API, the delivery runner and the cleanup loop; stops them cleanly on SIGTERM or SIGINT. */
+/** Starts the API, the delivery runner, the queue dispatcher and the cleanup loop; stops them cleanly on SIGTERM or SIGINT. */
 async function main(): Promise<void> {
   const config = await loadApiConfig();
   const container = await buildContainer(config);
-  const { log, deliveryRunner, cleanup, database, temporal } = container.cradle;
+  const { log, deliveryRunner, queueDispatcher, cleanup, database, temporal } = container.cradle;
   const { runs, queue, brands, reviews, products, resources, fleet } = container.cradle;
   const context = { runs, queue, brands, reviews, products, resources, fleet };
-  const server = await listen(createHttpApp(context), config.api);
+  const server = await listen(
+    createHttpApp({ ...context, listingStates: container.cradle.listingStates }),
+    config.api,
+  );
   const health = await heartbeat();
   log.info({ host: config.api.host, port: config.api.port }, "api listening");
 
   const stop = new AbortController();
   process.once("SIGTERM", () => stop.abort());
   process.once("SIGINT", () => stop.abort());
-  await Promise.all([deliveryRunner.run(stop.signal), cleanup.run(stop.signal)]);
+  await Promise.all([
+    deliveryRunner.run(stop.signal),
+    queueDispatcher.run(stop.signal),
+    cleanup.run(stop.signal),
+  ]);
 
   log.info("api stopping");
   await health.stop();

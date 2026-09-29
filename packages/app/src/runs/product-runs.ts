@@ -5,6 +5,9 @@ import type { Channel } from "../delivery/delivery-coordinator.js";
 import { appErrors } from "../errors.js";
 import type { ProductRun } from "./run-model.js";
 
+/** A product run's workflow ID (the product_run table checks the same rule). */
+export const productRunWorkflowId = (runId: string) => `product-run-${runId}`;
+
 export interface ProductSource {
   brandId: string;
   channel: Channel;

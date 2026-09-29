@@ -4,6 +4,7 @@ import {
   type ProductRun,
   type ProductRunStore,
   type ProductSource,
+  productRunWorkflowId,
 } from "@crawl-automation/app";
 import type { Queryable } from "@crawl-automation/platform";
 import { z } from "zod";
@@ -32,12 +33,17 @@ const SELECT_RUN = `
 export class PostgresProductRunStore implements ProductRunStore {
   constructor(private readonly database: Queryable) {}
 
+  /** A source of a channel the pipeline does not run yet (Costco, Whole Foods) is refused, not misread. */
   async source(sourceId: string): Promise<ProductSource | null> {
-    const rows = await this.database.query(
+    const rows = await this.database.query<{ channel: string }>(
       `SELECT brand_id AS "brandId", channel FROM brand_source WHERE id = $1`,
       [sourceId],
     );
-    return rows[0] ? SourceRow.parse(rows[0]) : null;
+    const row = rows[0];
+    if (row && !SourceRow.shape.channel.safeParse(row.channel).success) {
+      throw appErrors.create("RUN.CHANNEL_UNSUPPORTED", { details: { channel: row.channel } });
+    }
+    return row ? SourceRow.parse(row) : null;
   }
 
   async accept(run: ProductRun & ProductSource): Promise<AcceptedProductRun> {
@@ -50,7 +56,7 @@ export class PostgresProductRunStore implements ProductRunStore {
         run.brandId,
         run.channel,
         run.url,
-        `product-run-${run.requestId}`,
+        productRunWorkflowId(run.requestId),
       ],
     );
     const stored = RunRow.parse((await this.database.query(SELECT_RUN, [run.requestId]))[0]);

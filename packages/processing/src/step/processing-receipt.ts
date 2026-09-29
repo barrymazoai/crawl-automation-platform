@@ -1,62 +1,18 @@
 import { isDeepStrictEqual } from "node:util";
-import { isAppError, type AppError, type ObjectStore } from "@crawl-automation/platform";
-import {
-  ReviewRecordSchema,
-  type ArtifactRef,
-  type ReviewRecord,
-} from "@crawl-automation/v3-contracts";
-import type { ProcessingInput, ResultFacts, StoredRecord } from "../results/result-kind.js";
-import { appendConfirmed, keepAndRecordReview, type ReviewLedger } from "./kept-review.js";
+import { isAppError, type AppError } from "@crawl-automation/platform";
+import { ReviewRecordSchema, type ReviewRecord } from "@crawl-automation/v3-contracts";
+import { appendConfirmed, keepAndRecordReview } from "./kept-review.js";
+import type {
+  ReceiptDeps,
+  ReceiptFailureReason,
+  ReceiptKind,
+  ReceiptRecord,
+  ReviewOutcome,
+  StepOutcome,
+} from "./receipt-kind.js";
 import { buildStepReview, newReviewId } from "./step-review.js";
 
-export type ReceiptFailureReason =
-  | "identityConflict"
-  | "reviewUnverified"
-  | "resultUnconfirmed"
-  | "evidenceUnverified"
-  | "localUnverified";
-
-/** What a processing step reported: a result, or a Review. */
-export type StepOutcome =
-  | {
-      status: "registered" | "uploaded";
-      operationId: string;
-      result: ArtifactRef;
-      completion: ArtifactRef;
-    }
-  | { status: "review"; operationId: string; reviewId: string; code: string; evidenceKey?: string };
-type ReviewOutcome = Extract<StepOutcome, { status: "review" }>;
-
-/** How one kind of receipt names and checks its records (Strategy). */
-export interface ReceiptKind<TInput extends ProcessingInput, TRecord, TReceipt> {
-  parseRequest(raw: unknown): { input: TInput; outcome: StepOutcome | null };
-  parseRecord(raw: unknown): TRecord;
-  /** The stage whose Reviews this receipt confirms. */
-  reviewedStage: string;
-  observation(input: TInput): unknown;
-  /** Checks a Review must also pass to be this task's, beyond ID, operation, stage, code and observation. */
-  ownsReview(review: ReviewRecord, input: TInput, outcome: ReviewOutcome): boolean;
-  reviewReceipt(input: TInput, review: ReviewRecord): TReceipt;
-  registeredReceipt(registration: TRecord): TReceipt;
-  /** The receipt's own Review of a failure it could not settle. */
-  failureReview: { stage: string; idPrefix: string; keyPrefix: string; errorName: string };
-  failureDetails(input: TInput, outcome: StepOutcome | null): Record<string, unknown>;
-  failureInspection(input: TInput): unknown;
-  codes: Record<ReceiptFailureReason, string>;
-  fail(reason: ReceiptFailureReason): AppError;
-}
-
-export interface ReceiptDeps<TInput, TRecord> {
-  results: {
-    inspect(input: TInput, signal: AbortSignal): Promise<ResultFacts<TRecord>>;
-    /** Cloud mode: registers what a ledger-less worker left in R2. */
-    registerFromRemote?(input: unknown, signal: AbortSignal): Promise<unknown>;
-  };
-  local: ObjectStore;
-  reviews: ReviewLedger;
-  /** Cloud mode: Reviews a ledger-less worker kept remotely; registered here only after identity checks. */
-  remoteReviews?: { read(id: string): Promise<ReviewRecord | null> };
-}
+export * from "./receipt-kind.js";
 
 const KEPT: readonly ReceiptFailureReason[] = [
   "identityConflict",
@@ -65,11 +21,7 @@ const KEPT: readonly ReceiptFailureReason[] = [
 ];
 
 /** Confirms a step's result or Review. Never runs the service, uploads or retries; unknown means inspect only. */
-export class ProcessingReceipt<
-  TInput extends ProcessingInput,
-  TRecord extends StoredRecord<TInput>,
-  TReceipt,
-> {
+export class ProcessingReceipt<TInput, TRecord extends ReceiptRecord, TReceipt> {
   constructor(
     private readonly kind: ReceiptKind<TInput, TRecord, TReceipt>,
     private readonly deps: ReceiptDeps<TInput, TRecord>,
@@ -79,7 +31,7 @@ export class ProcessingReceipt<
     const { input, outcome } = this.kind.parseRequest(raw);
     try {
       signal.throwIfAborted();
-      if (outcome && outcome.operationId !== input.operationId) {
+      if (outcome && outcome.operationId !== this.kind.task(input).operationId) {
         throw this.kind.fail("identityConflict");
       }
       if (outcome?.status === "review") {
@@ -121,7 +73,7 @@ export class ProcessingReceipt<
       throw this.kind.fail("resultUnconfirmed");
     }
     const registration = this.kind.parseRecord(facts.record);
-    if (!isDeepStrictEqual(registration.input, input) || !sameFiles(outcome, registration)) {
+    if (!this.kind.ownsRegistration(registration, input) || !sameFiles(outcome, registration)) {
       throw this.kind.fail("identityConflict");
     }
     return this.kind.registeredReceipt(registration);
@@ -130,10 +82,11 @@ export class ProcessingReceipt<
   private ownReview(raw: unknown, input: TInput, outcome: ReviewOutcome): ReviewRecord {
     const review = ReviewRecordSchema.parse(raw);
     const { failure } = review;
+    const task = this.kind.task(input);
     const matches =
       review.reviewId === outcome.reviewId &&
-      failure.operationId === input.operationId &&
-      failure.inputFingerprint === input.inputFingerprint &&
+      failure.operationId === task.operationId &&
+      failure.inputFingerprint === task.inputFingerprint &&
       failure.stage === this.kind.reviewedStage &&
       failure.code === outcome.code &&
       isDeepStrictEqual(review.observation, this.kind.observation(input)) &&
@@ -159,7 +112,7 @@ export class ProcessingReceipt<
     const key = `${kind.failureReview.keyPrefix}/${reviewId}.json`;
     const review = buildStepReview({
       reviewId,
-      task: input,
+      task: kind.task(input),
       observation: kind.observation(input),
       stage: kind.failureReview.stage,
       category: "PROCESSING",
@@ -187,7 +140,7 @@ export class ProcessingReceipt<
 }
 
 /** The ledger's result files are the ones the step reported, when it reported any. */
-function sameFiles(outcome: StepOutcome | null, registration: StoredRecord<unknown>): boolean {
+function sameFiles(outcome: StepOutcome | null, registration: ReceiptRecord): boolean {
   if (outcome?.status !== "registered" && outcome?.status !== "uploaded") {
     return true;
   }

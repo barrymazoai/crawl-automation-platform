@@ -54,7 +54,8 @@ async function collect(
   const captured = CaptureResultSchema.parse(
     await gate("captureProduct", () => pipeline.captureProduct(input)),
   );
-  if (captured.status === "review") {
+  // A Review, or a listing the revisit found gone or superseded (recorded as a sighting, not a failure).
+  if (captured.status !== "captured") {
     return captured;
   }
   const { sourcePlan } = captured;
@@ -62,7 +63,12 @@ async function collect(
   const outcome = ChannelPlanOutcomeSchema.parse(await plan.prepareChannelProduct(sourcePlan));
   const { listingId, variantId } = sourcePlan.owner;
   const known = KnownFormulaSchema.parse(
-    await pipeline.findKnownFormula({ channel: input.channel, listingId, variantId }),
+    await pipeline.findKnownFormula({
+      runId: input.runId,
+      channel: input.channel,
+      listingId,
+      variantId,
+    }),
   );
   if (known) {
     return {

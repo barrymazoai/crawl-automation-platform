@@ -20,6 +20,7 @@ async function main(): Promise<void> {
     workflowBundlePath: new URL("./workflows.cjs", import.meta.url).pathname,
     activities: pipelineActivities(container.cradle),
     maxConcurrentActivities: config.maxConcurrentActivities,
+    log,
   });
   const health = await heartbeat();
   log.info({ taskQueue: config.taskQueue }, "pipeline worker running");

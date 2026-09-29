@@ -181,6 +181,26 @@ it("a capture Review is returned as is, releases the lane and starts nothing els
   expect(plan.prepareChannelProduct).not.toHaveBeenCalled();
 });
 
+it("a listing the revisit found gone ends there as a sighting, not a Review", async () => {
+  const { pipeline, plan, resource } = await setup();
+  const sighted = {
+    status: "listing",
+    state: "gone",
+    operationId: "pipeline-capture-1",
+    observationId: "a".repeat(64),
+    listingId: "synthetic",
+    variantId: null,
+    causeCode: "CAPTURE.NOT_FOUND",
+  };
+  pipeline.captureProduct.mockResolvedValue(sighted);
+
+  expect(await ProductPipelineWorkflow(input)).toEqual(sighted);
+
+  expect(resource.releaseResources).toHaveBeenCalledOnce();
+  expect(plan.prepareChannelProduct).not.toHaveBeenCalled();
+  expect(pipeline.reviewProduct).not.toHaveBeenCalled();
+});
+
 it("a failed image download seals the stream as failed and returns the file Review", async () => {
   const { pipeline } = await setup();
   pipeline.acquireProductFile.mockImplementation(async ({ acquire }: Acquire) => ({

@@ -1,15 +1,15 @@
 import { readFileSync } from "node:fs";
 import { gunzipSync } from "node:zlib";
-import { HttpCapture, OriginalHtmlArchive } from "@crawl-automation/channels-core";
 import {
-  ScraperApiTransport,
-  type HttpRoute,
-  type Response,
-} from "@crawl-automation/v3-acquisition";
+  HttpCapture,
+  OriginalHtmlArchive,
+  type HttpCaptureResult,
+} from "@crawl-automation/channels-core";
 import { RetainedPublication, type ObjectStore } from "@crawl-automation/v3-artifacts";
 import { SWANSON_HTTP_POLICY, SwansonHtmlArchive } from "@crawl-automation/v3-channels";
 import { describe, expect, it, vi } from "vitest";
 import { swansonAdapter } from "./adapter.js";
+import { fakeScraperApiPages } from "./testing/fake-scraperapi.js";
 
 class Memory implements ObjectStore {
   data = new Map<string, Uint8Array>();
@@ -36,51 +36,35 @@ const capture = {
   variantId: null,
 };
 
-function setup(status = 200) {
+function setup(status = 200, finalUrl?: string) {
   const remote = new Memory();
   const publication = new RetainedPublication(new Memory(), remote);
-  const selection = {
-    routeId: "route-test",
-    version: "scraperapi/1",
-    egressId: "scraperapi-us/1",
-    mode: "scraperapi" as const,
-    managed: true as const,
-    countryCode: "us",
-    sessionNumber: null,
-    responseMode: "html" as const,
-    providerPolicy: "scraperapi-sync/1" as const,
-  };
-  const fetches = vi.fn(async (): Promise<Response> => ({
-    status,
-    headers: { "content-type": "text/html; charset=utf-8", "content-length": String(body.length) },
-    body: (async function* () {
-      yield body;
-    })(),
-    close: () => undefined,
-  }));
-  const transport = new ScraperApiTransport(
-    selection,
-    { apiKey: "fake-key-000000", allowedOrigins: [...SWANSON_HTTP_POLICY.origins] },
-    fetches,
-  );
-  const route: HttpRoute = { selection, transport, capabilities: transport.capabilities };
+  const { fetches, pages } = fakeScraperApiPages(body, status, finalUrl);
   const archive = () =>
     new OriginalHtmlArchive(publication, {
       channel: "swanson",
       capture,
       maxBytes: SWANSON_HTTP_POLICY.maxBytes,
     });
-  return { remote, publication, fetches, capture: new HttpCapture(route), archive };
+  return { remote, publication, fetches, capture: new HttpCapture(pages), archive };
 }
 
 const signal = () => AbortSignal.timeout(10_000);
+
+/** The parsed page of a capture that read a product page. */
+function pageOf(result: HttpCaptureResult) {
+  if (result.status !== "page") {
+    throw new Error(`expected a product page, got a ${result.sighting.state} listing`);
+  }
+  return result;
+}
 
 describe("HttpCapture with the Swanson adapter", () => {
   it("downloads once, archives before parsing, then only reads the archive", async () => {
     const { remote, fetches, capture: http, archive } = setup();
 
-    const first = await http.capture(swansonAdapter, archive(), signal());
-    const second = await http.capture(swansonAdapter, archive(), signal());
+    const first = pageOf(await http.capture(swansonAdapter, archive(), signal()));
+    const second = pageOf(await http.capture(swansonAdapter, archive(), signal()));
 
     expect(fetches).toHaveBeenCalledOnce();
     expect(first.parsed.evidence.title).toMatch(/D-Ribose/i);
@@ -101,6 +85,28 @@ describe("HttpCapture with the Swanson adapter", () => {
     });
     expect(fetches).toHaveBeenCalledOnce();
     expect(remote.data.has("v3/swanson-html/swanson-capture-test/original.html")).toBe(false);
+  });
+});
+
+describe("a revisit of a Swanson listing that is no longer that product", () => {
+  it("reports a page that answers 404 as gone, archiving nothing", async () => {
+    const { remote, capture: http, archive } = setup(404);
+    const result = await http.capture(swansonAdapter, archive(), signal());
+    expect(result).toMatchObject({
+      status: "sighting",
+      sighting: { state: "gone", causeCode: "CAPTURE.NOT_FOUND", httpStatus: 404 },
+    });
+    expect(remote.data.has("v3/swanson-html/swanson-capture-test/original.html")).toBe(false);
+  });
+
+  it("reports a redirect to another product as superseded by that product's handle", async () => {
+    const moved = "https://www.swansonvitamins.com/p/healthy-origins-d-ribose-new";
+    const { capture: http, archive } = setup(200, moved);
+    const result = await http.capture(swansonAdapter, archive(), signal());
+    expect(result).toMatchObject({
+      status: "sighting",
+      sighting: { state: "superseded", observedListingId: "healthy-origins-d-ribose-new" },
+    });
   });
 });
 

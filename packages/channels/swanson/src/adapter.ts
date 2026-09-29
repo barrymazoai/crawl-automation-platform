@@ -1,9 +1,10 @@
-import type {
-  ChannelAdapter,
-  FactsText,
-  FetchedPage,
-  ParsedProduct,
-  ProductAddress,
+import {
+  pageText,
+  type ChannelAdapter,
+  type FactsText,
+  type FetchedPage,
+  type ParsedProduct,
+  type ProductAddress,
 } from "@crawl-automation/channels-core";
 import {
   SWANSON_HTTP_POLICY,
@@ -14,6 +15,7 @@ import {
   swansonProductAddress,
   swansonVariantChoices,
 } from "@crawl-automation/v3-channels";
+import { swansonLabelCore } from "./label-core.js";
 import type {
   ChannelProductEvidence,
   SwansonRenderedProduct,
@@ -69,10 +71,13 @@ export const swansonAdapter: ChannelAdapter<SwansonRenderedProduct> = {
     projectionModule: "swanson.http-projection",
     projection,
     corePolicy: "swanson-label-core/1",
+    labelCore: swansonLabelCore,
   },
   productAddress,
   parseProduct(page: FetchedPage): ParsedProduct<SwansonRenderedProduct> {
-    const rendered = parseSwansonStaticHtml(page.html, page.url, page.capturedAt);
+    const rendered = parseSwansonStaticHtml(page.html, page.url, page.capturedAt, (element) =>
+      pageText(element.innerHTML),
+    );
     const identity = selectedIdentity(rendered);
     const evidence = parseSwansonRenderedProduct(rendered, page.url, identity);
     const variants = swansonVariantChoices(rendered).choices.map((choice) =>

@@ -23,6 +23,7 @@
     "@temporalio/worker": "1.23.0",
     "pg": "catalog:",
     "pino": "catalog:",
+    "undici": "catalog:",
     "zod": "catalog:"
   },
   "devDependencies": {

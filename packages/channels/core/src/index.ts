@@ -4,5 +4,8 @@ export * from "./errors.js";
 export * from "./registry.js";
 export * from "./capture/http-capture.js";
 export * from "./capture/original-html-archive.js";
+export * from "./capture/page-fetch.js";
 export * from "./capture/read-html.js";
+export * from "./page-text.js";
 export * from "./pipeline/index.js";
+export * from "./label-core-errors.js";

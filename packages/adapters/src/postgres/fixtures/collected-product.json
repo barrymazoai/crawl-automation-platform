@@ -1,0 +1,1247 @@
+{
+  "schemaVersion": 3,
+  "codec": "collected-product/3",
+  "operationId": "label-product",
+  "observation": {
+    "schemaVersion": 1,
+    "requestId": "request",
+    "observationId": "observation",
+    "brandId": "brand",
+    "sourceId": "source",
+    "listingId": "listing",
+    "variantId": null
+  },
+  "assembly": {
+    "objectKey": "v3/label-products/label-product/assembly.json",
+    "sha256": "795496995253933795916af5a878b590f19937b14adfa65913ac7a712a99e59e",
+    "byteSize": 19245
+  },
+  "formula": {
+    "servingSize": {
+      "text": "2",
+      "sourceId": "source-0",
+      "citation": {
+        "kind": "image",
+        "evidence": "2"
+      }
+    },
+    "servingsPerContainer": {
+      "text": "3",
+      "sourceId": "source-0",
+      "citation": {
+        "kind": "image",
+        "evidence": "3"
+      }
+    },
+    "columns": [
+      {
+        "heading": {
+          "text": "Amounts Per Serving",
+          "sourceId": "source-0",
+          "citation": {
+            "kind": "image",
+            "evidence": "Amounts Per Serving"
+          }
+        },
+        "rows": [
+          {
+            "kind": "nutrient",
+            "name": {
+              "text": "Calories",
+              "sourceId": "source-0",
+              "citation": {
+                "kind": "image",
+                "evidence": "Calories"
+              }
+            },
+            "amount": {
+              "text": "12",
+              "sourceId": "source-0",
+              "citation": {
+                "kind": "image",
+                "evidence": "12"
+              }
+            },
+            "dailyValue": null,
+            "amountStatus": "printed",
+            "parentRowIndex": null
+          },
+          {
+            "kind": "nutrient",
+            "name": {
+              "text": "Total Carbohydrates",
+              "sourceId": "source-0",
+              "citation": {
+                "kind": "image",
+                "evidence": "Total Carbohydrates"
+              }
+            },
+            "amount": {
+              "text": "4 g",
+              "sourceId": "source-0",
+              "citation": {
+                "kind": "image",
+                "evidence": "4 g"
+              }
+            },
+            "dailyValue": null,
+            "amountStatus": "printed",
+            "parentRowIndex": null
+          },
+          {
+            "kind": "nutrient",
+            "name": {
+              "text": "Total Sugars",
+              "sourceId": "source-0",
+              "citation": {
+                "kind": "image",
+                "evidence": "Total Sugars"
+              }
+            },
+            "amount": {
+              "text": "2 g",
+              "sourceId": "source-0",
+              "citation": {
+                "kind": "image",
+                "evidence": "2 g"
+              }
+            },
+            "dailyValue": null,
+            "amountStatus": "printed",
+            "parentRowIndex": null
+          },
+          {
+            "kind": "nutrient",
+            "name": {
+              "text": "Added Sugars",
+              "sourceId": "source-0",
+              "citation": {
+                "kind": "image",
+                "evidence": "Added Sugars"
+              }
+            },
+            "amount": {
+              "text": "2 g",
+              "sourceId": "source-0",
+              "citation": {
+                "kind": "image",
+                "evidence": "2 g"
+              }
+            },
+            "dailyValue": null,
+            "amountStatus": "printed",
+            "parentRowIndex": null
+          },
+          {
+            "kind": "group_header",
+            "name": {
+              "text": "FocusFuel™ Electrolyte Blend",
+              "sourceId": "source-0",
+              "citation": {
+                "kind": "image",
+                "evidence": "FocusFuel™ Electrolyte Blend"
+              }
+            },
+            "amount": null,
+            "dailyValue": null,
+            "amountStatus": "not_applicable",
+            "parentRowIndex": null
+          },
+          {
+            "kind": "blend_component",
+            "name": {
+              "text": "Sodium",
+              "sourceId": "source-0",
+              "citation": {
+                "kind": "image",
+                "evidence": "Sodium"
+              }
+            },
+            "amount": {
+              "text": "200 mg",
+              "sourceId": "source-0",
+              "citation": {
+                "kind": "image",
+                "evidence": "200 mg"
+              }
+            },
+            "dailyValue": null,
+            "amountStatus": "printed",
+            "parentRowIndex": 4
+          },
+          {
+            "kind": "blend_component",
+            "name": {
+              "text": "Potassium",
+              "sourceId": "source-0",
+              "citation": {
+                "kind": "image",
+                "evidence": "Potassium"
+              }
+            },
+            "amount": {
+              "text": "100 mg",
+              "sourceId": "source-0",
+              "citation": {
+                "kind": "image",
+                "evidence": "100 mg"
+              }
+            },
+            "dailyValue": null,
+            "amountStatus": "printed",
+            "parentRowIndex": 4
+          },
+          {
+            "kind": "blend_component",
+            "name": {
+              "text": "Magnesium",
+              "sourceId": "source-0",
+              "citation": {
+                "kind": "image",
+                "evidence": "Magnesium"
+              }
+            },
+            "amount": {
+              "text": "50 mg",
+              "sourceId": "source-0",
+              "citation": {
+                "kind": "image",
+                "evidence": "50 mg"
+              }
+            },
+            "dailyValue": null,
+            "amountStatus": "printed",
+            "parentRowIndex": 4
+          },
+          {
+            "kind": "blend_component",
+            "name": {
+              "text": "Watermelon Juice Powder",
+              "sourceId": "source-0",
+              "citation": {
+                "kind": "image",
+                "evidence": "Watermelon Juice Powder"
+              }
+            },
+            "amount": {
+              "text": "200 mg",
+              "sourceId": "source-0",
+              "citation": {
+                "kind": "image",
+                "evidence": "200 mg"
+              }
+            },
+            "dailyValue": null,
+            "amountStatus": "printed",
+            "parentRowIndex": 4
+          },
+          {
+            "kind": "group_header",
+            "name": {
+              "text": "FocusFuel™ Focus Blend",
+              "sourceId": "source-0",
+              "citation": {
+                "kind": "image",
+                "evidence": "FocusFuel™ Focus Blend"
+              }
+            },
+            "amount": null,
+            "dailyValue": null,
+            "amountStatus": "not_applicable",
+            "parentRowIndex": null
+          },
+          {
+            "kind": "blend_component",
+            "name": {
+              "text": "Alpha GPC",
+              "sourceId": "source-0",
+              "citation": {
+                "kind": "image",
+                "evidence": "Alpha GPC"
+              }
+            },
+            "amount": {
+              "text": "200 mg",
+              "sourceId": "source-0",
+              "citation": {
+                "kind": "image",
+                "evidence": "200 mg"
+              }
+            },
+            "dailyValue": null,
+            "amountStatus": "printed",
+            "parentRowIndex": 9
+          },
+          {
+            "kind": "blend_component",
+            "name": {
+              "text": "Lion’s Mane",
+              "sourceId": "source-0",
+              "citation": {
+                "kind": "image",
+                "evidence": "Lion’s Mane"
+              }
+            },
+            "amount": {
+              "text": "200 mg",
+              "sourceId": "source-0",
+              "citation": {
+                "kind": "image",
+                "evidence": "200 mg"
+              }
+            },
+            "dailyValue": null,
+            "amountStatus": "printed",
+            "parentRowIndex": 9
+          },
+          {
+            "kind": "blend_component",
+            "name": {
+              "text": "Ashwagandha",
+              "sourceId": "source-0",
+              "citation": {
+                "kind": "image",
+                "evidence": "Ashwagandha"
+              }
+            },
+            "amount": {
+              "text": "200 mg",
+              "sourceId": "source-0",
+              "citation": {
+                "kind": "image",
+                "evidence": "200 mg"
+              }
+            },
+            "dailyValue": null,
+            "amountStatus": "printed",
+            "parentRowIndex": 9
+          },
+          {
+            "kind": "group_header",
+            "name": {
+              "text": "FocusFuel™ Electrolyte Blend",
+              "sourceId": "source-0",
+              "citation": {
+                "kind": "image",
+                "evidence": "FocusFuel™ Electrolyte Blend"
+              }
+            },
+            "amount": null,
+            "dailyValue": null,
+            "amountStatus": "not_applicable",
+            "parentRowIndex": null
+          },
+          {
+            "kind": "blend_component",
+            "name": {
+              "text": "Natural Caffeine (from Guarana seed and green tea blend)",
+              "sourceId": "source-0",
+              "citation": {
+                "kind": "image",
+                "evidence": "Natural Caffeine (from Guarana seed and green tea blend)"
+              }
+            },
+            "amount": {
+              "text": "100 mg",
+              "sourceId": "source-0",
+              "citation": {
+                "kind": "image",
+                "evidence": "100 mg"
+              }
+            },
+            "dailyValue": null,
+            "amountStatus": "printed",
+            "parentRowIndex": 13
+          },
+          {
+            "kind": "blend_component",
+            "name": {
+              "text": "L-Theanine",
+              "sourceId": "source-0",
+              "citation": {
+                "kind": "image",
+                "evidence": "L-Theanine"
+              }
+            },
+            "amount": {
+              "text": "100 mg",
+              "sourceId": "source-0",
+              "citation": {
+                "kind": "image",
+                "evidence": "100 mg"
+              }
+            },
+            "dailyValue": null,
+            "amountStatus": "printed",
+            "parentRowIndex": 13
+          },
+          {
+            "kind": "blend_component",
+            "name": {
+              "text": "Black Pepper/BioPerine",
+              "sourceId": "source-0",
+              "citation": {
+                "kind": "image",
+                "evidence": "Black Pepper/BioPerine"
+              }
+            },
+            "amount": {
+              "text": "5 mg",
+              "sourceId": "source-0",
+              "citation": {
+                "kind": "image",
+                "evidence": "5 mg"
+              }
+            },
+            "dailyValue": null,
+            "amountStatus": "printed",
+            "parentRowIndex": 13
+          },
+          {
+            "kind": "blend_component",
+            "name": {
+              "text": "Vitamin B12 (Methylcobalamin)",
+              "sourceId": "source-0",
+              "citation": {
+                "kind": "image",
+                "evidence": "Vitamin B12 (Methylcobalamin)"
+              }
+            },
+            "amount": {
+              "text": "2.4 mcg",
+              "sourceId": "source-0",
+              "citation": {
+                "kind": "image",
+                "evidence": "2.4 mcg"
+              }
+            },
+            "dailyValue": null,
+            "amountStatus": "printed",
+            "parentRowIndex": 13
+          }
+        ]
+      }
+    ]
+  },
+  "otherIngredients": {
+    "heading": {
+      "text": "Other Ingredients",
+      "sourceId": "source-0",
+      "citation": {
+        "kind": "image",
+        "evidence": "Other Ingredients"
+      }
+    },
+    "items": [
+      {
+        "text": "Malt Syrup",
+        "sourceId": "source-0",
+        "citation": {
+          "kind": "image",
+          "evidence": "Malt Syrup"
+        }
+      },
+      {
+        "text": "Organic Cane Sugar",
+        "sourceId": "source-0",
+        "citation": {
+          "kind": "image",
+          "evidence": "Organic Cane Sugar"
+        }
+      },
+      {
+        "text": "Pectin",
+        "sourceId": "source-0",
+        "citation": {
+          "kind": "image",
+          "evidence": "Pectin"
+        }
+      },
+      {
+        "text": "Sodium Citrate",
+        "sourceId": "source-0",
+        "citation": {
+          "kind": "image",
+          "evidence": "Sodium Citrate"
+        }
+      },
+      {
+        "text": "Citric Acid",
+        "sourceId": "source-0",
+        "citation": {
+          "kind": "image",
+          "evidence": "Citric Acid"
+        }
+      },
+      {
+        "text": "Lactic Acid",
+        "sourceId": "source-0",
+        "citation": {
+          "kind": "image",
+          "evidence": "Lactic Acid"
+        }
+      },
+      {
+        "text": "Natural Flavor Juice",
+        "sourceId": "source-0",
+        "citation": {
+          "kind": "image",
+          "evidence": "Natural Flavor Juice"
+        }
+      }
+    ]
+  },
+  "ingredients": [
+    {
+      "name": {
+        "text": "Sodium",
+        "sourceId": "source-0",
+        "citation": {
+          "kind": "image",
+          "evidence": "Sodium"
+        }
+      },
+      "role": "blend_component",
+      "amount": {
+        "text": "200 mg",
+        "sourceId": "source-0",
+        "citation": {
+          "kind": "image",
+          "evidence": "200 mg"
+        }
+      },
+      "columnIndex": 0,
+      "rowIndex": 5,
+      "parentRowIndex": 4
+    },
+    {
+      "name": {
+        "text": "Potassium",
+        "sourceId": "source-0",
+        "citation": {
+          "kind": "image",
+          "evidence": "Potassium"
+        }
+      },
+      "role": "blend_component",
+      "amount": {
+        "text": "100 mg",
+        "sourceId": "source-0",
+        "citation": {
+          "kind": "image",
+          "evidence": "100 mg"
+        }
+      },
+      "columnIndex": 0,
+      "rowIndex": 6,
+      "parentRowIndex": 4
+    },
+    {
+      "name": {
+        "text": "Magnesium",
+        "sourceId": "source-0",
+        "citation": {
+          "kind": "image",
+          "evidence": "Magnesium"
+        }
+      },
+      "role": "blend_component",
+      "amount": {
+        "text": "50 mg",
+        "sourceId": "source-0",
+        "citation": {
+          "kind": "image",
+          "evidence": "50 mg"
+        }
+      },
+      "columnIndex": 0,
+      "rowIndex": 7,
+      "parentRowIndex": 4
+    },
+    {
+      "name": {
+        "text": "Watermelon Juice Powder",
+        "sourceId": "source-0",
+        "citation": {
+          "kind": "image",
+          "evidence": "Watermelon Juice Powder"
+        }
+      },
+      "role": "blend_component",
+      "amount": {
+        "text": "200 mg",
+        "sourceId": "source-0",
+        "citation": {
+          "kind": "image",
+          "evidence": "200 mg"
+        }
+      },
+      "columnIndex": 0,
+      "rowIndex": 8,
+      "parentRowIndex": 4
+    },
+    {
+      "name": {
+        "text": "Alpha GPC",
+        "sourceId": "source-0",
+        "citation": {
+          "kind": "image",
+          "evidence": "Alpha GPC"
+        }
+      },
+      "role": "blend_component",
+      "amount": {
+        "text": "200 mg",
+        "sourceId": "source-0",
+        "citation": {
+          "kind": "image",
+          "evidence": "200 mg"
+        }
+      },
+      "columnIndex": 0,
+      "rowIndex": 10,
+      "parentRowIndex": 9
+    },
+    {
+      "name": {
+        "text": "Lion’s Mane",
+        "sourceId": "source-0",
+        "citation": {
+          "kind": "image",
+          "evidence": "Lion’s Mane"
+        }
+      },
+      "role": "blend_component",
+      "amount": {
+        "text": "200 mg",
+        "sourceId": "source-0",
+        "citation": {
+          "kind": "image",
+          "evidence": "200 mg"
+        }
+      },
+      "columnIndex": 0,
+      "rowIndex": 11,
+      "parentRowIndex": 9
+    },
+    {
+      "name": {
+        "text": "Ashwagandha",
+        "sourceId": "source-0",
+        "citation": {
+          "kind": "image",
+          "evidence": "Ashwagandha"
+        }
+      },
+      "role": "blend_component",
+      "amount": {
+        "text": "200 mg",
+        "sourceId": "source-0",
+        "citation": {
+          "kind": "image",
+          "evidence": "200 mg"
+        }
+      },
+      "columnIndex": 0,
+      "rowIndex": 12,
+      "parentRowIndex": 9
+    },
+    {
+      "name": {
+        "text": "Natural Caffeine (from Guarana seed and green tea blend)",
+        "sourceId": "source-0",
+        "citation": {
+          "kind": "image",
+          "evidence": "Natural Caffeine (from Guarana seed and green tea blend)"
+        }
+      },
+      "role": "blend_component",
+      "amount": {
+        "text": "100 mg",
+        "sourceId": "source-0",
+        "citation": {
+          "kind": "image",
+          "evidence": "100 mg"
+        }
+      },
+      "columnIndex": 0,
+      "rowIndex": 14,
+      "parentRowIndex": 13
+    },
+    {
+      "name": {
+        "text": "L-Theanine",
+        "sourceId": "source-0",
+        "citation": {
+          "kind": "image",
+          "evidence": "L-Theanine"
+        }
+      },
+      "role": "blend_component",
+      "amount": {
+        "text": "100 mg",
+        "sourceId": "source-0",
+        "citation": {
+          "kind": "image",
+          "evidence": "100 mg"
+        }
+      },
+      "columnIndex": 0,
+      "rowIndex": 15,
+      "parentRowIndex": 13
+    },
+    {
+      "name": {
+        "text": "Black Pepper/BioPerine",
+        "sourceId": "source-0",
+        "citation": {
+          "kind": "image",
+          "evidence": "Black Pepper/BioPerine"
+        }
+      },
+      "role": "blend_component",
+      "amount": {
+        "text": "5 mg",
+        "sourceId": "source-0",
+        "citation": {
+          "kind": "image",
+          "evidence": "5 mg"
+        }
+      },
+      "columnIndex": 0,
+      "rowIndex": 16,
+      "parentRowIndex": 13
+    },
+    {
+      "name": {
+        "text": "Vitamin B12 (Methylcobalamin)",
+        "sourceId": "source-0",
+        "citation": {
+          "kind": "image",
+          "evidence": "Vitamin B12 (Methylcobalamin)"
+        }
+      },
+      "role": "blend_component",
+      "amount": {
+        "text": "2.4 mcg",
+        "sourceId": "source-0",
+        "citation": {
+          "kind": "image",
+          "evidence": "2.4 mcg"
+        }
+      },
+      "columnIndex": 0,
+      "rowIndex": 17,
+      "parentRowIndex": 13
+    },
+    {
+      "name": {
+        "text": "Malt Syrup",
+        "sourceId": "source-0",
+        "citation": {
+          "kind": "image",
+          "evidence": "Malt Syrup"
+        }
+      },
+      "role": "other",
+      "amount": null,
+      "columnIndex": null,
+      "rowIndex": null,
+      "parentRowIndex": null
+    },
+    {
+      "name": {
+        "text": "Organic Cane Sugar",
+        "sourceId": "source-0",
+        "citation": {
+          "kind": "image",
+          "evidence": "Organic Cane Sugar"
+        }
+      },
+      "role": "other",
+      "amount": null,
+      "columnIndex": null,
+      "rowIndex": null,
+      "parentRowIndex": null
+    },
+    {
+      "name": {
+        "text": "Pectin",
+        "sourceId": "source-0",
+        "citation": {
+          "kind": "image",
+          "evidence": "Pectin"
+        }
+      },
+      "role": "other",
+      "amount": null,
+      "columnIndex": null,
+      "rowIndex": null,
+      "parentRowIndex": null
+    },
+    {
+      "name": {
+        "text": "Sodium Citrate",
+        "sourceId": "source-0",
+        "citation": {
+          "kind": "image",
+          "evidence": "Sodium Citrate"
+        }
+      },
+      "role": "other",
+      "amount": null,
+      "columnIndex": null,
+      "rowIndex": null,
+      "parentRowIndex": null
+    },
+    {
+      "name": {
+        "text": "Citric Acid",
+        "sourceId": "source-0",
+        "citation": {
+          "kind": "image",
+          "evidence": "Citric Acid"
+        }
+      },
+      "role": "other",
+      "amount": null,
+      "columnIndex": null,
+      "rowIndex": null,
+      "parentRowIndex": null
+    },
+    {
+      "name": {
+        "text": "Lactic Acid",
+        "sourceId": "source-0",
+        "citation": {
+          "kind": "image",
+          "evidence": "Lactic Acid"
+        }
+      },
+      "role": "other",
+      "amount": null,
+      "columnIndex": null,
+      "rowIndex": null,
+      "parentRowIndex": null
+    },
+    {
+      "name": {
+        "text": "Natural Flavor Juice",
+        "sourceId": "source-0",
+        "citation": {
+          "kind": "image",
+          "evidence": "Natural Flavor Juice"
+        }
+      },
+      "role": "other",
+      "amount": null,
+      "columnIndex": null,
+      "rowIndex": null,
+      "parentRowIndex": null
+    }
+  ],
+  "warnings": [],
+  "provenance": [
+    {
+      "id": "source-0",
+      "kind": "image",
+      "record": {
+        "schemaVersion": 2,
+        "codec": "vision-result/2",
+        "storageId": "test/1",
+        "input": {
+          "operationId": "label-source-0",
+          "selection": {
+            "schemaVersion": 1,
+            "observation": {
+              "schemaVersion": 1,
+              "requestId": "request",
+              "observationId": "observation",
+              "brandId": "brand",
+              "sourceId": "source",
+              "listingId": "listing",
+              "variantId": null
+            },
+            "image": {
+              "schemaVersion": 1,
+              "artifactId": "images-image-0-png",
+              "observationId": "observation",
+              "sourceId": "source",
+              "listingId": "listing",
+              "variantId": null,
+              "sha256": "6299bae6761904b3f54e46029afbc01b2fe6a23e9c665d9503c42f141cbf8060",
+              "byteSize": 18,
+              "objectKey": "images/image-0.png",
+              "producer": {
+                "operationId": "download",
+                "module": "file.acquire",
+                "implementationVersion": "1"
+              },
+              "kind": "source-image",
+              "mediaType": "image/png"
+            },
+            "ocrOperationId": "ocr-0",
+            "ocrTextSha256": "12726d8e25a20ace83ef079eda054357f75a60c9d992d83bd20fcc3e394b3639",
+            "policy": {
+              "version": "label-keywords/1",
+              "keywords": [
+                "Supplement Facts",
+                "Nutrition Facts",
+                "Ingredients",
+                "Other Ingredients"
+              ]
+            },
+            "policyFingerprint": "6db51043a388938291c9ce183e5cbc0614a376d8c4b0daca03cec806006dbeeb",
+            "status": "matched",
+            "matchedKeywords": ["Supplement Facts"]
+          },
+          "extractionProtocol": "label-extraction/1"
+        },
+        "configFingerprint": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "status": "candidate",
+        "result": {
+          "schemaVersion": 1,
+          "artifactId": "v3-vision-label-source-0-response-json",
+          "observationId": "observation",
+          "sourceId": "source",
+          "listingId": "listing",
+          "variantId": null,
+          "sha256": "cd9d871332ee98ac82f6ed896429315d5309325fba8e1b7a6c01976331a34b7a",
+          "byteSize": 38,
+          "objectKey": "v3/vision/label-source-0/response.json",
+          "producer": {
+            "operationId": "label-source-0",
+            "module": "codex.vision",
+            "implementationVersion": "vision/2"
+          },
+          "kind": "result-json",
+          "mediaType": "application/json"
+        },
+        "completion": {
+          "schemaVersion": 1,
+          "artifactId": "v3-vision-label-source-0-completion-json",
+          "observationId": "observation",
+          "sourceId": "source",
+          "listingId": "listing",
+          "variantId": null,
+          "sha256": "7a7b96578aaaf679e1cb16d9d5878e7f9d3b258518b3cd55444079da5e784362",
+          "byteSize": 40,
+          "objectKey": "v3/vision/label-source-0/completion.json",
+          "producer": {
+            "operationId": "label-source-0",
+            "module": "codex.vision",
+            "implementationVersion": "vision/2"
+          },
+          "kind": "result-json",
+          "mediaType": "application/json"
+        }
+      },
+      "candidate": {
+        "codec": "label-extraction/1",
+        "formula": {
+          "servingSize": {
+            "text": "2",
+            "evidence": "2"
+          },
+          "servingsPerContainer": {
+            "text": "3",
+            "evidence": "3"
+          },
+          "columns": [
+            {
+              "heading": {
+                "text": "Amounts Per Serving",
+                "evidence": "Amounts Per Serving"
+              },
+              "rows": [
+                {
+                  "kind": "nutrient",
+                  "name": {
+                    "text": "Calories",
+                    "evidence": "Calories"
+                  },
+                  "amount": {
+                    "text": "12",
+                    "evidence": "12"
+                  },
+                  "dailyValue": null,
+                  "amountStatus": "printed",
+                  "parentRowIndex": null
+                },
+                {
+                  "kind": "nutrient",
+                  "name": {
+                    "text": "Total Carbohydrates",
+                    "evidence": "Total Carbohydrates"
+                  },
+                  "amount": {
+                    "text": "4 g",
+                    "evidence": "4 g"
+                  },
+                  "dailyValue": null,
+                  "amountStatus": "printed",
+                  "parentRowIndex": null
+                },
+                {
+                  "kind": "nutrient",
+                  "name": {
+                    "text": "Total Sugars",
+                    "evidence": "Total Sugars"
+                  },
+                  "amount": {
+                    "text": "2 g",
+                    "evidence": "2 g"
+                  },
+                  "dailyValue": null,
+                  "amountStatus": "printed",
+                  "parentRowIndex": null
+                },
+                {
+                  "kind": "nutrient",
+                  "name": {
+                    "text": "Added Sugars",
+                    "evidence": "Added Sugars"
+                  },
+                  "amount": {
+                    "text": "2 g",
+                    "evidence": "2 g"
+                  },
+                  "dailyValue": null,
+                  "amountStatus": "printed",
+                  "parentRowIndex": null
+                },
+                {
+                  "kind": "group_header",
+                  "name": {
+                    "text": "FocusFuel™ Electrolyte Blend",
+                    "evidence": "FocusFuel™ Electrolyte Blend"
+                  },
+                  "amount": null,
+                  "dailyValue": null,
+                  "amountStatus": "not_applicable",
+                  "parentRowIndex": null
+                },
+                {
+                  "kind": "blend_component",
+                  "name": {
+                    "text": "Sodium",
+                    "evidence": "Sodium"
+                  },
+                  "amount": {
+                    "text": "200 mg",
+                    "evidence": "200 mg"
+                  },
+                  "dailyValue": null,
+                  "amountStatus": "printed",
+                  "parentRowIndex": 4
+                },
+                {
+                  "kind": "blend_component",
+                  "name": {
+                    "text": "Potassium",
+                    "evidence": "Potassium"
+                  },
+                  "amount": {
+                    "text": "100 mg",
+                    "evidence": "100 mg"
+                  },
+                  "dailyValue": null,
+                  "amountStatus": "printed",
+                  "parentRowIndex": 4
+                },
+                {
+                  "kind": "blend_component",
+                  "name": {
+                    "text": "Magnesium",
+                    "evidence": "Magnesium"
+                  },
+                  "amount": {
+                    "text": "50 mg",
+                    "evidence": "50 mg"
+                  },
+                  "dailyValue": null,
+                  "amountStatus": "printed",
+                  "parentRowIndex": 4
+                },
+                {
+                  "kind": "blend_component",
+                  "name": {
+                    "text": "Watermelon Juice Powder",
+                    "evidence": "Watermelon Juice Powder"
+                  },
+                  "amount": {
+                    "text": "200 mg",
+                    "evidence": "200 mg"
+                  },
+                  "dailyValue": null,
+                  "amountStatus": "printed",
+                  "parentRowIndex": 4
+                },
+                {
+                  "kind": "group_header",
+                  "name": {
+                    "text": "FocusFuel™ Focus Blend",
+                    "evidence": "FocusFuel™ Focus Blend"
+                  },
+                  "amount": null,
+                  "dailyValue": null,
+                  "amountStatus": "not_applicable",
+                  "parentRowIndex": null
+                },
+                {
+                  "kind": "blend_component",
+                  "name": {
+                    "text": "Alpha GPC",
+                    "evidence": "Alpha GPC"
+                  },
+                  "amount": {
+                    "text": "200 mg",
+                    "evidence": "200 mg"
+                  },
+                  "dailyValue": null,
+                  "amountStatus": "printed",
+                  "parentRowIndex": 9
+                },
+                {
+                  "kind": "blend_component",
+                  "name": {
+                    "text": "Lion’s Mane",
+                    "evidence": "Lion’s Mane"
+                  },
+                  "amount": {
+                    "text": "200 mg",
+                    "evidence": "200 mg"
+                  },
+                  "dailyValue": null,
+                  "amountStatus": "printed",
+                  "parentRowIndex": 9
+                },
+                {
+                  "kind": "blend_component",
+                  "name": {
+                    "text": "Ashwagandha",
+                    "evidence": "Ashwagandha"
+                  },
+                  "amount": {
+                    "text": "200 mg",
+                    "evidence": "200 mg"
+                  },
+                  "dailyValue": null,
+                  "amountStatus": "printed",
+                  "parentRowIndex": 9
+                },
+                {
+                  "kind": "group_header",
+                  "name": {
+                    "text": "FocusFuel™ Electrolyte Blend",
+                    "evidence": "FocusFuel™ Electrolyte Blend"
+                  },
+                  "amount": null,
+                  "dailyValue": null,
+                  "amountStatus": "not_applicable",
+                  "parentRowIndex": null
+                },
+                {
+                  "kind": "blend_component",
+                  "name": {
+                    "text": "Natural Caffeine (from Guarana seed and green tea blend)",
+                    "evidence": "Natural Caffeine (from Guarana seed and green tea blend)"
+                  },
+                  "amount": {
+                    "text": "100 mg",
+                    "evidence": "100 mg"
+                  },
+                  "dailyValue": null,
+                  "amountStatus": "printed",
+                  "parentRowIndex": 13
+                },
+                {
+                  "kind": "blend_component",
+                  "name": {
+                    "text": "L-Theanine",
+                    "evidence": "L-Theanine"
+                  },
+                  "amount": {
+                    "text": "100 mg",
+                    "evidence": "100 mg"
+                  },
+                  "dailyValue": null,
+                  "amountStatus": "printed",
+                  "parentRowIndex": 13
+                },
+                {
+                  "kind": "blend_component",
+                  "name": {
+                    "text": "Black Pepper/BioPerine",
+                    "evidence": "Black Pepper/BioPerine"
+                  },
+                  "amount": {
+                    "text": "5 mg",
+                    "evidence": "5 mg"
+                  },
+                  "dailyValue": null,
+                  "amountStatus": "printed",
+                  "parentRowIndex": 13
+                },
+                {
+                  "kind": "blend_component",
+                  "name": {
+                    "text": "Vitamin B12 (Methylcobalamin)",
+                    "evidence": "Vitamin B12 (Methylcobalamin)"
+                  },
+                  "amount": {
+                    "text": "2.4 mcg",
+                    "evidence": "2.4 mcg"
+                  },
+                  "dailyValue": null,
+                  "amountStatus": "printed",
+                  "parentRowIndex": 13
+                }
+              ]
+            }
+          ]
+        },
+        "otherIngredients": {
+          "heading": {
+            "text": "Other Ingredients",
+            "evidence": "Other Ingredients"
+          },
+          "items": [
+            {
+              "text": "Malt Syrup",
+              "evidence": "Malt Syrup"
+            },
+            {
+              "text": "Organic Cane Sugar",
+              "evidence": "Organic Cane Sugar"
+            },
+            {
+              "text": "Pectin",
+              "evidence": "Pectin"
+            },
+            {
+              "text": "Sodium Citrate",
+              "evidence": "Sodium Citrate"
+            },
+            {
+              "text": "Citric Acid",
+              "evidence": "Citric Acid"
+            },
+            {
+              "text": "Lactic Acid",
+              "evidence": "Lactic Acid"
+            },
+            {
+              "text": "Natural Flavor Juice",
+              "evidence": "Natural Flavor Juice"
+            }
+          ]
+        },
+        "formulaComplete": true,
+        "ingredientsComplete": true,
+        "exclusions": [],
+        "issues": []
+      }
+    }
+  ]
+}

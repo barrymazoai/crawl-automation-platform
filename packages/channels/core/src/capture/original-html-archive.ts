@@ -1,5 +1,6 @@
 import { isDeepStrictEqual } from "node:util";
 import { RetainedPublication, sha256, verifyBytes } from "@crawl-automation/v3-artifacts";
+import { ScraperApiOptionsSchema } from "@crawl-automation/platform";
 import { ArtifactRefSchema, type ArtifactRef } from "@crawl-automation/v3-contracts";
 import { z } from "zod";
 import type { ChannelId } from "../adapter.js";
@@ -18,11 +19,19 @@ export const HtmlCaptureSchema = z.strictObject({
 });
 export type HtmlCapture = z.infer<typeof HtmlCaptureSchema>;
 
+/**
+ * How a page was fetched. `options` and `creditCost` are recorded since the ScraperAPI client moved to platform;
+ * earlier archives have neither and stay readable.
+ */
 export const FetchedViaSchema = z.strictObject({
   mode: z.literal("http"),
   routeId: z.string(),
   egressId: z.string(),
   provider: z.string(),
+  options: ScraperApiOptionsSchema.optional(),
+  creditCost: z.number().nonnegative().nullable().optional(),
+  /** Where the page was finally read, when a same-site redirect moved it; absent when it was not moved. */
+  finalUrl: z.url().max(4096).optional(),
 });
 export type FetchedVia = z.infer<typeof FetchedViaSchema>;
 
@@ -30,6 +39,8 @@ export interface ArchivedHtml {
   bytes: Uint8Array;
   source: ArtifactRef;
   capturedAt: string;
+  /** Where the page was finally read, when a redirect moved it; null otherwise. */
+  finalUrl: string | null;
 }
 
 /**
@@ -96,7 +107,8 @@ export class OriginalHtmlArchive {
     if (!isDeepStrictEqual(receipt.source, this.sourceOf(bytes))) {
       throw channelErrors.create("CAPTURE.ARCHIVE_IDENTITY", { details: { prefix: this.prefix } });
     }
-    return { bytes, source: receipt.source, capturedAt: receipt.capturedAt };
+    const finalUrl = receipt.fetchedVia.finalUrl ?? null;
+    return { bytes, source: receipt.source, capturedAt: receipt.capturedAt, finalUrl };
   }
 
   /** Commits the page and its receipt, then reads both back. An identical earlier archive is returned as is. */

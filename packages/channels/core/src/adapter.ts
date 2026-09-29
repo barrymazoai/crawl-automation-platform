@@ -10,7 +10,9 @@ import type { CaptureMode } from "./capture.js";
 /** Price, rating, review count and availability as a product page shows them. */
 export type CommerceEvidence = z.infer<typeof CommerceEvidenceSchema>;
 
-export type ChannelId = "amazon" | "gnc" | "swanson" | "dtc" | "costco" | "wholefoods";
+/** Every channel the system knows. */
+export const CHANNEL_IDS = ["amazon", "gnc", "swanson", "dtc", "costco", "wholefoods"] as const;
+export type ChannelId = (typeof CHANNEL_IDS)[number];
 
 /** A product's address on its channel, known before the page is fetched. */
 export interface ProductAddress {
@@ -77,6 +79,15 @@ export interface ChannelPlanning<Rendered = unknown> {
   projection(rendered: Rendered): unknown;
   /** The label workflow's channel-specific core step, when the channel has one. */
   corePolicy?: ChannelLabelInput["corePolicy"];
+  /** How that core step reads the label facts text from the product page (supplied to processing by name). */
+  labelCore?: LabelCoreReader;
+}
+
+/** A channel's label-core reader: which page producer it reads, and how it picks out the label facts text. */
+export interface LabelCoreReader {
+  sourceModule: string;
+  sourceVersion?: string;
+  extract(html: string): string;
 }
 
 /**
@@ -85,10 +96,10 @@ export interface ChannelPlanning<Rendered = unknown> {
  */
 export interface ChannelAdapter<Rendered = unknown> {
   readonly id: ChannelId;
-  /** The capture modes this website supports, preferred first. */
+  /** Product pages are fetched only through ScraperAPI (`http`); never in a browser. */
   readonly captureModes: readonly CaptureMode[];
-  /** Required when `captureModes` includes `http`. */
-  readonly httpPolicy?: HttpPolicy;
+  /** Which sites the product pages may come from, and their size and time limits. */
+  readonly httpPolicy: HttpPolicy;
   /** Where product images may be downloaded from; defaults to the page origins. */
   readonly fileOrigins?: readonly string[];
   readonly planning?: ChannelPlanning<Rendered>;

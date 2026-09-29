@@ -10,6 +10,7 @@ import {
 } from "@crawl-automation/v3-contracts";
 import {
   ProcessingReceipt,
+  registeredInputIs,
   type ReceiptDeps,
   type ReceiptFailureReason,
   type ReceiptKind,
@@ -31,6 +32,8 @@ const ocrReceiptKind: ReceiptKind<OcrInput, OcrRegistration, OcrReceiptOutcome> 
     return { input: parseOcrTask(request.input), outcome: request.outcome };
   },
   parseRecord: (raw) => OcrRegistrationSchema.parse(raw),
+  task: (input) => input,
+  ownsRegistration: registeredInputIs,
   reviewedStage: "ocr.file",
   observation: observationIdentity,
   ownsReview: (review, input, outcome) =>

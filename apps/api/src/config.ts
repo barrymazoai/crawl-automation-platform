@@ -1,11 +1,12 @@
 import { isAbsolute } from "node:path";
-import { DeliveryRunnerOptionsSchema } from "@crawl-automation/app";
+import { DeliveryRunnerOptionsSchema, QueueDispatcherOptionsSchema } from "@crawl-automation/app";
 import {
   DatabaseConfigSchema,
   LogConfigSchema,
   TemporalConfigSchema,
   loadConfig,
 } from "@crawl-automation/platform";
+import { R2ScopeSchema } from "@crawl-automation/v3-artifacts";
 import { DeliveryTarget, ResourceGateSchema } from "@crawl-automation/v3-contracts";
 import { ProductPipelineInputSchema } from "@crawl-automation/workflows";
 import { z } from "zod";
@@ -43,6 +44,25 @@ export const ApiConfigSchema = z.strictObject({
     })
     .default({ queues: { activities: "none", plan: "none", label: "none" }, channels: {} }),
   fleet: z.strictObject({ monitorStatus: absolutePath, queueHealth: absolutePath }),
+  /**
+   * Read-only access to the evidence in R2, for the Review evidence and recheck procedures. Without it those
+   * procedures answer REVIEW.EVIDENCE_NOT_CONFIGURED; nothing else needs it.
+   */
+  storage: z
+    .strictObject({
+      r2: R2ScopeSchema,
+      r2Credentials: z.strictObject({
+        accessKeyId: z.string().min(1),
+        secretAccessKey: z.string().min(1),
+      }),
+      /** The storage ID results were stored under (the workers' `storageId`). */
+      storageId: z.string().min(1),
+    })
+    .optional(),
+  /** The product queue of every channel but Amazon: how often its dispatcher runs a round. */
+  queue: z
+    .strictObject({ dispatcher: QueueDispatcherOptionsSchema.default({ intervalMs: 5_000 }) })
+    .default({ dispatcher: { intervalMs: 5_000 } }),
   /** How often ended work is checked: permits of stopped owners released, ended runs settled. */
   cleanup: z.strictObject({ intervalMs: z.number().int().min(10_000).max(3_600_000) }).default({
     intervalMs: 60_000,

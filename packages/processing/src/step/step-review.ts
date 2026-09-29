@@ -21,7 +21,7 @@ export interface StepReviewParts {
   task: ReviewedTask;
   observation: unknown;
   stage: string;
-  category: "PROCESSING" | "ARTIFACT";
+  category: "PROCESSING" | "ARTIFACT" | "VALIDATION" | "INGEST";
   code: string;
   fact: ExecutionFact;
   evidenceKey: string;

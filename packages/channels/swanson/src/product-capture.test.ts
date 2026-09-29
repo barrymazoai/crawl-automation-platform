@@ -6,21 +6,18 @@ import {
   ProductCapture,
   ProductSourcePlans,
   type PlanSettings,
+  type ProductCaptureResult,
 } from "@crawl-automation/channels-core";
-import {
-  ScraperApiTransport,
-  type HttpRoute,
-  type Response,
-} from "@crawl-automation/v3-acquisition";
 import {
   ArtifactResolver,
   RetainedPublication,
   type ObjectStore,
 } from "@crawl-automation/v3-artifacts";
 import { extractSwansonLabelCore } from "@crawl-automation/v3-acquisition";
-import { ChannelProductPlans, SWANSON_HTTP_POLICY } from "@crawl-automation/v3-channels";
+import { ChannelProductPlans } from "@crawl-automation/v3-channels";
 import { describe, expect, it, vi } from "vitest";
 import { swansonAdapter } from "./adapter.js";
+import { fakeScraperApiPages } from "./testing/fake-scraperapi.js";
 
 class Memory implements ObjectStore {
   data = new Map<string, Uint8Array>();
@@ -48,17 +45,6 @@ const pages = {
 type Page = (typeof pages)[keyof typeof pages];
 const pageBytes = (page: Page) =>
   gunzipSync(readFileSync(new URL(`./fixtures/${page.file}`, import.meta.url)));
-const selection = {
-  routeId: "route-test",
-  version: "scraperapi/1",
-  egressId: "scraperapi-us/1",
-  mode: "scraperapi" as const,
-  managed: true as const,
-  countryCode: "us",
-  sessionNumber: null,
-  responseMode: "html" as const,
-  providerPolicy: "scraperapi-sync/1" as const,
-};
 const settings: PlanSettings = {
   text: {
     schemaVersion: 1 as const,
@@ -93,23 +79,10 @@ function setup(page: Page = pages.dRibose) {
   const body = pageBytes(page);
   const remote = new Memory();
   const publication = new RetainedPublication(new Memory(), remote);
-  const fetches = vi.fn(async (): Promise<Response> => ({
-    status: 200,
-    headers: { "content-type": "text/html; charset=utf-8", "content-length": String(body.length) },
-    body: (async function* () {
-      yield body;
-    })(),
-    close: () => undefined,
-  }));
-  const transport = new ScraperApiTransport(
-    selection,
-    { apiKey: "fake-key-000000", allowedOrigins: [...SWANSON_HTTP_POLICY.origins] },
-    fetches,
-  );
-  const route: HttpRoute = { selection, transport, capabilities: transport.capabilities };
+  const { fetches, pages: scraperPages } = fakeScraperApiPages(body);
   const capture = new ProductCapture({
     registry: new ChannelRegistry([swansonAdapter]),
-    http: new HttpCapture(route),
+    http: new HttpCapture(scraperPages),
     publication,
     sourcePlans: new ProductSourcePlans(publication, settings),
   });
@@ -121,11 +94,19 @@ function setup(page: Page = pages.dRibose) {
 
 const signal = () => AbortSignal.timeout(10_000);
 
+/** A capture that read a product page (not a listing found gone or superseded). */
+function captured(result: ProductCaptureResult) {
+  if (result.status !== "captured") {
+    throw new Error(`expected a product page, got a ${result.sighting.state} listing`);
+  }
+  return result;
+}
+
 describe("ProductCapture with the Swanson adapter", () => {
   it("archives the page, publishes the projection, and the existing planner accepts it", async () => {
     const { remote, fetches, capture, plans } = setup();
 
-    const result = await capture.capture(request, signal());
+    const result = captured(await capture.capture(request, signal()));
 
     expect(fetches).toHaveBeenCalledOnce();
     expect(remote.data.has("v3/swanson-html/pipeline-capture-1/original.html")).toBe(true);
@@ -157,7 +138,9 @@ describe("ProductCapture with the Swanson adapter", () => {
     async (_name, page) => {
       const { remote, capture, plans } = setup(page);
 
-      const { sourcePlan } = await capture.capture({ ...request, url: page.url }, signal());
+      const { sourcePlan } = captured(
+        await capture.capture({ ...request, url: page.url }, signal()),
+      );
       const planned = await plans.run(sourcePlan, signal());
 
       expect(planned.status).toBe("prepared");

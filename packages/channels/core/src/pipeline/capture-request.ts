@@ -1,5 +1,6 @@
 import type { ChannelPlanInput } from "@crawl-automation/v3-contracts";
 import type { ChannelId } from "../adapter.js";
+import type { ListingSighting } from "./listing-sighting.js";
 
 /** One product of one run, as the pipeline asks for it. */
 export interface CaptureRequest {
@@ -18,9 +19,17 @@ export type PlanSettings = Pick<ChannelPlanInput, "text" | "ocr" | "visionConfig
   factsPolicy?: ChannelPlanInput["factsPolicy"];
 };
 
-export interface ProductCaptureResult {
-  status: "captured";
-  sourcePlan: ChannelPlanInput;
-  /** Whether the page's own facts text is complete enough to read the formula without images. */
-  factsComplete: boolean;
-}
+export type ProductCaptureResult =
+  | {
+      status: "captured";
+      sourcePlan: ChannelPlanInput;
+      /** Whether the page's own facts text is complete enough to read the formula without images. */
+      factsComplete: boolean;
+    }
+  | {
+      /** The revisit showed the listing is gone or superseded; nothing was parsed or planned. */
+      status: "sighted";
+      listingId: string;
+      variantId: string | null;
+      sighting: ListingSighting;
+    };

@@ -1,5 +1,6 @@
 import {
   AddToQueueSchema,
+  ChannelQueueSchema,
   PauseQueueSchema,
   QueueItemsQuerySchema,
   QueueLimitsSchema,
@@ -7,16 +8,21 @@ import {
 } from "@crawl-automation/app";
 import { procedure, router } from "../trpc.js";
 
+const channelOf = (input: unknown) => ChannelQueueSchema.parse(input ?? {}).channel;
+
+/** Every channel's product queue; a call without a channel is about Amazon's. */
 export const queueRouter = router({
   /** Mode, limits and item counts by state. */
-  status: procedure.query(({ ctx }) => ctx.queue.status()),
+  status: procedure
+    .input(ChannelQueueSchema.optional())
+    .query(({ ctx, input }) => ctx.queue.status(channelOf(input))),
 
   /** Items in one state, most recently changed first. */
   items: procedure
     .input(QueueItemsQuerySchema.optional())
     .query(({ ctx, input }) => ctx.queue.items(QueueItemsQuerySchema.parse(input ?? {}))),
 
-  /** Add a list of products; importing the same list again adds nothing. */
+  /** Add a product list; adding the same list again adds nothing. */
   add: procedure.input(AddToQueueSchema).mutation(({ ctx, input }) => ctx.queue.add(input)),
 
   /** Drain (let running products finish) or, with `force`, stop them. */
@@ -24,7 +30,9 @@ export const queueRouter = router({
     .input(PauseQueueSchema.optional())
     .mutation(({ ctx, input }) => ctx.queue.pause(PauseQueueSchema.parse(input ?? {}))),
 
-  resume: procedure.mutation(({ ctx }) => ctx.queue.resume()),
+  resume: procedure
+    .input(ChannelQueueSchema.optional())
+    .mutation(({ ctx, input }) => ctx.queue.resume(channelOf(input))),
 
   /** How many products wait ready and how many run at once. */
   setLimits: procedure

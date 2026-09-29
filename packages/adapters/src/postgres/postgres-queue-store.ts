@@ -22,6 +22,9 @@ function itemId(campaignId: string, scope: unknown, entry: unknown): string {
     .digest("hex");
 }
 
+type AmazonList = Extract<AddToQueue, { channel: "amazon" }>;
+
+/** Amazon's existing queue tables (amazon_queue_*), unchanged; only the Amazon channel reaches this store. */
 export class PostgresQueueStore implements QueueStore {
   constructor(private readonly database: Database) {}
 
@@ -34,6 +37,13 @@ export class PostgresQueueStore implements QueueStore {
   }
 
   add(input: AddToQueue): Promise<{ added: number }> {
+    if (input.channel !== "amazon") {
+      throw appErrors.create("RUN.CHANNEL_UNSUPPORTED", { details: { channel: input.channel } });
+    }
+    return this.addAmazon(input);
+  }
+
+  private addAmazon(input: AmazonList): Promise<{ added: number }> {
     return this.locked(async (tx) => {
       let added = 0;
       for (const batch of input.batches) {
@@ -117,7 +127,7 @@ export class PostgresQueueStore implements QueueStore {
   }
 }
 
-async function insertItem(tx: Queryable, campaignId: string, input: AddToQueue["batches"][number]) {
+async function insertItem(tx: Queryable, campaignId: string, input: AmazonList["batches"][number]) {
   const [entry] = input.entries;
   const id = itemId(campaignId, input.scope, entry?.entry);
   const inserted = await tx.query(

@@ -1,0 +1,306 @@
+{
+  "codec": "label-extraction/1",
+  "formula": {
+    "servingSize": {
+      "text": "2",
+      "evidence": "2"
+    },
+    "servingsPerContainer": {
+      "text": "3",
+      "evidence": "3"
+    },
+    "columns": [
+      {
+        "heading": {
+          "text": "Amounts Per Serving",
+          "evidence": "Amounts Per Serving"
+        },
+        "rows": [
+          {
+            "kind": "nutrient",
+            "name": {
+              "text": "Calories",
+              "evidence": "Calories"
+            },
+            "amount": {
+              "text": "12",
+              "evidence": "12"
+            },
+            "dailyValue": null,
+            "amountStatus": "printed",
+            "parentRowIndex": null
+          },
+          {
+            "kind": "nutrient",
+            "name": {
+              "text": "Total Carbohydrates",
+              "evidence": "Total Carbohydrates"
+            },
+            "amount": {
+              "text": "4 g",
+              "evidence": "4 g"
+            },
+            "dailyValue": null,
+            "amountStatus": "printed",
+            "parentRowIndex": null
+          },
+          {
+            "kind": "nutrient",
+            "name": {
+              "text": "Total Sugars",
+              "evidence": "Total Sugars"
+            },
+            "amount": {
+              "text": "2 g",
+              "evidence": "2 g"
+            },
+            "dailyValue": null,
+            "amountStatus": "printed",
+            "parentRowIndex": null
+          },
+          {
+            "kind": "nutrient",
+            "name": {
+              "text": "Added Sugars",
+              "evidence": "Added Sugars"
+            },
+            "amount": {
+              "text": "2 g",
+              "evidence": "2 g"
+            },
+            "dailyValue": null,
+            "amountStatus": "printed",
+            "parentRowIndex": null
+          },
+          {
+            "kind": "group_header",
+            "name": {
+              "text": "FocusFuel™ Electrolyte Blend",
+              "evidence": "FocusFuel™ Electrolyte Blend"
+            },
+            "amount": null,
+            "dailyValue": null,
+            "amountStatus": "not_applicable",
+            "parentRowIndex": null
+          },
+          {
+            "kind": "blend_component",
+            "name": {
+              "text": "Sodium",
+              "evidence": "Sodium"
+            },
+            "amount": {
+              "text": "200 mg",
+              "evidence": "200 mg"
+            },
+            "dailyValue": null,
+            "amountStatus": "printed",
+            "parentRowIndex": 4
+          },
+          {
+            "kind": "blend_component",
+            "name": {
+              "text": "Potassium",
+              "evidence": "Potassium"
+            },
+            "amount": {
+              "text": "100 mg",
+              "evidence": "100 mg"
+            },
+            "dailyValue": null,
+            "amountStatus": "printed",
+            "parentRowIndex": 4
+          },
+          {
+            "kind": "blend_component",
+            "name": {
+              "text": "Magnesium",
+              "evidence": "Magnesium"
+            },
+            "amount": {
+              "text": "50 mg",
+              "evidence": "50 mg"
+            },
+            "dailyValue": null,
+            "amountStatus": "printed",
+            "parentRowIndex": 4
+          },
+          {
+            "kind": "blend_component",
+            "name": {
+              "text": "Watermelon Juice Powder",
+              "evidence": "Watermelon Juice Powder"
+            },
+            "amount": {
+              "text": "200 mg",
+              "evidence": "200 mg"
+            },
+            "dailyValue": null,
+            "amountStatus": "printed",
+            "parentRowIndex": 4
+          },
+          {
+            "kind": "group_header",
+            "name": {
+              "text": "FocusFuel™ Focus Blend",
+              "evidence": "FocusFuel™ Focus Blend"
+            },
+            "amount": null,
+            "dailyValue": null,
+            "amountStatus": "not_applicable",
+            "parentRowIndex": null
+          },
+          {
+            "kind": "blend_component",
+            "name": {
+              "text": "Alpha GPC",
+              "evidence": "Alpha GPC"
+            },
+            "amount": {
+              "text": "200 mg",
+              "evidence": "200 mg"
+            },
+            "dailyValue": null,
+            "amountStatus": "printed",
+            "parentRowIndex": 9
+          },
+          {
+            "kind": "blend_component",
+            "name": {
+              "text": "Lion’s Mane",
+              "evidence": "Lion’s Mane"
+            },
+            "amount": {
+              "text": "200 mg",
+              "evidence": "200 mg"
+            },
+            "dailyValue": null,
+            "amountStatus": "printed",
+            "parentRowIndex": 9
+          },
+          {
+            "kind": "blend_component",
+            "name": {
+              "text": "Ashwagandha",
+              "evidence": "Ashwagandha"
+            },
+            "amount": {
+              "text": "200 mg",
+              "evidence": "200 mg"
+            },
+            "dailyValue": null,
+            "amountStatus": "printed",
+            "parentRowIndex": 9
+          },
+          {
+            "kind": "group_header",
+            "name": {
+              "text": "FocusFuel™ Electrolyte Blend",
+              "evidence": "FocusFuel™ Electrolyte Blend"
+            },
+            "amount": null,
+            "dailyValue": null,
+            "amountStatus": "not_applicable",
+            "parentRowIndex": null
+          },
+          {
+            "kind": "blend_component",
+            "name": {
+              "text": "Natural Caffeine (from Guarana seed and green tea blend)",
+              "evidence": "Natural Caffeine (from Guarana seed and green tea blend)"
+            },
+            "amount": {
+              "text": "100 mg",
+              "evidence": "100 mg"
+            },
+            "dailyValue": null,
+            "amountStatus": "printed",
+            "parentRowIndex": 13
+          },
+          {
+            "kind": "blend_component",
+            "name": {
+              "text": "L-Theanine",
+              "evidence": "L-Theanine"
+            },
+            "amount": {
+              "text": "100 mg",
+              "evidence": "100 mg"
+            },
+            "dailyValue": null,
+            "amountStatus": "printed",
+            "parentRowIndex": 13
+          },
+          {
+            "kind": "blend_component",
+            "name": {
+              "text": "Black Pepper/BioPerine",
+              "evidence": "Black Pepper/BioPerine"
+            },
+            "amount": {
+              "text": "5 mg",
+              "evidence": "5 mg"
+            },
+            "dailyValue": null,
+            "amountStatus": "printed",
+            "parentRowIndex": 13
+          },
+          {
+            "kind": "blend_component",
+            "name": {
+              "text": "Vitamin B12 (Methylcobalamin)",
+              "evidence": "Vitamin B12 (Methylcobalamin)"
+            },
+            "amount": {
+              "text": "2.4 mcg",
+              "evidence": "2.4 mcg"
+            },
+            "dailyValue": null,
+            "amountStatus": "printed",
+            "parentRowIndex": 13
+          }
+        ]
+      }
+    ]
+  },
+  "otherIngredients": {
+    "heading": {
+      "text": "Other Ingredients",
+      "evidence": "Other Ingredients"
+    },
+    "items": [
+      {
+        "text": "Malt Syrup",
+        "evidence": "Malt Syrup"
+      },
+      {
+        "text": "Organic Cane Sugar",
+        "evidence": "Organic Cane Sugar"
+      },
+      {
+        "text": "Pectin",
+        "evidence": "Pectin"
+      },
+      {
+        "text": "Sodium Citrate",
+        "evidence": "Sodium Citrate"
+      },
+      {
+        "text": "Citric Acid",
+        "evidence": "Citric Acid"
+      },
+      {
+        "text": "Lactic Acid",
+        "evidence": "Lactic Acid"
+      },
+      {
+        "text": "Natural Flavor Juice",
+        "evidence": "Natural Flavor Juice"
+      }
+    ]
+  },
+  "formulaComplete": true,
+  "ingredientsComplete": true,
+  "exclusions": [],
+  "issues": []
+}
