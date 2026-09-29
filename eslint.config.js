@@ -7,6 +7,7 @@ export const governed = [
   "apps/api/src/**/*.ts",
   "apps/worker/src/**/*.ts",
   "apps/cli/src/**/*.ts",
+  "packages/adapters/src/**/*.ts",
   "packages/app/src/**/*.ts",
   "packages/workflows/src/**/*.ts",
   "packages/channels/*/src/**/*.ts",
@@ -31,6 +32,10 @@ export default tseslint.config(
       "id-length": ["error", { min: 2, exceptions: shortNamesAllowed, properties: "never" }],
       "no-empty": ["error", { allowEmptyCatch: false }],
       curly: ["error", "all"],
+      "@typescript-eslint/no-unused-vars": [
+        "error",
+        { argsIgnorePattern: "^_", varsIgnorePattern: "^_", caughtErrors: "all" },
+      ],
       "no-console": "error",
       "no-restricted-imports": [
         "error",

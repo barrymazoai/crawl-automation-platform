@@ -2,14 +2,25 @@
 // A layer imports only layers below it; channels and processing never import each other.
 const layer = (name) => `^(apps|packages)/${name}/`;
 
-/** Layers from top to bottom. Each may import only the layers listed after it. */
-const order = ["api", "cli", "worker", "app", "workflows", "channels", "processing", "platform"];
+/** Layers from top to bottom. Each may import only the layers listed after it; the CLI uses the API's types. */
+const order = [
+  "cli",
+  "api",
+  "worker",
+  "adapters",
+  "app",
+  "workflows",
+  "channels",
+  "processing",
+  "platform",
+];
 
-const forbidUpward = order.map((name, index) => ({
+// The top layer has nothing above it; an empty `to.path` list would match every module.
+const forbidUpward = order.slice(1).map((name, index) => ({
   name: `${name}-imports-downward-only`,
   severity: "error",
   from: { path: layer(name) },
-  to: { path: order.slice(0, index).map(layer) },
+  to: { path: order.slice(0, index + 1).map(layer) },
 }));
 
 module.exports = {
@@ -34,13 +45,13 @@ module.exports = {
       to: { path: "^packages/channels/([^/]+)/", pathNot: ["^packages/channels/$1/", "^packages/channels/core/"] },
     },
     {
-      name: "sql-only-in-platform-database",
+      name: "sql-only-in-platform-and-adapters",
       severity: "error",
       from: { path: layer("(api|cli|app|workflows|channels|processing)"), pathNot: "\\.test\\.ts$" },
       to: { path: "node_modules/(pg|pg-pool)/" },
     },
     {
-      name: "temporal-client-only-in-platform",
+      name: "temporal-client-only-in-platform-and-adapters",
       severity: "error",
       from: { path: layer("(api|cli|app|channels|processing)"), pathNot: "\\.test\\.ts$" },
       to: { path: "node_modules/@temporalio/(client|worker)/" },
@@ -48,7 +59,7 @@ module.exports = {
     {
       name: "new-code-does-not-import-old-apps",
       severity: "error",
-      from: { path: layer("(api|cli|worker|app|workflows|channels|processing|platform)") },
+      from: { path: layer("(api|cli|worker|adapters|app|workflows|channels|processing|platform)") },
       to: { path: "^apps/(v3-api|v3-workers|backend|web|browser-node)/" },
     },
     { name: "no-circular", severity: "error", from: {}, to: { circular: true } },

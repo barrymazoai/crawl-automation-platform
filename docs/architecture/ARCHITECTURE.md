@@ -13,17 +13,18 @@ A layer imports only the layers below it. Channels and processing sit side by si
 | Interface | `apps/api` | tRPC routers on a Hono server. Check input with zod, call one service method, return the result. The only way into the system. No authentication. | Business rules, SQL, Temporal calls |
 | Client | `apps/cli` | Typed command-line client of the API. | Anything the API does not do |
 | Worker host | `apps/worker` | Starts the worker roles named in the machine's config. | Business rules |
-| Application | `packages/app` | One service per area: Brand, Run, Queue, Product, Review, Resource, Fleet. Decides whether an operation is allowed and in which order things happen. | HTTP, any website's details |
+| Adapters | `packages/adapters` | Implements the application's interfaces with Postgres (repositories), Temporal (start, inspect, cancel) and status files. | Business rules |
+| Application | `packages/app` | One service per area: Brand, Run, Queue, Product, Review, Resource, Fleet, plus the interfaces (ports) it needs. Decides whether an operation is allowed and in which order things happen. | SQL, Temporal calls, HTTP, any website's details |
 | Workflows | `packages/workflows` | Temporal workflows for every channel: Collection, Catalog, Product, Label, ResourceGate. | Reading HTML, a site's URL formats |
 | Channels | `packages/channels/<channel>` | Everything specific to one website: brand lookup, product list, page parsing, facts text, identity. One folder per channel; `core/` holds the `ChannelAdapter` interface, the capture strategies and the shared pipeline steps. | Database, Temporal, permits, other channels |
 | Processing | `packages/processing` | Turns label images and page text into a formula: image preparation, OCR client, text model, vision model, PDF, assembly. | Knowing the channel, fetching pages |
-| Platform | `packages/platform` | Shared tools: config, logger, database and repositories, Temporal client, R2 storage, fetch (ScraperAPI, Ego), error registry, `createWorker`. | Brands, products, runs, channels |
+| Platform | `packages/platform` | Shared tools: config, logger, database connection, Temporal client, R2 storage, fetch (ScraperAPI, Ego), error registry, `createWorker`. | Brands, products, runs, channels |
 
 `packages/v3-contracts` (data shapes) and `database/v3` (migrations) are kept and used by every layer.
 
 ## Runs
 
-`POST` through the API's `runs.submit` accepts one product URL, a list of URLs, or a whole brand on one channel.
+The API's `runs.submit` accepts one product URL, a list of URLs, or a whole brand on one channel.
 Every run moves through: accepted → waiting for permit → running → completed / failed / cancelled → settled.
 Settled means its permits and its source guard are released. Stopping a run is `runs.cancel`; nothing is repaired
 by script.
@@ -51,7 +52,7 @@ Every service is started by hand; nothing starts at boot or login. Code reaches 
 - Adapter + registry: one `ChannelAdapter` per website, looked up by channel id.
 - Strategy: capture (browser or HTTP); formula source (facts text or OCR).
 - Template method: the shared product pipeline with channel hooks.
-- Repository: all SQL lives in repository classes.
+- Repository: all SQL lives in repository classes in `packages/adapters`.
 - Facade: application services are the API's only door into the system.
 - State machine: the run lifecycle, with one settle step for every ending.
 - Composition root: one awilix container per app builds and wires every part.
@@ -62,7 +63,7 @@ Every service is started by hand; nothing starts at boot or login. Code reaches 
 |---|---|---|
 | 1 | Guardrails: ESLint, Prettier, dependency-cruiser, jscpd, lefthook, CI, `test:v3` | Done |
 | 2 | `packages/platform`: config, logger, database, Temporal client, error registry. Storage and fetch move in with the channels in phase 5. | Done |
-| 3 | `packages/app` + `apps/api` (tRPC on Hono) + `apps/cli` | Next |
+| 3 | `packages/app` + `packages/adapters` + `apps/api` (tRPC on Hono) + `apps/cli`. Done: runs (submit brand, list, get, cancel, settle), resources and permits, fleet, delivery runner. Next: queue, brands, reviews, products, then switch Server 一 from `collection-api`. | In progress |
 | 4 | Run lifecycle: cancel, permit and guard release on every ending, resource kinds | |
 | 5 | Channel interface; Swanson, then Amazon, GNC, DTC; Costco and Whole Foods | |
 | 6 | Grouped worker processes, generated job list, one deploy command, old scripts archived | |

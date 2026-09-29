@@ -1,0 +1,25 @@
+{
+  "name": "@crawl-automation/cli",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "crawler": "./src/main.ts"
+  },
+  "scripts": {
+    "check-types": "tsc --noEmit",
+    "test": "vitest run src",
+    "start": "tsx src/main.ts"
+  },
+  "dependencies": {
+    "@crawl-automation/api": "workspace:*",
+    "@trpc/client": "^11.19.0",
+    "commander": "^14.0.3"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "tsx": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}

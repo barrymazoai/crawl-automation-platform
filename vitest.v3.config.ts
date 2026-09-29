@@ -9,7 +9,7 @@ export default defineConfig({
       "apps/v3-api/src/**/*.test.ts",
       "apps/v3-workers/src/**/*.test.ts",
       "apps/{api,worker,cli}/src/**/*.test.ts",
-      "packages/{app,workflows,processing,platform}/src/**/*.test.ts",
+      "packages/{adapters,app,workflows,processing,platform}/src/**/*.test.ts",
       "packages/channels/*/src/**/*.test.ts",
     ],
     exclude: ["**/node_modules/**", "**/dist/**"],

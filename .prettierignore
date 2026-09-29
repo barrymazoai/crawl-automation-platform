@@ -8,6 +8,8 @@
 !apps/cli/
 !apps/cli/**
 !packages/
+!packages/adapters/
+!packages/adapters/**
 !packages/app/
 !packages/app/**
 !packages/workflows/

@@ -31,7 +31,8 @@ GitHub Actions (`.github/workflows/ci.yml`) runs everything on every push to mai
 ## Layers
 
 - Imports go downward only (see ARCHITECTURE.md). Packages are imported by name, never through `../../x/src`.
-- SQL only in repositories (`packages/platform`). HTTP only in `apps/api`. Temporal client only in `packages/platform`.
+- SQL only in repositories (`packages/adapters`). HTTP only in `apps/api`. Temporal client only in `packages/platform`
+  and `packages/adapters`.
 - A channel never imports another channel; channels and processing never import each other.
 
 ## Errors
