@@ -9,6 +9,5 @@ export * from "./vision/index.js";
 export * from "./pages/index.js";
 export * from "./label/index.js";
 export * from "./assembly/index.js";
-export * from "./pdf/index.js";
 export * from "./publication/index.js";
 export * from "./formula/index.js";

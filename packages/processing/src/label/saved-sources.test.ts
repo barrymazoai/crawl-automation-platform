@@ -6,16 +6,12 @@ import type {
 } from "@crawl-automation/v3-contracts";
 import { KeywordScreening, keywordKey } from "../keywords/keyword-screening.js";
 import { LedgerOcrText } from "../keywords/ocr-text.js";
-import { PdfEvidence } from "../pdf/pdf-evidence.js";
-import { PdfStep } from "../pdf/pdf-step.js";
-import { PdfTextEvidence, PdfTextPreparation } from "../pdf/pdf-text.js";
 import { hashString } from "../results/result-record.js";
 import { defined } from "../testing/defined.js";
 import { MemoryReviews } from "../testing/memory-ledgers.js";
 import { MemoryStore } from "../testing/memory-store.js";
 import { ocrStepSetup, remoteArtifacts } from "../testing/ocr-fixture.js";
 import { pageSetup } from "../testing/page-fixture.js";
-import { fakePdfEngine, pdfStores, pdfTask, pdfTextPlan } from "../testing/pdf-fixture.js";
 import { SavedSourceEvidence } from "./saved-sources.js";
 
 const signal = () => AbortSignal.timeout(10_000);
@@ -79,33 +75,6 @@ async function savedImage(text: string) {
     configFingerprint: "a".repeat(64),
   };
   return { ...setup, selection, source, resolver: new SavedSourceEvidence(deps) };
-}
-
-async function savedPdf(text?: string) {
-  const deps = pdfStores();
-  const plan = pdfTextPlan(pdfTask("pdf.text", "extract-pdf"));
-  const receipt = await new PdfStep(deps, fakePdfEngine(text === undefined ? {} : { text })).run(
-    plan.extraction,
-    signal(),
-  );
-  const prepared = await new PdfTextPreparation(deps).run({ plan, receipt }, signal());
-  const source: Extract<SavedEvidenceSource, { kind: "pdf-text" }> = {
-    id: "pdf-page",
-    kind: "pdf-text",
-    required: true,
-    plan,
-  };
-  const pdfText = new PdfTextEvidence(deps.remote, new PdfEvidence(deps));
-  const resolverDeps = {
-    remote: deps.remote,
-    reviews: deps.reviews,
-    pages: { inspect: async () => null },
-    ocr: noOcr,
-    screen: noScreen,
-    pdfText,
-    visionFingerprint,
-  };
-  return { deps, source, prepared, resolver: new SavedSourceEvidence(resolverDeps) };
 }
 
 // Cases carried over from the former saved-source resolver.
@@ -215,56 +184,17 @@ describe("saved sources", () => {
     });
   });
 
-  it("a saved PDF page resolves exactly its prepared task; damaged input is never prepared again", async () => {
-    const pdf = await savedPdf();
-    const writes = pdf.deps.remote.writes;
-    if (pdf.prepared.status !== "prepared") {
-      throw new Error(JSON.stringify(pdf.prepared));
-    }
-    for (const status of ["registered", "unresolved"] as const) {
-      expect(
-        await pdf.resolver.resolve(pdf.source, { id: pdf.source.id, status }, signal()),
-      ).toEqual({
-        status: "resolved",
-        source: { id: pdf.source.id, kind: "text", required: true, task: pdf.prepared.task },
+  it("a PDF source is skipped, never read and never a Review (no PDF, owner 2026-09-30)", async () => {
+    const page = await savedPage();
+    const pdf = {
+      id: "pdf-page",
+      kind: "pdf-text",
+      required: true,
+    } as unknown as SavedEvidenceSource;
+    for (const status of ["registered", "unresolved", "not_matched"] as const) {
+      expect(await page.resolver.resolve(pdf, { id: "pdf-page", status }, signal())).toEqual({
+        status: "not_matched",
       });
     }
-    await expect(
-      pdf.resolver.resolve(pdf.source, { id: pdf.source.id, status: "not_matched" }, signal()),
-    ).rejects.toMatchObject({
-      code: "SAVED.RECEIPT_INVALID",
-    });
-    pdf.deps.remote.data.delete(pdf.prepared.evidenceKey);
-    expect(
-      await pdf.resolver.resolve(pdf.source, { id: pdf.source.id, status: "registered" }, signal()),
-    ).toEqual({
-      status: "review",
-      code: "SAVED.PREPARATION_UNVERIFIED",
-    });
-    expect(pdf.deps.remote.writes).toBe(writes);
-  });
-
-  it("a PDF preparation Review is bound to its whole plan; another task cannot borrow it", async () => {
-    const pdf = await savedPdf("");
-    if (pdf.prepared.status !== "review") {
-      throw new Error(JSON.stringify(pdf.prepared));
-    }
-    const state = { id: pdf.source.id, status: "review" as const, reviewId: pdf.prepared.reviewId };
-    pdf.source.required = false;
-    expect(await pdf.resolver.resolve(pdf.source, state, signal())).toEqual({
-      status: "review",
-      code: "PDF.TEXT_EMPTY",
-    });
-    const changed = {
-      ...pdf.source,
-      plan: { ...pdf.source.plan, textOperationId: "another-model-operation" },
-    };
-    await expect(pdf.resolver.resolve(changed, state, signal())).rejects.toMatchObject({
-      code: "SAVED.IDENTITY_CONFLICT",
-    });
-    defined(pdf.deps.reviews.records.get(state.reviewId)).failure.inputFingerprint = "c".repeat(64);
-    await expect(pdf.resolver.resolve(pdf.source, state, signal())).rejects.toMatchObject({
-      code: "SAVED.IDENTITY_CONFLICT",
-    });
   });
 });

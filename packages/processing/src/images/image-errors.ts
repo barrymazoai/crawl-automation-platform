@@ -10,7 +10,6 @@ export const imageErrors = defineErrors({
   "IMAGE.IDENTITY_CONFLICT": artifact(
     "The plan, the download and its receipt name different images.",
   ),
-  "IMAGE.PDF_ROUTE_REQUIRED": artifact("The file is a PDF; it goes to PDF preparation."),
   "ACQUIRE.NOT_DURABLE": artifact("The downloaded file is not in R2."),
   "ACQUIRE.REVIEW_UNVERIFIED": artifact("The download's Review could not be confirmed."),
   "ACQUIRE.OUTPUT_LIMIT": artifact("The OCR task record is larger than allowed."),

@@ -14,6 +14,8 @@ import { SavedSourceTasks, type SavedSourceDeps } from "./saved-source-tasks.js"
 
 type State = ProductEvidenceJoin["states"][number];
 type Of<Kind extends SavedEvidenceSource["kind"]> = Extract<SavedEvidenceSource, { kind: Kind }>;
+/** Sources whose own step's evidence is re-read (a file image is re-read through its OCR source). */
+type Reread = Exclude<SavedEvidenceSource, { kind: "file-image" | "pdf-text" }>;
 
 const PREPARATION_STAGES = ["file.acquire", "image.ocr-input"];
 
@@ -35,6 +37,10 @@ export class SavedSourceEvidence {
   ): Promise<SourceResolution> {
     if (state.status === "rejected") {
       throw labelFailure("SAVED.RECEIPT_INVALID");
+    }
+    if (source.kind === "pdf-text") {
+      // PDFs are not read (owner 2026-09-30): a PDF source is skipped, never a Review.
+      return { status: "not_matched" };
     }
     if (source.kind === "file-image") {
       return this.fileImage(source, state, signal);
@@ -71,7 +77,7 @@ export class SavedSourceEvidence {
 
   /** A Review of this exact source's own step, at whichever stage it stopped. */
   private async reviewed(
-    source: Exclude<SavedEvidenceSource, { kind: "file-image" }>,
+    source: Reread,
     state: Extract<State, { status: "review" }>,
     signal: AbortSignal,
   ): Promise<SourceResolution> {
@@ -95,20 +101,16 @@ export class SavedSourceEvidence {
 
   /** A claimed success: the task is re-derived from re-verified evidence. */
   private async claimed(
-    source: Exclude<SavedEvidenceSource, { kind: "file-image" }>,
+    source: Reread,
     state: State,
     signal: AbortSignal,
   ): Promise<SourceResolution> {
     try {
-      if (source.kind !== "ocr-image") {
+      if (source.kind === "page") {
         if (state.status === "not_matched") {
           throw labelFailure("SAVED.RECEIPT_INVALID");
         }
-        const task =
-          source.kind === "page"
-            ? await this.tasks.page(source, signal)
-            : await this.tasks.pdf(source, signal);
-        return { status: "resolved", source: task };
+        return { status: "resolved", source: await this.tasks.page(source, signal) };
       }
       return await this.claimedImage(source, state, signal);
     } catch (error) {
@@ -143,10 +145,7 @@ export class SavedSourceEvidence {
   }
 }
 
-function ownerOf(source: Exclude<SavedEvidenceSource, { kind: "file-image" }>) {
-  if (source.kind === "pdf-text") {
-    return observationIdentity(source.plan.extraction);
-  }
+function ownerOf(source: Reread) {
   return source.kind === "page"
     ? observationIdentity(source.plan.page)
     : observationIdentity(source.task);

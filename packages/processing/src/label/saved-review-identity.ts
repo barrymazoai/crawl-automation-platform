@@ -1,11 +1,10 @@
-import { isDeepStrictEqual } from "node:util";
 import type { ReviewRecord, SavedEvidenceSource } from "@crawl-automation/v3-contracts";
 import { keywordCompatibility } from "../keywords/keyword-screening.js";
 import { hashString } from "../results/result-record.js";
 import { labelFailure } from "./label-errors.js";
 import type { SavedSourceTasks } from "./saved-source-tasks.js";
 
-type Reviewable = Exclude<SavedEvidenceSource, { kind: "file-image" }>;
+type Reviewable = Exclude<SavedEvidenceSource, { kind: "file-image" | "pdf-text" }>;
 type Of<Kind extends Reviewable["kind"]> = Extract<Reviewable, { kind: Kind }>;
 interface Operation {
   operationId: string;
@@ -22,34 +21,10 @@ const TEXT_STAGES = ["codex.text", "text.receipt"];
 
 /** The operation a source's Review must name, for the stage it stopped at; an unknown stage is a conflict. */
 export function reviewedOperation(source: Reviewable, lookup: Lookup): Promise<Operation> {
-  if (source.kind === "pdf-text") {
-    return pdfOperation(source, lookup);
-  }
   if (source.kind === "page") {
     return pageOperation(source, lookup);
   }
   return imageOperation(source, lookup);
-}
-
-async function pdfOperation(source: Of<"pdf-text">, lookup: Lookup): Promise<Operation> {
-  const { stage } = lookup.review.failure;
-  if (stage === "pdf.text" || stage === "pdf.text-input") {
-    const details = lookup.review.rawError.details;
-    const planned =
-      stage === "pdf.text" ||
-      (typeof details === "object" &&
-        details !== null &&
-        !Array.isArray(details) &&
-        isDeepStrictEqual((details as { plan?: unknown }).plan, source.plan));
-    if (!planned) {
-      throw conflict();
-    }
-    return source.plan.extraction;
-  }
-  if (TEXT_STAGES.includes(stage)) {
-    return (await lookup.tasks.pdf(source, lookup.signal)).task;
-  }
-  throw conflict();
 }
 
 async function pageOperation(source: Of<"page">, lookup: Lookup): Promise<Operation> {

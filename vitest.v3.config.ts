@@ -13,7 +13,14 @@ export default defineConfig({
       "packages/channels/*/src/**/*.test.ts",
       "ops/deploy/src/**/*.test.ts",
     ],
-    exclude: ["**/node_modules/**", "**/dist/**"],
+    exclude: [
+      "**/node_modules/**",
+      "**/dist/**",
+      // PDF is not part of the plan (owner 2026-09-30). These old tests start the Python PDF engine; the old code
+      // they test is archived with the rest (ticket R41).
+      "packages/v3-pdf/**",
+      "packages/v3-product/src/saved-sources.test.ts",
+    ],
     // Some archive tests do real hashing and I/O; 5 s is too short when the whole suite runs in parallel.
     testTimeout: 20000,
   },

@@ -23,17 +23,8 @@ jobs:
           node-version: 22.17.0
           cache: pnpm
 
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.13"
-
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
-
-      - name: PDF engine for the PDF tests
-        run: |
-          python -m venv packages/v3-pdf/.venv
-          packages/v3-pdf/.venv/bin/pip install -r packages/v3-pdf/python/requirements.txt
 
       - name: Lint and format
         run: pnpm lint

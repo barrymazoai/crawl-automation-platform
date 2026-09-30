@@ -10,11 +10,9 @@ import {
   type KeywordResult,
   type OcrRegistration,
   type PagePrepareInput,
-  type PdfTextPlan,
   type PreparedPageRecord,
   type ReviewRecord,
   type SavedEvidenceSource,
-  type TextInput,
   type VisionTask,
 } from "@crawl-automation/v3-contracts";
 import { keywordKey } from "../keywords/keyword-screening.js";
@@ -27,7 +25,6 @@ export interface SavedSourceDeps {
   files?: {
     inspect(input: FileAcquireInput, signal: AbortSignal): Promise<AcquiredFileRecord | null>;
   };
-  pdfText?: { inspect(plan: PdfTextPlan, signal: AbortSignal): Promise<TextInput> };
   pages: {
     inspect(input: PagePrepareInput, signal: AbortSignal): Promise<PreparedPageRecord | null>;
   };
@@ -45,14 +42,6 @@ const DECISION_LIMIT = 1024 * 1024;
 /** The tasks a saved source's prepared evidence stands for, each re-derived from that evidence. */
 export class SavedSourceTasks {
   constructor(readonly deps: SavedSourceDeps) {}
-
-  async pdf(source: Of<"pdf-text">, signal: AbortSignal) {
-    if (!this.deps.pdfText) {
-      throw labelFailure("SAVED.PDF_ADAPTER_REQUIRED");
-    }
-    const task = await this.deps.pdfText.inspect(source.plan, signal);
-    return { id: source.id, required: source.required, kind: "text" as const, task };
-  }
 
   async page(source: Of<"page">, signal: AbortSignal) {
     const record = await this.deps.pages.inspect(source.plan.page, signal);
