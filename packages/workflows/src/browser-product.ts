@@ -1,4 +1,4 @@
-import { resourceGate } from "@crawl-automation/v3-product/resource-workflow";
+import { versionedResourceGate } from "./resources/versioned-gate.js";
 import { ApplicationFailure, proxyActivities } from "@temporalio/workflow";
 import {
   BrowserCaptureResultSchema,
@@ -25,10 +25,15 @@ export async function collectInBrowser(
       "PIPELINE.BROWSER_QUEUE_MISSING",
     );
   }
-  const browser = proxyActivities<BrowserActivities>({ taskQueue: queue, ...once });
-  const gate = resourceGate(input.resources);
+  const gate = versionedResourceGate(input.resources, { ignoreLegacyBinding: true });
   const captured = BrowserCaptureResultSchema.parse(
-    await gate("captureProduct", () => browser.captureBrowserProduct(input)),
+    await gate("captureProduct", (binding) =>
+      proxyActivities<BrowserActivities>({
+        taskQueue: queue,
+        ...once,
+        ...binding,
+      }).captureBrowserProduct(input),
+    ),
   );
   if (captured.status !== "captured") {
     return captured;

@@ -21,12 +21,17 @@
     "@crawl-automation/v3-contracts": "workspace:*",
     "@crawl-automation/v3-product": "workspace:*",
     "@temporalio/workflow": "1.23.0",
-    "zod": "catalog:"
+    "zod": "catalog:",
+    "@crawl-automation/platform": "workspace:*"
   },
   "devDependencies": {
     "@crawl-automation/v3-channels": "workspace:*",
     "@types/node": "catalog:",
     "typescript": "catalog:",
-    "vitest": "catalog:"
+    "vitest": "catalog:",
+    "@temporalio/testing": "1.23.0",
+    "@temporalio/worker": "1.23.0",
+    "@temporalio/activity": "1.23.0",
+    "@temporalio/common": "1.23.0"
   }
 }

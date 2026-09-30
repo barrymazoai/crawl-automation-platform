@@ -15,6 +15,7 @@ export interface ReviewRequest {
   code: string;
   /** The error code that caused it, when the failure carried one. */
   causeCode: string | null;
+  executionFact?: ReviewRecord["failure"]["executionFact"] | undefined;
 }
 
 export interface ProductReview {
@@ -99,7 +100,7 @@ export class ProductReviews {
         stage: "pipeline.product",
         category: CATEGORY_BY_AREA[String(code).split(".")[0] ?? ""] ?? "PROCESSING",
         code,
-        executionFact: "unknown",
+        executionFact: target.request.executionFact ?? "unknown",
         evidenceKey: target.evidenceKey,
         blockedBy: null,
         automaticRetry: false,

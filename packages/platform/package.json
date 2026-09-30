@@ -11,6 +11,10 @@
     "./temporal-worker": {
       "types": "./src/temporal-worker/index.ts",
       "import": "./src/temporal-worker/index.ts"
+    },
+    "./errors/resource-gate": {
+      "types": "./src/errors/resource-gate-errors.ts",
+      "import": "./src/errors/resource-gate-errors.ts"
     }
   },
   "scripts": {

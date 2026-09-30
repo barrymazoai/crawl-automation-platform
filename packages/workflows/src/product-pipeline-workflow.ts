@@ -1,9 +1,8 @@
-import { resourceGate } from "@crawl-automation/v3-product/resource-workflow";
+import { resourceGateCodes } from "@crawl-automation/platform/errors/resource-gate";
 import { ChannelPlanOutcomeSchema } from "@crawl-automation/v3-contracts";
-import { isCancellation, proxyActivities } from "@temporalio/workflow";
+import { isCancellation, patched, proxyActivities } from "@temporalio/workflow";
 import { failureCode } from "./failure-code.js";
 import {
-  CaptureResultSchema,
   KnownFormulaSchema,
   ProductPipelineInputSchema,
   type PipelineActivities,
@@ -14,6 +13,7 @@ import { once } from "./activity-options.js";
 import { collectInBrowser } from "./browser-product.js";
 import { reuseSiblingFormula } from "./sibling-reuse.js";
 import { streamLabel } from "./stream-label.js";
+import { captureProduct } from "./resources/capture-product.js";
 
 /**
  * The shared product pipeline for every channel:
@@ -39,6 +39,9 @@ export async function ProductPipelineWorkflow(raw: unknown): Promise<unknown> {
       pipeline: input,
       code: "PIPELINE.PRODUCT_UNRESOLVED",
       causeCode,
+      ...(patched("resource-gate-v1") && causeCode === resourceGateCodes.waitLimit
+        ? { executionFact: "not_executed" as const }
+        : {}),
     });
   }
 }
@@ -48,10 +51,7 @@ async function collect(
   pipeline: PipelineActivities,
 ): Promise<unknown> {
   const plan = proxyActivities<PlanActivities>({ taskQueue: input.queues.plan, ...once });
-  const gate = resourceGate(input.resources);
-  const captured = CaptureResultSchema.parse(
-    await gate("captureProduct", () => pipeline.captureProduct(input)),
-  );
+  const captured = await captureProduct(input, pipeline);
   // A Review, or a listing the revisit found unlisted (recorded as a sighting with its reason, not a failure).
   if (captured.status !== "captured") {
     return captured;

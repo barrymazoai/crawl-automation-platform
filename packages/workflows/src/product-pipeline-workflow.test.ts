@@ -252,13 +252,41 @@ it("an Activity failure becomes a Review that carries its real cause", async () 
 });
 
 it("cancellation passes through without a Review", async () => {
-  const { pipeline } = await setup();
+  const { pipeline, resource } = await setup();
   pipeline.captureProduct.mockRejectedValue(
     Object.assign(new Error("cancelled"), { type: "CANCELLED" }),
   );
 
   await expect(ProductPipelineWorkflow(input)).rejects.toMatchObject({ type: "CANCELLED" });
   expect(pipeline.reviewProduct).not.toHaveBeenCalled();
+  expect(resource.releaseResources).toHaveBeenCalledOnce();
+  expect(env.held).toBe(false);
+});
+
+it("capture wait expiry records not_executed without starting capture", async () => {
+  const { pipeline, resource } = await setup();
+  let now = 0;
+  const clock = vi.spyOn(Date, "now").mockImplementation(() => now);
+  resource.reserveResources.mockImplementation(async ({ permitId }) => {
+    now += 10_000;
+    return { permitId, status: "waiting", reason: "unhealthy" };
+  });
+  try {
+    await ProductPipelineWorkflow({
+      ...input,
+      resources: { ...input.resources, maxWaitSeconds: 10 },
+    });
+    expect(pipeline.reviewProduct).toHaveBeenCalledWith(
+      expect.objectContaining({
+        causeCode: "RESOURCE.WAIT_LIMIT",
+        executionFact: "not_executed",
+      }),
+    );
+    expect(pipeline.captureProduct).not.toHaveBeenCalled();
+    expect(resource.releaseResources).not.toHaveBeenCalled();
+  } finally {
+    clock.mockRestore();
+  }
 });
 
 const family = {

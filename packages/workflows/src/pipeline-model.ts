@@ -5,6 +5,7 @@ import {
   FileAcquireInputSchema,
   ResourceGateSchema,
   ReviewCodeSchema,
+  ReviewSchema,
   ChannelSavedLabelWorkflowInputSchema,
   type ChannelPlanInput,
   type FileAcquireOutcome,
@@ -139,6 +140,8 @@ export const ReviewRequestSchema = z.strictObject({
   pipeline: ProductPipelineInputSchema,
   code: ReviewCodeSchema,
   causeCode: z.string().max(120).nullable(),
+  /** Absent in old histories; wait expiry proves that capture never started. */
+  executionFact: ReviewSchema.shape.executionFact.optional(),
 });
 export type ReviewRequest = z.infer<typeof ReviewRequestSchema>;
 

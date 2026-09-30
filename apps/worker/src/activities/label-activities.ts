@@ -1,5 +1,9 @@
 import type { WorkerParts } from "../container.js";
 import { guarded } from "./activity-guard.js";
+import { activityLogger } from "./activity-log.js";
+import { errorCodeOf } from "@crawl-automation/platform";
+import { resourceGateCodes } from "@crawl-automation/platform/errors/resource-gate";
+import { ApplicationFailure } from "@temporalio/common";
 
 type Handler = (raw: unknown, signal: AbortSignal) => Promise<unknown>;
 
@@ -52,8 +56,26 @@ export function ocrActivities(parts: WorkerParts) {
 
 /** Resource permits for the workflows' permit gates: short ledger transactions, never a wait. */
 export function resourceActivities(parts: WorkerParts) {
-  return guardAll(parts, {
-    reserveResources: async (raw) => parts.admission.reserve(raw),
-    releaseResources: async (raw) => parts.admission.release(raw),
-  });
+  return {
+    ...guardAll(parts, { reserveResources: async (raw) => parts.admission.reserve(raw) }),
+    releaseResources: (raw: unknown) => releaseResource(parts, raw),
+  };
+}
+
+/** Release alone can repeat: the ledger checks the exact request and preserves released_at. */
+async function releaseResource(parts: WorkerParts, raw: unknown): Promise<unknown> {
+  const log = activityLogger(parts.log, "releaseResources", raw);
+  try {
+    const result = await parts.admission.release(raw);
+    log.info("resource permit released");
+    return result;
+  } catch (error) {
+    const code = errorCodeOf(error) ?? resourceGateCodes.releaseUnknown;
+    log.error({ err: error, code }, "resource release failed");
+    throw ApplicationFailure.create({
+      message: "Resource release failed",
+      type: code,
+      nonRetryable: code === resourceGateCodes.identityConflict,
+    });
+  }
 }

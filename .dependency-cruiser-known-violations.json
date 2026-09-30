@@ -154,15 +154,6 @@
   },
   {
     "type": "dependency",
-    "from": "packages/adapters/src/postgres/postgres-review-store.ts",
-    "to": "packages/v3-review/src/index.ts",
-    "rule": {
-      "severity": "error",
-      "name": "new-code-does-not-import-old-packages"
-    }
-  },
-  {
-    "type": "dependency",
     "from": "packages/app/src/listings/listing-state-service.ts",
     "to": "packages/v3-artifacts/src/index.ts",
     "rule": {
@@ -451,60 +442,6 @@
   },
   {
     "type": "dependency",
-    "from": "packages/processing/src/codex/codex-client.test.ts",
-    "to": "packages/v3-codex/src/index.ts",
-    "rule": {
-      "severity": "error",
-      "name": "new-code-does-not-import-old-packages"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "packages/processing/src/codex/codex-client.ts",
-    "to": "packages/v3-codex/src/index.ts",
-    "rule": {
-      "severity": "error",
-      "name": "new-code-does-not-import-old-packages"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "packages/processing/src/codex/codex-errors.ts",
-    "to": "packages/v3-codex/src/index.ts",
-    "rule": {
-      "severity": "error",
-      "name": "new-code-does-not-import-old-packages"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "packages/processing/src/codex/codex-profile.ts",
-    "to": "packages/v3-codex/src/index.ts",
-    "rule": {
-      "severity": "error",
-      "name": "new-code-does-not-import-old-packages"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "packages/processing/src/codex/codex-settings.ts",
-    "to": "packages/v3-codex/src/index.ts",
-    "rule": {
-      "severity": "error",
-      "name": "new-code-does-not-import-old-packages"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "packages/processing/src/codex/codex-turn.ts",
-    "to": "packages/v3-codex/src/index.ts",
-    "rule": {
-      "severity": "error",
-      "name": "new-code-does-not-import-old-packages"
-    }
-  },
-  {
-    "type": "dependency",
     "from": "packages/processing/src/images/image-ocr-task.test.ts",
     "to": "packages/v3-artifacts/src/index.ts",
     "rule": {
@@ -577,35 +514,8 @@
   },
   {
     "type": "dependency",
-    "from": "packages/processing/src/ocr/ocr-receipt.test.ts",
-    "to": "packages/v3-review/src/index.ts",
-    "rule": {
-      "severity": "error",
-      "name": "new-code-does-not-import-old-packages"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "packages/processing/src/ocr/ocr-step.test.ts",
-    "to": "packages/v3-review/src/index.ts",
-    "rule": {
-      "severity": "error",
-      "name": "new-code-does-not-import-old-packages"
-    }
-  },
-  {
-    "type": "dependency",
     "from": "packages/processing/src/ocr/ocr-step.ts",
     "to": "packages/v3-artifacts/src/index.ts",
-    "rule": {
-      "severity": "error",
-      "name": "new-code-does-not-import-old-packages"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "packages/processing/src/ocr/ocr-step.ts",
-    "to": "packages/v3-review/src/index.ts",
     "rule": {
       "severity": "error",
       "name": "new-code-does-not-import-old-packages"
@@ -775,24 +685,6 @@
   },
   {
     "type": "dependency",
-    "from": "packages/processing/src/step/processing-step.ts",
-    "to": "packages/v3-review/src/index.ts",
-    "rule": {
-      "severity": "error",
-      "name": "new-code-does-not-import-old-packages"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "packages/processing/src/step/step-review.ts",
-    "to": "packages/v3-review/src/index.ts",
-    "rule": {
-      "severity": "error",
-      "name": "new-code-does-not-import-old-packages"
-    }
-  },
-  {
-    "type": "dependency",
     "from": "packages/processing/src/testing/label-fixture.ts",
     "to": "packages/v3-artifacts/src/index.ts",
     "rule": {
@@ -804,15 +696,6 @@
     "type": "dependency",
     "from": "packages/processing/src/testing/label-sources.ts",
     "to": "packages/v3-artifacts/src/index.ts",
-    "rule": {
-      "severity": "error",
-      "name": "new-code-does-not-import-old-packages"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "packages/processing/src/testing/memory-ledgers.ts",
-    "to": "packages/v3-review/src/index.ts",
     "rule": {
       "severity": "error",
       "name": "new-code-does-not-import-old-packages"
@@ -856,24 +739,6 @@
   },
   {
     "type": "dependency",
-    "from": "packages/processing/src/text/errors.test.ts",
-    "to": "packages/v3-codex/src/index.ts",
-    "rule": {
-      "severity": "error",
-      "name": "new-code-does-not-import-old-packages"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "packages/processing/src/text/errors.ts",
-    "to": "packages/v3-codex/src/index.ts",
-    "rule": {
-      "severity": "error",
-      "name": "new-code-does-not-import-old-packages"
-    }
-  },
-  {
-    "type": "dependency",
     "from": "packages/processing/src/text/evidence/text-evidence.test.ts",
     "to": "packages/v3-artifacts/src/index.ts",
     "rule": {
@@ -892,53 +757,8 @@
   },
   {
     "type": "dependency",
-    "from": "packages/processing/src/text/model/codex-text-model.ts",
-    "to": "packages/v3-codex/src/index.ts",
-    "rule": {
-      "severity": "error",
-      "name": "new-code-does-not-import-old-packages"
-    }
-  },
-  {
-    "type": "dependency",
     "from": "packages/processing/src/text/results/source-durability.ts",
     "to": "packages/v3-artifacts/src/index.ts",
-    "rule": {
-      "severity": "error",
-      "name": "new-code-does-not-import-old-packages"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "packages/processing/src/text/step/text-review.ts",
-    "to": "packages/v3-codex/src/index.ts",
-    "rule": {
-      "severity": "error",
-      "name": "new-code-does-not-import-old-packages"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "packages/processing/src/text/step/text-step.test.ts",
-    "to": "packages/v3-codex/src/index.ts",
-    "rule": {
-      "severity": "error",
-      "name": "new-code-does-not-import-old-packages"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "packages/processing/src/text/step/text-step.ts",
-    "to": "packages/v3-review/src/index.ts",
-    "rule": {
-      "severity": "error",
-      "name": "new-code-does-not-import-old-packages"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "packages/processing/src/text/testing/memory-ledgers.ts",
-    "to": "packages/v3-review/src/index.ts",
     "rule": {
       "severity": "error",
       "name": "new-code-does-not-import-old-packages"
@@ -955,35 +775,8 @@
   },
   {
     "type": "dependency",
-    "from": "packages/processing/src/vision/codex-vision-model.test.ts",
-    "to": "packages/v3-codex/src/index.ts",
-    "rule": {
-      "severity": "error",
-      "name": "new-code-does-not-import-old-packages"
-    }
-  },
-  {
-    "type": "dependency",
     "from": "packages/processing/src/vision/codex-vision-model.ts",
     "to": "packages/v3-artifacts/src/index.ts",
-    "rule": {
-      "severity": "error",
-      "name": "new-code-does-not-import-old-packages"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "packages/processing/src/vision/codex-vision-model.ts",
-    "to": "packages/v3-codex/src/index.ts",
-    "rule": {
-      "severity": "error",
-      "name": "new-code-does-not-import-old-packages"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "packages/processing/src/vision/vision-attempts.ts",
-    "to": "packages/v3-codex/src/index.ts",
     "rule": {
       "severity": "error",
       "name": "new-code-does-not-import-old-packages"
@@ -1009,44 +802,8 @@
   },
   {
     "type": "dependency",
-    "from": "packages/processing/src/vision/vision-step.test.ts",
-    "to": "packages/v3-codex/src/index.ts",
-    "rule": {
-      "severity": "error",
-      "name": "new-code-does-not-import-old-packages"
-    }
-  },
-  {
-    "type": "dependency",
     "from": "packages/processing/src/vision/vision-step.ts",
     "to": "packages/v3-artifacts/src/index.ts",
-    "rule": {
-      "severity": "error",
-      "name": "new-code-does-not-import-old-packages"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "packages/processing/src/vision/vision-step.ts",
-    "to": "packages/v3-review/src/index.ts",
-    "rule": {
-      "severity": "error",
-      "name": "new-code-does-not-import-old-packages"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "packages/workflows/src/browser-product.ts",
-    "to": "packages/v3-product/src/resource-workflow.ts",
-    "rule": {
-      "severity": "error",
-      "name": "new-code-does-not-import-old-packages"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "packages/workflows/src/label/label-run.ts",
-    "to": "packages/v3-product/src/resource-workflow.ts",
     "rule": {
       "severity": "error",
       "name": "new-code-does-not-import-old-packages"
@@ -1063,7 +820,16 @@
   },
   {
     "type": "dependency",
-    "from": "packages/workflows/src/product-pipeline-workflow.ts",
+    "from": "packages/workflows/src/resources/testing/legacy-gate.ts",
+    "to": "packages/v3-product/src/resource-workflow.ts",
+    "rule": {
+      "severity": "error",
+      "name": "new-code-does-not-import-old-packages"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "packages/workflows/src/resources/versioned-gate.ts",
     "to": "packages/v3-product/src/resource-workflow.ts",
     "rule": {
       "severity": "error",

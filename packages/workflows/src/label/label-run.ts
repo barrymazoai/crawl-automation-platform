@@ -1,4 +1,5 @@
-import { resourceGate } from "@crawl-automation/v3-product/resource-workflow";
+import { versionedResourceGate } from "../resources/versioned-gate.js";
+import { resourceGateCodes } from "@crawl-automation/platform/errors/resource-gate";
 import { imageActivityOptions } from "@crawl-automation/v3-contracts";
 import { ApplicationFailure, proxyActivities } from "@temporalio/workflow";
 import type { LabelWorkflowInput, QueueKind } from "./label-model.js";
@@ -7,8 +8,11 @@ import type { LabelStream } from "./label-stream.js";
 type Activity = (value: unknown) => Promise<unknown>;
 
 /** Permit failures that mean a source never ran (waiting) or may still be running (quarantined). */
-const WAITING = "RESOURCE.WAIT_LIMIT";
-const QUARANTINED = new Set(["RESOURCE.OWNER_QUARANTINED", "RESOURCE.REVIEW_STOP_UNVERIFIED"]);
+const WAITING = resourceGateCodes.waitLimit;
+const QUARANTINED = new Set<string>([
+  resourceGateCodes.ownerQuarantined,
+  resourceGateCodes.reviewStopUnverified,
+]);
 
 /** One Label workflow run: its task, how it calls activities, its file stream and the sources held up by permits. */
 export interface LabelRun {
@@ -20,9 +24,7 @@ export interface LabelRun {
 }
 
 export function labelRun(entry: LabelWorkflowInput, stream: LabelStream): LabelRun {
-  // Label calls release their permits on a Review (see the app's label gates); no review-stop proof is required,
-  // since the worker hosts no review-stop verifier.
-  const gate = resourceGate(entry.resources);
+  const gate = versionedResourceGate(entry.resources);
   const call = (kind: QueueKind, name: string, value: unknown) =>
     gate(name, (binding) => {
       // One attempt per activity: a failure is a Review, never an automatic retry of paid or model work.
