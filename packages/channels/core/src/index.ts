@@ -16,3 +16,4 @@ export * from "./listing/brand-scan.js";
 export * from "./listing/listing-pages.js";
 export * from "./facts/index.js";
 export * from "./planning/index.js";
+export * from "./platforms/index.js";
