@@ -1,5 +1,6 @@
 import { procedure, router } from "../trpc.js";
 import { brandsRouter } from "./brands.js";
+import { evidenceRouter } from "./evidence.js";
 import { historyRouter } from "./history.js";
 import { listingStatesRouter } from "./listings.js";
 import { queueRouter } from "./queue.js";
@@ -8,6 +9,7 @@ import { productsRouter, reviewsRouter } from "./results.js";
 import { runsRouter } from "./runs.js";
 
 export const appRouter = router({
+  evidence: evidenceRouter,
   runs: runsRouter,
   queue: queueRouter,
   brands: brandsRouter,

@@ -1,6 +1,10 @@
 import { isIP } from "node:net";
 import { isAbsolute } from "node:path";
-import { DeliveryRunnerOptionsSchema, QueueDispatcherOptionsSchema } from "@crawl-automation/app";
+import {
+  DeliveryRunnerOptionsSchema,
+  EvidenceTestPrefixSchema,
+  QueueDispatcherOptionsSchema,
+} from "@crawl-automation/app";
 import { ResourceKindsSchema } from "@crawl-automation/channels-core";
 import { OcrApiSettingsSchema } from "@crawl-automation/processing";
 import {
@@ -74,8 +78,8 @@ export const ApiConfigSchema = z.strictObject({
     })
     .default({ taskQueues: [] }),
   /**
-   * Read-only access to the evidence in R2, for the Review evidence and recheck procedures. Without it those
-   * procedures answer REVIEW.EVIDENCE_NOT_CONFIGURED; nothing else needs it.
+   * R2 access for Review reads and manual test captures. Reviews stay read-only; evidence.capture writes only
+   * under evidence.testPrefix. Missing storage refuses both operations with their registered config errors.
    */
   storage: z
     .strictObject({
@@ -89,11 +93,23 @@ export const ApiConfigSchema = z.strictObject({
     })
     .optional(),
   /**
-   * Brand scans: listing pages through ScraperAPI, archived in R2 (written, unlike `storage`). Without this section
+   * Brand scans: listing pages through ScraperAPI, archived in R2. Without this section
    * scan requests answer BRAND_SCAN.NOT_CONFIGURED; brand-source import works either way. `ego` and `wholefoods`
    * together enable Whole Foods scans in the Ego browser (an owner-approved browser case).
    */
   brandScans: BrandScanSettingsSchema.optional(),
+  /** Manual test captures use their own bucket-level tests/ prefix, never storage.r2.prefix. */
+  evidence: z
+    .strictObject({
+      testPrefix: EvidenceTestPrefixSchema.optional(),
+      /** Copy the normal product worker's capture settings; this does not enable a scan runner. */
+      capture: BrandScanSettingsSchema.pick({
+        route: true,
+        scraperApi: true,
+        channels: true,
+      }).optional(),
+    })
+    .optional(),
   /** The product queue of every channel but Amazon: how often its dispatcher runs a round. */
   queue: z
     .strictObject({ dispatcher: QueueDispatcherOptionsSchema.default({ intervalMs: 5_000 }) })

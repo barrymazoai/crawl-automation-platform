@@ -2,6 +2,26 @@ import { defineErrors } from "@crawl-automation/platform";
 
 /** Errors raised by the application services. */
 export const appErrors = defineErrors({
+  "EVIDENCE.NOT_CONFIGURED": {
+    category: "RUNTIME",
+    message: "Test capture needs evidence.testPrefix, evidence.capture and storage settings.",
+  },
+  "EVIDENCE.BROWSER_CAPTURE_UNSUPPORTED": {
+    category: "VALIDATION",
+    message: "Browser evidence capture (Whole Foods and DTC) must use the browser worker later.",
+  },
+  "EVIDENCE.SINGLE_REQUEST_UNAVAILABLE": {
+    category: "RUNTIME",
+    message: "The capture client cannot guarantee one paid request, including redirect hops.",
+  },
+  "EVIDENCE.ARCHIVE_CONFLICT": {
+    category: "ARTIFACT",
+    message: "The test evidence key already exists; it was not overwritten or fetched again.",
+  },
+  "EVIDENCE.ARCHIVE_UNVERIFIED": {
+    category: "ARTIFACT",
+    message: "The test evidence could not be read back with its original size and SHA-256.",
+  },
   "RUN.NOT_FOUND": { category: "VALIDATION", message: "Run not found." },
   "RUN.SOURCE_NOT_FOUND": { category: "VALIDATION", message: "Brand source not found." },
   "RUN.CHANNEL_UNSUPPORTED": {

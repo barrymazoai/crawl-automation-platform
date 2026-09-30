@@ -48,6 +48,36 @@ describe("API config", () => {
   });
 });
 
+describe("test evidence settings", () => {
+  it("keeps test capture optional for existing API configs", () => {
+    expect(ApiConfigSchema.parse(productionShaped).evidence).toBeUndefined();
+    expect(ApiConfigSchema.parse({ ...productionShaped, evidence: {} }).evidence).toEqual({});
+  });
+
+  it("accepts a separate test prefix and the normal worker's capture options", () => {
+    const { route, scraperApi } = productionShaped.brandScans;
+    const evidence = {
+      testPrefix: "tests/v3/pages",
+      capture: { route, scraperApi, channels: { gnc: { premium: true } } },
+    };
+    expect(ApiConfigSchema.parse({ ...productionShaped, evidence }).evidence).toEqual(evidence);
+  });
+
+  it.each([
+    "v3/pages",
+    "tests",
+    "/tests/v3",
+    "tests/../v3",
+    "tests/v3/",
+    "tests//pages",
+    "tests/" + "x".repeat(201),
+  ])("refuses an unsafe or non-test prefix %s", (testPrefix) => {
+    expect(
+      ApiConfigSchema.safeParse({ ...productionShaped, evidence: { testPrefix } }).success,
+    ).toBe(false);
+  });
+});
+
 describe("API bind address", () => {
   const hostSchema = ApiConfigSchema.shape.api.shape.host;
 

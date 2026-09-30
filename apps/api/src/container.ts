@@ -1,5 +1,6 @@
 import { access } from "node:fs/promises";
 import {
+  createEvidenceService,
   PostgresBrandStore,
   PostgresDeliveryJournal,
   PostgresDeliveryScan,
@@ -15,6 +16,7 @@ import {
   DeliveryCoordinator,
   DeliveryRunner,
   type FleetService,
+  type EvidenceService,
   type HistoryService,
   type ProductService,
   QueueService,
@@ -32,6 +34,7 @@ import {
   type Logger,
   type TemporalClient,
 } from "@crawl-automation/platform";
+import { ScraperApiPages } from "@crawl-automation/channels-core";
 import { asFunction, asValue, createContainer, InjectionMode, type AwilixContainer } from "awilix";
 import type { ApiConfig } from "./config.js";
 import { evidenceReaders } from "./evidence-readers.js";
@@ -40,6 +43,7 @@ import { runService } from "./run-parts.js";
 import { listingStateService, productRuns, queueDispatcher, queueService } from "./queue-parts.js";
 import { historyService, productService } from "./results-parts.js";
 import { fleetService } from "./routers/fleet-parts.js";
+import { channelRegistry } from "./resources/channel-registry.js";
 
 /** Everything the API is built from. Adapters are created once and shared. */
 export interface ApiParts {
@@ -59,6 +63,7 @@ export interface ApiParts {
   history: HistoryService;
   resources: ResourceService;
   fleet: FleetService;
+  evidence: EvidenceService;
   listingStates: ListingStateService;
   brandScanParts: BrandScanParts;
   deliveryRunner: DeliveryRunner;
@@ -96,18 +101,26 @@ export function assembleContainer(base: Pick<ApiParts, "config" | "log" | "tempo
 }
 
 function registerAdapters(container: Parts): void {
+  const database = ({ config, log }: ApiParts) => createDatabase(config.database, log);
+  const resources = ({ database }: ApiParts) => new PostgresResourceStore(database);
+  const workflows = ({ temporal }: ApiParts) => new TemporalWorkflowTree(temporal.client);
   container.register({
-    database: asFunction((parts: ApiParts) =>
-      createDatabase(parts.config.database, parts.log),
-    ).singleton(),
+    database: asFunction(database).singleton(),
     runStore: asFunction((parts: ApiParts) => new PostgresRunStore(parts.database)).singleton(),
-    resourceStore: asFunction(
-      (parts: ApiParts) => new PostgresResourceStore(parts.database),
-    ).singleton(),
-    workflowTree: asFunction(
-      (parts: ApiParts) => new TemporalWorkflowTree(parts.temporal.client),
-    ).singleton(),
+    resourceStore: asFunction(resources).singleton(),
+    workflowTree: asFunction(workflows).singleton(),
     deliveryCoordinator: asFunction(deliveryCoordinator).singleton(),
+    evidence: asFunction(evidenceService).singleton(),
+  });
+}
+
+/** Test evidence uses the same channel options as product capture, with one paid-request enforcement. */
+function evidenceService({ config }: ApiParts): EvidenceService {
+  return createEvidenceService({
+    ...config.evidence,
+    storage: config.storage,
+    channels: channelRegistry(),
+    createPages: (client, settings) => new ScraperApiPages(client, settings),
   });
 }
 
