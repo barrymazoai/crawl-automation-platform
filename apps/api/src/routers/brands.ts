@@ -3,6 +3,8 @@ import {
   CreateSourceSchema,
   ImportSourcesSchema,
   ListSourcesSchema,
+  ScanChannelSchema,
+  ScanStateSchema,
   ToggleSourceSchema,
   UpdateBrandSchema,
   UpdateSourceSchema,
@@ -15,12 +17,12 @@ import { procedure, router } from "../trpc.js";
 const ScanRequestInput = z.strictObject({
   requestId: z.uuid(),
   sourceIds: z.array(z.uuid()).min(1).max(1_000).optional(),
-  channel: z.enum(["swanson", "gnc", "dtc", "costco", "wholefoods"]).optional(),
+  channel: ScanChannelSchema.optional(),
 });
 const ScanListInput = z
   .strictObject({
-    channel: z.enum(["swanson", "gnc", "dtc", "costco", "wholefoods"]).optional(),
-    state: z.enum(["queued", "running", "complete", "partial", "review"]).optional(),
+    channel: ScanChannelSchema.optional(),
+    state: ScanStateSchema.optional(),
     limit: z.number().int().min(1).max(1_000).optional(),
   })
   .optional();
@@ -57,6 +59,11 @@ export const brandsRouter = router({
 
   /** Brand scans, newest first, with what each found. */
   scans: procedure.input(ScanListInput).query(({ ctx, input }) => ctx.brandScans.list(input ?? {})),
+
+  /** One brand scan: what it found (new, known, missing) and what its revisits have shown so far. */
+  scanGet: procedure
+    .input(z.strictObject({ scanId: z.uuid() }))
+    .query(({ ctx, input }) => ctx.brandScans.get(input.scanId)),
 
   /** Adds a channel's brand directory as disabled sources; loose and missing name matches come back for review. */
   importSources: procedure

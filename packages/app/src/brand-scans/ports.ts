@@ -9,6 +9,7 @@ import type {
   ScanListQuery,
   ScanRecord,
   ScanResult,
+  ScanRevisits,
   ScanSource,
 } from "./scan-model.js";
 
@@ -25,6 +26,9 @@ export interface BrandScanStore {
   claim(limit: number, staleMs: number): Promise<ScanRecord[]>;
   finish(scanId: string, result: ScanResult): Promise<void>;
   list(query: ScanListQuery): Promise<ScanRecord[]>;
+  get(scanId: string): Promise<ScanRecord | null>;
+  /** The latest sighting of each listing in the scan's revisit list, seen by that list's own runs. */
+  revisits(revisitBatchId: string): Promise<ScanRevisits>;
   /** The listings of this source ever queued by earlier lists (not by the scan itself). */
   knownListings(source: ScanSource, exceptBatchId: string): Promise<QueuedProduct[]>;
 }

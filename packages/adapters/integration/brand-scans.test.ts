@@ -27,6 +27,8 @@ const result: ScanResult = {
   unresolvedFamilies: 0,
   statedTotal: 1,
   full: true,
+  newListings: 1,
+  knownListings: 0,
   missing: 1,
   queued: 1,
   credits: 10,
@@ -116,5 +118,63 @@ describe.skipIf(!hasPostgres)("brand scans against a real PostgreSQL", () => {
     }
     const known = await scans.knownListings(source, scan.scanId);
     expect(known.map((item) => item.listingId)).toEqual(["877080", "877081"]);
+  });
+
+  it("answers one scan, and counts its revisits: listed, seen and not seen yet", async () => {
+    const [scan] = await scans.list({ channel: "gnc", limit: 1 });
+    if (!scan) {
+      throw new Error("the scan exists");
+    }
+    expect(await scans.get(scan.scanId)).toEqual(scan);
+    expect(await scans.get("88888888-8888-4888-8888-888888888888")).toBeNull();
+    expect(await scans.revisits(scan.revisitBatchId)).toEqual({
+      requested: 0,
+      live: 0,
+      unlisted: {},
+      pending: 0,
+    });
+    await new PostgresChannelQueueStore(database).add(
+      AddToQueueSchema.parse({
+        channel: "gnc",
+        batchId: scan.revisitBatchId,
+        label: "revisit",
+        products: [{ sourceId, url: "https://www.gnc.com/omega/877083.html", listingId: "877083" }],
+      }),
+    );
+    expect(await scans.revisits(scan.revisitBatchId)).toMatchObject({ requested: 1, pending: 1 });
+    // The revisit ran: its product run saw the page gone.
+    const runId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+    await database.query(
+      `WITH moved AS (UPDATE queue_item SET state = 'running', attempt = 1, run_id = $2::uuid
+         WHERE batch_id = $1::uuid RETURNING item_id, channel)
+       INSERT INTO queue_attempt (run_id, item_id, channel, attempt) SELECT $2::uuid, item_id, channel, 1 FROM moved`,
+      [scan.revisitBatchId, runId],
+    );
+    await database.query(
+      `INSERT INTO listing_state_observation
+         (observation_id, channel, listing_id, variant_id, run_id, state, reason, evidence, source, captured_at)
+       VALUES ($1, 'gnc', '877083', NULL, $2::uuid, 'unlisted', 'not_found', '{"httpStatus": "404"}', 'test', now())`,
+      ["b".repeat(64), runId],
+    );
+    expect(await scans.revisits(scan.revisitBatchId)).toEqual({
+      requested: 1,
+      live: 0,
+      unlisted: { not_found: 1 },
+      pending: 0,
+    });
+  });
+
+  it("reads a result finished before the new and known counts existed", async () => {
+    const [scan] = await scans.list({ channel: "gnc", limit: 1 });
+    const old = { ...result } as Partial<ScanResult>;
+    delete old.newListings;
+    delete old.knownListings;
+    await database.query(
+      `INSERT INTO brand_scan (request_id, source_id, channel, url, state, result, finished_at)
+       VALUES ('99999999-9999-4999-8999-999999999999', $1, 'gnc', $2, 'complete', $3::jsonb, now())`,
+      [sourceId, scan?.source.url, JSON.stringify(old)],
+    );
+    const [latest] = await scans.list({ channel: "gnc", limit: 1 });
+    expect(latest?.result).toMatchObject({ newListings: null, knownListings: null });
   });
 });

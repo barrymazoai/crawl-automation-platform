@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { ChannelIdSchema } from "./channels.js";
 
 export const Id = z.uuid().transform((value) => value.toLowerCase());
 const Revision = z.number().int().positive().max(2147483646);
@@ -53,7 +54,7 @@ const Url = z
       return z.NEVER;
     }
   });
-export const Channel = z.enum(["amazon", "gnc", "swanson", "dtc"]);
+export const Channel = ChannelIdSchema;
 const SourceFields = {
   channel: Channel,
   region: z

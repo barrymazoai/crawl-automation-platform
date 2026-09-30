@@ -1,5 +1,5 @@
 import { swansonAdapter } from "@crawl-automation/channel-swanson";
-import { ChannelRegistry } from "@crawl-automation/channels-core";
+import { ChannelRegistry, type ChannelAdapter } from "@crawl-automation/channels-core";
 import { describe, expect, it, vi } from "vitest";
 import { ProductRuns, type AcceptedProductRun, type ProductRunStore } from "./product-runs.js";
 
@@ -71,6 +71,36 @@ describe("ProductRuns", () => {
       runs.submit({ ...request, url: "https://www.example.com/p/other" }),
     ).rejects.toBeDefined();
     expect(store.accept).not.toHaveBeenCalled();
+  });
+
+  it("accepts every channel the pipeline is configured for, Whole Foods included", async () => {
+    const wholeFoods = {
+      id: "wholefoods",
+      productAddress: (page: string) => ({ url: page, listingId: "B002CQU54Q", variantId: null }),
+    } as unknown as ChannelAdapter;
+    const store: ProductRunStore = {
+      source: vi.fn(async () => ({ brandId: "b", channel: "wholefoods" as const })),
+      accept: vi.fn(async (run) => ({ ...run, runId, workflowId: "w", startedRunId: null })),
+      markStarted: vi.fn(async () => undefined),
+    };
+    const starter = { start: vi.fn(async () => ({ startedRunId: "temporal-run-2" })) };
+    const runs = new ProductRuns({
+      store,
+      starter,
+      registry: new ChannelRegistry([wholeFoods]),
+      targets: {
+        queues: { activities: "pipeline", plan: "plan", label: "label" },
+        channels: { wholefoods: { resources } },
+      },
+    });
+    const page =
+      "https://www.wholefoodsmarket.com/grocery/product/nordic-naturals-omega-b002cqu54q";
+
+    expect(await runs.submit({ ...request, url: page })).toBe(runId);
+    expect(starter.start).toHaveBeenCalledWith(
+      "w",
+      expect.objectContaining({ channel: "wholefoods" }),
+    );
   });
 
   it("refuses a channel without pipeline targets", async () => {

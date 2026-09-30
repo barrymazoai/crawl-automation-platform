@@ -1,5 +1,6 @@
 import type {
   CollectedProduct,
+  ProductDetail,
   ProductList,
   ProductPage,
   ProductStore,
@@ -73,5 +74,18 @@ export class PostgresProductStore implements ProductStore {
     const nextCursor =
       rows.length > query.limit && last ? `${last.collectedAt}|${last.operationId}` : null;
     return { items, nextCursor };
+  }
+
+  async get(operationId: string): Promise<ProductDetail | null> {
+    const rows = await this.database.query(
+      `SELECT operation_id, collected_at, record FROM collected_product WHERE operation_id = $1`,
+      [operationId],
+    );
+    const row = rows[0];
+    if (!row) {
+      return null;
+    }
+    const record = z.record(z.string(), z.unknown()).parse(Row.parse(row).record);
+    return { ...toProduct(row), record };
   }
 }

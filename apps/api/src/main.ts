@@ -14,7 +14,7 @@ async function main(): Promise<void> {
   const config = await loadApiConfig();
   const container = await buildContainer(config);
   const { log, deliveryRunner, queueDispatcher, cleanup, database, temporal } = container.cradle;
-  const { runs, queue, brands, reviews, products, resources, fleet } = container.cradle;
+  const { runs, queue, brands, reviews, products, history, resources, fleet } = container.cradle;
   const { brandScans, brandSources, runner: brandScanRunner } = container.cradle.brandScanParts;
   const context = {
     runs,
@@ -22,6 +22,7 @@ async function main(): Promise<void> {
     brands,
     reviews,
     products,
+    history,
     resources,
     fleet,
     brandScans,

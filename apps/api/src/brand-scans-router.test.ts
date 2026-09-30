@@ -1,4 +1,4 @@
-import type { BrandScanService, BrandSourceImport } from "@crawl-automation/app";
+import { appErrors, type BrandScanService, type BrandSourceImport } from "@crawl-automation/app";
 import { describe, expect, it, vi } from "vitest";
 import { createHttpApp } from "./server.js";
 
@@ -13,6 +13,7 @@ function appWith(services: {
     brands: unused,
     reviews: unused,
     products: unused,
+    history: unused,
     resources: unused,
     fleet: unused,
     listingStates: unused,
@@ -65,5 +66,31 @@ describe("brand scan procedures", () => {
     );
     expect(response.status).toBe(400);
     expect(request).not.toHaveBeenCalled();
+  });
+
+  it("answers one scan with its revisit outcomes", async () => {
+    const scanId = "22222222-2222-4222-8222-222222222222";
+    const detail = { scanId, revisits: { requested: 2, live: 1, unlisted: {}, pending: 1 } };
+    const get = vi.fn(async () => detail);
+    const query = encodeURIComponent(JSON.stringify({ scanId }));
+    const response = await appWith({ brandScans: { get } as never }).request(
+      `/trpc/brands.scanGet?input=${query}`,
+    );
+    expect(response.status).toBe(200);
+    expect(get).toHaveBeenCalledWith(scanId);
+    expect((await response.json()).result.data).toEqual(detail);
+  });
+
+  it("answers 404 for an unknown scan", async () => {
+    const get = vi.fn(async () => {
+      throw appErrors.create("SCAN.NOT_FOUND");
+    });
+    const query = encodeURIComponent(
+      JSON.stringify({ scanId: "22222222-2222-4222-8222-222222222222" }),
+    );
+    const response = await appWith({ brandScans: { get } as never }).request(
+      `/trpc/brands.scanGet?input=${query}`,
+    );
+    expect(response.status).toBe(404);
   });
 });

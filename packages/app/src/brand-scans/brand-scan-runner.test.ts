@@ -146,6 +146,8 @@ describe("brand scan runner", () => {
       state: "complete",
       pages: 2,
       products: 3,
+      newListings: 2,
+      knownListings: 1,
       missing: 1,
       credits: 2,
     });
@@ -174,7 +176,13 @@ describe("brand scan runner", () => {
     const bodies = { "page-1": JSON.stringify({ ids: ["100001"], next: null }) };
     const fixture = setup({ bodies, known: ["999999"], scanReader: reader({ full: false }) });
     await fixture.runner.tick(signal());
-    expect(fixture.finished[0]).toMatchObject({ state: "partial", full: false, missing: 0 });
+    expect(fixture.finished[0]).toMatchObject({
+      state: "partial",
+      full: false,
+      newListings: 1,
+      knownListings: 0,
+      missing: 0,
+    });
     expect(fixture.listings.requestRevisits).not.toHaveBeenCalled();
   });
 

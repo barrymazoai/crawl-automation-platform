@@ -130,6 +130,8 @@ export const appErrors = defineErrors({
     category: "RUNTIME",
     message: "This channel is scanned in a browser, and no browser is configured for it here.",
   },
+  "PRODUCT.NOT_FOUND": { category: "VALIDATION", message: "Collected product not found." },
+  "SCAN.NOT_FOUND": { category: "VALIDATION", message: "Brand scan not found." },
   "BRAND_SCAN.NOT_CONFIGURED": {
     category: "RUNTIME",
     message: "Brand scans need their settings (R2 and ScraperAPI) in this process's config.",

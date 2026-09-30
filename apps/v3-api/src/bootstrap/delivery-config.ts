@@ -1,12 +1,12 @@
 import { isAbsolute } from "node:path";
 import { z } from "zod";
-import { DeliveryTarget } from "@crawl-automation/v3-contracts";
+import { ChannelIdSchema, DeliveryTarget } from "@crawl-automation/v3-contracts";
 import { V3DatabaseUrl } from "./config.js";
 
 const absolutePath = z.string().min(1).refine(isAbsolute);
 const Profile = z.strictObject({
   target: DeliveryTarget,
-  channelTargets: z.partialRecord(z.enum(["gnc", "amazon", "swanson", "dtc"]), DeliveryTarget).optional(),
+  channelTargets: z.partialRecord(ChannelIdSchema, DeliveryTarget).optional(),
   address: z.string().regex(/^[a-zA-Z0-9.-]+:[0-9]{1,5}$/).refine((s) => {
     const port = Number(s.split(":")[1]); return port > 0 && port <= 65535;
   }),

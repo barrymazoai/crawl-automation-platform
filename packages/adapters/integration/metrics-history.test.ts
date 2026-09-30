@@ -4,6 +4,7 @@ import type { CapturedPage } from "@crawl-automation/channels-core";
 import type { Database } from "@crawl-automation/platform";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { PostgresChannelQueueStore } from "../src/postgres/postgres-channel-queue-store.js";
+import { PostgresHistoryReader } from "../src/postgres/postgres-history-reader.js";
 import { PostgresProductHistory } from "../src/postgres/postgres-product-history.js";
 import { startTemporaryPostgres, type TemporaryPostgres } from "./temporary-postgres.js";
 
@@ -93,6 +94,29 @@ describe.skipIf(!hasPostgres)("metrics history and Amazon holds against a real P
       [next.historyListingId],
     );
     expect(counts[0]?.points).toBe(2);
+  });
+
+  it("reads the listing's metrics back by channel and product ID, newest first", async () => {
+    const reader = new PostgresHistoryReader(database);
+    const query = {
+      channel: "wholefoods" as const,
+      externalId: "B002CQU54Q",
+      kind: "metrics" as const,
+    };
+    const answer = await reader.find({ ...query, limit: 10 });
+    expect(answer.listings).toEqual([
+      expect.objectContaining({ externalId: "B002CQU54Q", basis: "external-id" }),
+    ]);
+    expect(answer.points.map((point) => point.observedAt)).toEqual([
+      "2026-10-01T02:00:00.000Z",
+      "2026-09-30T02:00:00.000Z",
+    ]);
+    expect(answer.points[0]?.record).toMatchObject({ price: "45.04" });
+    expect((await reader.find({ ...query, limit: 1 })).points).toHaveLength(1);
+    expect(await reader.find({ ...query, externalId: "B000000000", limit: 10 })).toEqual({
+      listings: [],
+      points: [],
+    });
   });
 
   it("a different record under the same capture is a conflict, and nothing changes", async () => {

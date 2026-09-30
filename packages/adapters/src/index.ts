@@ -11,6 +11,7 @@ export * from "./temporal/temporal-browser-scans.js";
 export * from "./temporal/temporal-workflow-tree.js";
 export * from "./postgres/postgres-brand-store.js";
 export * from "./postgres/postgres-product-store.js";
+export * from "./postgres/postgres-history-reader.js";
 export * from "./postgres/postgres-queue-store.js";
 export * from "./postgres/postgres-channel-queue-store.js";
 export * from "./postgres/postgres-queue-dispatch.js";

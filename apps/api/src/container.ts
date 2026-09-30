@@ -4,7 +4,6 @@ import {
   PostgresBrandStore,
   PostgresDeliveryJournal,
   PostgresDeliveryScan,
-  PostgresProductStore,
   PostgresResourceStore,
   PostgresReviewStore,
   PostgresRunStore,
@@ -17,7 +16,8 @@ import {
   DeliveryCoordinator,
   DeliveryRunner,
   FleetService,
-  ProductService,
+  type HistoryService,
+  type ProductService,
   QueueService,
   type ListingStateService,
   type QueueDispatcher,
@@ -38,6 +38,7 @@ import type { ApiConfig } from "./config.js";
 import { evidenceReaders } from "./evidence-readers.js";
 import { brandScanParts, type BrandScanParts } from "./brand-scan-parts.js";
 import { listingStateService, productRuns, queueDispatcher, queueService } from "./queue-parts.js";
+import { historyService, productService } from "./results-parts.js";
 
 /** Everything the API is built from. Adapters are created once and shared. */
 export interface ApiParts {
@@ -54,6 +55,7 @@ export interface ApiParts {
   brands: BrandService;
   reviews: ReviewService;
   products: ProductService;
+  history: HistoryService;
   resources: ResourceService;
   fleet: FleetService;
   listingStates: ListingStateService;
@@ -126,10 +128,8 @@ function registerServices(container: Parts): void {
         new BrandService({ brands: new PostgresBrandStore(parts.database), log: parts.log }),
     ).singleton(),
     reviews: asFunction(reviewService).singleton(),
-    products: asFunction(
-      (parts: ApiParts) =>
-        new ProductService({ products: new PostgresProductStore(parts.database) }),
-    ).singleton(),
+    products: asFunction(productService).singleton(),
+    history: asFunction(historyService).singleton(),
     resources: asFunction(
       (parts: ApiParts) =>
         new ResourceService({

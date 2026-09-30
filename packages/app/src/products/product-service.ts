@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { appErrors } from "../errors.js";
 
 export const ProductListSchema = z.strictObject({
   sourceId: z.string().max(200).optional(),
@@ -20,6 +21,11 @@ export interface CollectedProduct {
   warningCodes: string[];
 }
 
+/** One collected product with its full stored record: formula, ingredients, assembly and evidence references. */
+export interface ProductDetail extends CollectedProduct {
+  record: Record<string, unknown>;
+}
+
 export interface ProductPage {
   items: CollectedProduct[];
   nextCursor: string | null;
@@ -27,6 +33,7 @@ export interface ProductPage {
 
 export interface ProductStore {
   list(query: ProductList): Promise<ProductPage>;
+  get(operationId: string): Promise<ProductDetail | null>;
 }
 
 /** Collected products, newest first by collection time. */
@@ -35,5 +42,13 @@ export class ProductService {
 
   list(query: ProductList): Promise<ProductPage> {
     return this.deps.products.list(query);
+  }
+
+  async get(operationId: string): Promise<ProductDetail> {
+    const product = await this.deps.products.get(operationId);
+    if (!product) {
+      throw appErrors.create("PRODUCT.NOT_FOUND", { details: { operationId } });
+    }
+    return product;
   }
 }

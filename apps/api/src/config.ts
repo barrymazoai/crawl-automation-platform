@@ -7,7 +7,11 @@ import {
   loadConfig,
 } from "@crawl-automation/platform";
 import { R2ScopeSchema } from "@crawl-automation/v3-artifacts";
-import { DeliveryTarget, ResourceGateSchema } from "@crawl-automation/v3-contracts";
+import {
+  ChannelIdSchema,
+  DeliveryTarget,
+  ResourceGateSchema,
+} from "@crawl-automation/v3-contracts";
 import { ProductPipelineInputSchema } from "@crawl-automation/workflows";
 import { z } from "zod";
 import { BrandScanSettingsSchema } from "./brand-scan-config.js";
@@ -25,7 +29,7 @@ export const ApiConfigSchema = z.strictObject({
   temporal: TemporalConfigSchema,
   delivery: z.strictObject({
     clusterId: z.string().min(1),
-    channels: z.partialRecord(z.enum(["amazon", "gnc", "swanson", "dtc"]), DeliveryTarget),
+    channels: z.partialRecord(ChannelIdSchema, DeliveryTarget),
     /** While this file exists, no new run is started. */
     pauseFile: absolutePath,
     runner: DeliveryRunnerOptionsSchema.default({
@@ -38,10 +42,7 @@ export const ApiConfigSchema = z.strictObject({
   pipeline: z
     .strictObject({
       queues: ProductPipelineInputSchema.shape.queues,
-      channels: z.partialRecord(
-        z.enum(["amazon", "gnc", "swanson", "dtc"]),
-        z.strictObject({ resources: ResourceGateSchema }),
-      ),
+      channels: z.partialRecord(ChannelIdSchema, z.strictObject({ resources: ResourceGateSchema })),
     })
     .default({ queues: { activities: "none", plan: "none", label: "none" }, channels: {} }),
   fleet: z.strictObject({ monitorStatus: absolutePath, queueHealth: absolutePath }),

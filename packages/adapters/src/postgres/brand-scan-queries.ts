@@ -1,4 +1,10 @@
-import type { ScanRecord, ScanResult, ScanSource } from "@crawl-automation/app";
+import {
+  UnlistedReasonSchema,
+  type ScanRecord,
+  type ScanResult,
+  type ScanRevisits,
+  type ScanSource,
+} from "@crawl-automation/app";
 import { z } from "zod";
 
 /** The columns a scan is read with: the scan, its source and its brand. */
@@ -31,6 +37,9 @@ const ResultSchema = z.object({
   unresolvedFamilies: z.number(),
   statedTotal: z.number().nullable(),
   full: z.boolean(),
+  // Scans finished before these counts existed have neither.
+  newListings: z.number().nullable().default(null),
+  knownListings: z.number().nullable().default(null),
   missing: z.number(),
   queued: z.number(),
   credits: z.number(),
@@ -62,9 +71,50 @@ export function scanOf(row: unknown): ScanRecord {
     source: sourceOf(parsed),
     revisitBatchId,
     state,
-    result: result as ScanResult | null,
+    result: result satisfies ScanResult | null,
     requestedAt,
     startedAt,
     finishedAt,
   };
+}
+
+/**
+ * A revisit list's outcome: the latest sighting of each of its listings recorded by the list's own runs, grouped by
+ * state and reason, with the number of listings the list holds.
+ */
+export const REVISIT_OUTCOMES = `
+  WITH runs AS (
+    SELECT a.run_id FROM queue_attempt a JOIN queue_item i ON i.item_id = a.item_id WHERE i.batch_id = $1::uuid),
+  latest AS (
+    SELECT DISTINCT ON (o.listing_id, coalesce(o.variant_id, '')) o.state, o.reason
+    FROM listing_state_observation o WHERE o.run_id IN (SELECT run_id FROM runs)
+    ORDER BY o.listing_id, coalesce(o.variant_id, ''), o.captured_at DESC)
+  SELECT (SELECT count(*)::int FROM queue_item WHERE batch_id = $1::uuid) AS requested,
+    l.state, l.reason, count(*)::int AS count
+  FROM latest l GROUP BY l.state, l.reason
+  UNION ALL
+  SELECT (SELECT count(*)::int FROM queue_item WHERE batch_id = $1::uuid), NULL, NULL, 0`;
+
+const OutcomeRow = z.object({
+  requested: z.number(),
+  state: z.enum(["live", "unlisted"]).nullable(),
+  reason: UnlistedReasonSchema.nullable(),
+  count: z.number(),
+});
+
+export function revisitsOf(rows: unknown[]): ScanRevisits {
+  const parsed = rows.map((row) => OutcomeRow.parse(row));
+  const requested = parsed[0]?.requested ?? 0;
+  const revisits: ScanRevisits = { requested, live: 0, unlisted: {}, pending: 0 };
+  let seen = 0;
+  for (const row of parsed) {
+    seen += row.count;
+    if (row.state === "live") {
+      revisits.live += row.count;
+    } else if (row.reason) {
+      revisits.unlisted[row.reason] = (revisits.unlisted[row.reason] ?? 0) + row.count;
+    }
+  }
+  revisits.pending = Math.max(0, requested - seen);
+  return revisits;
 }

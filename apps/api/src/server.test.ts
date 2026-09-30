@@ -14,6 +14,7 @@ function appWith(runs: Partial<RunService>) {
     brands: unused,
     reviews: unused,
     products: unused,
+    history: unused,
     resources: unused,
     fleet: unused,
     listingStates: unused,

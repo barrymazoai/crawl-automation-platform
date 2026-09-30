@@ -36,4 +36,9 @@ export const productsRouter = router({
   list: procedure
     .input(ProductListSchema.optional())
     .query(({ ctx, input }) => ctx.products.list(ProductListSchema.parse(input ?? {}))),
+
+  /** One collected product with its full stored record (formula, ingredients, assembly). */
+  get: procedure
+    .input(z.strictObject({ operationId: z.string().min(1).max(120) }))
+    .query(({ ctx, input }) => ctx.products.get(input.operationId)),
 });

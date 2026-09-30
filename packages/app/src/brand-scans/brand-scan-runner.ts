@@ -88,8 +88,11 @@ export class BrandScanRunner {
 
   private async scan(scan: ScanRecord, signal: AbortSignal): Promise<ScanResult> {
     const listing = await readListing(this.deps, scan, signal);
+    // Known: queued by an earlier list of this source (the scan's own list is excluded).
+    const known = await this.deps.store.knownListings(scan.source, scan.scanId);
     const queued = await this.queueAll(scan, listing);
-    const missing = listing.full ? await this.revisitMissing(scan, listing) : 0;
+    const counts = compare(listing, known);
+    const missing = listing.full ? await this.revisitMissing(scan, counts.missing) : 0;
     return {
       state: listing.full ? "complete" : "partial",
       pages: listing.pages.length,
@@ -98,6 +101,8 @@ export class BrandScanRunner {
       unresolvedFamilies: listing.unresolvedFamilies,
       statedTotal: listing.pages.at(-1)?.statedTotal ?? null,
       full: listing.full,
+      newListings: counts.newListings,
+      knownListings: counts.knownListings,
       missing,
       queued,
       credits: listing.credits,
@@ -118,14 +123,7 @@ export class BrandScanRunner {
   }
 
   /** Known listings a full scan no longer shows: each queued once for a direct revisit, which decides. */
-  private async revisitMissing(scan: ScanRecord, listing: BrandListing): Promise<number> {
-    const found = new Set(
-      listing.products.map((product) => `${product.listingId}\u0000${product.variantId ?? ""}`),
-    );
-    const known = await this.deps.store.knownListings(scan.source, scan.scanId);
-    const missing = known.filter(
-      (item) => !found.has(`${item.listingId}\u0000${item.variantId ?? ""}`),
-    );
+  private async revisitMissing(scan: ScanRecord, missing: QueuedProduct[]): Promise<number> {
     if (missing.length === 0) {
       return 0;
     }
@@ -140,6 +138,21 @@ export class BrandScanRunner {
   }
 }
 
+const keyOf = (item: { listingId: string; variantId: string | null }) =>
+  `${item.listingId}\u0000${item.variantId ?? ""}`;
+
+/** Listed products split into new and already known; known listings the listing no longer shows. */
+function compare(listing: BrandListing, known: QueuedProduct[]) {
+  const knownKeys = new Set(known.map(keyOf));
+  const listedKeys = new Set(listing.products.map(keyOf));
+  const knownListings = [...listedKeys].filter((key) => knownKeys.has(key)).length;
+  return {
+    newListings: listedKeys.size - knownListings,
+    knownListings,
+    missing: known.filter((item) => !listedKeys.has(keyOf(item))),
+  };
+}
+
 function emptyResult(): ScanResult {
   return {
     state: "review",
@@ -149,6 +162,8 @@ function emptyResult(): ScanResult {
     unresolvedFamilies: 0,
     statedTotal: null,
     full: false,
+    newListings: null,
+    knownListings: null,
     missing: 0,
     queued: 0,
     credits: 0,

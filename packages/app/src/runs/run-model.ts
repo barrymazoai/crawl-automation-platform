@@ -1,4 +1,9 @@
-import { Id, type DeliveryIssue, type DeliveryReceipt } from "@crawl-automation/v3-contracts";
+import {
+  ChannelIdSchema,
+  Id,
+  type DeliveryIssue,
+  type DeliveryReceipt,
+} from "@crawl-automation/v3-contracts";
 import { z } from "zod";
 import type { Channel } from "../delivery/delivery-coordinator.js";
 
@@ -26,7 +31,7 @@ export type BrandRun = Extract<SubmitRun, { kind: "brand" }>;
 export type ProductRun = Extract<SubmitRun, { kind: "product" }>;
 
 export const RunFilterSchema = z.strictObject({
-  channel: z.enum(["amazon", "gnc", "swanson", "dtc"]).optional(),
+  channel: ChannelIdSchema.optional(),
   brandId: Id.optional(),
   active: z.boolean().optional(),
   limit: z.number().int().min(1).max(200).default(50),

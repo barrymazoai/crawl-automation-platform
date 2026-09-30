@@ -1,4 +1,5 @@
 import type {
+  ChannelId,
   ChannelLabelInput,
   ChannelPlanInput,
   ChannelProductEvidence,
@@ -12,9 +13,8 @@ import type { BrandScanReader } from "./listing/brand-scan.js";
 /** Price, rating, review count and availability as a product page shows them. */
 export type CommerceEvidence = z.infer<typeof CommerceEvidenceSchema>;
 
-/** Every channel the system knows. */
-export const CHANNEL_IDS = ["amazon", "gnc", "swanson", "dtc", "costco", "wholefoods"] as const;
-export type ChannelId = (typeof CHANNEL_IDS)[number];
+/** Every channel the system knows; the list itself lives in the contracts. */
+export { CHANNEL_IDS, type ChannelId } from "@crawl-automation/v3-contracts";
 
 /** A product's address on its channel, known before the page is fetched. */
 export interface ProductAddress {

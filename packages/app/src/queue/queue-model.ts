@@ -1,15 +1,9 @@
 import { AmazonLinkBatchesSchema } from "@crawl-automation/v3-channels";
+import { ChannelIdSchema } from "@crawl-automation/v3-contracts";
 import { z } from "zod";
 
 /** Every channel has its own queue: its own mode and limits. */
-export const QueueChannelSchema = z.enum([
-  "amazon",
-  "swanson",
-  "gnc",
-  "dtc",
-  "costco",
-  "wholefoods",
-]);
+export const QueueChannelSchema = ChannelIdSchema;
 export type QueueChannel = z.infer<typeof QueueChannelSchema>;
 
 export const QueueStateSchema = z.enum(["queued", "ready", "running", "review", "completed"]);

@@ -98,6 +98,38 @@ describe("brand scan requests", () => {
   });
 });
 
+describe("one brand scan", () => {
+  const scanId = "44444444-4444-4444-8444-444444444444";
+  const record = {
+    scanId,
+    requestId,
+    source: source(),
+    revisitBatchId: "55555555-5555-4555-8555-555555555555",
+    state: "complete" as const,
+    result: null,
+    requestedAt: "2026-09-30T00:00:00.000Z",
+    startedAt: null,
+    finishedAt: null,
+  };
+
+  it("answers the scan with what its revisits have shown so far", async () => {
+    const revisits = { requested: 3, live: 1, unlisted: { not_found: 1 }, pending: 1 };
+    const store = {
+      get: vi.fn(async () => record),
+      revisits: vi.fn(async () => revisits),
+    } as unknown as BrandScanStore;
+    const scans = new BrandScanService({ store, registry, browsers: {}, log, enabled: true });
+    expect(await scans.get(scanId)).toEqual({ ...record, revisits });
+    expect(store.revisits).toHaveBeenCalledWith(record.revisitBatchId);
+  });
+
+  it("refuses an unknown scan", async () => {
+    const store = { get: vi.fn(async () => null) } as unknown as BrandScanStore;
+    const scans = new BrandScanService({ store, registry, browsers: {}, log, enabled: true });
+    await expect(scans.get(scanId)).rejects.toMatchObject({ code: "SCAN.NOT_FOUND" });
+  });
+});
+
 describe("brand source import", () => {
   it("adds exact name matches as disabled sources, and returns loose, missing and refused entries", async () => {
     const store: BrandSourceImportStore = {

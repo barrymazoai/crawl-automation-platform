@@ -5,11 +5,20 @@ import type {
   ScanListQuery,
   ScanRecord,
   ScanResult,
+  ScanRevisits,
   ScanSource,
 } from "@crawl-automation/app";
 import type { Database } from "@crawl-automation/platform";
 import { z } from "zod";
-import { SCAN_COLUMNS, SCAN_FROM, SOURCE_COLUMNS, scanOf, sourceOf } from "./brand-scan-queries.js";
+import {
+  REVISIT_OUTCOMES,
+  SCAN_COLUMNS,
+  SCAN_FROM,
+  SOURCE_COLUMNS,
+  revisitsOf,
+  scanOf,
+  sourceOf,
+} from "./brand-scan-queries.js";
 
 const KnownRow = z.object({
   sourceId: z.string(),
@@ -99,6 +108,18 @@ export class PostgresBrandScans implements BrandScanStore {
       [query.channel ?? null, query.state ?? null, query.limit],
     );
     return rows.map(scanOf);
+  }
+
+  async get(scanId: string): Promise<ScanRecord | null> {
+    const rows = await this.database.query(
+      `SELECT ${SCAN_COLUMNS} FROM ${SCAN_FROM} WHERE sc.scan_id = $1::uuid`,
+      [scanId],
+    );
+    return rows[0] ? scanOf(rows[0]) : null;
+  }
+
+  async revisits(revisitBatchId: string): Promise<ScanRevisits> {
+    return revisitsOf(await this.database.query(REVISIT_OUTCOMES, [revisitBatchId]));
   }
 
   /** The source's listings queued by earlier lists: the latest address of each listing and variant. */

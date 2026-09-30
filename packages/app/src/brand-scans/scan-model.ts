@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { UnlistedReasonName } from "../listings/listing-model.js";
 import { QueueChannelSchema } from "../queue/queue-model.js";
 
 /** Channels whose brand scans go through the shared queue (Amazon keeps its own tools until 5.5). */
@@ -52,11 +53,31 @@ export interface ScanResult {
   unresolvedFamilies: number;
   statedTotal: number | null;
   full: boolean;
+  /** Listed products not queued by any earlier list of this source; null for scans finished before 2026-09-30. */
+  newListings: number | null;
+  /** Listed products an earlier list of this source already queued; null for scans finished before 2026-09-30. */
+  knownListings: number | null;
   /** Known listings a full scan no longer showed; each is queued for a direct revisit. */
   missing: number;
   queued: number;
   credits: number;
   code: string | null;
+}
+
+/**
+ * What the direct revisits of a full scan's missing listings have shown so far: still on sale, unlisted (by the
+ * owner's reasons), or not seen yet. Counted when asked, so it grows as the revisits run.
+ */
+export interface ScanRevisits {
+  requested: number;
+  live: number;
+  unlisted: Partial<Record<UnlistedReasonName, number>>;
+  pending: number;
+}
+
+/** One brand scan with the outcome of its revisits. */
+export interface ScanDetail extends ScanRecord {
+  revisits: ScanRevisits;
 }
 
 /** One brand scan: its source, its state and, once finished, what it found. */

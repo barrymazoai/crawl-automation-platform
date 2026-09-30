@@ -1,11 +1,12 @@
 import type { RunFilter, RunSummary } from "@crawl-automation/app";
 import type { Queryable } from "@crawl-automation/platform";
+import { ChannelIdSchema } from "@crawl-automation/v3-contracts";
 import { z } from "zod";
 
 const ProductRunRow = z.object({
   runId: z.string(),
   workflowId: z.string(),
-  channel: z.enum(["amazon", "gnc", "swanson", "dtc"]),
+  channel: ChannelIdSchema,
   brandId: z.string(),
   brandName: z.string(),
   sourceId: z.string(),

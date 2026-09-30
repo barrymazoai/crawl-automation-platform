@@ -8,6 +8,7 @@ import {
   RequestScansSchema,
   ScanListQuerySchema,
   type ScanChannel,
+  type ScanDetail,
   type ScanRecord,
   type ScanSource,
 } from "./scan-model.js";
@@ -50,6 +51,15 @@ export class BrandScanService {
 
   list(raw: unknown): Promise<ScanRecord[]> {
     return this.deps.store.list(ScanListQuerySchema.parse(raw ?? {}));
+  }
+
+  /** One scan, with what its revisits have shown so far. */
+  async get(scanId: string): Promise<ScanDetail> {
+    const scan = await this.deps.store.get(scanId);
+    if (!scan) {
+      throw appErrors.create("SCAN.NOT_FOUND", { details: { scanId } });
+    }
+    return { ...scan, revisits: await this.deps.store.revisits(scan.revisitBatchId) };
   }
 
   private async namedSources(sourceIds: readonly string[]): Promise<ScanSource[]> {
