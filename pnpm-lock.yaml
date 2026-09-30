@@ -164,6 +164,9 @@ importers:
       ipaddr.js:
         specifier: 'catalog:'
         version: 2.5.0
+      pm2:
+        specifier: 7.0.4
+        version: 7.0.4
       zod:
         specifier: 'catalog:'
         version: 4.4.3
@@ -234,6 +237,9 @@ importers:
       awilix:
         specifier: ^13.0.5
         version: 13.0.5
+      pm2:
+        specifier: 7.0.4
+        version: 7.0.4
       zod:
         specifier: 'catalog:'
         version: 4.4.3

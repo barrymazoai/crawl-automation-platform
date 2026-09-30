@@ -25,6 +25,7 @@
     "@temporalio/common": "1.23.0",
     "@temporalio/worker": "1.23.0",
     "awilix": "^13.0.5",
+    "pm2": "7.0.4",
     "zod": "catalog:"
   },
   "devDependencies": {

@@ -35,6 +35,7 @@
     "awilix": "^13.0.5",
     "hono": "catalog:",
     "ipaddr.js": "catalog:",
+    "pm2": "7.0.4",
     "zod": "catalog:"
   },
   "devDependencies": {
