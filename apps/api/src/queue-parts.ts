@@ -1,19 +1,38 @@
 import {
   PostgresChannelQueueStore,
   PostgresListingStates,
+  PostgresProductRunStore,
   PostgresQueueDispatch,
   PostgresQueueStore,
+  TemporalPipelineStarter,
   TemporalRunExecutions,
 } from "@crawl-automation/adapters";
 import {
   ListingStateService,
+  ProductRuns,
   QueueDispatcher,
   QueueService,
-  type ProductRuns,
   type RunService,
 } from "@crawl-automation/app";
+import { swansonAdapter } from "@crawl-automation/channel-swanson";
+import { ChannelRegistry } from "@crawl-automation/channels-core";
+import { gncAdapter } from "@crawl-automation/channels-gnc";
 import type { Database, Logger, TemporalClient } from "@crawl-automation/platform";
 import type { ApiConfig } from "./config.js";
+
+/** Product runs: started straight away on the shared pipeline. A channel is enabled by its adapter and config. */
+export function productRuns(parts: {
+  database: Database;
+  temporal: TemporalClient;
+  config: Pick<ApiConfig, "pipeline">;
+}): ProductRuns {
+  return new ProductRuns({
+    store: new PostgresProductRunStore(parts.database),
+    starter: new TemporalPipelineStarter(parts.temporal.client),
+    registry: new ChannelRegistry([swansonAdapter, gncAdapter]),
+    targets: parts.config.pipeline,
+  });
+}
 
 /** Amazon's queue on its existing tables; every other channel's on the shared queue tables. */
 export function queueService(database: Database, log: Logger): QueueService {

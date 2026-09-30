@@ -4,11 +4,11 @@ One command, run by hand on the machine being deployed. Code reaches the machine
 `main`; private settings files arrive by SCP and never go into git. Nothing is set to start at boot or login.
 
 ```sh
-pnpm --filter @crawl-automation/ops-deploy deploy <machine-config> <full-commit> --dry-run
-pnpm --filter @crawl-automation/ops-deploy deploy <machine-config> <full-commit> [--migrate]
+pnpm --filter @crawl-automation/ops-deploy run deploy <machine-config> <full-commit> --dry-run
+pnpm --filter @crawl-automation/ops-deploy run deploy <machine-config> <full-commit> [--migrate]
 ```
 
-Run it from any existing checkout of this repository on the machine (the command itself is not part of the
+`run` is required: plain `pnpm deploy` is a built-in pnpm command. Run it from any existing checkout of this repository on the machine (the command itself is not part of the
 release it builds). Always read the `--dry-run` output first.
 
 ## What it does, in order

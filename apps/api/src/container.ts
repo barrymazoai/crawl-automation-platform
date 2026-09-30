@@ -4,12 +4,10 @@ import {
   PostgresBrandStore,
   PostgresDeliveryJournal,
   PostgresDeliveryScan,
-  PostgresProductRunStore,
   PostgresProductStore,
   PostgresResourceStore,
   PostgresReviewStore,
   PostgresRunStore,
-  TemporalPipelineStarter,
   TemporalWorkflowStarter,
   TemporalWorkflowTree,
 } from "@crawl-automation/adapters";
@@ -19,7 +17,6 @@ import {
   DeliveryCoordinator,
   DeliveryRunner,
   FleetService,
-  ProductRuns,
   ProductService,
   QueueService,
   type ListingStateService,
@@ -36,14 +33,11 @@ import {
   type Logger,
   type TemporalClient,
 } from "@crawl-automation/platform";
-import { swansonAdapter } from "@crawl-automation/channel-swanson";
-import { gncAdapter } from "@crawl-automation/channels-gnc";
-import { ChannelRegistry } from "@crawl-automation/channels-core";
 import { asFunction, asValue, createContainer, InjectionMode, type AwilixContainer } from "awilix";
 import type { ApiConfig } from "./config.js";
 import { evidenceReaders } from "./evidence-readers.js";
 import { brandScanParts, type BrandScanParts } from "./brand-scan-parts.js";
-import { listingStateService, queueDispatcher, queueService } from "./queue-parts.js";
+import { listingStateService, productRuns, queueDispatcher, queueService } from "./queue-parts.js";
 
 /** Everything the API is built from. Adapters are created once and shared. */
 export interface ApiParts {
@@ -81,8 +75,17 @@ const exists = (path: string) =>
 export async function buildContainer(config: ApiConfig): Promise<Parts> {
   const log = createLogger({ name: "api", level: config.log.level });
   const temporal = await connectTemporal(config.temporal);
+  return assembleContainer({ config, log, temporal });
+}
+
+/** Every part of the API, registered around its already-open connections (tests pass stand-ins). */
+export function assembleContainer(base: Pick<ApiParts, "config" | "log" | "temporal">): Parts {
   const container = createContainer<ApiParts>({ injectionMode: InjectionMode.PROXY, strict: true });
-  container.register({ config: asValue(config), log: asValue(log), temporal: asValue(temporal) });
+  container.register({
+    config: asValue(base.config),
+    log: asValue(base.log),
+    temporal: asValue(base.temporal),
+  });
   registerAdapters(container);
   registerServices(container);
   registerLoops(container);
@@ -149,14 +152,25 @@ function registerLoops(container: Parts): void {
   container.register({
     deliveryRunner: asFunction(deliveryRunner).singleton(),
     // Brand scans: their services, and their runner when this process has scan settings.
+    // Named fields only: spreading the cradle would resolve every registration, this one included (a cycle).
     brandScanParts: asFunction((parts: ApiParts) =>
-      brandScanParts({ ...parts, settings: parts.config.brandScans }),
+      brandScanParts({
+        database: parts.database,
+        queue: parts.queue,
+        listingStates: parts.listingStates,
+        settings: parts.config.brandScans,
+        temporal: parts.temporal,
+        log: parts.log,
+      }),
     ).singleton(),
 
     queueDispatcher: asFunction((parts: ApiParts) =>
       queueDispatcher(
         {
-          ...parts,
+          database: parts.database,
+          temporal: parts.temporal,
+          runs: parts.runs,
+          log: parts.log,
           productRuns: productRuns(parts),
           isPaused: () => exists(parts.config.delivery.pauseFile),
         },
@@ -172,16 +186,6 @@ function registerLoops(container: Parts): void {
           intervalMs: parts.config.cleanup.intervalMs,
         }),
     ).singleton(),
-  });
-}
-
-/** Product runs: started straight away on the shared pipeline. A channel is enabled by its adapter and config. */
-function productRuns(parts: ApiParts): ProductRuns {
-  return new ProductRuns({
-    store: new PostgresProductRunStore(parts.database),
-    starter: new TemporalPipelineStarter(parts.temporal.client),
-    registry: new ChannelRegistry([swansonAdapter, gncAdapter]),
-    targets: parts.config.pipeline,
   });
 }
 
