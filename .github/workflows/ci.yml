@@ -38,8 +38,11 @@ jobs:
       - name: Types
         run: pnpm check:types
 
-      - name: Unit tests
+      - name: Active unit tests
         run: pnpm test:v3
+
+      - name: Build API and workers
+        run: pnpm build
 
       - name: Modules load under Node (not only under vitest)
         run: pnpm smoke

@@ -6,7 +6,6 @@ import tseslint from "typescript-eslint";
 export const governed = [
   "apps/api/src/**/*.ts",
   "apps/worker/src/**/*.ts",
-  "apps/cli/src/**/*.ts",
   "packages/adapters/src/**/*.ts",
   "packages/adapters/integration/**/*.ts",
   "packages/app/src/**/*.ts",
@@ -20,7 +19,17 @@ export const governed = [
 const shortNamesAllowed = ["_", "i", "x", "y"];
 
 export default tseslint.config(
-  { ignores: ["**/dist/**", "**/node_modules/**", "**/*.generated.ts"] },
+  { ignores: ["archive/**", "**/dist/**", "**/node_modules/**", "**/*.generated.ts"] },
+  { files: ["eslint.config.js"], extends: [js.configs.recommended] },
+  {
+    files: [".dependency-cruiser.cjs"],
+    extends: [js.configs.recommended],
+    languageOptions: { globals: { module: "readonly" } },
+  },
+  {
+    files: ["vitest.v3.config.ts", "packages/v3-product/tsdown.config.ts"],
+    extends: [js.configs.recommended, ...tseslint.configs.strict],
+  },
   {
     files: governed,
     extends: [js.configs.recommended, ...tseslint.configs.strict],

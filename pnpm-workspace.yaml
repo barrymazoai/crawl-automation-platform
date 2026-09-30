@@ -1,9 +1,23 @@
 packages:
-  - apps/*
-  - packages/*
+  - apps/api
+  - apps/worker
+  - packages/adapters
+  - packages/app
+  - packages/workflows
+  - packages/processing
+  - packages/platform
+  # Manifest dependency closure of the legacy resource gate and shared contracts (R41).
+  - packages/v3-contracts
+  - packages/v3-product
+  - packages/v3-vision
+  - packages/v3-artifacts
+  - packages/v3-results
+  - packages/v3-codex
+  - packages/v3-worker-runtime
   - packages/channels/*
   - ops/*
   - crawl-products
+  - '!archive/**'
 
 catalog:
   '@ant-design/icons': ^5.6.1

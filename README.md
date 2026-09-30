@@ -1,5 +1,7 @@
 # Crawl Automation Platform
 
+> **R41 (2026-09-30):** The legacy apps and launch/deploy commands below are retired from the active workspace; their move to `archive/` is pending the Git index permission fix. Do not run them. Use [the current architecture](docs/architecture/ARCHITECTURE.md) and [manual deployment](ops/deploy/README.md); see [archive status](archive/README.md).
+
 > **V3 redesign (2026-09-05):** [Temporal plan](CRAWLER_V3_PLAN.md) · [Design specification](docs/spark/2026-09-05-crawler-v3-temporal-design.md) · [Interactive architecture](docs/crawler-v3-architecture.html). These describe the proposed replacement, not a completed migration. The implementation and operational instructions below still describe the existing system.
 
 > **2026-09-23 operational references:** [Execution machines and responsibilities](docs/operations/machines.md) · [Amazon Brand entry preparation design](docs/spark/2026-09-23-amazon-brand-entry-preparation-design.md). The device inventory distinguishes the migrated US database host, Windows services, the new Brand Mini, and the historical local Mini.

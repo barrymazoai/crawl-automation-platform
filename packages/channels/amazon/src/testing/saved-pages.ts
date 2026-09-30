@@ -6,7 +6,7 @@ import type { FetchedPage } from "@crawl-automation/channels-core";
 
 const repository = fileURLToPath(new URL("../../../../../", import.meta.url));
 const external = process.env["V3_TEST_DATA_DIR"];
-const fixtureDirectory = "packages/v3-channels/src/fixtures";
+const fixtureDirectory = "archive/packages/v3-channels/src/fixtures"; // until R45 moves saved pages to R2
 const evidenceDirectory = "docs/quality/evidence/2026-09-23-amazon-html-loading";
 
 export const savedPaths = {

@@ -6,6 +6,7 @@
     "console"
   ],
   "ignore": [
+    "archive/**",
     "**/*.test.ts",
     "**/dist/**",
     "**/node_modules/**",

@@ -2,9 +2,8 @@
 // A layer imports only layers below it; channels and processing never import each other.
 const layer = (name) => `^(apps|packages)/${name}/`;
 
-/** Layers from top to bottom. Each may import only the layers listed after it; the CLI uses the API's types. */
+/** Layers from top to bottom. Each may import only the layers listed after it. */
 const order = [
-  "cli",
   "api",
   "worker",
   "adapters",
@@ -47,42 +46,46 @@ module.exports = {
     {
       name: "sql-only-in-platform-and-adapters",
       severity: "error",
-      from: { path: layer("(api|cli|app|workflows|channels|processing)"), pathNot: "\\.test\\.ts$" },
+      from: { path: layer("(api|app|workflows|channels|processing)"), pathNot: "\\.test\\.ts$" },
       to: { path: "node_modules/(pg|pg-pool)/" },
     },
     {
       name: "temporal-client-only-in-platform-and-adapters",
       severity: "error",
-      from: { path: layer("(api|cli|app|channels|processing)"), pathNot: "\\.test\\.ts$" },
+      from: { path: layer("(api|app|channels|processing)"), pathNot: "\\.test\\.ts$" },
       to: { path: "node_modules/@temporalio/(client|worker)/" },
     },
     {
-      name: "new-code-does-not-import-old-apps",
+      name: "new-code-does-not-import-archive",
       severity: "error",
-      from: { path: layer("(api|cli|worker|adapters|app|workflows|channels|processing|platform)") },
-      to: { path: "^apps/(v3-api|v3-workers|backend|web|browser-node)/" },
+      from: { path: layer("(api|worker|adapters|app|workflows|channels|processing|platform)") },
+      to: { path: "^archive/" },
     },
     {
       // Only the new version runs: new code never calls the old packages. v3-contracts (data shapes) is kept.
       // Today's imports are listed in .dependency-cruiser-known-violations.json (a dependency-cruiser baseline);
-      // each move ticket (R02-R08) removes its lines, and R01 closes when the file lists nothing.
+      // only the two versioned resource-gate imports remain for histories predating resource-gate-v1.
       name: "new-code-does-not-import-old-packages",
       severity: "error",
       from: {
-        path: [layer("(api|cli|worker|adapters|app|workflows|channels|processing|platform)"), "^ops/deploy/"],
+        path: [layer("(api|worker|adapters|app|workflows|channels|processing|platform)"), "^ops/deploy/"],
       },
       to: { path: "^packages/v3-", pathNot: "^packages/v3-contracts/" },
     },
     {
       name: "no-circular",
       severity: "error",
-      from: { path: layer("(api|cli|worker|adapters|app|workflows|channels|processing|platform)") },
+      from: { path: layer("(api|worker|adapters|app|workflows|channels|processing|platform)") },
       to: { circular: true },
     },
   ],
   options: {
+    // Enumerate kept code; a broad v3-* pattern would include retired implementations (R41).
+    includeOnly: {
+      path: "^(apps/(api|worker)/|ops/deploy/|packages/(adapters|app|workflows|channels|processing|platform)/|packages/v3-(contracts|vision|artifacts|results|codex|worker-runtime)/src/|packages/v3-product/src/resource-workflow(?:\\.test)?\\.ts$)",
+    },
     doNotFollow: { path: "node_modules" },
-    exclude: { path: "(dist|node_modules)/" },
+    exclude: { path: "(^archive/|(^|/)(dist|node_modules)/)" },
     tsPreCompilationDeps: true,
     tsConfig: { fileName: "tsconfig.base.json" },
     enhancedResolveOptions: { exportsFields: ["exports"], conditionNames: ["import", "require", "node", "default"] },

@@ -3,10 +3,10 @@ pre-commit:
   parallel: true
   commands:
     format:
-      glob: "{apps/{api,worker,cli},ops/deploy,packages/{adapters,app,workflows,channels,processing,platform}}/**/*.ts"
+      glob: "{apps/{api,worker},ops/deploy,packages/{adapters,app,workflows,channels,processing,platform}}/**/*.ts"
       run: pnpm exec prettier --check {staged_files}
     lint:
-      glob: "{apps/{api,worker,cli},ops/deploy,packages/{adapters,app,workflows,channels,processing,platform}}/**/*.ts"
+      glob: "{apps/{api,worker},ops/deploy,packages/{adapters,app,workflows,channels,processing,platform}}/**/*.ts"
       run: pnpm exec eslint --max-warnings 0 --no-warn-ignored {staged_files}
 
 pre-push:

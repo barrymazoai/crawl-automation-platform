@@ -1,5 +1,7 @@
 # V3 新业务数据库 · 第一版基础结构
 
+> **R41 (2026-09-30):** The old API/CLI tools referenced below are retired and awaiting their move to `archive/`; do not run those commands. Current migrations use [ops/deploy](../../ops/deploy/README.md).
+
 2026-09-09：新增 `013_catalog_presence.sql`，保存目录页/发现/子流程启动回执/目录封闭/存在性结论及观察到 Temporal 执行的映射，全部不可变。只在新隔离库验收；现有持久库未升级。不是第二任务队列，不从处理/入库结果推断产品消失。[第二批边界与证据](../../docs/quality/2026-09-09-batch-two.md)。
 
 2026-09-07：新增 `010_label_collected_products.sql`，同一不可变 collected_product 表允许分组配方 codec /3。仅更新版本约束，不改写旧快照；Formula、Ingredients、分组剂量和来源由共享契约验证。只在隔离临时库验收，已有持久库未升级；[报告](../../docs/quality/2026-09-07-label-product.md)。

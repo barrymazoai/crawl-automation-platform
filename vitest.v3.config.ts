@@ -1,14 +1,14 @@
-// Unit tests of every Crawler V3 package and app (`pnpm test:v3`). Integration tests that need a live
-// Postgres, Temporal or saved fixtures on Server 一 live in `integration/` folders and run separately.
+// Tests of active Crawler V3 code (`pnpm test:v3`); dedicated integration/ suites run separately.
+// Some src tests still need permission to start isolated local PostgreSQL or Temporal servers.
 import { defineConfig } from "vitest/config";
 
 export default defineConfig({
   test: {
     include: [
-      "packages/v3-*/src/**/*.test.ts",
-      "apps/v3-api/src/**/*.test.ts",
-      "apps/v3-workers/src/**/*.test.ts",
-      "apps/{api,worker,cli}/src/**/*.test.ts",
+      "packages/v3-{contracts,vision,artifacts,results,codex,worker-runtime}/src/**/*.test.ts",
+      // Only this legacy entry is used by histories predating resource-gate-v1.
+      "packages/v3-product/src/resource-workflow.test.ts",
+      "apps/{api,worker}/src/**/*.test.ts",
       "packages/{adapters,app,workflows,processing,platform}/src/**/*.test.ts",
       "packages/channels/*/src/**/*.test.ts",
       "ops/deploy/src/**/*.test.ts",
@@ -16,12 +16,9 @@ export default defineConfig({
     exclude: [
       "**/node_modules/**",
       "**/dist/**",
-      // PDF is not part of the plan (owner 2026-09-30). These old tests start the Python PDF engine; the old code
-      // they test is archived with the rest (ticket R41).
-      "packages/v3-pdf/**",
-      "packages/v3-product/src/saved-sources.test.ts",
+      "archive/**",
     ],
-    // Some archive tests do real hashing and I/O; 5 s is too short when the whole suite runs in parallel.
+    // Evidence storage tests do real hashing and I/O; allow for the whole suite running in parallel.
     testTimeout: 20000,
   },
 });

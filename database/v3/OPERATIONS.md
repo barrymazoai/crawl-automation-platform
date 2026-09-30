@@ -1,5 +1,7 @@
 # V3 数据库迁移与恢复
 
+> **R41 (2026-09-30):** The old API/CLI tools referenced below are retired and awaiting their move to `archive/`; do not run those commands. Current operations use the API and [ops/deploy](../../ops/deploy/README.md).
+
 R08 部署迁移入口是 `packages/app/src/deployment/migration-service.ts`，数据库实现位于
 `packages/adapters/src/{migrations,postgres}`。`ops/deploy` 直接调用服务；不再启动四次旧
 `v3-api db` 子进程，也不增加新的数据库 CLI。现有开发启动器、凭证初始化和恢复功能尚未迁移，

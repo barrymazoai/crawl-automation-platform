@@ -4,14 +4,6 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": {
-      "types": "./src/index.ts",
-      "import": "./src/index.ts"
-    },
-    "./workflow": {
-      "types": "./src/workflow.ts",
-      "import": "./src/workflow.ts"
-    },
     "./resource-workflow": {
       "types": "./src/resource-workflow.ts",
       "import": "./src/resource-workflow.ts"
@@ -20,7 +12,7 @@
   "scripts": {
     "build": "tsc --noEmit && tsdown",
     "check-types": "tsc --noEmit",
-    "test": "vitest run src"
+    "test": "vitest run src/resource-workflow.test.ts"
   },
   "dependencies": {
     "@crawl-automation/v3-contracts": "workspace:*",
