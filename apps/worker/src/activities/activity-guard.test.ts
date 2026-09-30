@@ -1,4 +1,4 @@
-import { beforeEach, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 const context = vi.hoisted(() => ({
   info: { attempt: 1, workflowExecution: { workflowId: "product-1", runId: "temporal-run-1" } },
@@ -18,8 +18,12 @@ const log = createLogger({
 
 beforeEach(() => {
   context.info.attempt = 1;
+  context.heartbeat.mockClear();
+  context.cancellationSignal = new AbortController().signal;
   lines.length = 0;
 });
+
+afterEach(() => vi.useRealTimers());
 
 it("runs the first attempt and returns its result", async () => {
   const run = guarded("captureProduct", async (raw) => ({ echoed: raw }), log);
@@ -36,6 +40,43 @@ it("refuses a second attempt without running the handler", async () => {
     nonRetryable: true,
   });
   expect(handler).not.toHaveBeenCalled();
+  expect(context.heartbeat).not.toHaveBeenCalled();
+});
+
+it("heartbeats immediately and every 2 seconds while work is pending, then clears the timer", async () => {
+  vi.useFakeTimers();
+  let finish: (value: string) => void = () => undefined;
+  const pending = new Promise<string>((resolve) => {
+    finish = resolve;
+  });
+  const handler = vi.fn(async () => pending);
+  const result = guarded("interpretText", handler, log)("task");
+  expect(context.heartbeat).toHaveBeenCalledOnce();
+  expect(handler).toHaveBeenCalledWith("task", context.cancellationSignal);
+  await vi.advanceTimersByTimeAsync(28_000);
+  expect(context.heartbeat).toHaveBeenCalledTimes(15);
+  finish("done");
+  await expect(result).resolves.toBe("done");
+  expect(vi.getTimerCount()).toBe(0);
+  await vi.advanceTimersByTimeAsync(30_000);
+  expect(context.heartbeat).toHaveBeenCalledTimes(15);
+});
+
+it.each(["failure", "cancelled"])("clears the heartbeat timer after %s", async (ending) => {
+  vi.useFakeTimers();
+  const controller = new AbortController();
+  context.cancellationSignal = controller.signal;
+  const failure = new Error("work stopped");
+  const handler = async () => {
+    if (ending === "cancelled") {
+      controller.abort(failure);
+    }
+    throw failure;
+  };
+  const result = guarded("ocrFile", handler, log)("task");
+  await expect(result).rejects.toBeInstanceOf(Error);
+  expect(vi.getTimerCount()).toBe(0);
+  expect(context.heartbeat).toHaveBeenCalledOnce();
 });
 
 it("a failure leaves with the error's own code", async () => {

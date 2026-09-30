@@ -5,7 +5,8 @@ const env = vi.hoisted(() => ({
   handlers: {} as Record<string, (raw: unknown) => void>,
 }));
 
-vi.mock("@temporalio/workflow", () => {
+vi.mock("@temporalio/workflow", async () => {
+  const { TimeoutFailure } = await import("@temporalio/common");
   class ApplicationFailure extends Error {
     constructor(
       message: string,
@@ -34,10 +35,13 @@ vi.mock("@temporalio/workflow", () => {
     ActivityCancellationType: { WAIT_CANCELLATION_COMPLETED: "WAIT" },
     ActivityFailure: class extends Error {},
     ApplicationFailure,
+    TimeoutFailure,
   };
 });
 
 import { ApplicationFailure } from "@temporalio/workflow";
+import { TimeoutFailure } from "@temporalio/common";
+import { activityCodes } from "@crawl-automation/platform/errors/activity";
 import { collected, entry, pageActivities, textOutcome } from "./label-fixture.js";
 import { LabelWorkflow } from "./label-workflow.js";
 
@@ -146,4 +150,50 @@ it("a manifest that does not account for every source is refused before collecti
   await expect(run()).rejects.toMatchObject({ type: "CHANNEL.LABEL_IDENTITY_CONFLICT" });
 
   expect(steps["collectLabelProduct"]).not.toHaveBeenCalled();
+});
+
+it.each([
+  "loadLabelPlan",
+  "prepareHtmlPage",
+  "preparePageText",
+  "prepareLabelSource",
+  "interpretText",
+  "resolveTextReceipt",
+  "prepareLabelManifest",
+  "assembleLabelProduct",
+  "collectLabelProduct",
+])(
+  "%s heartbeat expiry becomes a Review with the registered cause, never a retry",
+  async (name) => {
+    const { steps, model } = setup();
+    const activity = name === "interpretText" ? model.interpretText : steps[name];
+    const failure = new Error("Activity failed", {
+      cause: new TimeoutFailure("Heartbeat expired", undefined, "HEARTBEAT"),
+    });
+    activity?.mockRejectedValue(failure);
+
+    expect(await run()).toMatchObject({ status: "review", automaticRetry: false });
+    expect(activity).toHaveBeenCalledOnce();
+    expect(steps["reviewLabelProduct"]).toHaveBeenCalledWith(
+      expect.objectContaining({
+        failures: [
+          expect.objectContaining({
+            code: activityCodes.heartbeatTimeout,
+            executionFact: "unknown",
+          }),
+        ],
+      }),
+    );
+    if (name === "interpretText") {
+      expect(steps["resolveTextReceipt"]).not.toHaveBeenCalled();
+    }
+  },
+);
+
+it("a heartbeat timeout writing the Review escapes without a second Review write", async () => {
+  const { steps } = setup();
+  const timeout = new TimeoutFailure("Heartbeat expired", undefined, "HEARTBEAT");
+  steps["reviewLabelProduct"]?.mockRejectedValue(timeout);
+  await expect(run("failed")).rejects.toBe(timeout);
+  expect(steps["reviewLabelProduct"]).toHaveBeenCalledOnce();
 });

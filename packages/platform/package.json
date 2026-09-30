@@ -15,6 +15,10 @@
     "./errors/resource-gate": {
       "types": "./src/errors/resource-gate-errors.ts",
       "import": "./src/errors/resource-gate-errors.ts"
+    },
+    "./errors/activity": {
+      "types": "./src/errors/activity-errors.ts",
+      "import": "./src/errors/activity-errors.ts"
     }
   },
   "scripts": {

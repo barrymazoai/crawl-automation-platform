@@ -9,6 +9,7 @@ import { ApplicationFailure, isCancellation } from "@temporalio/workflow";
 import { isAdmissionFailure, type LabelRun } from "./label-run.js";
 import { sameJson } from "./same.js";
 import type { State } from "./label-model.js";
+import { isHeartbeatFailure } from "./activity-heartbeat.js";
 
 /**
  * One text task: the model once, then the receipt, which confirms the result (or its Review) from durable evidence.
@@ -20,7 +21,7 @@ export async function runText(run: LabelRun, at: { id: string; task: TextInput }
   try {
     outcome = TextActivityOutcomeSchema.parse(await run.call("model", "interpretText", task));
   } catch (error) {
-    if (isCancellation(error) || isAdmissionFailure(error)) {
+    if (isCancellation(error) || isAdmissionFailure(error) || isHeartbeatFailure(error)) {
       throw error;
     }
     // Only read-only reconciliation follows.

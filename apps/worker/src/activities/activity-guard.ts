@@ -24,6 +24,7 @@ export function guarded(name: string, handler: Handler, log: Logger) {
     activityLog.info("activity started");
     const timer = setInterval(() => context.heartbeat(), HEARTBEAT_MS);
     try {
+      context.heartbeat();
       const result = await handler(raw, context.cancellationSignal);
       activityLog.info({ durationMs: Date.now() - started }, "activity finished");
       return result;

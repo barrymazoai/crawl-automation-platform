@@ -9,7 +9,7 @@ import {
   type PlanActivities,
   type ProductPipelineInput,
 } from "./pipeline-model.js";
-import { once } from "./activity-options.js";
+import { once, withDownloadHeartbeat } from "./activity-options.js";
 import { collectInBrowser } from "./browser-product.js";
 import { reuseSiblingFormula } from "./sibling-reuse.js";
 import { streamLabel } from "./stream-label.js";
@@ -22,10 +22,10 @@ import { captureProduct } from "./resources/capture-product.js";
  */
 export async function ProductPipelineWorkflow(raw: unknown): Promise<unknown> {
   const input = ProductPipelineInputSchema.parse(raw);
-  const pipeline = proxyActivities<PipelineActivities>({
-    taskQueue: input.queues.activities,
-    ...once,
-  });
+  const pipeline = withDownloadHeartbeat(
+    proxyActivities<PipelineActivities>({ taskQueue: input.queues.activities, ...once }),
+    input.queues.activities,
+  );
   try {
     // Pages only a browser can read have no formula planner: their formula comes from the formula family.
     const browser = input.channel === "wholefoods";

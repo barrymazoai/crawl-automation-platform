@@ -11,6 +11,7 @@ import { ManifestResultSchema, type ManifestResult, type State } from "./label-m
 import type { Walk } from "./label-image-first.js";
 import { identityConflict } from "./identity-conflict.js";
 import { sameJson } from "./same.js";
+import { isHeartbeatFailure } from "./activity-heartbeat.js";
 
 type ReviewCode = "CHANNEL.LABEL_PREPARATION_UNVERIFIED" | "CHANNEL.DEPENDENCY_UNAVAILABLE";
 type Failure = { sourceId: string; code: string; executionFact: string };
@@ -68,7 +69,7 @@ export async function labelManifest(
       result: ManifestResultSchema.parse(await run.call("activities", name, request)),
     };
   } catch (error) {
-    if (isCancellation(error)) {
+    if (isCancellation(error) || isHeartbeatFailure(error)) {
       throw error;
     }
     const cause = causeCode(error);

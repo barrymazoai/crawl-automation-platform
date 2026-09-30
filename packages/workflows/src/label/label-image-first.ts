@@ -4,6 +4,7 @@ import { processSource, type SourceWork } from "./label-source.js";
 import { ImageCheckSchema, type ImageSource, type Manifest, type State } from "./label-model.js";
 import { identityConflict } from "./identity-conflict.js";
 import { sameJson } from "./same.js";
+import { noteSourceFailure } from "./label-run.js";
 
 export interface Walk {
   states: State[];
@@ -92,6 +93,7 @@ async function checkComplete(
       throw error;
     }
     walk.states[walk.states.length - 1] = { id: source.id, status: "unresolved" };
+    noteSourceFailure(work.run, source.id, error);
     return false;
   }
 }

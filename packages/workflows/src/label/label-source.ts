@@ -2,7 +2,7 @@ import { ExecutionIdSchema, observationIdentity } from "@crawl-automation/v3-con
 import { isCancellation } from "@temporalio/workflow";
 import { ocrImage, type OcrOutcome } from "./label-image-ocr.js";
 import { pageEvidence, type PageOutcome } from "./label-page.js";
-import { notePermitFailure, type LabelRun } from "./label-run.js";
+import { noteSourceFailure, type LabelRun } from "./label-run.js";
 import { runText } from "./label-text.js";
 import { SourceResultSchema, type Source, type State, type Status } from "./label-model.js";
 import { sameJson } from "./same.js";
@@ -35,7 +35,7 @@ export async function processSource(work: SourceWork, source: Source): Promise<S
     if (isCancellation(error)) {
       throw error;
     }
-    notePermitFailure(work.run, source.id, error);
+    noteSourceFailure(work.run, source.id, error);
     return stateOf(source, "unresolved");
   }
 }

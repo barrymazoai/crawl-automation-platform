@@ -8,6 +8,7 @@ import { isCancellation } from "@temporalio/workflow";
 import type { LabelRun } from "./label-run.js";
 import type { Source, State } from "./label-model.js";
 import { sameJson } from "./same.js";
+import { isHeartbeatFailure } from "./activity-heartbeat.js";
 
 type PageSource = Extract<Source, { kind: "page" }>;
 
@@ -51,7 +52,7 @@ async function preparedPage(run: LabelRun, source: PageSource) {
       await run.call("activities", "prepareHtmlPage", source.plan.page),
     );
   } catch (error) {
-    if (isCancellation(error)) {
+    if (isCancellation(error) || isHeartbeatFailure(error)) {
       throw error;
     }
     return null;

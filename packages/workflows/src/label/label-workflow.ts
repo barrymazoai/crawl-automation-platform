@@ -17,6 +17,8 @@ import { labelRun, type LabelRun } from "./label-run.js";
 import { processSource, type SourceWork } from "./label-source.js";
 import { labelStream } from "./label-stream.js";
 import { sameJson } from "./same.js";
+import { activityCodes } from "@crawl-automation/platform/errors/activity";
+import { isHeartbeatFailure } from "./activity-heartbeat.js";
 
 /**
  * The Label workflow for every channel: load the product's label plan, prepare each source (page text, or image
@@ -26,6 +28,24 @@ import { sameJson } from "./same.js";
 export async function LabelWorkflow(raw: unknown): Promise<unknown> {
   const entry = LabelWorkflowInputSchema.parse(raw);
   const run = labelRun(entry, labelStream(entry.input));
+  try {
+    return await executeLabel(run);
+  } catch (error) {
+    if (!isHeartbeatFailure(error)) {
+      throw error;
+    }
+    return reviewLabel(run, {
+      states: [],
+      code: "CHANNEL.LABEL_PREPARATION_UNVERIFIED",
+      failures: [
+        { sourceId: "label", code: activityCodes.heartbeatTimeout, executionFact: "unknown" },
+      ],
+    });
+  }
+}
+
+async function executeLabel(run: LabelRun): Promise<unknown> {
+  const { entry } = run;
   const loaded = LoadedPlanSchema.parse(await run.call("activities", "loadLabelPlan", entry.input));
   const identity =
     sameJson(loaded.input, entry.input) &&
@@ -52,6 +72,13 @@ export async function LabelWorkflow(raw: unknown): Promise<unknown> {
 
 /** A broken file stream, or sources held up by permits, end the product in its Review before any manifest. */
 async function stoppedEarly(run: LabelRun, states: State[]): Promise<unknown> {
+  if (run.heartbeatFailures.length) {
+    return reviewLabel(run, {
+      states,
+      code: "CHANNEL.LABEL_PREPARATION_UNVERIFIED",
+      failures: [...run.heartbeatFailures, ...permitFailures(run)],
+    });
+  }
   if (!(await run.stream.finish())) {
     return reviewLabel(run, { states, code: "CHANNEL.LABEL_PREPARATION_UNVERIFIED" });
   }

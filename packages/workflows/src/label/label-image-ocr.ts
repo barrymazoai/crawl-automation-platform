@@ -7,9 +7,10 @@ import {
   type OcrInput,
 } from "@crawl-automation/v3-contracts";
 import { isCancellation } from "@temporalio/workflow";
-import { isAdmissionFailure, notePermitFailure, type LabelRun } from "./label-run.js";
+import { isAdmissionFailure, noteSourceFailure, type LabelRun } from "./label-run.js";
 import { sameJson } from "./same.js";
 import { ImagePrepareSchema, type ImageSource, type State, type Status } from "./label-model.js";
+import { isHeartbeatFailure } from "./activity-heartbeat.js";
 
 /** An image after OCR: a final state (Review, rejected…), or its keyword selection for the label source step. */
 export type OcrOutcome =
@@ -51,7 +52,7 @@ export async function ocrImage(run: LabelRun, source: ImageSource): Promise<OcrO
     if (isCancellation(error)) {
       throw error;
     }
-    notePermitFailure(run, source.id, error);
+    noteSourceFailure(run, source.id, error);
     return stateOf(source, "unresolved");
   }
 }
@@ -101,7 +102,7 @@ async function ocrOnce(run: LabelRun, task: OcrInput): Promise<OcrActivityOutcom
   try {
     return OcrActivityOutcomeSchema.parse(await run.call("ocr", "ocrFile", task));
   } catch (error) {
-    if (isCancellation(error) || isAdmissionFailure(error)) {
+    if (isCancellation(error) || isAdmissionFailure(error) || isHeartbeatFailure(error)) {
       throw error;
     }
     return null;
