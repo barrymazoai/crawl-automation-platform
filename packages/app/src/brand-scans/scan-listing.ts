@@ -3,11 +3,21 @@ import {
   type BrandScanReader,
   type ChannelAdapter,
   type ChannelId,
+  type ChannelRegistry,
   type ListedProduct,
   type ListingPage,
 } from "@crawl-automation/channels-core";
-import type { ListingPageReader } from "./ports.js";
-import type { ScanRecord } from "./scan-model.js";
+import type { BrowserBrandScanners, ListingPageReader } from "./ports.js";
+import { BROWSER_SCAN_CHANNELS, type ScanChannel, type ScanRecord } from "./scan-model.js";
+import { appErrors } from "../errors.js";
+import { assertScanReadable } from "./scan-availability.js";
+
+/** Everything that can read a brand listing: adapters' ScraperAPI readers, and the configured browser scanners. */
+export interface ScanReaders {
+  registry: ChannelRegistry;
+  pages: ListingPageReader;
+  browsers: BrowserBrandScanners;
+}
 
 /** Everything one brand's listing showed: its pages, its products (families expanded) and what it cost. */
 export interface BrandListing {
@@ -27,6 +37,71 @@ interface ListingWork {
   adapter: ChannelAdapter;
   reader: BrandScanReader;
   pages: ListingPageReader;
+}
+
+/** Select by source before normalisation: Amazon search and Store sources share a channel. */
+function sourceReader(
+  readers: Pick<ScanReaders, "registry" | "browsers">,
+  channel: ScanChannel,
+  url: string,
+) {
+  const adapter = readers.registry.channels().includes(channel)
+    ? readers.registry.get(channel)
+    : undefined;
+  const capture = adapter
+    ? (adapter.scanCapture?.(url) ?? "http")
+    : BROWSER_SCAN_CHANNELS.includes(channel)
+      ? "browser"
+      : "http";
+  if (capture === "browser") {
+    const reader = readers.browsers[channel];
+    if (!reader) {
+      throw appErrors.create("BRAND_SCAN.BROWSER_NOT_CONFIGURED", { details: { channel } });
+    }
+    return { capture, reader } as const;
+  }
+  if (!adapter?.brandScan) {
+    throw appErrors.create("BRAND_SCAN.CHANNEL_UNSUPPORTED", { details: { channel } });
+  }
+  return { capture, adapter, reader: adapter.brandScan } as const;
+}
+
+/** Normalise each source with the same reader the runner will use. */
+export function sourceUrlOf(
+  readers: Pick<ScanReaders, "registry" | "browsers">,
+  channel: ScanChannel,
+): (url: string) => string {
+  assertScanReadable(readers, channel);
+  return (url) => sourceReader(readers, channel, url).reader.sourceUrl(url);
+}
+
+/** Read this source over HTTP or through its configured browser workflow. */
+export async function readListing(
+  readers: ScanReaders,
+  scan: ScanRecord,
+  signal: AbortSignal,
+): Promise<BrandListing> {
+  const selected = sourceReader(readers, scan.source.channel as ScanChannel, scan.source.url);
+  const url = selected.reader.sourceUrl(scan.source.url);
+  if (selected.capture === "http") {
+    return readBrandListing(
+      { scan, adapter: selected.adapter, reader: selected.reader, pages: readers.pages },
+      signal,
+    );
+  }
+  const found = await selected.reader.scan({ scanId: scan.scanId, sourceUrl: url }, signal);
+  const products = found.pages.flatMap((page) => page.products);
+  const unique = new Map(
+    products.map((item) => [`${item.listingId}\u0000${item.variantId ?? ""}`, item]),
+  );
+  return {
+    pages: found.pages,
+    products: [...unique.values()],
+    families: 0,
+    unresolvedFamilies: 0,
+    credits: 0,
+    full: found.complete && found.soldHere,
+  };
 }
 
 /** Reads the brand's listing pages in order until the listing ends; more pages than the reader allows is a limit. */

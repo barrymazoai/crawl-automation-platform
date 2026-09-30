@@ -5,8 +5,8 @@ import type { ListingStateService } from "../listings/listing-state-service.js";
 import type { QueueService } from "../queue/queue-service.js";
 import type { QueuedProduct } from "../queue/queue-model.js";
 import type { BrandScanStore } from "./ports.js";
-import type { BrandListing } from "./scan-listing.js";
-import { readListing, type ScanReaders } from "./scan-readers.js";
+import { readListing, type BrandListing } from "./scan-listing.js";
+import type { ScanReaders } from "./scan-listing.js";
 import type { ScanChannel, ScanRecord, ScanResult } from "./scan-model.js";
 import type { AmazonScanQueue } from "./amazon-scan-queue.js";
 import { appErrors } from "../errors.js";
@@ -38,7 +38,7 @@ const toQueued =
   });
 
 /**
- * Runs requested brand scans: reads each brand's listing through ScraperAPI, puts ALL its products into its
+ * Runs requested brand scans: reads each source with its declared capture, puts ALL its products into its
  * queue (formula-once decides what is new), and after a full scan queues a direct revisit of every known listing
  * the brand no longer lists. Absence alone is never recorded as a sighting.
  */

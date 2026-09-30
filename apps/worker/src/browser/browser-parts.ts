@@ -7,8 +7,6 @@ import {
   type BrowserCaptureResult,
 } from "@crawl-automation/channels-core";
 import {
-  WholeFoodsBrandScan,
-  ensureWholeFoodsStore,
   wholeFoodsAdapter,
   wholeFoodsBrowserPolicy,
   type WholeFoodsStore,
@@ -17,13 +15,15 @@ import { EgoPages } from "@crawl-automation/platform";
 import { captureRecords } from "../capture-records.js";
 import type { CoreParts } from "../core-parts.js";
 import { workerErrors } from "../errors.js";
+import type { BrowserScanners } from "./browser-scanners.js";
+import { ManagedBrowserRounds, egoTargetVerifier } from "./managed-rounds.js";
+import { buildBrowserScanners } from "./scan-wiring.js";
+import { StoreEgoRounds } from "./store-rounds.js";
 
-const STORE_SETUP_TIMEOUT_MS = 120_000;
-
-/** Whole Foods capture and brand scans in the Ego browser, with the store set once per process. */
+/** Product capture plus capability-selected brand scans on either browser worker. */
 export interface BrowserParts {
   capture: PipelineCapture<BrowserCaptureResult>;
-  scanner: WholeFoodsBrandScan;
+  scanner: BrowserScanners;
   /** Sets the store in the browser profile once, before the first page this process reads. */
   ensureStore(productUrl: string, signal: AbortSignal): Promise<void>;
 }
@@ -45,26 +45,21 @@ export function buildBrowserParts(parts: CoreParts): BrowserParts {
   const registry = new ChannelRegistry([wholeFoodsAdapter(store)]);
   const http = new HttpCapture(pages);
   const capture = new BrowserProductCapture({ registry, http, publication: parts.publication });
-  let storeSet: Promise<unknown> | null = null;
+  const scanner = buildBrowserScanners({
+    ego,
+    store,
+    publication: parts.publication,
+    rounds: new ManagedBrowserRounds(
+      new StoreEgoRounds({ settings: settings.ego, pages: ego }),
+      egoTargetVerifier(settings.ego),
+    ),
+  });
   return {
     capture: new PipelineCapture<BrowserCaptureResult>({
       capture,
       ...captureRecords({ database: parts.database, log: parts.log, registry }),
     }),
-    scanner: new WholeFoodsBrandScan({ browser: ego, remote: parts.r2.store, store }),
-    async ensureStore(productUrl, signal) {
-      storeSet ??= ensureWholeFoodsStore(
-        ego,
-        { store, productUrl, timeoutMs: STORE_SETUP_TIMEOUT_MS },
-        signal,
-      );
-      try {
-        await storeSet;
-      } catch (error) {
-        // A failed setup is tried again by the next page, never silently skipped.
-        storeSet = null;
-        throw error;
-      }
-    },
+    scanner,
+    ensureStore: (url, signal) => scanner.prepare(url, signal),
   };
 }

@@ -1,6 +1,6 @@
 import type { ChannelRegistry } from "@crawl-automation/channels-core";
 import type { BrowserBrandScanners } from "./ports.js";
-import { sourceUrlOf } from "./scan-readers.js";
+import { sourceUrlOf } from "./scan-listing.js";
 import type { Logger } from "@crawl-automation/platform";
 import { appErrors } from "../errors.js";
 import type { BrandScanStore } from "./ports.js";

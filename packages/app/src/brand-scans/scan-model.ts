@@ -14,7 +14,7 @@ export const ScanChannelSchema = QueueChannelSchema.extract([
 ]);
 export type ScanChannel = z.infer<typeof ScanChannelSchema>;
 
-/** Channels whose brand scans need a browser (owner decision): their scanner must be configured to scan them. */
+/** Browser-only channels whose product adapter can live on the worker; source hooks take precedence. */
 export const BROWSER_SCAN_CHANNELS: readonly ScanChannel[] = ["wholefoods"];
 
 /**

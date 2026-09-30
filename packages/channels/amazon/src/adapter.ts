@@ -56,6 +56,8 @@ export const amazonAdapter: ChannelAdapter<AmazonRendered> = {
   fileOrigins: AMAZON_FILE_ORIGINS,
   productAddress: amazonProductAddress,
   brandScan: amazonBrandScan,
+  scanCapture: (url) =>
+    /^\/stores\//i.test(URL.parse(url, AMAZON_ORIGIN)?.pathname ?? "") ? "browser" : "http",
   pageIdentity: (page) => ({
     listingId: pageAsin(productRoot(amazonDocument(page.html))),
     variantId: null,

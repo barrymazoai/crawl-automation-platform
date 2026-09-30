@@ -61,6 +61,7 @@ export function wholeFoodsAdapter(store: WholeFoodsStore): ChannelAdapter<WholeF
     id: "wholefoods",
     formulaFamily: "amazon-asin",
     captureModes: ["browser"],
+    scanCapture: () => "browser",
     httpPolicy: WHOLE_FOODS_PAGE_POLICY,
     productAddress: wholeFoodsProductAddress,
     pageIdentity: wholeFoodsPageIdentity,

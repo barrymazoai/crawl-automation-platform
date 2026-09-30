@@ -25,8 +25,8 @@ export const BrandScanSettingsSchema = z.strictObject({
     staleMs: 1_800_000,
   }),
   /**
-   * The browser machine's task queue (Server 二), where Whole Foods listings are scanned in Ego; absent means Whole
-   * Foods is not scanned. This process never drives a browser: the store and Ego settings live on that worker.
+   * The browser task queue for Amazon Store pages and Whole Foods. Without it those sources are refused;
+   * HTTP sources still work. Store selection and Ego settings live on the worker.
    */
   browserQueue: z.string().min(1).max(200).optional(),
 });

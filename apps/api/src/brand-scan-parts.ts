@@ -6,12 +6,14 @@ import {
 import {
   BrandScanRunner,
   BrandScanService,
+  AmazonBrandScanQueue,
   BrandSourceImport,
   type BrowserBrandScanners,
   type ListingStateService,
   type QueueService,
 } from "@crawl-automation/app";
 import { swansonAdapter } from "@crawl-automation/channel-swanson";
+import { amazonAdapter, amazonStoreSourceUrl } from "@crawl-automation/channel-amazon";
 import { ChannelRegistry, ListingPages } from "@crawl-automation/channels-core";
 import { gncAdapter } from "@crawl-automation/channels-gnc";
 import { wholeFoodsBrandSourceUrl } from "@crawl-automation/channels-wholefoods";
@@ -26,9 +28,9 @@ import { createR2Objects } from "@crawl-automation/platform";
 import type { BrandScanSettings } from "./brand-scan-config.js";
 
 /** The channels brand scans read with their adapters' ScraperAPI readers. */
-const scanRegistry = () => new ChannelRegistry([swansonAdapter, gncAdapter]);
+const scanRegistry = () => new ChannelRegistry([swansonAdapter, gncAdapter, amazonAdapter]);
 
-/** Whole Foods, scanned in Ego on the browser machine through its task queue; absent without that queue. */
+/** Browser sources run in Ego on the browser worker; HTTP sources never call these gateways. */
 function browserScanners(
   settings: BrandScanSettings,
   temporal: TemporalClient,
@@ -38,6 +40,10 @@ function browserScanners(
   }
   const scans = new TemporalBrowserScans(temporal.client, settings.browserQueue);
   return {
+    amazon: {
+      sourceUrl: amazonStoreSourceUrl,
+      scan: (request, signal) => scans.scan({ channel: "amazon", ...request }, signal),
+    },
     wholefoods: {
       sourceUrl: wholeFoodsBrandSourceUrl,
       scan: (request, signal) => scans.scan({ channel: "wholefoods", ...request }, signal),
@@ -99,6 +105,17 @@ export function brandScanParts(parts: {
     return { brandScans, brandSources, runner: null };
   }
   const readers = { registry, pages: listingPages(settings, remote), browsers };
-  const deps = { ...readers, store, queue: parts.queue, listings: parts.listingStates, log };
+  const amazonQueue = new AmazonBrandScanQueue({
+    queue: parts.queue,
+    knownListings: (scan) => store.knownListings(scan.source, scan.scanId),
+  });
+  const deps = {
+    ...readers,
+    store,
+    queue: parts.queue,
+    listings: parts.listingStates,
+    log,
+    amazonQueue,
+  };
   return { brandScans, brandSources, runner: new BrandScanRunner(deps, settings.runner) };
 }

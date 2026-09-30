@@ -1,6 +1,14 @@
 import { defineErrors } from "@crawl-automation/platform";
 
 export const amazonErrors = defineErrors({
+  "AMAZON.STORE_UNVERIFIED": {
+    category: "SOURCE",
+    message: "The page has no verified Amazon Store navigation.",
+  },
+  "AMAZON.STORE_REDIRECT": {
+    category: "SOURCE",
+    message: "The browser left the requested Amazon Store sub-page.",
+  },
   "AMAZON.SCAN_FILTER_LOST": {
     category: "SOURCE",
     message: "The search page no longer has the requested Brand filter selected.",

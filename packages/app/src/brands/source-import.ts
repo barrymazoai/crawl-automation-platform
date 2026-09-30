@@ -1,8 +1,9 @@
-import type { ChannelRegistry } from "@crawl-automation/channels-core";
+import { recordRecovery } from "@crawl-automation/platform";
+import { brandScanErrors, type ChannelRegistry } from "@crawl-automation/channels-core";
 import { errorCodeOf, type Logger } from "@crawl-automation/platform";
 import { z } from "zod";
 import type { BrowserBrandScanners } from "../brand-scans/ports.js";
-import { sourceUrlOf } from "../brand-scans/scan-readers.js";
+import { sourceUrlOf } from "../brand-scans/scan-listing.js";
 import { ScanChannelSchema, type ScanChannel } from "../brand-scans/scan-model.js";
 
 /** A channel's brand list, as the site's brand directory shows it (name and brand listing URL). */
@@ -98,7 +99,11 @@ export class BrandSourceImport {
     try {
       return normalise(entry.url);
     } catch (error) {
-      result.refused.push({ ...entry, code: errorCodeOf(error) ?? "BRAND_SCAN.URL" });
+      recordRecovery(error, { operation: "source-import" });
+      result.refused.push({
+        ...entry,
+        code: errorCodeOf(error) ?? brandScanErrors.code("BRAND_SCAN.URL"),
+      });
       return null;
     }
   }

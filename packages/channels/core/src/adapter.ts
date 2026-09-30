@@ -121,6 +121,8 @@ export interface ChannelAdapter<Rendered = unknown> {
   readonly planning?: ChannelPlanning<Rendered>;
   /** How this channel lists one brand's products, for brand scans (through ScraperAPI). */
   readonly brandScan?: BrandScanReader;
+  /** Capture for this brand-source URL; absent means HTTP. Independent of product captureModes. */
+  scanCapture?(url: string): CaptureMode;
   /** Normalises a product URL and returns its identity; refuses URLs of other sites. */
   productAddress(url: string): ProductAddress;
   /**
