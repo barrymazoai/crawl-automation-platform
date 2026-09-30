@@ -108,6 +108,7 @@ export class BrandScanRunner {
       statedTotal: listing.pages.at(-1)?.statedTotal ?? null,
       full: listing.full,
       capped: listing.capped ?? false,
+      ...(listing.soldHere === undefined ? {} : { soldHere: listing.soldHere }),
       newListings: counts.newListings,
       knownListings: counts.knownListings,
       missing,

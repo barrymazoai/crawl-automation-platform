@@ -86,6 +86,7 @@ function setup(input: {
   scanReader?: BrandScanReader;
   browsers?: BrowserBrandScanners;
   channel?: ChannelAdapter["id"];
+  capture?: "browser";
 }) {
   const finished: ScanResult[] = [];
   const known: QueuedProduct[] = (input.known ?? []).map((id) => ({
@@ -126,7 +127,12 @@ function setup(input: {
     }),
   };
   const listings = { requestRevisits: vi.fn(async () => ({ queued: 1 })) };
-  const registry = new ChannelRegistry([adapter(input.scanReader ?? reader(), input.channel)]);
+  const registry = new ChannelRegistry([
+    {
+      ...adapter(input.scanReader ?? reader(), input.channel),
+      ...(input.capture ? { scanCapture: () => input.capture ?? "http" } : {}),
+    },
+  ]);
   const log = createLogger({
     name: "test",
     destination: new Writable({ write: (_c, _e, done) => done() }),
@@ -325,13 +331,13 @@ describe("brand scan runner", () => {
     (fixture.store.claim as ReturnType<typeof vi.fn>).mockResolvedValueOnce([whole]);
     await fixture.runner.tick(signal());
     expect(fixture.lists[0]?.products.map((item) => item.listingId)).toEqual(["B002CQU54Q"]);
-    expect(fixture.finished[0]).toMatchObject({ state: "partial", full: false });
+    expect(fixture.finished[0]).toMatchObject({ state: "partial", full: false, soldHere: true });
     expect(fixture.listings.requestRevisits).not.toHaveBeenCalled();
   });
 
   it("refuses a browser channel with no browser configured, as a Review with a clear code", async () => {
     const whole = { ...scan, source: { ...scan.source, channel: "wholefoods" } };
-    const fixture = setup({ bodies: {} });
+    const fixture = setup({ bodies: {}, channel: "wholefoods", capture: "browser" });
     (fixture.store.claim as ReturnType<typeof vi.fn>).mockResolvedValueOnce([whole]);
     await fixture.runner.tick(signal());
     expect(fixture.finished[0]).toMatchObject({

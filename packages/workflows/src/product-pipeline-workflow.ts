@@ -1,6 +1,8 @@
 import { pipelineErrors } from "@crawl-automation/platform/errors/activity";
 import { resourceGateCodes } from "@crawl-automation/platform/errors/resource-gate";
 import { isCancellation, patched, proxyActivities } from "@temporalio/workflow";
+import { legacyBrowserCapture } from "./legacy-capture.js";
+import { collectFamilyProduct } from "./family-product.js";
 import { failureCode } from "./failure-code.js";
 import {
   ProductPipelineInputSchema,
@@ -24,11 +26,11 @@ export async function ProductPipelineWorkflow(raw: unknown): Promise<unknown> {
     input.queues.activities,
   );
   try {
-    // Keep the recorded route when old inputs have no capability, or when replay predates the marker.
-    const browser =
-      input.capture !== undefined && patched("capture-mode-v1")
-        ? input.capture === "browser"
-        : input.channel === "wholefoods";
+    // New work receives adapter captureModes; absent capabilities default to HTTP.
+    // Histories without the marker retain their recorded commands.
+    const browser = patched("capture-mode-v1")
+      ? input.capture === "browser"
+      : legacyBrowserCapture(input.channel);
     return await (browser ? collectInBrowser(input, pipeline) : collect(input, pipeline));
   } catch (error) {
     if (isCancellation(error)) {
@@ -51,6 +53,9 @@ async function collect(
   pipeline: PipelineActivities,
 ): Promise<unknown> {
   const captured = await captureProduct(input, pipeline);
+  if (captured.status === "captured-family" && patched("formula-family-capture-v1")) {
+    return collectFamilyProduct(input, pipeline, captured);
+  }
   // A Review, or a listing the revisit found unlisted (recorded as a sighting with its reason, not a failure).
   if (captured.status !== "captured") {
     return captured;

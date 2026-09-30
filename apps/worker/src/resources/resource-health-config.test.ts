@@ -27,6 +27,14 @@ describe("resource health settings", () => {
     });
   });
 
+  it.each(["mini-ego-space-1", "server2-ego-space-6"])(
+    "maps browser resource %s to the shared browser queue without OCR",
+    (resourceId) => {
+      const resources = { [resourceId]: { taskQueues: ["v3.browser.wholefoods.v1"] } };
+      expect(schema.parse({ ...settings, resources })).toMatchObject({ resources });
+    },
+  );
+
   it.each([
     { controller: "" },
     { intervalMs: 0 },

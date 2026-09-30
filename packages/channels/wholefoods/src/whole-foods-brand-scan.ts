@@ -1,8 +1,7 @@
 import type { ListingPage } from "@crawl-automation/channels-core";
 import type { BrowserPage, BrowserRead, ObjectStore } from "@crawl-automation/platform";
-import { wholeFoodsBrandSourceUrl } from "./whole-foods-address.js";
 import { ListingArchive } from "./whole-foods-listing-archive.js";
-import { WHOLE_FOODS_PRODUCT_LINK, parseWholeFoodsListing } from "./whole-foods-listing.js";
+import { WholeFoodsBrandReader } from "./whole-foods-brand-reader.js";
 import { WHOLE_FOODS_LIST_SCROLL, WHOLE_FOODS_PAGE_POLICY } from "./whole-foods-policy.js";
 import type { WholeFoodsStore } from "./whole-foods-store.js";
 
@@ -34,17 +33,18 @@ export interface BrowserBrandScan {
 
 /**
  * A Whole Foods brand scan: the brand's filtered search page, drawn in the browser for the configured store and
- * scrolled to its end, archived in R2, then read. Whole Foods pages cannot be fetched through ScraperAPI (drawn by
- * script, priced by the chosen store), one of the two owner-approved browser cases.
+ * scrolled to its end, archived in R2, then read through its BrandScanReader capability.
  */
-export class WholeFoodsBrandScan {
-  constructor(private readonly deps: WholeFoodsBrandScanDeps) {}
+export class WholeFoodsBrandScan extends WholeFoodsBrandReader {
+  constructor(private readonly deps: WholeFoodsBrandScanDeps) {
+    super(deps.store);
+  }
 
   async scan(
     request: { scanId: string; sourceUrl: string },
     signal: AbortSignal,
   ): Promise<BrowserBrandScan> {
-    const url = wholeFoodsBrandSourceUrl(request.sourceUrl);
+    const url = this.sourceUrl(request.sourceUrl);
     const place = {
       scanId: request.scanId,
       label: "search",
@@ -52,12 +52,12 @@ export class WholeFoodsBrandScan {
     };
     const archive = new ListingArchive(this.deps.remote, place);
     const saved = (await archive.inspect(signal)) ?? (await this.draw(url, archive, signal));
-    const listing = parseWholeFoodsListing(saved.html, this.deps.store);
+    const listing = this.parsePage({ body: saved.html, url, page: 1 });
     return {
       sourceUrl: url,
-      pages: [listing.page],
+      pages: [listing],
       complete: saved.record.scroll.ended === "stable",
-      soldHere: listing.soldHere,
+      soldHere: listing.soldHere === true,
       archiveKeys: [saved.key],
     };
   }
@@ -66,7 +66,8 @@ export class WholeFoodsBrandScan {
     const { browser, store } = this.deps;
     const read: BrowserRead = {
       url,
-      readySelector: WHOLE_FOODS_PRODUCT_LINK,
+      // Empty results have no product link; parsing verifies the settled page.
+      readySelector: "main",
       timeoutMs: WHOLE_FOODS_PAGE_POLICY.timeoutMs,
       scroll: WHOLE_FOODS_LIST_SCROLL,
     };

@@ -1,7 +1,7 @@
 import type { ChannelRegistry } from "@crawl-automation/channels-core";
 import { appErrors } from "../errors.js";
 import type { BrowserBrandScanners } from "./ports.js";
-import { BROWSER_SCAN_CHANNELS, type ScanChannel } from "./scan-model.js";
+import { type ScanChannel } from "./scan-model.js";
 
 /**
  * Refuses a channel that cannot be read here at all, before any brand is read: no adapter brand reader and no
@@ -18,10 +18,7 @@ export function assertScanReadable(
   if (adapter?.brandScan || adapter?.scanCapture) {
     return;
   }
-  if (!BROWSER_SCAN_CHANNELS.includes(channel)) {
-    throw appErrors.create("BRAND_SCAN.CHANNEL_UNSUPPORTED", { details: { channel } });
-  }
   if (!readers.browsers[channel]) {
-    throw appErrors.create("BRAND_SCAN.BROWSER_NOT_CONFIGURED", { details: { channel } });
+    throw appErrors.create("BRAND_SCAN.CHANNEL_UNSUPPORTED", { details: { channel } });
   }
 }

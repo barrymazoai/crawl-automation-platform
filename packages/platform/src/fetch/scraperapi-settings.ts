@@ -1,6 +1,7 @@
 import { isIP } from "node:net";
 import { z } from "zod";
 import { scraperApiErrors } from "./scraperapi-errors.js";
+import { ScraperApiHeadersSchema } from "./scraperapi-headers.js";
 
 const optionFields = {
   countryCode: z.string().regex(/^[a-z]{2}$/),
@@ -10,6 +11,8 @@ const optionFields = {
   render: z.boolean(),
   /** ScraperAPI uses premium residential proxies (costs more credits). */
   premium: z.boolean(),
+  /** Per-channel fixed headers, sent on the first request only. Values are never evidence. */
+  headers: ScraperApiHeadersSchema,
 };
 
 /** How ScraperAPI fetches one page. The defaults are a plain US HTML fetch. */
@@ -18,6 +21,7 @@ export const ScraperApiOptionsSchema = z.strictObject({
   sessionNumber: optionFields.sessionNumber.default(null),
   render: optionFields.render.default(false),
   premium: optionFields.premium.default(false),
+  headers: optionFields.headers.optional(),
 });
 /** Some of the options, e.g. one channel's own; nothing is filled in, so absent ones keep their defaults. */
 export const ScraperApiOptionChoicesSchema = z.strictObject(optionFields).partial();

@@ -6,7 +6,7 @@ import type { WholeFoodsStore } from "./whole-foods-store.js";
 
 /**
  * In the browser, on one task page: deny the site's location prompt for this profile (it otherwise blocks the page),
- * open a product page, and when it is priced for another store, pick the configured store through the site's own
+ * open the brand search, and when it is priced for another store, pick the configured store through the site's own
  * store picker, then check again. The store is kept in the profile, so this runs once per run, not per page.
  */
 const SET_STORE_BODY = `
@@ -15,7 +15,7 @@ const notSet = () => Object.assign(new Error("store not set"), { code: "WHOLEFOO
 await task.cdp("Browser.setPermission", { origin, permission: { name: "geolocation" }, setting: "denied" });
 const open = async () => {
   await page.goto(productUrl, { timeout: timeoutMs, waitUntil: "domcontentloaded" });
-  await page.waitForSelector("h1", { timeout: timeoutMs, state: "attached" });
+  await page.waitForSelector("main", { timeout: timeoutMs, state: "attached" });
 };
 const shown = () => page.evaluate(() => (/Pickup (?:at|from)\\s*\\n?\\s*([^\\n]+)/.exec(document.body.innerText) || [])[1]?.trim() ?? null);
 const mark = (find) => page.evaluate(find.code, find.argument);
@@ -56,7 +56,7 @@ export interface StoreSetupBrowser {
 
 /**
  * Makes sure the browser profile shops the configured store before a run reads any page. `productUrl` is any Whole
- * Foods product page (the store picker is reached from it).
+ * Foods page (brand scans pass their search URL; the store picker is reached from it).
  */
 export async function ensureWholeFoodsStore(
   browser: StoreSetupBrowser,

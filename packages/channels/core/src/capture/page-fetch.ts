@@ -8,6 +8,8 @@ import type { CaptureMode } from "../capture.js";
 import { channelErrors } from "../errors.js";
 import type { FetchedVia } from "./original-html-archive.js";
 import { checkPage } from "./read-html.js";
+import { channelOptions, type ChannelOptions } from "./channel-options.js";
+export type { ChannelOptions } from "./channel-options.js";
 
 /** One product page to fetch, within its channel's limits. */
 export interface PageRequest {
@@ -37,16 +39,6 @@ export interface ScraperApiCaptureSettings {
   channels: Partial<Record<ChannelId, ChannelOptions>>;
 }
 
-/** Some of the options; an absent or undefined one keeps the default. */
-export type ChannelOptions = {
-  [Name in keyof ScraperApiOptions]?: ScraperApiOptions[Name] | undefined;
-};
-
-function withDefaults(defaults: ScraperApiOptions, own: ChannelOptions = {}): ScraperApiOptions {
-  const given = Object.entries(own).filter(([, value]) => value !== undefined);
-  return { ...defaults, ...Object.fromEntries(given) };
-}
-
 /** Product pages through ScraperAPI, with the options the channel's settings choose. */
 export class ScraperApiPages implements PageFetcher {
   readonly mode = "http";
@@ -59,7 +51,7 @@ export class ScraperApiPages implements PageFetcher {
   async fetchPage(request: PageRequest, abort: AbortSignal): Promise<FetchedHtml> {
     const { policy } = request;
     const target = allowedTarget(request.url, policy.origins).href;
-    const options = withDefaults(this.settings.defaults, this.settings.channels[request.channel]);
+    const options = channelOptions(this.settings.defaults, this.settings.channels[request.channel]);
     const signal = AbortSignal.any([abort, AbortSignal.timeout(policy.timeoutMs)]);
     const tooLarge = () =>
       channelErrors.create("CAPTURE.PAGE_LIMIT", { details: { maxBytes: policy.maxBytes } });
@@ -70,7 +62,14 @@ export class ScraperApiPages implements PageFetcher {
     checkPage(page);
     const { routeId, egressId } = this.settings;
     const provider = this.client.provider;
-    const fetchedVia = { mode: "http" as const, routeId, egressId, provider, options };
+    const { headers: _headers, ...publicOptions } = options;
+    const fetchedVia = {
+      mode: "http" as const,
+      routeId,
+      egressId,
+      provider,
+      options: publicOptions,
+    };
     const moved = page.url === target ? {} : { finalUrl: page.url };
     return {
       bytes: page.bytes,

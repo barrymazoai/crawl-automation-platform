@@ -48,7 +48,8 @@ const header = (answer: Answer, name: string): string | null => {
 
 /**
  * ScraperAPI, called through undici: one submission per page (plus at most two same-site redirects), no
- * cookies or credentials forwarded, the key only in the provider address. The provider may retry on its side; this
+ * response cookies or credentials forwarded. Fixed configured headers apply only to the initial target.
+ * The key is only in the provider address. The provider may retry on its side; this
  * client never does, never rotates a session and never upgrades the options it was given.
  */
 export class ScraperApiClient {
@@ -84,27 +85,33 @@ export class ScraperApiClient {
         }
         await answer.body.dump();
         target = next;
-        answer = await this.send(target, options, signal);
+        const { headers: _headers, ...hopOptions } = options;
+        answer = await this.send(target, hopOptions, signal);
       }
-      return await this.accept(answer, { target, page });
+      return await this.accept(answer, { target, page, privateHeaders: !!options.headers });
     } catch (error) {
       // No cause: the request URL carries the API key. Keep only the error's name and code.
       throw isAppError(error)
         ? error
-        : scraperApiErrors.create("SCRAPERAPI.EXECUTION_UNKNOWN", { details: safeReason(error) });
+        : scraperApiErrors.create("SCRAPERAPI.EXECUTION_UNKNOWN", {
+            details: options.headers ? {} : safeReason(error),
+          });
     }
   }
 
   private send(target: URL, options: ScraperApiOptions, signal: AbortSignal): Promise<Answer> {
-    const headers = { accept: "text/html", "accept-encoding": "identity" };
+    const headers = { accept: "text/html", "accept-encoding": "identity", ...options.headers };
     const url = providerUrl(this.#access.apiKey, target, options);
     return request(url, { dispatcher: this.#dispatcher, method: "GET", headers, signal });
   }
 
   /** Refuses provider failures and unverified redirects; otherwise reads the page within its size limit. */
-  private async accept(answer: Answer, fetched: { target: URL; page: ScraperApiRequest }) {
+  private async accept(
+    answer: Answer,
+    fetched: { target: URL; page: ScraperApiRequest; privateHeaders: boolean },
+  ) {
     const { target, page } = fetched;
-    const refusal = refusalOf(answer, target);
+    const refusal = refusalOf(answer, target, fetched.privateHeaders);
     if (refusal) {
       await answer.body.dump();
       throw refusal;
@@ -135,11 +142,14 @@ function providerUrl(apiKey: string, target: URL, options: ScraperApiOptions): U
   if (options.premium) {
     url.searchParams.set("premium", "true");
   }
+  if (options.headers && Object.keys(options.headers).length > 0) {
+    url.searchParams.set("keep_headers", "true");
+  }
   url.searchParams.set("url", target.href);
   return url;
 }
 
-function refusalOf(answer: Answer, target: URL): AppError | null {
+function refusalOf(answer: Answer, target: URL, privateHeaders: boolean): AppError | null {
   const status = answer.statusCode;
   if (status === 401) {
     return scraperApiErrors.create("SCRAPERAPI.AUTH");
@@ -150,7 +160,7 @@ function refusalOf(answer: Answer, target: URL): AppError | null {
   if (isRedirect(status)) {
     const facts = { status, target: target.href, location: header(answer, "location") };
     return scraperApiErrors.create("SCRAPERAPI.REDIRECT_UNVERIFIED", {
-      details: redirectFacts(facts),
+      details: privateHeaders ? { status } : redirectFacts(facts),
     });
   }
   if (!PAGE_STATUSES.has(status)) {
@@ -160,7 +170,7 @@ function refusalOf(answer: Answer, target: URL): AppError | null {
   if (finalUrl && new URL(finalUrl, target).href !== target.href) {
     const facts = { status, target: target.href, finalUrl };
     return scraperApiErrors.create("SCRAPERAPI.REDIRECT_UNVERIFIED", {
-      details: redirectFacts(facts),
+      details: privateHeaders ? { status } : redirectFacts(facts),
     });
   }
   return null;

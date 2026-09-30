@@ -1,11 +1,10 @@
 import { isAbsolute } from "node:path";
 import type { LabelSettings } from "@crawl-automation/app";
-import { CHANNEL_IDS, ResourceKindsSchema } from "@crawl-automation/channels-core";
+import { ResourceKindsSchema } from "@crawl-automation/channels-core";
 import {
   DatabaseConfigSchema,
   LogConfigSchema,
   ScraperApiAccessSchema,
-  ScraperApiOptionChoicesSchema,
   TemporalConfigSchema,
 } from "@crawl-automation/platform";
 import { R2ScopeSchema } from "@crawl-automation/platform";
@@ -17,6 +16,7 @@ import {
   ScraperApiRouteSchema,
 } from "@crawl-automation/v3-contracts";
 import { z } from "zod";
+import { CaptureChannelSettingsSchema } from "./capture-channel-settings.js";
 import { BrowserSettingsSchema } from "./browser/browser-settings.js";
 import { ProcessingSettingsSchema } from "./label/processing-settings.js";
 import { WorkerProcessesSchema } from "./processes/process-config.js";
@@ -56,47 +56,53 @@ export const WorkerConfigSchema = z
       /** Local copies of R2 evidence already read. */
       cacheRoot: absolutePath,
     }),
-    /** Product pages through ScraperAPI; the key stays in this private file. */
-    capture: z.strictObject({
-      /** The route's name, egress and default options (country, session; `rendered-html` means render). */
-      route: ScraperApiRouteSchema.refine((route) => route.responseMode !== "binary", {
-        message: "Product pages are HTML",
-      }),
-      scraperApi: ScraperApiAccessSchema,
-      /** A channel's own ScraperAPI options over the route's, e.g. `{ "gnc": { "premium": true } }`. */
-      channels: z.partialRecord(z.enum(CHANNEL_IDS), ScraperApiOptionChoicesSchema).default({}),
-    }),
+    /** Required by pipeline only; browser-only machines need no ScraperAPI key. */
+    capture: z
+      .strictObject({
+        /** The route's name, egress and default options (country, session; `rendered-html` means render). */
+        route: ScraperApiRouteSchema.refine((route) => route.responseMode !== "binary", {
+          message: "Product pages are HTML",
+        }),
+        scraperApi: ScraperApiAccessSchema,
+        /** A channel's own ScraperAPI options over the route's, e.g. `{ "gnc": { "premium": true } }`. */
+        channels: CaptureChannelSettingsSchema,
+      })
+      .optional(),
     /** How image hosts are resolved: pinned by this worker (`direct`) or by the system (`system`). */
     files: z.strictObject({ resolve: z.enum(["direct", "system"]) }).default({ resolve: "direct" }),
-    /** The formula planner's model settings for the sources it plans. */
-    plan: z.strictObject({
-      text: ChannelPlanInputSchema.shape.text,
-      ocr: ChannelPlanInputSchema.shape.ocr,
-      visionConfigFingerprint: ChannelPlanInputSchema.shape.visionConfigFingerprint,
-      factsPolicy: z.literal("text-facts-first/1").optional(),
-    }),
-    /** The label workflow's model settings, its task queues and its permits. */
-    label: z.strictObject({
-      text: ChannelLabelInputSchema.shape.text.refine(
-        (text) => text.policyVersion === LABEL_TEXT_POLICY,
-        { message: `New label work uses ${LABEL_TEXT_POLICY} only`, path: ["policyVersion"] },
-      ),
-      visionConfigFingerprint: ChannelLabelInputSchema.shape.visionConfigFingerprint,
-      evidencePolicy: ChannelLabelInputSchema.shape.evidencePolicy,
-      queues: ChannelSavedLabelWorkflowInputSchema.shape.queues,
-      resources: ResourceGateSchema,
-      /** The shared Label workflow's three task queues and its permits (model and OCR calls). */
-      shared: z
-        .strictObject({
-          queues: z.strictObject({
-            activities: z.string().min(1).max(200),
-            ocr: z.string().min(1).max(200),
-            model: z.string().min(1).max(200),
-          }),
-          resources: ResourceGateSchema.optional(),
-        })
-        .optional(),
-    }) satisfies z.ZodType<LabelSettings>,
+    /** Required by pipeline and browser product capture (including DTC source plans). */
+    plan: z
+      .strictObject({
+        text: ChannelPlanInputSchema.shape.text,
+        ocr: ChannelPlanInputSchema.shape.ocr,
+        visionConfigFingerprint: ChannelPlanInputSchema.shape.visionConfigFingerprint,
+        factsPolicy: z.literal("text-facts-first/1").optional(),
+      })
+      .optional(),
+    /** Required by pipeline to hand off label work; label execution roles use processing. */
+    label: (
+      z.strictObject({
+        text: ChannelLabelInputSchema.shape.text.refine(
+          (text) => text.policyVersion === LABEL_TEXT_POLICY,
+          { message: `New label work uses ${LABEL_TEXT_POLICY} only`, path: ["policyVersion"] },
+        ),
+        visionConfigFingerprint: ChannelLabelInputSchema.shape.visionConfigFingerprint,
+        evidencePolicy: ChannelLabelInputSchema.shape.evidencePolicy,
+        queues: ChannelSavedLabelWorkflowInputSchema.shape.queues,
+        resources: ResourceGateSchema,
+        /** The shared Label workflow's three task queues and its permits (model and OCR calls). */
+        shared: z
+          .strictObject({
+            queues: z.strictObject({
+              activities: z.string().min(1).max(200),
+              ocr: z.string().min(1).max(200),
+              model: z.string().min(1).max(200),
+            }),
+            resources: ResourceGateSchema.optional(),
+          })
+          .optional(),
+      }) satisfies z.ZodType<LabelSettings>
+    ).optional(),
     /** The label steps on this machine: storage, node name, Codex and the OCR API (see `label/processing-settings.ts`). */
     processing: ProcessingSettingsSchema.optional(),
     /**

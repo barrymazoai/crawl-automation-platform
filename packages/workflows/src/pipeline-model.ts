@@ -75,6 +75,12 @@ export const CaptureResultSchema = z.discriminatedUnion("status", [
     /** The product's family as the adapter read it; checked by the reuse activity (absent in earlier histories). */
     family: z.unknown().optional(),
   }),
+  z.strictObject({
+    status: z.literal("captured-family"),
+    listingId: z.string().min(1).max(200),
+    variantId: z.string().min(1).max(200).nullable(),
+    archiveKey: z.string().min(1).max(1024),
+  }),
   AcquisitionReviewSchema,
   ListingResultSchema,
 ]);

@@ -124,7 +124,13 @@ describe("brand-scan API source routing", () => {
       expect.objectContaining({
         taskQueue: "browser",
         args: [
-          { channel, capture: "browser", scanId: test.scans[0]?.scanId, sourceUrl: normalized },
+          {
+            channel,
+            capture: "browser",
+            scanId: test.scans[0]?.scanId,
+            sourceUrl: normalized,
+            sourceId: test.scans[0]?.source.sourceId,
+          },
         ],
       }),
     );

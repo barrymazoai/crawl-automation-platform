@@ -14,24 +14,21 @@ import {
   LabelHandoffs,
   type LabelReviews,
   type LabelTasks,
-  PipelineCapture,
   ProductReviews,
   SiblingFormulaReuse,
 } from "@crawl-automation/app";
-import { amazonProductForAsin } from "@crawl-automation/channels-wholefoods";
+import { amazonFormulaProduct } from "./amazon-formula-product.js";
 import {
   ProductCapture,
   ProductFiles,
   ProductPlans,
   ProductSourcePlans,
   ScraperApiPages,
-} from "@crawl-automation/channels-core";
-import { createDatabase, createLogger, ScraperApiClient } from "@crawl-automation/platform";
-import {
   DirectHttpsTransport,
   FileEvidence,
   SystemHttpsTransport,
 } from "@crawl-automation/channels-core";
+import { createDatabase, createLogger, ScraperApiClient } from "@crawl-automation/platform";
 import {
   ArtifactResolver,
   createR2Objects,
@@ -42,9 +39,10 @@ import {
 import { LocalObjectStore } from "@crawl-automation/platform";
 import { asFunction, asValue, createContainer, InjectionMode, type AwilixContainer } from "awilix";
 import { buildBrowserParts, type BrowserParts } from "./browser/browser-parts.js";
-import { captureRecords, recordedHttpCapture } from "./capture-records.js";
+import { recordedPipelineCapture, recordedHttpCapture } from "./capture-records.js";
 import type { WorkerConfig } from "./config.js";
 import type { CoreParts } from "./core-parts.js";
+import { requireRoleSection } from "./processes/role-settings.js";
 import {
   buildResourceHealth,
   type ResourceHealthRunner,
@@ -135,12 +133,7 @@ function registerServices(container: Parts): void {
     productCapture: asFunction(captureService).singleton(),
     // A revisit that finds the listing unlisted records that sighting (with its reason) instead of a Review.
     // Every captured page also adds one metrics-history point.
-    pipelineCapture: asFunction(({ productCapture, database, log, registry }: WorkerParts) => {
-      return new PipelineCapture({
-        capture: productCapture,
-        ...captureRecords({ database, log, registry }),
-      });
-    }).singleton(),
+    pipelineCapture: asFunction(recordedPipelineCapture).singleton(),
     productFiles: asFunction(filesService).singleton(),
     // Formula once across the channel's formula family, then a size or pack sibling's formula after a label check.
     formulaLookup: asFunction(
@@ -153,7 +146,7 @@ function registerServices(container: Parts): void {
       ({ database }: WorkerParts) =>
         new AmazonFormulaRequests({
           queue: new PostgresChannelQueueStore(database),
-          amazonProduct: amazonProductForAsin,
+          amazonProduct: amazonFormulaProduct,
         }),
     ).singleton(),
     labelHandoffs: asFunction(
@@ -163,7 +156,7 @@ function registerServices(container: Parts): void {
           plans: channelPlans,
           evidence: publication,
           executions: new PostgresExecutionRegistry(database),
-          settings: config.label,
+          settings: requireRoleSection(config, "label", "pipeline"),
         }),
     ).singleton(),
     productReviews: asFunction(
@@ -175,7 +168,7 @@ function registerServices(container: Parts): void {
 
 function captureService(parts: WorkerParts): ProductCapture {
   const { config, registry, publication, fileTransport } = parts;
-  const { route, scraperApi, channels } = config.capture;
+  const { route, scraperApi, channels } = requireRoleSection(config, "capture", "pipeline");
   const pages = new ScraperApiPages(new ScraperApiClient(scraperApi), {
     routeId: route.routeId,
     egressId: route.egressId,
@@ -188,7 +181,8 @@ function captureService(parts: WorkerParts): ProductCapture {
     channels,
   });
   // Planned image downloads are bound to the file transport's egress.
-  const settings = { ...config.plan, egressId: fileTransport.egressId };
+  const plan = requireRoleSection(config, "plan", "pipeline");
+  const settings = { ...plan, egressId: fileTransport.egressId };
   return new ProductCapture({
     registry,
     http: recordedHttpCapture(pages, parts.database),

@@ -1,7 +1,12 @@
 import { defineErrors } from "@crawl-automation/platform";
 
-/** Worker settings whose permits do not fit the work they guard; the worker does not start. */
+/** Invalid role or permit settings stop the worker before polling. */
 export const resourceErrors = defineErrors({
+  "WORKER.ROLE_SETTINGS_MISSING": {
+    category: "VALIDATION",
+    message:
+      "A worker role requires a settings section that is missing from this machine's config.",
+  },
   "WORKER.RESOURCE_KIND_MISMATCH": {
     category: "VALIDATION",
     message:

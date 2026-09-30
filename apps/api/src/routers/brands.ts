@@ -1,5 +1,6 @@
 import {
   CreateBrandSchema,
+  DerivedSourcesSchema,
   CreateSourceSchema,
   ImportSourcesSchema,
   ListSourcesSchema,
@@ -69,6 +70,11 @@ export const brandsRouter = router({
   importSources: procedure
     .input(ImportSourcesSchema)
     .mutation(({ ctx, input }) => ctx.brandSources.import(input)),
+
+  /** Adds disabled Whole Foods sources from existing Amazon p_123 brand-filter sources. */
+  deriveWholeFoodsSources: procedure
+    .input(DerivedSourcesSchema)
+    .mutation(({ ctx, input }) => ctx.brandSources.deriveWholeFoods(input)),
 
   /** Enable or disable a source; only an enabled source can run. */
   toggleSource: procedure

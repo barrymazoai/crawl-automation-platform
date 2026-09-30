@@ -5,6 +5,7 @@ import type {
   ParsedProduct,
 } from "@crawl-automation/channels-core";
 import type { ChannelProductEvidence } from "@crawl-automation/v3-contracts";
+import { WholeFoodsBrandReader } from "./whole-foods-brand-reader.js";
 import { wholeFoodsProductAddress } from "./whole-foods-address.js";
 import { wholeFoodsPageIdentity } from "./whole-foods-identity.js";
 import { WHOLE_FOODS_PAGE_POLICY } from "./whole-foods-policy.js";
@@ -40,27 +41,39 @@ function evidenceOf(product: WholeFoodsProduct): ChannelProductEvidence {
     variantId: null,
     url: product.url,
     title: product.title,
-    brandRaw: null,
+    brandRaw: product.brandRaw,
     variantOptions: [],
     variants: [],
-    detailsHtml: null,
-    factsCandidates: [],
-    imageCandidates: [],
+    detailsHtml: product.detailsHtml,
+    factsCandidates: product.detailsHtml
+      ? [
+          {
+            field: "page-facts",
+            html: product.detailsHtml,
+            scope: "selected-product",
+          },
+        ]
+      : [],
+    imageCandidates: product.images.map((url) => ({
+      url,
+      variantId: null,
+      basis: "product-gallery",
+      verifiedOriginal: false,
+    })),
     warnings: [],
   };
 }
 
 /**
- * wholefoodsmarket.com, read for one configured store. Pages are drawn by script and priced by the chosen store,
- * so they are read in the browser (an owner-approved browser case). The product is an Amazon ASIN: its formula is
- * Amazon's, found by ASIN; this channel adds its own metrics, recorded with the store ID. So there is no formula
- * planner here, and the facts are never read from this page.
+ * Product HTML comes through ScraperAPI with the store cookie; brand scans alone use the browser.
+ * The ASIN shares Amazon's formula. Page facts are retained as evidence, never planned as a new formula.
  */
 export function wholeFoodsAdapter(store: WholeFoodsStore): ChannelAdapter<WholeFoodsProduct> {
   return {
     id: "wholefoods",
     formulaFamily: "amazon-asin",
-    captureModes: ["browser"],
+    captureModes: ["http"],
+    brandScan: new WholeFoodsBrandReader(store),
     scanCapture: () => "browser",
     httpPolicy: WHOLE_FOODS_PAGE_POLICY,
     productAddress: wholeFoodsProductAddress,
@@ -74,7 +87,7 @@ export function wholeFoodsAdapter(store: WholeFoodsStore): ChannelAdapter<WholeF
         evidence: evidenceOf(product),
         commerce: commerceOf(product),
         variants: [],
-        facts: { text: null, complete: false, missing: ["FACTS.FROM_AMAZON_BY_ASIN"] },
+        facts: { text: product.factsText, complete: false, missing: ["FACTS.FROM_AMAZON_BY_ASIN"] },
       };
     },
   };

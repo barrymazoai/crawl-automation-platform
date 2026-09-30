@@ -1,12 +1,14 @@
 import { readFileSync } from "node:fs";
 import {
-  BrowserPages,
-  BrowserProductCapture,
+  ProductCapture,
+  ScraperApiPages,
+  ProductSourcePlans,
   ChannelRegistry,
   HttpCapture,
 } from "@crawl-automation/channels-core";
-import type { BrowserPage, ObjectStore } from "@crawl-automation/platform";
+import type { ScraperApiPage, ObjectStore } from "@crawl-automation/platform";
 import { describe, expect, it, vi } from "vitest";
+import { WHOLE_FOODS_HTTP_OPTIONS } from "./whole-foods-http.js";
 import { wholeFoodsAdapter } from "./whole-foods-adapter.js";
 
 // Existing synthetic page; real Whole Foods identity evidence is still ticket R22.
@@ -35,25 +37,30 @@ function setup(landedUrl = url, status = 200) {
       return "created";
     },
   };
-  const read = vi.fn(async (): Promise<BrowserPage> => ({
-    html,
+  const read = vi.fn(async (): Promise<ScraperApiPage> => ({
+    bytes: Buffer.from(html),
     url: landedUrl,
     status,
-    ready: true,
-    scroll: { rounds: 0, ended: "none" },
+    contentType: "text/html",
+    contentEncoding: null,
+    creditCost: 1,
   }));
-  const browser = { provider: "saved-page", read };
-  const pages = new BrowserPages(browser, {
-    routeId: "test",
-    egressId: "test",
-    channels: { wholefoods: { readySelector: "h1", storeId: store.storeId } },
-  });
+  const pages = new ScraperApiPages(
+    { provider: "scraperapi-sync/1", get: read },
+    {
+      routeId: "test",
+      egressId: "test",
+      defaults: { countryCode: "us", sessionNumber: null, render: false, premium: false },
+      channels: { wholefoods: WHOLE_FOODS_HTTP_OPTIONS },
+    },
+  );
   const adapter = wholeFoodsAdapter(store);
   const publish = async (key: string, bytes: Uint8Array) => {
     await remote.create(key, bytes, "text/html", signal());
   };
-  const capture = new BrowserProductCapture({
+  const capture = new ProductCapture({
     registry: new ChannelRegistry([adapter]),
+    sourcePlans: { publish: vi.fn() } as unknown as ProductSourcePlans,
     http: new HttpCapture(pages),
     publication: { local: remote, remote, retain: publish, publish },
   });
@@ -66,13 +73,19 @@ describe("Whole Foods capture with page identity unknown (R22)", () => {
     expect(
       adapter.pageIdentity?.({ url, html, capturedAt: "2026-09-30T08:00:00.000Z" }),
     ).toBeNull();
-    const first = await capture.capture(request, signal());
-    expect(first).toMatchObject({ status: "captured", listingId: "B002CQU54Q" });
+    const first = await capture.captureForAdapter(request, signal());
+    expect(first).toMatchObject({ status: "captured-family", listingId: "B002CQU54Q" });
     expect(data.get("v3/wholefoods-html/wholefoods-capture/original.html")).toEqual(
       Buffer.from(html),
     );
-    expect(await capture.capture(request, signal())).toEqual(first);
+    expect(await capture.captureForAdapter(request, signal())).toEqual(first);
     expect(read).toHaveBeenCalledOnce();
+    expect(read).toHaveBeenCalledWith(
+      expect.objectContaining({
+        options: expect.objectContaining({ headers: { cookie: "wfm_store_d8=10259" } }),
+      }),
+      expect.anything(),
+    );
   });
 
   it.each([
@@ -82,7 +95,7 @@ describe("Whole Foods capture with page identity unknown (R22)", () => {
     const finalUrl = new URL(path, url).href;
     const { capture, adapter, data } = setup(finalUrl);
     const parse = vi.spyOn(adapter, "parseProduct");
-    expect(await capture.capture(request, signal())).toMatchObject({
+    expect(await capture.captureForAdapter(request, signal())).toMatchObject({
       status: "sighted",
       listingId: "B002CQU54Q",
       sighting: { state: "unlisted", reason, observedListingId, finalUrl },
@@ -95,7 +108,7 @@ describe("Whole Foods capture with page identity unknown (R22)", () => {
 
   it.each([404, 410])("classifies HTTP %s as not found", async (status) => {
     const { capture } = setup(url, status);
-    expect(await capture.capture(request, signal())).toMatchObject({
+    expect(await capture.captureForAdapter(request, signal())).toMatchObject({
       status: "sighted",
       sighting: { state: "unlisted", reason: "not_found", httpStatus: status },
     });

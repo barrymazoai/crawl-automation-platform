@@ -15,9 +15,9 @@ import {
   type ListingStateService,
   type QueueService,
 } from "@crawl-automation/app";
-import { amazonStoreSourceUrl } from "@crawl-automation/channel-amazon";
+import { wholeFoodsSourceFromAmazon } from "./whole-foods-source-derivation.js";
+import { adapterBrowserScanners } from "./browser-scan-gateways.js";
 import { ListingPages } from "@crawl-automation/channels-core";
-import { wholeFoodsBrandSourceUrl } from "@crawl-automation/channels-wholefoods";
 import {
   ScraperApiClient,
   type TemporalClient,
@@ -43,14 +43,7 @@ export function browserScanners(
       sourceUrl: (url) => dtcBrandSourceUrl(url, dtcSites),
       scan: (request, signal) => scans.scan({ channel: "dtc", ...request }, signal),
     },
-    amazon: {
-      sourceUrl: amazonStoreSourceUrl,
-      scan: (request, signal) => scans.scan({ channel: "amazon", ...request }, signal),
-    },
-    wholefoods: {
-      sourceUrl: wholeFoodsBrandSourceUrl,
-      scan: (request, signal) => scans.scan({ channel: "wholefoods", ...request }, signal),
-    },
+    ...adapterBrowserScanners(channelRegistry(dtcSites), scans),
   };
 }
 
@@ -99,12 +92,7 @@ export function brandScanParts(parts: {
   const store = new PostgresBrandScans(database);
   const remote = settings ? createR2Objects(settings.r2, settings.r2Credentials).store : null;
   const browsers = settings ? browserScanners(settings, parts.temporal, dtcSites) : {};
-  const brandSources = new BrandSourceImport({
-    store: new PostgresBrandSourceImport(database),
-    registry,
-    browsers,
-    log,
-  });
+  const brandSources = sourceImports({ database, registry, browsers, log, store });
   const brandScans = new BrandScanService({ store, registry, browsers, log, enabled: !!settings });
   if (!settings || !remote) {
     return { brandScans, brandSources, runner: null };
@@ -123,4 +111,27 @@ export function brandScanParts(parts: {
     amazonQueue,
   };
   return { brandScans, brandSources, runner: new BrandScanRunner(deps, settings.runner) };
+}
+
+function sourceImports(parts: {
+  database: Database;
+  registry: ReturnType<typeof channelRegistry>;
+  browsers: BrowserBrandScanners;
+  log: Logger;
+  store: PostgresBrandScans;
+}) {
+  const { database, registry, browsers, log, store } = parts;
+  const sourceStore = new PostgresBrandSourceImport(database);
+  return new BrandSourceImport({
+    store: sourceStore,
+    derived: {
+      sources: store,
+      store: sourceStore,
+      channel: "wholefoods",
+      derive: wholeFoodsSourceFromAmazon,
+    },
+    registry,
+    browsers,
+    log,
+  });
 }

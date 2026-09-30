@@ -200,6 +200,30 @@ The browser worker runs on each Mac mini with Ego (both Server 一 and Server �
 private Ego settings. DTC and Amazon Store-page brands use it. Whole Foods waits on its fetch test
 (owner decision, 2026-09-30).
 
+R39 needs no new deploy job type: use `app: "worker"`, `process: "browser"` and the ordinary worker
+environment, health and log fields. A machine with only this job needs neither an API job nor a
+`migrations` section; deploy without `--migrate`. Both Minis poll `v3.browser.wholefoods.v1`.
+The machine/job examples, local task spaces and resource-health setup are in
+[the machine runbook](../../docs/operations/machines.md#r39-browser-worker双-mini-配置2026-09-30).
+
+`loadWorkerConfig` validates settings before building the container or polling. Every supplied section
+still uses its strict schema, even if no role uses it. Missing sections are checked against **all roles
+declared in the file**, not the spelling of the process name:
+
+| Role                                                | Required role sections                                                          |
+| --------------------------------------------------- | ------------------------------------------------------------------------------- |
+| `pipeline` (including old `taskQueue`-only configs) | `capture`, `plan`, `label`                                                      |
+| `browser`                                           | `browser`, `plan`                                                               |
+| `label`, `label-ocr`, `label-model`                 | `processing`                                                                    |
+| `resources`                                         | No capture/planning/label section; configure `resourceHealth` to refresh health |
+
+All processes still need `database`, `temporal`, `clusterId` and `storage`.
+Browser-only machines can omit `capture`, `label` and `processing`: they need no ScraperAPI key,
+Codex client or OCR client. `plan` is required because this role also exposes DTC product capture,
+which publishes a formula source plan. Copy production planner descriptors/fingerprints, without model
+credentials. Missing required sections fail startup; no placeholder planner is invented.
+`processing` retains its existing optional `codex`/`ocrApi` fields for the matching steps.
+
 ## Database: migrations 026–031
 
 | Migration | Adds                                                                                                             | Runtime role (`v3_runtime`) gets                                                                                           |

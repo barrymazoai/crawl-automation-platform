@@ -9,6 +9,7 @@ import type {
 } from "@crawl-automation/app";
 import type {
   ChannelRegistry,
+  ChannelCaptureResult,
   ProductCapture,
   ProductFiles,
   ProductPlans,
@@ -38,7 +39,7 @@ export interface CoreParts {
   reviewLedger: PostgresReviewLedger;
   channelPlans: ProductPlans;
   productCapture: ProductCapture;
-  pipelineCapture: PipelineCapture;
+  pipelineCapture: PipelineCapture<ChannelCaptureResult>;
   productFiles: ProductFiles;
   formulaIndex: PostgresFormulaIndex;
   formulaLookup: FormulaLookup;

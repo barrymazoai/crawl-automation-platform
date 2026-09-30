@@ -104,7 +104,10 @@ describe("brand scan requests", () => {
   });
 
   it("refuses a browser channel when no browser is configured here", async () => {
-    const { scans } = service([source({ channel: "wholefoods" })]);
+    const { scans } = service(
+      [source({ channel: "wholefoods" })],
+      new ChannelRegistry([{ ...gnc, id: "wholefoods", scanCapture: () => "browser" }]),
+    );
     await expect(
       scans.request({ requestId, sourceIds: [source().sourceId] }),
     ).rejects.toMatchObject({

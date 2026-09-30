@@ -38,6 +38,8 @@ const ResultSchema = z.object({
   statedTotal: z.number().nullable(),
   full: z.boolean(),
   capped: z.boolean().optional(),
+  // Browser scans record whether the channel sells the brand; older results have no such field.
+  soldHere: z.boolean().optional(),
   // Scans finished before these counts existed have neither.
   newListings: z.number().nullable().default(null),
   knownListings: z.number().nullable().default(null),

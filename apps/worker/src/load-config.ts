@@ -1,6 +1,7 @@
 import { loadConfig } from "@crawl-automation/platform";
 import { WorkerConfigSchema, type WorkerConfig } from "./config.js";
 import { checkWorkerResources } from "./resources/resource-check.js";
+import { checkWorkerRoleSettings } from "./processes/role-settings.js";
 
 /**
  * The worker's settings come from one private JSON file named by `V3_PIPELINE_CONFIG`. Not `V3_WORKER_CONFIG`: the
@@ -13,5 +14,6 @@ export async function loadWorkerConfig(
 ): Promise<WorkerConfig> {
   const config = await loadConfig(WorkerConfigSchema, env["V3_PIPELINE_CONFIG"] ?? "");
   checkWorkerResources(config);
+  checkWorkerRoleSettings(config);
   return config;
 }

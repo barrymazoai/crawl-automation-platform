@@ -1,12 +1,8 @@
 import { createHash } from "node:crypto";
-import {
-  allowedTarget,
-  type ObjectStore,
-  type ScraperApiClient,
-  type ScraperApiOptions,
-} from "@crawl-automation/platform";
+import { allowedTarget, type ObjectStore, type ScraperApiClient } from "@crawl-automation/platform";
 import type { ChannelId } from "../adapter.js";
 import type { ScraperApiCaptureSettings } from "../capture/page-fetch.js";
+import { channelOptions } from "../capture/channel-options.js";
 import { brandScanErrors } from "./brand-scan.js";
 
 /** One listing page to read for a scan: where it is archived (`label`) and what it answers with. */
@@ -31,13 +27,6 @@ export interface ListingPageRead {
 
 const MEDIA = { html: "text/html", json: "application/json" } as const;
 const sha256 = (bytes: Uint8Array) => createHash("sha256").update(bytes).digest("hex");
-
-function optionsFor(settings: ScraperApiCaptureSettings, channel: ChannelId): ScraperApiOptions {
-  const own = Object.entries(settings.channels[channel] ?? {}).filter(
-    ([, value]) => value !== undefined,
-  );
-  return { ...settings.defaults, ...Object.fromEntries(own) };
-}
 
 /** Refuses anything but a 200 answer of the expected type, uncompressed and non-empty. */
 function checkAnswer(
@@ -113,7 +102,8 @@ export class ListingPages {
     const target = allowedTarget(request.url, request.origins).href;
     const tooLarge = () =>
       brandScanErrors.create("BRAND_SCAN.PAGE_LIMIT", { details: { maxBytes: request.maxBytes } });
-    const options = optionsFor(this.deps.settings, request.channel);
+    const { defaults, channels } = this.deps.settings;
+    const options = channelOptions(defaults, channels[request.channel]);
     return this.deps.client.get({ target, options, maxBytes: request.maxBytes, tooLarge }, signal);
   }
 

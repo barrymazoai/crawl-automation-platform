@@ -127,6 +127,8 @@ export interface ChannelAdapter<Rendered = unknown> {
   scanCapture?(url: string): CaptureMode;
   /** Normalises a product URL and returns its identity; refuses URLs of other sites. */
   productAddress(url: string): ProductAddress;
+  /** Builds a product address from a shared external ID, when supported. */
+  productUrl?(listingId: string): string;
   /**
    * The page's own listing key, in the same namespace as productAddress (Swanson: canonical handle, not Shopify
    * product ID). Read before product parsing so another product is an unlisted sighting, even if its facts fail.

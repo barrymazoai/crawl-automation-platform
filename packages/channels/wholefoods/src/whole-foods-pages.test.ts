@@ -91,15 +91,16 @@ describe("Whole Foods product page", () => {
     );
   });
 
-  it("gives the shared pipeline metrics with the store ID and no facts (the formula is Amazon's)", () => {
+  it("gives the shared pipeline metrics with the store ID and optional page facts (the formula is Amazon's)", () => {
     const adapter = wholeFoodsAdapter(store);
     const parsed = adapter.parseProduct(page("product-b0096m5pbw.html"));
-    expect(adapter.captureModes).toEqual(["browser"]);
+    expect(adapter.captureModes).toEqual(["http"]);
+    expect(adapter.scanCapture?.("unused")).toBe("browser");
     expect(parsed.identity).toEqual({ listingId: "B0096M5PBW", variantId: null });
     expect(parsed.commerce).toMatchObject({ price: "$24.21", priceStatus: "observed" });
     expect(parsed.commerce?.context).toContain("wholefoods-store:10259");
     expect(parsed.facts).toEqual({
-      text: null,
+      text: expect.stringMatching(/Ingredients\s+See the product label\./),
       complete: false,
       missing: ["FACTS.FROM_AMAZON_BY_ASIN"],
     });
@@ -137,4 +138,15 @@ describe("Whole Foods brand search page", () => {
       expect.objectContaining({ code: "BRAND_SCAN.TILE_IDENTITY" }),
     );
   });
+});
+
+it("exposes a browser BrandScanReader without claiming HTML alone proves completeness", () => {
+  const reader = wholeFoodsAdapter(store).brandScan;
+  const url = wholeFoodsBrandSearchUrl({ name: "Example", amazonBrandId: "123" });
+  expect(reader?.sourceUrl(url)).toBe(url);
+  expect(reader?.pageUrl(url, 1)).toBe(url);
+  expect(() => reader?.pageUrl(url, 2)).toThrow();
+  const empty = reader?.parsePage({ url, page: 1, body: fixture("search-no-results.html") });
+  expect(empty).toMatchObject({ products: [], soldHere: false });
+  expect(reader?.complete(empty ? [empty] : [])).toBe(false);
 });

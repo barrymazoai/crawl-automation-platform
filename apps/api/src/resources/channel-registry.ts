@@ -1,4 +1,5 @@
 import { createDtcAdapter, type DtcSitePolicy } from "@crawl-automation/channel-dtc";
+import { wholeFoodsAdapter, WHOLE_FOODS_STORE } from "@crawl-automation/channels-wholefoods";
 import { amazonAdapter } from "@crawl-automation/channel-amazon";
 import { swansonAdapter } from "@crawl-automation/channel-swanson";
 import { ChannelRegistry } from "@crawl-automation/channels-core";
@@ -10,6 +11,7 @@ export function channelRegistry(dtcSites: readonly DtcSitePolicy[] = []): Channe
     swansonAdapter,
     gncAdapter,
     amazonAdapter,
+    wholeFoodsAdapter(WHOLE_FOODS_STORE),
     createDtcAdapter(dtcSites),
   ]);
 }

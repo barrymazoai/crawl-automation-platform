@@ -239,7 +239,7 @@ it.each([false, true])(
       expect(request).not.toHaveProperty("executionFact");
     }
     // No download was reached, so its heartbeat patch must not be evaluated.
-    expectMarkers(history, patched ? ["resource-gate-v1"] : []);
+    expectMarkers(history, patched ? ["capture-mode-v1", "resource-gate-v1"] : ["capture-mode-v1"]);
     expect(scheduledActivities(history)).toEqual([
       "reserveResources",
       "reserveResources",
@@ -261,7 +261,10 @@ it.each([false, true])(
     const gate = gateFixture();
     const { history, result, workflowId } = await recordHistory({
       environment,
-      bundle: patched ? current : withoutPatches(current, ["resource-gate-v1"]),
+      bundle: withoutPatches(
+        current,
+        patched ? ["capture-mode-v1"] : ["capture-mode-v1", "resource-gate-v1"],
+      ),
       queue,
       workflow: "ProductPipelineWorkflow",
       input: productInput(queue, "wholefoods"),
@@ -318,6 +321,51 @@ it.each(["http", "browser"] as const)(
       ),
     );
     expect(markers?.some((payload) => payload.includes('"capture-mode-v1"'))).toBe(true);
+    expect(gate.held.size).toBe(0);
+    await Worker.runReplayHistory({ workflowBundle: current }, history, workflowId);
+  },
+  30_000,
+);
+
+it.each([false, true])(
+  "replays HTTP formula-family capture (known: %s)",
+  async (known) => {
+    const queue = `family-http-${randomUUID()}`;
+    const gate = gateFixture();
+    const input = { ...productInput(queue, "wholefoods"), capture: "http" };
+    const requestAmazonFormula = vi.fn(async () => ({ status: "queued" }));
+    const { history, result, workflowId } = await recordHistory({
+      environment,
+      bundle: current,
+      queue,
+      workflow: "ProductPipelineWorkflow",
+      input,
+      activities: {
+        ...gate.activities,
+        captureProduct: async () => ({
+          status: "captured-family",
+          listingId: "B0096M5PBW",
+          variantId: null,
+          archiveKey: "replay/wholefoods.html",
+        }),
+        findKnownFormula: async () => (known ? { operationId: "amazon-formula" } : null),
+        requestAmazonFormula,
+        reviewProduct: async () => captureReview(),
+      },
+    });
+    expect(result).toMatchObject({
+      status: "collected",
+      ...(known ? {} : { formulaPending: true }),
+    });
+    expect(scheduledActivities(history)).toEqual([
+      "reserveResources",
+      "captureProduct",
+      "releaseResources",
+      "findKnownFormula",
+      ...(known ? [] : ["requestAmazonFormula"]),
+    ]);
+    expectMarkers(history, ["capture-mode-v1", "resource-gate-v1", "formula-family-capture-v1"]);
+    expect(requestAmazonFormula).toHaveBeenCalledTimes(known ? 0 : 1);
     expect(gate.held.size).toBe(0);
     await Worker.runReplayHistory({ workflowBundle: current }, history, workflowId);
   },

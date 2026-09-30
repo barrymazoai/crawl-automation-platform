@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { LABEL_TEXT_POLICY, WorkerConfigSchema } from "./config.js";
 
-const capture = WorkerConfigSchema.shape.capture;
+const capture = WorkerConfigSchema.shape.capture.unwrap();
 const route = {
   routeId: "scraperapi-us",
   version: "scraperapi/1",
@@ -25,7 +25,10 @@ describe("worker capture settings", () => {
 
   it("reads a channel's own ScraperAPI options", () => {
     const parsed = capture.parse({ route, scraperApi, channels: { gnc: { premium: true } } });
-    expect(parsed.channels).toEqual({ gnc: { premium: true } });
+    expect(parsed.channels).toMatchObject({
+      gnc: { premium: true },
+      wholefoods: { headers: { cookie: "wfm_store_d8=10259" } },
+    });
   });
 
   it.each([
@@ -39,7 +42,7 @@ describe("worker capture settings", () => {
 });
 
 describe("worker label settings", () => {
-  const labelText = WorkerConfigSchema.shape.label.shape.text;
+  const labelText = WorkerConfigSchema.shape.label.unwrap().shape.text;
   const text = {
     schemaVersion: 1,
     module: "codex.text",

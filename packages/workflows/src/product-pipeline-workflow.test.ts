@@ -116,6 +116,7 @@ async function setup() {
       file,
     })),
     reviewProduct: vi.fn(async () => review),
+    requestAmazonFormula: vi.fn(async () => ({ status: "queued" })),
   };
   const plan = {
     prepareChannelProduct: vi.fn((raw: unknown): Promise<unknown> =>
@@ -362,3 +363,30 @@ it("a history recorded before the reuse patch replays without the reuse activity
   });
   expect(pipeline.reuseSiblingFormula).not.toHaveBeenCalled();
 });
+
+it.each([false, true])(
+  "captures Whole Foods over HTTP then resolves its formula family (known: %s)",
+  async (known) => {
+    const { pipeline, plan } = await setup();
+    pipeline.captureProduct.mockResolvedValue({
+      status: "captured-family",
+      listingId: "B0096M5PBW",
+      variantId: null,
+      archiveKey: "retained/wholefoods.html",
+    });
+    pipeline.findKnownFormula.mockResolvedValue(known ? { operationId: "amazon-formula" } : null);
+    expect(
+      await ProductPipelineWorkflow({ ...input, channel: "wholefoods", capture: "http" }),
+    ).toMatchObject({ status: "collected", ...(known ? {} : { formulaPending: true }) });
+    expect(plan.prepareChannelProduct).not.toHaveBeenCalled();
+    expect(pipeline.requestAmazonFormula).toHaveBeenCalledTimes(known ? 0 : 1);
+    if (!known) {
+      expect(pipeline.requestAmazonFormula).toHaveBeenCalledWith({
+        brandId: input.brandId,
+        listingId: "B0096M5PBW",
+      });
+    }
+    expect(env.held).toBe(false);
+    expect(env.start).not.toHaveBeenCalled();
+  },
+);

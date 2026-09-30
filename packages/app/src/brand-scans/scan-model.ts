@@ -15,9 +15,6 @@ export const ScanChannelSchema = QueueChannelSchema.extract([
 ]);
 export type ScanChannel = z.infer<typeof ScanChannelSchema>;
 
-/** Browser-only channels whose product adapter can live on the worker; source hooks take precedence. */
-export const BROWSER_SCAN_CHANNELS: readonly ScanChannel[] = ["wholefoods"];
-
 /**
  * Scans to start: the named brand sources, or every enabled source of a channel. The request ID makes asking
  * twice start each source's scan once.
@@ -64,6 +61,8 @@ export interface ScanResult {
   full: boolean;
   /** The reader stopped at its page cap; absent on historical results. */
   capped?: boolean | undefined;
+  /** Store availability explicitly reported by the browser reader; absent in old scans. */
+  soldHere?: boolean | undefined;
   /** Listed products not queued by any earlier list of this source; null for scans finished before 2026-09-30. */
   newListings: number | null;
   /** Listed products an earlier list of this source already queued; null for scans finished before 2026-09-30. */

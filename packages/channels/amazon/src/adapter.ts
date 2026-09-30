@@ -4,7 +4,8 @@ import type {
   ProductIdentity,
 } from "@crawl-automation/channels-core";
 import { ChannelProductEvidenceSchema } from "@crawl-automation/v3-contracts";
-import { AMAZON_ORIGIN, amazonProductAddress } from "./address.js";
+import { AMAZON_ORIGIN, amazonProductAddress, amazonProductUrl } from "./address.js";
+import { amazonStoreBrandScan } from "./store-listing.js";
 import { amazonBrandScan } from "./brand-scan.js";
 import { AMAZON_MAX_BYTES, amazonDocument, pageAsin, productRoot } from "./dom.js";
 import { amazonErrors } from "./errors.js";
@@ -55,7 +56,13 @@ export const amazonAdapter: ChannelAdapter<AmazonRendered> = {
   httpPolicy: AMAZON_HTTP_POLICY,
   fileOrigins: AMAZON_FILE_ORIGINS,
   productAddress: amazonProductAddress,
+  productUrl: amazonProductUrl,
   brandScan: amazonBrandScan,
+  forBrandSource: (url) => ({
+    ...amazonAdapter,
+    brandScan:
+      amazonAdapter.scanCapture?.(url) === "browser" ? amazonStoreBrandScan : amazonBrandScan,
+  }),
   scanCapture: (url) =>
     /^\/stores\//i.test(URL.parse(url, AMAZON_ORIGIN)?.pathname ?? "") ? "browser" : "http",
   pageIdentity: (page) => ({

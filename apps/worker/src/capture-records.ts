@@ -1,4 +1,4 @@
-import { historyErrors } from "@crawl-automation/app";
+import { historyErrors, PipelineCapture } from "@crawl-automation/app";
 import {
   PostgresHtmlCaptureRecords,
   PostgresListingStates,
@@ -12,6 +12,19 @@ import {
   type ChannelRegistry,
 } from "@crawl-automation/channels-core";
 import { errorCodeOf, type Database, type Logger } from "@crawl-automation/platform";
+import type { CoreParts } from "./core-parts.js";
+
+/** Capture metrics and sightings before either formula planning or shared-formula lookup. */
+export function recordedPipelineCapture(
+  parts: Pick<CoreParts, "productCapture" | "database" | "log" | "registry">,
+) {
+  return new PipelineCapture({
+    capture: {
+      capture: (request, signal) => parts.productCapture.captureForAdapter(request, signal),
+    },
+    ...captureRecords(parts),
+  });
+}
 
 /**
  * What the pipeline's capture step records besides the capture itself, for every channel and machine: an unlisted

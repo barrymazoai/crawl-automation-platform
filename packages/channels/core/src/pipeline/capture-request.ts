@@ -23,6 +23,16 @@ export type PlanSettings = Pick<ChannelPlanInput, "text" | "ocr" | "visionConfig
   factsPolicy?: ChannelPlanInput["factsPolicy"];
 };
 
+export interface FamilyCaptureResult {
+  status: "captured-family";
+  listingId: string;
+  variantId: string | null;
+  archiveKey: string;
+  page: CapturedPage;
+}
+
+export type ChannelCaptureResult = ProductCaptureResult | FamilyCaptureResult;
+
 export type ProductCaptureResult =
   | {
       status: "captured";

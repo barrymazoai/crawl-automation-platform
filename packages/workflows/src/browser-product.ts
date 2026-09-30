@@ -3,11 +3,11 @@ import { versionedResourceGate } from "./resources/versioned-gate.js";
 import { ApplicationFailure, patched, proxyActivities } from "@temporalio/workflow";
 import {
   BrowserCaptureResultSchema,
-  KnownFormulaSchema,
   type BrowserActivities,
   type PipelineActivities,
   type ProductPipelineInput,
 } from "./pipeline-model.js";
+import { collectFamilyProduct } from "./family-product.js";
 import { once } from "./activity-options.js";
 import { collectCapturedProduct } from "./collect-captured-product.js";
 
@@ -43,16 +43,5 @@ export async function collectInBrowser(
   if (captured.planned && patched("browser-formula-plan-v1")) {
     return collectCapturedProduct(input, pipeline, captured.planned);
   }
-  const { listingId, variantId } = captured;
-  const request = { runId: input.runId, channel: input.channel, listingId, variantId };
-  const known = KnownFormulaSchema.parse(await pipeline.findKnownFormula(request));
-  if (known) {
-    return { status: "collected", reusedFormula: true, operationId: known.operationId, listingId };
-  }
-  await pipeline.requestAmazonFormula({ brandId: input.brandId, listingId });
-  return pipeline.reviewProduct({
-    pipeline: input,
-    code: pipelineErrors.code("PIPELINE.FORMULA_PENDING"),
-    causeCode: pipelineErrors.code("WHOLEFOODS.AMAZON_FORMULA_MISSING"),
-  });
+  return collectFamilyProduct(input, pipeline, captured);
 }

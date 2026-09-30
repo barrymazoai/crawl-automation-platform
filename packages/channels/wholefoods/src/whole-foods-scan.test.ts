@@ -147,3 +147,16 @@ describe("Whole Foods store setup", () => {
     expect(() => new AsyncFunction(pageRoundScript(body, { taskSpaceId: 1 }))).not.toThrow();
   });
 });
+
+it("records a fully scrolled no-results brand as not sold at this store", async () => {
+  const { scanner, browser } = scanSetup(fixture("search-no-results.html"));
+  expect(await scanner.scan({ scanId: "empty-brand", sourceUrl }, signal())).toMatchObject({
+    complete: true,
+    soldHere: false,
+    pages: [{ products: [], soldHere: false }],
+  });
+  expect(browser.read).toHaveBeenCalledWith(
+    expect.objectContaining({ readySelector: "main" }),
+    expect.anything(),
+  );
+});

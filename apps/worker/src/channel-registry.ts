@@ -1,3 +1,4 @@
+import { wholeFoodsAdapter, WHOLE_FOODS_STORE } from "@crawl-automation/channels-wholefoods";
 import { amazonAdapter } from "@crawl-automation/channel-amazon";
 import { configuredDtcSites, createDtcAdapter } from "@crawl-automation/channel-dtc";
 import { swansonAdapter } from "@crawl-automation/channel-swanson";
@@ -11,6 +12,7 @@ export function workerChannelRegistry(config: Pick<WorkerConfig, "browser">): Ch
     swansonAdapter,
     gncAdapter,
     amazonAdapter,
+    wholeFoodsAdapter(WHOLE_FOODS_STORE),
     createDtcAdapter(configuredDtcSites(config.browser?.dtc)),
   ]);
 }

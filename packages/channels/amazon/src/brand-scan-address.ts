@@ -68,6 +68,11 @@ export function amazonScanPageUrl(source: string, page: number): string {
   return url.href;
 }
 
+/** The shared numeric brand ID, or null for other supported brand filter types. */
+export function amazonBrandFilterId(url: string): string | null {
+  return /^p_123:(\d{1,12})$/.exec(amazonScanBrandFilter(url))?.[1] ?? null;
+}
+
 export function amazonScanBrandFilter(url: string): string {
   return (
     filtersOf(new URL(amazonScanSourceUrl(url))).find((filter) => BRAND_FILTER.test(filter)) ?? ""

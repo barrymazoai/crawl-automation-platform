@@ -14,7 +14,6 @@ import {
   WholeFoodsBrandScan,
   ensureWholeFoodsStore,
   wholeFoodsBrandSourceUrl,
-  wholeFoodsAdapter,
   type WholeFoodsStore,
 } from "@crawl-automation/channels-wholefoods";
 import type { EgoPages, RetainedPublication } from "@crawl-automation/platform";
@@ -74,8 +73,7 @@ export function buildBrowserScanners(deps: {
       scanner: new AmazonStoreBrandScan({ pages: new AmazonStorePages(deps.rounds), publication }),
     },
     {
-      accepts: (url) =>
-        acceptsAddress([wholeFoodsBrandSourceUrl, wholeFoodsAdapter(store).productAddress], url),
+      accepts: (url) => acceptsAddress([wholeFoodsBrandSourceUrl], url),
       scanner: new WholeFoodsBrandScan({ browser: ego, remote: publication.remote, store }),
       prepare: storePreparation(ego, store),
     },

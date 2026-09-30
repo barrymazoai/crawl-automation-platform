@@ -3,6 +3,7 @@ import { bundleWorkflowCode } from "@temporalio/worker";
 import ts from "typescript";
 
 export const pipelineMarkers = [
+  "capture-mode-v1",
   "shared-label-workflow-v1",
   "formula-reuse-v1",
   "formula-reuse-ocr-v1",
@@ -12,7 +13,8 @@ export const pipelineMarkers = [
 ] as const;
 export const labelMarkers = ["resource-gate-v1", "label-heartbeat-v1"] as const;
 export const labelNoSourceMarker = "label-no-source-review-v1";
-export type PatchMarker = (typeof pipelineMarkers)[number] | typeof labelNoSourceMarker;
+export type PatchMarker =
+  (typeof pipelineMarkers)[number] | typeof labelNoSourceMarker | "formula-family-capture-v1";
 export type ReplayBundle = { code: string };
 
 export function currentBundle() {

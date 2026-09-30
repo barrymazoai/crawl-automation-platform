@@ -23,7 +23,7 @@ export const FetchedViaSchema = z.strictObject({
   routeId: z.string(),
   egressId: z.string(),
   provider: z.string(),
-  options: ScraperApiOptionsSchema.optional(),
+  options: ScraperApiOptionsSchema.omit({ headers: true }).optional(),
   creditCost: z.number().nonnegative().nullable().optional(),
   finalUrl: z.url().max(4096).optional(),
 });

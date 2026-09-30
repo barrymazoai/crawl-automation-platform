@@ -13,6 +13,15 @@ function ownSite(url: URL): boolean {
   );
 }
 
+/** Canonical URL for an ASIN shared by another channel. */
+export function amazonProductUrl(asin: string): string {
+  const listingId = asin.toUpperCase();
+  if (!isAsin(listingId)) {
+    throw channelErrors.create("CHANNEL.URL_REJECTED");
+  }
+  return `${AMAZON_ORIGIN}/dp/${listingId}`;
+}
+
 /** US product addresses, including slugs, locale prefixes, mobile and legacy /gp forms. */
 export function amazonProductAddress(raw: string): ProductAddress {
   const url = URL.parse(raw, AMAZON_ORIGIN);
@@ -23,5 +32,5 @@ export function amazonProductAddress(raw: string): ProductAddress {
   if (!url || !ownSite(url) || !asin) {
     throw channelErrors.create("CHANNEL.URL_REJECTED");
   }
-  return { url: `${AMAZON_ORIGIN}/dp/${asin}`, listingId: asin, variantId: null };
+  return { url: amazonProductUrl(asin), listingId: asin, variantId: null };
 }

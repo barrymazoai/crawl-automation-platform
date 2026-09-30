@@ -4,6 +4,7 @@ export * from "./shopify.js";
 export * from "./shopify-data.js";
 export * from "./woocommerce.js";
 export * from "./jsonld.js";
+export { object, string, parsePageJson } from "./json.js";
 export * from "./catalog.js";
 export { canonicalUrl, samePage } from "./urls.js";
 export { completeFacts, sectionImages, imageUrls } from "./content.js";

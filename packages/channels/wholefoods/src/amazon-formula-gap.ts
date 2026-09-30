@@ -11,7 +11,11 @@ export interface AmazonProductToQueue {
  * extracted from (Whole Foods shows fewer images than Amazon). Its Whole Foods metrics are recorded meanwhile.
  * `sourceId` is the brand's Amazon source.
  */
-export function amazonProductForAsin(asin: string, sourceId: string): AmazonProductToQueue {
+export function amazonProductForAsin(
+  asin: string,
+  sourceId: string,
+  productUrl: (asin: string) => string,
+): AmazonProductToQueue {
   const listingId = asin.toUpperCase();
-  return { sourceId, url: `https://www.amazon.com/dp/${listingId}`, listingId, variantId: null };
+  return { sourceId, url: productUrl(listingId), listingId, variantId: null };
 }

@@ -12,15 +12,12 @@ import {
   ProductSourcePlans,
   type BrowserCaptureResult,
 } from "@crawl-automation/channels-core";
-import {
-  wholeFoodsAdapter,
-  wholeFoodsBrowserPolicy,
-  type WholeFoodsStore,
-} from "@crawl-automation/channels-wholefoods";
+import type { WholeFoodsStore } from "@crawl-automation/channels-wholefoods";
 import { EgoPages } from "@crawl-automation/platform";
 import { captureRecords } from "../capture-records.js";
 import type { CoreParts } from "../core-parts.js";
 import { workerErrors } from "../errors.js";
+import { requireRoleSection } from "../processes/role-settings.js";
 import type { BrowserScanners } from "./browser-scanners.js";
 import { ManagedBrowserRounds, egoTargetVerifier } from "./managed-rounds.js";
 import { buildBrowserScanners } from "./scan-wiring.js";
@@ -52,16 +49,16 @@ export function buildBrowserParts(parts: CoreParts): BrowserParts {
   const pages = new BrowserPages(ego, {
     routeId: settings.routeId,
     egressId: settings.egressId,
-    channels: { wholefoods: wholeFoodsBrowserPolicy(store), dtc: DTC_BROWSER_POLICY },
+    channels: { dtc: DTC_BROWSER_POLICY },
   });
-  const registry = new ChannelRegistry([wholeFoodsAdapter(store), createDtcAdapter(dtcSites)]);
+  const registry = new ChannelRegistry([createDtcAdapter(dtcSites)]);
   const http = new HttpCapture(pages);
   const capture = new BrowserProductCapture({
     registry,
     http,
     publication: parts.publication,
     sourcePlans: new ProductSourcePlans(parts.publication, {
-      ...parts.config.plan,
+      ...requireRoleSection(parts.config, "plan", "browser"),
       egressId: parts.fileTransport.egressId,
     }),
   });

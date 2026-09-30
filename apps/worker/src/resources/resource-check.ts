@@ -37,7 +37,7 @@ export function workerResourceKinds(config: Pick<WorkerConfig, "resourceKinds">)
  */
 export function checkWorkerResources(config: CheckedSettings): void {
   const kindOf = workerResourceKinds(config);
-  const gates = [config.label.resources, config.label.shared?.resources];
+  const gates = [config.label?.resources, config.label?.shared?.resources];
   for (const gate of gates.filter((entry) => entry !== undefined)) {
     checkLabelGate(gate, kindOf);
   }

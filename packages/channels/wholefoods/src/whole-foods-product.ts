@@ -1,4 +1,5 @@
 import { pageText, type FetchedPage } from "@crawl-automation/channels-core";
+import { wholeFoodsContent } from "./whole-foods-content.js";
 import { parseHTML } from "linkedom";
 import { wholeFoodsProductAddress } from "./whole-foods-address.js";
 import { wholeFoodsErrors } from "./whole-foods-errors.js";
@@ -10,9 +11,13 @@ export interface WholeFoodsProduct {
   asin: string;
   url: string;
   title: string;
+  brandRaw: string | null;
+  images: string[];
+  factsText: string | null;
+  detailsHtml: string | null;
   /** The price shown under the title, as printed (`$41.30`); null when none is shown. */
   price: string | null;
-  availability: "available" | "unavailable";
+  availability: "available" | "unavailable" | null;
   storeId: string;
   storeLabel: string;
   capturedAt: string;
@@ -31,8 +36,10 @@ function blockAfterTitle(text: string, title: string): string {
 }
 
 /**
- * Reads one drawn product page for the configured store: title, the price and availability below it, and the
- * store the page is priced for, which must be the configured one.
+ * Reads retained HTTP HTML for the configured store. Confirm on a real saved HTTP page:
+ * h1 (title), the next 400 text characters (price/availability), and the visible
+ * "Pickup at/from <label>" store text. Additional product selectors and JSON paths
+ * requiring confirmation are listed in whole-foods-content.ts and whole-foods-structured.ts.
  */
 export function parseWholeFoodsProduct(
   page: FetchedPage,
@@ -40,7 +47,9 @@ export function parseWholeFoodsProduct(
 ): WholeFoodsProduct {
   const address = wholeFoodsProductAddress(page.url);
   const { document } = parseHTML(page.html);
-  const title = document.querySelector("h1")?.textContent?.replace(/\s+/g, " ").trim();
+  const content = wholeFoodsContent(document, { asin: address.listingId, url: address.url });
+  const title =
+    document.querySelector("h1")?.textContent?.replace(/\s+/g, " ").trim() || content.title;
   if (!title) {
     throw wholeFoodsErrors.create("WHOLEFOODS.PRODUCT_UNVERIFIED", {
       details: { url: address.url },
@@ -54,9 +63,14 @@ export function parseWholeFoodsProduct(
     // The requested ASIN is an association only, not verified page identity (R22).
     asin: address.listingId,
     url: address.url,
+    ...content,
     title,
     price: PRICE.exec(block)?.[0] ?? null,
-    availability: UNAVAILABLE.test(block) ? "unavailable" : "available",
+    availability: UNAVAILABLE.test(block)
+      ? "unavailable"
+      : PRICE.test(block) || /add to cart/i.test(block)
+        ? "available"
+        : null,
     storeId: store.storeId,
     storeLabel: store.label,
     capturedAt: page.capturedAt,

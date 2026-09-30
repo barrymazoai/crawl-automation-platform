@@ -40,6 +40,8 @@ export interface ListedProduct {
 
 /** What one listing page shows. */
 export interface ListingPage {
+  /** Present when the reader can establish whether the store sells this brand. */
+  soldHere?: boolean;
   products: ListedProduct[];
   /** Product tiles on this page (promotion tiles are not products). */
   cards: number;
@@ -49,8 +51,7 @@ export interface ListingPage {
 }
 
 /**
- * How a channel lists one brand's products. Listing pages are fetched through ScraperAPI like product pages; the
- * reader only knows the site's addresses and page shapes.
+ * How a channel reads retained HTTP or browser brand pages: site addresses and page shapes only.
  */
 export interface BrandScanReader {
   /** Normalises a brand source URL; refuses anything that is not this channel's brand listing. */

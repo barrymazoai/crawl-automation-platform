@@ -14,6 +14,13 @@ export const WholeFoodsStoreSchema = z.strictObject({
 });
 export type WholeFoodsStore = z.infer<typeof WholeFoodsStoreSchema>;
 
+/** Owner-selected store for all product captures and brand scans. */
+export const WHOLE_FOODS_STORE: WholeFoodsStore = {
+  storeId: "10259",
+  label: "The Alameda",
+  postalCode: "95126",
+};
+
 /** The store a page says it is priced for ("Pickup at The Alameda"); null when the page names none. */
 export function shownStore(pageText: string): string | null {
   const match = /Pickup (?:at|from)\s*\n?\s*([^\n]+)/.exec(pageText);

@@ -44,6 +44,30 @@ function client(page: Partial<ScraperApiPage> = {}) {
 }
 
 describe("product pages through ScraperAPI", () => {
+  it("keeps fixed headers channel-local and omits their values from capture receipts", async () => {
+    const { fake, calls } = client();
+    const cookie = "wfm_store_d8=10259";
+    const pages = new ScraperApiPages(fake, {
+      ...settings,
+      defaults: { ...settings.defaults, headers: { Cookie: "never-inherit" } },
+      channels: { wholefoods: { headers: { Cookie: cookie } } },
+    });
+    const origin = "https://www.wholefoodsmarket.com";
+    const captured = await pages.fetchPage(
+      {
+        channel: "wholefoods",
+        url: `${origin}/grocery/product/test-b000000001`,
+        policy: { ...policy, origins: [origin] },
+      },
+      signal(),
+    );
+    await pages.fetchPage({ channel: "gnc", url, policy }, signal());
+    expect(calls[0]?.options.headers).toEqual({ Cookie: cookie });
+    expect(calls[1]?.options).not.toHaveProperty("headers");
+    expect(captured.fetchedVia.options).not.toHaveProperty("headers");
+    expect(JSON.stringify(captured.fetchedVia)).not.toContain(cookie);
+  });
+
   it("uses the channel's own options over the defaults and records them with the credit cost", async () => {
     const { fake, calls } = client();
     const page = await new ScraperApiPages(fake, settings).fetchPage(

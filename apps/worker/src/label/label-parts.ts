@@ -2,6 +2,7 @@ import { PostgresExecutionRegistry, PostgresResourceAdmission } from "@crawl-aut
 import { LabelReviews, LabelTasks } from "@crawl-automation/app";
 import type { CoreParts } from "../core-parts.js";
 import { workerErrors } from "../errors.js";
+import { requireRoleSection } from "../processes/role-settings.js";
 import { labelModels, type LabelModels } from "./label-models.js";
 import { labelSteps, type LabelSteps } from "./label-steps.js";
 import { labelStores, type LabelStores } from "./label-stores.js";
@@ -29,7 +30,8 @@ export function buildLabelParts(parts: CoreParts): LabelParts {
 export function buildLabelTasks(parts: CoreParts): LabelTasks {
   const { registry, channelPlans: plans, publication: evidence, database, config } = parts;
   const executions = new PostgresExecutionRegistry(database);
-  return new LabelTasks({ registry, plans, evidence, executions, settings: config.label });
+  const settings = requireRoleSection(config, "label", "pipeline");
+  return new LabelTasks({ registry, plans, evidence, executions, settings });
 }
 
 /** A label product's own Review when it stops before its manifest. */

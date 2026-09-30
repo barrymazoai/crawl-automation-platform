@@ -4,7 +4,11 @@ import { HttpCapture } from "../capture/http-capture.js";
 import { OriginalHtmlArchive } from "../capture/original-html-archive.js";
 import { channelErrors } from "../errors.js";
 import type { ChannelRegistry } from "../registry.js";
-import type { CaptureRequest, ProductCaptureResult } from "./capture-request.js";
+import type {
+  CaptureRequest,
+  ProductCaptureResult,
+  ChannelCaptureResult,
+} from "./capture-request.js";
 import { capturedPage } from "./captured-page.js";
 import type { ProductSourcePlans } from "./source-plans.js";
 import type { CaptureMode } from "../capture.js";
@@ -36,12 +40,7 @@ export class ProductCapture {
         details: { channel: request.channel },
       });
     }
-    const address = adapter.productAddress(request.url);
-    const captured = await this.deps.http.capture(
-      adapter,
-      this.archive(adapter, { request, address }),
-      signal,
-    );
+    const { address, captured } = await this.read(adapter, request, signal);
     if (captured.status === "sighting") {
       const { listingId, variantId } = address;
       return { status: "sighted", listingId, variantId, sighting: captured.sighting };
@@ -60,6 +59,43 @@ export class ProductCapture {
       family: adapter.productFamily?.(parsed) ?? null,
       page: capturedPage(adapter, address, captured),
     };
+  }
+
+  /** Formula-family adapters capture metrics without requiring a local formula planner. */
+  async captureForAdapter(
+    request: CaptureRequest,
+    signal: AbortSignal,
+  ): Promise<ChannelCaptureResult> {
+    const adapter = this.deps.registry.forCapture(
+      request.channel,
+      this.deps.mode ?? "http",
+      request.sourceUrl,
+    );
+    if (adapter.planning || !adapter.formulaFamily) {
+      return this.capture(request, signal);
+    }
+    const { address, captured } = await this.read(adapter, request, signal);
+    const { listingId, variantId } = address;
+    if (captured.status === "sighting") {
+      return { status: "sighted", listingId, variantId, sighting: captured.sighting };
+    }
+    return {
+      status: "captured-family",
+      listingId,
+      variantId,
+      archiveKey: captured.archiveKey,
+      page: capturedPage(adapter, address, captured),
+    };
+  }
+
+  private async read(adapter: ChannelAdapter, request: CaptureRequest, signal: AbortSignal) {
+    const address = adapter.productAddress(request.url);
+    const captured = await this.deps.http.capture(
+      adapter,
+      this.archive(adapter, { request, address }),
+      signal,
+    );
+    return { address, captured };
   }
 
   private archive(

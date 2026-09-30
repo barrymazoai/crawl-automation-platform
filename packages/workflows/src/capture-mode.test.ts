@@ -51,13 +51,11 @@ it.each(["swanson", "gnc", "amazon", "wholefoods", "dtc", "costco"])(
 it.each([
   ["wholefoods", "browser-result"],
   ["amazon", "http-result"],
-])(
-  "preserves absent-field histories for %s without introducing a marker",
-  async (channel, status) => {
-    expect(await ProductPipelineWorkflow({ ...input, channel })).toEqual({ status });
-    expect(env.patched).not.toHaveBeenCalledWith("capture-mode-v1");
-  },
-);
+])("preserves absent-field histories for %s when the marker is absent", async (channel, status) => {
+  env.patched.mockReturnValue(false);
+  expect(await ProductPipelineWorkflow({ ...input, channel })).toEqual({ status });
+  expect(env.patched).toHaveBeenCalledWith("capture-mode-v1");
+});
 
 it("preserves the old decision when replay has no capture marker", async () => {
   env.patched.mockReturnValue(false);
@@ -72,5 +70,10 @@ it("preserves the old decision when replay has no capture marker", async () => {
 it("refuses an unsupported capture mode before any activity", async () => {
   await expect(ProductPipelineWorkflow({ ...input, capture: "other" })).rejects.toThrow();
   expect(env.http).not.toHaveBeenCalled();
+  expect(env.browser).not.toHaveBeenCalled();
+});
+
+it("defaults new inputs without a capture capability to HTTP", async () => {
+  expect(await ProductPipelineWorkflow(input)).toEqual({ status: "http-result" });
   expect(env.browser).not.toHaveBeenCalled();
 });

@@ -17,7 +17,8 @@ vi.mock("@temporalio/workflow", () => {
   return {
     proxyActivities: ({ taskQueue }: { taskQueue: string }) => env.activities[taskQueue],
     workflowInfo: () => ({ workflowId: "product-run-1", runId: "run-1" }),
-    patched: () => true,
+    // Historical browser product results retain their recorded route before capture-mode-v1.
+    patched: (marker: string) => marker !== "capture-mode-v1",
     sleep: async () => undefined,
     isCancellation: (error: unknown) => (error as { type?: string }).type === "CANCELLED",
     CancellationScope: { nonCancellable: (run: () => unknown) => run() },
@@ -41,13 +42,11 @@ const input = {
   resources: { queue: "resource", activities: {} },
 };
 
-const pendingReview = {
-  status: "review",
-  operationId: "pipeline-capture-1",
-  reviewId: "review-1",
-  code: "PIPELINE.FORMULA_PENDING",
-  evidenceKey: "reviews/one.json",
-  automaticRetry: false,
+const pendingFormula = {
+  status: "collected",
+  reusedFormula: false,
+  formulaPending: true,
+  listingId: "B002CQU54Q",
 };
 
 function setup() {
@@ -61,7 +60,7 @@ function setup() {
   };
   const pipeline = {
     findKnownFormula: vi.fn(async (): Promise<unknown> => ({ operationId: "amazon-formula-1" })),
-    reviewProduct: vi.fn(async () => pendingReview),
+    reviewProduct: vi.fn(async () => ({ status: "review", code: "TEST.REVIEW" })),
     requestAmazonFormula: vi.fn(async (): Promise<unknown> => ({ status: "queued" })),
   };
   const plan = { prepareChannelProduct: vi.fn() };
@@ -71,7 +70,7 @@ function setup() {
 
 beforeEach(() => vi.clearAllMocks());
 
-it("reads a Whole Foods page in the browser and takes the formula of the same ASIN from its family", async () => {
+it("replays a legacy Whole Foods browser capture and takes the formula of the same ASIN from its family", async () => {
   const { browser, pipeline, plan } = setup();
 
   expect(await ProductPipelineWorkflow(input)).toEqual({
@@ -89,22 +88,17 @@ it("reads a Whole Foods page in the browser and takes the formula of the same AS
   expect(pipeline.requestAmazonFormula).not.toHaveBeenCalled();
 });
 
-it("an ASIN with no formula yet is held for Amazon and ends in a Review naming why, with no label reading", async () => {
+it("an ASIN with no formula yet is queued for Amazon and completes as formula pending, with no label reading and no Review", async () => {
   const { pipeline } = setup();
   pipeline.findKnownFormula.mockResolvedValue(null);
 
-  expect(await ProductPipelineWorkflow(input)).toEqual(pendingReview);
+  expect(await ProductPipelineWorkflow(input)).toEqual(pendingFormula);
 
   expect(pipeline.requestAmazonFormula).toHaveBeenCalledWith({
     brandId: input.brandId,
     listingId: "B002CQU54Q",
   });
-  expect(pipeline.reviewProduct).toHaveBeenCalledWith(
-    expect.objectContaining({
-      code: "PIPELINE.FORMULA_PENDING",
-      causeCode: "WHOLEFOODS.AMAZON_FORMULA_MISSING",
-    }),
-  );
+  expect(pipeline.reviewProduct).not.toHaveBeenCalled();
 });
 
 it("without a browser task queue the product is a Review, and nothing is fetched", async () => {

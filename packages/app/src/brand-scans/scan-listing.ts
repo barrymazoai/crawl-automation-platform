@@ -8,7 +8,7 @@ import {
   type ListingPage,
 } from "@crawl-automation/channels-core";
 import type { BrowserBrandScanners, ListingPageReader } from "./ports.js";
-import { BROWSER_SCAN_CHANNELS, type ScanChannel, type ScanRecord } from "./scan-model.js";
+import { type ScanChannel, type ScanRecord } from "./scan-model.js";
 import { appErrors } from "../errors.js";
 import { assertScanReadable } from "./scan-availability.js";
 
@@ -30,6 +30,7 @@ export interface BrandListing {
   full: boolean;
   /** A reader explicitly reported a capped listing. */
   capped?: boolean;
+  soldHere?: boolean;
 }
 
 interface ListingWork {
@@ -50,7 +51,7 @@ function sourceReader(
     : undefined;
   const capture = adapter
     ? (adapter.scanCapture?.(url) ?? "http")
-    : BROWSER_SCAN_CHANNELS.includes(channel)
+    : readers.browsers[channel] !== undefined
       ? "browser"
       : "http";
   if (capture === "browser") {
@@ -92,7 +93,7 @@ export async function readListing(
   const request = {
     scanId: scan.scanId,
     sourceUrl: url,
-    ...(scan.source.channel === "dtc" ? { sourceId: scan.source.sourceId } : {}),
+    sourceId: scan.source.sourceId,
   };
   const found = await selected.reader.scan(request, signal);
   const products = found.pages.flatMap((page) => page.products);
@@ -105,7 +106,8 @@ export async function readListing(
     families: 0,
     unresolvedFamilies: 0,
     credits: 0,
-    full: found.complete && found.soldHere,
+    full: found.complete,
+    soldHere: found.soldHere,
   };
 }
 

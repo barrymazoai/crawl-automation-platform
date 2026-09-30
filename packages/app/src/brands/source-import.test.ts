@@ -92,7 +92,7 @@ describe("BrandSourceImport.import with fake stores and URL readers", () => {
   });
 
   it.each([
-    ["wholefoods", "BRAND_SCAN.BROWSER_NOT_CONFIGURED"],
+    ["wholefoods", "BRAND_SCAN.CHANNEL_UNSUPPORTED"],
     ["swanson", "BRAND_SCAN.CHANNEL_UNSUPPORTED"],
   ])("refuses an unavailable %s reader before reading brands", async (channel, code) => {
     const fake = setup();
@@ -141,4 +141,43 @@ describe("BrandSourceImport.import with fake stores and URL readers", () => {
       }
     },
   );
+});
+
+it("exposes disabled-source derivation through the source service", async () => {
+  const fake = setup();
+  const sourceId = "11111111-1111-4111-8111-111111111111";
+  const sources = {
+    sources: vi.fn(async () => [
+      {
+        sourceId,
+        brandId: sourceId,
+        brandName: entry.name,
+        channel: "amazon",
+        url: entry.url,
+        enabled: false,
+      },
+    ]),
+  };
+  const importer = new BrandSourceImport({
+    ...fake,
+    derived: {
+      sources,
+      store: fake.store,
+      channel: "wholefoods",
+      derive: () => "https://target.example/brand",
+    },
+  });
+  expect(await importer.deriveWholeFoods({ sourceIds: [sourceId] })).toEqual({
+    created: 1,
+    skipped: 0,
+  });
+  expect(fake.scanner.scan).not.toHaveBeenCalled();
+});
+
+it("reports unavailable source derivation without reading or writing", async () => {
+  const fake = setup();
+  expect(() => fake.importer.deriveWholeFoods({ sourceIds: [] })).toThrow(
+    expect.objectContaining({ code: "BRAND_SCAN.NOT_CONFIGURED" }),
+  );
+  expect(fake.store.addDisabledSources).not.toHaveBeenCalled();
 });
