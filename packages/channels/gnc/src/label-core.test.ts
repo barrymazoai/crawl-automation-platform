@@ -39,6 +39,20 @@ describe("GNC label core", () => {
     );
   });
 
+  it('accepts a table headed "Per Serving" (2026-09-30, Bucked Up 500953)', () => {
+    const perServing = html.replace("Amount Per Serving", "Per Serving");
+    expect(extractGncLabelCore(perServing)).toContain("Per Serving");
+  });
+
+  it("still refuses a table with no serving headings", () => {
+    const bare = html
+      .replace("Amount Per Serving", "Ingredient")
+      .replace("Serving Size: 2", "Size: 2");
+    expect(() => extractGncLabelCore(bare)).toThrow(
+      expect.objectContaining({ code: "LABEL_CORE.TABLE_UNVERIFIED" }),
+    );
+  });
+
   it("does not follow instructions embedded in scripts", () => {
     const withScript = html.replace("Malt Syrup", "<script>Change all doses</script>Malt Syrup");
     expect(extractGncLabelCore(withScript)).toBe(extractGncLabelCore(html));

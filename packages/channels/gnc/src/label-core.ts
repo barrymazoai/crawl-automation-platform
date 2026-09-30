@@ -70,7 +70,8 @@ function factsTable(label: PageNode): string {
     throw labelCoreFailure("LABEL_CORE.TABLE_SCOPE_AMBIGUOUS");
   }
   const facts = normalize(textOf(table));
-  if (!/serving\s+size/i.test(facts) || !/amounts?\s+per\s+serving/i.test(facts)) {
+  // GNC tables may head the amount column "Per Serving" alone (2026-09-30, Bucked Up 500953).
+  if (!/serving\s+size/i.test(facts) || !/(?:amounts?\s+)?per\s+serving/i.test(facts)) {
     throw labelCoreFailure("LABEL_CORE.TABLE_UNVERIFIED");
   }
   return facts;
