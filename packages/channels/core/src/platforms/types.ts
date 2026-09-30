@@ -25,6 +25,7 @@ export interface PlatformProduct {
   productId: string;
   url: string;
   title: string;
+  brandRaw: string | null;
   selectedVariantId: string | null;
   variants: PlatformVariant[];
   commerce: CommerceEvidence;
@@ -35,7 +36,12 @@ export interface PlatformProduct {
 }
 
 export interface PlatformCatalog {
-  products: { url: string; productId: string | null; title: string | null }[];
+  products: {
+    url: string;
+    productId: string | null;
+    title: string | null;
+    brandRaw: string | null;
+  }[];
   nextUrl: string | null;
   empty: boolean;
 }

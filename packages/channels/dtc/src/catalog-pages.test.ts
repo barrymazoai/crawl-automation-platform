@@ -39,6 +39,29 @@ function setup() {
 }
 
 describe("DTC catalog retained browser evidence", () => {
+  it("isolates retained catalog originals by brand even when a caller reuses a scan ID", async () => {
+    const multi = dtcSitePolicy({
+      siteKey: "shop.example",
+      kind: "multi-brand",
+      platform: "shopify",
+      brands: [
+        { brand: "Alpha", catalogUrl: "https://shop.example/collections/alpha" },
+        { brand: "Beta", catalogUrl: "https://shop.example/collections/beta" },
+      ],
+    });
+    const { pages, read } = setup();
+    const results = [];
+    for (const source of multi.brands) {
+      results.push(
+        await pages.read(
+          { ...request, site: multi, sourceUrl: source.catalogUrl, url: source.catalogUrl },
+          signal(),
+        ),
+      );
+    }
+    expect(read).toHaveBeenCalledTimes(2);
+    expect(results[0]?.archiveKey).not.toBe(results[1]?.archiveKey);
+  });
   it("archives bytes and scroll proof before returning and reuses them", async () => {
     const { pages, read, remote } = setup();
     const result = await pages.read(request, signal());

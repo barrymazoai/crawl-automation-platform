@@ -1,46 +1,31 @@
 import {
   completeFacts,
-  platformPageErrors,
   type ChannelAdapter,
   type FetchedPage,
   type ParsedProduct,
-  type ProductIdentity,
 } from "@crawl-automation/channels-core";
-import { ChannelProductEvidenceSchema } from "@crawl-automation/v3-contracts";
 import { dtcBrandSourceUrl, dtcProductAddress, siteForUrl } from "./address.js";
 import { dtcEvidence, type DtcRendered } from "./evidence.js";
 import { dtcPageIdentity, readDtcProduct } from "./product.js";
 import { DTC_PAGE_LIMITS, DTC_SITES, type DtcSitePolicy } from "./site-policy.js";
+import { dtcBrandEvidence } from "./brand-evidence.js";
+import { dtcBrandSource, dtcBrandSources, type DtcBrandSource } from "./brand-source.js";
+import { dtcProjection, readDtcProjection } from "./projection.js";
 
-function readProjection(
-  projection: unknown,
-  expected: { url: string; owner: ProductIdentity },
-  sites: readonly DtcSitePolicy[],
-) {
-  const evidence = ChannelProductEvidenceSchema.parse(projection);
-  const address = dtcProductAddress(expected.url, sites);
-  const actual = dtcProductAddress(evidence.url, sites);
-  const site = siteForUrl(expected.url, sites);
-  if (
-    evidence.channel !== "dtc" ||
-    evidence.listingId !== expected.owner.listingId ||
-    evidence.variantId !== expected.owner.variantId ||
-    actual.listingId !== address.listingId ||
-    evidence.brandRaw !== site.siteKey
-  ) {
-    throw platformPageErrors.create("DTC.IDENTITY_CONFLICT");
-  }
-  const selected = evidence.factsCandidates.find((entry) => entry.scope === "selected-product");
-  return { evidence, facts: completeFacts(selected?.html ?? null) };
+export interface DtcAdapter extends ChannelAdapter<DtcRendered> {
+  readonly brandSources: readonly DtcBrandSource[];
+  forBrandSource(sourceUrl: string): DtcAdapter;
 }
 
 function parsedProduct(
   page: FetchedPage,
   sites: readonly DtcSitePolicy[],
+  source: DtcBrandSource | null,
 ): ParsedProduct<DtcRendered> {
   const site = siteForUrl(page.url, sites);
   const product = readDtcProduct(page, sites);
-  const evidence = dtcEvidence(product, site);
+  const brandEvidence = dtcBrandEvidence(site, product.brandRaw, source);
+  const evidence = dtcEvidence(product, site, brandEvidence);
   const selected = evidence.factsCandidates.find((entry) => entry.scope === "selected-product");
   const facts = completeFacts(selected?.html ?? null);
   return {
@@ -52,11 +37,16 @@ function parsedProduct(
       platform: product.platform,
       siteKey: site.siteKey,
       productId: product.productId,
+      brandEvidence,
     },
     evidence,
     commerce: {
       ...product.commerce,
-      context: [...product.commerce.context, `dtc-site:${site.siteKey}`],
+      context: [
+        ...product.commerce.context,
+        `dtc-site:${site.siteKey}`,
+        `dtc-seller:${site.siteKey}`,
+      ],
     },
     variants: product.variants.map((variant) => dtcProductAddress(variant.url, sites)),
     facts,
@@ -66,29 +56,35 @@ function parsedProduct(
 /** One registry entry for all configured DTC sites. BrowserPages/Ego is the only capture path. */
 export function createDtcAdapter(
   sites: readonly DtcSitePolicy[] = DTC_SITES,
-): ChannelAdapter<DtcRendered> {
+  sourceUrl?: string,
+): DtcAdapter {
+  const source = sourceUrl ? dtcBrandSource(sourceUrl, sites) : null;
+  const scopedSites = source ? [siteForUrl(source.catalogUrl, sites)] : sites;
   return {
     id: "dtc",
+    brandSources: source ? [source] : dtcBrandSources(sites),
+    forBrandSource: (url) => createDtcAdapter(sites, url),
     captureModes: ["browser"],
     scanCapture: (url) => {
-      dtcBrandSourceUrl(url, sites);
+      dtcBrandSourceUrl(url, scopedSites);
       return "browser";
     },
     httpPolicy: {
-      origins: [...new Set(sites.flatMap((site) => site.origins))],
+      origins: [...new Set(scopedSites.flatMap((site) => site.origins))],
       ...DTC_PAGE_LIMITS,
     },
-    fileOrigins: [...new Set(sites.flatMap((site) => site.imageOrigins))],
-    productAddress: (url) => dtcProductAddress(url, sites),
-    pageIdentity: (page) => dtcPageIdentity(page, sites),
-    parseProduct: (page) => parsedProduct(page, sites),
+    fileOrigins: [...new Set(scopedSites.flatMap((site) => site.imageOrigins))],
+    productAddress: (url) => dtcProductAddress(url, scopedSites),
+    pageIdentity: (page) => dtcPageIdentity(page, scopedSites),
+    parseProduct: (page) => parsedProduct(page, scopedSites, source),
     externalId: (parsed) => parsed.identity.listingId,
     planning: {
       channel: "dtc",
       parserVersion: "dtc-rendered/1",
       projectionModule: "dtc.browser-projection",
-      projection: (rendered) => rendered.evidence,
-      read: (projection, url, owner) => readProjection(projection, { url, owner }, sites),
+      projection: dtcProjection,
+      read: (projection, url, owner) =>
+        readDtcProjection(projection, { url, owner }, { sites: scopedSites, source }),
     },
   };
 }

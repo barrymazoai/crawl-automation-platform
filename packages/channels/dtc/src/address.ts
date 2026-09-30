@@ -1,6 +1,7 @@
 import { channelErrors, type ProductAddress } from "@crawl-automation/channels-core";
 import type { DtcSitePolicy } from "./site-policy.js";
 import { dtcIdentityKey } from "./identity.js";
+import { dtcBrandSource } from "./brand-source.js";
 
 export function siteForUrl(raw: string, sites: readonly DtcSitePolicy[]): DtcSitePolicy {
   let url;
@@ -48,11 +49,8 @@ export function dtcProductAddress(raw: string, sites: readonly DtcSitePolicy[]):
 }
 
 export function catalogStartUrl(raw: string, site: DtcSitePolicy): string {
-  const url = catalogUrl(raw, site);
-  if (url !== site.catalogUrl) {
-    throw channelErrors.create("CHANNEL.URL_REJECTED", { details: { url: raw } });
-  }
-  return url;
+  const source = dtcBrandSource(raw, [site]);
+  return catalogUrl(raw, site, source.catalogUrl);
 }
 
 /** A browser brand scan starts at exactly the configured catalog entry. */
@@ -60,16 +58,23 @@ export function dtcBrandSourceUrl(raw: string, sites: readonly DtcSitePolicy[]):
   return catalogStartUrl(raw, siteForUrl(raw, sites));
 }
 
-export function catalogUrl(raw: string, site: DtcSitePolicy): string {
+export function catalogUrl(
+  raw: string,
+  site: DtcSitePolicy,
+  sourceUrl: string | null = site.catalogUrl,
+): string {
   siteForUrl(raw, [site]);
-  if (!site.catalogUrl) {
+  if (!sourceUrl) {
     throw channelErrors.create("CHANNEL.URL_REJECTED");
   }
   const url = new URL(raw);
-  const catalog = new URL(site.catalogUrl);
+  const catalog = new URL(dtcBrandSource(sourceUrl, [site]).catalogUrl);
   const basePath = catalog.pathname.replace(/\/$/, "");
   const path = url.pathname.replace(/\/page\/\d+\/?$/, "").replace(/\/$/, "");
-  if (path !== basePath) {
+  const changedFilter = [...catalog.searchParams].some(
+    ([name, value]) => url.searchParams.get(name) !== value,
+  );
+  if (url.origin !== catalog.origin || path !== basePath || changedFilter) {
     throw channelErrors.create("CHANNEL.URL_REJECTED", { details: { url: raw } });
   }
   url.hash = "";

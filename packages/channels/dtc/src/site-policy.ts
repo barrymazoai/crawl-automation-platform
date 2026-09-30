@@ -8,9 +8,11 @@ import type { ListScroll } from "@crawl-automation/platform";
 
 export interface DtcSitePolicy {
   siteKey: string;
+  kind: "single-brand" | "multi-brand";
   platform: StorePlatform | "unverified";
   origins: readonly string[];
   catalogUrl: string | null;
+  brands: readonly DtcBrandCatalog[];
   imageOrigins: readonly string[];
   productPath: RegExp;
   productSelector?: string;
@@ -19,6 +21,18 @@ export interface DtcSitePolicy {
   /** A site's small extraction hook, still pure and still reading the retained DOM. */
   readProduct?: (document: Document, context: PlatformContext) => PlatformProduct;
 }
+
+export interface DtcBrandCatalog {
+  brand: string;
+  catalogUrl: string;
+}
+
+type SiteInput = Pick<DtcSitePolicy, "siteKey" | "platform"> &
+  Partial<Omit<DtcSitePolicy, "siteKey" | "platform" | "kind" | "catalogUrl" | "brands">> &
+  (
+    | { kind?: "single-brand"; catalogUrl: string | null; brands?: never }
+    | { kind: "multi-brand"; brands: readonly DtcBrandCatalog[]; catalogUrl?: never }
+  );
 
 export const DTC_PAGE_LIMITS = { maxBytes: 6 * 1024 * 1024, timeoutMs: 75_000 };
 export const DTC_BROWSER_POLICY = { readySelector: "main, #MainContent, .site-main" };
@@ -48,13 +62,13 @@ function catalogItemSelector(policy: DtcSitePolicy["catalog"]): string {
 }
 
 /** An unverified site is addressable, but reading waits for its browser-checked policy. */
-export function dtcSitePolicy(
-  site: Pick<DtcSitePolicy, "siteKey" | "platform" | "catalogUrl"> &
-    Partial<Omit<DtcSitePolicy, "siteKey" | "platform" | "catalogUrl">>,
-): DtcSitePolicy {
+export function dtcSitePolicy(site: SiteInput): DtcSitePolicy {
   const origins = site.origins ?? [`https://${site.siteKey}`];
   const listing = site.catalog ?? catalog;
   return {
+    kind: "single-brand",
+    catalogUrl: null,
+    brands: [],
     origins,
     imageOrigins: [...origins, "https://cdn.shopify.com"],
     productPath: /^\/(?:collections\/[^/]+\/)?products?\/[^/]+\/?$/,

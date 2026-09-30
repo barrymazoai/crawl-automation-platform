@@ -11,6 +11,8 @@ import type { RetainedPublication } from "@crawl-automation/platform";
 import { z } from "zod";
 import { DTC_PAGE_LIMITS, type DtcSitePolicy } from "./site-policy.js";
 import { dtcIdentityKey } from "./identity.js";
+import { dtcBrandSource } from "./brand-source.js";
+import { catalogUrl } from "./address.js";
 
 const Proof = z.object({
   url: z.string(),
@@ -27,6 +29,7 @@ export interface DtcCatalogRead {
   position: number;
   url: string;
   site: DtcSitePolicy;
+  sourceUrl?: string;
 }
 
 /** The page reader owns closure. No successful read is returned until HTML and scroll proof are retained. */
@@ -101,15 +104,21 @@ export class DtcCatalogPages {
   }
 
   private archive(request: DtcCatalogRead) {
+    const source = dtcBrandSource(request.sourceUrl ?? request.site.catalogUrl ?? request.url, [
+      request.site,
+    ]);
+    catalogUrl(request.url, request.site, source.catalogUrl);
+    const multi = request.site.kind === "multi-brand";
+    const operation = `catalog-${request.scanId}-${request.position}`;
     return new OriginalHtmlArchive(this.deps.publication, {
       channel: "dtc",
       maxBytes: DTC_PAGE_LIMITS.maxBytes,
       capture: {
-        operationId: `catalog-${request.scanId}-${request.position}`,
+        operationId: multi ? dtcIdentityKey(source.sourceId, operation) : operation,
         sessionId: request.scanId,
         url: request.url,
-        sourceId: dtcIdentityKey(request.site.siteKey, "site"),
-        listingId: dtcIdentityKey(request.site.siteKey, "catalog"),
+        sourceId: multi ? source.sourceId : dtcIdentityKey(request.site.siteKey, "site"),
+        listingId: dtcIdentityKey(request.site.siteKey, multi ? source.catalogUrl : "catalog"),
         variantId: null,
       },
     });

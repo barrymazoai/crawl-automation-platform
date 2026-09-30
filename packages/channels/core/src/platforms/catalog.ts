@@ -1,6 +1,6 @@
 import { platformPageErrors } from "./errors.js";
 import { identifier, string } from "./json.js";
-import { embeddedShopifyProducts } from "./shopify-data.js";
+import { embeddedShopifyCatalogProducts } from "./shopify-data.js";
 import type { PlatformCatalog } from "./types.js";
 import { pageUrl } from "./urls.js";
 
@@ -29,7 +29,7 @@ function nextCatalogUrl(document: Document, policy: CatalogPolicy): string | nul
 /** Catalog-scoped links, plus embedded product IDs when present; no related-product or navigation links. */
 export function readPlatformCatalog(document: Document, policy: CatalogPolicy): PlatformCatalog {
   const root = document.querySelector(policy.catalogSelector);
-  const data = embeddedShopifyProducts(document);
+  const data = embeddedShopifyCatalogProducts(document);
   const products = new Map<string, PlatformCatalog["products"][number]>();
   for (const link of root?.querySelectorAll(policy.productLinkSelector) ?? []) {
     const href = link.getAttribute("href");
@@ -37,12 +37,13 @@ export function readPlatformCatalog(document: Document, policy: CatalogPolicy): 
       continue;
     }
     const url = pageUrl(href, policy.url);
-    const handle = new URL(url).pathname.split("/products/")[1];
-    const record = data.find((product) => product.handle === handle);
+    const handle = new URL(url).pathname.split("/products/")[1]?.replace(/\/$/, "");
+    const record = data.find((product) => product.handle === handle) ?? {};
     products.set(url, {
       url,
-      productId: identifier(record?.id),
-      title: string(record?.title) ?? string(link.textContent),
+      productId: identifier(record.id),
+      title: string(record.title) ?? string(link.textContent),
+      brandRaw: string(record.vendor),
     });
   }
   const empty = Boolean(document.querySelector(policy.emptySelector));

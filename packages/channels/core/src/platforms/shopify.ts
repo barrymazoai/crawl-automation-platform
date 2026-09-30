@@ -8,7 +8,7 @@ import {
 } from "./content.js";
 import { platformPageErrors } from "./errors.js";
 import { object, records, string } from "./json.js";
-import { jsonLdProducts, readJsonLdProduct, selectedVariant } from "./jsonld.js";
+import { jsonLdBrand, jsonLdProducts, readJsonLdProduct, selectedVariant } from "./jsonld.js";
 import { embeddedShopifyProducts, readShopifyData } from "./shopify-data.js";
 import type { JsonObject, PlatformContext, PlatformProduct } from "./types.js";
 import { canonicalUrl } from "./urls.js";
@@ -35,6 +35,10 @@ function shopifyCurrency(document: Document): string | null {
   return unique.length === 1 ? (unique[0] ?? null) : null;
 }
 
+function shopifyBrand(vendor: string | null, document: Document, context: PlatformContext) {
+  return vendor ?? jsonLdBrand(document, context);
+}
+
 export function readShopifyProduct(document: Document, context: PlatformContext): PlatformProduct {
   const url = canonicalUrl(document, context.url);
   const record = url ? ownRecord(document, url) : null;
@@ -57,6 +61,7 @@ export function readShopifyProduct(document: Document, context: PlatformContext)
   const details = object(record.metafields);
   return {
     ...data,
+    brandRaw: shopifyBrand(data.brandRaw, document, context),
     platform: "shopify",
     url,
     selectedVariantId: selected,

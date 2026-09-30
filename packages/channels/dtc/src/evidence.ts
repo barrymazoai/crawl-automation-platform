@@ -6,10 +6,12 @@ import {
 } from "@crawl-automation/v3-contracts";
 import type { DtcSitePolicy } from "./site-policy.js";
 import { dtcIdentityKey } from "./identity.js";
+import { dtcBrandWarnings, type DtcBrandEvidence } from "./brand-evidence.js";
 
 export interface DtcRendered {
   siteKey: string;
   productId: string;
+  brandEvidence: DtcBrandEvidence;
   evidence: ChannelProductEvidence;
   facts: FactsText;
   platform: PlatformProduct["platform"];
@@ -38,7 +40,11 @@ function productImages(product: PlatformProduct, site: DtcSitePolicy) {
   return [...galleries, ...featured];
 }
 
-export function dtcEvidence(product: PlatformProduct, site: DtcSitePolicy): ChannelProductEvidence {
+export function dtcEvidence(
+  product: PlatformProduct,
+  site: DtcSitePolicy,
+  brandEvidence: DtcBrandEvidence,
+): ChannelProductEvidence {
   const listingId = dtcIdentityKey(site.siteKey, product.productId);
   return ChannelProductEvidenceSchema.parse({
     codec: "channel-product/1",
@@ -47,7 +53,7 @@ export function dtcEvidence(product: PlatformProduct, site: DtcSitePolicy): Chan
     variantId: product.selectedVariantId,
     url: product.url,
     title: product.title,
-    brandRaw: site.siteKey,
+    brandRaw: site.kind === "single-brand" ? site.siteKey : product.brandRaw,
     variantOptions: [],
     variants: product.variants.map((variant) => ({
       listingId,
@@ -66,7 +72,11 @@ export function dtcEvidence(product: PlatformProduct, site: DtcSitePolicy): Chan
         ]
       : [],
     imageCandidates: productImages(product, site),
-    warnings:
-      product.variants.length > 1 ? [dtcEvidenceErrors.code("DTC.FACTS_VARIANT_UNASSIGNED")] : [],
+    warnings: [
+      ...dtcBrandWarnings(brandEvidence),
+      ...(product.variants.length > 1
+        ? [dtcEvidenceErrors.code("DTC.FACTS_VARIANT_UNASSIGNED")]
+        : []),
+    ],
   });
 }

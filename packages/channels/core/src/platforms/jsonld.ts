@@ -36,7 +36,7 @@ export function schemaUrl(product: JsonObject, base: string): string | null {
   return value ? pageUrl(value, base) : null;
 }
 
-export function ownJsonLd(document: Document, context: PlatformContext): JsonObject {
+function ownJsonLdCandidates(document: Document, context: PlatformContext): JsonObject[] {
   const canonical = canonicalUrl(document, context.url);
   const products = jsonLdProducts(document);
   const matches = canonical
@@ -46,12 +46,16 @@ export function ownJsonLd(document: Document, context: PlatformContext): JsonObj
       })
     : products;
   // Some stores omit the URL on their sole Product, but state it in a canonical link.
-  const candidates = matches.length
+  return matches.length
     ? matches
     : products.filter(
         (product) =>
           products.length === 1 && canonical !== null && schemaUrl(product, context.url) === null,
       );
+}
+
+export function ownJsonLd(document: Document, context: PlatformContext): JsonObject {
+  const candidates = ownJsonLdCandidates(document, context);
   if (candidates.length !== 1 || !candidates[0]) {
     throw platformPageErrors.create("DTC.IDENTITY_UNVERIFIED");
   }
@@ -63,6 +67,19 @@ export function schemaImages(value: unknown): string[] {
     const url = string(entry) ?? string(object(entry)?.url) ?? string(object(entry)?.contentUrl);
     return url ? [url] : [];
   });
+}
+
+export function schemaBrand(value: unknown): string | null {
+  const brands = (Array.isArray(value) ? value : [value])
+    .map((entry) => string(entry) ?? string(object(entry)?.name))
+    .filter((entry) => entry !== null);
+  return new Set(brands).size === 1 ? (brands[0] ?? null) : null;
+}
+
+/** Optional fallback for Shopify vendor; still selects only this page's own Product. */
+export function jsonLdBrand(document: Document, context: PlatformContext): string | null {
+  const candidates = ownJsonLdCandidates(document, context);
+  return candidates.length === 1 ? schemaBrand(candidates[0]?.brand) : null;
 }
 
 function variantOffers(product: JsonObject, url: string): PlatformVariant[] {
@@ -136,6 +153,7 @@ export function readJsonLdProduct(document: Document, context: PlatformContext):
     productId: identifier(product.productID ?? product.sku) ?? new URL(url).pathname,
     url,
     title,
+    brandRaw: schemaBrand(product.brand),
     selectedVariantId: selected,
     variants,
     commerce: commerce(offer, product),

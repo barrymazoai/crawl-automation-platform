@@ -117,6 +117,44 @@ const settings: PlanSettings = {
   factsPolicy: "text-facts-first/1",
 };
 
+it("archives and publishes both brands when a source-bound product capture disagrees", async () => {
+  const sourceUrl = "https://shop.example/collections/alpha";
+  const multi = dtcSitePolicy({
+    siteKey: site.siteKey,
+    kind: "multi-brand",
+    platform: "jsonld",
+    brands: [{ brand: "Alpha", catalogUrl: sourceUrl }],
+  });
+  const scoped = createDtcAdapter([multi], sourceUrl);
+  const html = original.replace('"name":"Sleep"', '"name":"Sleep","brand":{"name":"Beta"}');
+  const test = setup(html);
+  const browser = new BrowserProductCapture({
+    registry: new ChannelRegistry([scoped]),
+    http: test.capture,
+    publication: test.publication,
+    sourcePlans: new ProductSourcePlans(test.publication, settings),
+  });
+  const result = await browser.capture(request, AbortSignal.timeout(5000));
+  if (result.status !== "captured" || !result.planned) {
+    throw new Error("Expected source-bound browser capture");
+  }
+  expect(Buffer.from(test.remote.data.get(result.archiveKey) ?? []).toString()).toBe(html);
+  const plan = result.planned.sourcePlan;
+  const projection = JSON.parse(
+    Buffer.from(test.remote.data.get(plan.source.objectKey) ?? []).toString(),
+  );
+  expect(projection).toMatchObject({
+    evidence: { brandRaw: "Beta", warnings: ["DTC.BRAND_MISMATCH"] },
+    brandEvidence: {
+      seller: site.siteKey,
+      source: { brand: "Alpha", catalogUrl: sourceUrl },
+      observedBrand: "Beta",
+      status: "mismatch",
+    },
+  });
+  expect(scoped.planning?.read(projection, url, plan.owner).evidence.brandRaw).toBe("Beta");
+});
+
 it.each([null, "11"])(
   "hands DTC browser variant %s to the real formula planner",
   async (variantId) => {

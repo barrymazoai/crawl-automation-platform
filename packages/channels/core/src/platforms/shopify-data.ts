@@ -6,7 +6,7 @@ import type { JsonObject, PlatformVariant } from "./types.js";
 import { variantUrl } from "./urls.js";
 
 /** Public embedded product data, including collection products; never an HTTP JSON endpoint. */
-export function shopifyRecords(value: unknown): JsonObject[] {
+export function shopifyCatalogRecords(value: unknown): JsonObject[] {
   return records(value)
     .flatMap((record) => {
       if (Array.isArray(record.products)) {
@@ -14,9 +14,15 @@ export function shopifyRecords(value: unknown): JsonObject[] {
       }
       return object(record.product) ? records(record.product) : [record];
     })
-    .filter(
-      (record) => identifier(record.id) && string(record.handle) && Array.isArray(record.variants),
-    );
+    .filter((record) => identifier(record.id) && string(record.handle));
+}
+
+export function shopifyRecords(value: unknown): JsonObject[] {
+  return shopifyCatalogRecords(value).filter((record) => Array.isArray(record.variants));
+}
+
+export function embeddedShopifyCatalogProducts(document: Document): JsonObject[] {
+  return jsonScripts(document, "application/json").flatMap(shopifyCatalogRecords);
 }
 
 export function embeddedShopifyProducts(document: Document): JsonObject[] {
@@ -57,6 +63,7 @@ export function readShopifyData(record: JsonObject, url: string) {
   return {
     productId,
     title,
+    brandRaw: string(record.vendor),
     variants,
     images,
     detailsHtml: string(record.description) ?? string(record.body_html),

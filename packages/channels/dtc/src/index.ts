@@ -7,3 +7,5 @@ export * from "./brand-scan.js";
 export * from "./catalog-pages.js";
 export * from "./identity.js";
 export * from "./settings.js";
+export * from "./brand-source.js";
+export * from "./brand-evidence.js";

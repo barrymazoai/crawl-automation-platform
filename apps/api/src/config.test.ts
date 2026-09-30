@@ -259,3 +259,36 @@ it("accepts DTC browser settings and checks its browser permit kind", async () =
     loadSettings({ ...settings, resourceKinds: { "dtc-browser": "http-lane" } }),
   ).rejects.toMatchObject({ code: "CHANNEL.CAPTURE_LANE_MISMATCH" });
 });
+
+it("parses one collection per brand in the API's DTC retailer settings", () => {
+  const brands = [
+    ["Metagenics", "metagenics"],
+    ["Pure Encapsulations", "pure-encapsulations"],
+    ["Life Extension", "life-extension"],
+    ["Allergy Research", "allergy-research"],
+    ["Thorne", "thorne"],
+  ].map(([brand, handle]) => ({
+    brand,
+    catalogUrl: `https://nutriessential.com/collections/${handle}`,
+  }));
+  const browser = {
+    dtc: {
+      sites: [{ siteKey: "nutriessential.com", kind: "multi-brand", platform: "shopify", brands }],
+    },
+  };
+  expect(ApiConfigSchema.parse({ ...productionShaped, browser }).browser).toEqual(browser);
+  expect(ApiConfigSchema.parse({ ...productionShaped, browser: {} }).browser?.dtc.sites).toEqual(
+    [],
+  );
+  const invalid = {
+    dtc: {
+      sites: [
+        {
+          ...browser.dtc.sites[0],
+          brands: [{ brand: "Thorne", catalogUrl: "https://other.example/collections/thorne" }],
+        },
+      ],
+    },
+  };
+  expect(ApiConfigSchema.safeParse({ ...productionShaped, browser: invalid }).success).toBe(false);
+});

@@ -92,6 +92,11 @@ describe("DTC adapter contracts (small synthetic boundary cases, not saved-page 
     expect(dtcIdentityKey("shop.example", "123")).not.toBe(dtcIdentityKey("other.example", "123"));
     expect(dtcIdentityKey("a-b", "c")).not.toBe(dtcIdentityKey("a", "b-c"));
   });
+  it("keeps the site brand on a single-brand site even when its vendor differs", () => {
+    const parsed = adapter.parseProduct(page({ data: { ...data, vendor: "Supplier" } }));
+    expect(parsed.evidence.brandRaw).toBe(site.siteKey);
+    expect(parsed.evidence.warnings).not.toContain("DTC.BRAND_MISMATCH");
+  });
   it("uses complete serving/amount/ingredients facts and validates its projection", () => {
     const parsed = adapter.parseProduct(page());
     expect(parsed.facts.complete).toBe(true);
@@ -105,6 +110,13 @@ describe("DTC adapter contracts (small synthetic boundary cases, not saved-page 
         variantId: "12",
       }),
     ).toThrow();
+  });
+  it("continues to read retained single-brand projections without a brand envelope", () => {
+    const parsed = adapter.parseProduct(page());
+    expect(adapter.planning?.read(parsed.evidence, url, parsed.identity)).toEqual({
+      evidence: parsed.evidence,
+      facts: parsed.facts,
+    });
   });
   it("does not assign common facts to every flavour", () => {
     const parsed = adapter.parseProduct(
