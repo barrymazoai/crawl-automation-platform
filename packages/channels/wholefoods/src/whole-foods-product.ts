@@ -37,8 +37,8 @@ function blockAfterTitle(text: string, title: string): string {
 
 /**
  * Reads retained HTTP HTML for the configured store. Confirm on a real saved HTTP page:
- * h1 (title), the next 400 text characters (price/availability), and the visible
- * "Pickup at/from <label>" store text. Additional product selectors and JSON paths
+ * h1 (title), the next 400 text characters (price/availability), and the store ID in the
+ * page data. Additional product selectors and JSON paths
  * requiring confirmation are listed in whole-foods-content.ts and whole-foods-structured.ts.
  */
 export function parseWholeFoodsProduct(
@@ -56,7 +56,7 @@ export function parseWholeFoodsProduct(
     });
   }
   const text = pageText(page.html);
-  assertStore(text, store);
+  assertStore(page.html, store);
   const block = blockAfterTitle(text, title);
   return {
     codec: "wholefoods-product/1",

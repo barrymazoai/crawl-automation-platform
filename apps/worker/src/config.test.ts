@@ -49,7 +49,7 @@ describe("worker capture settings", () => {
     const parsed = capture.parse({ route, scraperApi, channels: { gnc: { premium: true } } });
     expect(parsed.channels).toMatchObject({
       gnc: { premium: true },
-      wholefoods: { headers: { cookie: "wfm_store_d8=10259" } },
+      wholefoods: { headers: { cookie: expect.stringMatching(/^wfm_store_d8=/) } },
     });
   });
 

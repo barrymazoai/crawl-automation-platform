@@ -8,7 +8,7 @@ import {
 import { describe, expect, it, vi } from "vitest";
 import { WholeFoodsBrandScan } from "./whole-foods-brand-scan.js";
 import { ensureWholeFoodsStore } from "./whole-foods-store-setup.js";
-import type { WholeFoodsStore } from "./whole-foods-store.js";
+import { wholeFoodsStoreCookie, type WholeFoodsStore } from "./whole-foods-store.js";
 
 const fixture = (name: string) =>
   readFileSync(new URL(`./fixtures/${name}`, import.meta.url), "utf8");
@@ -104,11 +104,15 @@ describe("Whole Foods store setup", () => {
   };
 
   it("reports whether the store had to be changed", async () => {
-    const browser = { round: vi.fn(async () => ({ shown: "The Alameda", changed: false })) };
+    const browser = { round: vi.fn(async () => ({ shown: "10259", changed: false })) };
     expect(await ensureWholeFoodsStore(browser, target, signal())).toEqual({ changed: false });
     expect(browser.round).toHaveBeenCalledWith(
       expect.any(String),
-      expect.objectContaining({ store }),
+      expect.objectContaining({
+        storeId: store.storeId,
+        cookie: wholeFoodsStoreCookie(store),
+        productUrl: target.productUrl,
+      }),
       expect.anything(),
     );
   });

@@ -10,6 +10,7 @@ import type { ScraperApiPage, ObjectStore } from "@crawl-automation/platform";
 import { describe, expect, it, vi } from "vitest";
 import { WHOLE_FOODS_HTTP_OPTIONS } from "./whole-foods-http.js";
 import { wholeFoodsAdapter } from "./whole-foods-adapter.js";
+import { WHOLE_FOODS_STORE, wholeFoodsStoreCookie } from "./whole-foods-store.js";
 
 // Existing synthetic page; real Whole Foods identity evidence is still ticket R22.
 const html = readFileSync(new URL("./fixtures/product-b0096m5pbw.html", import.meta.url), "utf8");
@@ -82,7 +83,9 @@ describe("Whole Foods capture with page identity unknown (R22)", () => {
     expect(read).toHaveBeenCalledOnce();
     expect(read).toHaveBeenCalledWith(
       expect.objectContaining({
-        options: expect.objectContaining({ headers: { cookie: "wfm_store_d8=10259" } }),
+        options: expect.objectContaining({
+          headers: { cookie: wholeFoodsStoreCookie(WHOLE_FOODS_STORE) },
+        }),
       }),
       expect.anything(),
     );

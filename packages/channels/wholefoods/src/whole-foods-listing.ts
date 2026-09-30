@@ -49,7 +49,7 @@ export function parseWholeFoodsListing(html: string, store: WholeFoodsStore): Wh
   if (products.size === 0 && !noResults) {
     throw wholeFoodsErrors.create("WHOLEFOODS.LISTING_UNVERIFIED");
   }
-  assertStore(text, store);
+  assertStore(html, store);
   const listed = [...products.values()];
   return {
     page: { products: listed, cards: listed.length, nextPage: null, statedTotal: null },

@@ -4,11 +4,12 @@ import { wholeFoodsAdapter } from "./whole-foods-adapter.js";
 import { WHOLE_FOODS_STORE } from "./whole-foods-store.js";
 
 const url = "https://www.wholefoodsmarket.com/grocery/product/oil-b0096m5pbw";
+const ALAMEDA = `<script type="application/json">{"storePreference":{"buid":"10259","storeName":"The Alameda"}}</script>`;
 const parse = (markup: string) =>
   wholeFoodsAdapter(WHOLE_FOODS_STORE).parseProduct({
     url,
     capturedAt: "2026-09-30T00:00:00Z",
-    html: `<html><body><header>Pickup at\nThe Alameda</header><main>
+    html: `<html><body><header>Delivering to 95126</header>${ALAMEDA}<main>
     <h1>Fish Oil</h1><p>$24.21</p>${markup}</main></body></html>`,
   });
 const product = {
@@ -93,7 +94,7 @@ it("leaves price and availability absent when the page does not show them", () =
   const parsed = wholeFoodsAdapter(WHOLE_FOODS_STORE).parseProduct({
     url,
     capturedAt: "2026-09-30T00:00:00Z",
-    html: "<html><body><header>Pickup at\nThe Alameda</header><main><h1>Fish Oil</h1></main></body></html>",
+    html: `<html><body><header>Delivering to 95126</header>${ALAMEDA}<main><h1>Fish Oil</h1></main></body></html>`,
   });
   expect(parsed.commerce).toMatchObject({
     price: null,

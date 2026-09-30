@@ -9,7 +9,7 @@ export const WholeFoodsStoreSchema = z.strictObject({
   storeId: z.string().regex(/^\d{1,12}$/),
   /** The name the site shows for the store, e.g. `The Alameda`. */
   label: z.string().min(1).max(200),
-  /** The postal code the site's store picker is searched with. */
+  /** The store's postal code, sent with the store in the store cookie. */
   postalCode: z.string().regex(/^\d{5}$/),
 });
 export type WholeFoodsStore = z.infer<typeof WholeFoodsStoreSchema>;
@@ -21,21 +21,44 @@ export const WHOLE_FOODS_STORE: WholeFoodsStore = {
   postalCode: "95126",
 };
 
-/** The store a page says it is priced for ("Pickup at The Alameda"); null when the page names none. */
-export function shownStore(pageText: string): string | null {
-  const match = /Pickup (?:at|from)\s*\n?\s*([^\n]+)/.exec(pageText);
-  return match?.[1]?.trim() ?? null;
+/**
+ * The cookie the site reads the shopper's store from: base64 JSON with the store ID and delivery ZIP. Checked
+ * 2026-10-01 with plain requests: without it, or with a bare ID, the site prices every page for Lamar (10145).
+ */
+export function wholeFoodsStoreCookie(store: WholeFoodsStore): string {
+  const value = btoa(JSON.stringify({ id: store.storeId, deliveryZip: store.postalCode }));
+  return `wfm_store_d8=${value}`;
+}
+
+// The page data's store preference (`"storePreference":{"buid":"10259","storeAcronym":"ALM","storeName":…`),
+// in plain or JSON-escaped script text. The 2026-10 site no longer prints "Pickup at <store>".
+const quote = String.raw`\\?"`;
+const field = (name: string, value: string) =>
+  String.raw`${quote}${name}${quote}\s*:\s*${quote}${value}${quote}`;
+export const STORE_PREFERENCE = new RegExp(
+  String.raw`${quote}storePreference${quote}\s*:\s*\{\s*` +
+    field("buid", String.raw`(\d+)`) +
+    String.raw`(?:\s*,\s*` +
+    field("storeAcronym", String.raw`[^"\\]*`) +
+    String.raw`)?\s*,\s*` +
+    field("storeName", String.raw`([^"\\]*)`),
+);
+
+/** The store a page is priced for, from its page data; null when the page names none. */
+export function shownStore(html: string): { storeId: string; name: string } | null {
+  const match = STORE_PREFERENCE.exec(html);
+  return match?.[1] ? { storeId: match[1], name: match[2] ?? "" } : null;
 }
 
 /** Refuses a page priced for any other store than the configured one. */
-export function assertStore(pageText: string, store: WholeFoodsStore): void {
-  const shown = shownStore(pageText);
+export function assertStore(html: string, store: WholeFoodsStore): void {
+  const shown = shownStore(html);
   if (!shown) {
     throw wholeFoodsErrors.create("WHOLEFOODS.STORE_UNVERIFIED");
   }
-  if (shown !== store.label) {
+  if (shown.storeId !== store.storeId) {
     throw wholeFoodsErrors.create("WHOLEFOODS.STORE_MISMATCH", {
-      details: { shown, expected: store.label },
+      details: { shown: `${shown.name} (${shown.storeId})`, expected: store.storeId },
     });
   }
 }
