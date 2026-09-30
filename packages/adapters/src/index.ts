@@ -39,3 +39,4 @@ export * from "./postgres/postgres-brand-scans.js";
 export * from "./postgres/postgres-brand-source-import.js";
 export * from "./postgres/postgres-product-history.js";
 export * from "./postgres/html-capture-records.js";
+export * from "./postgres/html-capture-reader.js";

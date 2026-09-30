@@ -5,7 +5,7 @@ import { ApiConfigSchema } from "./config.js";
 import { assembleContainer, buildContainer } from "./container.js";
 import productionShaped from "./fixtures/api-config.json" with { type: "json" };
 import { listen } from "./server.js";
-import { post } from "./testing/app-with.js";
+import { post, query } from "./testing/app-with.js";
 
 vi.mock("./config.js", async (original) => ({
   ...(await original<typeof import("./config.js")>()),
@@ -63,6 +63,19 @@ describe("evidence through the API startup context", () => {
       status: 200,
     };
     const capture = vi.spyOn(container.cradle.evidence, "capture").mockResolvedValue(result);
+    const saved = {
+      operationId: "archived-operation",
+      channel: "amazon" as const,
+      listingId: "B012345678",
+      variantId: null,
+      capturedAt: result.capturedAt,
+      url: input.url,
+      sha256: result.sha256,
+      byteSize: result.size,
+      mediaType: "text/html",
+      html: "<html>archived</html>",
+    };
+    const original = vi.spyOn(container.cradle.originals, "original").mockResolvedValue(saved);
 
     await import("./main.js");
     await vi.waitFor(() => expect(listen).toHaveBeenCalledTimes(1));
@@ -72,6 +85,11 @@ describe("evidence through the API startup context", () => {
     expect(response?.status).toBe(200);
     expect(await response?.json()).toEqual({ result: { data: result } });
     expect(capture).toHaveBeenCalledExactlyOnceWith(input);
+    const lookup = { operationId: saved.operationId };
+    const archived = await app?.request(`/trpc/evidence.original${query(lookup)}`);
+    expect(archived?.status).toBe(200);
+    expect(await archived?.json()).toEqual({ result: { data: saved } });
+    expect(original).toHaveBeenCalledExactlyOnceWith(lookup);
     await vi.waitFor(() => expect(exit).toHaveBeenCalledWith(0));
   });
 });

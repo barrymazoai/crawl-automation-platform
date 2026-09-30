@@ -13,6 +13,7 @@ function appWith(services: {
     brands: unused,
     reviews: unused,
     products: unused,
+    originals: unused,
     history: unused,
     resources: unused,
     fleet: unused,

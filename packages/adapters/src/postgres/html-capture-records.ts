@@ -88,8 +88,12 @@ export class PostgresHtmlCaptureRecords implements HtmlCaptureRecords {
     const request = HtmlCaptureRequestSchema.parse(raw);
     await this.locked(request, async (transaction) => {
       const prior = await readCapture(transaction, request.capture.operationId);
-      if (!prior || !isDeepStrictEqual(prior.request, request) || prior.state === "done") {
+      if (!prior || !isDeepStrictEqual(prior.request, request)) {
         throw conflict();
+      }
+      // A lost completion acknowledgement must not replace a verified original with failure.
+      if (prior.state === "done") {
+        return;
       }
       if (prior.state === "failed") {
         if (prior.cause_code !== causeCode) {

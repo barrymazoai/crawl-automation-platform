@@ -30,6 +30,6 @@ export interface HtmlCaptureRecords {
   admit(request: HtmlCaptureRequest): Promise<HtmlCaptureAdmission>;
   /** Called only after the original receipt and bytes have been read back and verified. */
   complete(request: HtmlCaptureRequest, original: SavedHtmlOriginal): Promise<void>;
-  /** A terminal failed download does not block a different operation; it never retries itself. */
+  /** Ends a pending download; preserves done if completion committed but its acknowledgement was lost. */
   fail(request: HtmlCaptureRequest, causeCode: string | null): Promise<void>;
 }

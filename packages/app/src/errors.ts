@@ -2,6 +2,11 @@ import { defineErrors } from "@crawl-automation/platform";
 
 /** Errors raised by the application services. */
 export const appErrors = defineErrors({
+  "EVIDENCE.NOT_FOUND": { category: "VALIDATION", message: "Archived HTML capture not found." },
+  "EVIDENCE.READ_NOT_CONFIGURED": {
+    category: "RUNTIME",
+    message: "This API has no storage settings, so it cannot read archived HTML.",
+  },
   "EVIDENCE.NOT_CONFIGURED": {
     category: "RUNTIME",
     message: "Test capture needs evidence.testPrefix, evidence.capture and storage settings.",

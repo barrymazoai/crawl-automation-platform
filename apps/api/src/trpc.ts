@@ -6,6 +6,7 @@ import type {
   HistoryService,
   ListingStateService,
   ProductService,
+  OriginalEvidenceService,
   QueueService,
   ResourceService,
   ReviewService,
@@ -20,6 +21,7 @@ export interface ApiContext {
   brands: BrandService;
   reviews: ReviewService;
   products: ProductService;
+  originals: OriginalEvidenceService;
   history: HistoryService;
   resources: ResourceService;
   fleet: FleetService;

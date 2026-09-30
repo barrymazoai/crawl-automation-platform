@@ -45,5 +45,5 @@ export function evidenceReaders(storage: NonNullable<ApiConfig["storage"]>) {
     files: new ReviewEvidence({ objects: remote }),
     recheck: new TextAnswerRecheck({ objects: remote, sources }),
   };
-  return { readers, close: r2.close };
+  return { readers, objects: remote, close: r2.close };
 }

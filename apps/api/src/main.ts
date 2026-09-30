@@ -1,4 +1,5 @@
 import { createLogger, startHeartbeat } from "@crawl-automation/platform";
+import { apiContext } from "./api-context.js";
 import { loadApiConfig } from "./config.js";
 import { buildContainer } from "./container.js";
 import { createHttpApp, listen } from "./server.js";
@@ -14,25 +15,8 @@ async function main(): Promise<void> {
   const config = await loadApiConfig();
   const container = await buildContainer(config);
   const { log, deliveryRunner, queueDispatcher, cleanup, database, temporal } = container.cradle;
-  const { runs, queue, brands, reviews, products, history, resources, fleet } = container.cradle;
-  const { brandScans, brandSources, runner: brandScanRunner } = container.cradle.brandScanParts;
-  const context = {
-    evidence: container.cradle.evidence,
-    runs,
-    queue,
-    brands,
-    reviews,
-    products,
-    history,
-    resources,
-    fleet,
-    brandScans,
-    brandSources,
-  };
-  const server = await listen(
-    createHttpApp({ ...context, listingStates: container.cradle.listingStates }),
-    config.api,
-  );
+  const { runner: brandScanRunner } = container.cradle.brandScanParts;
+  const server = await listen(createHttpApp(apiContext(container.cradle)), config.api);
   const health = await heartbeat();
   log.info({ host: config.api.host, port: config.api.port }, "api listening");
 
@@ -51,6 +35,7 @@ async function main(): Promise<void> {
   await new Promise<void>((resolve) => server.close(() => resolve()));
   await database.close();
   await temporal.close();
+  container.cradle.storageReaders?.close();
 }
 
 main().then(

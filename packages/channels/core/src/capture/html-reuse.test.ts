@@ -1,4 +1,4 @@
-import { RetainedPublication, type ObjectStore } from "@crawl-automation/platform";
+import { artifactErrors, RetainedPublication, type ObjectStore } from "@crawl-automation/platform";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ChannelAdapter, ChannelId, ParsedProduct } from "../adapter.js";
 import { channelErrors } from "../errors.js";
@@ -281,19 +281,84 @@ describe("shared original HTML reuse", () => {
     });
     expect(test.fetchPage).not.toHaveBeenCalled();
     expect(test.records.complete).not.toHaveBeenCalled();
+    expect(test.records.fail).toHaveBeenCalledExactlyOnceWith(
+      { channel: "gnc", capture: test.archive("new-operation").capture },
+      "ARTIFACT.INTEGRITY",
+    );
   });
 
-  it("never marks an unknown archive publication done or repeats its paid request", async () => {
+  it("marks unknown publication failed and never repeats its paid request", async () => {
     const test = setup();
     test.remote.read.mockImplementation(async (key) =>
       key.endsWith("original.html") ? null : (test.remote.data.get(key) ?? null),
     );
     const target = test.archive("producer");
-    await expect(test.capture(target)).rejects.toThrow();
-    await expect(test.capture(target)).rejects.toThrow();
+    await expect(test.capture(target)).rejects.toMatchObject({ code: "ARTIFACT.UPLOAD_UNKNOWN" });
+    test.records.admit.mockResolvedValueOnce({ status: "unresolved" });
+    await expect(test.capture(target)).rejects.toMatchObject({
+      code: "CAPTURE.DOWNLOAD_UNRESOLVED",
+    });
     expect(test.fetchPage).toHaveBeenCalledOnce();
     expect(test.records.complete).not.toHaveBeenCalled();
-    expect(test.records.fail).not.toHaveBeenCalled();
+    expect(test.records.fail).toHaveBeenCalledExactlyOnceWith(
+      { channel: "gnc", capture: target.capture },
+      "ARTIFACT.UPLOAD_UNKNOWN",
+    );
     expect(test.parseProduct).not.toHaveBeenCalled();
+  });
+
+  it.each(["intent", "publication", "read-back", "completion"])(
+    "ends the in-flight Swanson record on ARTIFACT.UNAVAILABLE during %s",
+    async (phase) => {
+      const test = setup("swanson");
+      const target = test.archive("producer");
+      const row = { state: "absent", causeCode: null as string | null };
+      const failure = artifactErrors.create("ARTIFACT.UNAVAILABLE");
+      test.records.admit.mockImplementation(async () => {
+        row.state = "in_flight";
+        return { status: "download" };
+      });
+      test.records.fail.mockImplementation(async (_request, code) => {
+        expect(row.state).toBe("in_flight");
+        row.state = "failed";
+        row.causeCode = code;
+      });
+      if (phase === "intent") {
+        vi.spyOn(target, "beginDownload").mockRejectedValue(failure);
+      }
+      if (phase === "publication") {
+        vi.spyOn(target, "save").mockRejectedValue(failure);
+      }
+      if (phase === "completion") {
+        test.records.complete.mockRejectedValue(failure);
+      }
+      if (phase === "read-back") {
+        test.remote.read.mockImplementation(async (key) => {
+          if (key.endsWith("original.html") && test.remote.data.has(key)) {
+            throw failure;
+          }
+          return test.remote.data.get(key) ?? null;
+        });
+      }
+      await expect(test.capture(target)).rejects.toBe(failure);
+      expect(row).toEqual({ state: "failed", causeCode: "ARTIFACT.UNAVAILABLE" });
+      expect(test.records.fail).toHaveBeenCalledExactlyOnceWith(
+        { channel: "swanson", capture: target.capture },
+        "ARTIFACT.UNAVAILABLE",
+      );
+      expect(test.fetchPage).toHaveBeenCalledTimes(phase === "intent" ? 0 : 1);
+      expect(test.parseProduct).not.toHaveBeenCalled();
+    },
+  );
+
+  it("retains a not-found sighting after ending its reservation as failed", async () => {
+    const test = setup();
+    test.fetchPage.mockRejectedValue(channelErrors.create("CAPTURE.NOT_FOUND"));
+    expect(await test.capture(test.archive("gone"))).toMatchObject({ status: "sighting" });
+    expect(test.records.fail).toHaveBeenCalledExactlyOnceWith(
+      { channel: "gnc", capture: test.archive("gone").capture },
+      "CAPTURE.NOT_FOUND",
+    );
+    expect(test.records.complete).not.toHaveBeenCalled();
   });
 });

@@ -2,6 +2,7 @@ import {
   appErrors,
   EvidenceCaptureInputSchema,
   EvidenceCaptureResultSchema,
+  EvidenceOriginalInputSchema,
   type EvidenceService,
 } from "@crawl-automation/app";
 import { procedure, router } from "../trpc.js";
@@ -14,6 +15,10 @@ declare module "../trpc.js" {
 }
 
 export const evidenceRouter = router({
+  original: procedure
+    .input(EvidenceOriginalInputSchema)
+    .query(({ ctx, input }) => ctx.originals.original(input)),
+
   capture: procedure
     .input(EvidenceCaptureInputSchema)
     .output(EvidenceCaptureResultSchema)

@@ -1,12 +1,10 @@
 import { configuredDtcSites } from "@crawl-automation/channel-dtc";
 import { pathAccessible } from "@crawl-automation/platform";
 import {
-  createEvidenceService,
   PostgresBrandStore,
   PostgresDeliveryJournal,
   PostgresDeliveryScan,
   PostgresResourceStore,
-  PostgresReviewStore,
   PostgresRunStore,
   TemporalWorkflowStarter,
   TemporalWorkflowTree,
@@ -18,13 +16,14 @@ import {
   DeliveryRunner,
   type FleetService,
   type EvidenceService,
+  type OriginalEvidenceService,
   type HistoryService,
   type ProductService,
   QueueService,
   type ListingStateService,
   type QueueDispatcher,
   ResourceService,
-  ReviewService,
+  type ReviewService,
   RunService,
 } from "@crawl-automation/app";
 import {
@@ -35,7 +34,6 @@ import {
   type Logger,
   type TemporalClient,
 } from "@crawl-automation/platform";
-import { ScraperApiPages } from "@crawl-automation/channels-core";
 import { asFunction, asValue, createContainer, InjectionMode, type AwilixContainer } from "awilix";
 import type { ApiConfig } from "./config.js";
 import { evidenceReaders } from "./evidence-readers.js";
@@ -43,8 +41,8 @@ import { brandScanParts, type BrandScanParts } from "./brand-scan-parts.js";
 import { runService } from "./run-parts.js";
 import { listingStateService, productRuns, queueDispatcher, queueService } from "./queue-parts.js";
 import { historyService, productService } from "./results-parts.js";
+import { evidenceService, originalEvidenceService, reviewService } from "./evidence-parts.js";
 import { fleetService } from "./routers/fleet-parts.js";
-import { channelRegistry } from "./resources/channel-registry.js";
 
 /** Everything the API is built from. Adapters are created once and shared. */
 export interface ApiParts {
@@ -65,6 +63,8 @@ export interface ApiParts {
   resources: ResourceService;
   fleet: FleetService;
   evidence: EvidenceService;
+  originals: OriginalEvidenceService;
+  storageReaders: ReturnType<typeof evidenceReaders> | null;
   listingStates: ListingStateService;
   brandScanParts: BrandScanParts;
   deliveryRunner: DeliveryRunner;
@@ -106,16 +106,10 @@ function registerAdapters(container: Parts): void {
     workflowTree: asFunction(workflows).singleton(),
     deliveryCoordinator: asFunction(deliveryCoordinator).singleton(),
     evidence: asFunction(evidenceService).singleton(),
-  });
-}
-
-/** Test evidence uses the same channel options as product capture, with one paid-request enforcement. */
-function evidenceService({ config }: ApiParts): EvidenceService {
-  return createEvidenceService({
-    ...config.evidence,
-    storage: config.storage,
-    channels: channelRegistry(configuredDtcSites(config.browser?.dtc)),
-    createPages: (client, settings) => new ScraperApiPages(client, settings),
+    originals: asFunction(originalEvidenceService).singleton(),
+    storageReaders: asFunction(({ config }: ApiParts) =>
+      config.storage ? evidenceReaders(config.storage) : null,
+    ).singleton(),
   });
 }
 
@@ -186,15 +180,6 @@ function registerLoops(container: Parts): void {
         }),
     ).singleton(),
   });
-}
-
-/** Reviews from the ledger; their evidence from R2 when the API has storage settings. */
-function reviewService(parts: ApiParts): ReviewService {
-  const reviews = new PostgresReviewStore(parts.database);
-  const storage = parts.config.storage;
-  return new ReviewService(
-    storage ? { reviews, evidence: evidenceReaders(storage).readers } : { reviews },
-  );
 }
 
 function deliveryCoordinator(parts: ApiParts): DeliveryCoordinator {

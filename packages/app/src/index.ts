@@ -2,6 +2,8 @@ export * from "./errors.js";
 export * from "./evidence/evidence-model.js";
 export * from "./evidence/ports.js";
 export * from "./evidence/evidence-service.js";
+export * from "./evidence/original-model.js";
+export * from "./evidence/original-service.js";
 export * from "./deployment/migration-ports.js";
 export * from "./deployment/migration-service.js";
 export * from "./delivery/ports.js";

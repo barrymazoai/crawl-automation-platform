@@ -12,6 +12,7 @@ import type { PageFetcher } from "./page-fetch.js";
 import { decodeHtml } from "./read-html.js";
 import { htmlCaptureErrors, type HtmlCaptureRecords } from "./html-capture-records.js";
 import type { HtmlCaptureRequest } from "./html-capture-model.js";
+import { recoverOriginal } from "./recover-original.js";
 
 export interface CapturedProduct {
   parsed: ParsedProduct;
@@ -108,7 +109,7 @@ export class HttpCapture {
     signal: AbortSignal,
   ): Promise<Download> {
     if (!this.records) {
-      return this.download(adapter, archive, signal);
+      return this.reserved({ adapter, archive, previous: [] }, signal);
     }
     const request = { channel: adapter.id, capture: archive.capture };
     const decision = await this.records.admit(request);
@@ -123,32 +124,36 @@ export class HttpCapture {
     if (decision.status === "unresolved") {
       throw channelErrors.create("CAPTURE.DOWNLOAD_UNRESOLVED");
     }
-    const recovered = await this.recover(archive, decision.previous ?? [], signal);
-    if (recovered) {
-      const page = await archive.reuse(recovered, signal);
-      await this.records.complete(request, recovered);
-      return { page };
-    }
-    return this.download(adapter, archive, signal);
+    return this.reserved({ adapter, archive, previous: decision.previous ?? [] }, signal);
   }
 
-  /** A stale in-flight record may already have an original in R2; inspect before paying. */
-  private async recover(
-    archive: OriginalHtmlArchive,
-    previous: HtmlCaptureRequest[],
+  /** Every failure after admission ends this reservation, including intent and publication failures. */
+  private async reserved(
+    target: {
+      adapter: ChannelAdapter;
+      archive: OriginalHtmlArchive;
+      previous: HtmlCaptureRequest[];
+    },
     signal: AbortSignal,
-  ) {
-    for (const request of previous) {
-      const original = await archive.inspectPrevious(request, signal);
-      if (original) {
-        await this.records?.complete(request, original);
-        const age = Date.now() - Date.parse(original.capturedAt);
-        if (age >= 0 && age < 24 * 60 * 60 * 1000) {
-          return original;
-        }
+  ): Promise<Download> {
+    const { adapter, archive, previous } = target;
+    const request = { channel: adapter.id, capture: archive.capture };
+    try {
+      const recovered = await recoverOriginal({ archive, records: this.records }, previous, signal);
+      if (recovered) {
+        const page = await archive.reuse(recovered, signal);
+        await this.records?.complete(request, recovered);
+        return { page };
       }
+      return await this.download(adapter, archive, signal);
+    } catch (error) {
+      await this.records?.fail(request, errorCodeOf(error));
+      const unlisted = notFoundSighting(error);
+      if (unlisted) {
+        return { sighting: unlisted };
+      }
+      throw error;
     }
-    return null;
   }
 
   /** Records the intent, downloads once and archives; a page that no longer exists is a `not_found` sighting. */
@@ -159,20 +164,7 @@ export class HttpCapture {
   ): Promise<Download> {
     await archive.beginDownload(signal);
     const request = { channel: adapter.id, url: archive.capture.url, policy: adapter.httpPolicy };
-    let page;
-    try {
-      page = await this.pages.fetchPage(request, signal);
-    } catch (error) {
-      await this.records?.fail(
-        { channel: adapter.id, capture: archive.capture },
-        errorCodeOf(error),
-      );
-      const unlisted = notFoundSighting(error);
-      if (unlisted) {
-        return { sighting: unlisted };
-      }
-      throw error;
-    }
+    const page = await this.pages.fetchPage(request, signal);
     const saved = await archive.save(page.bytes, page.fetchedVia, signal);
     await this.records?.complete(
       { channel: adapter.id, capture: archive.capture },

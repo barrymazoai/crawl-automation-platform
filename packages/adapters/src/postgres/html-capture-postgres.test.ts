@@ -4,6 +4,7 @@ import type { HtmlCaptureRequest, SavedHtmlOriginal } from "@crawl-automation/ap
 import type { Database } from "@crawl-automation/platform";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { PostgresHtmlCaptureRecords } from "./html-capture-records.js";
+import { PostgresHtmlCaptureReader } from "./html-capture-reader.js";
 
 interface TemporaryPostgres {
   database: Database;
@@ -263,9 +264,9 @@ describe.skipIf(!hasPostgres || process.env.V3_TEST_SKIP_POSTGRES === "1")(
       await expect(
         records.complete(producer, { ...saved, finalUrl: "https://example.com/elsewhere" }),
       ).rejects.toMatchObject({ code: "CAPTURE.RECORD_CONFLICT" });
-      await expect(records.fail(producer, "CAPTURE.NOT_FOUND")).rejects.toMatchObject({
-        code: "CAPTURE.RECORD_CONFLICT",
-      });
+      // A completion can commit even when its acknowledgement was lost; cleanup preserves it.
+      await records.fail(producer, "ARTIFACT.UNAVAILABLE");
+      expect(await records.admit(producer)).toEqual({ status: "reuse", original: saved });
     });
 
     it.each([
@@ -300,6 +301,63 @@ describe.skipIf(!hasPostgres || process.env.V3_TEST_SKIP_POSTGRES === "1")(
       await expect(records.complete(producer, original(producer))).rejects.toMatchObject({
         code: "CAPTURE.RECORD_CONFLICT",
       });
+    });
+
+    it("reads historical done operations, preserving a reused original's provenance", async () => {
+      const reader = new PostgresHtmlCaptureReader(postgres.database);
+      const producer = request();
+      const saved = await seedOriginal(producer, 25 * hour);
+      const consumer = next(producer);
+      await records.complete(consumer, saved);
+      const found = await reader.find({ operationId: consumer.capture.operationId });
+      expect(found).toEqual({ operationId: consumer.capture.operationId, original: saved });
+      expect(found?.original.capture.operationId).toBe(producer.capture.operationId);
+      expect(await reader.find({ operationId: "missing" })).toBeNull();
+    });
+
+    it("selects the latest done capture by time for the exact channel/listing/variant", async () => {
+      const reader = new PostgresHtmlCaptureReader(postgres.database);
+      const producer = request();
+      const { channel, capture } = producer;
+      const identity = { channel, listingId: capture.listingId };
+      const older = await seedOriginal(producer, 26 * hour);
+      const newest = next(producer);
+      const saved = await seedOriginal(newest, hour);
+      await records.complete(next(producer), older); // Recently recorded reuse is still older HTML.
+      const otherVariant = next(producer);
+      otherVariant.capture.variantId = "large";
+      const variant = await seedOriginal(otherVariant, 0);
+      await seedOriginal({ ...next(producer), channel: "swanson" }, 0);
+      await seedOriginal(request(), 0);
+      const unfinished = next(producer);
+      await seedInFlight(unfinished, 0);
+      const failed = next(producer);
+      await seedInFlight(failed, 0);
+      await records.fail(failed, "ARTIFACT.UNAVAILABLE");
+      const expected = { operationId: newest.capture.operationId, original: saved };
+      expect(await reader.find(identity)).toEqual(expected);
+      expect(await reader.find({ ...identity, variantId: null })).toEqual(expected);
+      expect(await reader.find({ ...identity, variantId: "large" })).toEqual({
+        operationId: otherVariant.capture.operationId,
+        original: variant,
+      });
+      expect(await reader.find({ ...identity, variantId: "missing" })).toBeNull();
+      expect(await reader.find({ operationId: unfinished.capture.operationId })).toBeNull();
+      expect(await reader.find({ operationId: failed.capture.operationId })).toBeNull();
+      expect(await reader.find({ channel, listingId: "missing" })).toBeNull();
+    });
+
+    it("finishes unavailable publication as failed without blocking a later run", async () => {
+      const producer = request();
+      await records.admit(producer);
+      await records.fail(producer, "ARTIFACT.UNAVAILABLE");
+      const rows = await postgres.database.query<{ state: string; cause_code: string }>(
+        "SELECT state,cause_code FROM html_capture WHERE operation_id=$1",
+        [producer.capture.operationId],
+      );
+      expect(rows).toEqual([{ state: "failed", cause_code: "ARTIFACT.UNAVAILABLE" }]);
+      expect(await records.admit(producer)).toEqual({ status: "unresolved" });
+      expect(await records.admit(next(producer))).toEqual({ status: "download" });
     });
   },
 );

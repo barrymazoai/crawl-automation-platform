@@ -28,4 +28,22 @@ describe("API composition root", () => {
       registry.get("amazon").productAddress("https://www.amazon.com/dp/B012345678"),
     ).toMatchObject({ listingId: "B012345678", variantId: null });
   });
+
+  it("wires archived originals without paid-capture configuration and refuses R2 writes", async () => {
+    const config = ApiConfigSchema.parse({ ...productionShaped, evidence: undefined });
+    const temporal = { client: {}, connection: {} } as unknown as TemporalClient;
+    const log = createLogger({ name: "original-test", level: "error" });
+    const { cradle } = assembleContainer({ config, temporal, log });
+    expect(cradle.originals).toBeDefined();
+    expect(cradle.storageReaders).not.toBeNull();
+    await expect(
+      cradle.storageReaders?.objects.create(
+        "forbidden.html",
+        Buffer.from("html"),
+        "text/html",
+        new AbortController().signal,
+      ),
+    ).rejects.toMatchObject({ code: "API.READ_ONLY_STORAGE" });
+    cradle.storageReaders?.close();
+  });
 });
