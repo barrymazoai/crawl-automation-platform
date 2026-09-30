@@ -86,7 +86,7 @@ function rating(value: unknown): string | null {
   return decimal(value) ?? decimal(stars);
 }
 
-/** The store a channel's prices belong to (Whole Foods: `wholefoods-store:10259`), when the page names one. */
+/** The store a channel's prices belong to, when the page names one. */
 function storeOf(context: unknown): Record<string, string> | null {
   const entries = Array.isArray(context) ? context.filter((item) => typeof item === "string") : [];
   const id = entries.find((item) => /^[a-z]+-store:/u.test(item));

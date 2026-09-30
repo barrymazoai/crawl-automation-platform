@@ -34,7 +34,6 @@ const hasPostgres = (() => {
     return false;
   }
 })();
-
 describe.skipIf(!hasPostgres || process.env.V3_TEST_SKIP_POSTGRES === "1")(
   "migrations against isolated PostgreSQL",
   () => {
@@ -47,7 +46,6 @@ describe.skipIf(!hasPostgres || process.env.V3_TEST_SKIP_POSTGRES === "1")(
       Object.entries(process.env).filter(([key]) => !key.startsWith("PG")),
     );
     const nativeOptions = { env: environment, timeout: 60_000 };
-
     beforeAll(async () => {
       root = await mkdtemp(join(tmpdir(), "v3-migrate-"));
       const socket = join(root, "socket");
@@ -134,11 +132,9 @@ describe.skipIf(!hasPostgres || process.env.V3_TEST_SKIP_POSTGRES === "1")(
         logger,
       );
     }
-
     async function query(sql: string, values?: readonly unknown[]) {
       return { rows: await database.query<Record<string, unknown>>(sql, values) };
     }
-
     function service(migrations = catalog, pgDump?: string) {
       return new MigrationService(
         new PostgresMigrationRepository({
@@ -149,14 +145,12 @@ describe.skipIf(!hasPostgres || process.env.V3_TEST_SKIP_POSTGRES === "1")(
         }),
       );
     }
-
     function request() {
       return {
         confirmation: `${connection.host}:${connection.port}/${connection.database}`,
         backupDirectory: root,
       };
     }
-
     /** Build the exact legacy two-column rows independently of the new runner. */
     async function seedLegacy(count: number) {
       await query(
@@ -171,15 +165,12 @@ describe.skipIf(!hasPostgres || process.env.V3_TEST_SKIP_POSTGRES === "1")(
         ]);
       }
     }
-
     async function history() {
       return (await query("SELECT name,sha256 FROM public.v3_local_migration ORDER BY name")).rows;
     }
-
     async function backups() {
       return (await readdir(root)).filter((name) => name.startsWith("v3-backup-"));
     }
-
     function sqlMigration(name: string, body: string): SqlMigration {
       const sql = `BEGIN; ${body} COMMIT;`;
       return {
@@ -189,17 +180,36 @@ describe.skipIf(!hasPostgres || process.env.V3_TEST_SKIP_POSTGRES === "1")(
         sha256: createHash("sha256").update(sql).digest("hex"),
       };
     }
-
-    it("adopts existing 001–031 history with zero SQL replay or backup", async () => {
+    it("applies only 032 after existing 001–031 history, then does no replay or backup", async () => {
       await seedLegacy(31);
       await query("INSERT INTO brand(name) VALUES ('Existing brand')");
       const original = await history();
       const dumps = await backups();
       const result = await service().migrate(request());
-      expect(result.before.applied).toHaveLength(31);
-      expect(result.backup).toBeNull();
-      expect(await history()).toEqual(original);
-      expect(await backups()).toEqual(dumps);
+      expect(result.before).toEqual({
+        applied: original.map((row) => row.name),
+        pending: ["032_brand_scan_amazon.sql"],
+      });
+      expect(result.after).toEqual({
+        applied: [...result.before.applied, "032_brand_scan_amazon.sql"],
+        pending: [],
+      });
+      const updated = [
+        ...original,
+        {
+          name: "032_brand_scan_amazon.sql",
+          sha256: "65843e727968a5898f77f58850fe17bac8ca4d8648a08c76f3daf7cb5189566b",
+        },
+      ];
+      expect(await history()).toEqual(updated);
+      expect(result.backup).not.toBeNull();
+      const constraint = await query(`SELECT pg_get_constraintdef(oid) AS definition
+        FROM pg_constraint WHERE conname = 'brand_scan_channel_check'`);
+      expect(constraint.rows[0]?.definition).toContain("'amazon'");
+      const repeated = await service().migrate(request());
+      expect(repeated).toEqual({ before: result.after, after: result.after, backup: null });
+      expect(await history()).toEqual(updated);
+      expect(await backups()).toHaveLength(dumps.length + 1);
       expect((await query("SELECT name FROM brand")).rows).toEqual([{ name: "Existing brand" }]);
     });
 
@@ -210,7 +220,7 @@ describe.skipIf(!hasPostgres || process.env.V3_TEST_SKIP_POSTGRES === "1")(
       const dumps = await backups();
       const result = await service().migrate(request());
       expect(result.before.applied).toHaveLength(2);
-      expect(result.after.applied).toHaveLength(31);
+      expect(result.after.applied).toHaveLength(32);
       expect((await history()).slice(0, 2)).toEqual(original);
       expect(await backups()).toHaveLength(dumps.length + 1);
       const directory = required(result.backup);
@@ -355,10 +365,10 @@ describe.skipIf(!hasPostgres || process.env.V3_TEST_SKIP_POSTGRES === "1")(
       ]);
       expect(
         results.map((result) => result.before.applied.length).sort((left, right) => left - right),
-      ).toEqual([2, 31]);
+      ).toEqual([2, 32]);
       expect(results.filter((result) => result.backup)).toHaveLength(1);
       expect(await backups()).toHaveLength(dumps.length + 1);
-      expect(await history()).toHaveLength(31);
+      expect(await history()).toHaveLength(32);
     });
 
     it("read-only status and dry run create no ledger or backup in an empty database", async () => {
@@ -369,7 +379,7 @@ describe.skipIf(!hasPostgres || process.env.V3_TEST_SKIP_POSTGRES === "1")(
         confirmation: "ignored",
         dryRun: true,
       });
-      expect(result.before.pending).toHaveLength(31);
+      expect(result.before.pending).toHaveLength(32);
       expect(result.after).toEqual(result.before);
       expect(await backups()).toEqual(dumps);
       expect(

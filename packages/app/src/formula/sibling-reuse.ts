@@ -3,7 +3,7 @@ import { checkSiblingLabel, hashString } from "@crawl-automation/processing";
 import { KeywordResultSchema } from "@crawl-automation/v3-contracts";
 import { SiblingReuseRequestSchema, type SiblingReuseRequest } from "@crawl-automation/workflows";
 import { formulaChannels } from "./formula-lookup.js";
-import type { FormulaIndex, FormulaLinks, LabelImageText } from "./ports.js";
+import type { FormulaFamilies, FormulaIndex, FormulaLinks, LabelImageText } from "./ports.js";
 
 export type SiblingReuseResult =
   | {
@@ -41,6 +41,7 @@ export class SiblingFormulaReuse {
   constructor(
     private readonly deps: {
       index: FormulaIndex;
+      families: FormulaFamilies;
       links: FormulaLinks;
       /** Reads the facts image's OCR text; without it a label only in images is extracted in full. */
       labelImages?: LabelImageText;
@@ -73,7 +74,7 @@ export class SiblingFormulaReuse {
     request: SiblingReuseRequest,
     family: ProductFamily,
   ): Promise<Found | null> {
-    const channels = formulaChannels(request.channel);
+    const channels = formulaChannels(request.channel, this.deps.families);
     for (const member of family.members) {
       const { listingId, variantId } = member;
       const formula = await this.deps.index.findForMember({ channels, listingId, variantId });

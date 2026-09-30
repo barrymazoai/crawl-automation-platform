@@ -102,16 +102,13 @@ describe("evidence composition with real channel hooks", () => {
     expect(["CHANNEL.URL_REJECTED", "GNC.URL_REJECTED"]).toContain(code);
   });
 
-  it.each([input, { channel: "swanson", url: "https://www.swansonvitamins.com/p/example" }])(
-    "refuses a valid $channel page until platform can guarantee one paid request",
-    async (body) => {
-      const response = await appWith({ evidence: configuredEvidence() }).request(
-        "/trpc/evidence.capture",
-        post(body),
-      );
-      expect((await response.json()).error.data.app.code).toBe(
-        "EVIDENCE.SINGLE_REQUEST_UNAVAILABLE",
-      );
-    },
-  );
+  it("refuses another site's page for the channel before any paid request", async () => {
+    const response = await appWith({ evidence: configuredEvidence() }).request(
+      "/trpc/evidence.capture",
+      post({ channel: "swanson", url: "https://www.gnc.com/example/877080.html" }),
+    );
+    const body = await response.json();
+    expect(response.status).toBeGreaterThanOrEqual(400);
+    expect(body.error.data.app.code).not.toBe("EVIDENCE.SINGLE_REQUEST_UNAVAILABLE");
+  });
 });

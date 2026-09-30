@@ -28,7 +28,11 @@ export async function ProductPipelineWorkflow(raw: unknown): Promise<unknown> {
   );
   try {
     // Pages only a browser can read have no formula planner: their formula comes from the formula family.
-    const browser = input.channel === "wholefoods";
+    // Keep the recorded route when old inputs have no capability, or when replay predates the marker.
+    const browser =
+      input.capture !== undefined && patched("capture-mode-v1")
+        ? input.capture === "browser"
+        : input.channel === "wholefoods";
     return await (browser ? collectInBrowser(input, pipeline) : collect(input, pipeline));
   } catch (error) {
     if (isCancellation(error)) {

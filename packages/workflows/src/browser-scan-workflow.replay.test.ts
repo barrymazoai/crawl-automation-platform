@@ -18,13 +18,20 @@ afterAll(async () => {
   await environment?.teardown();
 });
 
-// BrowserScanWorkflow has no patch points or versioned callees; both terminal outcomes are replayed.
-it.each([false, true])(
-  "replays BrowserScanWorkflow (activity fails: %s)",
-  async (fails) => {
+// Widening the schema leaves old payloads intact; replay both legacy and explicit-capability inputs.
+it.each(
+  [false, true].flatMap((fails) => [
+    { fails, channel: "wholefoods", capture: undefined },
+    { fails, channel: "wholefoods", capture: "browser" },
+    { fails, channel: "dtc", capture: "browser" },
+  ]),
+)(
+  "replays BrowserScanWorkflow ($channel, capture: $capture, fails: $fails)",
+  async ({ fails, channel, capture }) => {
     const queue = `scan-replay-${randomUUID()}`;
     const input = {
-      channel: "wholefoods",
+      channel,
+      ...(capture ? { capture } : {}),
       scanId: "scan-1",
       sourceUrl: "https://example.com/brand",
     };

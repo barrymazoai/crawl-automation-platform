@@ -3,17 +3,33 @@ import { describe, expect, it, vi } from "vitest";
 import { singleRequestClient } from "./single-request-client.js";
 
 describe("one paid request capability", () => {
-  it("refuses the current redirect-following client before any network request", () => {
+  it("binds the real client's single-request method to the page-client interface", async () => {
     const client = new ScraperApiClient({
       apiKey: "test-key-0000",
       allowedOrigins: ["https://page.test"],
     });
     const get = vi.spyOn(client, "get");
-    expect(() => singleRequestClient(client)).toThrow(
-      expect.objectContaining({
-        code: "EVIDENCE.SINGLE_REQUEST_UNAVAILABLE",
-      }),
-    );
+    const page = {
+      status: 200,
+      url: "https://page.test/product",
+      contentType: "text/html",
+      contentEncoding: null,
+      bytes: Buffer.from("<html>page</html>"),
+      creditCost: 1,
+    };
+    const getOnce = vi.spyOn(client, "getOnce").mockResolvedValue(page);
+    const request = {
+      target: page.url,
+      options: {},
+      maxBytes: 1024,
+      tooLarge: () => scraperApiErrors.create("SCRAPERAPI.PROVIDER_FAILURE"),
+    };
+    const signal = new AbortController().signal;
+    const single = singleRequestClient(client);
+    await expect(single.get(request, signal)).resolves.toBe(page);
+    expect(single.provider).toBe(client.provider);
+    expect(getOnce).toHaveBeenCalledExactlyOnceWith(request, signal);
+    expect(getOnce.mock.contexts).toEqual([client]);
     expect(get).not.toHaveBeenCalled();
   });
 

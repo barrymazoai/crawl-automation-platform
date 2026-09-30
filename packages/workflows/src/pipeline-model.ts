@@ -23,6 +23,8 @@ export const ProductPipelineInputSchema = z.strictObject({
   /** The run this product belongs to (a product run's ID, or a brand run's catalog ID). */
   runId: z.uuid(),
   channel: PipelineChannelSchema,
+  /** Selected from the adapter's captureModes; absent in workflows started before capability routing. */
+  capture: z.enum(["http", "browser"]).optional(),
   url: z.url().max(4096),
   brandId: z.uuid(),
   sourceId: z.uuid(),
@@ -35,7 +37,7 @@ export const ProductPipelineInputSchema = z.strictObject({
     plan: z.string().min(1).max(200),
     /** Where the Label workflow runs. */
     label: z.string().min(1).max(200),
-    /** Pages only a browser can read (Whole Foods), on the machine that runs Ego. */
+    /** Pages captured in the browser, on the machine that runs Ego. */
     browser: z.string().min(1).max(200).optional(),
   }),
   /** Permit gates; `captureProduct` must take the capture lane. */

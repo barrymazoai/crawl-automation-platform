@@ -59,6 +59,7 @@ function evidenceOf(product: WholeFoodsProduct): ChannelProductEvidence {
 export function wholeFoodsAdapter(store: WholeFoodsStore): ChannelAdapter<WholeFoodsProduct> {
   return {
     id: "wholefoods",
+    formulaFamily: "amazon-asin",
     captureModes: ["browser"],
     httpPolicy: WHOLE_FOODS_PAGE_POLICY,
     productAddress: wholeFoodsProductAddress,

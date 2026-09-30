@@ -1,6 +1,14 @@
 import { defineErrors } from "@crawl-automation/platform";
 
 export const amazonErrors = defineErrors({
+  "AMAZON.SCAN_FILTER_LOST": {
+    category: "SOURCE",
+    message: "The search page no longer has the requested Brand filter selected.",
+  },
+  "AMAZON.SCAN_UNVERIFIED": {
+    category: "SOURCE",
+    message: "The response does not contain an Amazon search result grid.",
+  },
   "AMAZON.PRODUCT_UNVERIFIED": {
     category: "SOURCE",
     message: "The page does not identify one Amazon product with a title.",

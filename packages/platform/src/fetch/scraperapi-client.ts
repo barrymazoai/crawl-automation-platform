@@ -61,14 +61,23 @@ export class ScraperApiClient {
     this.#dispatcher = transport.dispatcher ?? new Agent();
   }
 
-  async get(page: ScraperApiRequest, outer: AbortSignal): Promise<ScraperApiPage> {
+  get(page: ScraperApiRequest, outer: AbortSignal): Promise<ScraperApiPage> {
+    return this.fetch(page, outer, MAX_HOPS);
+  }
+
+  /** One provider submission, with follow_redirect=false; any redirect is refused without another request. */
+  getOnce(page: ScraperApiRequest, outer: AbortSignal): Promise<ScraperApiPage> {
+    return this.fetch(page, outer, 0);
+  }
+
+  private async fetch(page: ScraperApiRequest, outer: AbortSignal, maxHops: number) {
     const options = parseSettings(ScraperApiOptionsSchema, page.options);
     let target = allowedTarget(page.target, this.#access.allowedOrigins);
     outer.throwIfAborted();
     const signal = AbortSignal.any([outer, AbortSignal.timeout(TIMEOUT_MS)]);
     try {
       let answer = await this.send(target, options, signal);
-      for (let hop = 0; hop < MAX_HOPS && isRedirect(answer.statusCode); hop++) {
+      for (let hop = 0; hop < maxHops && isRedirect(answer.statusCode); hop++) {
         const next = allowedHop(header(answer, "location"), target, this.#access.allowedOrigins);
         if (!next) {
           break;

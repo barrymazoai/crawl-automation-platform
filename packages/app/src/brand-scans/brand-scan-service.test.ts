@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 import { BrandSourceImport, type BrandSourceImportStore } from "../brands/source-import.js";
 import { BrandScanService } from "./brand-scan-service.js";
 import type { BrandScanStore } from "./ports.js";
-import type { ScanSource } from "./scan-model.js";
+import { RequestScansSchema, ScanListQuerySchema, type ScanSource } from "./scan-model.js";
 
 const log = createLogger({
   name: "test",
@@ -50,7 +50,7 @@ const source = (overrides: Partial<ScanSource> = {}): ScanSource => ({
   ...overrides,
 });
 
-function service(sources: ScanSource[]) {
+function service(sources: ScanSource[], adapters = registry) {
   const store = {
     sources: vi.fn(async (ids: readonly string[]) =>
       sources.filter((item) => ids.includes(item.sourceId)),
@@ -60,13 +60,28 @@ function service(sources: ScanSource[]) {
   } as unknown as BrandScanStore & { request: ReturnType<typeof vi.fn> };
   return {
     store,
-    scans: new BrandScanService({ store, registry, browsers: {}, log, enabled: true }),
+    scans: new BrandScanService({ store, registry: adapters, browsers: {}, log, enabled: true }),
   };
 }
 
 const requestId = "33333333-3333-4333-8333-333333333333";
 
 describe("brand scan requests", () => {
+  it("accepts Amazon requests and listing filters through the channel's configured reader", async () => {
+    expect(RequestScansSchema.parse({ requestId, channel: "amazon" }).channel).toBe("amazon");
+    expect(ScanListQuerySchema.parse({ channel: "amazon" }).channel).toBe("amazon");
+    const amazon: ChannelAdapter = { ...gnc, id: "amazon" };
+    const { scans, store } = service(
+      [source({ channel: "amazon" })],
+      new ChannelRegistry([amazon]),
+    );
+    await scans.request({ requestId, channel: "amazon" });
+    expect(store.enabledSources).toHaveBeenCalledWith("amazon");
+    expect(store.request).toHaveBeenCalledWith(requestId, [
+      expect.objectContaining({ channel: "amazon", url: `${ORIGIN}/brands/nordic-naturals/` }),
+    ]);
+  });
+
   it("scans every enabled source of a channel, each URL in the reader's own form", async () => {
     const { store, scans } = service([
       source(),

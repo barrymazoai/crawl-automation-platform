@@ -1,25 +1,36 @@
+import type { ChannelRegistry } from "@crawl-automation/channels-core";
 import type { FormulaKey } from "@crawl-automation/workflows";
-import type { FormulaIndex } from "./ports.js";
+import type { FormulaFamilies, FormulaIndex } from "./ports.js";
 
-/**
- * Channels whose listings share one product ID space for formulas. Whole Foods sells Amazon products under the same
- * ASIN, so a formula collected on either serves both. This is for the formula only: the 24-hour skip and the
- * metrics stay per channel.
- */
-const FORMULA_FAMILIES: readonly (readonly string[])[] = [["amazon", "wholefoods"]];
+/** Channels share formulas only when their adapters declare the same listing-ID namespace. */
+export function formulaFamilies(registry: ChannelRegistry): FormulaFamilies {
+  return {
+    channels(channel) {
+      const registered = registry.channels();
+      const owner = registered.find((id) => id === channel);
+      const family = owner ? registry.get(owner).formulaFamily : undefined;
+      return family
+        ? registered.filter((id) => registry.get(id).formulaFamily === family).sort()
+        : [channel];
+    },
+  };
+}
 
-/** The channels whose formulas this channel's products may use: its own, plus its formula family. */
-export function formulaChannels(channel: string): string[] {
-  const family = FORMULA_FAMILIES.find((members) => members.includes(channel));
-  return family ? [...family] : [channel];
+/** The channels whose formulas this channel's products may use, as declared by the adapters. */
+export function formulaChannels(channel: string, families: FormulaFamilies): string[] {
+  return families.channels(channel);
 }
 
 /** Formula once: the product's own formula (or one linked to it), across its formula family. */
 export class FormulaLookup {
-  constructor(private readonly index: Pick<FormulaIndex, "findKnown">) {}
+  constructor(
+    private readonly index: Pick<FormulaIndex, "findKnown">,
+    private readonly families: FormulaFamilies,
+  ) {}
 
   findKnown(key: FormulaKey): Promise<{ operationId: string } | null> {
     const { listingId, variantId } = key;
-    return this.index.findKnown({ channels: formulaChannels(key.channel), listingId, variantId });
+    const channels = formulaChannels(key.channel, this.families);
+    return this.index.findKnown({ channels, listingId, variantId });
   }
 }

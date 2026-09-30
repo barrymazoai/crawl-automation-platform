@@ -46,11 +46,11 @@ export class PostgresChannelQueueStore implements QueueStore {
     return this.addList({ ...list, channel: "amazon" });
   }
 
-  /** The brand's Amazon source (its enabled amazon.com root first), or null when the brand has none. */
+  /** The brand's source for the formula request, preferring enabled entries; no particular URL is required. */
   async amazonSourceOf(brandId: string): Promise<string | null> {
     const rows = await this.database.query<{ id: string }>(
       `SELECT id FROM brand_source WHERE brand_id = $1 AND channel = 'amazon'
-       ORDER BY enabled DESC, (url = 'https://www.amazon.com/') DESC, created_at, id LIMIT 1`,
+       ORDER BY enabled DESC, created_at, id LIMIT 1`,
       [brandId],
     );
     return rows[0]?.id ?? null;

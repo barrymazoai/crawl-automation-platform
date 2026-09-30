@@ -3,6 +3,9 @@
 `@crawl-automation/channel-amazon` implements `ChannelAdapter` for Amazon US product pages.
 The adapter is not registered in the worker or API yet. It performs no network or model calls.
 
+R18 adds the search/brand-page `BrandScanReader`, application queue bridge and migration.
+See [brand scan implementation and integration notes](BRAND_SCAN.md).
+
 ## Files
 
 - `package.json`, `tsconfig.json`: workspace package and strict TypeScript configuration.

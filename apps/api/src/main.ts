@@ -17,6 +17,7 @@ async function main(): Promise<void> {
   const { runs, queue, brands, reviews, products, history, resources, fleet } = container.cradle;
   const { brandScans, brandSources, runner: brandScanRunner } = container.cradle.brandScanParts;
   const context = {
+    evidence: container.cradle.evidence,
     runs,
     queue,
     brands,

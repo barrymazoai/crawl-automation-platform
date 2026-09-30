@@ -8,6 +8,8 @@ import type { BrandScanStore } from "./ports.js";
 import type { BrandListing } from "./scan-listing.js";
 import { readListing, type ScanReaders } from "./scan-readers.js";
 import type { ScanChannel, ScanRecord, ScanResult } from "./scan-model.js";
+import type { AmazonScanQueue } from "./amazon-scan-queue.js";
+import { appErrors } from "../errors.js";
 
 export const BrandScanRunnerSettingsSchema = z.strictObject({
   intervalMs: z.number().int().min(500).max(60_000).default(5_000),
@@ -19,6 +21,7 @@ export const BrandScanRunnerSettingsSchema = z.strictObject({
 export type BrandScanRunnerSettings = z.infer<typeof BrandScanRunnerSettingsSchema>;
 
 export interface BrandScanRunnerDeps extends ScanReaders {
+  amazonQueue?: AmazonScanQueue;
   store: BrandScanStore;
   queue: Pick<QueueService, "add">;
   listings: Pick<ListingStateService, "requestRevisits">;
@@ -35,7 +38,7 @@ const toQueued =
   });
 
 /**
- * Runs requested brand scans: reads each brand's listing through ScraperAPI, puts ALL its products into the shared
+ * Runs requested brand scans: reads each brand's listing through ScraperAPI, puts ALL its products into its
  * queue (formula-once decides what is new), and after a full scan queues a direct revisit of every known listing
  * the brand no longer lists. Absence alone is never recorded as a sighting.
  */
@@ -87,9 +90,12 @@ export class BrandScanRunner {
   }
 
   private async scan(scan: ScanRecord, signal: AbortSignal): Promise<ScanResult> {
+    const amazon = scan.source.channel === "amazon" ? this.amazonQueue() : null;
     const listing = await readListing(this.deps, scan, signal);
     // Known: queued by an earlier list of this source (the scan's own list is excluded).
-    const known = await this.deps.store.knownListings(scan.source, scan.scanId);
+    const known = amazon
+      ? await amazon.knownListings(scan)
+      : await this.deps.store.knownListings(scan.source, scan.scanId);
     const queued = await this.queueAll(scan, listing);
     const counts = compare(listing, known);
     const missing = listing.full ? await this.revisitMissing(scan, counts.missing) : 0;
@@ -101,6 +107,7 @@ export class BrandScanRunner {
       unresolvedFamilies: listing.unresolvedFamilies,
       statedTotal: listing.pages.at(-1)?.statedTotal ?? null,
       full: listing.full,
+      capped: listing.capped ?? false,
       newListings: counts.newListings,
       knownListings: counts.knownListings,
       missing,
@@ -110,12 +117,15 @@ export class BrandScanRunner {
     };
   }
 
-  /** Every listed product goes into the shared queue in one list; the scan's ID makes a rerun add nothing. */
+  /** Every listed product goes into its queue; the scan's ID makes a rerun add nothing. */
   private async queueAll(scan: ScanRecord, listing: BrandListing): Promise<number> {
     if (listing.products.length === 0) {
       return 0;
     }
     const channel = scan.source.channel as ScanChannel;
+    if (channel === "amazon") {
+      return (await this.amazonQueue().add(scan, listing.products, scan.scanId)).added;
+    }
     const products = listing.products.map(toQueued(scan));
     const label = `brand scan: ${scan.source.brandName}`.slice(0, 200);
     const { added } = await this.deps.queue.add({ channel, batchId: scan.scanId, label, products });
@@ -127,6 +137,10 @@ export class BrandScanRunner {
     if (missing.length === 0) {
       return 0;
     }
+    if (scan.source.channel === "amazon") {
+      await this.amazonQueue().add(scan, missing, scan.revisitBatchId);
+      return missing.length;
+    }
     await this.deps.listings.requestRevisits({
       channel: scan.source.channel,
       scope: "full",
@@ -135,6 +149,15 @@ export class BrandScanRunner {
       listings: missing,
     });
     return missing.length;
+  }
+
+  private amazonQueue(): AmazonScanQueue {
+    if (!this.deps.amazonQueue) {
+      throw appErrors.create("BRAND_SCAN.NOT_CONFIGURED", {
+        details: { component: "amazonQueue" },
+      });
+    }
+    return this.deps.amazonQueue;
   }
 }
 
@@ -162,6 +185,7 @@ function emptyResult(): ScanResult {
     unresolvedFamilies: 0,
     statedTotal: null,
     full: false,
+    capped: false,
     newListings: null,
     knownListings: null,
     missing: 0,

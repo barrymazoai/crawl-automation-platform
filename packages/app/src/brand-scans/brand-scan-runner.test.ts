@@ -12,6 +12,7 @@ import type { AddProducts, AddToQueue, QueuedProduct } from "../queue/queue-mode
 import { BrandScanRunner } from "./brand-scan-runner.js";
 import type { BrandScanStore, BrowserBrandScanners, ListingPageReader } from "./ports.js";
 import type { ScanRecord, ScanResult } from "./scan-model.js";
+import type { AmazonScanQueue } from "./amazon-scan-queue.js";
 
 const ORIGIN = "https://shop.example";
 const product = (id: string, kind: ListedProduct["kind"] = "product"): ListedProduct => ({
@@ -31,18 +32,25 @@ function reader(options: { full?: boolean; maxPages?: number } = {}): BrandScanR
     maxPages: options.maxPages ?? 5,
     maxBytes: 1_000_000,
     parsePage: ({ body }) => {
-      const { ids, next } = JSON.parse(body) as { ids: string[]; next: number | null };
+      const { ids, next, capped } = JSON.parse(body) as {
+        ids: string[];
+        next: number | null;
+        capped?: boolean;
+      };
       const products = ids.map((id) => product(id, id.startsWith("fam-") ? "family" : "product"));
-      return { products, cards: ids.length, nextPage: next, statedTotal: null };
+      return { products, cards: ids.length, nextPage: next, statedTotal: null, capped };
     },
     complete: () => options.full ?? true,
     familyMembers: (page) => (page.html ? page.html.split(",").map((id) => product(id)) : []),
   };
 }
 
-function adapter(scanReader: BrandScanReader): ChannelAdapter {
+function adapter(
+  scanReader: BrandScanReader,
+  channel: ChannelAdapter["id"] = "gnc",
+): ChannelAdapter {
   return {
-    id: "gnc",
+    id: channel,
     captureModes: ["http"],
     httpPolicy: { origins: [ORIGIN], maxBytes: 1_000_000, timeoutMs: 1_000 },
     brandScan: scanReader,
@@ -77,6 +85,7 @@ function setup(input: {
   known?: string[];
   scanReader?: BrandScanReader;
   browsers?: BrowserBrandScanners;
+  channel?: ChannelAdapter["id"];
 }) {
   const finished: ScanResult[] = [];
   const known: QueuedProduct[] = (input.known ?? []).map((id) => ({
@@ -86,7 +95,12 @@ function setup(input: {
     variantId: null,
   }));
   const store = {
-    claim: vi.fn(async () => [scan]),
+    claim: vi.fn(async () => [
+      {
+        ...scan,
+        source: { ...scan.source, channel: input.channel ?? "gnc" },
+      },
+    ]),
     finish: vi.fn(async (_scanId: string, result: ScanResult) => void finished.push(result)),
     knownListings: vi.fn(async () => known),
   } as unknown as BrandScanStore;
@@ -112,19 +126,113 @@ function setup(input: {
     }),
   };
   const listings = { requestRevisits: vi.fn(async () => ({ queued: 1 })) };
-  const registry = new ChannelRegistry([adapter(input.scanReader ?? reader())]);
+  const registry = new ChannelRegistry([adapter(input.scanReader ?? reader(), input.channel)]);
   const log = createLogger({
     name: "test",
     destination: new Writable({ write: (_c, _e, done) => done() }),
   });
   const browsers = input.browsers ?? {};
-  const runner = new BrandScanRunner({ store, pages, registry, browsers, queue, listings, log });
-  return { runner, finished, queue, lists, listings, pages, store };
+  const amazonQueue: AmazonScanQueue = {
+    knownListings: vi.fn(async () => known),
+    add: vi.fn(async () => ({ added: 1 })),
+  };
+  const deps = { store, pages, registry, browsers, queue, listings, log, amazonQueue };
+  const runner = new BrandScanRunner(deps);
+  return { runner, finished, queue, lists, listings, pages, store, amazonQueue, deps };
 }
 
 const signal = () => new AbortController().signal;
 
 describe("brand scan runner", () => {
+  it("queues all Amazon scan products once, retains capped=true and never requests missing revisits", async () => {
+    const bodies = Object.fromEntries(
+      Array.from({ length: 7 }, (_, index) => [
+        `page-${index + 1}`,
+        JSON.stringify({
+          ids: ["B0016B5U20", `B00000000${index}`],
+          next: index === 6 ? null : index + 2,
+          capped: index === 6,
+        }),
+      ]),
+    );
+    const fixture = setup({
+      bodies,
+      known: ["B0016B5U20", "B999999999"],
+      channel: "amazon",
+      // The application's cap guard remains conservative even if a reader claims completeness.
+      scanReader: reader({ maxPages: 7, full: true }),
+    });
+    await fixture.runner.tick(signal());
+    expect(fixture.pages.read).toHaveBeenCalledTimes(7);
+    expect(fixture.queue.add).not.toHaveBeenCalled();
+    expect(fixture.amazonQueue.add).toHaveBeenCalledTimes(1);
+    const queued = vi.mocked(fixture.amazonQueue.add).mock.calls[0];
+    expect(queued?.[0].source.channel).toBe("amazon");
+    expect(queued?.[1]).toHaveLength(8);
+    expect(queued?.[2]).toBe(scan.scanId);
+    expect(fixture.finished[0]).toMatchObject({
+      state: "partial",
+      full: false,
+      capped: true,
+      pages: 7,
+      products: 8,
+      knownListings: 1,
+      newListings: 7,
+      missing: 0,
+      credits: 7,
+    });
+    expect(fixture.listings.requestRevisits).not.toHaveBeenCalled();
+  });
+
+  it("stops an Amazon scan on an empty page and preserves earlier products", async () => {
+    const fixture = setup({
+      channel: "amazon",
+      scanReader: reader({ full: false }),
+      bodies: {
+        "page-1": JSON.stringify({ ids: ["B0016B5U20"], next: 2 }),
+        "page-2": JSON.stringify({ ids: [], next: 3 }),
+      },
+    });
+    await fixture.runner.tick(signal());
+    expect(fixture.pages.read).toHaveBeenCalledTimes(2);
+    expect(fixture.finished[0]).toMatchObject({
+      pages: 2,
+      products: 1,
+      full: false,
+      capped: false,
+    });
+    expect(vi.mocked(fixture.amazonQueue.add).mock.calls[0]?.[1][0]?.listingId).toBe("B0016B5U20");
+    expect(fixture.listings.requestRevisits).not.toHaveBeenCalled();
+  });
+
+  it("queues missing Amazon products through the same Amazon bridge only after a full scan", async () => {
+    const fixture = setup({
+      channel: "amazon",
+      known: ["B999999999"],
+      bodies: { "page-1": JSON.stringify({ ids: ["B0016B5U20"], next: null }) },
+    });
+    await fixture.runner.tick(signal());
+    expect(fixture.amazonQueue.add).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(fixture.amazonQueue.add).mock.calls[1]).toEqual([
+      expect.any(Object),
+      [expect.objectContaining({ listingId: "B999999999" })],
+      scan.revisitBatchId,
+    ]);
+    expect(fixture.finished[0]).toMatchObject({ full: true, capped: false, missing: 1 });
+    expect(fixture.listings.requestRevisits).not.toHaveBeenCalled();
+  });
+
+  it("fails before any paid page read if the Amazon queue bridge is not configured", async () => {
+    const fixture = setup({ channel: "amazon", bodies: {} });
+    const { amazonQueue: _amazon, ...deps } = fixture.deps;
+    await new BrandScanRunner(deps).tick(signal());
+    expect(fixture.pages.read).not.toHaveBeenCalled();
+    expect(fixture.finished[0]).toMatchObject({
+      state: "review",
+      code: "BRAND_SCAN.NOT_CONFIGURED",
+    });
+  });
+
   it("queues every listed product in one list, and revisits known listings a full scan no longer shows", async () => {
     const bodies = {
       "page-1": JSON.stringify({ ids: ["100001", "100002"], next: 2 }),

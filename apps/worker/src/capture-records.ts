@@ -1,6 +1,6 @@
 import { PostgresListingStates, PostgresProductHistory } from "@crawl-automation/adapters";
-import { MetricsHistory, recordSighting } from "@crawl-automation/app";
-import type { CapturedPage } from "@crawl-automation/channels-core";
+import { listingIdentityResolver, MetricsHistory, recordSighting } from "@crawl-automation/app";
+import type { CapturedPage, ChannelRegistry } from "@crawl-automation/channels-core";
 import { errorCodeOf, type Database, type Logger } from "@crawl-automation/platform";
 
 /**
@@ -8,11 +8,18 @@ import { errorCodeOf, type Database, type Logger } from "@crawl-automation/platf
  * sighting (with its reason) instead of a Review, and for every captured page a live sighting and one
  * metrics-history point.
  */
-export function captureRecords(parts: { database: Database; log: Logger }) {
+export function captureRecords(parts: {
+  database: Database;
+  log: Logger;
+  registry: ChannelRegistry;
+}) {
   const listingStates = new PostgresListingStates(parts.database);
   return {
     listings: { record: (raw: unknown) => recordSighting(listingStates, raw) },
-    history: new MetricsHistory(new PostgresProductHistory(parts.database)),
+    history: new MetricsHistory(
+      new PostgresProductHistory(parts.database),
+      listingIdentityResolver(parts.registry),
+    ),
     onHistoryPending(error: unknown, page: CapturedPage) {
       const code = errorCodeOf(error) ?? "HISTORY.STORAGE_UNAVAILABLE";
       const { channel, listingId, variantId, archive } = page;

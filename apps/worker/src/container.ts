@@ -8,6 +8,7 @@ import {
 } from "@crawl-automation/adapters";
 import {
   AmazonFormulaRequests,
+  formulaFamilies,
   FormulaLookup,
   LabelHandoffs,
   type LabelReviews,
@@ -16,6 +17,7 @@ import {
   ProductReviews,
   SiblingFormulaReuse,
 } from "@crawl-automation/app";
+import { amazonAdapter } from "@crawl-automation/channel-amazon";
 import { swansonAdapter } from "@crawl-automation/channel-swanson";
 import { gncAdapter } from "@crawl-automation/channels-gnc";
 import { amazonProductForAsin } from "@crawl-automation/channels-wholefoods";
@@ -84,7 +86,7 @@ export async function buildContainer(config: WorkerConfig): Promise<Parts> {
     local: asValue(await TextLocalStore.open(storage.journalRoot)),
     copies: asValue(await FileCopies.open(storage.cacheRoot)),
     // Channels this worker can collect. A new channel is one adapter added here.
-    registry: asValue(new ChannelRegistry([swansonAdapter, gncAdapter])),
+    registry: asValue(new ChannelRegistry([swansonAdapter, gncAdapter, amazonAdapter])),
     fileTransport: asValue(
       config.files.resolve === "system" ? new SystemHttpsTransport() : new DirectHttpsTransport(),
     ),
@@ -131,13 +133,17 @@ function registerServices(container: Parts): void {
     productCapture: asFunction(captureService).singleton(),
     // A revisit that finds the listing unlisted records that sighting (with its reason) instead of a Review.
     // Every captured page also adds one metrics-history point.
-    pipelineCapture: asFunction(({ productCapture, database, log }: WorkerParts) => {
-      return new PipelineCapture({ capture: productCapture, ...captureRecords({ database, log }) });
+    pipelineCapture: asFunction(({ productCapture, database, log, registry }: WorkerParts) => {
+      return new PipelineCapture({
+        capture: productCapture,
+        ...captureRecords({ database, log, registry }),
+      });
     }).singleton(),
     productFiles: asFunction(filesService).singleton(),
     // Formula once across the channel's formula family, then a size or pack sibling's formula after a label check.
     formulaLookup: asFunction(
-      ({ formulaIndex }: WorkerParts) => new FormulaLookup(formulaIndex),
+      ({ formulaIndex, registry }: WorkerParts) =>
+        new FormulaLookup(formulaIndex, formulaFamilies(registry)),
     ).singleton(),
     siblingReuse: asFunction(siblingReuseService).singleton(),
     // A Whole Foods ASIN with no Amazon formula is held once in Amazon's queue for its formula.
@@ -199,6 +205,7 @@ function filesService(parts: WorkerParts): ProductFiles {
 function siblingReuseService(parts: WorkerParts): SiblingFormulaReuse {
   return new SiblingFormulaReuse({
     index: parts.formulaIndex,
+    families: formulaFamilies(parts.registry),
     links: new PostgresFormulaLinks(parts.database),
     labelImages: {
       verifiedText: (selection, signal) =>

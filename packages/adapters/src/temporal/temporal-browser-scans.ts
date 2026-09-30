@@ -1,4 +1,5 @@
 import type { BrowserBrandScan } from "@crawl-automation/app";
+import type { ChannelId } from "@crawl-automation/v3-contracts";
 import type { Client } from "@temporalio/client";
 import { z } from "zod";
 
@@ -21,13 +22,13 @@ export class TemporalBrowserScans {
   ) {}
 
   async scan(
-    request: { channel: "wholefoods"; scanId: string; sourceUrl: string },
+    request: { channel: ChannelId; scanId: string; sourceUrl: string },
     signal: AbortSignal,
   ): Promise<BrowserBrandScan> {
     const handle = await this.client.workflow.start("BrowserScanWorkflow", {
       workflowId: `browser-scan-${request.scanId}`,
       taskQueue: this.taskQueue,
-      args: [request],
+      args: [{ ...request, capture: "browser" }],
       // The same scan asked again waits for the one already running; nothing is scanned twice.
       workflowIdReusePolicy: "REJECT_DUPLICATE",
       workflowIdConflictPolicy: "USE_EXISTING",

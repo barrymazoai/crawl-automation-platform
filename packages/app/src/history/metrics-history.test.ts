@@ -1,9 +1,9 @@
 import type { CapturedPage } from "@crawl-automation/channels-core";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { canonicalHash } from "./canonical.js";
 import { captureHistoryEntry } from "./capture-history.js";
 import { commerceMetrics } from "./commerce-metrics.js";
-import { identifyListing } from "./listing-identity.js";
+import { identifyListing, type ListingIdentityResolver } from "./listing-identity.js";
 import { MetricsHistory } from "./metrics-history.js";
 import type { HistoryEntry, ProductHistoryStore } from "./ports.js";
 
@@ -15,6 +15,20 @@ const OLD_IDS = {
 };
 
 const at = { dataset: "v3:test", sourceKey: "k" };
+
+// The port has already validated these addresses; adapter validation is covered in worker tests.
+const identities: ListingIdentityResolver = {
+  resolve: vi.fn((page) => {
+    if (page.url.startsWith("https://example.com") || page.listingId === "B000000000") {
+      return null;
+    }
+    const url = new URL(page.url);
+    url.hostname = url.hostname.replace(/^www\./u, "");
+    url.search = "";
+    url.pathname = url.pathname.replace(/\/$/u, "");
+    return { site: url.hostname, url: url.href, externalId: page.externalId ?? page.listingId };
+  }),
+};
 
 function page(changes: Partial<CapturedPage> = {}): CapturedPage {
   return {
@@ -49,20 +63,23 @@ describe("history listing identity", () => {
       channel: "gnc",
       url: "https://www.gnc.com/energy/877080.html",
       externalId: "877080",
+      listingId: "877080",
     };
     const swanson = {
       channel: "swanson",
       url: "https://www.swansonvitamins.com/p/healthy-origins-natural-d-ribose-10-6-oz-pwdr?utm_source=x",
       externalId: "HOR083",
+      listingId: "healthy-origins-natural-d-ribose-10-6-oz-pwdr",
     };
     const amazon = {
       channel: "amazon",
       url: "https://www.amazon.com/dp/B002CQU54Q/?th=1",
-      externalId: "b002cqu54q",
+      externalId: "B002CQU54Q",
+      listingId: "B002CQU54Q",
     };
-    expect(identifyListing({ ...gnc, ...at }).id).toBe(OLD_IDS.gnc);
-    expect(identifyListing({ ...swanson, ...at }).id).toBe(OLD_IDS.swanson);
-    expect(identifyListing({ ...amazon, ...at })).toMatchObject({
+    expect(identifyListing({ ...gnc, ...at }, identities).id).toBe(OLD_IDS.gnc);
+    expect(identifyListing({ ...swanson, ...at }, identities).id).toBe(OLD_IDS.swanson);
+    expect(identifyListing({ ...amazon, ...at }, identities)).toMatchObject({
       id: OLD_IDS.amazon,
       externalId: "B002CQU54Q",
       url: "https://amazon.com/dp/B002CQU54Q",
@@ -73,22 +90,30 @@ describe("history listing identity", () => {
   });
 
   it("keys a Whole Foods listing by its ASIN on the Whole Foods site", () => {
-    const listing = identifyListing({
-      channel: "wholefoods",
-      url: "https://www.wholefoodsmarket.com/grocery/product/nordic-naturals-b002cqu54q",
-      externalId: "B002CQU54Q",
-      ...at,
-    });
+    const listing = identifyListing(
+      {
+        channel: "wholefoods",
+        url: "https://www.wholefoodsmarket.com/grocery/product/nordic-naturals-b002cqu54q",
+        externalId: "B002CQU54Q",
+        listingId: "B002CQU54Q",
+        ...at,
+      },
+      identities,
+    );
     expect(listing).toMatchObject({ basis: "external-id", site: "wholefoodsmarket.com" });
   });
 
   it("an ASIN that contradicts the Amazon URL is never a keyed listing", () => {
-    const listing = identifyListing({
-      channel: "amazon",
-      url: "https://www.amazon.com/dp/B002CQU54Q",
-      externalId: "B000000000",
-      ...at,
-    });
+    const listing = identifyListing(
+      {
+        channel: "amazon",
+        url: "https://www.amazon.com/dp/B002CQU54Q",
+        externalId: "B000000000",
+        listingId: "B000000000",
+        ...at,
+      },
+      identities,
+    );
     expect(listing.basis).toBe("unresolved");
   });
 });
@@ -134,7 +159,7 @@ describe("commerce metrics", () => {
 
 describe("capture history entry", () => {
   it("is one metrics point per product operation, stable when recorded again", () => {
-    const first = captureHistoryEntry(page(), run);
+    const first = captureHistoryEntry(page(), run, identities);
     expect(first).toMatchObject({ dataset: "v3:gnc", sourceKey: "op-1", issues: [] });
     expect(first.listings[0]?.id).toBe(OLD_IDS.gnc);
     expect(first.observations[0]).toMatchObject({
@@ -142,15 +167,15 @@ describe("capture history entry", () => {
       observedAt: "2026-09-30T01:02:03.000Z",
       record: { price: "29.99", rating: "4.6", reviewCount: "118", source: "v3:gnc" },
     });
-    expect(captureHistoryEntry(page(), run)).toEqual(first);
-    const next = captureHistoryEntry(page(), { ...run, operationId: "op-2" });
+    expect(captureHistoryEntry(page(), run, identities)).toEqual(first);
+    const next = captureHistoryEntry(page(), { ...run, operationId: "op-2" }, identities);
     expect(next.id).not.toBe(first.id);
     expect(next.listings[0]?.id).toBe(first.listings[0]?.id);
   });
 
   it("a page naming no keyable listing is refused", () => {
     const foreign = page({ url: "https://example.com/p/1" });
-    expect(() => captureHistoryEntry(foreign, run)).toThrow(
+    expect(() => captureHistoryEntry(foreign, run, identities)).toThrow(
       expect.objectContaining({ code: "HISTORY.CAPTURE_IDENTITY_UNRESOLVED" }),
     );
   });
@@ -165,7 +190,7 @@ describe("metrics history", () => {
         return { inserted: appended.length === 1 };
       },
     };
-    const history = new MetricsHistory(store);
+    const history = new MetricsHistory(store, identities);
     const first = await history.record(page(), run);
     expect(first).toMatchObject({ inserted: true, historyListingId: OLD_IDS.gnc });
     expect((await history.record(page(), run)).inserted).toBe(false);

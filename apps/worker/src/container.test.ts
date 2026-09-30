@@ -1,6 +1,7 @@
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { amazonAdapter } from "@crawl-automation/channel-amazon";
 import { describe, expect, it } from "vitest";
 import { WorkerConfigSchema } from "./config.js";
 import { buildContainer } from "./container.js";
@@ -133,5 +134,12 @@ describe("worker composition root", () => {
     for (const name of Object.keys(container.registrations)) {
       expect(() => container.resolve(name as never), name).not.toThrow();
     }
+  });
+
+  it("resolves Amazon HTTP capture alongside Swanson and GNC", async () => {
+    const container = await buildContainer(await productionShapedConfig());
+    const { registry } = container.cradle;
+    expect(registry.channels()).toEqual(["swanson", "gnc", "amazon"]);
+    expect(registry.forCapture("amazon", "http")).toBe(amazonAdapter);
   });
 });

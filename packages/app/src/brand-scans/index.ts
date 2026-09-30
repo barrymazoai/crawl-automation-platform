@@ -1,4 +1,5 @@
 export * from "./brand-scan-runner.js";
+export * from "./amazon-scan-queue.js";
 export * from "./brand-scan-service.js";
 export * from "./ports.js";
 export * from "./scan-listing.js";

@@ -18,6 +18,8 @@ export interface BrandListing {
   credits: number;
   /** The reader proved every product was listed, and every family's members were read. */
   full: boolean;
+  /** A reader explicitly reported a capped listing. */
+  capped?: boolean;
 }
 
 interface ListingWork {
@@ -111,7 +113,8 @@ export async function readBrandListing(
       products.set(`${member.listingId}\u0000${member.variantId ?? ""}`, member);
     }
   }
-  const full = work.reader.complete(pages) && unresolved === 0;
+  const capped = pages.some((page) => "capped" in page && page.capped === true);
+  const full = !capped && work.reader.complete(pages) && unresolved === 0;
   const productList = [...products.values()];
   return {
     pages,
@@ -120,5 +123,6 @@ export async function readBrandListing(
     unresolvedFamilies: unresolved,
     credits,
     full,
+    capped,
   };
 }

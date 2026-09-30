@@ -2,6 +2,7 @@ import { screenKeywords, type SavedFormula } from "@crawl-automation/processing"
 import { describe, expect, it, vi } from "vitest";
 import { FormulaLookup, formulaChannels } from "./formula-lookup.js";
 import type {
+  FormulaFamilies,
   FormulaIndex,
   FormulaLink,
   FormulaLinks,
@@ -9,6 +10,8 @@ import type {
   LabelImageText,
 } from "./ports.js";
 import { SiblingFormulaReuse } from "./sibling-reuse.js";
+
+const families: FormulaFamilies = { channels: (channel) => [channel] };
 
 const LABEL = "Serving Size 2 Capsules\nD-Ribose 500 mg\nOther Ingredients: Rice Flour, Gelatin.";
 const field = (text: string) => ({
@@ -97,6 +100,7 @@ function factsImageSelection() {
 function setup(
   known: Record<string, string> = { "ribose-60": "formula-60" },
   ocrText = `Supplement Facts\n${LABEL}`,
+  familyPort = families,
 ) {
   const index: FormulaIndex = {
     findKnown: vi.fn(async () => null),
@@ -114,7 +118,7 @@ function setup(
     }),
   };
   const labelImages: LabelImageText = { verifiedText: vi.fn(async () => ocrText) };
-  const reuse = new SiblingFormulaReuse({ index, links, labelImages });
+  const reuse = new SiblingFormulaReuse({ index, links, labelImages, families: familyPort });
   return { index, links, labelImages, reuse };
 }
 
@@ -236,12 +240,15 @@ describe("sibling formula reuse by the facts image's OCR text", () => {
 });
 
 describe("formula family across channels", () => {
-  it("Amazon and Whole Foods share formulas by ASIN; other channels only their own", async () => {
-    expect(formulaChannels("wholefoods")).toEqual(["amazon", "wholefoods"]);
-    expect(formulaChannels("amazon")).toEqual(["amazon", "wholefoods"]);
-    expect(formulaChannels("swanson")).toEqual(["swanson"]);
+  it("uses the formula family supplied by the port", async () => {
+    const families: FormulaFamilies = {
+      channels: (channel) => (channel === "swanson" ? [channel] : ["amazon", "wholefoods"]),
+    };
+    expect(formulaChannels("wholefoods", families)).toEqual(["amazon", "wholefoods"]);
+    expect(formulaChannels("amazon", families)).toEqual(["amazon", "wholefoods"]);
+    expect(formulaChannels("swanson", families)).toEqual(["swanson"]);
     const findKnown = vi.fn(async () => ({ operationId: "amazon-formula" }));
-    const lookup = new FormulaLookup({ findKnown });
+    const lookup = new FormulaLookup({ findKnown }, families);
     const key = { channel: "wholefoods" as const, listingId: "B002CQU54Q", variantId: null };
     expect(await lookup.findKnown(key)).toEqual({ operationId: "amazon-formula" });
     expect(findKnown).toHaveBeenCalledWith({
@@ -250,4 +257,16 @@ describe("formula family across channels", () => {
       variantId: null,
     });
   });
+});
+
+it("uses the supplied family for sibling lookups too", async () => {
+  const families = { channels: vi.fn(() => ["gnc", "swanson"]) };
+  const { reuse, index } = setup(undefined, undefined, families);
+  await reuse.reuse(request());
+  expect(families.channels).toHaveBeenCalledWith("swanson");
+  expect(index.findForMember).toHaveBeenCalledWith(
+    expect.objectContaining({
+      channels: ["gnc", "swanson"],
+    }),
+  );
 });

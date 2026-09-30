@@ -1,8 +1,11 @@
+import { ChannelIdSchema } from "@crawl-automation/v3-contracts";
 import { proxyActivities, workflowInfo } from "@temporalio/workflow";
 import { z } from "zod";
 
 export const BrowserScanInputSchema = z.strictObject({
-  channel: z.literal("wholefoods"),
+  channel: ChannelIdSchema,
+  /** Browser-only workflow; old histories omit this field. No default changes their activity payload. */
+  capture: z.literal("browser").optional(),
   scanId: z.string().min(1).max(200),
   sourceUrl: z.url().max(4096),
 });

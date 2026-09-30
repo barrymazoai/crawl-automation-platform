@@ -217,3 +217,37 @@ it.each([false, true])(
   },
   30_000,
 );
+
+it.each(["http", "browser"] as const)(
+  "replays explicit %s capture independently of the historical channel route",
+  async (capture) => {
+    const queue = `capture-mode-replay-${randomUUID()}`;
+    const gate = gateFixture();
+    const channel = capture === "http" ? "wholefoods" : "swanson";
+    const captureProduct = vi.fn(async () => captureReview());
+    const captureBrowserProduct = vi.fn(async () => captureReview());
+    const { history, result, workflowId } = await recordHistory({
+      environment,
+      bundle: current,
+      queue,
+      workflow: "ProductPipelineWorkflow",
+      input: { ...productInput(queue, channel), capture },
+      activities: { ...gate.activities, captureProduct, captureBrowserProduct },
+    });
+    expect(result).toEqual(captureReview());
+    expect(scheduledActivities(history)).toEqual([
+      "reserveResources",
+      capture === "http" ? "captureProduct" : "captureBrowserProduct",
+      "releaseResources",
+    ]);
+    const markers = history.events?.flatMap((event) =>
+      Object.values(event.markerRecordedEventAttributes?.details ?? {}).flatMap(
+        (values) => values.payloads?.map((value) => Buffer.from(value.data ?? []).toString()) ?? [],
+      ),
+    );
+    expect(markers?.some((payload) => payload.includes('"capture-mode-v1"'))).toBe(true);
+    expect(gate.held.size).toBe(0);
+    await Worker.runReplayHistory({ workflowBundle: current }, history, workflowId);
+  },
+  30_000,
+);

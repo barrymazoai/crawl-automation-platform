@@ -2,8 +2,16 @@ import { z } from "zod";
 import type { UnlistedReasonName } from "../listings/listing-model.js";
 import { QueueChannelSchema } from "../queue/queue-model.js";
 
-/** Channels whose brand scans go through the shared queue (Amazon keeps its own tools until 5.5). */
-export const ScanChannelSchema = QueueChannelSchema.exclude(["amazon"]);
+/**
+ * Channels with a wired brand scan (migration 032 adds amazon; its products go to Amazon's product queue through a
+ * bridge). DTC and Costco join when their scans are wired.
+ */
+export const ScanChannelSchema = QueueChannelSchema.extract([
+  "swanson",
+  "gnc",
+  "amazon",
+  "wholefoods",
+]);
 export type ScanChannel = z.infer<typeof ScanChannelSchema>;
 
 /** Channels whose brand scans need a browser (owner decision): their scanner must be configured to scan them. */
@@ -53,6 +61,8 @@ export interface ScanResult {
   unresolvedFamilies: number;
   statedTotal: number | null;
   full: boolean;
+  /** The reader stopped at its page cap; absent on historical results. */
+  capped?: boolean | undefined;
   /** Listed products not queued by any earlier list of this source; null for scans finished before 2026-09-30. */
   newListings: number | null;
   /** Listed products an earlier list of this source already queued; null for scans finished before 2026-09-30. */
@@ -85,7 +95,7 @@ export interface ScanRecord {
   scanId: string;
   requestId: string;
   source: ScanSource;
-  /** The shared-queue list the scan's revisits go into (fixed at request time, so a rerun queues them once). */
+  /** The list/campaign for revisits (fixed at request time, so a rerun queues them once). */
   revisitBatchId: string;
   state: ScanState;
   result: ScanResult | null;

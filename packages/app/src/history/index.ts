@@ -6,3 +6,4 @@ export * from "./listing-identity.js";
 export * from "./metrics-history.js";
 export * from "./ports.js";
 export * from "./history-service.js";
+export * from "./registry-listing-identity.js";

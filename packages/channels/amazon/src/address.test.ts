@@ -42,6 +42,6 @@ describe("Amazon HTTP product addresses", () => {
       timeoutMs: 75_000,
     });
     expect(amazonAdapter.planning?.channel).toBe("amazon");
-    expect(amazonAdapter.brandScan).toBeUndefined();
+    expect(amazonAdapter.brandScan?.maxPages).toBe(7);
   });
 });

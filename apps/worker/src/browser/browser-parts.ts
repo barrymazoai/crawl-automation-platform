@@ -47,7 +47,10 @@ export function buildBrowserParts(parts: CoreParts): BrowserParts {
   const capture = new BrowserProductCapture({ registry, http, publication: parts.publication });
   let storeSet: Promise<unknown> | null = null;
   return {
-    capture: new PipelineCapture<BrowserCaptureResult>({ capture, ...captureRecords(parts) }),
+    capture: new PipelineCapture<BrowserCaptureResult>({
+      capture,
+      ...captureRecords({ database: parts.database, log: parts.log, registry }),
+    }),
     scanner: new WholeFoodsBrandScan({ browser: ego, remote: parts.r2.store, store }),
     async ensureStore(productUrl, signal) {
       storeSet ??= ensureWholeFoodsStore(

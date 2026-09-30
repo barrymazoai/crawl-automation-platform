@@ -10,10 +10,10 @@ import { OcrApiSettingsSchema } from "@crawl-automation/processing";
 import {
   DatabaseConfigSchema,
   LogConfigSchema,
+  R2ScopeSchema,
   TemporalConfigSchema,
   loadConfig,
 } from "@crawl-automation/platform";
-import { R2ScopeSchema } from "@crawl-automation/v3-artifacts";
 import {
   ChannelIdSchema,
   DeliveryTarget,

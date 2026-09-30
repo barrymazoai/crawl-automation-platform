@@ -59,7 +59,7 @@ describe("brand scan procedures", () => {
 
   it("refuses a channel that cannot be scanned before any service runs", async () => {
     const request = vi.fn(async () => []);
-    const input = { requestId: "11111111-1111-4111-8111-111111111111", channel: "amazon" };
+    const input = { requestId: "11111111-1111-4111-8111-111111111111", channel: "costco" };
     const response = await appWith({ brandScans: { request } }).request(
       "/trpc/brands.scan",
       post(input),

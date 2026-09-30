@@ -112,6 +112,8 @@ export interface ChannelAdapter<Rendered = unknown> {
   readonly id: ChannelId;
   /** Product pages are fetched only through ScraperAPI (`http`); never in a browser. */
   readonly captureModes: readonly CaptureMode[];
+  /** Shared listing-ID namespace for formula reuse; absent means formulas stay on this channel. */
+  readonly formulaFamily?: string;
   /** Which sites the product pages may come from, and their size and time limits. */
   readonly httpPolicy: HttpPolicy;
   /** Where product images may be downloaded from; defaults to the page origins. */

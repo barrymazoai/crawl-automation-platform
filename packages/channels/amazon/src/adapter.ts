@@ -5,6 +5,7 @@ import type {
 } from "@crawl-automation/channels-core";
 import { ChannelProductEvidenceSchema } from "@crawl-automation/v3-contracts";
 import { AMAZON_ORIGIN, amazonProductAddress } from "./address.js";
+import { amazonBrandScan } from "./brand-scan.js";
 import { AMAZON_MAX_BYTES, amazonDocument, pageAsin, productRoot } from "./dom.js";
 import { amazonErrors } from "./errors.js";
 import { amazonFacts } from "./facts.js";
@@ -49,10 +50,12 @@ export const AMAZON_HTTP_POLICY = {
 
 export const amazonAdapter: ChannelAdapter<AmazonRendered> = {
   id: "amazon",
+  formulaFamily: "amazon-asin",
   captureModes: ["http"],
   httpPolicy: AMAZON_HTTP_POLICY,
   fileOrigins: AMAZON_FILE_ORIGINS,
   productAddress: amazonProductAddress,
+  brandScan: amazonBrandScan,
   pageIdentity: (page) => ({
     listingId: pageAsin(productRoot(amazonDocument(page.html))),
     variantId: null,

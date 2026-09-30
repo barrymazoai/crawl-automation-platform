@@ -37,6 +37,7 @@ const ResultSchema = z.object({
   unresolvedFamilies: z.number(),
   statedTotal: z.number().nullable(),
   full: z.boolean(),
+  capped: z.boolean().optional(),
   // Scans finished before these counts existed have neither.
   newListings: z.number().nullable().default(null),
   knownListings: z.number().nullable().default(null),

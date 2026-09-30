@@ -43,3 +43,8 @@ export interface FormulaLinks {
 export interface LabelImageText {
   verifiedText(selection: KeywordResult, signal: AbortSignal): Promise<string>;
 }
+
+/** The formula namespaces declared by the configured channel adapters. */
+export interface FormulaFamilies {
+  channels(channel: string): string[];
+}

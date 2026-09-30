@@ -10,9 +10,8 @@ import {
 import { once } from "./activity-options.js";
 
 /**
- * A product whose page only a browser can read (Whole Foods): the page is read and archived on the browser
- * machine, then the formula comes from its formula family by listing (Whole Foods shares Amazon's ASINs). A product
- * with no formula in its family ends in a Review naming why, until Amazon's own product run supplies the formula.
+ * A browser capture records metrics, then looks up a formula in the adapter-declared family.
+ * The formula-request activity name and failure code remain the recorded legacy protocol.
  */
 export async function collectInBrowser(
   input: ProductPipelineInput,

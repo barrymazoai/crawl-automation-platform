@@ -2,7 +2,7 @@ import type { CapturedPage } from "@crawl-automation/channels-core";
 import { canonicalHash, timestamp } from "./canonical.js";
 import { commerceMetrics } from "./commerce-metrics.js";
 import { historyErrors } from "./history-errors.js";
-import { identifyListing } from "./listing-identity.js";
+import { identifyListing, type ListingIdentityResolver } from "./listing-identity.js";
 import type { HistoryEntry } from "./ports.js";
 
 /** The product run a capture belongs to. */
@@ -20,7 +20,11 @@ const CODEC = "v3-capture-history/1";
  * product operation), its listing and its one metrics point — the same shape and IDs the earlier history
  * projection wrote, so the product service's history export reads both alike.
  */
-export function captureHistoryEntry(page: CapturedPage, run: CaptureRun): HistoryEntry {
+export function captureHistoryEntry(
+  page: CapturedPage,
+  run: CaptureRun,
+  identities: ListingIdentityResolver,
+): HistoryEntry {
   const dataset = `v3:${page.channel}`;
   const observationId = run.operationId;
   const metrics = commerceMetrics(page.commerce);
@@ -36,12 +40,7 @@ export function captureHistoryEntry(page: CapturedPage, run: CaptureRun): Histor
     evidence,
     capture: { runId: run.runId, operationId: run.operationId, variantId: page.variantId },
   };
-  const listing = identifyListing({ ...page, sourceKey: observationId, dataset });
-  if (listing.basis === "unresolved") {
-    throw historyErrors.create("HISTORY.CAPTURE_IDENTITY_UNRESOLVED", {
-      details: { channel: page.channel, url: page.url },
-    });
-  }
+  const listing = captureListing({ ...page, sourceKey: observationId, dataset }, identities);
   const point = {
     listingId: listing.id,
     kind: "metrics" as const,
@@ -58,4 +57,17 @@ export function captureHistoryEntry(page: CapturedPage, run: CaptureRun): Histor
     observations: [{ id: canonicalHash(point), ...point }],
     issues: raw.capturedAt ? [] : ["HISTORY.METRIC_TIME_UNKNOWN"],
   };
+}
+
+function captureListing(
+  page: Parameters<typeof identifyListing>[0],
+  identities: ListingIdentityResolver,
+) {
+  const listing = identifyListing(page, identities);
+  if (listing.basis === "unresolved") {
+    throw historyErrors.create("HISTORY.CAPTURE_IDENTITY_UNRESOLVED", {
+      details: { channel: page.channel, url: page.url },
+    });
+  }
+  return listing;
 }
