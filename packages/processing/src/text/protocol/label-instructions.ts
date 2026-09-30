@@ -1,5 +1,5 @@
 import {
-  LabelTextWireSchema,
+  LabelTextModelSchema,
   LabelAnchorSchema,
   legacyLabelExtractionSchema,
   type TextInput,
@@ -10,7 +10,7 @@ import { evidenceLines } from "./evidence-lines.js";
 export const labelTextPolicyVersion = "label-text/5";
 export type LabelTextPolicyVersion =
   "label-text/1" | "label-text/2" | "label-text/3" | "label-text/4" | "label-text/5";
-export const labelTextOutputSchema = z.toJSONSchema(LabelTextWireSchema);
+export const labelTextOutputSchema = z.toJSONSchema(LabelTextModelSchema);
 export const legacyLabelTextOutputSchema = z.toJSONSchema(
   legacyLabelExtractionSchema(LabelAnchorSchema),
 );
@@ -51,8 +51,8 @@ export const v4LabelTextInstructions = [
 /** label-text/5: Drug Facts uses active ingredients, printed strengths and cited Purpose fields. */
 export const labelTextInstructions = [
   v4LabelTextInstructions,
-  "For Drug Facts ONLY, formula.drugFacts quotes the exact Drug Facts heading. Omit drugFacts for Supplement/Nutrition Facts. Serving Size and Servings Per Container may be null for Drug Facts; never invent them from Directions or package weight.",
-  "Drug Facts formula rows are active ingredients, kind nutrient, parentRowIndex null, dailyValue null. Quote each ingredient name and its complete strength as printed in amount, including homeopathic dilution, HPUS, percentage and parenthesized mass when present. Never convert homeopathic strengths to mass. Quote the printed Purpose in that row's optional purpose field; omit purpose when absent. Purpose is not an amount column or an exclusion.",
+  "For Drug Facts ONLY, formula.drugFacts quotes the exact Drug Facts heading. drugFacts is null for Supplement/Nutrition Facts. Serving Size and Servings Per Container may be null for Drug Facts; never invent them from Directions or package weight.",
+  "Drug Facts formula rows are active ingredients, kind nutrient, parentRowIndex null, dailyValue null. Quote each ingredient name and its complete strength as printed in amount, including homeopathic dilution, HPUS, percentage and parenthesized mass when present. Never convert homeopathic strengths to mass. Quote the printed Purpose in that row's purpose field; purpose is null when absent and on every non-Drug-Facts row. Purpose is not an amount column or an exclusion.",
   "Use the printed Active ingredient(s) heading (including an in-each basis when present) as the formula column heading. Keep extra active-ingredient and Purpose headings as heading exclusions. Inactive ingredients map to otherIngredients; foods may use Ingredients instead of Other Ingredients. Retain the exact heading and split the list by the existing rules.",
   "Drug Facts Uses, Warning/Warnings, Directions, Other information and Questions sections are directions exclusions, including their printed headings and body. Quote each section separately; never cross into active or inactive ingredients. HPUS definitions, homeopathic dilution explanations and parenthesized trace-alkaloid/constituent notes are exact footnote exclusions. Never discard a strength or Purpose as a note. All other coverage rules still apply.",
 ].join("\n");

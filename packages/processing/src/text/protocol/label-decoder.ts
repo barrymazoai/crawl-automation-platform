@@ -132,7 +132,7 @@ class QuotePlacer {
         name,
         amount: this.optional(row.amount, own),
         dailyValue: this.optional(row.dailyValue, own),
-        ...(row.purpose !== undefined ? { purpose: this.optional(row.purpose, own) } : {}),
+        ...(row.purpose ? { purpose: this.optional(row.purpose, own) } : {}),
       };
     });
   }

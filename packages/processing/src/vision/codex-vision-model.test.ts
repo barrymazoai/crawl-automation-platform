@@ -32,7 +32,7 @@ describe("model setup fingerprints", () => {
 
   it.each([
     [undefined, "2573146e2a3aeee817a7663cd465ddb3b42258ec5debe8923c39c64cdc7a071e"],
-    ["label-extraction/1", "6307c73b0dba4ca3061213cbff96e4d231241a5db7391d638ac3d51deca65d8f"],
+    ["label-extraction/1", "6057c1bb7f75597c7ec3db210b9b5fb411f2747d8367411f96e0858b80f6f16c"],
   ] as const)("text %s matches its policy fingerprint", (extractionProtocol, fingerprint) => {
     const config = extractionProtocol ? { ...base, extractionProtocol } : base;
     expect(CodexTextModel.describe(config).configFingerprint).toBe(fingerprint);
