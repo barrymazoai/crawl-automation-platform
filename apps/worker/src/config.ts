@@ -24,6 +24,9 @@ import { WorkerProcessesSchema } from "./processes/process-config.js";
 
 const absolutePath = z.string().refine(isAbsolute, "Must be an absolute path");
 
+/** New label work reads labels with this protocol only; older versions stay readable for stored answers. */
+export const LABEL_TEXT_POLICY = "label-text/4";
+
 export const WorkerConfigSchema = z
   .strictObject({
     log: LogConfigSchema.default({ level: "info" }),
@@ -74,7 +77,10 @@ export const WorkerConfigSchema = z
     }),
     /** The label workflow's model settings, its task queues and its permits. */
     label: z.strictObject({
-      text: ChannelLabelInputSchema.shape.text,
+      text: ChannelLabelInputSchema.shape.text.refine(
+        (text) => text.policyVersion === LABEL_TEXT_POLICY,
+        { message: `New label work uses ${LABEL_TEXT_POLICY} only`, path: ["policyVersion"] },
+      ),
       visionConfigFingerprint: ChannelLabelInputSchema.shape.visionConfigFingerprint,
       evidencePolicy: ChannelLabelInputSchema.shape.evidencePolicy,
       queues: ChannelSavedLabelWorkflowInputSchema.shape.queues,

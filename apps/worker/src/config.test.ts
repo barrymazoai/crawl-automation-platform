@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { WorkerConfigSchema } from "./config.js";
+import { LABEL_TEXT_POLICY, WorkerConfigSchema } from "./config.js";
 
 const capture = WorkerConfigSchema.shape.capture;
 const route = {
@@ -36,4 +36,27 @@ describe("worker capture settings", () => {
   ])("refuses settings a page fetch cannot use: %j", (settings) => {
     expect(capture.safeParse(settings).success).toBe(false);
   });
+});
+
+describe("worker label settings", () => {
+  const labelText = WorkerConfigSchema.shape.label.shape.text;
+  const text = {
+    schemaVersion: 1,
+    module: "codex.text",
+    implementationVersion: "codex-text/3",
+    policyVersion: LABEL_TEXT_POLICY,
+    resultSchemaVersion: 3,
+    configFingerprint: "a".repeat(64),
+  };
+
+  it("accepts the current label protocol", () => {
+    expect(labelText.safeParse(text).success).toBe(true);
+  });
+
+  it.each(["label-text/1", "label-text/2", "label-text/3"])(
+    "refuses %s for new label work",
+    (policyVersion) => {
+      expect(labelText.safeParse({ ...text, policyVersion }).success).toBe(false);
+    },
+  );
 });
