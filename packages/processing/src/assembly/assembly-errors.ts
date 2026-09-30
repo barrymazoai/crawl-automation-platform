@@ -31,6 +31,9 @@ export const assemblyErrors = defineErrors({
     category: "VALIDATION",
     message: "Source numeric conflict.",
   },
+  "LABEL_PRODUCT.SOURCE_WORDING_DIFFERS": validation(
+    "Label sources agree after wording normalization; the selected source is retained.",
+  ),
   "PACKAGING.PACK_MEANING_UNRESOLVED": {
     category: "VALIDATION",
     message: "Pack meaning unresolved.",

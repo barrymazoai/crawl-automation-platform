@@ -24,6 +24,9 @@ catalogs:
     '@types/pg':
       specifier: ^8.15.5
       version: 8.23.1
+    dequal:
+      specifier: ^2.0.3
+      version: 2.0.3
     execa:
       specifier: ^10.0.1
       version: 10.0.1
@@ -708,6 +711,9 @@ importers:
 
   packages/v3-contracts:
     dependencies:
+      dequal:
+        specifier: 'catalog:'
+        version: 2.0.3
       zod:
         specifier: 'catalog:'
         version: 4.4.3
@@ -2486,6 +2492,10 @@ packages:
     resolution: {integrity: sha512-hrxVOjIm8idZ9ZVDGSyyG3SHiNcEUPhL6RTEmO/3wfQWLepH5pA3nuDMMrcJ1DkZztFA7xg3tk8OVO+MmwwH9w==}
     engines: {node: ^18.17||>=20}
     hasBin: true
+
+  dequal@2.0.3:
+    resolution: {integrity: sha512-0je+qPKHEMohvfRTCEo3CrPG6cAzAYgmzKyxRiYSSDkS6eGJdyVJm7WaYA5ECaAD9wLB2T4EEeymA5aFVcYXCA==}
+    engines: {node: '>=6'}
 
   detect-libc@2.1.2:
     resolution: {integrity: sha512-Btj2BOOO83o3WyH59e8MgXsxEQVcarkUOpEYrubB0urwnN10yQ364rsiByU11nZlqWYZm05i/of7io4mzihBtQ==}
@@ -6110,6 +6120,8 @@ snapshots:
       teamcity-service-messages: 0.1.14
       tsconfig-paths-webpack-plugin: 4.2.0
       watskeburt: 4.2.3
+
+  dequal@2.0.3: {}
 
   detect-libc@2.1.2:
     optional: true

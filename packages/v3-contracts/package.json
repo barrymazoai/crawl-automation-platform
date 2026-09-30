@@ -16,6 +16,7 @@
     "test": "vitest run src"
   },
   "dependencies": {
+    "dequal": "catalog:",
     "zod": "catalog:"
   },
   "devDependencies": {

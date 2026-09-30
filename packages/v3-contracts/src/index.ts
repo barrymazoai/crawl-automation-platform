@@ -30,6 +30,7 @@ export * from "./label-quality.js";
 export * from "./gnc-label.js";
 export * from "./packaging.js";
 export * from "./label-typography.js";
+export * from "./label-agreement.js";
 export * from "./label-core.js";
 export * from "./catalog.js";
 export * from "./swanson-live.js";

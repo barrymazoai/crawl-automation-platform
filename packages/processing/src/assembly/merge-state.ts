@@ -6,7 +6,7 @@ import type {
   TextCandidateV3,
   TextRecord,
   VisionRecord,
-  labelFormulaStructure,
+  labelAgreementFormula,
 } from "@crawl-automation/v3-contracts";
 
 /** A label source whose registered original evidence the reader has re-verified. */
@@ -35,7 +35,7 @@ export interface MergeState {
   packaging: PackagingFacts | undefined;
   formula: LabelCollectedProduct["formula"] | null;
   otherIngredients: LabelCollectedProduct["otherIngredients"];
-  formulaShape: ReturnType<typeof labelFormulaStructure>;
+  formulaShape: ReturnType<typeof labelAgreementFormula>;
   otherShape: string[] | null;
 }
 

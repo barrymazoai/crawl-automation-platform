@@ -53,7 +53,7 @@ describe("label comparison", () => {
     expect(compareLabelStructure(source(), other).status).toBe("unresolved");
   });
 
-  it("does not erase trademark, punctuation or unit differences as a guess", () => {
+  it("preserves trademark differences without the explicit typography policy", () => {
     const other = source();
     defined(column(other).rows[4]).name.text = "FocusFuel Electrolyte Blend";
     expect(compareLabelStructure(source(), other).status).toBe("conflict");

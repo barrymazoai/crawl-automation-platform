@@ -7,8 +7,7 @@ import { observationIdentity } from "./processing.js";
 import { labelExtractionSchema, LabelImageCandidateSchema, assessLabelCandidate, type LabelImageCandidate } from "./label-extraction.js";
 import type { TextCandidateV3 } from "./text.js";
 import { ProductEvidenceJoinSchema } from "./product-evidence.js";
-import { labelTypographyStructure, labelNameForComparison } from "./label-typography.js";
-import { labelFormulaStructure } from "./label-extraction.js";
+import { collectedSourcesAgree } from "./label-product-agreement.js";
 import { labelImageIntegrityCodes, labelNumericSourceConflict } from "./label-quality.js";
 export const LabelEvidencePolicySchema = z.enum(["label-image-first/1", "label-image-first/2", "label-image-first/3", "label-image-first/4", "label-image-first/5"]);
 /** Priority is earned by a complete, structurally valid image, never merely its media type. */
@@ -103,28 +102,8 @@ export const LabelCollectedProductSchema = z.discriminatedUnion("schemaVersion",
   if(textFallback && !r.warnings.some(w=>w.code==="LABEL_PRODUCT.COMPLETE_TEXT_FALLBACK"))invalid();
   if(r.evidencePolicy==="label-image-first/5" && imageFirst && authoritative.length!==1)invalid();
   const projectedSources = authoritative.map(p => projectLabelProductCandidate(p.id, p.candidate));
-  if (imageFirst) {
-    // A forged persisted record cannot switch back to text or hide disagreeing images.
-    const comparison = r.schemaVersion === 4 ? r.comparisonPolicy : undefined;
-    const formulaShape = (candidate: LabelImageCandidate | TextCandidateV3) => {
-      const shape = (comparison ? labelTypographyStructure(candidate, comparison) : labelFormulaStructure(candidate))!;
-      if (r.schemaVersion === 4) shape.servingsPerContainer = null;
-      return JSON.stringify(shape);
-    };
-    const otherShape = (candidate: LabelImageCandidate | TextCandidateV3) => JSON.stringify(candidate.otherIngredients!.items.map(i => comparison ? labelNameForComparison(i.text) : i.text.replace(/\s+/gu, " ").trim()));
-    const formulas = authoritative.filter(p => p.candidate.formula).map(p => formulaShape(p.candidate));
-    const others = authoritative.filter(p => p.candidate.otherIngredients).map(p => otherShape(p.candidate));
-    if (new Set(formulas).size > 1 || new Set(others).size > 1) invalid();
-    const requireWarning = (id: string, code: string) => { if (!r.warnings.some(w => w.id === id && w.code === code)) invalid(); };
-    for (const p of accepted) {
-      if (p.kind === "text" && p.candidate.formula && formulaShape(p.candidate) !== formulas[0]) requireWarning(p.id, "LABEL_PRODUCT.SECONDARY_TEXT_FORMULA_CONFLICT");
-      if (p.kind === "text" && p.candidate.otherIngredients && otherShape(p.candidate) !== others[0]) requireWarning(p.id, "LABEL_PRODUCT.SECONDARY_TEXT_INGREDIENTS_CONFLICT");
-      if (r.schemaVersion === 4 && r.packaging.servingSize.value && p.candidate.formula) {
-        const shape = comparison ? labelTypographyStructure(p.candidate, comparison) : labelFormulaStructure(p.candidate);
-        if (shape!.servingSize !== r.packaging.servingSize.value.replace(/\s+/gu, " ").trim()) requireWarning(p.id, "PACKAGING.SERVING_SIZE_CONFLICT");
-      }
-    }
-  }
+  // A saved record cannot hide a real disagreement or omit the warning for normalized agreement.
+  if (imageFirst && !collectedSourcesAgree(r, accepted)) invalid();
   if (r.schemaVersion === 4) {
     if (JSON.stringify(r.packaging.observation) !== JSON.stringify(r.observation) || (!imageFirst && r.packaging.blockingIssues.length)) invalid();
     for (const code of r.packaging.blockingIssues) if (!r.warnings.some(w => w.code === code)) invalid();

@@ -1,13 +1,14 @@
 import { labelValidationErrors } from "../label/validation-errors.js";
-import { assemblyErrors } from "./assembly-errors.js";
-import { isDeepStrictEqual } from "node:util";
+import { assemblyErrors, type AssemblyErrorCode } from "./assembly-errors.js";
 import {
   assessLabelCandidate,
   isCompleteLabelImage,
-  labelFormulaStructure,
-  labelNameForComparison,
-  labelTypographyStructure,
+  formulaAgreement,
+  ingredientsAgreement,
+  labelAgreementFormula,
+  labelAgreementIngredients,
   projectLabelProductCandidate,
+  type LabelAgreement,
 } from "@crawl-automation/v3-contracts";
 import type { MergePolicy } from "./merge-policy.js";
 import { byText, fail, words, type MergeState, type Provenance } from "./merge-state.js";
@@ -93,27 +94,22 @@ interface Pick {
 }
 
 function selectFormula(state: MergeState, pick: Pick): void {
-  const { entry, candidate, projected, secondaryText } = pick;
+  const { candidate, projected, secondaryText } = pick;
   if (!candidate.formula) {
     return;
   }
   const comparison = state.manifest.admission?.comparison;
-  const shape = comparison
-    ? labelTypographyStructure(candidate, comparison)
-    : labelFormulaStructure(candidate);
+  const shape = labelAgreementFormula(candidate, comparison);
   if (!shape) {
     return;
   }
   checkAgainstPackaging(state, shape, pick);
-  if (state.formulaShape && !isDeepStrictEqual(state.formulaShape, shape)) {
-    if (secondaryText) {
-      state.warnings.push({
-        id: entry.id,
-        code: assemblyErrors.code("LABEL_PRODUCT.SECONDARY_TEXT_FORMULA_CONFLICT"),
-      });
-    } else {
-      state.codes.add(assemblyErrors.code("LABEL_PRODUCT.FORMULA_CONFLICT"));
-    }
+  if (state.formulaShape) {
+    recordAgreement(state, pick, {
+      agreement: formulaAgreement(state.formulaShape, shape),
+      conflict: "LABEL_PRODUCT.FORMULA_CONFLICT",
+      secondary: "LABEL_PRODUCT.SECONDARY_TEXT_FORMULA_CONFLICT",
+    });
   }
   if (!state.formula && !secondaryText) {
     state.formulaShape = shape;
@@ -121,7 +117,7 @@ function selectFormula(state: MergeState, pick: Pick): void {
   }
 }
 
-type Shape = NonNullable<ReturnType<typeof labelFormulaStructure>>;
+type Shape = NonNullable<ReturnType<typeof labelAgreementFormula>>;
 
 /**
  * With packaging evidence, the container count is compared across sources but never kept as a per-serving value (the
@@ -151,26 +147,48 @@ function checkAgainstPackaging(state: MergeState, shape: Shape, pick: Pick): voi
 }
 
 function selectOtherIngredients(state: MergeState, pick: Pick): void {
-  const { entry, candidate, projected, secondaryText } = pick;
+  const { candidate, projected, secondaryText } = pick;
   if (!candidate.otherIngredients) {
     return;
   }
   const comparison = state.manifest.admission?.comparison;
-  const shape = candidate.otherIngredients.items.map((item) =>
-    comparison ? labelNameForComparison(item.text) : words(item.text),
-  );
-  if ((state.otherShape || secondaryText) && !isDeepStrictEqual(state.otherShape, shape)) {
-    if (secondaryText) {
-      state.warnings.push({
-        id: entry.id,
-        code: assemblyErrors.code("LABEL_PRODUCT.SECONDARY_TEXT_INGREDIENTS_CONFLICT"),
-      });
-    } else {
-      state.codes.add(assemblyErrors.code("LABEL_PRODUCT.INGREDIENTS_CONFLICT"));
-    }
+  const shape = labelAgreementIngredients(candidate);
+  if (state.otherShape || secondaryText) {
+    recordAgreement(state, pick, {
+      agreement: ingredientsAgreement(state.otherShape, shape, comparison),
+      conflict: "LABEL_PRODUCT.INGREDIENTS_CONFLICT",
+      secondary: "LABEL_PRODUCT.SECONDARY_TEXT_INGREDIENTS_CONFLICT",
+    });
   }
   if (!state.otherIngredients && !secondaryText) {
     state.otherShape = shape;
     state.otherIngredients = projected.otherIngredients;
+  }
+}
+
+function recordAgreement(
+  state: MergeState,
+  pick: Pick,
+  comparison: {
+    agreement: LabelAgreement;
+    conflict: AssemblyErrorCode;
+    secondary: AssemblyErrorCode;
+  },
+): void {
+  const { agreement, conflict, secondary } = comparison;
+  if (agreement === "exact") {
+    return;
+  }
+  const wording = agreement === "wording";
+  const code = assemblyErrors.code(
+    wording ? "LABEL_PRODUCT.SOURCE_WORDING_DIFFERS" : pick.secondaryText ? secondary : conflict,
+  );
+  const id = pick.entry.id;
+  if (wording || pick.secondaryText) {
+    if (!state.warnings.some((warning) => warning.id === id && warning.code === code)) {
+      state.warnings.push({ id, code });
+    }
+  } else {
+    state.codes.add(code);
   }
 }
