@@ -106,8 +106,12 @@ while (read.scroll && rounds < read.scroll.maxRounds) {
   const before = await count();
   const more = await markMore();
   if (more) {
-    await page.click('[data-crawlv3-more="1"]', { label: "load more results" });
-    await page.evaluate(() => document.querySelector('[data-crawlv3-more="1"]')?.removeAttribute("data-crawlv3-more"));
+    // Pressed in the page: a pointer click scrolls a growing list and misses (2026-10-01, Whole Foods: 30 → 52 by DOM).
+    await page.evaluate(() => {
+      const button = document.querySelector('[data-crawlv3-more="1"]');
+      button?.removeAttribute("data-crawlv3-more");
+      button?.click();
+    });
   } else {
     await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
   }
