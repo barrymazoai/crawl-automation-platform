@@ -97,7 +97,7 @@ export class LabelPlans {
       if (source.kind !== "file-image") {
         throw labelFailure("CHANNEL.LABEL_IDENTITY_CONFLICT");
       }
-      result = { status: "not_matched", input: request };
+      result = { ...resolution, input: request };
     } else {
       const prepared = { source, resolved: resolution.source };
       result = await labelSourceTask(request, prepared, { reader: this.deps.core, signal });

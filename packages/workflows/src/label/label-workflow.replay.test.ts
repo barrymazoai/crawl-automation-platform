@@ -1,12 +1,14 @@
 import { randomUUID } from "node:crypto";
 import { TestWorkflowEnvironment } from "@temporalio/testing";
 import { Worker } from "@temporalio/worker";
+import { ApplicationFailure } from "@temporalio/common";
 import { afterAll, beforeAll, expect, it } from "vitest";
 import { entry, collected, pageActivities, textOutcome } from "./label-fixture.js";
 import { gateFixture } from "../resources/testing/gate-fixture.js";
 import {
   currentBundle,
   labelMarkers,
+  labelNoSourceMarker,
   withoutPatches,
   type PatchMarker,
   type ReplayBundle,
@@ -33,6 +35,7 @@ beforeAll(async () => {
   for (const version of versions) {
     recordingBundles.set(version.name, withoutPatches(current, version.missing));
   }
+  recordingBundles.set("before no-source review", withoutPatches(current, [labelNoSourceMarker]));
   environment = await TestWorkflowEnvironment.createTimeSkipping();
 }, 60_000);
 
@@ -42,6 +45,51 @@ afterAll(async () => {
 
 const cases = versions.flatMap((version) =>
   (["closed", "failed"] as const).map((seal) => ({ ...version, seal })),
+);
+
+it.each([false, true])(
+  "replays a no-source Review (old history: %s)",
+  async (legacy) => {
+    const queue = `label-no-source-replay-${randomUUID()}`;
+    const bundle = legacy ? recordingBundles.get("before no-source review") : current;
+    if (!bundle) {
+      throw new Error("Missing no-source recording bundle");
+    }
+    const { history, result, workflowId } = await recordHistory({
+      environment,
+      bundle,
+      queue,
+      workflow: "LabelWorkflow",
+      input: { ...entry, queues: { activities: queue, model: queue, ocr: queue } },
+      activities: {
+        ...pageActivities(),
+        interpretText: async () => textOutcome,
+        prepareLabelManifest: async () => {
+          throw ApplicationFailure.nonRetryable(
+            "No source holds a label",
+            "CHANNEL.LABEL_NO_SOURCE",
+          );
+        },
+      },
+      afterStart: (handle) =>
+        handle.signal("labelStreamSealed", {
+          operationId: entry.input.operationId,
+          status: "closed",
+        }),
+    });
+    expect(result).toMatchObject({
+      status: "review",
+      automaticRetry: false,
+      code: legacy ? "CHANNEL.LABEL_PREPARATION_UNVERIFIED" : "CHANNEL.LABEL_NO_SOURCE",
+    });
+    expectMarkers(history, legacy ? [...labelMarkers] : [...labelMarkers, labelNoSourceMarker]);
+    expect(scheduledActivities(history).slice(-2)).toEqual([
+      "prepareLabelManifest",
+      "reviewLabelProduct",
+    ]);
+    await Worker.runReplayHistory({ workflowBundle: current }, history, workflowId);
+  },
+  30_000,
 );
 
 it.each(cases)(

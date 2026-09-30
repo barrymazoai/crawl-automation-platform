@@ -8,11 +8,12 @@ import { appErrors } from "../errors.js";
 import type { ProductReview } from "./product-reviews.js";
 import type { EvidencePublisher, ReviewLedger } from "./ports.js";
 
-/** The two ways a label product stops before its manifest: sources unverified, or held up by permits. */
+/** A label product without usable sources, with unverified preparation, or held up by permits. */
 export const LabelReviewRequestSchema = z.strictObject({
   input: z.unknown(),
   code: z.enum([
     "CHANNEL.LABEL_PREPARATION_UNVERIFIED",
+    "CHANNEL.LABEL_NO_SOURCE",
     pipelineErrors.code("CHANNEL.DEPENDENCY_UNAVAILABLE"),
   ]),
   states: z.array(z.unknown()).max(100),

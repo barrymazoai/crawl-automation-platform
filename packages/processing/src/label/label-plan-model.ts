@@ -53,7 +53,11 @@ export const LabelSourceResultSchema = z.discriminatedUnion("status", [
     input: LabelSourceRequestSchema,
     source: LabelProductSourceSchema,
   }),
-  z.strictObject({ status: z.literal("not_matched"), input: LabelSourceRequestSchema }),
+  z.strictObject({
+    status: z.literal("not_matched"),
+    input: LabelSourceRequestSchema,
+    reason: z.literal("no_text").optional(),
+  }),
 ]);
 export type LabelSourceResult = z.infer<typeof LabelSourceResultSchema>;
 
@@ -95,7 +99,7 @@ export interface ProductPlanReader {
 /** What a saved source's prepared evidence resolves to (see SavedSourceEvidence). */
 export type SourceResolution =
   | { status: "resolved"; source: ProductResolvedEvidenceSource }
-  | { status: "not_matched" }
+  | { status: "not_matched"; reason?: "no_text" }
   | { status: "review"; code: string };
 
 export type SourceResolver = (

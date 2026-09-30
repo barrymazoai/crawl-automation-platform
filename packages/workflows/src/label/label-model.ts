@@ -81,7 +81,11 @@ export const SourceResultSchema = z.discriminatedUnion("status", [
     input: SourceRequestSchema,
     source: LabelProductSourceSchema,
   }),
-  z.strictObject({ status: z.literal("not_matched"), input: SourceRequestSchema }),
+  z.strictObject({
+    status: z.literal("not_matched"),
+    input: SourceRequestSchema,
+    reason: z.literal("no_text").optional(),
+  }),
 ]);
 
 export const ImageCheckSchema = z.strictObject({

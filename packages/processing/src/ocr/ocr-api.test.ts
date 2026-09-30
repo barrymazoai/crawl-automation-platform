@@ -63,12 +63,16 @@ describe("OCR API client", () => {
     await expect(recognize(api(broken))).rejects.toMatchObject({ code: "OCR.PROTOCOL" });
   });
 
-  it("an answer without text is an executed failure", async () => {
-    const service = fakeService(json(200, { text: "  ", lines: [] }));
-    await expect(recognize(api(service))).rejects.toMatchObject({
-      code: "OCR.EMPTY",
-      details: { executionFact: "executed" },
-    });
+  it.each(["", "  \n\t"])("keeps a successful no-text response %j unchanged", async (text) => {
+    const answer = { text, lines: [], detector: "test" };
+    const service = fakeService(json(200, answer));
+    await expect(recognize(api(service))).resolves.toEqual(answer);
+    expect(service.requests).toHaveLength(1);
+  });
+
+  it("missing text is still a protocol failure, not a no-text result", async () => {
+    const service = fakeService(json(200, { lines: [] }));
+    await expect(recognize(api(service))).rejects.toMatchObject({ code: "OCR.PROTOCOL" });
   });
 
   it("bytes that are not the referenced image are never sent", async () => {

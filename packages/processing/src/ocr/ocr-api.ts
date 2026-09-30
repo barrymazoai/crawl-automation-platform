@@ -89,7 +89,7 @@ export class OcrApi {
     }
   }
 
-  /** The answer as the OCR API sent it, provider fields included; empty text is not a usable answer. */
+  /** Keep every successful answer, including no text, as provider evidence for source preparation. */
   private read(body: string): OcrResponse {
     if (Buffer.byteLength(body) > this.settings.maxResponseBytes) {
       throw ocrFailure("OCR.OUTPUT_LIMIT", "executed");
@@ -99,9 +99,6 @@ export class OcrApi {
       parsed = OcrResponseSchema.parse(JSON.parse(body));
     } catch (error) {
       throw ocrFailure("OCR.PROTOCOL", "executed", error);
-    }
-    if (!parsed.text.trim()) {
-      throw ocrFailure("OCR.EMPTY", "executed");
     }
     return parsed;
   }

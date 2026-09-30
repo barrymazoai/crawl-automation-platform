@@ -11,7 +11,8 @@ export const pipelineMarkers = [
   "label-heartbeat-v1",
 ] as const;
 export const labelMarkers = ["resource-gate-v1", "label-heartbeat-v1"] as const;
-export type PatchMarker = (typeof pipelineMarkers)[number];
+export const labelNoSourceMarker = "label-no-source-review-v1";
+export type PatchMarker = (typeof pipelineMarkers)[number] | typeof labelNoSourceMarker;
 export type ReplayBundle = { code: string };
 
 export function currentBundle() {

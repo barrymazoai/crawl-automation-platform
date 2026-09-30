@@ -136,7 +136,7 @@ export class LabelImageSelection {
       if (resolved.status !== state.status) {
         throw labelFailure("CHANNEL.LABEL_IDENTITY_CONFLICT");
       }
-      skip(outcome, source.id, { reason: "keyword_not_matched" });
+      skip(outcome, source.id, { reason: resolved.reason ?? "keyword_not_matched" });
       return;
     }
     const selected = context.selection.selectedImageId;

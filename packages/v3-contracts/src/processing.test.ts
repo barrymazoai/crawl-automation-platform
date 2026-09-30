@@ -16,6 +16,16 @@ function fixture(): OcrInput {
       producer: { operationId: "capture-1", module: "capture", implementationVersion: "capture/1" } } };
 }
 describe("V3 shared processing boundary", () => {
+  it.each(["", "  \n"])("v2 retains no-text evidence %j with exact provider agreement", (text) => {
+    const input = { ...fixture(), resultSchemaVersion: 2 as const };
+    const output = { ...processingIdentity(input), provider: "test/2", text,
+      rawResponse: { text, lines: [] } };
+    expect(OcrOutputSchema.parse(output)).toEqual(output);
+    expect(() => assertProcessingResultMatches(input, output, "output")).not.toThrow();
+    expect(OcrOutputSchema.safeParse({ ...output, rawResponse: { text: "different", lines: [] } }).success).toBe(false);
+    const { rawResponse: _removed, ...textOnly } = output;
+    expect(OcrOutputSchema.safeParse(textOnly).success).toBe(false);
+  });
   it("v2 requires provider evidence, preserves metadata and cannot reuse text-only v1 results", () => {
     const input = { ...fixture(), resultSchemaVersion: 2 as const };
     const rawResponse = { text: " raw text ", lines: [{ text: "raw text", score: 0.98, polygon: [[0, 0], [5, 0], [5, 2], [0, 2]] }], request_id: "synthetic", detector: "test" };

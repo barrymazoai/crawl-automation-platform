@@ -44,37 +44,38 @@ function setup() {
 }
 
 describe("LabelReviews.review durability and refusal cases", () => {
-  it.each(["CHANNEL.LABEL_PREPARATION_UNVERIFIED", "CHANNEL.DEPENDENCY_UNAVAILABLE"])(
-    "archives %s before appending and verifies the stored review",
-    async (code) => {
-      const fake = setup();
-      const signal = new AbortController().signal;
-      const result = await fake.service.review({ ...request, code }, signal);
-      const record = fake.rows.get(result.reviewId);
-      expect(record?.failure).toMatchObject({
-        code,
-        stage: "channel.label-input",
-        automaticRetry: false,
-      });
-      expect(record?.rawError.details).toEqual({ input, states: request.states });
-      expect(fake.evidence.publish).toHaveBeenCalledExactlyOnceWith(
-        result.evidenceKey,
-        Buffer.from(JSON.stringify(record)),
-        "application/json",
-        signal,
-      );
-      expect(fake.evidence.publish.mock.invocationCallOrder[0]).toBeLessThan(
-        fake.reviews.append.mock.invocationCallOrder[0] ?? 0,
-      );
-      expect(fake.reviews.read.mock.calls).toEqual([[result.reviewId], [result.reviewId]]);
-      expect(result).toMatchObject({
-        status: "review",
-        automaticRetry: false,
-        code,
-        operationId: input.operationId,
-      });
-    },
-  );
+  it.each([
+    "CHANNEL.LABEL_PREPARATION_UNVERIFIED",
+    "CHANNEL.LABEL_NO_SOURCE",
+    "CHANNEL.DEPENDENCY_UNAVAILABLE",
+  ])("archives %s before appending and verifies the stored review", async (code) => {
+    const fake = setup();
+    const signal = new AbortController().signal;
+    const result = await fake.service.review({ ...request, code }, signal);
+    const record = fake.rows.get(result.reviewId);
+    expect(record?.failure).toMatchObject({
+      code,
+      stage: "channel.label-input",
+      automaticRetry: false,
+    });
+    expect(record?.rawError.details).toEqual({ input, states: request.states });
+    expect(fake.evidence.publish).toHaveBeenCalledExactlyOnceWith(
+      result.evidenceKey,
+      Buffer.from(JSON.stringify(record)),
+      "application/json",
+      signal,
+    );
+    expect(fake.evidence.publish.mock.invocationCallOrder[0]).toBeLessThan(
+      fake.reviews.append.mock.invocationCallOrder[0] ?? 0,
+    );
+    expect(fake.reviews.read.mock.calls).toEqual([[result.reviewId], [result.reviewId]]);
+    expect(result).toMatchObject({
+      status: "review",
+      automaticRetry: false,
+      code,
+      operationId: input.operationId,
+    });
+  });
 
   it("returns a prior review's original code without publishing or appending again", async () => {
     const fake = setup();

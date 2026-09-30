@@ -7,7 +7,7 @@ import {
   ProductImageOutcomeSchema,
   ProductWorkflowOutcomeSchema,
 } from "@crawl-automation/v3-contracts";
-import { ApplicationFailure, isCancellation } from "@temporalio/workflow";
+import { ApplicationFailure, isCancellation, patched } from "@temporalio/workflow";
 import type { LabelRun } from "./label-run.js";
 import type { Issued } from "./label-source.js";
 import { ManifestResultSchema, type ManifestResult, type State } from "./label-model.js";
@@ -18,6 +18,7 @@ import { isHeartbeatFailure } from "./activity-heartbeat.js";
 
 type ReviewCode =
   | "CHANNEL.LABEL_PREPARATION_UNVERIFIED"
+  | "CHANNEL.LABEL_NO_SOURCE"
   | Extract<keyof typeof pipelineErrors.codes, "CHANNEL.DEPENDENCY_UNAVAILABLE">;
 type Failure = { sourceId: string; code: string; executionFact: string };
 
@@ -83,12 +84,19 @@ export async function labelManifest(
       ? [{ sourceId: "manifest", code: cause, executionFact: "executed" }]
       : undefined;
     const states = walk ? walk.states : [];
-    const code = "CHANNEL.LABEL_PREPARATION_UNVERIFIED";
+    const code = manifestReviewCode(cause);
     return {
       kind: "review",
       review: await reviewLabel(run, { states, code, ...(failures ? { failures } : {}) }),
     };
   }
+}
+
+/** Old histories keep the original Review activity input; new runs identify a missing label. */
+function manifestReviewCode(cause: string | undefined): ReviewCode {
+  return cause === "CHANNEL.LABEL_NO_SOURCE" && patched("label-no-source-review-v1")
+    ? cause
+    : "CHANNEL.LABEL_PREPARATION_UNVERIFIED";
 }
 
 /** The first coded cause in an activity failure's chain. */

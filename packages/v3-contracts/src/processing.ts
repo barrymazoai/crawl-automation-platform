@@ -69,7 +69,8 @@ const outputFields = { ...identity, ...versions, inputFingerprint: Sha256Schema,
   text: z.string().min(1).max(2000000), provider: VersionTagSchema };
 export const OcrOutputSchema = z.discriminatedUnion("resultSchemaVersion", [
   z.strictObject({ ...outputFields, resultSchemaVersion: z.literal(1) }),
-  z.strictObject({ ...outputFields, resultSchemaVersion: z.literal(2), rawResponse: OcrResponseSchema }),
+  z.strictObject({ ...outputFields, resultSchemaVersion: z.literal(2),
+    text: OcrResponseSchema.shape.text, rawResponse: OcrResponseSchema }),
 ]).refine(output => output.resultSchemaVersion === 1 || output.text === output.rawResponse.text,
   "OCR text must exactly match retained provider evidence");
 export const CompletionSchema = z.strictObject({ ...OperationIdentitySchema.shape,

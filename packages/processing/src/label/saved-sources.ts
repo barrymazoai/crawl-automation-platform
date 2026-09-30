@@ -136,7 +136,12 @@ export class SavedSourceEvidence {
     if (contradicts) {
       throw labelFailure("SAVED.RECEIPT_INVALID");
     }
-    return matched ? { status: "resolved", source: resolved } : { status: "not_matched" };
+    if (matched) {
+      return { status: "resolved", source: resolved };
+    }
+    const text = await this.deps.screen.verifiedText(resolved.task.input.selection, signal);
+    // Only verified, registered OCR can establish no text; missing evidence stays a failure.
+    return { status: "not_matched", ...(!text.trim() ? { reason: "no_text" as const } : {}) };
   }
 
   private async review(reviewId: string): Promise<ReviewRecord> {

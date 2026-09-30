@@ -18,7 +18,8 @@ const signal = () => AbortSignal.timeout(10_000);
 const visionFingerprint = (task: VisionTask) =>
   hashString(JSON.stringify(["vision-input/1", task.input, task.configFingerprint]));
 const noOcr = { read: async () => null };
-const noScreen = { screen: async () => Promise.reject(new Error("not an image")) };
+const noImage = async () => Promise.reject(new Error("not an image"));
+const noScreen = { screen: noImage, verifiedText: noImage };
 
 async function savedPage(html = "<p>Other ingredients: Water</p>") {
   const setup = pageSetup(html);

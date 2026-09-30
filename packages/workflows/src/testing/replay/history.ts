@@ -2,7 +2,12 @@ import { randomUUID } from "node:crypto";
 import type { TestWorkflowEnvironment } from "@temporalio/testing";
 import { Worker, type WorkerOptions } from "@temporalio/worker";
 import { expect } from "vitest";
-import { pipelineMarkers, type PatchMarker, type ReplayBundle } from "./bundles.js";
+import {
+  labelNoSourceMarker,
+  pipelineMarkers,
+  type PatchMarker,
+  type ReplayBundle,
+} from "./bundles.js";
 
 type Handle = Awaited<ReturnType<TestWorkflowEnvironment["client"]["workflow"]["start"]>>;
 export type History = Awaited<ReturnType<Handle["fetchHistory"]>>;
@@ -53,15 +58,16 @@ export async function recordHistory(recording: Recording) {
 }
 
 export function expectMarkers(history: History, expected: readonly PatchMarker[]) {
+  const markers = [...pipelineMarkers, labelNoSourceMarker] as const;
   const recorded = (history.events ?? []).flatMap((event) =>
     Object.values(event.markerRecordedEventAttributes?.details ?? {}).flatMap(
       (values) => values.payloads?.map((value) => Buffer.from(value.data ?? []).toString()) ?? [],
     ),
   );
-  const found = pipelineMarkers.filter((marker) =>
+  const found = markers.filter((marker) =>
     recorded.some((payload) => payload.includes(`"${marker}"`)),
   );
-  expect(found).toEqual(pipelineMarkers.filter((marker) => expected.includes(marker)));
+  expect(found).toEqual(markers.filter((marker) => expected.includes(marker)));
 }
 
 export function scheduledActivities(history: History): string[] {

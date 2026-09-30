@@ -7,7 +7,6 @@ import {
   observationIdentity,
   type AcquiredFileRecord,
   type FileAcquireInput,
-  type KeywordResult,
   type OcrRegistration,
   type PagePrepareInput,
   type PreparedPageRecord,
@@ -16,6 +15,7 @@ import {
   type VisionTask,
 } from "@crawl-automation/v3-contracts";
 import { keywordKey } from "../keywords/keyword-screening.js";
+import type { LedgerOcrText } from "../keywords/ocr-text.js";
 import { pageTextInputKey, pageTextTask } from "../pages/page-text.js";
 import { decodeJson, hashString } from "../results/result-record.js";
 import { labelFailure } from "./label-errors.js";
@@ -29,7 +29,7 @@ export interface SavedSourceDeps {
     inspect(input: PagePrepareInput, signal: AbortSignal): Promise<PreparedPageRecord | null>;
   };
   ocr: { read(operationId: string): Promise<OcrRegistration | null> };
-  screen: { screen(record: OcrRegistration, signal: AbortSignal): Promise<KeywordResult> };
+  screen: Pick<LedgerOcrText, "screen" | "verifiedText">;
   reviews: { read(reviewId: string): Promise<ReviewRecord | null> };
   visionFingerprint: (task: VisionTask) => string;
 }

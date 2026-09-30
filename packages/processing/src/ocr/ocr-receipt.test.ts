@@ -157,6 +157,25 @@ describe("OCR receipt", () => {
 });
 
 describe("OCR receipt for a cloud worker", () => {
+  it.each(["", " \n"])(
+    "registers retained no-text evidence %j without rerunning OCR",
+    async (text) => {
+      const fixture = receiptSetup();
+      const recognize = vi.fn(async () => ({ text, lines: [] }));
+      const api = { ...fixture.api, recognize };
+      const outcome = await cloudStep(fixture, { api }).run(fixture.input, signal());
+      expect(outcome.status).toBe("uploaded");
+      const receipt = await fixture.receipt.run({ input: fixture.input, outcome }, signal());
+      expect(receipt.status).toBe("registered");
+      expect(await fixture.receipt.run({ input: fixture.input, outcome: null }, signal())).toEqual(
+        receipt,
+      );
+      expect(recognize).toHaveBeenCalledOnce();
+      expect(fixture.registry.writes).toBe(1);
+      expect(fixture.reviews.records.size).toBe(0);
+    },
+  );
+
   it("registers what the cloud worker uploaded, from R2 alone, once", async () => {
     const fixture = receiptSetup();
     const outcome = await cloudStep(fixture).run(fixture.input, signal());
