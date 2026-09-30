@@ -63,14 +63,15 @@ module.exports = {
       to: { path: "^apps/(v3-api|v3-workers|backend|web|browser-node)/" },
     },
     {
-      // The old packages processing still calls until they move into it or the platform (restructure M1-M4).
-      name: "processing-imports-only-listed-old-packages",
+      // Only the new version runs: new code never calls the old packages. v3-contracts (data shapes) is kept.
+      // Today's imports are listed in .dependency-cruiser-known-violations.json (a dependency-cruiser baseline);
+      // each move ticket (R02-R08) removes its lines, and R01 closes when the file lists nothing.
+      name: "new-code-does-not-import-old-packages",
       severity: "error",
-      from: { path: layer("processing") },
-      to: {
-        path: "^packages/v3-",
-        pathNot: "^packages/v3-(contracts|artifacts|codex|review)/",
+      from: {
+        path: [layer("(api|cli|worker|adapters|app|workflows|channels|processing|platform)"), "^ops/deploy/"],
       },
+      to: { path: "^packages/v3-", pathNot: "^packages/v3-contracts/" },
     },
     {
       name: "no-circular",
