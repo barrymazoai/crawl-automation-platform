@@ -21,6 +21,7 @@ export function brandListingActivities(parts: WorkerParts) {
       : undefined;
     const readers: ScanReaders = {
       registry: parts.registry,
+      channels: parts.config.brandScans?.channels ?? {},
       pages: {
         read: (request, signal) => {
           pages ??= createListingPages(

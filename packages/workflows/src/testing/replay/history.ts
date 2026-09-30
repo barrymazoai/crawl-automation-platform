@@ -58,7 +58,12 @@ export async function recordHistory(recording: Recording) {
 }
 
 export function expectMarkers(history: History, expected: readonly PatchMarker[]) {
-  const markers = [...pipelineMarkers, labelNoSourceMarker, "formula-family-capture-v1"] as const;
+  const markers = [
+    ...pipelineMarkers,
+    labelNoSourceMarker,
+    "formula-family-capture-v1",
+    "brand-listing-gap-v1",
+  ] as const;
   const recorded = (history.events ?? []).flatMap((event) =>
     Object.values(event.markerRecordedEventAttributes?.details ?? {}).flatMap(
       (values) => values.payloads?.map((value) => Buffer.from(value.data ?? []).toString()) ?? [],

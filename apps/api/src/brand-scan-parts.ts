@@ -80,6 +80,7 @@ export function brandScanParts(parts: {
   });
   const deps = {
     ...readers,
+    channels: settings.channels,
     store,
     queue: parts.queue,
     listings: parts.listingStates,

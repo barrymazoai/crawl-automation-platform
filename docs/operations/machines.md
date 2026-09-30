@@ -10,19 +10,24 @@
 实际列表读取原来位于 API `BrandScanRunner`；`CollectionWorkflow` 只轮询扫描结果。
 API 为配置了 `brandScans.permits.<channel>` 的渠道启动新的 `BrandListingWorkflow`，由现有
 ResourceGate 在整个 listing read（分页和 family 展开）期间持有一个许可；获取许可前不发付费请求。
-没有 permit 配置的 GNC、Amazon 等继续原路径。该新工作流不改变已有 Collection/Browser workflow
-的命令序列，所以不需要给历史工作流添加 `patched()` 分支；新增的 Temporal replay 测试由主会话运行。
+没有 permit 配置的 GNC、Amazon 等继续原路径。Collection/Browser workflow 的命令序列不变。
+BrandListingWorkflow 的扫描后间隔使用 `patched("brand-listing-gap-v1")`，保持旧的未打补丁
+历史可重放；Temporal replay 测试由主会话运行，使用 `createLocal()` 和 1 秒间隔。
 
 Server 一 API 私有配置，在已有 `brandScans` 下合并：
 
 ```json
 {
+  "channels": {
+    "swanson": { "requestIntervalMs": 3000 }
+  },
   "permits": {
     "swanson": {
       "taskQueue": "v3.pipeline.product.v1",
       "resourceQueue": "v3.resources.v1",
       "resourceId": "swanson-brand-scan",
-      "maxWaitSeconds": 900
+      "maxWaitSeconds": 900,
+      "gapAfterSeconds": 30
     }
   }
 }
@@ -34,6 +39,18 @@ Server 一 API 私有配置，在已有 `brandScans` 下合并：
 `runner.concurrent` 仍是 API 同时处理的扫描总数，不能替代跨进程共享的 resource_capacity。
 沿用现有 ResourceGate 等待策略：资源不健康由 `maxWaitSeconds` 限定，健康但已满由最多 400 次
 退避轮询限定（不是严格的 900 秒墙钟截止）；超限以 `RESOURCE.WAIT_LIMIT` 结束扫描 Review。
+
+两项节流配置适用于任意渠道，未设置时均为 0。Swanson 建议：
+`brandScans.channels.swanson.requestIntervalMs = 3000`（API 和 worker 都配置），每次列表页面
+读取和解析结束后、下一次请求前暂停 3 秒，含 collection → API page 1 → API page 2；首个请求前
+及最后一页后不等待，读存档也遵守间隔。该 Node promise timer 使用 Activity 的 AbortSignal，
+取消立即中断等待。合并 `channels.swanson` 时保留既有代理及 header 配置。
+`brandScans.permits.swanson.gapAfterSeconds = 30`（只在 API 配置）让成功、Review 或失败的扫描
+在许可内用 Temporal durable sleep 再等 30 秒才释放；容量为 1 时，下一个品牌必须等到释放后才能开始。
+取消会跳过或中断间隔，但仍通过 gate 的 non-cancellable finally 释放。已有工作流保留原输入，
+新配置作用于新启动的扫描；没有 permit 的渠道没有扫描后间隔。
+10 个各含 1 页 API 的小品牌，等待合计 10 × (3 + 30) = 330 秒（含最后一次释放前间隔），
+加上每品牌约 3 秒的抓取和存档，约 6 分钟列完。额外分页每页再加 3 秒及请求耗时；这不是时限保证。
 
 Server 一 worker 私有配置新增顶层 `brandScans`，从 API 的 `brandScans` **仅复制**
 `route`、`scraperApi`、`channels` 和 `swanson`；`channels` 可省略，默认 `{}`。不要复制 runner、permits、

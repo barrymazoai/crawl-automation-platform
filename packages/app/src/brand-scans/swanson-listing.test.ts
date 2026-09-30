@@ -1,7 +1,11 @@
 import { createSwansonAdapter } from "@crawl-automation/channel-swanson";
+import { setTimeout } from "node:timers/promises";
 import { ChannelRegistry, type ListingPageRequest } from "@crawl-automation/channels-core";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { readListing } from "./scan-listing.js";
+
+vi.mock("node:timers/promises", () => ({ setTimeout: vi.fn(async () => undefined) }));
+beforeEach(() => vi.mocked(setTimeout).mockClear());
 
 const origin = "https://www.swansonvitamins.com";
 const scan = {
@@ -30,7 +34,15 @@ function fixture(bodies: Record<string, string>, configured = true) {
   }));
   const adapter = createSwansonAdapter(configured ? { constructorKey: "test-key" } : undefined);
   const readers = { registry: new ChannelRegistry([adapter]), pages: { read }, browsers: {} };
-  return { read, run: () => readListing(readers, scan, new AbortController().signal) };
+  return {
+    read,
+    run: (requestIntervalMs = 0) =>
+      readListing(
+        { ...readers, channels: { swanson: { requestIntervalMs } } },
+        scan,
+        new AbortController().signal,
+      ),
+  };
 }
 
 describe("two-stage archived Swanson listing", () => {
@@ -41,7 +53,9 @@ describe("two-stage archived Swanson listing", () => {
       "page-1": response(handles, 101),
       "page-2": response(["last"], 101),
     });
-    const listing = await test.run();
+    const listing = await test.run(3000);
+    expect(setTimeout).toHaveBeenCalledTimes(2);
+    expect(setTimeout).toHaveBeenCalledWith(3000, undefined, { signal: expect.any(AbortSignal) });
     expect(listing).toMatchObject({ full: true, credits: 3, families: 0, unresolvedFamilies: 0 });
     expect(listing.pages).toHaveLength(2);
     expect(listing.products).toHaveLength(102);

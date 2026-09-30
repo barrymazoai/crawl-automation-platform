@@ -1,3 +1,4 @@
+import { setTimeout } from "node:timers/promises";
 import {
   brandScanErrors,
   type BrandScanReader,
@@ -17,6 +18,7 @@ export interface ListingWork {
   adapter: ChannelAdapter;
   reader: BrandScanReader;
   pages: ListingPageReader;
+  requestIntervalMs?: number;
 }
 
 export function listingTarget(work: ListingWork) {
@@ -51,6 +53,7 @@ async function resolveSource(work: ListingWork, signal: AbortSignal) {
 /** Read consecutive archived pages; readers can report a bounded partial scan at their own cap. */
 export async function readPages(work: ListingWork, signal: AbortSignal) {
   const { reader } = work;
+  signal.throwIfAborted();
   const resolved = await resolveSource(work, signal);
   const pages: ListingPage[] = [];
   let credits = resolved.credits;
@@ -61,6 +64,7 @@ export async function readPages(work: ListingWork, signal: AbortSignal) {
       });
     }
     const url = reader.pageUrl(resolved.source, page);
+    await waitBetweenPages(work, page, signal);
     const read = await work.pages.read(
       {
         ...listingTarget(work),
@@ -81,4 +85,12 @@ export async function readPages(work: ListingWork, signal: AbortSignal) {
       throw brandScanErrors.create("BRAND_SCAN.PAGINATION");
     }
   }
+}
+
+async function waitBetweenPages(work: ListingWork, page: number, signal: AbortSignal) {
+  const interval = work.requestIntervalMs ?? 0;
+  if ((work.reader.resolve || page > 1) && interval > 0) {
+    await setTimeout(interval, undefined, { signal });
+  }
+  signal.throwIfAborted();
 }

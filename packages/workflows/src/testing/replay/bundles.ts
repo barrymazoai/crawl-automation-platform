@@ -14,7 +14,10 @@ export const pipelineMarkers = [
 export const labelMarkers = ["resource-gate-v1", "label-heartbeat-v1"] as const;
 export const labelNoSourceMarker = "label-no-source-review-v1";
 export type PatchMarker =
-  (typeof pipelineMarkers)[number] | typeof labelNoSourceMarker | "formula-family-capture-v1";
+  | (typeof pipelineMarkers)[number]
+  | typeof labelNoSourceMarker
+  | "formula-family-capture-v1"
+  | "brand-listing-gap-v1";
 export type ReplayBundle = { code: string };
 
 export function currentBundle() {

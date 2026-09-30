@@ -4,7 +4,8 @@ import {
   type ScraperApiAccess,
 } from "@crawl-automation/platform";
 import type { ScraperApiRoute } from "@crawl-automation/v3-contracts";
-import type { ScraperApiCaptureSettings } from "../capture/page-fetch.js";
+import type { ChannelId } from "../adapter.js";
+import type { ListingChannelSettings } from "./listing-fetch-settings.js";
 import { ListingPages } from "./listing-pages.js";
 
 /** API and worker listing readers share the same provider options and archive contract. */
@@ -12,7 +13,7 @@ export function createListingPages(
   settings: {
     route: ScraperApiRoute;
     scraperApi: ScraperApiAccess;
-    channels: ScraperApiCaptureSettings["channels"];
+    channels: Partial<Record<ChannelId, ListingChannelSettings>>;
   },
   remote: ObjectStore,
 ): ListingPages {
@@ -28,7 +29,12 @@ export function createListingPages(
         render: route.responseMode === "rendered-html",
         premium: false,
       },
-      channels,
+      channels: Object.fromEntries(
+        Object.entries(channels).map(([channel, { requestIntervalMs: _interval, ...options }]) => [
+          channel,
+          options,
+        ]),
+      ),
     },
     remote,
   });

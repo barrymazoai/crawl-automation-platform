@@ -1,5 +1,6 @@
 import {
   type ChannelRegistry,
+  type ChannelId,
   type ListedProduct,
   type ListingPage,
 } from "@crawl-automation/channels-core";
@@ -21,6 +22,7 @@ export interface ScanReaders {
   registry: ChannelRegistry;
   pages: ListingPageReader;
   browsers: BrowserBrandScanners;
+  channels?: Partial<Record<ChannelId, { requestIntervalMs: number }>>;
 }
 
 /** Everything one brand's listing showed: its pages, its products (families expanded) and what it cost. */
@@ -83,7 +85,13 @@ export async function readListing(
   const url = selected.reader.sourceUrl(scan.source.url);
   if (selected.capture === "http") {
     return readBrandListing(
-      { scan, adapter: selected.adapter, reader: selected.reader, pages: readers.pages },
+      {
+        scan,
+        adapter: selected.adapter,
+        reader: selected.reader,
+        pages: readers.pages,
+        requestIntervalMs: readers.channels?.[selected.adapter.id]?.requestIntervalMs ?? 0,
+      },
       signal,
     );
   }

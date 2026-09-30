@@ -40,6 +40,7 @@ it("wires only the configured channel to a ResourceGate listing workflow", async
         taskQueue: "pipeline",
         resourceQueue: "resources",
         resourceId: "swanson-brand-scan",
+        gapAfterSeconds: 30,
       },
     },
   });
@@ -60,6 +61,7 @@ it("wires only the configured channel to a ResourceGate listing workflow", async
         {
           scanId,
           source,
+          gapAfterSeconds: 30,
           resources: {
             queue: "resources",
             maxWaitSeconds: 900,

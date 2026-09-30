@@ -1,4 +1,5 @@
 import { ResourceGateSchema, ResourceNeedSchema } from "@crawl-automation/v3-contracts";
+import { BrandListingInputSchema } from "@crawl-automation/workflows";
 import { z } from "zod";
 import type { BrandListing, ListingScan } from "./scan-listing.js";
 
@@ -8,6 +9,7 @@ export const BrandScanPermitSchema = z.strictObject({
   resourceQueue: ResourceGateSchema.shape.queue,
   resourceId: ResourceNeedSchema.shape.resourceId,
   maxWaitSeconds: ResourceGateSchema.shape.maxWaitSeconds,
+  gapAfterSeconds: BrandListingInputSchema.shape.gapAfterSeconds,
 });
 export type BrandScanPermit = z.infer<typeof BrandScanPermitSchema>;
 

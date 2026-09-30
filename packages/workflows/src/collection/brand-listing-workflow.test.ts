@@ -3,6 +3,8 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 const state = vi.hoisted(() => ({
   held: true,
   now: 0,
+  patched: true,
+  cancelled: false,
   reserve: vi.fn(),
   release: vi.fn(),
   read: vi.fn(),
@@ -16,7 +18,12 @@ vi.mock("@temporalio/workflow", () => ({
     }
   },
   ActivityCancellationType: { WAIT_CANCELLATION_COMPLETED: "WAIT" },
-  CancellationScope: { nonCancellable: (run: () => Promise<unknown>) => run() },
+  CancellationScope: {
+    nonCancellable: (run: () => Promise<unknown>) => run(),
+    current: () => ({ consideredCancelled: state.cancelled }),
+  },
+  patched: () => state.patched,
+  isCancellation: (error: unknown) => error instanceof Error && error.name === "CancelledFailure",
   workflowInfo: () => ({
     taskQueue: "pipeline",
     runId: "11111111-1111-4111-8111-111111111111",
@@ -54,6 +61,8 @@ const input = {
 beforeEach(() => {
   state.held = true;
   state.now = 0;
+  state.patched = true;
+  state.cancelled = false;
   state.options = [];
   vi.spyOn(Date, "now").mockImplementation(() => state.now);
   state.reserve.mockReset().mockImplementation(async ({ permitId }) => ({
@@ -126,3 +135,76 @@ it("releases a failed listing without repeating the activity", async () => {
   expect(state.read).toHaveBeenCalledOnce();
   expect(state.release).toHaveBeenCalledOnce();
 });
+
+it.each(["complete", "review", "failure"])(
+  "holds the permit after %s until the gap ends",
+  async (ending) => {
+    state.held = false;
+    const result = { products: [], full: ending === "complete" };
+    const failure = Object.assign(new Error("challenge"), { type: "BRAND_SCAN.ACCESS_CHALLENGE" });
+    state.read.mockImplementation(async () => {
+      if (ending === "failure") {
+        throw failure;
+      }
+      return result;
+    });
+    let finishGap: () => void = () => undefined;
+    state.sleep.mockReturnValueOnce(
+      new Promise<void>((resolve) => {
+        finishGap = resolve;
+      }),
+    );
+    const pending = BrandListingWorkflow({ ...input, gapAfterSeconds: 1 });
+    const settled =
+      ending === "failure"
+        ? expect(pending).rejects.toBe(failure)
+        : expect(pending).resolves.toEqual(result);
+    await vi.waitFor(() => expect(state.sleep).toHaveBeenCalledExactlyOnceWith(1000));
+    expect(state.read).toHaveBeenCalledOnce();
+    expect(state.release).not.toHaveBeenCalled();
+    finishGap();
+    await settled;
+    expect(state.release).toHaveBeenCalledExactlyOnceWith(state.reserve.mock.calls[0]?.[0]);
+  },
+);
+
+it.each([undefined, 0])(
+  "does not schedule a gap when configured as %s",
+  async (gapAfterSeconds) => {
+    state.held = false;
+    await BrandListingWorkflow({ ...input, gapAfterSeconds });
+    expect(state.sleep).not.toHaveBeenCalled();
+    expect(state.release).toHaveBeenCalledOnce();
+  },
+);
+
+it("keeps the unpatched command sequence even with a configured gap", async () => {
+  state.held = false;
+  state.patched = false;
+  await BrandListingWorkflow({ ...input, gapAfterSeconds: 1 });
+  expect(state.sleep).not.toHaveBeenCalled();
+  expect(state.release).toHaveBeenCalledOnce();
+});
+
+it.each(["activity", "scope", "gap"])(
+  "releases on cancellation during %s without waiting",
+  async (during) => {
+    state.held = false;
+    const cancelled = Object.assign(new Error("cancelled"), { name: "CancelledFailure" });
+    if (during === "activity") {
+      state.read.mockRejectedValueOnce(cancelled);
+    } else if (during === "scope") {
+      state.cancelled = true;
+    } else {
+      state.sleep.mockRejectedValueOnce(cancelled);
+    }
+    const pending = BrandListingWorkflow({ ...input, gapAfterSeconds: 30 });
+    if (during === "scope") {
+      await expect(pending).resolves.toEqual({ products: [] });
+    } else {
+      await expect(pending).rejects.toBe(cancelled);
+    }
+    expect(state.sleep).toHaveBeenCalledTimes(during === "gap" ? 1 : 0);
+    expect(state.release).toHaveBeenCalledOnce();
+  },
+);

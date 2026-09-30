@@ -1,9 +1,13 @@
 import { ChannelRegistry, type ChannelAdapter } from "@crawl-automation/channels-core";
+import { setTimeout } from "node:timers/promises";
 import * as channels from "@crawl-automation/channels-core";
 import type { ListingPages } from "@crawl-automation/channels-core";
 import type { WorkerParts } from "../container.js";
-import { afterEach, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { brandListingActivities } from "./brand-listing-activities.js";
+
+vi.mock("node:timers/promises", () => ({ setTimeout: vi.fn(async () => undefined) }));
+beforeEach(() => vi.mocked(setTimeout).mockClear());
 
 vi.mock("./activity-guard.js", () => ({
   guarded:
@@ -23,7 +27,7 @@ const request = {
 };
 const page = { products: [], cards: 0, nextPage: null, statedTotal: 0 };
 
-function fixture(capture: "http" | "browser") {
+function fixture(capture: "http" | "browser", requestIntervalMs = 0) {
   const adapter = {
     id: "gnc",
     scanCapture: () => capture,
@@ -45,11 +49,18 @@ function fixture(capture: "http" | "browser") {
   const scan = vi.fn(async () => ({ pages: [page], complete: true, soldHere: true }));
   const parts = {
     registry: new ChannelRegistry([adapter]),
-    config: { brandScans: {} },
+    config: { brandScans: { channels: { gnc: { requestIntervalMs } } } },
     r2: { store: {} },
     browser: { scanner: { scan } },
   } as unknown as WorkerParts;
-  return { activity: brandListingActivities(parts).readBrandListing, parts, read, factory, scan };
+  return {
+    activity: brandListingActivities(parts).readBrandListing,
+    parts,
+    read,
+    factory,
+    scan,
+    adapter,
+  };
 }
 
 it("runs a configured HTTP listing through the shared archived reader", async () => {
@@ -87,4 +98,23 @@ it("refuses an HTTP listing without worker listing settings before a paid reques
     code: "WORKER.ROLE_SETTINGS_MISSING",
   });
   expect(test.read).not.toHaveBeenCalled();
+});
+
+it("passes the channel's configured interval to the activity's page loop", async () => {
+  const test = fixture("http", 3000);
+  const reader = test.adapter.brandScan;
+  if (!reader) {
+    throw new Error("fixture must have a listing reader");
+  }
+  reader.resolve = {
+    pageUrl: (url) => url,
+    answer: "html",
+    maxBytes: 1000,
+    parsePage: () => request.source.url,
+  };
+  await test.activity(request);
+  expect(test.read).toHaveBeenCalledTimes(2);
+  expect(setTimeout).toHaveBeenCalledExactlyOnceWith(3000, undefined, {
+    signal: expect.any(AbortSignal),
+  });
 });

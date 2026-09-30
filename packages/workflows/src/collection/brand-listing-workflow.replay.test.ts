@@ -5,7 +5,10 @@ import { TestWorkflowEnvironment } from "@temporalio/testing";
 import { Worker, bundleWorkflowCode } from "@temporalio/worker";
 import type { ResourceRequest } from "@crawl-automation/v3-contracts";
 import { afterAll, beforeAll, expect, it, vi } from "vitest";
-import { recordHistory, scheduledActivities } from "../testing/replay/history.js";
+import { expectMarkers, recordHistory, scheduledActivities } from "../testing/replay/history.js";
+import type { History } from "../testing/replay/history.js";
+import { withoutPatches } from "../testing/replay/bundles.js";
+import { gateFixture } from "../resources/testing/gate-fixture.js";
 
 let environment: TestWorkflowEnvironment;
 let bundle: Awaited<ReturnType<typeof bundleWorkflowCode>>;
@@ -22,9 +25,10 @@ afterAll(async () => {
   await environment?.teardown();
 });
 
-function input(queue: string, maxWaitSeconds = 10) {
+function input(queue: string, maxWaitSeconds = 10, gapAfterSeconds = 0) {
   return {
     scanId: randomUUID(),
+    gapAfterSeconds,
     source: { sourceId: randomUUID(), channel: "swanson", url: "https://example.com/brand" },
     resources: {
       queue,
@@ -34,37 +38,69 @@ function input(queue: string, maxWaitSeconds = 10) {
   };
 }
 
-it.each(["complete", "challenge", "wait-limit"])(
-  "records and replays a gated listing ending in %s",
-  async (ending) => {
+function listingFixture(ending: string) {
+  const held = new Set<string>();
+  const readBrandListing = vi.fn(async () => {
+    expect(held.size).toBe(1);
+    if (ending === "challenge") {
+      throw ApplicationFailure.nonRetryable("challenge", "BRAND_SCAN.ACCESS_CHALLENGE");
+    }
+    return { pages: [], products: [], full: ending !== "review" };
+  });
+  const reserveResources = vi.fn(async ({ permitId }: ResourceRequest) => {
+    if (ending === "wait-limit") {
+      return { permitId, status: "waiting", reason: "unhealthy" };
+    }
+    held.add(permitId);
+    return { permitId, status: "granted", reason: "available" };
+  });
+  const releaseResources = vi.fn(async ({ permitId }: ResourceRequest) => {
+    expect(held.delete(permitId)).toBe(true);
+    return { permitId, status: "released", reason: "released" };
+  });
+  return { held, activities: { readBrandListing, reserveResources, releaseResources } };
+}
+
+function expectGap(history: History, gap: number) {
+  const events = history.events ?? [];
+  const timers = events.filter((event) => event.timerStartedEventAttributes);
+  expect(timers).toHaveLength(gap > 0 ? 1 : 0);
+  if (gap > 0) {
+    expect(Number(timers[0]?.timerStartedEventAttributes?.startToFireTimeout?.seconds)).toBe(gap);
+    const finished = events.findLastIndex((event) => event.timerFiredEventAttributes);
+    const released = events.findIndex(
+      (event) =>
+        event.activityTaskScheduledEventAttributes?.activityType?.name === "releaseResources",
+    );
+    expect(finished).toBeGreaterThan(-1);
+    expect(released).toBeGreaterThan(finished);
+  }
+}
+
+it.each([
+  { ending: "complete", legacy: true, gap: 0 },
+  { ending: "challenge", legacy: true, gap: 0 },
+  { ending: "complete", legacy: false, gap: 0 },
+  { ending: "complete", legacy: false, gap: 1 },
+  { ending: "review", legacy: false, gap: 1 },
+  { ending: "challenge", legacy: false, gap: 1 },
+  { ending: "wait-limit", legacy: false, gap: 1 },
+])(
+  "replays $ending (legacy=$legacy, gap=$gap)",
+  async ({ ending, legacy, gap }) => {
     const queue = `listing-replay-${randomUUID()}`;
-    const held = new Set<string>();
-    const readBrandListing = vi.fn(async () => {
-      expect(held.size).toBe(1);
-      if (ending === "challenge") {
-        throw ApplicationFailure.nonRetryable("challenge", "BRAND_SCAN.ACCESS_CHALLENGE");
-      }
-      return { pages: [], products: [], full: true };
-    });
-    const reserveResources = vi.fn(async ({ permitId }: ResourceRequest) => {
-      if (ending === "wait-limit") {
-        return { permitId, status: "waiting", reason: "unhealthy" };
-      }
-      held.add(permitId);
-      return { permitId, status: "granted", reason: "available" };
-    });
-    const releaseResources = vi.fn(async ({ permitId }: ResourceRequest) => {
-      expect(held.delete(permitId)).toBe(true);
-      return { permitId, status: "released", reason: "released" };
-    });
+    const { held, activities } = listingFixture(ending);
+    const { readBrandListing, releaseResources } = activities;
+    const request = input(queue, 10, gap);
+    const { gapAfterSeconds: _gap, ...oldRequest } = request;
     const { history, workflowId } = await recordHistory({
       environment,
-      bundle,
+      bundle: legacy ? withoutPatches(bundle, ["brand-listing-gap-v1"]) : bundle,
       queue,
       workflow: "BrandListingWorkflow",
-      input: input(queue),
-      activities: { readBrandListing, reserveResources, releaseResources },
-      fails: ending !== "complete",
+      input: legacy ? oldRequest : request,
+      activities,
+      fails: ending === "challenge" || ending === "wait-limit",
     });
     expect(held.size).toBe(0);
     expect(readBrandListing).toHaveBeenCalledTimes(ending === "wait-limit" ? 0 : 1);
@@ -74,6 +110,10 @@ it.each(["complete", "challenge", "wait-limit"])(
         ? ["reserveResources", "reserveResources"]
         : ["reserveResources", "readBrandListing", "releaseResources"],
     );
+    expectMarkers(history, legacy ? [] : ["brand-listing-gap-v1"]);
+    if (ending !== "wait-limit") {
+      expectGap(history, gap);
+    }
     await Worker.runReplayHistory({ workflowBundle: bundle }, history, workflowId);
   },
   30_000,
@@ -100,6 +140,7 @@ it("serializes two listings at capacity 1 and replays their waiting histories", 
   });
   const held = new Set<string>();
   let reads = 0;
+  let firstFinishedAt = 0;
   const worker = await Worker.create({
     connection: environment.nativeConnection,
     workflowBundle: bundle,
@@ -119,8 +160,10 @@ it("serializes two listings at capacity 1 and replays their waiting histories", 
         if (reads === 1) {
           reading();
           await finishFirst;
+          firstFinishedAt = Date.now();
         }
         if (reads === 2) {
+          expect(Date.now() - firstFinishedAt).toBeGreaterThanOrEqual(1000);
           bothRead();
         }
         return { products: [] };
@@ -137,7 +180,7 @@ it("serializes two listings at capacity 1 and replays their waiting histories", 
         taskQueue: queue,
         workflowId: randomUUID(),
         // The waiting run must outlast the first listing's real run time plus its backoff polls.
-        args: [input(queue, 900)],
+        args: [input(queue, 900, 1)],
       });
     const first = await start();
     await firstReading;
@@ -158,3 +201,54 @@ it("serializes two listings at capacity 1 and replays their waiting histories", 
     }
   });
 }, 30_000);
+
+it.each(["activity", "gap"])(
+  "cancels during %s, releases and replays without finishing the gap",
+  async (during) => {
+    const queue = `listing-cancel-${randomUUID()}`;
+    const fixture = gateFixture();
+    const readBrandListing = vi.fn(() =>
+      fixture.activities.work(during === "activity" ? "cancel" : "complete"),
+    );
+    const worker = await Worker.create({
+      connection: environment.nativeConnection,
+      workflowBundle: bundle,
+      taskQueue: queue,
+      activities: { ...fixture.activities, readBrandListing },
+      maxHeartbeatThrottleInterval: "50 milliseconds",
+      defaultHeartbeatThrottleInterval: "50 milliseconds",
+    });
+    await worker.runUntil(async () => {
+      const handle = await environment.client.workflow.start("BrandListingWorkflow", {
+        taskQueue: queue,
+        workflowId: randomUUID(),
+        args: [input(queue, 10, 1)],
+      });
+      await fixture.working;
+      if (during === "gap") {
+        await vi.waitFor(
+          async () => {
+            const history = await handle.fetchHistory();
+            expect(history.events?.some((event) => event.timerStartedEventAttributes)).toBe(true);
+          },
+          { interval: 10 },
+        );
+      }
+      expect(fixture.held.size).toBe(1);
+      await handle.cancel();
+      await expect(handle.result()).rejects.toThrow();
+      expect(fixture.calls.stopped).toBe(true);
+      expect(fixture.calls.released).toBe(1);
+      expect(fixture.held.size).toBe(0);
+      expect(readBrandListing).toHaveBeenCalledOnce();
+      const history = await handle.fetchHistory();
+      expect(history.events?.at(-1)?.workflowExecutionCanceledEventAttributes).toBeTruthy();
+      expect(history.events?.filter((event) => event.timerStartedEventAttributes)).toHaveLength(
+        during === "gap" ? 1 : 0,
+      );
+      expect(history.events?.some((event) => event.timerFiredEventAttributes)).toBe(false);
+      await Worker.runReplayHistory({ workflowBundle: bundle }, history, handle.workflowId);
+    });
+  },
+  30_000,
+);

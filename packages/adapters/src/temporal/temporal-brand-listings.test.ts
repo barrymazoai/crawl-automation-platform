@@ -16,6 +16,7 @@ const settings = {
   resourceQueue: "resources",
   resourceId: "swanson-brand-scan",
   maxWaitSeconds: 900,
+  gapAfterSeconds: 30,
 };
 
 function fixture() {
@@ -43,6 +44,7 @@ it("starts one durable gated listing for the scan snapshot", async () => {
     args: [
       {
         ...scan,
+        gapAfterSeconds: 30,
         resources: {
           queue: "resources",
           maxWaitSeconds: 900,

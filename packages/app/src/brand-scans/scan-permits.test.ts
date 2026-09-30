@@ -84,7 +84,16 @@ it.each([
 it("validates the permit resource and bounded wait at config load", () => {
   const valid = { taskQueue: "pipeline", resourceQueue: "resources", resourceId: "brand-scan" };
   expect(BrandScanPermitSchema.parse(valid).maxWaitSeconds).toBe(900);
-  for (const invalid of [{ resourceId: "" }, { resourceQueue: "" }, { maxWaitSeconds: 3601 }]) {
+  expect(BrandScanPermitSchema.parse(valid).gapAfterSeconds).toBe(0);
+  expect(BrandScanPermitSchema.parse({ ...valid, gapAfterSeconds: 30 }).gapAfterSeconds).toBe(30);
+  for (const invalid of [
+    { resourceId: "" },
+    { resourceQueue: "" },
+    { maxWaitSeconds: 3601 },
+    { gapAfterSeconds: -1 },
+    { gapAfterSeconds: 0.5 },
+    { gapAfterSeconds: "30" },
+  ]) {
     expect(() => BrandScanPermitSchema.parse({ ...valid, ...invalid })).toThrow();
   }
 });
