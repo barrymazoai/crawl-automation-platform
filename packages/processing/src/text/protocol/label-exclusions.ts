@@ -84,6 +84,10 @@ function allowedExclusion(exclusion: Exclusion, judged: Judged): boolean {
       return HEADING.test(value);
     case "footnote":
       return SYMBOL_FOOTNOTE.test(value) || STANDARD_FOOTNOTE.test(value);
+    // The model may call the FDA's standard sentence metadata (2026-09-30, Swanson D-Ribose); the whole line is still
+    // the footnote, so the reason word does not send it to Review. Other metadata stays refused.
+    case "metadata":
+      return STANDARD_FOOTNOTE.test(value);
     case "allergen":
       return ALLERGEN.test(value);
     case "directions":

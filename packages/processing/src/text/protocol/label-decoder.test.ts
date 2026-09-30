@@ -78,6 +78,30 @@ describe("decodeLabelText", () => {
     expect(result.codes).toContain("LABEL.COVERAGE_UNCERTAIN");
   });
 
+  it("accepts the standard FDA footnote whether the model calls it footnote or metadata", () => {
+    // 2026-09-30 run aa3f19fe: the same label, the same sentence, reason "metadata" (owner: this is a product).
+    const exclusions = answer.exclusions.map((exclusion) =>
+      exclusion.quote.text.startsWith("Percent Daily Values")
+        ? { ...exclusion, reason: "metadata" }
+        : exclusion,
+    );
+    const { result } = decode(dRibose, { ...answer, exclusions });
+
+    expect(result.codes).toEqual([]);
+    expect(result.status).toBe("candidate");
+  });
+
+  it("still sends other text excluded as metadata to Review", () => {
+    const lines = [...dRibose, "Made with love"];
+    const exclusion = {
+      quote: { fromLine: 19, toLine: 19, text: "Made with love" },
+      reason: "metadata",
+    };
+    const { result } = decode(lines, { ...answer, exclusions: [...answer.exclusions, exclusion] });
+
+    expect(result.codes).toContain("LABEL.COVERAGE_UNCERTAIN");
+  });
+
   it("flags printed words that are neither extracted nor excluded", () => {
     const { result } = decode([...dRibose, "Vitamin C 60 mg"], answer);
 
