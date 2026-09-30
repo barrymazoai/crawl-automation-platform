@@ -142,50 +142,5 @@
       "severity": "error",
       "name": "new-code-does-not-import-old-packages"
     }
-  },
-  {
-    "type": "dependency",
-    "from": "packages/platform/src/storage/file-copies-compatibility.test.ts",
-    "to": "packages/v3-artifacts/src/index.ts",
-    "rule": {
-      "severity": "error",
-      "name": "new-code-does-not-import-old-packages"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "packages/platform/src/storage/integrity-compatibility.test.ts",
-    "to": "packages/v3-artifacts/src/index.ts",
-    "rule": {
-      "severity": "error",
-      "name": "new-code-does-not-import-old-packages"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "packages/platform/src/storage/publication-compatibility.test.ts",
-    "to": "packages/v3-artifacts/src/index.ts",
-    "rule": {
-      "severity": "error",
-      "name": "new-code-does-not-import-old-packages"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "packages/platform/src/storage/r2-compatibility.test.ts",
-    "to": "packages/v3-artifacts/src/index.ts",
-    "rule": {
-      "severity": "error",
-      "name": "new-code-does-not-import-old-packages"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "packages/platform/src/storage/resolver-compatibility.test.ts",
-    "to": "packages/v3-artifacts/src/index.ts",
-    "rule": {
-      "severity": "error",
-      "name": "new-code-does-not-import-old-packages"
-    }
   }
 ]

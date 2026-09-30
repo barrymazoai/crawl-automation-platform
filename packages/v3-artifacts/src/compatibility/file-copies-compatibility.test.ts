@@ -2,8 +2,8 @@ import { mkdtemp, readFile, readdir, stat, symlink, writeFile } from "node:fs/pr
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { describe, expect, it } from "vitest";
-import { FileCopies as OldCopies } from "@crawl-automation/v3-artifacts";
-import { FileCopies } from "./file-copies.js";
+import { FileCopies as OldCopies } from "../index.js";
+import { FileCopies } from "@crawl-automation/platform";
 import { evidenceBytes, evidenceRef, testSignal } from "./compatibility-fixture.js";
 
 const versions = [

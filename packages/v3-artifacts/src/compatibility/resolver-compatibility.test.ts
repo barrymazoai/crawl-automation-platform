@@ -2,9 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   ArtifactResolver as OldResolver,
   ArtifactError as OldError,
-} from "@crawl-automation/v3-artifacts";
-import { ArtifactResolver } from "./artifact-resolver.js";
-import { artifactErrors } from "./artifact-errors.js";
+} from "../index.js";
+import { ArtifactResolver } from "@crawl-automation/platform";
+import { artifactErrors } from "@crawl-automation/platform";
 import {
   evidenceBytes,
   evidenceOwner,
@@ -13,8 +13,8 @@ import {
   memoryObjects,
   testSignal,
 } from "./compatibility-fixture.js";
-import type { LocalCopies } from "./artifact-types.js";
-import type { ObjectStore } from "./object-store.js";
+import type { LocalCopies } from "@crawl-automation/platform";
+import type { ObjectStore } from "@crawl-automation/platform";
 
 type Resolver = Pick<ArtifactResolver, "resolve" | "publish">;
 const versions = [

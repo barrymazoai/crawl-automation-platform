@@ -6,7 +6,7 @@ import { expect, it } from "vitest";
 import { textFingerprint, TextOutputSchema } from "@crawl-automation/v3-contracts";
 import { labelExecutionFixture } from "./label-execution.fixture.js";
 import { CodexTextProvider, type CodexConnectionOptions } from "./codex-provider.js";
-import { CodexRpc } from "./codex-rpc.js";
+import { CodexRpc } from "@crawl-automation/platform";
 import { TextModule } from "./module.js";
 import { hashText } from "./handoff.js";
 

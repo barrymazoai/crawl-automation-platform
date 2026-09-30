@@ -37,7 +37,6 @@
     "zod": "catalog:"
   },
   "devDependencies": {
-    "@crawl-automation/v3-artifacts": "workspace:*",
     "@types/node": "catalog:",
     "@types/pg": "catalog:",
     "typescript": "catalog:",

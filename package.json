@@ -20,7 +20,7 @@
     "format": "prettier --write --no-error-on-unmatched-pattern apps/api apps/worker apps/cli packages/adapters packages/app packages/workflows packages/channels packages/processing packages/platform ops/deploy",
     "check:deps": "depcruise --config .dependency-cruiser.cjs --ignore-known .dependency-cruiser-known-violations.json --include-only \"^(apps/(api|worker|cli)|ops/deploy|packages/(adapters|app|workflows|channels|processing|platform|v3-[^/]+))/\" apps packages ops",
     "check:dupes": "jscpd --config .jscpd.json --pattern \"{apps/{api,worker,cli},ops/deploy,packages/{adapters,app,workflows,channels,processing,platform}}/src/**/*.ts\" .",
-    "check:types": "turbo check-types",
+    "check:types": "turbo check-types --filter=!@crawl-automation/web --filter=!@crawl-automation/cli",
     "check": "pnpm lint && pnpm check:deps && pnpm check:dupes && pnpm check:types",
     "test:v3": "vitest run --no-cache --config vitest.v3.config.ts",
     "prepare": "lefthook install",

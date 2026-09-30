@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect, it, vi } from "vitest";
 import { CodexTextProvider, codexTextConnection, type CodexConnectionOptions } from "./codex-provider.js";
-import { CodexRpc } from "./codex-rpc.js";
+import { CodexRpc } from "@crawl-automation/platform";
 const fixture = fileURLToPath(new URL("./codex.fixture.mjs", import.meta.url));
 const request = { operationId: "operation", prompt: "evidence", outputSchema: { type: "object" } };
 async function setup(scenario = "success") {

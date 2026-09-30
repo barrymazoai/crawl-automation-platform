@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import { RetainedPublication as OldPublication } from "@crawl-automation/v3-artifacts";
-import { RetainedPublication } from "./retained-publication.js";
+import { RetainedPublication as OldPublication } from "../index.js";
+import { RetainedPublication } from "@crawl-automation/platform";
 import { evidenceBytes, memoryObjects, testSignal } from "./compatibility-fixture.js";
 
 vi.mock("node:crypto", async (importOriginal) => ({

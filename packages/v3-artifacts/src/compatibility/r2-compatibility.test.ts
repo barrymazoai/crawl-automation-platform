@@ -5,10 +5,10 @@ import {
   R2Objects as OldObjects,
   R2ScopeSchema as OldScopeSchema,
   createR2Objects as oldCreateR2Objects,
-} from "@crawl-automation/v3-artifacts";
-import { R2Objects } from "./r2-objects.js";
-import { createR2Objects } from "./r2-client.js";
-import { R2ScopeSchema, type R2Scope } from "./r2-settings.js";
+} from "../index.js";
+import { R2Objects } from "@crawl-automation/platform";
+import { createR2Objects } from "@crawl-automation/platform";
+import { R2ScopeSchema, type R2Scope } from "@crawl-automation/platform";
 import { testSignal } from "./compatibility-fixture.js";
 
 const scope: R2Scope = {

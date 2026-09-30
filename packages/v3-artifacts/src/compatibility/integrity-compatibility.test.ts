@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 import type { ArtifactRef } from "@crawl-automation/v3-contracts";
-import { sha256 as oldSha256, verifyBytes as oldVerifyBytes } from "@crawl-automation/v3-artifacts";
-import { AppError } from "../errors/app-error.js";
+import { sha256 as oldSha256, verifyBytes as oldVerifyBytes } from "../index.js";
+import { AppError } from "@crawl-automation/platform";
 import { evidenceRef } from "./compatibility-fixture.js";
-import { sha256, verifyBytes } from "./integrity.js";
+import { sha256, verifyBytes } from "@crawl-automation/platform";
 
 const formats: [ArtifactRef["mediaType"], Buffer][] = [
   ["image/png", Buffer.from("89504e470d0a1a0a0000", "hex")],

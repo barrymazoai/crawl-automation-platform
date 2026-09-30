@@ -1,8 +1,8 @@
 import type { ArtifactRef, Observation } from "@crawl-automation/v3-contracts";
-import { artifactErrors } from "./artifact-errors.js";
-import type { LocalCopies } from "./artifact-types.js";
-import { sha256 } from "./integrity.js";
-import type { ObjectStore } from "./object-store.js";
+import { artifactErrors } from "@crawl-automation/platform";
+import type { LocalCopies } from "@crawl-automation/platform";
+import { sha256 } from "@crawl-automation/platform";
+import type { ObjectStore } from "@crawl-automation/platform";
 
 /** Synthetic storage fixtures, never a provider or saved product page. */
 export const evidenceOwner: Observation = {
