@@ -1,6 +1,6 @@
 # Coding rules
 
-These rules apply to the restructured folders (`apps/{api,worker,cli}`, `packages/{app,workflows,channels,processing,
+These rules apply to the restructured folders (`apps/{api,worker}`, `packages/{app,workflows,channels,processing,
 platform}`). Each rule is checked by a tool; older code comes under them as it moves.
 
 | Command | Checks |
@@ -61,7 +61,6 @@ exists, and say why in the commit.
 | Logging | pino; every line carries the run ID; no `console` |
 | Dates and durations | date-fns |
 | Wiring | awilix, one container per app |
-| Command-line arguments | commander |
 | Calling an HTTP API that has an OpenAPI document (e.g. the OCR API) | openapi-typescript (generated types) + openapi-fetch |
 | IP address ranges | ipaddr.js |
 | Tests | vitest |
@@ -73,13 +72,13 @@ exists, and say why in the commit.
 
 ## Operations
 
-- No one-off scripts. An operation needed twice becomes an API procedure.
+- No one-off scripts and no CLI. Every operation is an API procedure (owner 2026-09-28 and 2026-09-30).
 - Nothing writes to the database or Temporal except through a service.
 - Code reaches a server only through git: commit to main, push, `git pull` on the server.
 
 ## Tests
 
-- Every channel adapter is tested against saved real pages in its `fixtures/` folder.
+- Every channel adapter is tested against real saved pages. Saved pages and workflow histories are data: they are not stored in git (owner 2026-09-30; where they live is ticket R45).
 - Every service method has a unit test with fake repositories and gateways.
 - After a change, one product runs end to end before any batch.
 - A test that documents a known bug uses `it.fails` with a comment giving the reason; remove `.fails` when fixed.
