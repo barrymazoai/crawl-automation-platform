@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { ResourceRequest } from "@crawl-automation/v3-contracts";
+import { ChannelPlanInputSchema, type ResourceRequest } from "@crawl-automation/v3-contracts";
 import { TestWorkflowEnvironment } from "@temporalio/testing";
 import { Worker } from "@temporalio/worker";
 import { afterAll, beforeAll, expect, it, vi } from "vitest";
@@ -21,6 +21,7 @@ import {
   type History,
 } from "./testing/replay/history.js";
 import { pipelineFixture } from "./testing/replay/product-fixture.js";
+import type { ProductPlanRequest } from "./pipeline-model.js";
 
 let environment: TestWorkflowEnvironment;
 let current: ReplayBundle;
@@ -133,6 +134,77 @@ function expectHeartbeats(history: History, missing: PatchMarker[], ocr: boolean
   );
   expect(heartbeatSeconds(history, "ocrFile")).toEqual(ocr ? [labelHeartbeat] : []);
 }
+
+it.each([false, true])(
+  "replays DTC capture and planning (source bound: %s)",
+  async (bound) => {
+    const queue = `dtc-source-replay-${randomUUID()}`;
+    const fixture = pipelineFixture(queue);
+    const captured = await fixture.activities.captureProduct();
+    const sourcePlan = ChannelPlanInputSchema.parse({
+      ...captured.sourcePlan,
+      channel: "dtc",
+      parserVersion: "dtc-rendered/1",
+      expectedUrl: "https://shop.example/products/sleep",
+      owner: { ...captured.sourcePlan.owner, sourceId: fixture.input.sourceId },
+      source: {
+        ...captured.sourcePlan.source,
+        sourceId: fixture.input.sourceId,
+        producer: {
+          ...captured.sourcePlan.source.producer,
+          module: "dtc.browser-projection",
+          implementationVersion: "dtc-rendered/1",
+        },
+      },
+    });
+    const sourceUrl = "https://shop.example/collections/alpha";
+    const input = {
+      ...fixture.input,
+      channel: "dtc",
+      capture: "browser",
+      url: sourcePlan.expectedUrl,
+      ...(bound ? { sourceUrl } : {}),
+    };
+    const captureBrowserProduct = vi.fn(async (_input: unknown) => ({
+      status: "captured",
+      listingId: sourcePlan.owner.listingId,
+      variantId: sourcePlan.owner.variantId,
+      archiveKey: "replay/dtc.html",
+      planned: { ...captured, sourcePlan, family: null },
+    }));
+    const prepareChannelProduct = vi.fn(async (_request: ProductPlanRequest) =>
+      fixture.activities.prepareChannelProduct(),
+    );
+    const { history, result, workflowId } = await recordHistory({
+      environment,
+      bundle: current,
+      queue,
+      workflow: "ProductPipelineWorkflow",
+      input,
+      activities: {
+        ...fixture.activities,
+        captureBrowserProduct,
+        prepareChannelProduct,
+        findKnownFormula: async () => ({ operationId: "known-formula" }),
+      },
+    });
+    expect(result).toMatchObject({ status: "collected", reusedFormula: true });
+    expect(captureBrowserProduct).toHaveBeenCalledExactlyOnceWith(input);
+    expect(prepareChannelProduct).toHaveBeenCalledExactlyOnceWith(
+      bound ? { ...sourcePlan, sourceUrl } : sourcePlan,
+    );
+    expect(scheduledActivities(history)).toEqual([
+      "reserveResources",
+      "captureBrowserProduct",
+      "releaseResources",
+      "prepareChannelProduct",
+      "findKnownFormula",
+    ]);
+    expect(fixture.gate.held.size).toBe(0);
+    await Worker.runReplayHistory({ workflowBundle: current }, history, workflowId);
+  },
+  30_000,
+);
 
 it.each([false, true])(
   "replays resource wait timers and the catch branch (marker present: %s)",

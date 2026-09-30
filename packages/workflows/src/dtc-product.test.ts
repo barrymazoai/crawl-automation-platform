@@ -43,9 +43,10 @@ async function setup() {
     channel: "dtc",
     parserVersion: "dtc-rendered/1",
     expectedUrl: "https://shop.example/products/sleep?variant=11",
-    owner: { ...captured.sourcePlan.owner, variantId: "11" },
+    owner: { ...captured.sourcePlan.owner, variantId: "11", sourceId: fixture.input.sourceId },
     source: {
       ...captured.sourcePlan.source,
+      sourceId: fixture.input.sourceId,
       variantId: "11",
       producer: {
         ...captured.sourcePlan.source.producer,
@@ -115,4 +116,16 @@ it("keeps the recorded browser command sequence when the formula-plan marker is 
   expect(test.pipeline.prepareChannelProduct).not.toHaveBeenCalled();
   expect(test.pipeline.requestAmazonFormula).toHaveBeenCalledOnce();
   expect(env.start).not.toHaveBeenCalled();
+});
+
+it("carries the source ID and catalog to browser capture and formula planning", async () => {
+  const test = await setup();
+  const input = { ...test.input, sourceUrl: "https://shop.example/collections/alpha" };
+  await ProductPipelineWorkflow(input);
+  expect(test.browser.captureBrowserProduct).toHaveBeenCalledExactlyOnceWith(input);
+  expect(test.pipeline.prepareChannelProduct).toHaveBeenCalledExactlyOnceWith({
+    ...test.sourcePlan,
+    sourceUrl: input.sourceUrl,
+  });
+  expect(test.sourcePlan.owner.sourceId).toBe(input.sourceId);
 });

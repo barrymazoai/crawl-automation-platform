@@ -25,7 +25,11 @@ export class ProductCapture {
   constructor(private readonly deps: ProductCaptureDeps) {}
 
   async capture(request: CaptureRequest, signal: AbortSignal): Promise<ProductCaptureResult> {
-    const adapter = this.deps.registry.forCapture(request.channel, this.deps.mode ?? "http");
+    const adapter = this.deps.registry.forCapture(
+      request.channel,
+      this.deps.mode ?? "http",
+      request.sourceUrl,
+    );
     const planning = adapter.planning;
     if (!planning) {
       throw channelErrors.create("CHANNEL.PLANNING_UNSUPPORTED", {

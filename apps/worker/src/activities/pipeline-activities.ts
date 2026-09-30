@@ -4,6 +4,7 @@ import {
   FormulaRequestSchema,
   LabelHandoffRequestSchema,
   ProductPipelineInputSchema,
+  ProductPlanRequestSchema,
   ReviewRequestSchema,
 } from "@crawl-automation/workflows";
 import { Context } from "@temporalio/activity";
@@ -23,6 +24,14 @@ function callingExecution(parts: WorkerParts) {
     workflowId: execution.workflowId,
     runId: execution.runId,
   };
+}
+
+function prepareProductPlan(parts: WorkerParts, raw: unknown, signal: AbortSignal) {
+  const { sourceUrl, ...input } = ProductPlanRequestSchema.parse(raw);
+  const plans = sourceUrl
+    ? parts.channelPlans.forBrandSource(input.channel, sourceUrl)
+    : parts.channelPlans;
+  return plans.run(input, signal);
 }
 
 /**
@@ -52,7 +61,7 @@ export function pipelineActivities(parts: WorkerParts) {
     },
     // The formula planner: saves the plan of the product's formula sources (queue `plan` of the pipeline input).
     prepareChannelProduct: (raw: unknown, signal: AbortSignal) =>
-      parts.channelPlans.run(raw, signal),
+      prepareProductPlan(parts, raw, signal),
     acquireProductFile: (raw: unknown, signal: AbortSignal) => {
       const { pipeline, sourcePlan, acquire } = FileRequestSchema.parse(raw);
       return parts.productFiles.acquire({ channel: pipeline.channel, sourcePlan, acquire }, signal);

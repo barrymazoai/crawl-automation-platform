@@ -46,7 +46,7 @@ function sourceReader(
   url: string,
 ) {
   const adapter = readers.registry.channels().includes(channel)
-    ? readers.registry.get(channel)
+    ? readers.registry.forBrandSource(channel, url)
     : undefined;
   const capture = adapter
     ? (adapter.scanCapture?.(url) ?? "http")
@@ -89,7 +89,12 @@ export async function readListing(
       signal,
     );
   }
-  const found = await selected.reader.scan({ scanId: scan.scanId, sourceUrl: url }, signal);
+  const request = {
+    scanId: scan.scanId,
+    sourceUrl: url,
+    ...(scan.source.channel === "dtc" ? { sourceId: scan.source.sourceId } : {}),
+  };
+  const found = await selected.reader.scan(request, signal);
   const products = found.pages.flatMap((page) => page.products);
   const unique = new Map(
     products.map((item) => [`${item.listingId}\u0000${item.variantId ?? ""}`, item]),

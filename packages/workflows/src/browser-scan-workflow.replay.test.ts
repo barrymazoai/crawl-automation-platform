@@ -24,14 +24,18 @@ it.each(
     { fails, channel: "wholefoods", capture: undefined },
     { fails, channel: "wholefoods", capture: "browser" },
     { fails, channel: "dtc", capture: "browser" },
+    { fails, channel: "dtc", capture: "browser", sourceId: "22222222-2222-4222-8222-222222222222" },
   ]),
 )(
   "replays BrowserScanWorkflow ($channel, capture: $capture, fails: $fails)",
-  async ({ fails, channel, capture }) => {
+  async (scenario) => {
+    const { fails, channel, capture } = scenario;
+    const sourceId = "sourceId" in scenario ? scenario.sourceId : undefined;
     const queue = `scan-replay-${randomUUID()}`;
     const input = {
       channel,
       ...(capture ? { capture } : {}),
+      ...(sourceId ? { sourceId } : {}),
       scanId: "scan-1",
       sourceUrl: "https://example.com/brand",
     };

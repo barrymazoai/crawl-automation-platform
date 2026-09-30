@@ -11,6 +11,8 @@ export interface CaptureRequest {
   url: string;
   brandId: string;
   sourceId: string;
+  /** The catalog of sourceId; absent in product workflows started before source binding. */
+  sourceUrl?: string | undefined;
   /** Unique per product per run; names the archive, the projection and the plan. */
   operationId: string;
 }

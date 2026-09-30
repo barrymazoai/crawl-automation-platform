@@ -1,6 +1,7 @@
 import { configuredDtcSites } from "@crawl-automation/channel-dtc";
 import {
   PostgresChannelQueueStore,
+  PostgresBrandScans,
   PostgresListingStates,
   PostgresProductRunStore,
   PostgresQueueDispatch,
@@ -29,6 +30,7 @@ export function productRuns(parts: {
 }): ProductRuns {
   return new ProductRuns({
     store: new PostgresProductRunStore(parts.database),
+    sources: new PostgresBrandScans(parts.database),
     starter: new TemporalPipelineStarter(parts.temporal.client),
     registry: channelRegistry(configuredDtcSites(parts.config.browser?.dtc)),
     targets: parts.config.pipeline,

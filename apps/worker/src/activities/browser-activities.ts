@@ -15,9 +15,14 @@ export function browserActivities(parts: WorkerParts) {
       return parts.browser.capture.capture(input, signal);
     },
     scanBrandInBrowser: async (raw: unknown, signal: AbortSignal) => {
-      const { scanId, sourceUrl } = BrowserScanInputSchema.parse(raw);
+      const {
+        channel: _channel,
+        capture: _capture,
+        ...request
+      } = BrowserScanInputSchema.parse(raw);
+      const { sourceUrl } = request;
       await parts.browser.ensureStore(sourceUrl, signal);
-      return parts.browser.scanner.scan({ scanId, sourceUrl }, signal);
+      return parts.browser.scanner.scan(request, signal);
     },
   };
   return Object.fromEntries(

@@ -38,7 +38,7 @@ export class BrowserProductCapture {
   ) {}
 
   async capture(request: CaptureRequest, signal: AbortSignal): Promise<BrowserCaptureResult> {
-    const adapter = this.deps.registry.forCapture(request.channel, "browser");
+    const adapter = this.deps.registry.forCapture(request.channel, "browser", request.sourceUrl);
     if (adapter.planning) {
       return this.capturePlanned(request, signal);
     }

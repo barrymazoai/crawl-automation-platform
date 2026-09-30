@@ -4,6 +4,7 @@ import type { ProductPipelineInput } from "@crawl-automation/workflows";
 import type { Channel } from "../delivery/delivery-coordinator.js";
 import { appErrors } from "../errors.js";
 import type { ProductRun } from "./run-model.js";
+import type { BrandScanStore } from "../brand-scans/ports.js";
 
 /** A product run's workflow ID (the product_run table checks the same rule). */
 export const productRunWorkflowId = (runId: string) => `product-run-${runId}`;
@@ -44,6 +45,7 @@ export interface PipelineTargets {
 
 export interface ProductRunDeps {
   store: ProductRunStore;
+  sources: Pick<BrandScanStore, "sources">;
   starter: PipelineStarter;
   registry: ChannelRegistry;
   targets: PipelineTargets;
@@ -63,25 +65,43 @@ export class ProductRuns {
       throw appErrors.create("RUN.CHANNEL_UNSUPPORTED", { details: { channel: source.channel } });
     }
     // Refuses a page of another site before anything is stored.
-    this.deps.registry.get(source.channel).productAddress(run.url);
+    const sourceUrl = await this.sourceUrl(run.sourceId, source);
+    this.deps.registry.forBrandSource(source.channel, sourceUrl).productAddress(run.url);
     const accepted = await this.deps.store.accept({ ...run, ...source });
     if (accepted.startedRunId === null) {
-      const input = this.pipelineInput(accepted, target.resources);
+      const input = this.pipelineInput(accepted, target.resources, sourceUrl);
       const { startedRunId } = await this.deps.starter.start(accepted.workflowId, input);
       await this.deps.store.markStarted(accepted.runId, startedRunId);
     }
     return accepted.runId;
   }
 
-  private pipelineInput(run: AcceptedProductRun, resources: ResourceGate): ProductPipelineInput {
+  private async sourceUrl(sourceId: string, product: ProductSource): Promise<string | undefined> {
+    if (product.channel !== "dtc") {
+      return undefined;
+    }
+    const sources = await this.deps.sources.sources([sourceId]);
+    const source = sources.find((entry) => entry.sourceId === sourceId);
+    if (!source || source.channel !== product.channel || source.brandId !== product.brandId) {
+      throw appErrors.create("RUN.SOURCE_NOT_FOUND", { details: { sourceId } });
+    }
+    return source.url;
+  }
+
+  private pipelineInput(
+    run: AcceptedProductRun,
+    resources: ResourceGate,
+    sourceUrl?: string,
+  ): ProductPipelineInput {
     return {
       codec: "product-pipeline/1",
       runId: run.runId,
       channel: run.channel,
-      capture: this.deps.registry.get(run.channel).captureModes[0],
+      capture: this.deps.registry.forBrandSource(run.channel, sourceUrl).captureModes[0],
       url: run.url,
       brandId: run.brandId,
       sourceId: run.sourceId,
+      ...(sourceUrl ? { sourceUrl } : {}),
       operationId: `product-${run.runId}`,
       queues: this.deps.targets.queues,
       resources,

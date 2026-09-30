@@ -109,6 +109,8 @@ export interface LabelCoreReader {
  * database, Temporal or permits, and never imports another channel.
  */
 export interface ChannelAdapter<Rendered = unknown> {
+  /** Bind a task to its catalog when a channel hosts multiple brand sources. */
+  forBrandSource?(catalogUrl: string): ChannelAdapter<Rendered>;
   readonly id: ChannelId;
   /** Allowed product capture strategies; browser-only channels never use ScraperAPI. */
   readonly captureModes: readonly CaptureMode[];

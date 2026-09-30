@@ -68,6 +68,13 @@ function listing(request: DtcCatalogRead, next?: string) {
 }
 
 describe("a multi-brand scan is exactly one brand's collection", () => {
+  it("binds scan routing to one catalog without narrowing the shared adapter", () => {
+    const otherUrl = `${origin}/collections/metagenics`;
+    expect(scoped.scanCapture?.(sourceUrl)).toBe("browser");
+    expect(() => scoped.scanCapture?.(otherUrl)).toThrow();
+    expect(adapter.scanCapture?.(otherUrl)).toBe("browser");
+  });
+
   it("reads only the selected collection and its next page with end proof", async () => {
     const read = vi.fn(async (request: DtcCatalogRead) =>
       listing(request, request.position === 1 ? "?page=2" : undefined),

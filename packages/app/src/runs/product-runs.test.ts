@@ -24,8 +24,10 @@ function setup(startedRunId: string | null = null) {
     markStarted: vi.fn(async () => undefined),
   };
   const starter = { start: vi.fn(async () => ({ startedRunId: "temporal-run-1" })) };
+  const sources = { sources: vi.fn(async () => []) };
   const runs = new ProductRuns({
     store,
+    sources,
     starter,
     registry: new ChannelRegistry([swansonAdapter]),
     targets: {
@@ -33,14 +35,14 @@ function setup(startedRunId: string | null = null) {
       channels: { swanson: { resources } },
     },
   });
-  return { runs, store, starter };
+  return { runs, store, starter, sources };
 }
 
 const request = { kind: "product" as const, requestId: runId, sourceId, url };
 
 describe("ProductRuns", () => {
   it("accepts the run, starts its workflow with the pipeline input and records the start", async () => {
-    const { runs, store, starter } = setup();
+    const { runs, store, starter, sources } = setup();
 
     expect(await runs.submit(request)).toBe(runId);
 
@@ -55,6 +57,11 @@ describe("ProductRuns", () => {
       }),
     );
     expect(store.markStarted).toHaveBeenCalledWith(runId, "temporal-run-1");
+    expect(sources.sources).not.toHaveBeenCalled();
+    expect(starter.start).not.toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ sourceUrl: expect.anything() }),
+    );
   });
 
   it("a repeated request of a started run starts nothing", async () => {
@@ -90,6 +97,11 @@ describe("ProductRuns", () => {
       const starter = { start: vi.fn(async () => ({ startedRunId: "temporal-run-2" })) };
       const runs = new ProductRuns({
         store,
+        sources: {
+          sources: async () => [
+            { sourceId, brandId: "b", channel, url: page, brandName: "Test", enabled: true },
+          ],
+        },
         starter,
         registry: new ChannelRegistry([wholeFoods]),
         targets: {

@@ -20,7 +20,9 @@ export async function collectCapturedProduct(
   const plan = proxyActivities<PlanActivities>({ taskQueue: input.queues.plan, ...once });
   const { sourcePlan } = captured;
   // Plan the retained page on every capture, known formula or not; capture already records metrics.
-  const outcome = ChannelPlanOutcomeSchema.parse(await plan.prepareChannelProduct(sourcePlan));
+  // Old strict workflow inputs could not contain sourceUrl: their command payload stays identical.
+  const request = input.sourceUrl ? { ...sourcePlan, sourceUrl: input.sourceUrl } : sourcePlan;
+  const outcome = ChannelPlanOutcomeSchema.parse(await plan.prepareChannelProduct(request));
   const { listingId, variantId } = sourcePlan.owner;
   const known = KnownFormulaSchema.parse(
     await pipeline.findKnownFormula({

@@ -8,6 +8,8 @@ export const BrowserScanInputSchema = z.strictObject({
   capture: z.literal("browser").optional(),
   scanId: z.string().min(1).max(200),
   sourceUrl: z.url().max(4096),
+  /** Database brand source, distinct from the channel's evidence key; old histories omit it. */
+  sourceId: z.uuid().optional(),
 });
 export type BrowserScanInput = z.infer<typeof BrowserScanInputSchema>;
 

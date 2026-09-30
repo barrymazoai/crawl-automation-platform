@@ -10,7 +10,8 @@ import {
   type ChannelProductPlan,
 } from "@crawl-automation/v3-contracts";
 import { channelErrors } from "../errors.js";
-import type { ChannelRegistry } from "../registry.js";
+import { ChannelRegistry } from "../registry.js";
+import type { ChannelId } from "../adapter.js";
 import {
   FRAGMENT_LIMIT,
   PLAN_LIMIT,
@@ -48,6 +49,12 @@ export class ProductPlans {
 
   constructor(private readonly deps: ProductPlansDeps) {
     this.ledger = new PlanReviewLedger(deps.reviews, deps.publication);
+  }
+
+  /** Bind only this planning activity, including its read-back checks, to the run's source. */
+  forBrandSource(channel: ChannelId, sourceUrl: string): ProductPlans {
+    const adapter = this.deps.registry.forBrandSource(channel, sourceUrl);
+    return new ProductPlans({ ...this.deps, registry: new ChannelRegistry([adapter]) });
   }
 
   async run(raw: unknown, signal: AbortSignal): Promise<ChannelPlanOutcome> {

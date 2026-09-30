@@ -18,7 +18,7 @@ import {
   type WholeFoodsStore,
 } from "@crawl-automation/channels-wholefoods";
 import type { EgoPages, RetainedPublication } from "@crawl-automation/platform";
-import { acceptsAddress, BrowserScanners } from "./browser-scanners.js";
+import { acceptsAddress, BrowserScanners, type BrowserScanCapability } from "./browser-scanners.js";
 import type { ManagedBrowserRounds } from "./managed-rounds.js";
 
 function storePreparation(browser: EgoPages, store: WholeFoodsStore) {
@@ -34,6 +34,29 @@ function storePreparation(browser: EgoPages, store: WholeFoodsStore) {
   };
 }
 
+function dtcScanner(deps: {
+  ego: EgoPages;
+  publication: RetainedPublication;
+  sites: readonly DtcSitePolicy[];
+}): BrowserScanCapability {
+  const { sites, publication, ego } = deps;
+  const adapter = createDtcAdapter(sites);
+  const scanner = new DtcBrandScan({
+    pages: new DtcCatalogPages({ browser: ego, publication }),
+    sites,
+  });
+  return {
+    accepts: (url) =>
+      acceptsAddress([(source) => dtcBrandSourceUrl(source, sites), adapter.productAddress], url),
+    scanner: {
+      scan: (request, signal) => {
+        adapter.forBrandSource(request.sourceUrl).scanCapture?.(request.sourceUrl);
+        return scanner.scan(request, signal);
+      },
+    },
+  };
+}
+
 /** Both Minis use this composition; routing asks URL capabilities, never switches on channel IDs. */
 export function buildBrowserScanners(deps: {
   ego: EgoPages;
@@ -45,17 +68,7 @@ export function buildBrowserScanners(deps: {
   const { ego, store, publication } = deps;
   const sites = deps.dtcSites ?? [];
   return new BrowserScanners([
-    {
-      accepts: (url) =>
-        acceptsAddress(
-          [(source) => dtcBrandSourceUrl(source, sites), createDtcAdapter(sites).productAddress],
-          url,
-        ),
-      scanner: new DtcBrandScan({
-        pages: new DtcCatalogPages({ browser: ego, publication }),
-        sites,
-      }),
-    },
+    dtcScanner({ ego, publication, sites }),
     {
       accepts: (url) => acceptsAddress([amazonStoreSourceUrl], url),
       scanner: new AmazonStoreBrandScan({ pages: new AmazonStorePages(deps.rounds), publication }),

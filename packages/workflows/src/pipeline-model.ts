@@ -8,7 +8,6 @@ import {
   ReviewSchema,
   ChannelIdSchema,
   ChannelSavedLabelWorkflowInputSchema,
-  type ChannelPlanInput,
   type FileAcquireOutcome,
 } from "@crawl-automation/v3-contracts";
 import { z } from "zod";
@@ -28,6 +27,8 @@ export const ProductPipelineInputSchema = z.strictObject({
   url: z.url().max(4096),
   brandId: z.uuid(),
   sourceId: z.uuid(),
+  /** Catalog of sourceId, captured at acceptance; no default alters old history payloads. */
+  sourceUrl: z.url().max(4096).optional(),
   /** Unique per product per run; names its archive, projection and plan. */
   operationId: ExecutionIdSchema,
   queues: z.strictObject({
@@ -166,8 +167,14 @@ export type AmazonFormulaRequest = z.infer<typeof AmazonFormulaRequestSchema>;
 
 /** The formula planner's activity: plans the formula sources (metrics are recorded at capture). */
 export interface PlanActivities {
-  prepareChannelProduct(sourcePlan: ChannelPlanInput): Promise<unknown>;
+  prepareChannelProduct(request: ProductPlanRequest): Promise<unknown>;
 }
+
+/** Activity-only source context; the retained ChannelPlanInput contract stays unchanged. */
+export const ProductPlanRequestSchema = ChannelPlanInputSchema.safeExtend({
+  sourceUrl: z.url().max(4096).optional(),
+});
+export type ProductPlanRequest = z.infer<typeof ProductPlanRequestSchema>;
 
 /** A page read in the browser (its metrics are recorded at capture), or the listing's unlisted sighting, or a Review. */
 export const BrowserCaptureResultSchema = z.discriminatedUnion("status", [

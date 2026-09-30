@@ -26,3 +26,8 @@ it.each(["dtc", "gnc", "amazon", "wholefoods", "swanson", "costco"])(
 it("refuses HTTP on the browser-only workflow", () => {
   expect(() => BrowserScanInputSchema.parse({ ...input, capture: "http" })).toThrow();
 });
+
+it("preserves the DTC database source ID with its catalog through the scan activity", async () => {
+  const request = { ...input, channel: "dtc", sourceId: "22222222-2222-4222-8222-222222222222" };
+  expect(await BrowserScanWorkflow(request)).toEqual(request);
+});

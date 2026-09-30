@@ -58,7 +58,7 @@ export interface BrowserBrandScan {
 export interface BrowserBrandScanner {
   sourceUrl(url: string): string;
   scan(
-    request: { scanId: string; sourceUrl: string },
+    request: { scanId: string; sourceUrl: string; sourceId?: string | undefined },
     signal: AbortSignal,
   ): Promise<BrowserBrandScan>;
 }

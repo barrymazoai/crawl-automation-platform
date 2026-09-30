@@ -1,5 +1,6 @@
 import {
   completeFacts,
+  channelErrors,
   type ChannelAdapter,
   type FetchedPage,
   type ParsedProduct,
@@ -60,6 +61,9 @@ export function createDtcAdapter(
 ): DtcAdapter {
   const source = sourceUrl ? dtcBrandSource(sourceUrl, sites) : null;
   const scopedSites = source ? [siteForUrl(source.catalogUrl, sites)] : sites;
+  // Single-brand parsing keeps its original evidence/projection, even with a task-bound address policy.
+  const productSource = scopedSites[0]?.kind === "multi-brand" ? source : null;
+  const scope = { sites: scopedSites, source: productSource };
   return {
     id: "dtc",
     brandSources: source ? [source] : dtcBrandSources(sites),
@@ -67,6 +71,9 @@ export function createDtcAdapter(
     captureModes: ["browser"],
     scanCapture: (url) => {
       dtcBrandSourceUrl(url, scopedSites);
+      if (source && url !== source.catalogUrl) {
+        throw channelErrors.create("CHANNEL.URL_REJECTED", { details: { url } });
+      }
       return "browser";
     },
     httpPolicy: {
@@ -76,15 +83,14 @@ export function createDtcAdapter(
     fileOrigins: [...new Set(scopedSites.flatMap((site) => site.imageOrigins))],
     productAddress: (url) => dtcProductAddress(url, scopedSites),
     pageIdentity: (page) => dtcPageIdentity(page, scopedSites),
-    parseProduct: (page) => parsedProduct(page, scopedSites, source),
+    parseProduct: (page) => parsedProduct(page, scopedSites, productSource),
     externalId: (parsed) => parsed.identity.listingId,
     planning: {
       channel: "dtc",
       parserVersion: "dtc-rendered/1",
       projectionModule: "dtc.browser-projection",
       projection: dtcProjection,
-      read: (projection, url, owner) =>
-        readDtcProjection(projection, { url, owner }, { sites: scopedSites, source }),
+      read: (projection, url, owner) => readDtcProjection(projection, { url, owner }, scope),
     },
   };
 }

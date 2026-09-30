@@ -63,7 +63,7 @@ const page: ListingPage = {
   statedTotal: 1,
 };
 
-function setup(sources: ScanSource[], browserQueue: string | null = "browser") {
+function setup(sources: ScanSource[], browserQueue: string | null = "browser", sites = dtcSites) {
   const scans: ScanRecord[] = [];
   vi.spyOn(PostgresBrandScans.prototype, "enabledSources").mockResolvedValue(sources);
   vi.spyOn(PostgresBrandScans.prototype, "sources").mockResolvedValue(sources);
@@ -95,7 +95,7 @@ function setup(sources: ScanSource[], browserQueue: string | null = "browser") {
   const queue = { add: vi.fn(async () => ({ added: 1 })) };
   const parts = brandScanParts({
     database: {} as Database,
-    dtcSites,
+    dtcSites: sites,
     queue: queue as unknown as QueueService,
     listingStates: { requestRevisits: vi.fn() } as unknown as ListingStateService,
     settings: BrandScanSettingsSchema.parse({
@@ -269,9 +269,59 @@ it("routes a named DTC source by scanCapture through the API runner, never HTTP"
     "BrowserScanWorkflow",
     expect.objectContaining({
       taskQueue: "browser",
-      args: [{ channel: "dtc", capture: "browser", scanId: row.sourceId, sourceUrl: dtcUrl }],
+      args: [
+        {
+          channel: "dtc",
+          capture: "browser",
+          scanId: row.sourceId,
+          sourceId: row.sourceId,
+          sourceUrl: dtcUrl,
+        },
+      ],
     }),
   );
   expect(test.read).not.toHaveBeenCalled();
   expect(test.queue.add).toHaveBeenCalledWith(expect.objectContaining({ channel: "dtc" }));
+});
+
+it("routes one collection of a multi-brand site and queues its database source ID", async () => {
+  const alphaUrl = "https://shop.example/collections/alpha";
+  const row = source("dtc", alphaUrl);
+  const sites = configuredDtcSites({
+    sites: [
+      {
+        siteKey: "shop.example",
+        platform: "shopify",
+        kind: "multi-brand",
+        brands: [
+          { brand: "Alpha", catalogUrl: alphaUrl },
+          { brand: "Beta", catalogUrl: "https://shop.example/collections/beta" },
+        ],
+      },
+    ],
+  });
+  const test = setup([row], "browser", sites);
+  await test.brandScans.request({ requestId, sourceIds: [row.sourceId] });
+  await test.runner?.tick(new AbortController().signal);
+  expect(test.start).toHaveBeenCalledExactlyOnceWith(
+    "BrowserScanWorkflow",
+    expect.objectContaining({
+      args: [
+        {
+          channel: "dtc",
+          capture: "browser",
+          scanId: row.sourceId,
+          sourceId: row.sourceId,
+          sourceUrl: alphaUrl,
+        },
+      ],
+    }),
+  );
+  expect(test.queue.add).toHaveBeenCalledExactlyOnceWith(
+    expect.objectContaining({
+      channel: "dtc",
+      products: [expect.objectContaining({ sourceId: row.sourceId })],
+    }),
+  );
+  expect(test.read).not.toHaveBeenCalled();
 });

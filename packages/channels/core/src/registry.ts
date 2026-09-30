@@ -24,8 +24,8 @@ export class ChannelRegistry {
   }
 
   /** The adapter, after checking it can be captured in the configured mode. */
-  forCapture(channel: ChannelId, mode: CaptureMode): ChannelAdapter {
-    const adapter = this.get(channel);
+  forCapture(channel: ChannelId, mode: CaptureMode, sourceUrl?: string): ChannelAdapter {
+    const adapter = this.forBrandSource(channel, sourceUrl);
     if (!adapter.captureModes.includes(mode)) {
       throw channelErrors.create("CHANNEL.CAPTURE_MODE_UNSUPPORTED", {
         details: { channel, mode },
@@ -36,5 +36,11 @@ export class ChannelRegistry {
 
   channels(): ChannelId[] {
     return [...this.adapters.keys()];
+  }
+
+  /** A task-local adapter; the process registry is never mutated by a brand binding. */
+  forBrandSource(channel: ChannelId, sourceUrl?: string): ChannelAdapter {
+    const adapter = this.get(channel);
+    return sourceUrl && adapter.forBrandSource ? adapter.forBrandSource(sourceUrl) : adapter;
   }
 }
