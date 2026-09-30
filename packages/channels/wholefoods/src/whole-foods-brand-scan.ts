@@ -22,8 +22,9 @@ export interface BrowserBrandScan {
   sourceUrl: string;
   pages: ListingPage[];
   /**
-   * Complete only when the browser scrolled the list to its end (no new products and no "load more" left). A list
-   * stopped at the round limit is partial and never suggests that a missing product is unlisted.
+   * Complete only when the browser scrolled the list to its end (no new products and no "load more" left) and holds
+   * at least the total the page states: "load more" sometimes loads nothing or replaces the list (2026-10-01). A
+   * partial list never suggests that a missing product is unlisted.
    */
   complete: boolean;
   /** False when the search has no results: the brand is not sold at this store. */
@@ -56,7 +57,7 @@ export class WholeFoodsBrandScan extends WholeFoodsBrandReader {
     return {
       sourceUrl: url,
       pages: [listing],
-      complete: saved.record.scroll.ended === "stable",
+      complete: saved.record.scroll.ended === "stable" && !shortOfStated(listing),
       soldHere: listing.soldHere === true,
       archiveKeys: [saved.key],
     };
@@ -74,4 +75,9 @@ export class WholeFoodsBrandScan extends WholeFoodsBrandReader {
     const page = await browser.read(read, signal);
     return archive.save({ page, url, provider: browser.provider, storeId: store.storeId }, signal);
   }
+}
+
+/** A drawn list with fewer products than its heading states is not the whole list. */
+function shortOfStated(listing: ListingPage): boolean {
+  return listing.statedTotal !== null && listing.products.length < listing.statedTotal;
 }

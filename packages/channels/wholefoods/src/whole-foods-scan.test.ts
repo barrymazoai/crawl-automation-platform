@@ -86,6 +86,13 @@ describe("Whole Foods brand scan", () => {
     });
   });
 
+  it("is partial when the list holds fewer products than the page states", async () => {
+    const html = fixture("search-nordic-naturals.html").replace("3 results for", "58 results for");
+    const scan = await scanSetup(html).scanner.scan({ scanId: "scan-5", sourceUrl }, signal());
+    expect(scan).toMatchObject({ complete: false, soldHere: true });
+    expect(scan.pages[0]).toMatchObject({ statedTotal: 58 });
+  });
+
   it("refuses an archive whose record never finished, and draws nothing", async () => {
     const { browser, remote, scanner } = scanSetup(fixture("search-nordic-naturals.html"));
     remote.data.set("v3/brand-scans/scan-4/search.html", Buffer.from("<html></html>"));

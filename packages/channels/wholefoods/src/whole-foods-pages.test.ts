@@ -116,7 +116,10 @@ describe("Whole Foods brand search page", () => {
       "B07WMZTX28",
       "B0096M5PBW",
     ]);
-    expect(listing).toMatchObject({ soldHere: true, page: { cards: 3, nextPage: null } });
+    expect(listing).toMatchObject({
+      soldHere: true,
+      page: { cards: 3, nextPage: null, statedTotal: 3 },
+    });
   });
 
   it("reads a no-results search as a brand not sold at this store", () => {

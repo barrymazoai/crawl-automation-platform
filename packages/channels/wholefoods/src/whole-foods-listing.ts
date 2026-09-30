@@ -52,7 +52,18 @@ export function parseWholeFoodsListing(html: string, store: WholeFoodsStore): Wh
   assertStore(html, store);
   const listed = [...products.values()];
   return {
-    page: { products: listed, cards: listed.length, nextPage: null, statedTotal: null },
+    page: {
+      products: listed,
+      cards: listed.length,
+      nextPage: null,
+      statedTotal: statedTotal(text),
+    },
     soldHere: listed.length > 0,
   };
+}
+
+/** The total the search heading states ("58 results for …"); null when it states none. */
+function statedTotal(text: string): number | null {
+  const match = /(\d[\d,]*)\s+results?\s+for\b/i.exec(text);
+  return match?.[1] ? Number(match[1].replaceAll(",", "")) : null;
 }

@@ -112,6 +112,12 @@ while (read.scroll && rounds < read.scroll.maxRounds) {
       button?.removeAttribute("data-crawlv3-more");
       button?.click();
     });
+    // Wait for the list to grow: the next items can take longer than one settle, and the list can empty meanwhile.
+    await page.waitForFunction(
+      (wait) => document.querySelectorAll(wait.selector).length > wait.before,
+      { selector: read.scroll.itemSelector ?? "a", before },
+      { timeout: read.scroll.settleMs * 6 },
+    ).catch(() => {});
   } else {
     await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
   }
