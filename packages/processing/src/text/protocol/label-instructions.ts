@@ -1,16 +1,17 @@
 import {
-  LabelTextModelSchema,
+  LabelTextWireSchema,
   LabelAnchorSchema,
   legacyLabelExtractionSchema,
   type TextInput,
 } from "@crawl-automation/v3-contracts";
 import { z } from "zod";
 import { evidenceLines } from "./evidence-lines.js";
+import { strictOutputSchema } from "./strict-output-schema.js";
 
 export const labelTextPolicyVersion = "label-text/5";
 export type LabelTextPolicyVersion =
   "label-text/1" | "label-text/2" | "label-text/3" | "label-text/4" | "label-text/5";
-export const labelTextOutputSchema = z.toJSONSchema(LabelTextModelSchema);
+export const labelTextOutputSchema = strictOutputSchema(z.toJSONSchema(LabelTextWireSchema));
 export const legacyLabelTextOutputSchema = z.toJSONSchema(
   legacyLabelExtractionSchema(LabelAnchorSchema),
 );

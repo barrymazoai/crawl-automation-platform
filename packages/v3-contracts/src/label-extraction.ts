@@ -10,25 +10,21 @@ export const LabelAnchorSchema = z.strictObject({ fromLine: z.number().int().pos
 export const LabelQuoteSchema = z.strictObject({ text: content, start: z.number().int().nonnegative(), end: z.number().int().positive().max(200000) });
 export const LabelImageFieldSchema = z.strictObject({ text: content, evidence: content });
 
-/**
- * The field codec changes with the evidence medium; the formula structure does not. `forModel` builds the answer
- * format sent to the model: OpenAI strict output requires every property to be required, so Drug Facts fields there
- * are required-and-nullable; stored answers and candidates accept them absent or null.
- */
-export function labelExtractionSchema<F extends z.ZodType>(field: F, forModel = false) {
-  const drugField = forModel ? field.nullable() : field.nullable().optional();
+/** The field codec changes with the evidence medium; the formula structure does not. */
+export function labelExtractionSchema<F extends z.ZodType>(field: F) {
   const row = z.strictObject({
     kind: z.enum(["nutrient", "group_header", "blend_total", "blend_component"]),
     name: field, amount: field.nullable(), dailyValue: field.nullable(),
     // Drug Facts Purpose is quoted like every other value; old rows omit this field.
-    purpose: drugField,
+    purpose: field.nullable().optional(),
     amountStatus: z.enum(["printed", "not_declared", "unreadable", "not_applicable"]),
     // Zero-based index within THIS column, not a name or a global ingredient id.
     parentRowIndex: z.number().int().nonnegative().nullable(),
   });
   // A cited Drug Facts heading opts into drug validation; absent means existing serving rules.
   return z.strictObject({ codec: z.literal(labelExtractionVersion),
-    formula: z.strictObject({ drugFacts: drugField, servingSize: field.nullable(), servingsPerContainer: field.nullable(),
+    // Absent or null for Supplement/Nutrition Facts (the model's strict format sends null).
+    formula: z.strictObject({ drugFacts: field.nullable().optional(), servingSize: field.nullable(), servingsPerContainer: field.nullable(),
       columns: z.array(z.strictObject({ heading: field.nullable(), rows: z.array(row).min(1).max(200) })).min(1).max(8),
     }).nullable(),
     otherIngredients: z.strictObject({ heading: field, items: z.array(field).min(1).max(300) }).nullable(),
@@ -38,8 +34,6 @@ export function labelExtractionSchema<F extends z.ZodType>(field: F, forModel = 
   });
 }
 export const LabelTextWireSchema = labelExtractionSchema(LabelAnchorSchema);
-/** The strict answer format the text model is given (see labelExtractionSchema). */
-export const LabelTextModelSchema = labelExtractionSchema(LabelAnchorSchema, true);
 export const LabelTextCandidateSchema = labelExtractionSchema(LabelQuoteSchema);
 export const LabelImageCandidateSchema = labelExtractionSchema(LabelImageFieldSchema);
 export type LabelTextCandidate = z.infer<typeof LabelTextCandidateSchema>;
