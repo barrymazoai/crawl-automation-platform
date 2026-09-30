@@ -10,18 +10,34 @@ interface Judged {
   policyVersion: string;
 }
 
-const HEADING =
-  /^(?:supplement\s+facts|nutrition\s+facts|view\s+nutrition\s+label|serving\s+size\s*:?|servings?\s+per\s+container\s*:?|amounts?\s+per\s+serving|%\s*(?:dv|daily\s+value))$/i;
-const SYMBOL_FOOTNOTE = /^[*+†]+\s*(?:percent\s+daily\s+values|daily\s+values?)/i;
-// The FDA's standard footnote may stand alone, without a leading symbol:
-// "Percent Daily Values are based on a 2,000 calorie diet." (2026-09-29, Swanson label core text).
-const STANDARD_FOOTNOTE =
-  /^[*+†]*\s*percent\s+daily\s+values?\s+(?:\(dv\)\s+)?are\s+based\s+on\s+a\s+2,?000\s+calorie\s+diet\.?$/i;
+const HEADING = new RegExp(
+  String.raw`^[*+†‡§¶\s]*(?:supplement\s+facts|nutrition\s+facts|view\s+nutrition\s+label|` +
+    String.raw`serving\s+size\s*:?|servings?\s+per\s+container\s*:?|` +
+    String.raw`amounts?\s+per\s+serving(?:\s+%\s*daily\s+value)?|` +
+    String.raw`%\s*dv|(?:%\s*)?daily\s+value)\.?$`,
+  "i",
+);
+const DV_BASIS = new RegExp(
+  String.raw`percent\s+daily\s+values?\s+(?:\(dv\)\s+)?(?:are\s+)?` +
+    String.raw`based\s+(?:on|upon)\s+a\s+2,?000\s+calorie\s+diet`,
+  "i",
+);
+const DV_NOT_ESTABLISHED = new RegExp(
+  String.raw`(?:(?:percent|%)\s*)?daily\s+values?(?:\s*\(%?dv\))?\s+` +
+    String.raw`not\s+(?:established|determined)`,
+  "i",
+);
+// The long FDA form's second sentence.
+const DV_NEEDS =
+  /your\s+daily\s+values?\s+may\s+be\s+higher\s+or\s+lower\s+depending\s+on\s+your\s+calorie\s+needs/i;
+// Accept one to three complete DV sentences; a recognized prefix cannot hide other label text.
+const DV_SENTENCE = String.raw`[*+†‡§¶\s]*(?:${DV_BASIS.source}|${DV_NOT_ESTABLISHED.source}|${DV_NEEDS.source})\.?`;
+const STANDARD_FOOTNOTE = new RegExp(`^(?:${DV_SENTENCE}){1,3}$`, "i");
 const ESTABLISHED_FOOTNOTE =
   /^[*+†]+\s*(?:percent\s+daily\s+values?|daily\s+values?)(?:\s*\(DV\))?\s+(?:not established\.?|not determined\.?)$/i;
 const ALLERGEN = /^(?:contains\s*:|may\s+contain|manufactured\s+(?:in|on)|processed\s+(?:in|on))/i;
 
-/** `LABEL.COVERAGE_UNCERTAIN` when any excluded text lacks an accepted reason; marketing and noise stay for Review. */
+/** Unrecognized exclusions retain `LABEL.COVERAGE_UNCERTAIN`; marketing always stays for Review. */
 export function exclusionCodes(judged: Judged): string[] {
   const uncertain = judged.candidate.exclusions.some(
     (exclusion) =>
@@ -79,15 +95,13 @@ function isDvFootnote(exclusion: Exclusion): boolean {
 
 function allowedExclusion(exclusion: Exclusion, judged: Judged): boolean {
   const value = exclusion.quote.text.trim();
+  if (
+    ["heading", "metadata", "footnote", "noise"].includes(exclusion.reason) &&
+    (HEADING.test(value) || STANDARD_FOOTNOTE.test(value))
+  ) {
+    return true;
+  }
   switch (exclusion.reason) {
-    case "heading":
-      return HEADING.test(value);
-    case "footnote":
-      return SYMBOL_FOOTNOTE.test(value) || STANDARD_FOOTNOTE.test(value);
-    // The model may call the FDA's standard sentence metadata (2026-09-30, Swanson D-Ribose); the whole line is still
-    // the footnote, so the reason word does not send it to Review. Other metadata stays refused.
-    case "metadata":
-      return STANDARD_FOOTNOTE.test(value);
     case "allergen":
       return ALLERGEN.test(value);
     case "directions":
