@@ -1,4 +1,5 @@
 import { drugExclusionAllowed } from "./drug-label.js";
+import { labelHeadingAllowed } from "./label-headings.js";
 import { labelValidationErrors } from "../../label/validation-errors.js";
 import type { LabelTextCandidateSchema } from "@crawl-automation/v3-contracts";
 import type { z } from "zod";
@@ -11,16 +12,9 @@ interface Judged {
   policyVersion: string;
 }
 
-const HEADING = new RegExp(
-  String.raw`^[*+†‡§¶\s]*(?:supplement\s+facts|nutrition\s+facts|view\s+nutrition\s+label|` +
-    String.raw`serving\s+size\s*:?|servings?\s+per\s+container\s*:?|` +
-    String.raw`amounts?\s+per\s+serving(?:\s+%\s*daily\s+value)?|` +
-    String.raw`%\s*dv|(?:%\s*)?daily\s+value)\.?$`,
-  "i",
-);
 const DV_BASIS = new RegExp(
   String.raw`percent\s+daily\s+values?\s+(?:\(dv\)\s+)?(?:are\s+)?` +
-    String.raw`based\s+(?:on|upon)\s+a\s+2,?000\s+calorie\s+diet`,
+    String.raw`based\s+(?:on|upon)\s+(?:a\s+)?2,?000\s+calorie\s+diet`,
   "i",
 );
 const DV_NOT_ESTABLISHED = new RegExp(
@@ -104,7 +98,7 @@ function allowedExclusion(exclusion: Exclusion, judged: Judged): boolean {
   const value = exclusion.quote.text.trim();
   if (
     ["heading", "metadata", "footnote", "noise"].includes(exclusion.reason) &&
-    (HEADING.test(value) || STANDARD_FOOTNOTE.test(value))
+    (labelHeadingAllowed(value, judged.candidate) || STANDARD_FOOTNOTE.test(value))
   ) {
     return true;
   }
@@ -114,7 +108,7 @@ function allowedExclusion(exclusion: Exclusion, judged: Judged): boolean {
     case "directions":
       return allowedDirections(exclusion, judged);
     case "noise":
-      return isBlendLinkingWord(exclusion, judged);
+      return /^[+•■|/]$/.test(value) || isBlendLinkingWord(exclusion, judged);
     default:
       return false;
   }

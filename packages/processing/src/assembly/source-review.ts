@@ -7,6 +7,7 @@ import {
 } from "@crawl-automation/v3-contracts";
 import { assemblyFailure } from "./assembly-errors.js";
 import type { MergeFailure } from "./merge-state.js";
+import { textReviewHasFormula } from "./source-without-label.js";
 
 type Source = LabelProductJoin["manifest"]["sources"][number];
 
@@ -41,9 +42,11 @@ export async function sourceReviewFailure(
   if (!own) {
     throw assemblyFailure("LABEL_PRODUCT.IDENTITY_CONFLICT");
   }
+  const hasFormula = text ? textReviewHasFormula(review) : undefined;
   return {
     id: source.id,
     code: failure.code,
     verifiedExecuted: failure.executionFact === "executed",
+    ...(hasFormula === undefined ? {} : { hasFormula }),
   };
 }

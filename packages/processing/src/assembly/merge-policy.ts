@@ -66,12 +66,14 @@ export function applyFailures(
   policy: MergePolicy,
 ): void {
   for (const failure of failures) {
-    if (excused(state, failure, policy)) {
+    // Checked coverage Reviews use formula presence, including under image-first policies:
+    // an absent formula warns explicitly; a present formula keeps its coverage failure blocking.
+    if (failure.hasFormula === undefined && excused(state, failure, policy)) {
       state.warnings.push({ id: failure.id, code: failure.code });
     } else {
       applySourceReview(
         state,
-        { id: failure.id, codes: [failure.code] },
+        { id: failure.id, codes: [failure.code], withoutLabel: failure.hasFormula === false },
         policy.completeLabel && failure.verifiedExecuted === true,
       );
     }

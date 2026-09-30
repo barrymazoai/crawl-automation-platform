@@ -20,6 +20,8 @@ export interface MergeFailure {
   id: string;
   code: string;
   verifiedExecuted?: boolean;
+  /** Formula presence in a schema-checked text coverage Review; absent means unverified. */
+  hasFormula?: boolean;
 }
 
 export type Provenance = LabelCollectedProduct["provenance"][number];

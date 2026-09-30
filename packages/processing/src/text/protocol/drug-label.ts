@@ -9,14 +9,22 @@ import {
 import { labelValidationErrors } from "../../label/validation-errors.js";
 
 type Exclusion = LabelTextCandidate["exclusions"][number];
-const HPUS_NOTE = new RegExp(
-  '^The letters? "?HPUS"? indicate that (?:this ingredient|the component in this product) ' +
-    "is officially (?:included|monographed) in the Homeopathic Pharmacop(?:oeia|eia) " +
-    "of the United States\\.$",
+const HPUS_NOTE =
+  String.raw`The letters? ["“]?HPUS["”]? indicate that ` +
+  String.raw`(?:this ingredient|the components?(?:\(s\))? in (?:this|the) product) ` +
+  String.raw`(?:is|are) officially (?:included|monographed) in the ` +
+  String.raw`Homeopathic Pharmacop(?:oeia|eia) of the United States`;
+const DILUTION_NOTE = String.raw`C, K, CK, and X are homeopathic dilutions`;
+const FDA_USES_NOTE = String.raw`These ["“]Uses["”] have not been evaluated by the FDA`;
+const HOMEOPATHIC_NOTE = new RegExp(
+  String.raw`^(?:[*\s]*(?:${HPUS_NOTE}|${DILUTION_NOTE}|${FDA_USES_NOTE})\.?\s*){1,2}$`,
   "i",
 );
-const DILUTION_NOTE = /^[*\s]*C, K, CK, and X are homeopathic dilutions\.$/i;
-const TRACE_NOTE = /^\(contains less than [\d⁻⁰¹²³⁴⁵⁶⁷⁸⁹.]+ mg [a-z ]+\)$/i;
+const TRACE_NOTE = new RegExp(
+  String.raw`^\(contains less than (?:than )?[\d⁰¹²³⁴⁵⁶⁷⁸⁹₀₁₂₃₄₅₆₇₈₉.]+` +
+    String.raw`(?:[-⁻₋][\d⁰¹²³⁴⁵⁶⁷⁸⁹₀₁₂₃₄₅₆₇₈₉]+)? mg [a-z ]+\)$`,
+  "i",
+);
 
 /** Only recognized Drug Facts sections can excuse their own content, never another section's rows. */
 export function drugExclusionAllowed(exclusion: Exclusion, text: string): boolean {
@@ -30,8 +38,8 @@ export function drugExclusionAllowed(exclusion: Exclusion, text: string): boolea
       /^Active ingredients?(?:\(s\))?\s+Purpose$/i.test(value)
     );
   }
-  if (reason === "footnote") {
-    return HPUS_NOTE.test(value) || DILUTION_NOTE.test(value) || TRACE_NOTE.test(value);
+  if (reason === "footnote" || reason === "metadata") {
+    return HOMEOPATHIC_NOTE.test(value) || TRACE_NOTE.test(value);
   }
   if (reason !== "directions") {
     return false;
