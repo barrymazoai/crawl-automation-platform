@@ -17,7 +17,6 @@
     "@crawl-automation/channels-core": "workspace:*",
     "@crawl-automation/platform": "workspace:*",
     "@crawl-automation/v3-artifacts": "workspace:*",
-    "@crawl-automation/v3-channels": "workspace:*",
     "@crawl-automation/v3-contracts": "workspace:*",
     "htmlparser2": "10.1.0",
     "linkedom": "0.18.13"
@@ -25,6 +24,7 @@
   "devDependencies": {
     "@types/node": "catalog:",
     "typescript": "catalog:",
-    "vitest": "catalog:"
+    "vitest": "catalog:",
+    "@crawl-automation/v3-channels": "workspace:*"
   }
 }

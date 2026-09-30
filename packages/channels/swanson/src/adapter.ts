@@ -1,6 +1,5 @@
 import {
   factsFromHtml,
-  pageText,
   type ChannelAdapter,
   type FactsText,
   type FetchedPage,
@@ -10,9 +9,6 @@ import {
   type ProductAddress,
   type ProductIdentity,
 } from "@crawl-automation/channels-core";
-// The static page reader runs the shared Ego DOM expression in linkedom; it moves here once linkedom is a
-// dependency of this package (see ticket R07).
-import { parseSwansonStaticHtml } from "@crawl-automation/v3-channels";
 import { swansonFamily } from "./family.js";
 import { swansonExternalId } from "./history-id.js";
 import { swansonBrandScan } from "./brand-scan.js";
@@ -21,6 +17,7 @@ import { SWANSON_ORIGIN, swansonProductAddress } from "./swanson-address.js";
 import { swansonErrors } from "./swanson-errors.js";
 import { parseSwansonRenderedProduct } from "./swanson-evidence.js";
 import { swansonVariantChoices } from "./swanson-variants.js";
+import { parseSwansonStaticHtml } from "./swanson-static-html.js";
 import type {
   ChannelProductEvidence,
   SwansonRenderedProduct,
@@ -99,9 +96,7 @@ export const swansonAdapter: ChannelAdapter<SwansonRenderedProduct> = {
   productFamily: swansonFamily,
   externalId: swansonExternalId,
   parseProduct(page: FetchedPage): ParsedProduct<SwansonRenderedProduct> {
-    const rendered = parseSwansonStaticHtml(page.html, page.url, page.capturedAt, (element) =>
-      pageText(element.innerHTML),
-    );
+    const rendered = parseSwansonStaticHtml(page.html, page.url, page.capturedAt);
     const identity = selectedIdentity(rendered);
     const evidence = parseSwansonRenderedProduct(rendered, page.url, identity);
     const variants = swansonVariantChoices(rendered).choices.map((choice) =>

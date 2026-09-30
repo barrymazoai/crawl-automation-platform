@@ -280,15 +280,6 @@
   },
   {
     "type": "dependency",
-    "from": "packages/channels/swanson/src/adapter.ts",
-    "to": "packages/v3-channels/src/index.ts",
-    "rule": {
-      "severity": "error",
-      "name": "new-code-does-not-import-old-packages"
-    }
-  },
-  {
-    "type": "dependency",
     "from": "packages/channels/swanson/src/http-capture.test.ts",
     "to": "packages/v3-artifacts/src/index.ts",
     "rule": {
@@ -750,6 +741,15 @@
     "type": "dependency",
     "from": "packages/workflows/src/resources/versioned-gate.ts",
     "to": "packages/v3-product/src/resource-workflow.ts",
+    "rule": {
+      "severity": "error",
+      "name": "new-code-does-not-import-old-packages"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "packages/channels/swanson/src/swanson-static-html.test.ts",
+    "to": "packages/v3-channels/src/index.ts",
     "rule": {
       "severity": "error",
       "name": "new-code-does-not-import-old-packages"

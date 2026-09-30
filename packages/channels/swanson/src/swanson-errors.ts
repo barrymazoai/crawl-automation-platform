@@ -2,6 +2,18 @@ import { defineErrors } from "@crawl-automation/platform";
 
 /** What the Swanson page reader can refuse; each code becomes the product's Review code. */
 export const swansonErrors = defineErrors({
+  "SWANSON.ACCESS_CHALLENGE": {
+    category: "SOURCE",
+    message: "Swanson returned an access challenge instead of a product page.",
+  },
+  "SWANSON.PRODUCT_TEMPLATE": {
+    category: "SOURCE",
+    message: "The product page does not contain exactly one product heading.",
+  },
+  "SWANSON.STATIC_PARSE_FAILED": {
+    category: "PROCESSING",
+    message: "The saved Swanson HTML could not be read as a product projection.",
+  },
   "SWANSON.PRODUCT_URL_UNVERIFIED": {
     category: "SOURCE",
     message: "The address is not a Swanson product page (/p/<handle>, optional ?variant=<id>).",
