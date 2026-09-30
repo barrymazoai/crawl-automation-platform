@@ -1,5 +1,5 @@
 import type { BrowserPage, BrowserRead } from "@crawl-automation/platform";
-import { RetainedPublication, type ObjectStore } from "@crawl-automation/v3-artifacts";
+import { RetainedPublication, type ObjectStore } from "@crawl-automation/platform";
 import { describe, expect, it, vi } from "vitest";
 import type { ChannelAdapter } from "../adapter.js";
 import { BrowserPages, type BrowserCaptureSettings } from "./browser-pages.js";

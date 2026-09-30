@@ -1,4 +1,4 @@
-import { sha256 } from "@crawl-automation/v3-artifacts";
+import { sha256 } from "@crawl-automation/platform";
 import { appErrors } from "../errors.js";
 import type { QueueService } from "../queue/queue-service.js";
 import {

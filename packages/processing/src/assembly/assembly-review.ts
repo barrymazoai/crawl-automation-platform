@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
 import type { ObjectStore } from "@crawl-automation/platform";
-import { sha256 } from "@crawl-automation/v3-artifacts";
+import { sha256 } from "@crawl-automation/platform";
 import {
   ReviewRecordSchema,
   type LabelProductJoin,

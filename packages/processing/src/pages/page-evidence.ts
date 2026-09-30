@@ -1,6 +1,6 @@
 import { isDeepStrictEqual } from "node:util";
 import { errorCodeOf, type ObjectStore } from "@crawl-automation/platform";
-import { verifyBytes } from "@crawl-automation/v3-artifacts";
+import { verifyBytes } from "@crawl-automation/platform";
 import {
   PageTablesSchema,
   PreparedPageRecordSchema,

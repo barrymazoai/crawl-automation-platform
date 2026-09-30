@@ -1,5 +1,5 @@
 import { isDeepStrictEqual } from "node:util";
-import type { RetainedPublication } from "@crawl-automation/v3-artifacts";
+import type { RetainedPublication } from "@crawl-automation/platform";
 import type { ArtifactRef, SavedEvidenceSource } from "@crawl-automation/v3-contracts";
 import { decodeJson, encodeJson } from "../results/result-record.js";
 import { labelFailure } from "./label-errors.js";

@@ -1,6 +1,6 @@
 import type { ChannelRegistry } from "@crawl-automation/channels-core";
 import { LabelPlanInputSchema } from "@crawl-automation/processing";
-import { sha256 } from "@crawl-automation/v3-artifacts";
+import { sha256 } from "@crawl-automation/platform";
 import type { ChannelPlanInput, ResourceGate } from "@crawl-automation/v3-contracts";
 import {
   LabelWorkflowInputSchema,

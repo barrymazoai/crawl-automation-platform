@@ -16,7 +16,7 @@ import {
   type LabelCorePolicies,
 } from "@crawl-automation/processing";
 import { acquiredImageId, acquisitionKey, FileEvidence } from "@crawl-automation/v3-acquisition";
-import { ArtifactResolver } from "@crawl-automation/v3-artifacts";
+import { ArtifactResolver } from "@crawl-automation/platform";
 import type { OcrRegistration } from "@crawl-automation/v3-contracts";
 import type { CoreParts } from "../core-parts.js";
 import type { ProcessingSettings } from "./processing-settings.js";

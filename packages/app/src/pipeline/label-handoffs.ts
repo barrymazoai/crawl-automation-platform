@@ -1,5 +1,5 @@
 import type { ChannelRegistry } from "@crawl-automation/channels-core";
-import { sha256 } from "@crawl-automation/v3-artifacts";
+import { sha256 } from "@crawl-automation/platform";
 import {
   ChannelLabelInputSchema,
   ChannelSavedLabelWorkflowInputSchema,

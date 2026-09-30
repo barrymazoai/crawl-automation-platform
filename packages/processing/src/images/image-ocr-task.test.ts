@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { sha256 } from "@crawl-automation/v3-artifacts";
+import { sha256 } from "@crawl-automation/platform";
 import {
   AcquiredFileRecordSchema,
   acquisitionFingerprintMaterial,

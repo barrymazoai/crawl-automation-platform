@@ -17,7 +17,6 @@
     "@crawl-automation/channels-core": "workspace:*",
     "@crawl-automation/platform": "workspace:*",
     "@crawl-automation/processing": "workspace:*",
-    "@crawl-automation/v3-artifacts": "workspace:*",
     "@crawl-automation/v3-channels": "workspace:*",
     "@crawl-automation/v3-contracts": "workspace:*",
     "@crawl-automation/workflows": "workspace:*",

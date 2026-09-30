@@ -10,7 +10,7 @@ import {
   type PagePrepareOutcome,
   type PreparedPageRecord,
 } from "@crawl-automation/v3-contracts";
-import { sha256 } from "@crawl-automation/v3-artifacts";
+import { sha256 } from "@crawl-automation/platform";
 import { claimOnce } from "../publication/claim-once.js";
 import { encodeJson, hashString } from "../results/result-record.js";
 import { writeOnce } from "../results/write-once.js";

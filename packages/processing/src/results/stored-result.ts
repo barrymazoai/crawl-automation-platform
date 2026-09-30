@@ -1,4 +1,4 @@
-import { verifyBytes } from "@crawl-automation/v3-artifacts";
+import { verifyBytes } from "@crawl-automation/platform";
 import type { ArtifactRef } from "@crawl-automation/v3-contracts";
 import type { ObjectStore } from "@crawl-automation/platform";
 import type { ProcessingInput, ResultEvidence, ResultKind, StoredRecord } from "./result-kind.js";

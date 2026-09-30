@@ -1,5 +1,5 @@
 import { errorCodeOf, isAppError, type ObjectStore } from "@crawl-automation/platform";
-import type { ArtifactResolver } from "@crawl-automation/v3-artifacts";
+import type { ArtifactResolver } from "@crawl-automation/platform";
 import {
   VisionTaskSchema,
   type KeywordResult,

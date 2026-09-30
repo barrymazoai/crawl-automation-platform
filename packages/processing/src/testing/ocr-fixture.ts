@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { sha256 } from "@crawl-automation/v3-artifacts";
+import { sha256 } from "@crawl-automation/platform";
 import {
   fingerprintOcrInput,
   processingIdentity,

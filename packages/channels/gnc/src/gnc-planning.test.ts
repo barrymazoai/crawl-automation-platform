@@ -15,7 +15,7 @@ import {
   RetainedPublication,
   verifyBytes,
   type ObjectStore,
-} from "@crawl-automation/v3-artifacts";
+} from "@crawl-automation/platform";
 import { describe, expect, it, vi } from "vitest";
 import { gncAdapter } from "./gnc-adapter.js";
 import { gncLabelCore } from "./label-core.js";

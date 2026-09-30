@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { errorCodeOf, type ObjectStore } from "@crawl-automation/platform";
-import { sha256 } from "@crawl-automation/v3-artifacts";
+import { sha256 } from "@crawl-automation/platform";
 import { LabelProductJoinSchema, type LabelProductJoin } from "@crawl-automation/v3-contracts";
 import { encodeJson } from "../results/result-record.js";
 import { writeOnce } from "../results/write-once.js";

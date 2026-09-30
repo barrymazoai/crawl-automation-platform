@@ -1,6 +1,6 @@
 import ipaddr from "ipaddr.js";
 import { z } from "zod";
-import { sha256 } from "@crawl-automation/v3-artifacts";
+import { sha256 } from "@crawl-automation/platform";
 import { VersionTagSchema, type ProcessingCompatibility } from "@crawl-automation/v3-contracts";
 
 /** Label images go out only over HTTPS, or over plain HTTP to an address on the private network. */

@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { sha256 } from "@crawl-automation/v3-artifacts";
+import { sha256 } from "@crawl-automation/platform";
 import {
   ArtifactRefSchema,
   ObservationSchema,

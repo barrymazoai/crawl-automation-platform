@@ -26,6 +26,7 @@
     "test": "vitest run src"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "catalog:",
     "@crawl-automation/v3-contracts": "workspace:*",
     "@temporalio/client": "1.23.0",
     "@temporalio/worker": "1.23.0",
@@ -36,6 +37,7 @@
     "zod": "catalog:"
   },
   "devDependencies": {
+    "@crawl-automation/v3-artifacts": "workspace:*",
     "@types/node": "catalog:",
     "@types/pg": "catalog:",
     "typescript": "catalog:",

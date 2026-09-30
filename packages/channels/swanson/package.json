@@ -16,7 +16,6 @@
   "dependencies": {
     "@crawl-automation/channels-core": "workspace:*",
     "@crawl-automation/platform": "workspace:*",
-    "@crawl-automation/v3-artifacts": "workspace:*",
     "@crawl-automation/v3-contracts": "workspace:*",
     "htmlparser2": "10.1.0",
     "linkedom": "0.18.13"

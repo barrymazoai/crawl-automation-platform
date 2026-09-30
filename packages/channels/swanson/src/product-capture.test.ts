@@ -14,7 +14,7 @@ import {
   RetainedPublication,
   verifyBytes,
   type ObjectStore,
-} from "@crawl-automation/v3-artifacts";
+} from "@crawl-automation/platform";
 import { describe, expect, it, vi } from "vitest";
 import { swansonAdapter } from "./adapter.js";
 import { extractSwansonLabelCore } from "./label-core.js";

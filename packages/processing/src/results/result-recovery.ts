@@ -1,4 +1,4 @@
-import { sha256 } from "@crawl-automation/v3-artifacts";
+import { sha256 } from "@crawl-automation/platform";
 import type { ProcessingInput, ResultFacts, StoredRecord } from "./result-kind.js";
 import { noResult } from "./result-kind.js";
 import { decodeJson, prepareRecord, recordHash, type PreparedRecord } from "./result-record.js";

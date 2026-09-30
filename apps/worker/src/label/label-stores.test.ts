@@ -4,7 +4,7 @@ import { ChannelRegistry } from "@crawl-automation/channels-core";
 import { gncAdapter, gncLabelCore } from "@crawl-automation/channels-gnc";
 import { swansonAdapter, swansonLabelCore } from "@crawl-automation/channel-swanson";
 import { LabelCoreStep } from "@crawl-automation/processing";
-import { ArtifactResolver, sha256, type ObjectStore } from "@crawl-automation/v3-artifacts";
+import { ArtifactResolver, sha256, type ObjectStore } from "@crawl-automation/platform";
 import {
   ArtifactRefSchema,
   ObservationSchema,

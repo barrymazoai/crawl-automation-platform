@@ -1,4 +1,4 @@
-import { RetainedPublication, type ObjectStore } from "@crawl-automation/v3-artifacts";
+import { RetainedPublication, type ObjectStore } from "@crawl-automation/platform";
 import type { ScraperApiPage, ScraperApiRequest } from "@crawl-automation/platform";
 import { describe, expect, it, vi } from "vitest";
 import type { ChannelAdapter } from "../adapter.js";

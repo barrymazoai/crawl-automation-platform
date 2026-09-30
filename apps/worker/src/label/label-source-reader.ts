@@ -1,5 +1,5 @@
 import type { LabelAssemblyDeps } from "@crawl-automation/processing";
-import { verifyBytes } from "@crawl-automation/v3-artifacts";
+import { verifyBytes } from "@crawl-automation/platform";
 import { TextCandidateV3Schema, TextOutputSchema } from "@crawl-automation/v3-contracts";
 import { assemblyFailure } from "@crawl-automation/processing";
 import type { LabelStores } from "./label-stores.js";

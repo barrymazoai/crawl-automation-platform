@@ -1,6 +1,6 @@
 import { isDeepStrictEqual } from "node:util";
 import { errorCodeOf, type ObjectStore } from "@crawl-automation/platform";
-import { sha256, type ArtifactResolver } from "@crawl-automation/v3-artifacts";
+import { sha256, type ArtifactResolver } from "@crawl-automation/platform";
 import {
   ArtifactRefSchema,
   LabelCoreInputSchema,

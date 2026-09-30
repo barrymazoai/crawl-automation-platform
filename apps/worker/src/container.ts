@@ -40,7 +40,7 @@ import {
   FileCopies,
   RetainedPublication,
   verifyBytes,
-} from "@crawl-automation/v3-artifacts";
+} from "@crawl-automation/platform";
 import { TextLocalStore } from "@crawl-automation/v3-text";
 import { asFunction, asValue, createContainer, InjectionMode, type AwilixContainer } from "awilix";
 import { buildBrowserParts, type BrowserParts } from "./browser/browser-parts.js";

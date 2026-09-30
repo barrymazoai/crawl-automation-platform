@@ -1,4 +1,4 @@
-import { RetainedPublication, sha256 } from "@crawl-automation/v3-artifacts";
+import { RetainedPublication, sha256 } from "@crawl-automation/platform";
 import { ChannelPlanInputSchema, type ChannelPlanInput } from "@crawl-automation/v3-contracts";
 import type { ChannelPlanning, ParsedProduct, ProductIdentity } from "../adapter.js";
 import type { CaptureRequest, PlanSettings } from "./capture-request.js";

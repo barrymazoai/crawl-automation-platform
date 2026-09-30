@@ -1,5 +1,5 @@
 import { isDeepStrictEqual } from "node:util";
-import type { ArtifactResolver } from "@crawl-automation/v3-artifacts";
+import type { ArtifactResolver } from "@crawl-automation/platform";
 import {
   ArtifactRefSchema,
   ObservationSchema,

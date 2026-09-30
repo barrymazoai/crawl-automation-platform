@@ -8,7 +8,7 @@ import {
   ScraperApiOptionChoicesSchema,
   TemporalConfigSchema,
 } from "@crawl-automation/platform";
-import { R2ScopeSchema } from "@crawl-automation/v3-artifacts";
+import { R2ScopeSchema } from "@crawl-automation/platform";
 import {
   ChannelLabelInputSchema,
   ChannelPlanInputSchema,

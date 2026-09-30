@@ -15,11 +15,7 @@ import type {
 } from "@crawl-automation/channels-core";
 import type { Database, Logger } from "@crawl-automation/platform";
 import type { FileTransport } from "@crawl-automation/v3-acquisition";
-import type {
-  createR2Objects,
-  FileCopies,
-  RetainedPublication,
-} from "@crawl-automation/v3-artifacts";
+import type { createR2Objects, FileCopies, RetainedPublication } from "@crawl-automation/platform";
 import type { TextLocalStore } from "@crawl-automation/v3-text";
 import type { WorkerConfig } from "./config.js";
 

@@ -22,7 +22,7 @@ import {
   type Logger,
   type ObjectStore,
 } from "@crawl-automation/platform";
-import { createR2Objects } from "@crawl-automation/v3-artifacts";
+import { createR2Objects } from "@crawl-automation/platform";
 import type { BrandScanSettings } from "./brand-scan-config.js";
 
 /** The channels brand scans read with their adapters' ScraperAPI readers. */

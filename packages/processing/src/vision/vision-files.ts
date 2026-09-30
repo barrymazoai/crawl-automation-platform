@@ -7,7 +7,7 @@ import {
   type VisionRecord,
   type VisionTask,
 } from "@crawl-automation/v3-contracts";
-import { sha256 } from "@crawl-automation/v3-artifacts";
+import { sha256 } from "@crawl-automation/platform";
 import type { RecordCodec, ResultFailureReason } from "../results/result-kind.js";
 import { encodeJson, hashString } from "../results/result-record.js";
 import { visionFailure, type VisionErrorCode } from "./vision-errors.js";

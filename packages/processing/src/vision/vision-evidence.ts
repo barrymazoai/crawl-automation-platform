@@ -1,5 +1,5 @@
 import { isDeepStrictEqual } from "node:util";
-import { verifyBytes } from "@crawl-automation/v3-artifacts";
+import { verifyBytes } from "@crawl-automation/platform";
 import type { ObjectStore } from "@crawl-automation/platform";
 import type { VisionTask } from "@crawl-automation/v3-contracts";
 import { decodeJson, hashString } from "../results/result-record.js";

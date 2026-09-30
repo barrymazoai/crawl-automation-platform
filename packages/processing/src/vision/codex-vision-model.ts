@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { verifyBytes } from "@crawl-automation/v3-artifacts";
+import { verifyBytes } from "@crawl-automation/platform";
 import {
   ImageEvidenceSchema,
   labelExtractionVersion,

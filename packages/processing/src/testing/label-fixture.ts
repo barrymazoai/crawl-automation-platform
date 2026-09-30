@@ -1,5 +1,5 @@
 import { vi } from "vitest";
-import { RetainedPublication } from "@crawl-automation/v3-artifacts";
+import { RetainedPublication } from "@crawl-automation/platform";
 import type { LabelImageCandidate, SavedEvidenceSource } from "@crawl-automation/v3-contracts";
 import type { SourceResolution } from "../label/label-plan-model.js";
 import { LabelPlans } from "../label/label-plans.js";

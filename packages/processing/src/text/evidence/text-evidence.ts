@@ -8,7 +8,7 @@ import {
   type OcrRegistration,
   type TextInput,
 } from "@crawl-automation/v3-contracts";
-import type { ArtifactResolver } from "@crawl-automation/v3-artifacts";
+import type { ArtifactResolver } from "@crawl-automation/platform";
 import { isAppError } from "@crawl-automation/platform";
 import { textFailure } from "../errors.js";
 import { splitsCharacter } from "../protocol/text-range.js";

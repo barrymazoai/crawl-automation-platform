@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { sha256 } from "@crawl-automation/v3-artifacts";
+import { sha256 } from "@crawl-automation/platform";
 import { TextDocumentSchema, parseTextInput } from "@crawl-automation/v3-contracts";
 import { decodeJson, hashString } from "../results/result-record.js";
 import { defined } from "../testing/defined.js";

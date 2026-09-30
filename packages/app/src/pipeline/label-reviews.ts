@@ -1,5 +1,5 @@
 import { LabelPlanInputSchema, type LabelPlanInput } from "@crawl-automation/processing";
-import { sha256 } from "@crawl-automation/v3-artifacts";
+import { sha256 } from "@crawl-automation/platform";
 import { ReviewRecordSchema, type ReviewRecord } from "@crawl-automation/v3-contracts";
 import { z } from "zod";
 import { appErrors } from "../errors.js";

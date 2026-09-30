@@ -1,7 +1,7 @@
 import { BrandScanRunnerSettingsSchema } from "@crawl-automation/app";
 import { CHANNEL_IDS } from "@crawl-automation/channels-core";
 import { ScraperApiAccessSchema, ScraperApiOptionChoicesSchema } from "@crawl-automation/platform";
-import { R2ScopeSchema } from "@crawl-automation/v3-artifacts";
+import { R2ScopeSchema } from "@crawl-automation/platform";
 import { ScraperApiRouteSchema } from "@crawl-automation/v3-contracts";
 import { z } from "zod";
 

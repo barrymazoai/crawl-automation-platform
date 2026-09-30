@@ -1,4 +1,4 @@
-import type { RetainedPublication } from "@crawl-automation/v3-artifacts";
+import type { RetainedPublication } from "@crawl-automation/platform";
 import type { HttpCapture } from "../capture/http-capture.js";
 import { OriginalHtmlArchive } from "../capture/original-html-archive.js";
 import type { ChannelRegistry } from "../registry.js";

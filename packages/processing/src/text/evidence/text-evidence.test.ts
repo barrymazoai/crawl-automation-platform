@@ -1,4 +1,4 @@
-import { ArtifactResolver, sha256 } from "@crawl-automation/v3-artifacts";
+import { ArtifactResolver, sha256 } from "@crawl-automation/platform";
 import {
   ArtifactRefSchema,
   TextInputSchema,

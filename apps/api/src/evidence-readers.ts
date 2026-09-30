@@ -1,7 +1,7 @@
 import { ReviewEvidence, TextAnswerRecheck } from "@crawl-automation/app";
 import { defineErrors, type ObjectStore } from "@crawl-automation/platform";
 import { OcrResults, TextEvidence, noResult } from "@crawl-automation/processing";
-import { ArtifactResolver, createR2Objects } from "@crawl-automation/v3-artifacts";
+import { ArtifactResolver, createR2Objects } from "@crawl-automation/platform";
 import { legacyLabelCorePolicies } from "@crawl-automation/v3-text";
 import type { ApiConfig } from "./config.js";
 

@@ -1,5 +1,5 @@
 import { Parser } from "htmlparser2";
-import { verifyBytes } from "@crawl-automation/v3-artifacts";
+import { verifyBytes } from "@crawl-automation/platform";
 import type { PagePrepareInput } from "@crawl-automation/v3-contracts";
 import { PageCollector, type PageTable } from "./page-collector.js";
 import { pageFailure } from "./page-errors.js";

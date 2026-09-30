@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ArtifactResolver, sha256 } from "@crawl-automation/v3-artifacts";
+import { ArtifactResolver, sha256 } from "@crawl-automation/platform";
 import {
   ArtifactRefSchema,
   ObservationSchema,

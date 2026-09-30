@@ -1,5 +1,5 @@
 import createClient, { type Client } from "openapi-fetch";
-import { verifyBytes } from "@crawl-automation/v3-artifacts";
+import { verifyBytes } from "@crawl-automation/platform";
 import {
   OcrResponseSchema,
   type OcrInput,

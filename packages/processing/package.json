@@ -16,7 +16,6 @@
   },
   "dependencies": {
     "@crawl-automation/platform": "workspace:*",
-    "@crawl-automation/v3-artifacts": "workspace:*",
     "@crawl-automation/v3-contracts": "workspace:*",
     "htmlparser2": "10.1.0",
     "ipaddr.js": "catalog:",

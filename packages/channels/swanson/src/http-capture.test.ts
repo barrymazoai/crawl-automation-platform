@@ -5,7 +5,7 @@ import {
   OriginalHtmlArchive,
   type HttpCaptureResult,
 } from "@crawl-automation/channels-core";
-import { RetainedPublication, type ObjectStore } from "@crawl-automation/v3-artifacts";
+import { RetainedPublication, type ObjectStore } from "@crawl-automation/platform";
 // Old workers wrote archives with this class; the test proves the shared archive reads them unchanged.
 import { SwansonHtmlArchive } from "@crawl-automation/v3-channels";
 import { describe, expect, it, vi } from "vitest";

@@ -1,5 +1,5 @@
 import { isDeepStrictEqual } from "node:util";
-import { RetainedPublication, sha256, verifyBytes } from "@crawl-automation/v3-artifacts";
+import { RetainedPublication, sha256, verifyBytes } from "@crawl-automation/platform";
 import { ScraperApiOptionsSchema } from "@crawl-automation/platform";
 import { ArtifactRefSchema, type ArtifactRef } from "@crawl-automation/v3-contracts";
 import { z } from "zod";

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { sha256 } from "@crawl-automation/v3-artifacts";
+import { sha256 } from "@crawl-automation/platform";
 import type { OcrRegistration } from "@crawl-automation/v3-contracts";
 import { OcrResults } from "../ocr/ocr-results.js";
 import { ocrKeys, ocrResultKind } from "../ocr/ocr-kind.js";
