@@ -18,7 +18,7 @@ function isAllowedAddress(raw: string): boolean {
 
 /** Settings of the OCR API client, read once at startup. */
 export const OcrApiSettingsSchema = z.strictObject({
-  /** The OCR API's base address, e.g. `http://192.168.68.20:8081`. */
+  /** The OCR API's base address, e.g. `https://192.0.2.20:8081` (documentation address). */
   baseUrl: z.url().refine(isAllowedAddress, "HTTPS, or HTTP to a private-network address"),
   provider: VersionTagSchema,
   timeoutMs: z.number().int().min(100).max(60_000).default(45_000),

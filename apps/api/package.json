@@ -34,6 +34,7 @@
     "@trpc/server": "^11.19.0",
     "awilix": "^13.0.5",
     "hono": "catalog:",
+    "ipaddr.js": "catalog:",
     "zod": "catalog:"
   },
   "devDependencies": {

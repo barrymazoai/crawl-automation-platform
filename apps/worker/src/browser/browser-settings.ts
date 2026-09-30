@@ -2,7 +2,10 @@ import { WholeFoodsStoreSchema } from "@crawl-automation/channels-wholefoods";
 import { EgoSettingsSchema } from "@crawl-automation/platform";
 import { z } from "zod";
 
-/** The browser machine's settings (Server 二): its Ego browser and the Whole Foods store every page is read for. */
+/**
+ * Local settings for the browser worker on each Mac mini with Ego, serving DTC and Amazon
+ * Store-page brands. Whole Foods waits on its fetch test; its store settings are retained here.
+ */
 export const BrowserSettingsSchema = z.strictObject({
   ego: EgoSettingsSchema,
   wholefoods: WholeFoodsStoreSchema,

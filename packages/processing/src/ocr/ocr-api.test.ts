@@ -103,6 +103,14 @@ describe("OCR API settings", () => {
   it.each(addresses.allowed)("allow %s", (address) => expect(valid(address)).toBe(true));
   it.each(addresses.refused)("refuse %s", (address) => expect(valid(address)).toBe(false));
 
+  it.each([
+    [10, 0, 0, 1],
+    [172, 16, 0, 1],
+    [192, 168, 0, 1],
+  ])("allows HTTP to an RFC 1918 address %j", (...octets) => {
+    expect(valid(`http://${octets.join(".")}:8081`)).toBe(true);
+  });
+
   it("name the same OCR setup as the previous client, so existing tasks and results stay valid", () => {
     const settings = (raw: object) =>
       OcrApiSettingsSchema.parse({ baseUrl: BASE_URL, provider: "rapidocr-ppocrv5/1", ...raw });

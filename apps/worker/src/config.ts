@@ -98,7 +98,10 @@ export const WorkerConfigSchema = z
     }) satisfies z.ZodType<LabelSettings>,
     /** The label steps on this machine: storage, node name, Codex and the OCR API (see `label/processing-settings.ts`). */
     processing: ProcessingSettingsSchema.optional(),
-    /** A machine with the browser role (both Mac minis): Ego and the Whole Foods store (`browser/browser-settings.ts`). */
+    /**
+     * The browser worker on each Mac mini with Ego serves DTC and Amazon Store-page brands.
+     * Whole Foods waits on its fetch test; see `browser/browser-settings.ts` for local settings.
+     */
     browser: BrowserSettingsSchema.optional(),
     /**
      * The kind of each resource the permits name (browser, http-lane, model, ocr, cpu…), checked against the work at

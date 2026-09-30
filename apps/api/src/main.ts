@@ -1,4 +1,4 @@
-import { startHeartbeat } from "@crawl-automation/platform";
+import { createLogger, startHeartbeat } from "@crawl-automation/platform";
 import { loadApiConfig } from "./config.js";
 import { buildContainer } from "./container.js";
 import { createHttpApp, listen } from "./server.js";
@@ -55,8 +55,9 @@ async function main(): Promise<void> {
 main().then(
   () => process.exit(0),
   (error: unknown) => {
-    process.stderr.write(
-      `${JSON.stringify({ level: 60, msg: "api failed", err: String(error) })}\n`,
+    createLogger({ name: "api", destination: process.stderr }).fatal(
+      { err: String(error) },
+      "api failed",
     );
     process.exit(1);
   },

@@ -27,8 +27,8 @@ const roleWork: Record<WorkerRole, (parts: WorkerParts) => RoleWork> = {
   "label-ocr": (parts) => ({ activities: ocrActivities(parts) }),
   "label-model": (parts) => ({ activities: modelActivities(parts) }),
   resources: (parts) => ({ activities: resourceActivities(parts) }),
-  // Pages only the Ego browser can read (Whole Foods), on the machine that runs Ego (Server 二); it also hosts the
-  // API's brand-scan workflow for them, so the API never drives a browser.
+  // Browser workers run on each Mac mini with Ego for DTC and Amazon Store-page brands.
+  // Whole Foods waits on its fetch test. The role also hosts the API's browser brand-scan workflow.
   browser: (parts) => ({ activities: browserActivities(parts), workflowBundlePath }),
 };
 

@@ -1,4 +1,4 @@
-import { startHeartbeat } from "@crawl-automation/platform";
+import { createLogger, startHeartbeat } from "@crawl-automation/platform";
 import { runWorkers } from "@crawl-automation/platform/temporal-worker";
 import { loadWorkerConfig } from "./load-config.js";
 import { buildContainer } from "./container.js";
@@ -37,8 +37,9 @@ async function main(): Promise<void> {
 main().then(
   () => process.exit(0),
   (error: unknown) => {
-    process.stderr.write(
-      `${JSON.stringify({ level: 60, msg: "worker process failed", err: String(error) })}\n`,
+    createLogger({ name: "worker", destination: process.stderr }).fatal(
+      { err: String(error) },
+      "worker process failed",
     );
     process.exit(1);
   },

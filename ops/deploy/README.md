@@ -194,6 +194,12 @@ task queue with its own limits; the process a job runs is named by `V3_WORKER_PR
 Unknown roles are refused. The label roles are added with their workers (phase M5). A config without `processes`
 keeps its old `taskQueue` and runs as the `pipeline` process.
 
+### Browser worker
+
+The browser worker runs on each Mac mini with Ego (both Server 一 and Server 二), using that machine's
+private Ego settings. DTC and Amazon Store-page brands use it. Whole Foods waits on its fetch test
+(owner decision, 2026-09-30).
+
 ## Database: migrations 026–031
 
 | Migration | Adds                                                                                                             | Runtime role (`v3_runtime`) gets                                                                                           |
@@ -228,7 +234,8 @@ Each migration grants these itself when the role exists. Run them with `--migrat
 }
 ```
 
-`storage` is read-only (Review evidence and recheck). `brandScans` writes listing pages to R2. `ego` and
-`wholefoods` only work on the machine where the Ego browser runs (Server 二).
+`storage` is read-only (Review evidence and recheck). `brandScans` writes listing pages to R2. Each
+Mac mini's browser worker uses its local Ego browser for DTC and Amazon Store-page brands. The
+`wholefoods` settings are retained; Whole Foods waits on its fetch test.
 
 The Postgres change for the private network is in [POSTGRES_PRIVATE_NETWORK.md](POSTGRES_PRIVATE_NETWORK.md).

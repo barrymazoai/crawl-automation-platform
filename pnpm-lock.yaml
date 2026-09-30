@@ -233,6 +233,9 @@ importers:
       hono:
         specifier: 'catalog:'
         version: 4.13.5
+      ipaddr.js:
+        specifier: 'catalog:'
+        version: 2.5.0
       zod:
         specifier: 'catalog:'
         version: 4.4.3
@@ -885,9 +888,6 @@ importers:
         specifier: 'catalog:'
         version: 4.4.3
     devDependencies:
-      '@crawl-automation/v3-artifacts':
-        specifier: workspace:*
-        version: link:../../v3-artifacts
       '@types/node':
         specifier: 'catalog:'
         version: 22.20.1

@@ -1,9 +1,14 @@
 {
   "allowed": [
-    "http://192.168.68.20:8081",
+    "https://192.0.2.20:8081",
     "http://127.0.0.1:8081",
     "http://[fd00::20]:8081",
     "https://ocr.example.test"
   ],
-  "refused": ["http://8.8.8.8:8081", "http://ocr.example.test", "ftp://192.168.68.20"]
+  "refused": [
+    "http://192.0.2.20:8081",
+    "http://198.51.100.20:8081",
+    "http://ocr.example.test",
+    "ftp://192.0.2.20"
+  ]
 }

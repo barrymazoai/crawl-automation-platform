@@ -6,7 +6,7 @@ import { z } from "zod";
  * startup from the machine's private config.
  */
 export const EgoSettingsSchema = z.strictObject({
-  /** The `ego-browser` executable, e.g. `/Users/server2/.local/bin/ego-browser`. */
+  /** The `ego-browser` executable, e.g. `/Users/<user>/.local/bin/ego-browser`. */
   cliPath: z.string().refine(isAbsolute, "an absolute path"),
   /** The task space the crawler owns; pages are opened and closed inside it only. */
   taskSpaceId: z.number().int().positive(),
