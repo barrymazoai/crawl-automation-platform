@@ -126,7 +126,8 @@ describe("HttpCapture", () => {
       }
       return { url: address, listingId, variantId: null };
     },
-    parseProduct: (page) => ({ html: page.html }) as never,
+    parseProduct: (page) =>
+      ({ html: page.html, identity: { listingId: "877080", variantId: null } }) as never,
   };
   const capture = {
     operationId: "gnc-op",
@@ -157,7 +158,7 @@ describe("HttpCapture", () => {
     expect(receipt.fetchedVia).toMatchObject({ creditCost: 10, options: { premium: true } });
   });
 
-  const captureWith = (page: Partial<ScraperApiPage>) => {
+  const captureWith = (page: Partial<ScraperApiPage>, hooks: Partial<ChannelAdapter> = {}) => {
     const publication = new RetainedPublication(new Memory(), new Memory());
     const archive = new OriginalHtmlArchive(publication, {
       channel: "gnc",
@@ -165,20 +166,75 @@ describe("HttpCapture", () => {
       maxBytes: policy.maxBytes,
     });
     const { fake } = client(page);
-    return new HttpCapture(new ScraperApiPages(fake, settings)).capture(adapter, archive, signal());
+    return new HttpCapture(new ScraperApiPages(fake, settings)).capture(
+      { ...adapter, ...hooks },
+      archive,
+      signal(),
+    );
   };
 
-  it("reports a page that answers 404 as unlisted (not found), not a failure", async () => {
-    expect(await captureWith({ status: 404 })).toEqual({
+  it.each([404, 410])("reports HTTP %s as unlisted (not found), not a failure", async (status) => {
+    expect(await captureWith({ status })).toEqual({
       status: "sighting",
       sighting: {
         state: "unlisted",
         reason: "not_found",
         causeCode: "LISTING.NOT_FOUND",
-        httpStatus: 404,
+        httpStatus: status,
         observedListingId: null,
         finalUrl: null,
         archiveKey: null,
+      },
+    });
+  });
+
+  it("reports both page and requested IDs before product parsing can fail", async () => {
+    const parseProduct = vi.fn(() => {
+      throw new Error("Product parsing must not run for another listing");
+    });
+    const result = await captureWith(
+      {},
+      {
+        pageIdentity: () => ({ listingId: "999111", variantId: "selected" }),
+        parseProduct,
+      },
+    );
+    expect(result).toMatchObject({
+      status: "sighting",
+      sighting: {
+        state: "unlisted",
+        reason: "identity_conflict",
+        causeCode: "LISTING.IDENTITY_CONFLICT",
+        requestedListingId: "877080",
+        requestedVariantId: null,
+        observedListingId: "999111",
+        observedVariantId: "selected",
+        archiveKey: "v3/gnc-html/gnc-op/original.html",
+      },
+    });
+    expect(parseProduct).not.toHaveBeenCalled();
+  });
+
+  it.each([null, { listingId: "877080", variantId: "selected" }])(
+    "does not invent a conflict for an unknown or matching page identity: %j",
+    async (identity) => {
+      const parseProduct = () =>
+        ({ identity: { listingId: "parsed-id", variantId: null } }) as never;
+      expect(await captureWith({}, { pageIdentity: () => identity, parseProduct })).toMatchObject({
+        status: "page",
+      });
+    },
+  );
+
+  it("compares parsed page identity when the adapter has no early identity hook", async () => {
+    const parseProduct = () => ({ identity: { listingId: "999111", variantId: null } }) as never;
+    expect(await captureWith({}, { parseProduct })).toMatchObject({
+      status: "sighting",
+      sighting: {
+        state: "unlisted",
+        reason: "identity_conflict",
+        requestedListingId: "877080",
+        observedListingId: "999111",
       },
     });
   });

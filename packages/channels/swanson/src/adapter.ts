@@ -17,7 +17,7 @@ import { SWANSON_ORIGIN, swansonProductAddress } from "./swanson-address.js";
 import { swansonErrors } from "./swanson-errors.js";
 import { parseSwansonRenderedProduct } from "./swanson-evidence.js";
 import { swansonVariantChoices } from "./swanson-variants.js";
-import { parseSwansonStaticHtml } from "./swanson-static-html.js";
+import { parseSwansonStaticHtml, parseSwansonStaticIdentity } from "./swanson-static-html.js";
 import type {
   ChannelProductEvidence,
   SwansonRenderedProduct,
@@ -30,17 +30,25 @@ function productAddress(url: string): ProductAddress {
 }
 
 /** After capture the page names its own identity: the Shopify product ID and the selected variant. */
-function selectedIdentity(rendered: SwansonRenderedProduct): {
+function selectedIdentity(rendered: Pick<SwansonRenderedProduct, "selectedForms">): {
   listingId: string;
   variantId: string;
 } {
   const form = rendered.selectedForms[0];
   const variantId = form?.variantIds[0];
-  if (!form || !variantId) {
+  if (rendered.selectedForms.length !== 1 || form?.variantIds.length !== 1 || !variantId) {
     // parseSwansonStaticHtml guarantees one selected form with one variant; this only narrows the type.
     throw swansonErrors.create("SWANSON.IDENTITY_UNVERIFIED");
   }
   return { listingId: form.productId, variantId };
+}
+
+/** The canonical handle and selected variant are page evidence; Shopify's numeric product ID is kept separately. */
+function pageIdentity(page: FetchedPage): ProductIdentity {
+  const rendered = parseSwansonStaticIdentity(page.html, page.url);
+  const canonical = swansonProductAddress(rendered.canonicalUrl);
+  const { variantId } = selectedIdentity(rendered);
+  return { listingId: canonical.handle, variantId };
 }
 
 /** The projection the formula planner reads: the rendered page without the family option list. */
@@ -93,6 +101,7 @@ export const swansonAdapter: ChannelAdapter<SwansonRenderedProduct> = {
     labelCore: swansonLabelCore,
   },
   productAddress,
+  pageIdentity,
   productFamily: swansonFamily,
   externalId: swansonExternalId,
   parseProduct(page: FetchedPage): ParsedProduct<SwansonRenderedProduct> {

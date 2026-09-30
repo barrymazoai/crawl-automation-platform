@@ -15,7 +15,9 @@ import {
 import { gncFactsTableComplete } from "./gnc-facts.js";
 import { gncPageErrors } from "./gnc-page-errors.js";
 import { parseGncProduct } from "./gnc-product.js";
-import { GNC_ORIGIN, gncErrors, gncProductAddress, isSku } from "./gnc-address.js";
+import { GNC_ORIGIN, gncProductAddress } from "./gnc-address.js";
+import { gncPageIdentity } from "./gnc-identity.js";
+import { gncLabelCore } from "./label-core.js";
 import { gncBrandScan } from "./gnc-brand-scan.js";
 import { gncCommerce } from "./gnc-commerce.js";
 import { gncProductFamily, readGncOptions, type GncRendered } from "./gnc-options.js";
@@ -91,14 +93,11 @@ function evidenceOf(product: GncProductEvidence): ChannelProductEvidence {
 
 function parseProduct(page: FetchedPage): ParsedProduct<GncRendered> {
   const address = gncProductAddress(page.url);
-  if (!isSku(address.listingId)) {
-    // A family page lists several SKUs; brand scans queue its members, never the family page itself.
-    throw gncErrors.create("GNC.FAMILY_PAGE", { details: { listingId: address.listingId } });
-  }
-  const product = parseGncProduct(page.html, address.url, address.listingId);
+  const identity = gncPageIdentity(page);
+  const product = parseGncProduct(page.html, address.url, identity.listingId);
   return {
     channel: "gnc",
-    identity: { listingId: product.sku, variantId: null },
+    identity,
     rendered: { product, options: readGncOptions(page.html) },
     evidence: evidenceOf(product),
     commerce: gncCommerce(page.html, product.sku),
@@ -123,8 +122,11 @@ export const gncAdapter: ChannelAdapter<GncRendered> = {
     projectionModule: "gnc.http-projection",
     projection: (rendered: GncRendered) => evidenceOf(rendered.product),
     read: readProjection,
+    corePolicy: "gnc-label-core/1",
+    labelCore: gncLabelCore,
   },
   productAddress: gncProductAddress,
+  pageIdentity: gncPageIdentity,
   parseProduct,
   productFamily: gncProductFamily,
 };

@@ -47,7 +47,8 @@ const adapter: ChannelAdapter = {
   captureModes: ["browser"],
   httpPolicy: policy,
   productAddress: (address) => ({ url: address, listingId: "B0096M5PBW", variantId: null }),
-  parseProduct: (page) => ({ html: page.html }) as never,
+  parseProduct: (page) =>
+    ({ html: page.html, identity: { listingId: "B0096M5PBW", variantId: null } }) as never,
 };
 const capture = {
   operationId: "wf-op",
@@ -68,6 +69,38 @@ function archive(remote = new Memory()) {
 }
 
 describe("BrowserPages", () => {
+  it("records page-owned identity conflicts before parsing and only after archiving the page", async () => {
+    const remote = new Memory();
+    const drawn = browser();
+    const parseProduct = vi.fn();
+    const other = { listingId: "B000000001", variantId: null };
+    const pageIdentity = vi.fn(() => {
+      expect(remote.data.has("v3/wholefoods-html/wf-op/original.json")).toBe(true);
+      return other;
+    });
+    const capturer = new HttpCapture(new BrowserPages(drawn, settings));
+    const result = await capturer.capture(
+      { ...adapter, pageIdentity, parseProduct },
+      archive(remote),
+      signal(),
+    );
+    expect(result).toMatchObject({
+      status: "sighting",
+      sighting: {
+        state: "unlisted",
+        reason: "identity_conflict",
+        causeCode: "LISTING.IDENTITY_CONFLICT",
+        observedListingId: other.listingId,
+        archiveKey: "v3/wholefoods-html/wf-op/original.html",
+      },
+    });
+    const receipt = JSON.parse(
+      Buffer.from(remote.data.get("v3/wholefoods-html/wf-op/original.json") ?? []).toString(),
+    );
+    expect(receipt.capture.listingId).toBe("B0096M5PBW");
+    expect(parseProduct).not.toHaveBeenCalled();
+  });
+
   it("draws the page once, archives it with its store, then reads only the archive", async () => {
     const remote = new Memory();
     const drawn = browser();

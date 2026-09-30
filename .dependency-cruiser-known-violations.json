@@ -754,5 +754,14 @@
       "severity": "error",
       "name": "new-code-does-not-import-old-packages"
     }
+  },
+  {
+    "type": "dependency",
+    "from": "apps/worker/src/label/label-stores.test.ts",
+    "to": "packages/v3-artifacts/src/index.ts",
+    "rule": {
+      "severity": "error",
+      "name": "new-code-does-not-import-old-packages"
+    }
   }
 ]

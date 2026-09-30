@@ -106,6 +106,46 @@ function captured(result: ProductCaptureResult) {
 }
 
 describe("ProductCapture with the Swanson adapter", () => {
+  it("records another product's unchanged page as unlisted, with both handles and its original", async () => {
+    const { remote, fetches, capture } = setup();
+    const wrongRequest = { ...request, url: pages.ubiquinol.url };
+    const first = await capture.capture(wrongRequest, signal());
+    expect(first).toMatchObject({
+      status: "sighted",
+      listingId: swansonAdapter.productAddress(pages.ubiquinol.url).listingId,
+      sighting: {
+        state: "unlisted",
+        reason: "identity_conflict",
+        causeCode: "LISTING.IDENTITY_CONFLICT",
+        requestedListingId: swansonAdapter.productAddress(pages.ubiquinol.url).listingId,
+        observedListingId: swansonAdapter.productAddress(pages.dRibose.url).listingId,
+        archiveKey: "v3/swanson-html/pipeline-capture-1/original.html",
+      },
+    });
+    expect(remote.data.get("v3/swanson-html/pipeline-capture-1/original.html")).toEqual(
+      pageBytes(pages.dRibose),
+    );
+    expect([...remote.data.keys()].some((key) => key.endsWith("projection.json"))).toBe(false);
+    expect(await capture.capture(wrongRequest, signal())).toEqual(first);
+    expect(fetches).toHaveBeenCalledOnce();
+  });
+
+  it("records a different requested variant as an identity conflict", async () => {
+    const { capture } = setup(pages.ubiquinol);
+    const url = new URL(pages.ubiquinol.url);
+    url.searchParams.set("variant", "999999999");
+    expect(await capture.capture({ ...request, url: url.href }, signal())).toMatchObject({
+      status: "sighted",
+      variantId: "999999999",
+      sighting: {
+        state: "unlisted",
+        reason: "identity_conflict",
+        requestedVariantId: "999999999",
+        observedVariantId: "46318812168330",
+      },
+    });
+  });
+
   it("archives the page, publishes the projection, and the existing planner accepts it", async () => {
     const { remote, fetches, capture, plans } = setup();
 

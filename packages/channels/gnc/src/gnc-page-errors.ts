@@ -11,11 +11,11 @@ export const gncPageErrors = defineErrors({
   "GNC.JSON_INVALID": { category: "SOURCE", message: "The page's product data is not valid JSON." },
   "GNC.SKU_UNVERIFIED": {
     category: "IDENTITY",
-    message: "The page's product data does not name the requested SKU.",
+    message: "The page's product data does not name a verifiable SKU.",
   },
   "GNC.SKU_AMBIGUOUS": {
     category: "IDENTITY",
-    message: "The page names the requested SKU with two different product records.",
+    message: "The page names more than one possible product record.",
   },
   "GNC.SKU_CONFLICT": {
     category: "IDENTITY",

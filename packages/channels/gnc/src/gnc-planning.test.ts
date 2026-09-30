@@ -18,6 +18,7 @@ import {
 } from "@crawl-automation/v3-artifacts";
 import { describe, expect, it, vi } from "vitest";
 import { gncAdapter } from "./gnc-adapter.js";
+import { gncLabelCore } from "./label-core.js";
 
 class Memory implements ObjectStore {
   data = new Map<string, Uint8Array>();
@@ -88,6 +89,43 @@ function scraperPages() {
 }
 
 describe("GNC product planning on the real 877080 page", () => {
+  it("archives a different SKU as unlisted with requested and observed identity, without a plan", async () => {
+    const remote = new Memory();
+    const publication = new RetainedPublication(new Memory(), remote);
+    const sourcePlans = new ProductSourcePlans(publication, settings);
+    const plan = vi.spyOn(sourcePlans, "publish");
+    const parse = vi.spyOn(gncAdapter, "parseProduct");
+    const capture = new ProductCapture({
+      registry: new ChannelRegistry([gncAdapter]),
+      http: new HttpCapture(scraperPages()),
+      publication,
+      sourcePlans,
+    });
+    try {
+      const result = await capture.capture(
+        { ...request, url: "https://www.gnc.com/vitamin-d/123456.html" },
+        AbortSignal.timeout(10_000),
+      );
+      expect(result).toMatchObject({
+        status: "sighted",
+        listingId: "123456",
+        sighting: {
+          state: "unlisted",
+          reason: "identity_conflict",
+          causeCode: "LISTING.IDENTITY_CONFLICT",
+          requestedListingId: "123456",
+          observedListingId: "877080",
+          archiveKey: "v3/gnc-html/pipeline-capture-1/original.html",
+        },
+      });
+      expect(remote.data.get("v3/gnc-html/pipeline-capture-1/original.html")).toEqual(body);
+      expect(parse).not.toHaveBeenCalled();
+      expect(plan).not.toHaveBeenCalled();
+    } finally {
+      parse.mockRestore();
+    }
+  });
+
   it("plans the complete Supplement Facts table as the only formula source, with no image", async () => {
     const remote = new Memory();
     const publication = new RetainedPublication(new Memory(), remote);
@@ -119,5 +157,19 @@ describe("GNC product planning on the real 877080 page", () => {
     expect(planned.status).toBe("prepared");
     const sources = planned.status === "prepared" ? planned.manifest.sources : [];
     expect(sources.map((source) => [source.kind, source.required])).toEqual([["page", true]]);
+    expect(gncAdapter.planning).toMatchObject({
+      corePolicy: "gnc-label-core/1",
+      labelCore: gncLabelCore,
+    });
+    const saved = await new ProductPlans(deps).inspect(
+      result.sourcePlan,
+      AbortSignal.timeout(10_000),
+    );
+    expect(saved?.fragment?.producer.module).toBe(gncLabelCore.sourceModule);
+    const fragment = remote.data.get(saved?.fragment?.objectKey ?? "");
+    const core = gncLabelCore.extract(Buffer.from(fragment ?? []).toString());
+    expect(core).toMatch(/Serving Size/i);
+    expect(core).toMatch(/Vitamin D3/i);
+    expect(core).toMatch(/Other Ingredients/i);
   });
 });

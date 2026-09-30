@@ -15,6 +15,12 @@ const formsExpression = `[...document.querySelectorAll(
   variantIds: [...form.querySelectorAll('input[name="id"]')].map(input => input.value)
 }))`;
 
+/** Page-owned identity alone, read before title, commerce, gallery or facts validation. */
+export const swansonIdentityExpression = `({
+  canonicalUrl: ${canonicalExpression},
+  selectedForms: ${formsExpression}
+})`;
+
 const galleryExpression = `[...document.querySelectorAll(
   'slideshow-slide .product-media img'
 )].map(image => ({ url: image.currentSrc || image.src, alt: image.alt || '' }))`;
@@ -51,10 +57,9 @@ export const swansonProductExpression = `(() => {
   return {
     url: location.href,
     capturedAt: new Date().toISOString(),
-    canonicalUrl: ${canonicalExpression},
+    ...${swansonIdentityExpression},
     title: headings[0].innerText.trim(),
     commerce: ${swansonCommerceExpression},
-    selectedForms: ${formsExpression},
     gallery: ${galleryExpression},
     variantPicker: ${pickerExpression},
     sections: ${sectionsExpression}

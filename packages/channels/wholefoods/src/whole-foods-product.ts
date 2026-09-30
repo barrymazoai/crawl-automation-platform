@@ -51,6 +51,7 @@ export function parseWholeFoodsProduct(
   const block = blockAfterTitle(text, title);
   return {
     codec: "wholefoods-product/1",
+    // The requested ASIN is an association only, not verified page identity (R22).
     asin: address.listingId,
     url: address.url,
     title,

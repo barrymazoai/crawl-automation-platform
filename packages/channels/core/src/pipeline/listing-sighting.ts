@@ -1,5 +1,5 @@
 import { errorCodeOf } from "@crawl-automation/platform";
-import type { ChannelAdapter, ProductAddress } from "../adapter.js";
+import type { ChannelAdapter, ProductAddress, ProductIdentity } from "../adapter.js";
 import { channelErrors } from "../errors.js";
 
 /**
@@ -27,10 +27,38 @@ export interface ListingSighting {
   httpStatus: number | null;
   /** The other product the page belongs to now: set for `redirected_to_other_product` and `identity_conflict`. */
   observedListingId: string | null;
+  /** Both identities for a page conflict, including a mismatched selected variant. */
+  requestedListingId?: string;
+  requestedVariantId?: string | null;
+  observedVariantId?: string | null;
   /** Where a redirect landed: set for `redirected_to_other_product` and `redirected_away`. */
   finalUrl: string | null;
   /** Where the page that showed it is archived, when one was archived. */
   archiveKey: string | null;
+}
+
+/** Compare page-owned IDs with the requested listing; the archive retains the requested ID and original bytes. */
+export function identitySighting(
+  requested: ProductIdentity,
+  observed: ProductIdentity,
+  archiveKey: string,
+): ListingSighting | null {
+  const sameVariant = requested.variantId === null || requested.variantId === observed.variantId;
+  if (requested.listingId === observed.listingId && sameVariant) {
+    return null;
+  }
+  return {
+    state: "unlisted",
+    reason: "identity_conflict",
+    causeCode: "LISTING.IDENTITY_CONFLICT",
+    httpStatus: 200,
+    requestedListingId: requested.listingId,
+    requestedVariantId: requested.variantId,
+    observedListingId: observed.listingId,
+    observedVariantId: observed.variantId,
+    finalUrl: null,
+    archiveKey,
+  };
 }
 
 /** A page that answered 404 or 410 is unlisted (`not_found`); any other failure is not a sighting. */

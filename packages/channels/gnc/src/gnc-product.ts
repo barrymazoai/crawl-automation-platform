@@ -101,7 +101,7 @@ function warningsOf(factsHtml: string | null, brandRaw: string | null): string[]
  */
 export function parseGncProduct(html: string, url: string, sku: string): GncProductEvidence {
   const page = { html, url, sku };
-  if (!/^\d{6}$/.test(sku) || !new URL(gncUrl(url, url)).pathname.endsWith(`/${sku}.html`)) {
+  if (!/^\d{6}$/.test(sku)) {
     throw skuConflict(sku);
   }
   const document = gncDocument(html);

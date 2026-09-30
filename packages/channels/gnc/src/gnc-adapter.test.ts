@@ -27,6 +27,12 @@ describe("GNC adapter on the real 877080 page", () => {
     expect(parsed.evidence.imageCandidates.length).toBeGreaterThan(0);
   });
 
+  it("reports the page's own SKU even when another listing was requested", () => {
+    const other = { ...page, url: "https://www.gnc.com/vitamin-d/123456.html" };
+    expect(gncAdapter.pageIdentity?.(other)).toEqual({ listingId: "877080", variantId: null });
+    expect(gncAdapter.parseProduct(other).identity).toEqual(parsed.identity);
+  });
+
   it("records the metrics the page shows", () => {
     expect(parsed.commerce).toMatchObject({
       sku: "877080",

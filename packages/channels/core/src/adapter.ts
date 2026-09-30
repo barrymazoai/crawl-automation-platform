@@ -1,9 +1,9 @@
 import type {
   ChannelId,
-  ChannelLabelInput,
   ChannelPlanInput,
   ChannelProductEvidence,
   CommerceEvidenceSchema,
+  TextDocument,
 } from "@crawl-automation/v3-contracts";
 import type { z } from "zod";
 import type { CaptureMode } from "./capture.js";
@@ -92,7 +92,7 @@ export interface ChannelPlanning<Rendered = unknown> {
    */
   read(projection: unknown, expectedUrl: string, owner: ProductIdentity): PlannedProduct;
   /** The label workflow's channel-specific core step, when the channel has one. */
-  corePolicy?: ChannelLabelInput["corePolicy"];
+  corePolicy?: TextDocument["corePolicy"];
   /** How that core step reads the label facts text from the product page (supplied to processing by name). */
   labelCore?: LabelCoreReader;
 }
@@ -121,6 +121,13 @@ export interface ChannelAdapter<Rendered = unknown> {
   readonly brandScan?: BrandScanReader;
   /** Normalises a product URL and returns its identity; refuses URLs of other sites. */
   productAddress(url: string): ProductAddress;
+  /**
+   * The page's own listing key, in the same namespace as productAddress (Swanson: canonical handle, not Shopify
+   * product ID). Read before product parsing so another product is an unlisted sighting, even if its facts fail.
+   * Null means the page identity is unknown; never infer it from the requested URL or parsed identity.
+   * Adapters without this hook are compared after parsing, using ParsedProduct.identity.
+   */
+  pageIdentity?(page: FetchedPage): ProductIdentity | null;
   /** Reads one archived product page. Throws a channel error code when the page is not a readable product. */
   parseProduct(page: FetchedPage): ParsedProduct<Rendered>;
   /** The product's family as its page shows it (other sizes, flavours…); null when the page shows none. */

@@ -1,7 +1,8 @@
-import type { ChannelAdapter, ParsedProduct } from "../adapter.js";
+import type { ChannelAdapter, FetchedPage, ParsedProduct } from "../adapter.js";
 import { channelErrors } from "../errors.js";
 import {
   movedSighting,
+  identitySighting,
   notFoundSighting,
   type ListingSighting,
 } from "../pipeline/listing-sighting.js";
@@ -53,12 +54,34 @@ export class HttpCapture {
     if (moved) {
       return { status: "sighting", sighting: moved };
     }
-    const url = archive.capture.url;
-    const parsed = adapter.parseProduct({
-      url,
+    return this.readProduct(adapter, archive, saved);
+  }
+
+  /** Page-owned identity is checked before facts, images or formula planning can turn a wrong page into a Review. */
+  private readProduct(
+    adapter: ChannelAdapter,
+    archive: OriginalHtmlArchive,
+    saved: ArchivedHtml,
+  ): HttpCaptureResult {
+    const page: FetchedPage = {
+      url: archive.capture.url,
       html: decodeHtml(saved.bytes),
       capturedAt: saved.capturedAt,
-    });
+    };
+    const observed = adapter.pageIdentity?.(page);
+    const conflict =
+      observed && identitySighting(archive.capture, observed, saved.source.objectKey);
+    if (conflict) {
+      return { status: "sighting", sighting: conflict };
+    }
+    const parsed = adapter.parseProduct(page);
+    // An explicit null is authoritative: the adapter has no verified page identity (Whole Foods, R22).
+    const parsedConflict =
+      !adapter.pageIdentity &&
+      identitySighting(archive.capture, parsed.identity, saved.source.objectKey);
+    if (parsedConflict) {
+      return { status: "sighting", sighting: parsedConflict };
+    }
     return {
       status: "page",
       parsed,

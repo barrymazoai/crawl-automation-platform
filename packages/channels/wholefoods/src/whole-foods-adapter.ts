@@ -6,6 +6,7 @@ import type {
 } from "@crawl-automation/channels-core";
 import type { ChannelProductEvidence } from "@crawl-automation/v3-contracts";
 import { wholeFoodsProductAddress } from "./whole-foods-address.js";
+import { wholeFoodsPageIdentity } from "./whole-foods-identity.js";
 import { WHOLE_FOODS_PAGE_POLICY } from "./whole-foods-policy.js";
 import { parseWholeFoodsProduct, type WholeFoodsProduct } from "./whole-foods-product.js";
 import type { WholeFoodsStore } from "./whole-foods-store.js";
@@ -61,6 +62,7 @@ export function wholeFoodsAdapter(store: WholeFoodsStore): ChannelAdapter<WholeF
     captureModes: ["browser"],
     httpPolicy: WHOLE_FOODS_PAGE_POLICY,
     productAddress: wholeFoodsProductAddress,
+    pageIdentity: wholeFoodsPageIdentity,
     parseProduct(page: FetchedPage): ParsedProduct<WholeFoodsProduct> {
       const product = parseWholeFoodsProduct(page, store);
       return {

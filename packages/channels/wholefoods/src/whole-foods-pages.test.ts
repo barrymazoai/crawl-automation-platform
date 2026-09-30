@@ -54,6 +54,20 @@ describe("Whole Foods addresses", () => {
 });
 
 describe("Whole Foods product page", () => {
+  it("reports page identity unknown for a different requested ASIN until R22 verifies real evidence", () => {
+    const adapter = wholeFoodsAdapter(store);
+    const saved = {
+      ...page("product-b0096m5pbw.html"),
+      url: productUrl.replace("b0096m5pbw", "b000000001"),
+    };
+    expect(adapter.pageIdentity?.(saved)).toBeNull();
+    // This ASIN only associates metrics with the request; it does not identify the page.
+    expect(adapter.parseProduct(saved).identity).toEqual({
+      listingId: "B000000001",
+      variantId: null,
+    });
+  });
+
   it("reads the title, price and availability for the configured store", () => {
     expect(parseWholeFoodsProduct(page("product-b0096m5pbw.html"), store)).toMatchObject({
       asin: "B0096M5PBW",

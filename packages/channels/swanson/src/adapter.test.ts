@@ -30,6 +30,14 @@ describe("swansonAdapter.productAddress", () => {
 });
 
 describe("swansonAdapter.parseProduct on real archived pages", () => {
+  it("reports the saved page's canonical handle when another listing was requested", () => {
+    const saved = page("healthy-origins-d-ribose.html.gz", ubiquinolUrl);
+    expect(swansonAdapter.pageIdentity?.(saved)).toEqual({
+      listingId: swansonAdapter.productAddress(riboseUrl).listingId,
+      variantId: expect.stringMatching(/^\d+$/),
+    });
+  });
+
   it("reads a single-size product: identity, title, price and complete facts text", () => {
     const parsed = swansonAdapter.parseProduct(page("healthy-origins-d-ribose.html.gz", riboseUrl));
 

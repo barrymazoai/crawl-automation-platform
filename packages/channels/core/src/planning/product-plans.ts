@@ -151,7 +151,7 @@ export class ProductPlans {
     }
     this.deps.integrity.verifyBytes(input.source, source.bytes, SOURCE_LIMIT);
     const product = planning.read(decodeJson(source.bytes), input.expectedUrl, input.owner);
-    return buildPlan(input, product);
+    return buildPlan(input, product, planning.labelCore?.sourceModule);
   }
 
   private async checkFragment(plan: ChannelProductPlan, signal: AbortSignal) {

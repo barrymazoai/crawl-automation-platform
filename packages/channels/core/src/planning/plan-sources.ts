@@ -27,7 +27,11 @@ type Files = ChannelProductPlan["files"];
 type ImageCandidate = ChannelProductEvidence["imageCandidates"][number];
 
 /** The page text the text step reads: the selected product's facts plus its details, never the whole page. */
-function fragmentOf(input: ChannelPlanInput, evidence: ChannelProductEvidence) {
+function fragmentOf(
+  input: ChannelPlanInput,
+  evidence: ChannelProductEvidence,
+  sourceModule: string,
+) {
   const selected = evidence.factsCandidates.filter((facts) => facts.scope === "selected-product");
   const html = [...selected.map((facts) => facts.html), evidence.detailsHtml]
     .filter(Boolean)
@@ -51,7 +55,7 @@ function fragmentOf(input: ChannelPlanInput, evidence: ChannelProductEvidence) {
     sha256: fingerprinted(html),
     producer: {
       operationId,
-      module: "channel.product-input",
+      module: sourceModule,
       implementationVersion: "channel-plan/1",
     },
   });
@@ -150,9 +154,13 @@ function taskOperations(sources: Sources): string[] {
  * text-facts-first/1: when the adapter judges the selected product's facts text complete, that page text is the only
  * (required) formula source and no image is planned; otherwise the page text and every image are planned.
  */
-export function buildPlan(input: ChannelPlanInput, product: PlannedProduct) {
+export function buildPlan(
+  input: ChannelPlanInput,
+  product: PlannedProduct,
+  sourceModule = "channel.product-input",
+) {
   const { evidence, facts } = product;
-  const { fragment, bytes } = fragmentOf(input, evidence);
+  const { fragment, bytes } = fragmentOf(input, evidence, sourceModule);
   const textOnly = input.factsPolicy === "text-facts-first/1" && !!fragment && facts.complete;
   const page = fragment ? [pageSource(input, fragment, textOnly)] : [];
   const images = textOnly ? { sources: [], files: [] } : imageSources(input, evidence);
