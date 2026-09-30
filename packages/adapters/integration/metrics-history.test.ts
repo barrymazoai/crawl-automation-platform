@@ -8,6 +8,15 @@ import { PostgresHistoryReader } from "../src/postgres/postgres-history-reader.j
 import { PostgresProductHistory } from "../src/postgres/postgres-product-history.js";
 import { startTemporaryPostgres, type TemporaryPostgres } from "./temporary-postgres.js";
 
+/** The adapters' identity for these fixtures: the page's host and its product ID. */
+const identities = {
+  resolve: (page: { url: string; listingId: string; externalId: string | null }) => ({
+    site: new URL(page.url).hostname,
+    url: page.url,
+    externalId: page.externalId ?? page.listingId,
+  }),
+};
+
 const hasPostgres = (() => {
   try {
     execFileSync("initdb", ["--version"]);
@@ -57,7 +66,7 @@ describe.skipIf(!hasPostgres)("metrics history and Amazon holds against a real P
   beforeAll(async () => {
     postgres = await startTemporaryPostgres();
     database = postgres.database;
-    history = new MetricsHistory(new PostgresProductHistory(database));
+    history = new MetricsHistory(new PostgresProductHistory(database), identities);
   }, 120_000);
 
   afterAll(async () => {

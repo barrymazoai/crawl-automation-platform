@@ -8,6 +8,12 @@ import { PostgresFormulaIndex } from "../src/postgres/postgres-formula-index.js"
 import { PostgresFormulaLinks } from "../src/postgres/postgres-formula-links.js";
 import { startTemporaryPostgres, type TemporaryPostgres } from "./temporary-postgres.js";
 
+/** Amazon and Whole Foods share ASIN formulas; every other channel only its own (as the adapters declare). */
+const families = {
+  channels: (channel: string) =>
+    ["amazon", "wholefoods"].includes(channel) ? ["amazon", "wholefoods"] : [channel],
+};
+
 const hasPostgres = (() => {
   try {
     execFileSync("initdb", ["--version"]);
@@ -87,7 +93,7 @@ describe.skipIf(!hasPostgres)("formula reuse against a real PostgreSQL", () => {
   });
 
   it("a Whole Foods listing finds the Amazon formula of the same ASIN; other channels do not", async () => {
-    const lookup = new FormulaLookup(index);
+    const lookup = new FormulaLookup(index, families);
     const asin = { listingId: "B002CQU54Q", variantId: null };
     expect(await lookup.findKnown({ channel: "wholefoods", ...asin })).toEqual({
       operationId: "amazon-formula",
@@ -139,7 +145,11 @@ describe.skipIf(!hasPostgres)("formula reuse against a real PostgreSQL", () => {
   });
 
   it("the reuse service reads the saved sibling formula from the database", async () => {
-    const reuse = new SiblingFormulaReuse({ index, links: new PostgresFormulaLinks(database) });
+    const reuse = new SiblingFormulaReuse({
+      index,
+      families,
+      links: new PostgresFormulaLinks(database),
+    });
     const result = await reuse.reuse({
       runId,
       channel: "swanson",
@@ -213,6 +223,7 @@ describe.skipIf(!hasPostgres)("sibling reuse end to end against a real PostgreSQ
     const saved = (await index.readSaved("sibling-60")) as unknown as Saved;
     const reuse = new SiblingFormulaReuse({
       index,
+      families,
       links: new PostgresFormulaLinks(postgres.database),
     });
     const request = {
