@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { parseSwansonRenderedProduct } from "@crawl-automation/v3-channels";
 import { extractSwansonLabelCore } from "./label-core.js";
+import { parseSwansonRenderedProduct } from "./swanson-evidence.js";
 
 const escape = (text: string) => `<pre>${text.replace(/&/g, "&amp;").replace(/</g, "&lt;")}</pre>`;
 const label =
@@ -18,7 +18,7 @@ const ambiguous: Record<string, string> = {
 
 /** A saved Swanson page projection (the public JSON the channel parser reads). */
 function savedProjection(name: string) {
-  const url = new URL(`../../../v3-channels/src/fixtures/${name}`, import.meta.url);
+  const url = new URL(`./fixtures/${name}`, import.meta.url);
   const projection = JSON.parse(readFileSync(url, "utf8"));
   const form = projection.selectedForms[0];
   return parseSwansonRenderedProduct(projection, projection.url, {

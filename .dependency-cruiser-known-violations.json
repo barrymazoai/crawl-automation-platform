@@ -74,15 +74,6 @@
   {
     "type": "dependency",
     "from": "apps/worker/src/container.ts",
-    "to": "packages/v3-channels/src/index.ts",
-    "rule": {
-      "severity": "error",
-      "name": "new-code-does-not-import-old-packages"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "apps/worker/src/container.ts",
     "to": "packages/v3-text/src/index.ts",
     "rule": {
       "severity": "error",
@@ -102,15 +93,6 @@
     "type": "dependency",
     "from": "apps/worker/src/core-parts.ts",
     "to": "packages/v3-artifacts/src/index.ts",
-    "rule": {
-      "severity": "error",
-      "name": "new-code-does-not-import-old-packages"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "apps/worker/src/core-parts.ts",
-    "to": "packages/v3-channels/src/index.ts",
     "rule": {
       "severity": "error",
       "name": "new-code-does-not-import-old-packages"
@@ -280,15 +262,6 @@
   },
   {
     "type": "dependency",
-    "from": "packages/channels/core/src/pipeline/product-files.ts",
-    "to": "packages/v3-channels/src/index.ts",
-    "rule": {
-      "severity": "error",
-      "name": "new-code-does-not-import-old-packages"
-    }
-  },
-  {
-    "type": "dependency",
     "from": "packages/channels/core/src/pipeline/source-plans.ts",
     "to": "packages/v3-artifacts/src/index.ts",
     "rule": {
@@ -298,26 +271,8 @@
   },
   {
     "type": "dependency",
-    "from": "packages/channels/gnc/src/gnc-adapter.ts",
-    "to": "packages/v3-channels/src/index.ts",
-    "rule": {
-      "severity": "error",
-      "name": "new-code-does-not-import-old-packages"
-    }
-  },
-  {
-    "type": "dependency",
     "from": "packages/channels/gnc/src/gnc-planning.test.ts",
     "to": "packages/v3-artifacts/src/index.ts",
-    "rule": {
-      "severity": "error",
-      "name": "new-code-does-not-import-old-packages"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "packages/channels/gnc/src/gnc-planning.test.ts",
-    "to": "packages/v3-channels/src/index.ts",
     "rule": {
       "severity": "error",
       "name": "new-code-does-not-import-old-packages"
@@ -334,15 +289,6 @@
   },
   {
     "type": "dependency",
-    "from": "packages/channels/swanson/src/family.ts",
-    "to": "packages/v3-channels/src/index.ts",
-    "rule": {
-      "severity": "error",
-      "name": "new-code-does-not-import-old-packages"
-    }
-  },
-  {
-    "type": "dependency",
     "from": "packages/channels/swanson/src/http-capture.test.ts",
     "to": "packages/v3-artifacts/src/index.ts",
     "rule": {
@@ -361,35 +307,8 @@
   },
   {
     "type": "dependency",
-    "from": "packages/channels/swanson/src/label-core.test.ts",
-    "to": "packages/v3-channels/src/index.ts",
-    "rule": {
-      "severity": "error",
-      "name": "new-code-does-not-import-old-packages"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "packages/channels/swanson/src/product-capture.test.ts",
-    "to": "packages/v3-acquisition/src/index.ts",
-    "rule": {
-      "severity": "error",
-      "name": "new-code-does-not-import-old-packages"
-    }
-  },
-  {
-    "type": "dependency",
     "from": "packages/channels/swanson/src/product-capture.test.ts",
     "to": "packages/v3-artifacts/src/index.ts",
-    "rule": {
-      "severity": "error",
-      "name": "new-code-does-not-import-old-packages"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "packages/channels/swanson/src/product-capture.test.ts",
-    "to": "packages/v3-channels/src/index.ts",
     "rule": {
       "severity": "error",
       "name": "new-code-does-not-import-old-packages"

@@ -1,24 +1,26 @@
 import {
+  factsFromHtml,
   pageText,
   type ChannelAdapter,
   type FactsText,
   type FetchedPage,
+  type HttpPolicy,
   type ParsedProduct,
+  type PlannedProduct,
   type ProductAddress,
+  type ProductIdentity,
 } from "@crawl-automation/channels-core";
-import {
-  SWANSON_HTTP_POLICY,
-  factsTextComplete,
-  factsTextFromHtml,
-  parseSwansonRenderedProduct,
-  parseSwansonStaticHtml,
-  swansonProductAddress,
-  swansonVariantChoices,
-} from "@crawl-automation/v3-channels";
+// The static page reader runs the shared Ego DOM expression in linkedom; it moves here once linkedom is a
+// dependency of this package (see ticket R07).
+import { parseSwansonStaticHtml } from "@crawl-automation/v3-channels";
 import { swansonFamily } from "./family.js";
 import { swansonExternalId } from "./history-id.js";
 import { swansonBrandScan } from "./brand-scan.js";
 import { swansonLabelCore } from "./label-core.js";
+import { SWANSON_ORIGIN, swansonProductAddress } from "./swanson-address.js";
+import { swansonErrors } from "./swanson-errors.js";
+import { parseSwansonRenderedProduct } from "./swanson-evidence.js";
+import { swansonVariantChoices } from "./swanson-variants.js";
 import type {
   ChannelProductEvidence,
   SwansonRenderedProduct,
@@ -39,7 +41,7 @@ function selectedIdentity(rendered: SwansonRenderedProduct): {
   const variantId = form?.variantIds[0];
   if (!form || !variantId) {
     // parseSwansonStaticHtml guarantees one selected form with one variant; this only narrows the type.
-    throw new Error("SWANSON.IDENTITY_UNVERIFIED");
+    throw swansonErrors.create("SWANSON.IDENTITY_UNVERIFIED");
   }
   return { listingId: form.productId, variantId };
 }
@@ -55,14 +57,29 @@ function factsOf(evidence: ChannelProductEvidence): FactsText {
   const selected = evidence.factsCandidates.find(
     (candidate) => candidate.scope === "selected-product",
   );
-  const text = selected ? factsTextFromHtml(selected.html) : null;
-  const verdict = factsTextComplete(text);
-  return { text, complete: verdict.complete, missing: verdict.reasons };
+  return factsFromHtml(selected?.html ?? null);
 }
+
+/** The planner reads the saved projection back with the same parser and facts rule as the capture. */
+function readProjection(
+  projection: unknown,
+  expectedUrl: string,
+  owner: ProductIdentity,
+): PlannedProduct {
+  const evidence = parseSwansonRenderedProduct(projection, expectedUrl, owner);
+  return { evidence, facts: factsOf(evidence) };
+}
+
+/** A bounded raw HTML read of one public product page (ScraperAPI); no JS, cookies or redirects. */
+export const SWANSON_HTTP_POLICY: HttpPolicy = {
+  origins: [SWANSON_ORIGIN],
+  maxBytes: 6 * 1024 * 1024,
+  timeoutMs: 75_000,
+};
 
 /**
  * swansonvitamins.com. Product pages are server-rendered, so a static HTTP fetch (ScraperAPI) is enough; every
- * size has its own URL. Parsing reuses the tested v3-channels functions unchanged.
+ * size has its own URL.
  */
 export const swansonAdapter: ChannelAdapter<SwansonRenderedProduct> = {
   id: "swanson",
@@ -74,6 +91,7 @@ export const swansonAdapter: ChannelAdapter<SwansonRenderedProduct> = {
     parserVersion: "swanson-rendered/1",
     projectionModule: "swanson.http-projection",
     projection,
+    read: readProjection,
     corePolicy: "swanson-label-core/1",
     labelCore: swansonLabelCore,
   },

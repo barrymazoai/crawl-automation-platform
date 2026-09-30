@@ -6,7 +6,6 @@ import {
   type FileTransport,
   type SourceAccess,
 } from "@crawl-automation/v3-acquisition";
-import type { ChannelProductPlans } from "@crawl-automation/v3-channels";
 import {
   observationIdentity,
   type ChannelPlanInput,
@@ -16,10 +15,11 @@ import {
 import type { ChannelId } from "../adapter.js";
 import { channelErrors } from "../errors.js";
 import type { ChannelRegistry } from "../registry.js";
+import type { ProductPlans } from "../planning/product-plans.js";
 
 export interface ProductFilesDeps {
   registry: ChannelRegistry;
-  plans: Pick<ChannelProductPlans, "fileSource">;
+  plans: Pick<ProductPlans, "fileSource">;
   files: FileEvidence;
   /** A direct HTTPS GET of the image; images are public and need no browser or provider. */
   transport: FileTransport;

@@ -7,6 +7,14 @@ export const channelErrors = defineErrors({
     message: "No adapter is registered for this channel.",
   },
   "CHANNEL.DUPLICATE": { category: "RUNTIME", message: "Two adapters claim the same channel." },
+  "CHANNEL.URL_REJECTED": {
+    category: "SOURCE",
+    message: "The address is not an https page of the channel's own site.",
+  },
+  "CHANNEL.IMAGE_URL_REJECTED": {
+    category: "SOURCE",
+    message: "An image address is not on the channel's own image host.",
+  },
   "CHANNEL.CAPTURE_MODE_UNSUPPORTED": {
     category: "RUNTIME",
     message: "This channel cannot be captured in the configured mode.",

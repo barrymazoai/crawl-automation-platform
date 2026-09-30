@@ -3,7 +3,7 @@ import {
   type ParsedProduct,
   type ProductFamily,
 } from "@crawl-automation/channels-core";
-import { swansonProductAddress } from "@crawl-automation/v3-channels";
+import { swansonProductAddress } from "./swanson-address.js";
 import type { SwansonRenderedProduct } from "@crawl-automation/v3-contracts";
 
 type Picker = NonNullable<SwansonRenderedProduct["variantPicker"]>;

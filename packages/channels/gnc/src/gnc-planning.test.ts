@@ -4,6 +4,7 @@ import {
   ChannelRegistry,
   HttpCapture,
   ProductCapture,
+  ProductPlans,
   ProductSourcePlans,
   ScraperApiPages,
   type PlanSettings,
@@ -12,9 +13,9 @@ import type { ScraperApiPage, ScraperApiRequest } from "@crawl-automation/platfo
 import {
   ArtifactResolver,
   RetainedPublication,
+  verifyBytes,
   type ObjectStore,
 } from "@crawl-automation/v3-artifacts";
-import { ChannelProductPlans } from "@crawl-automation/v3-channels";
 import { describe, expect, it, vi } from "vitest";
 import { gncAdapter } from "./gnc-adapter.js";
 
@@ -90,8 +91,9 @@ describe("GNC product planning on the real 877080 page", () => {
   it("plans the complete Supplement Facts table as the only formula source, with no image", async () => {
     const remote = new Memory();
     const publication = new RetainedPublication(new Memory(), remote);
+    const registry = new ChannelRegistry([gncAdapter]);
     const capture = new ProductCapture({
-      registry: new ChannelRegistry([gncAdapter]),
+      registry,
       http: new HttpCapture(scraperPages()),
       publication,
       sourcePlans: new ProductSourcePlans(publication, settings),
@@ -108,7 +110,8 @@ describe("GNC product planning on the real 877080 page", () => {
       { read: async () => null, retain: async () => {} },
       remote,
     );
-    const planned = await new ChannelProductPlans(publication, resolver, reviews).run(
+    const deps = { registry, publication, resolver, reviews, integrity: { verifyBytes } };
+    const planned = await new ProductPlans(deps).run(
       result.sourcePlan,
       AbortSignal.timeout(10_000),
     );

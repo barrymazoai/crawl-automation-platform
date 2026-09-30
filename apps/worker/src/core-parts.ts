@@ -11,6 +11,7 @@ import type {
   ChannelRegistry,
   ProductCapture,
   ProductFiles,
+  ProductPlans,
 } from "@crawl-automation/channels-core";
 import type { Database, Logger } from "@crawl-automation/platform";
 import type { FileTransport } from "@crawl-automation/v3-acquisition";
@@ -19,7 +20,6 @@ import type {
   FileCopies,
   RetainedPublication,
 } from "@crawl-automation/v3-artifacts";
-import type { ChannelProductPlans } from "@crawl-automation/v3-channels";
 import type { TextLocalStore } from "@crawl-automation/v3-text";
 import type { WorkerConfig } from "./config.js";
 
@@ -40,7 +40,7 @@ export interface CoreParts {
   registry: ChannelRegistry;
   fileTransport: FileTransport;
   reviewLedger: PostgresReviewLedger;
-  channelPlans: ChannelProductPlans;
+  channelPlans: ProductPlans;
   productCapture: ProductCapture;
   pipelineCapture: PipelineCapture;
   productFiles: ProductFiles;

@@ -68,9 +68,16 @@ export interface HttpPolicy {
   timeoutMs: number;
 }
 
+/** What a channel's planning hook reads back from its own page projection. */
+export interface PlannedProduct {
+  evidence: ChannelProductEvidence;
+  /** The adapter's facts judgement: complete facts text makes the page the only formula source. */
+  facts: FactsText;
+}
+
 /**
- * How the formula planner (the existing channel-plan worker) reads this channel's page projection. Only channels
- * the planner knows have one; the others cannot yet run the formula step.
+ * How the formula planner reads this channel's page projection. Only channels with this hook can run the formula
+ * step.
  */
 export interface ChannelPlanning<Rendered = unknown> {
   channel: ChannelPlanInput["channel"];
@@ -79,6 +86,11 @@ export interface ChannelPlanning<Rendered = unknown> {
   projectionModule: string;
   /** The part of the rendered page the planner reads. */
   projection(rendered: Rendered): unknown;
+  /**
+   * Reads a retained projection back for the planner, checked against the expected URL and the observation's own
+   * identity: the product evidence and the adapter's facts judgement.
+   */
+  read(projection: unknown, expectedUrl: string, owner: ProductIdentity): PlannedProduct;
   /** The label workflow's channel-specific core step, when the channel has one. */
   corePolicy?: ChannelLabelInput["corePolicy"];
   /** How that core step reads the label facts text from the product page (supplied to processing by name). */

@@ -881,9 +881,6 @@ importers:
       '@crawl-automation/v3-artifacts':
         specifier: workspace:*
         version: link:../../v3-artifacts
-      '@crawl-automation/v3-channels':
-        specifier: workspace:*
-        version: link:../../v3-channels
       '@crawl-automation/v3-contracts':
         specifier: workspace:*
         version: link:../../v3-contracts
@@ -915,9 +912,6 @@ importers:
       '@crawl-automation/platform':
         specifier: workspace:*
         version: link:../../platform
-      '@crawl-automation/v3-channels':
-        specifier: workspace:*
-        version: link:../../v3-channels
       '@crawl-automation/v3-contracts':
         specifier: workspace:*
         version: link:../../v3-contracts
@@ -946,9 +940,6 @@ importers:
       '@crawl-automation/platform':
         specifier: workspace:*
         version: link:../../platform
-      '@crawl-automation/v3-acquisition':
-        specifier: workspace:*
-        version: link:../../v3-acquisition
       '@crawl-automation/v3-artifacts':
         specifier: workspace:*
         version: link:../../v3-artifacts
@@ -961,6 +952,9 @@ importers:
       htmlparser2:
         specifier: 10.1.0
         version: 10.1.0
+      linkedom:
+        specifier: 0.18.13
+        version: 0.18.13
     devDependencies:
       '@types/node':
         specifier: 'catalog:'

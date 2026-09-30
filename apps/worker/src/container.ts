@@ -24,6 +24,7 @@ import {
   HttpCapture,
   ProductCapture,
   ProductFiles,
+  ProductPlans,
   ProductSourcePlans,
   ScraperApiPages,
 } from "@crawl-automation/channels-core";
@@ -38,8 +39,8 @@ import {
   createR2Objects,
   FileCopies,
   RetainedPublication,
+  verifyBytes,
 } from "@crawl-automation/v3-artifacts";
-import { ChannelProductPlans } from "@crawl-automation/v3-channels";
 import { TextLocalStore } from "@crawl-automation/v3-text";
 import { asFunction, asValue, createContainer, InjectionMode, type AwilixContainer } from "awilix";
 import { buildBrowserParts, type BrowserParts } from "./browser/browser-parts.js";
@@ -111,9 +112,16 @@ function registerStores(container: Parts): void {
     formulaIndex: asFunction(
       ({ database }: WorkerParts) => new PostgresFormulaIndex(database),
     ).singleton(),
+    // One formula planner for every channel; each adapter's planning hook reads its own projection.
     channelPlans: asFunction(
-      ({ publication, copies, r2, reviewLedger }: WorkerParts) =>
-        new ChannelProductPlans(publication, new ArtifactResolver(copies, r2.store), reviewLedger),
+      ({ registry, publication, copies, r2, reviewLedger }: WorkerParts) =>
+        new ProductPlans({
+          registry,
+          publication,
+          resolver: new ArtifactResolver(copies, r2.store),
+          reviews: reviewLedger,
+          integrity: { verifyBytes },
+        }),
     ).singleton(),
   });
 }

@@ -4,6 +4,7 @@ import {
   ChannelRegistry,
   HttpCapture,
   ProductCapture,
+  ProductPlans,
   ProductSourcePlans,
   type PlanSettings,
   type ProductCaptureResult,
@@ -11,12 +12,12 @@ import {
 import {
   ArtifactResolver,
   RetainedPublication,
+  verifyBytes,
   type ObjectStore,
 } from "@crawl-automation/v3-artifacts";
-import { extractSwansonLabelCore } from "@crawl-automation/v3-acquisition";
-import { ChannelProductPlans } from "@crawl-automation/v3-channels";
 import { describe, expect, it, vi } from "vitest";
 import { swansonAdapter } from "./adapter.js";
+import { extractSwansonLabelCore } from "./label-core.js";
 import { fakeScraperApiPages } from "./testing/fake-scraperapi.js";
 
 class Memory implements ObjectStore {
@@ -80,15 +81,17 @@ function setup(page: Page = pages.dRibose) {
   const remote = new Memory();
   const publication = new RetainedPublication(new Memory(), remote);
   const { fetches, pages: scraperPages } = fakeScraperApiPages(body);
+  const registry = new ChannelRegistry([swansonAdapter]);
   const capture = new ProductCapture({
-    registry: new ChannelRegistry([swansonAdapter]),
+    registry,
     http: new HttpCapture(scraperPages),
     publication,
     sourcePlans: new ProductSourcePlans(publication, settings),
   });
   const reviews = { read: async () => null, append: async () => undefined };
   const resolver = new ArtifactResolver({ read: async () => null, retain: async () => {} }, remote);
-  const plans = new ChannelProductPlans(publication, resolver, reviews);
+  const integrity = { verifyBytes };
+  const plans = new ProductPlans({ registry, publication, resolver, reviews, integrity });
   return { remote, fetches, capture, plans };
 }
 

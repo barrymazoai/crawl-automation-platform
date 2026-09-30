@@ -4,9 +4,17 @@ import {
   type FactsText,
   type FetchedPage,
   type ParsedProduct,
+  type PlannedProduct,
+  type ProductIdentity,
 } from "@crawl-automation/channels-core";
-import { gncFactsTableComplete, parseGncProduct } from "@crawl-automation/v3-channels";
-import type { ChannelProductEvidence, GncProductEvidence } from "@crawl-automation/v3-contracts";
+import {
+  ChannelProductEvidenceSchema,
+  type ChannelProductEvidence,
+  type GncProductEvidence,
+} from "@crawl-automation/v3-contracts";
+import { gncFactsTableComplete } from "./gnc-facts.js";
+import { gncPageErrors } from "./gnc-page-errors.js";
+import { parseGncProduct } from "./gnc-product.js";
 import { GNC_ORIGIN, gncErrors, gncProductAddress, isSku } from "./gnc-address.js";
 import { gncBrandScan } from "./gnc-brand-scan.js";
 import { gncCommerce } from "./gnc-commerce.js";
@@ -16,10 +24,39 @@ import { gncProductFamily, readGncOptions, type GncRendered } from "./gnc-option
  * The Supplement Facts as text (`html-table-first/1`): a complete HTML facts table is the only formula source; an
  * incomplete one keeps the images. Completeness is GNC's own rule, checked on real pages on 2026-09-28.
  */
-function factsOf(product: GncProductEvidence): FactsText {
-  const verdict = gncFactsTableComplete(product.factsHtml);
-  const text = product.factsHtml ? pageText(product.factsHtml) || null : null;
+function factsOf(factsHtml: string | null): FactsText {
+  const verdict = gncFactsTableComplete(factsHtml);
+  const text = factsHtml ? pageText(factsHtml) || null : null;
   return { text, complete: verdict.complete, missing: verdict.reasons };
+}
+
+/**
+ * The planner reads the saved projection (GNC's product evidence) back: the same product as the observation, and
+ * the same facts rule as the capture, so capture and planner never disagree about the formula source.
+ */
+function readProjection(
+  projection: unknown,
+  expectedUrl: string,
+  owner: ProductIdentity,
+): PlannedProduct {
+  const evidence = ChannelProductEvidenceSchema.parse(projection);
+  const sameHost = new URL(evidence.url).hostname === new URL(expectedUrl).hostname;
+  const ownProduct = evidence.listingId === owner.listingId;
+  if (
+    evidence.channel !== "gnc" ||
+    evidence.variantId !== null ||
+    owner.variantId !== null ||
+    !sameHost ||
+    !ownProduct
+  ) {
+    throw gncPageErrors.create("GNC.IDENTITY_CONFLICT", {
+      details: { listingId: owner.listingId },
+    });
+  }
+  const facts = evidence.factsCandidates.find(
+    (candidate) => candidate.scope === "selected-product",
+  );
+  return { evidence, facts: factsOf(facts?.html ?? null) };
 }
 
 /** GNC's own evidence in the channel-independent shape the planner and Reviews read. */
@@ -66,7 +103,7 @@ function parseProduct(page: FetchedPage): ParsedProduct<GncRendered> {
     evidence: evidenceOf(product),
     commerce: gncCommerce(page.html, product.sku),
     variants: product.variantUrls.map(gncProductAddress),
-    facts: factsOf(product),
+    facts: factsOf(product.factsHtml),
   };
 }
 
@@ -85,6 +122,7 @@ export const gncAdapter: ChannelAdapter<GncRendered> = {
     parserVersion: "gnc-rendered/1",
     projectionModule: "gnc.http-projection",
     projection: (rendered: GncRendered) => evidenceOf(rendered.product),
+    read: readProjection,
   },
   productAddress: gncProductAddress,
   parseProduct,

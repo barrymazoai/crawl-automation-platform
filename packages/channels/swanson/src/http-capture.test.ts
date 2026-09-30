@@ -6,9 +6,10 @@ import {
   type HttpCaptureResult,
 } from "@crawl-automation/channels-core";
 import { RetainedPublication, type ObjectStore } from "@crawl-automation/v3-artifacts";
-import { SWANSON_HTTP_POLICY, SwansonHtmlArchive } from "@crawl-automation/v3-channels";
+// Old workers wrote archives with this class; the test proves the shared archive reads them unchanged.
+import { SwansonHtmlArchive } from "@crawl-automation/v3-channels";
 import { describe, expect, it, vi } from "vitest";
-import { swansonAdapter } from "./adapter.js";
+import { SWANSON_HTTP_POLICY, swansonAdapter } from "./adapter.js";
 import { fakeScraperApiPages } from "./testing/fake-scraperapi.js";
 
 class Memory implements ObjectStore {
