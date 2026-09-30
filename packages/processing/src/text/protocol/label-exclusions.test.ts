@@ -34,6 +34,8 @@ const headings = [
   "Per Serving",
 ];
 const footnotes = [
+  // 2026-09-30 real answer: the long Nutrition Facts footnote.
+  "*The % Daily Value (DV) tells you how much a nutrient in a serving of food contributes to a daily diet. 2,000 calories a day is used for general nutrition advice.",
   "Percent Daily Values are based on a 2,000 calorie diet.",
   "Percent Daily Values (DV) based upon a 2,000 calorie diet.",
   "Percent Daily Value based on a 2,000 calorie diet.",

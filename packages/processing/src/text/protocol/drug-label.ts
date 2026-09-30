@@ -38,7 +38,8 @@ export function drugExclusionAllowed(exclusion: Exclusion, text: string): boolea
       /^Active ingredients?(?:\(s\))?\s+Purpose$/i.test(value)
     );
   }
-  if (reason === "footnote" || reason === "metadata") {
+  // Standard notes, whatever the model calls them (2026-09-30: HPUS notes tagged noise).
+  if (reason === "footnote" || reason === "metadata" || reason === "noise") {
     return HOMEOPATHIC_NOTE.test(value) || TRACE_NOTE.test(value);
   }
   if (reason !== "directions") {

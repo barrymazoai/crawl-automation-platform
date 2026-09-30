@@ -13,6 +13,8 @@ const notes = [
   hpus.replace("this product", "the product"),
   hpus.replace("components", "component(s)"),
   hpus.replace("components", "component").replace("are officially", "is officially"),
+  // 2026-09-30 real answer (tagged noise by the model).
+  "The letters HPUS indicate that this ingredient is officially included in the Homeopathic Pharmacopeia of the United States.",
   `${hpus} ${dilution}`,
   dilution,
   "(contains less than 10-¹⁴ mg alkaloids)",
@@ -23,7 +25,7 @@ const notes = [
   "(contains less than 10⁻¹³ mg anthraquinone glycosides)",
 ];
 
-describe.each(["footnote", "metadata"] as const)("homeopathic %s", (reason) => {
+describe.each(["footnote", "metadata", "noise"] as const)("homeopathic %s", (reason) => {
   it.each(notes)("accepts the full standard note %s", (note) => {
     const wire = drugWire();
     const exclusion = defined(wire.exclusions[1]);
