@@ -40,6 +40,7 @@ const ResultSchema = z.object({
   capped: z.boolean().optional(),
   // Browser scans record whether the channel sells the brand; older results have no such field.
   soldHere: z.boolean().optional(),
+  nameResolution: z.object({ brandName: z.string(), usedFallback: z.boolean() }).optional(),
   // Scans finished before these counts existed have neither.
   newListings: z.number().nullable().default(null),
   knownListings: z.number().nullable().default(null),

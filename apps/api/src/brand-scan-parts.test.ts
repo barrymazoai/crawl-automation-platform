@@ -129,13 +129,19 @@ it("wires the configured Swanson resolver and JSON reader into the API runner", 
   }));
   await test.brandScans.request({ requestId, channel: "swanson" });
   await test.runner?.tick(new AbortController().signal);
-  expect(test.read.mock.calls.map(([request]) => request.answer)).toEqual(["html", "json"]);
-  const api = new URL(test.read.mock.calls[1]?.[0].url ?? "");
+  expect(test.read.mock.calls.map(([request]) => request.answer)).toEqual(["json"]);
+  const api = new URL(test.read.mock.calls[0]?.[0].url ?? "");
   expect(api.origin).toBe("https://ac.cnstrc.com");
+  expect(api.pathname).toBe("/browse/brand/Herb%20Pharm");
   expect(api.searchParams.get("key")).toBe("test-public-constructor-key");
   expect(test.finish).toHaveBeenCalledWith(
     expect.any(String),
-    expect.objectContaining({ full: true, statedTotal: 1, products: 1 }),
+    expect.objectContaining({
+      full: true,
+      statedTotal: 1,
+      products: 1,
+      nameResolution: { brandName: "Herb Pharm", usedFallback: false },
+    }),
   );
 });
 

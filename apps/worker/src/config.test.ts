@@ -31,11 +31,11 @@ it("validates and wires the Swanson public key on the listing worker only", () =
   });
   const source = "https://www.swansonvitamins.com/collections/brand-herb-pharm";
   const adapter = workerChannelRegistry({ brandScans }).forBrandSource("swanson", source);
-  const resolved = adapter.brandScan?.resolve?.parsePage({
-    body: '<constructor-plp data-collection-title="Herb Pharm" />',
-    url: source,
-  });
-  expect(new URL(resolved ?? "").searchParams.get("key")).toBe("test-constructor-key");
+  const step = adapter.brandScan?.resolve?.({ url: source, brandName: "Herb Pharm" });
+  if (!step || !("request" in step)) {
+    throw new Error("expected a name lookup request");
+  }
+  expect(new URL(step.request.url).searchParams.get("key")).toBe("test-constructor-key");
   expect(adapter.httpPolicy.origins).not.toContain("https://ac.cnstrc.com");
   expect(schema.safeParse({ ...brandScans, swanson: { constructorKey: "" } }).success).toBe(false);
 });

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { ListingNameResolution } from "@crawl-automation/channels-core";
 import type { UnlistedReasonName } from "../listings/listing-model.js";
 import { QueueChannelSchema } from "../queue/queue-model.js";
 
@@ -63,6 +64,8 @@ export interface ScanResult {
   capped?: boolean | undefined;
   /** Store availability explicitly reported by the browser reader; absent in old scans. */
   soldHere?: boolean | undefined;
+  /** Name selected by the listing reader; absent in historical results and readers without resolution. */
+  nameResolution?: ListingNameResolution | undefined;
   /** Listed products not queued by any earlier list of this source; null for scans finished before 2026-09-30. */
   newListings: number | null;
   /** Listed products an earlier list of this source already queued; null for scans finished before 2026-09-30. */

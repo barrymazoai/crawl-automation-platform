@@ -3,6 +3,7 @@ import {
   type ChannelId,
   type ListedProduct,
   type ListingPage,
+  type ListingNameResolution,
 } from "@crawl-automation/channels-core";
 import type { BrowserBrandScanners, ListingPageReader } from "./ports.js";
 import type { ScanChannel } from "./scan-model.js";
@@ -37,6 +38,7 @@ export interface BrandListing {
   /** A reader explicitly reported a capped listing. */
   capped?: boolean;
   soldHere?: boolean;
+  nameResolution?: ListingNameResolution;
 }
 
 /** Select by source before normalisation: Amazon search and Store sources share a channel. */
@@ -144,7 +146,7 @@ export async function readBrandListing(
   work: ListingWork,
   signal: AbortSignal,
 ): Promise<BrandListing> {
-  const { pages, credits: pageCredits } = await readPages(work, signal);
+  const { pages, credits: pageCredits, nameResolution } = await readPages(work, signal);
   const listed = pages.flatMap((page) => page.products);
   const families = listed.filter((product) => product.kind === "family");
   const products = new Map<string, ListedProduct>();
@@ -172,5 +174,6 @@ export async function readBrandListing(
     credits,
     full,
     capped,
+    ...(nameResolution ? { nameResolution } : {}),
   };
 }

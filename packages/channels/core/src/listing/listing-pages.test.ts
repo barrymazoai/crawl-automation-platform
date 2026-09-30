@@ -92,7 +92,7 @@ describe("listing pages through ScraperAPI", () => {
     expect(get).toHaveBeenCalledOnce();
   });
 
-  it("keeps resolution HTML and cross-origin JSON in separate verified archives", async () => {
+  it("keeps name lookup, fallback HTML and listing JSON in separate verified archives", async () => {
     const { get, pages, remote } = setup();
     const origins = [ORIGIN, "https://ac.cnstrc.com"];
     const resolve = {
@@ -103,22 +103,32 @@ describe("listing pages through ScraperAPI", () => {
       url: `${ORIGIN}/collections/brand-example`,
     };
     const api = { ...request, origins, url: "https://ac.cnstrc.com/browse/brand/Example" };
-    get.mockResolvedValueOnce({
-      status: 200,
-      url: resolve.url,
-      contentType: "text/html",
-      contentEncoding: null,
-      bytes: Buffer.from('<constructor-plp data-collection-title="Example" />'),
-      creditCost: 1,
-    });
-    for (const target of [resolve, api]) {
+    const lookup = { ...api, label: "resolve-name", url: `${api.url}%20Inc.` };
+    get
+      .mockResolvedValueOnce({
+        status: 200,
+        url: lookup.url,
+        contentType: "application/json",
+        contentEncoding: null,
+        bytes: Buffer.from('{"response":{"total_num_results":0,"results":[]}}'),
+        creditCost: 1,
+      })
+      .mockResolvedValueOnce({
+        status: 200,
+        url: resolve.url,
+        contentType: "text/html",
+        contentEncoding: null,
+        bytes: Buffer.from('<constructor-plp data-collection-title="Example" />'),
+        creditCost: 1,
+      });
+    for (const target of [lookup, resolve, api]) {
       const first = await pages.read(target, signal());
       expect(remote.data.get(first.archiveKey)).toEqual(Buffer.from(first.body));
       const second = await pages.read(target, signal());
       expect(second).toMatchObject({ body: first.body, fromArchive: true, creditCost: null });
     }
-    expect(get).toHaveBeenCalledTimes(2);
-    expect(remote.data.size).toBe(4);
+    expect(get).toHaveBeenCalledTimes(3);
+    expect(remote.data.size).toBe(6);
   });
 
   it("stops on a page body whose record was never written, rather than fetching it again", async () => {

@@ -1,7 +1,6 @@
 import { brandScanErrors, type BrandScanReader } from "@crawl-automation/channels-core";
 import { SWANSON_ORIGIN } from "./swanson-address.js";
-import { swansonCollectionTitle } from "./collection-page.js";
-import { swansonErrors } from "./swanson-errors.js";
+import { resolveSwansonBrand } from "./brand-resolution.js";
 import type { SwansonBrandScanSettings } from "./brand-scan-settings.js";
 import {
   CONSTRUCTOR_ORIGIN,
@@ -21,13 +20,6 @@ function sourceUrl(raw: string): string {
     throw brandScanErrors.create("BRAND_SCAN.URL", { details: { url: raw } });
   }
   return `${SWANSON_ORIGIN}/collections/brand-${slug}`;
-}
-
-function clientKey(settings: SwansonBrandScanSettings | undefined): string {
-  if (!settings?.constructorKey) {
-    throw swansonErrors.create("SWANSON.CONSTRUCTOR_KEY_MISSING");
-  }
-  return settings.constructorKey;
 }
 
 function pageUrl(source: string, page: number): string {
@@ -50,24 +42,11 @@ function pageUrl(source: string, page: number): string {
   return url.href;
 }
 
-/** Resolve the archived collection title once, then read archived Constructor JSON pages. */
+/** Resolve the stored name or collection title, then read archived Constructor JSON pages. */
 export function createSwansonBrandScan(settings?: SwansonBrandScanSettings): BrandScanReader {
   return {
     sourceUrl,
-    resolve: {
-      pageUrl: (source) => {
-        clientKey(settings);
-        return sourceUrl(source);
-      },
-      answer: "html",
-      maxBytes: 6 * 1024 * 1024,
-      parsePage: ({ body }) => {
-        const brand = encodeURIComponent(swansonCollectionTitle(body));
-        const url = new URL(`/browse/brand/${brand}`, CONSTRUCTOR_ORIGIN);
-        url.searchParams.set("key", clientKey(settings));
-        return url.href;
-      },
-    },
+    resolve: (source) => resolveSwansonBrand({ ...source, url: sourceUrl(source.url) }, settings),
     origins: [SWANSON_ORIGIN, CONSTRUCTOR_ORIGIN],
     pageUrl,
     answer: "json",

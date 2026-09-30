@@ -7,7 +7,21 @@ import { SwansonBrandScanSettingsSchema } from "./brand-scan-settings.js";
 const source = "https://www.swansonvitamins.com/collections/brand-herb-pharm";
 const reader = createSwansonBrandScan({ constructorKey: "test-public-key" });
 const title = '<constructor-plp data-collection-title="Herb Pharm"></constructor-plp>';
-const base = reader.resolve?.parsePage({ body: title, url: source }) ?? "";
+function resolution(brandName?: string) {
+  const step = reader.resolve?.({ url: source, brandName });
+  if (!step || !("request" in step)) {
+    throw new Error("expected a resolution request");
+  }
+  return step;
+}
+function resolveTitle(body: string) {
+  const resolved = resolution().parsePage({ body, url: source });
+  if ("request" in resolved) {
+    throw new Error("expected a resolved collection title");
+  }
+  return resolved;
+}
+const base = resolveTitle(title).sourceUrl;
 
 // Small hand-written shapes; generated card counts exercise the real 100-card page boundary.
 function card(handle: string, variations: string[] = []) {
@@ -31,8 +45,9 @@ describe("Swanson collection resolution", () => {
     );
     const encoded = title.replace("Herb Pharm", " A &amp; B / C ");
     expect(swansonCollectionTitle(encoded)).toBe("A & B / C");
-    const resolved = reader.resolve?.parsePage({ body: encoded, url: source });
-    expect(new URL(resolved ?? "").pathname).toBe("/browse/brand/A%20%26%20B%20%2F%20C");
+    const resolved = resolveTitle(encoded);
+    expect(new URL(resolved.sourceUrl).pathname).toBe("/browse/brand/A%20%26%20B%20%2F%20C");
+    expect(resolved.nameResolution).toEqual({ brandName: "A & B / C", usedFallback: true });
   });
 
   it.each([
@@ -56,7 +71,7 @@ describe("Swanson collection resolution", () => {
   );
 
   it("requires configuration before paying for even the resolution page", () => {
-    expect(() => createSwansonBrandScan().resolve?.pageUrl(source)).toThrow(
+    expect(() => createSwansonBrandScan().resolve?.({ url: source })).toThrow(
       expect.objectContaining({ code: "SWANSON.CONSTRUCTOR_KEY_MISSING" }),
     );
     expect(SwansonBrandScanSettingsSchema.safeParse({ constructorKey: " " }).success).toBe(false);
@@ -65,7 +80,7 @@ describe("Swanson collection resolution", () => {
 
   it("normalises legacy JSON URLs and builds bounded brand-facet API pages", () => {
     expect(reader.sourceUrl(`${source}/products.json?limit=250`)).toBe(source);
-    expect(reader.resolve?.pageUrl(source)).toBe(source);
+    expect(resolution().request.url).toBe(source);
     const url = new URL(reader.pageUrl(base, 2));
     expect(url.origin).toBe("https://ac.cnstrc.com");
     expect(url.pathname).toBe("/browse/brand/Herb%20Pharm");
@@ -75,10 +90,10 @@ describe("Swanson collection resolution", () => {
       num_results_per_page: "100",
     });
     expect(reader.answer).toBe("json");
-    expect(reader.resolve?.answer).toBe("html");
+    expect(resolution().request.answer).toBe("html");
     expect(reader.maxPages).toBe(250);
     expect(reader.maxBytes).toBe(8 * 1024 * 1024);
-    expect(reader.resolve?.maxBytes).toBe(6 * 1024 * 1024);
+    expect(resolution().request.maxBytes).toBe(6 * 1024 * 1024);
     for (const page of [0, -1, 1.5, 251]) {
       expect(() => reader.pageUrl(base, page)).toThrow(
         expect.objectContaining({ code: "BRAND_SCAN.URL" }),
@@ -93,6 +108,34 @@ describe("Swanson collection resolution", () => {
   ])("refuses an unrelated source: %s", (url) => {
     expect(() => reader.sourceUrl(url)).toThrow(
       expect.objectContaining({ code: "BRAND_SCAN.URL" }),
+    );
+  });
+});
+
+describe("stored Swanson name resolution", () => {
+  it("preserves the stored name and uses its matching response as page one", () => {
+    const brandName = "A & B® / C Inc.";
+    const step = resolution(brandName);
+    expect(step.request).toMatchObject({ label: "resolve-name", answer: "json" });
+    expect(new URL(step.request.url).pathname).toBe(
+      `/browse/brand/${encodeURIComponent(brandName)}`,
+    );
+    expect(step.parsePage({ body: body([card("one")]), url: step.request.url })).toMatchObject({
+      sourceUrl: step.request.url,
+      firstPage: { cards: 1, pageNumber: 1, statedTotal: 1 },
+      nameResolution: { brandName, usedFallback: false },
+    });
+  });
+
+  it("uses the collection only after an explicit zero total", () => {
+    const step = resolution("Stored Name");
+    const next = step.parsePage({ body: body([]), url: step.request.url });
+    expect(next).toMatchObject({ request: { url: source, label: "resolve", answer: "html" } });
+    expect(() => step.parsePage({ body: "{}", url: step.request.url })).toThrow(
+      expect.objectContaining({ code: "BRAND_SCAN.NOT_JSON" }),
+    );
+    expect(step.parsePage({ body: body([], 1), url: step.request.url })).toHaveProperty(
+      "firstPage",
     );
   });
 });

@@ -150,6 +150,25 @@ function setup(input: {
 const signal = () => new AbortController().signal;
 
 describe("brand scan runner", () => {
+  it.each([true, false])(
+    "persists name resolution with fallback=%s in the scan result",
+    async (usedFallback) => {
+      const scanReader = reader();
+      const nameResolution = { brandName: "Resolved Brand", usedFallback };
+      scanReader.resolve = vi.fn(({ url }) => ({ sourceUrl: url, nameResolution }));
+      const fixture = setup({
+        bodies: { "page-1": JSON.stringify({ ids: ["one"], next: null }) },
+        scanReader,
+      });
+      await fixture.runner.tick(signal());
+      expect(scanReader.resolve).toHaveBeenCalledWith({
+        url: scan.source.url,
+        brandName: scan.source.brandName,
+      });
+      expect(fixture.finished[0]).toMatchObject({ state: "complete", nameResolution });
+    },
+  );
+
   it("queues all Amazon scan products once, retains capped=true and never requests missing revisits", async () => {
     const bodies = Object.fromEntries(
       Array.from({ length: 7 }, (_, index) => [

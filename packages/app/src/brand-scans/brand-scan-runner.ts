@@ -111,6 +111,7 @@ export class BrandScanRunner {
       full: listing.full,
       capped: listing.capped ?? false,
       ...(listing.soldHere === undefined ? {} : { soldHere: listing.soldHere }),
+      ...(listing.nameResolution ? { nameResolution: listing.nameResolution } : {}),
       newListings: counts.newListings,
       knownListings: counts.knownListings,
       missing,

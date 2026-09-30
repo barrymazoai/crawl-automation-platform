@@ -9,6 +9,7 @@ const scan: ListingScan = {
     sourceId: "22222222-2222-4222-8222-222222222222",
     channel: "swanson",
     url: "https://example.com",
+    brandName: "Allimax",
   },
 };
 const settings = {

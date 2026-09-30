@@ -1,9 +1,17 @@
 # Swanson brand listing reader
 
-The collection page is an entry page, not a product list. Its server HTML supplies the exact
-`constructor-plp[data-collection-title]` brand name. The reader then requests Constructor's
-`/browse/brand/<encoded name>` API, with 100 cards per page. Both stages use the existing
-ScraperAPI listing reader and its verified, byte-for-byte R2 archive before parsing.
+The reader first requests Constructor's `/browse/brand/<encoded name>` API using the stored
+`ScanRecord.source.brandName`, with 100 cards per page. A positive `total_num_results` selects
+that exact name and uses the response as page 1; the collection page is never requested.
+
+Only an explicit zero total falls back to the collection page. Its server HTML supplies the
+exact `constructor-plp[data-collection-title]` name, which the reader then uses to page
+Constructor from page 1. The zero-result lookup is evidence, not a listing page. Malformed
+JSON and request/archive failures stop the scan with their original error; they do not trigger
+fallback or retry. A bot challenge on the fallback remains `BRAND_SCAN.ACCESS_CHALLENGE`.
+Historical workflow requests without a brand name (or with a blank name) use the collection
+path directly. Every request uses the existing ScraperAPI listing reader and its verified,
+byte-for-byte R2 archive before parsing.
 
 ## Private configuration
 
@@ -47,8 +55,9 @@ In the **API config only**, set the gap alongside the existing Swanson permit:
 Both brakes are generic, validated at startup and default to `0` (no pause) for every channel.
 The recommended Swanson values are `brandScans.channels.swanson.requestIntervalMs: 3000`
 and `brandScans.permits.swanson.gapAfterSeconds: 30`. The first is a pause after the previous
-page has been read and parsed, before requesting the next page: collection → API page 1 →
-API page 2. There is no pause before the first request or after the final page. It also
+page has been read and parsed, before requesting the next page. A name hit follows API page 1 →
+API page 2. A name miss follows name lookup → collection → API page 1 → API page 2.
+There is no pause before the first request or after the final page. It also
 applies when the reader reuses an archived page. The activity's AbortSignal interrupts the
 [Node promise timer](https://nodejs.org/api/timers.html#timerspromisessettimeoutdelay-value-options)
 immediately. The value must be an integer from 0 to 2,147,483,647 ms;
@@ -62,10 +71,11 @@ non-cancellable finally still releases the permit. No permit means no inter-scan
 The marker `brand-listing-gap-v1` preserves the command sequence of older unpatched histories.
 New starts receive the configured gap; reattaching to an existing workflow retains its input.
 
-For 10 small brands with one API page each, the configured pauses add 10 × (3 + 30) = 330 s,
-including the final release gap. Allowing about 3 s per brand for fetching and archiving gives
-**approximately 6 minutes to list 10 brands**. This is an estimate, not a deadline: extra API
-pages add 3 s each plus request/archive time, and permit contention can add further waiting.
+For 10 small brands whose stored names all match and fit on one API page each, the configured
+pauses add 10 × 30 = 300 s, including the final release gap. Each name miss adds two request
+intervals (6 s at the recommended setting), plus the collection and replacement API page's
+fetch/archive time. Extra API pages add 3 s each plus fetch/archive time; permit contention
+can add further waiting. These are pause budgets, not scan deadlines.
 
 The shared Swanson settings schema validates the supplied key at startup. Without Swanson
 settings, unrelated channels and product capture remain available, but a Swanson scan fails
@@ -75,11 +85,26 @@ collection title fails with `SWANSON.COLLECTION_TITLE_MISSING`; bot challenges r
 
 ## Interface and completeness
 
-`BrandScanReader.resolve` is an optional generic capability: it defines an entry page's URL,
-response type, byte limit, and parser returning an opaque listing base URL. The app reads that
-page under archive label `resolve`, then passes the resolved URL to the existing `pageUrl`
-loop (`page-1`, `page-2`, etc.). Resolution credits are included; resolution is not counted as
-a product listing page. Other readers keep their existing single-stage behavior.
+`BrandScanReader.resolve` is an optional generic capability. It receives the normalized source
+URL and optional stored `brandName`, then returns a request (URL, stable archive label, response
+type, byte limit, and parser) or a resolved listing. A parser can choose another request or
+return the opaque listing base URL, an optional already-read first page, and name evidence.
+The app executes those steps through the same archive and pacing path as ordinary pages;
+all Swanson name-selection decisions remain in the channel. Repeated resolution labels fail
+before another read. Other readers keep their existing single-stage behavior.
+
+Swanson uses `resolve-name` for the stored-name API lookup, `resolve` for fallback collection
+HTML, and `page-N` for subsequent listing requests. On a hit, `resolve-name` is listing page 1
+and the loop continues at `page-2` without fetching `page-1` again. On a miss, the fallback
+title's listing starts at `page-1`. Every request's credits are included; the zero-result
+lookup and collection HTML do not inflate listing page/card counts.
+
+The optional `nameResolution: { brandName, usedFallback }` field appears in the listing result
+and persisted scan result (including partial listings). `brandName` is the exact name used for
+the selected listing; `usedFallback` records whether collection resolution was needed.
+Historical results omit the field. The generic gated workflow request carries `brandName`
+through to the worker; old requests that omit it remain valid. Failed resolution retains its
+error and available request evidence, without claiming a name was successfully selected.
 
 `BrandScanReader.origins` separates listing targets from the adapter's product HTTP policy.
 Swanson allows its storefront and Constructor here; ScraperAPI still enforces the private
@@ -98,6 +123,23 @@ they never trigger missing-listing revisits. Invalid responses and fetch/archive
 retain their Review reason instead of becoming empty successful scans.
 
 ## Verification
+
+Stored-name validation on 2026-09-30: `pnpm lint` and `pnpm check` passed (formatting, dependency
+boundaries, duplication and TypeScript included). Vitest passed **114 files / 927 tests**:
+all tests in `packages/channels/swanson`, `packages/channels/core`, `packages/app`, `apps/api`
+and `apps/worker`, plus the changed Postgres result decoder and Temporal listing adapter tests,
+and the listing workflow unit/bundle tests. Coverage includes a hit without a collection read,
+a zero-result miss followed by collection/title lookup, HTML and provider challenges during
+fallback, invalid and truncated API responses, completeness, per-request pauses, cancellation
+between resolution requests, archive separation, and stored-name/result delivery across layers.
+
+The requested fresh direct Constructor check could not run: the first request (Allimax)
+failed DNS resolution for `ac.cnstrc.com` with `ENOTFOUND` in the sandbox. No fresh totals were
+obtained for Allimax, Amazing Herbs, ChildLife Essentials, Culturelle, Arthur Andrew Medical,
+or Herb Pharm. No deployment, production scan, or Git state change was performed.
+
+Earlier verification of the collection-first implementation is retained below. These prior
+observations are not fresh totals from the stored-name check.
 
 Automated fixtures are small hand-written HTML/JSON. The owner's saved Herb Pharm server
 HTML was also parsed locally and resolved to `Herb Pharm`. A bounded direct public API check
@@ -126,6 +168,20 @@ needs to run these Temporal suites:
 All paths above are relative to `packages/workflows/src/`. This pacing task changed local
 source and documentation only; Git commands were read-only and no deployment was performed.
 
+## Files changed for stored-name lookup
+
+Paths are relative to the repository; braces group files in the same directory.
+
+| Area | Files |
+| --- | --- |
+| Swanson resolution and tests | `packages/channels/swanson/src/{brand-resolution.ts,brand-scan.ts,brand-scan.test.ts}` (`brand-resolution.ts` is new) |
+| Generic resolution contract and archive tests | `packages/channels/core/src/listing/{brand-scan.ts,listing-pages.test.ts}` |
+| Application orchestration, result and tests | `packages/app/src/brand-scans/{http-listing-pages.ts,http-listing-pages.test.ts,scan-listing.ts,scan-model.ts,brand-scan-runner.ts,brand-scan-runner.test.ts,swanson-listing.test.ts}` |
+| Persisted result decoding | `packages/adapters/src/postgres/{brand-scan-queries.ts,brand-scan-queries.test.ts}` |
+| Gated request delivery | `packages/adapters/src/temporal/{temporal-brand-listings.ts,temporal-brand-listings.test.ts}`, `packages/workflows/src/collection/brand-listing-model.ts` |
+| API and worker wiring tests | `apps/api/src/brand-scan-parts.test.ts`, `apps/worker/src/config.test.ts`, `apps/worker/src/activities/brand-listing-activities.test.ts` |
+| Operations documentation | `docs/operations/swanson-brand-scans.md` |
+
 ## Files changed for pacing
 
 Paths are relative to the repository; braces group files with a common directory/name.
@@ -141,7 +197,7 @@ Paths are relative to the repository; braces group files with a common directory
 | Shared replay helpers | `packages/workflows/src/testing/replay/{bundles.ts,history.ts}` |
 | Operations documentation | `docs/operations/{swanson-brand-scans.md,machines.md}` |
 
-## Files changed in this rework
+## Files changed in the earlier collection-first rework
 
 Paths below are relative to the repository. Existing uncommitted Swanson work was reworked;
 unrelated working-tree changes were preserved.

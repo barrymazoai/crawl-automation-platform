@@ -28,12 +28,10 @@ function fixture(resolve = true, requestIntervalMs = 3000) {
     complete: () => true,
   };
   if (resolve) {
-    reader.resolve = {
-      pageUrl: (url) => url,
-      parsePage: () => sourceUrl,
-      answer: "html",
-      maxBytes: 1000,
-    };
+    reader.resolve = ({ url }) => ({
+      request: { url, label: "resolve", answer: "html", maxBytes: 1000 },
+      parsePage: () => ({ sourceUrl }),
+    });
   }
   const read = vi.fn(async () => ({
     body: "",
@@ -89,6 +87,25 @@ it("cancels a real timer immediately without starting the next page", async () =
   const rejected = expect(pending).rejects.toMatchObject({ name: "AbortError", code: "ABORT_ERR" });
   await vi.waitFor(() => expect(sleep).toHaveBeenCalledOnce());
   expect(test.read).toHaveBeenCalledOnce();
+  controller.abort();
+  await rejected;
+  expect(test.read).toHaveBeenCalledOnce();
+}, 1000);
+
+it("cancels between resolution requests without starting the fallback", async () => {
+  const test = fixture(true, 60_000);
+  const controller = new AbortController();
+  const resolve = test.work.reader.resolve;
+  if (!resolve) {
+    throw new Error("expected fixture resolver");
+  }
+  test.work.reader.resolve = (source) => ({
+    request: { url: source.url, label: "resolve-name", answer: "json", maxBytes: 1000 },
+    parsePage: () => resolve(source),
+  });
+  const pending = readPages(test.work, controller.signal);
+  const rejected = expect(pending).rejects.toMatchObject({ name: "AbortError", code: "ABORT_ERR" });
+  await vi.waitFor(() => expect(timers.setTimeout).toHaveBeenCalledOnce());
   controller.abort();
   await rejected;
   expect(test.read).toHaveBeenCalledOnce();

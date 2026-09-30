@@ -5,12 +5,17 @@ import {
   type ChannelAdapter,
   type ChannelId,
   type ListingPage,
+  type ListingResolveRequest,
+  type ListingResolveStep,
 } from "@crawl-automation/channels-core";
 import type { ListingPageReader } from "./ports.js";
 import type { ScanRecord } from "./scan-model.js";
 
 export type ListingScan = Pick<ScanRecord, "scanId"> & {
-  source: Pick<ScanRecord["source"], "sourceId" | "channel" | "url">;
+  source: Pick<ScanRecord["source"], "sourceId" | "channel" | "url"> & {
+    /** Optional for workflows started before names were included in listing requests. */
+    brandName?: string | undefined;
+  };
 };
 
 export interface ListingWork {
@@ -29,68 +34,92 @@ export function listingTarget(work: ListingWork) {
   };
 }
 
-/** Resolution uses the same verified archive as listing pages, under its own stable label. */
-async function resolveSource(work: ListingWork, signal: AbortSignal) {
-  const source = work.reader.sourceUrl(work.scan.source.url);
-  const resolve = work.reader.resolve;
-  if (!resolve) {
-    return { source, credits: 0 };
-  }
-  const url = resolve.pageUrl(source);
-  const read = await work.pages.read(
-    {
-      ...listingTarget(work),
-      url,
-      label: "resolve",
-      answer: resolve.answer,
-      maxBytes: resolve.maxBytes,
+/** One pacing and credit counter for all resolution and listing reads, including archive reuse. */
+function pageReads(work: ListingWork, signal: AbortSignal) {
+  let started = false;
+  let credits = 0;
+  return {
+    get credits() {
+      return credits;
     },
-    signal,
-  );
-  return { source: resolve.parsePage({ body: read.body, url }), credits: read.creditCost ?? 0 };
+    read: async (request: ListingResolveRequest["request"]) => {
+      const interval = work.requestIntervalMs ?? 0;
+      if (started && interval > 0) {
+        await setTimeout(interval, undefined, { signal });
+      }
+      signal.throwIfAborted();
+      started = true;
+      const read = await work.pages.read({ ...listingTarget(work), ...request }, signal);
+      credits += read.creditCost ?? 0;
+      return read;
+    },
+  };
+}
+
+/** Each resolution step shares the archive and pacing; repeated labels fail before another read. */
+async function resolveSource(work: ListingWork, read: ReturnType<typeof pageReads>["read"]) {
+  const url = work.reader.sourceUrl(work.scan.source.url);
+  let step: ListingResolveStep = work.reader.resolve?.({
+    url,
+    brandName: work.scan.source.brandName,
+  }) ?? { sourceUrl: url };
+  const labels = new Set<string>();
+  while ("request" in step) {
+    const { request } = step;
+    if (labels.has(request.label)) {
+      throw brandScanErrors.create("BRAND_SCAN.PAGINATION");
+    }
+    labels.add(request.label);
+    const result = await read(request);
+    step = step.parsePage({ body: result.body, url: request.url });
+  }
+  return step;
+}
+
+async function readPage(
+  work: ListingWork,
+  target: { sourceUrl: string; page: number },
+  read: ReturnType<typeof pageReads>["read"],
+) {
+  const { reader } = work;
+  const url = reader.pageUrl(target.sourceUrl, target.page);
+  const result = await read({
+    url,
+    label: `page-${target.page}`,
+    answer: reader.answer,
+    maxBytes: reader.maxBytes,
+  });
+  return reader.parsePage({ body: result.body, url, page: target.page });
 }
 
 /** Read consecutive archived pages; readers can report a bounded partial scan at their own cap. */
 export async function readPages(work: ListingWork, signal: AbortSignal) {
   const { reader } = work;
   signal.throwIfAborted();
-  const resolved = await resolveSource(work, signal);
+  const reads = pageReads(work, signal);
+  const resolved = await resolveSource(work, reads.read);
   const pages: ListingPage[] = [];
-  let credits = resolved.credits;
   for (let page = 1; ; page++) {
+    signal.throwIfAborted();
     if (page > reader.maxPages) {
       throw brandScanErrors.create("BRAND_SCAN.PAGE_LIMIT", {
         details: { maxPages: reader.maxPages },
       });
     }
-    const url = reader.pageUrl(resolved.source, page);
-    await waitBetweenPages(work, page, signal);
-    const read = await work.pages.read(
-      {
-        ...listingTarget(work),
-        url,
-        label: `page-${page}`,
-        answer: reader.answer,
-        maxBytes: reader.maxBytes,
-      },
-      signal,
-    );
-    credits += read.creditCost ?? 0;
-    const listed = reader.parsePage({ body: read.body, url, page });
+    const listed =
+      page === 1 && resolved.firstPage
+        ? resolved.firstPage
+        : await readPage(work, { sourceUrl: resolved.sourceUrl, page }, reads.read);
     pages.push(listed);
     if (listed.nextPage === null || listed.products.length === 0) {
-      return { pages, credits };
+      return {
+        pages,
+        credits: reads.credits,
+        ...(resolved.nameResolution ? { nameResolution: resolved.nameResolution } : {}),
+      };
     }
     if (listed.nextPage !== page + 1) {
       throw brandScanErrors.create("BRAND_SCAN.PAGINATION");
     }
   }
-}
-
-async function waitBetweenPages(work: ListingWork, page: number, signal: AbortSignal) {
-  const interval = work.requestIntervalMs ?? 0;
-  if ((work.reader.resolve || page > 1) && interval > 0) {
-    await setTimeout(interval, undefined, { signal });
-  }
-  signal.throwIfAborted();
 }

@@ -38,7 +38,7 @@ export class TemporalBrandListings implements GatedBrandListing {
   private async start(scan: ListingScan) {
     const workflowId = `brand-listing-${scan.scanId}`;
     const { taskQueue, resourceQueue, resourceId, maxWaitSeconds, gapAfterSeconds } = this.settings;
-    const { sourceId, channel, url } = scan.source;
+    const { sourceId, channel, url, brandName } = scan.source;
     try {
       return await this.client.workflow.start("BrandListingWorkflow", {
         workflowId,
@@ -46,7 +46,7 @@ export class TemporalBrandListings implements GatedBrandListing {
         args: [
           {
             scanId: scan.scanId,
-            source: { sourceId, channel, url },
+            source: { sourceId, channel, url, ...(brandName === undefined ? {} : { brandName }) },
             gapAfterSeconds,
             resources: {
               queue: resourceQueue,

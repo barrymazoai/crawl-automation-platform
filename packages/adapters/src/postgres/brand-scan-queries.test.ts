@@ -41,5 +41,11 @@ describe("brand scan result decoding", () => {
 
   it("reads a result saved before soldHere existed", () => {
     expect(scanOf(row(result)).result).not.toHaveProperty("soldHere");
+    expect(scanOf(row(result)).result).not.toHaveProperty("nameResolution");
+  });
+
+  it.each([true, false])("retains name resolution evidence with fallback=%s", (usedFallback) => {
+    const nameResolution = { brandName: "Brand® Inc.", usedFallback };
+    expect(scanOf(row({ ...result, nameResolution })).result).toMatchObject({ nameResolution });
   });
 });

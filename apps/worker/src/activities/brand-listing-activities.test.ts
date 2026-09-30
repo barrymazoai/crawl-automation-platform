@@ -1,4 +1,8 @@
-import { ChannelRegistry, type ChannelAdapter } from "@crawl-automation/channels-core";
+import {
+  ChannelRegistry,
+  type BrandScanReader,
+  type ChannelAdapter,
+} from "@crawl-automation/channels-core";
 import { setTimeout } from "node:timers/promises";
 import * as channels from "@crawl-automation/channels-core";
 import type { ListingPages } from "@crawl-automation/channels-core";
@@ -23,6 +27,7 @@ const request = {
     sourceId: "22222222-2222-4222-8222-222222222222",
     channel: "gnc",
     url: "https://example.com/brand",
+    brandName: "Stored Brand",
   },
 };
 const page = { products: [], cards: 0, nextPage: null, statedTotal: 0 };
@@ -106,13 +111,15 @@ it("passes the channel's configured interval to the activity's page loop", async
   if (!reader) {
     throw new Error("fixture must have a listing reader");
   }
-  reader.resolve = {
-    pageUrl: (url) => url,
-    answer: "html",
-    maxBytes: 1000,
-    parsePage: () => request.source.url,
-  };
+  reader.resolve = vi.fn<NonNullable<BrandScanReader["resolve"]>>(({ url }) => ({
+    request: { url, label: "resolve", answer: "html", maxBytes: 1000 },
+    parsePage: () => ({ sourceUrl: request.source.url }),
+  }));
   await test.activity(request);
+  expect(reader.resolve).toHaveBeenCalledWith({
+    url: request.source.url,
+    brandName: request.source.brandName,
+  });
   expect(test.read).toHaveBeenCalledTimes(2);
   expect(setTimeout).toHaveBeenCalledExactlyOnceWith(3000, undefined, {
     signal: expect.any(AbortSignal),

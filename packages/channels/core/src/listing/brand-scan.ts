@@ -54,19 +54,35 @@ export interface ListingPage {
   statedTotal: number | null;
 }
 
+/** The name selected for a listing and whether resolving it required the fallback. */
+export interface ListingNameResolution {
+  brandName: string;
+  usedFallback: boolean;
+}
+
+export interface ResolvedListing {
+  sourceUrl: string;
+  /** A successful lookup can supply page 1 without another request. */
+  firstPage?: ListingPage;
+  nameResolution?: ListingNameResolution;
+}
+
+/** A channel chooses each next request from retained evidence; labels must be unique per scan. */
+export interface ListingResolveRequest {
+  request: { url: string; label: string; answer: "html" | "json"; maxBytes: number };
+  parsePage(page: { body: string; url: string }): ListingResolveStep;
+}
+
+export type ListingResolveStep = ListingResolveRequest | ResolvedListing;
+
 /**
  * How a channel reads retained HTTP or browser brand pages: site addresses and page shapes only.
  */
 export interface BrandScanReader {
   /** Normalises a brand source URL; refuses anything that is not this channel's brand listing. */
   sourceUrl(url: string): string;
-  /** Optional archived entry page resolving the source to an opaque listing base URL. */
-  resolve?: {
-    pageUrl(sourceUrl: string): string;
-    answer: "html" | "json";
-    maxBytes: number;
-    parsePage(page: { body: string; url: string }): string;
-  };
+  /** Optional sequence of archived requests resolving a source to an opaque listing base URL. */
+  resolve?(source: { url: string; brandName?: string | undefined }): ListingResolveStep;
   /** Listing-only targets; product capture retains its own origin policy. */
   origins?: readonly string[];
   /** Receives the resolved base URL when `resolve` is present. */
