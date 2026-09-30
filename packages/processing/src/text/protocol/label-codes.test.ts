@@ -1,6 +1,7 @@
 import { readFileSync, readdirSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { labelReviewFailure } from "./text-protocol.js";
+import { labelValidationWarnings } from "../../label/validation-errors.js";
 
 /**
  * Every `LABEL.*` code written in the label checks (contracts' assessment and this folder's checks). The contracts
@@ -35,12 +36,13 @@ describe("label check codes", () => {
     expect(labelCodesInSource()).toContain("LABEL.COVERAGE_UNCERTAIN");
   });
 
-  it.each(labelCodesInSource().filter((code) => !REFUSALS.has(code)))(
-    "%s has a registered TEXT.LABEL_ code",
-    (labelCode) => {
-      expect(labelReviewFailure(labelCode).code).toBe(labelCode.replace(/^LABEL\./, "TEXT.LABEL_"));
-    },
-  );
+  it.each(
+    labelCodesInSource().filter(
+      (code) => !REFUSALS.has(code) && !(code in labelValidationWarnings.codes),
+    ),
+  )("%s has a registered TEXT.LABEL_ code", (labelCode) => {
+    expect(labelReviewFailure(labelCode).code).toBe(labelCode.replace(/^LABEL\./, "TEXT.LABEL_"));
+  });
 
   it("an unknown label code is an unreadable answer that keeps the code it had", () => {
     const failure = labelReviewFailure("LABEL.SOMETHING_NEW");

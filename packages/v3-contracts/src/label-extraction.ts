@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { assessLabelGroups } from "./label-groups.js";
 
 /** New opt-in extraction protocol; never reinterpret a legacy candidate as this codec. */
 export const labelExtractionVersion = "label-extraction/1" as const;
@@ -48,13 +49,16 @@ export function isIngredientHeading(raw: string): boolean {
 export type LabelFinding = { code: string; detail: string };
 export function assessLabelCandidate(candidate: LabelCandidate) {
   const codes = new Set<string>(), findings: LabelFinding[] = [];
+  const warnings: LabelFinding[] = [];
   // Every code keeps the first place that raised it, so a Review can say which row broke which rule.
   const flag = (code: string, detail: string) => { if (!codes.has(code)) findings.push({ code, detail }); codes.add(code); };
   const rowText = (row: { name: { text: string }; amount: { text: string } | null }, index: number) =>
     `row ${index} "${row.name.text.slice(0, 80)}"${row.amount ? ` amount "${row.amount.text.slice(0, 30)}"` : ""}`;
   let componentCount = 0;
   for (const column of candidate.formula?.columns ?? []) {
-    let activeGroup: number | null = null;
+    const groups = assessLabelGroups(column.rows);
+    groups.findings.forEach(finding => flag(finding.code, finding.detail));
+    warnings.push(...groups.warnings);
     column.rows.forEach((row, index) => {
       if ((row.amountStatus === "printed") !== (row.amount !== null)) flag("LABEL.AMOUNT_STATE_CONFLICT", `${rowText(row, index)}: status ${row.amountStatus} but amount ${row.amount ? "present" : "missing"}`);
       if (row.kind === "group_header") {
@@ -64,17 +68,11 @@ export function assessLabelCandidate(candidate: LabelCandidate) {
       if (row.kind === "blend_component") {
         componentCount++;
         const parent = row.parentRowIndex === null ? undefined : column.rows[row.parentRowIndex];
-        if (row.parentRowIndex === null || row.parentRowIndex >= index || row.parentRowIndex !== activeGroup ||
-            !parent || !["group_header", "blend_total"].includes(parent.kind)) flag("LABEL.PARENT_INVALID", `${rowText(row, index)}: component parent ${row.parentRowIndex} is not the open group`);
         // A declared blend total may legitimately omit individual component amounts.
         if (row.amountStatus === "not_declared" && parent?.kind !== "blend_total") flag("LABEL.AMOUNT_MISSING", `${rowText(row, index)}: component without amount outside a blend total`);
       } else {
-        if (row.parentRowIndex !== null) flag("LABEL.PARENT_INVALID", `${rowText(row, index)}: ${row.kind} has a parent`);
-        activeGroup = row.kind === "group_header" || row.kind === "blend_total" ? index : null;
         if (row.kind !== "group_header" && row.amountStatus === "not_declared") flag("LABEL.AMOUNT_MISSING", `${rowText(row, index)}: no amount${row.dailyValue ? ` (label prints only %DV "${row.dailyValue.text}")` : ""}`);
       }
-      if ((row.kind === "group_header" || row.kind === "blend_total") &&
-          (column.rows[index + 1]?.kind !== "blend_component" || column.rows[index + 1]?.parentRowIndex !== index)) flag("LABEL.GROUP_EMPTY", `${rowText(row, index)}: ${row.kind} not followed by its own component (next: ${column.rows[index + 1] ? `${column.rows[index + 1]!.kind} "${column.rows[index + 1]!.name.text.slice(0, 60)}"` : "end of column"})`);
     });
   }
   const hasIngredients = componentCount > 0 || !!candidate.otherIngredients;
@@ -91,7 +89,7 @@ export function assessLabelCandidate(candidate: LabelCandidate) {
       hasIngredients && candidate.issues.some(i => i.code === "INGREDIENTS_MISSING")) flag("LABEL.COMPLETENESS_CONFLICT", "extracted content contradicts a reported missing section");
   if (!candidate.formula && !hasIngredients) flag("LABEL.CORE_MISSING", `no formula and no ingredients${candidate.issues[0] && "detail" in candidate.issues[0] && candidate.issues[0].detail ? `; model: ${String(candidate.issues[0].detail).slice(0, 160)}` : ""}`);
   return { status: codes.size ? "review" as const : candidate.formula && hasIngredients ? "candidate" as const : "partial" as const,
-    codes: [...codes], findings };
+    codes: [...codes], findings, warnings };
 }
 
 /** Small projection for structural comparison; group identity is never the printed name. */

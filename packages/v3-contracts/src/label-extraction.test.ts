@@ -6,7 +6,7 @@ import { gncLabelFixture } from "./label.fixture.js";
 const assess = (c = gncLabelFixture()) => assessLabelCandidate(LabelImageCandidateSchema.parse(c));
 it("keeps 3 dose-free headers, 15 numerical rows and 11 components without duplicated ingredient records", () => {
   const c = gncLabelFixture(), rows = c.formula!.columns[0]!.rows;
-  expect(assess(c)).toEqual({ status: "candidate", codes: [], findings: [] });
+  expect(assess(c)).toEqual({ status: "candidate", codes: [], findings: [], warnings: [] });
   expect(rows.filter(r => r.amount)).toHaveLength(15);
   expect(rows.filter(r => r.kind === "blend_component")).toHaveLength(11);
   expect(c.otherIngredients!.items).toHaveLength(7);

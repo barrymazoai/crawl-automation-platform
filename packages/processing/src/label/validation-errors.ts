@@ -1,5 +1,13 @@
 import { defineErrors } from "@crawl-automation/platform";
 
+/** Non-blocking label findings, retained in collected-product warnings rather than Review codes. */
+export const labelValidationWarnings = defineErrors({
+  "LABEL.BLEND_WITHOUT_COMPONENTS": {
+    category: "VALIDATION",
+    message: "A printed blend amount is retained without separately listed components.",
+  },
+});
+
 /** Registered reasons retained in Reviews and source observations. */
 export const labelValidationErrors = defineErrors({
   "LABEL.AMOUNT_UNREADABLE": { category: "VALIDATION", message: "Amount unreadable." },

@@ -62,6 +62,9 @@ function selectEntry(state: MergeState, entry: Provenance, policy: MergePolicy):
   }
   const candidate = entry.candidate;
   const assessed = assessLabelCandidate(candidate);
+  for (const code of new Set(assessed.warnings.map((warning) => warning.code))) {
+    state.warnings.push({ id: entry.id, code });
+  }
   if (policy.textFallback && entry.kind === "image") {
     // Keep the original partial evidence; never mix unreadable image rows into the complete text label.
     if (assessed.codes.some((code) => !PARTIAL_LABEL.includes(code))) {
