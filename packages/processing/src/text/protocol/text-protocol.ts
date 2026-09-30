@@ -10,9 +10,19 @@ import { decodeTextResponse } from "./anchored-decoder.js";
 import { anchoredPrompt } from "./anchored-prompt.js";
 import { AnchoredExtractionSchema } from "./anchored-schema.js";
 import { decodeLabelText } from "./label-decoder.js";
-import { labelTextOutputSchema, labelTextPrompt } from "./label-instructions.js";
+import {
+  labelTextOutputSchema,
+  legacyLabelTextOutputSchema,
+  labelTextPrompt,
+} from "./label-instructions.js";
 
-const LABEL_POLICIES = ["label-text/1", "label-text/2", "label-text/3", "label-text/4"];
+const LABEL_POLICIES = [
+  "label-text/1",
+  "label-text/2",
+  "label-text/3",
+  "label-text/4",
+  "label-text/5",
+];
 
 /** The first-generation prompt (result schema 1): offsets into the original text. */
 const V1_INSTRUCTIONS = [
@@ -76,7 +86,9 @@ export function labelReviewFailure(labelCode: string) {
 /** The answer format the model must return for this task. */
 export function textOutputSchema(input: TextInput): object {
   if (input.resultSchemaVersion === 3) {
-    return labelTextOutputSchema;
+    return input.policyVersion === "label-text/5"
+      ? labelTextOutputSchema
+      : legacyLabelTextOutputSchema;
   }
   const schema = input.resultSchemaVersion === 2 ? AnchoredExtractionSchema : TextCandidateV1Schema;
   return z.toJSONSchema(schema);

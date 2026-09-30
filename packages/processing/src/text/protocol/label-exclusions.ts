@@ -1,3 +1,4 @@
+import { drugExclusionAllowed } from "./drug-label.js";
 import { labelValidationErrors } from "../../label/validation-errors.js";
 import type { LabelTextCandidateSchema } from "@crawl-automation/v3-contracts";
 import type { z } from "zod";
@@ -41,14 +42,20 @@ const ALLERGEN = /^(?:contains\s*:|may\s+contain|manufactured\s+(?:in|on)|proces
 export function exclusionCodes(judged: Judged): string[] {
   const uncertain = judged.candidate.exclusions.some(
     (exclusion) =>
-      !exactlyPlacedExclusion(exclusion, judged) && !allowedExclusion(exclusion, judged),
+      !exactlyPlacedExclusion(exclusion, judged) &&
+      !allowedExclusion(exclusion, judged) &&
+      !(
+        judged.policyVersion === "label-text/5" &&
+        judged.candidate.formula?.drugFacts &&
+        drugExclusionAllowed(exclusion, judged.text)
+      ),
   );
   return uncertain ? [labelValidationErrors.code("LABEL.COVERAGE_UNCERTAIN")] : [];
 }
 
 /** label-text/4: the heading field itself, a field's printed prefix, or a DV footnote symbol. */
 function exactlyPlacedExclusion(exclusion: Exclusion, judged: Judged): boolean {
-  if (judged.policyVersion !== "label-text/4") {
+  if (!["label-text/4", "label-text/5"].includes(judged.policyVersion)) {
     return false;
   }
   return (
@@ -105,10 +112,7 @@ function allowedExclusion(exclusion: Exclusion, judged: Judged): boolean {
     case "allergen":
       return ALLERGEN.test(value);
     case "directions":
-      return (
-        /^(?:suggested\s+use|directions)\s*:/i.test(value) &&
-        !/supplement\s+facts|other\s+ingredients/i.test(value)
-      );
+      return allowedDirections(exclusion, judged);
     case "noise":
       return isBlendLinkingWord(exclusion, judged);
     default:
@@ -119,7 +123,7 @@ function allowedExclusion(exclusion: Exclusion, judged: Judged): boolean {
 /** label-text/3+: "consisting of" / "and" between a blend total and one of its components. */
 function isBlendLinkingWord(exclusion: Exclusion, judged: Judged): boolean {
   const quote = exclusion.quote;
-  if (!["label-text/3", "label-text/4"].includes(judged.policyVersion)) {
+  if (!["label-text/3", "label-text/4", "label-text/5"].includes(judged.policyVersion)) {
     return false;
   }
   if (!/^(?:consisting of|and)$/i.test(quote.text.trim())) {
@@ -137,5 +141,15 @@ function isBlendLinkingWord(exclusion: Exclusion, judged: Judged): boolean {
             child.name.end >= quote.end,
         ),
     ),
+  );
+}
+
+function allowedDirections(exclusion: Exclusion, judged: Judged): boolean {
+  if (judged.candidate.formula?.drugFacts) {
+    return judged.policyVersion === "label-text/5" && drugExclusionAllowed(exclusion, judged.text);
+  }
+  return (
+    /^(?:suggested\s+use|directions)\s*:/i.test(exclusion.quote.text.trim()) &&
+    !/supplement\s+facts|other\s+ingredients/i.test(exclusion.quote.text)
   );
 }

@@ -14,19 +14,21 @@ beforeAll(async () => {
   bundle = await bundleWorkflowCode({
     workflowsPath: fileURLToPath(new URL("./brand-listing-workflow.ts", import.meta.url)),
   });
-  environment = await TestWorkflowEnvironment.createTimeSkipping();
+  // A real-time local server: with two gated runs in flight, the time-skipping server jumped the clock while the
+  // waiting run's workflow task was in progress (task timeouts until the run timed out).
+  environment = await TestWorkflowEnvironment.createLocal();
 }, 60_000);
 afterAll(async () => {
   await environment?.teardown();
 });
 
-function input(queue: string) {
+function input(queue: string, maxWaitSeconds = 10) {
   return {
     scanId: randomUUID(),
     source: { sourceId: randomUUID(), channel: "swanson", url: "https://example.com/brand" },
     resources: {
       queue,
-      maxWaitSeconds: 10,
+      maxWaitSeconds,
       activities: { readBrandListing: [{ resourceId: "swanson-brand-scan", units: 1 }] },
     },
   };
@@ -91,6 +93,11 @@ it("serializes two listings at capacity 1 and replays their waiting histories", 
   const finishFirst = new Promise<void>((resolve) => {
     finish = resolve;
   });
+  // Results are awaited only after both reads returned: awaiting a result lets the test server skip time.
+  let bothRead: () => void = () => undefined;
+  const readsDone = new Promise<void>((resolve) => {
+    bothRead = resolve;
+  });
   const held = new Set<string>();
   let reads = 0;
   const worker = await Worker.create({
@@ -113,6 +120,9 @@ it("serializes two listings at capacity 1 and replays their waiting histories", 
           reading();
           await finishFirst;
         }
+        if (reads === 2) {
+          bothRead();
+        }
         return { products: [] };
       },
       releaseResources: async ({ permitId }: ResourceRequest) => {
@@ -126,7 +136,8 @@ it("serializes two listings at capacity 1 and replays their waiting histories", 
       environment.client.workflow.start("BrandListingWorkflow", {
         taskQueue: queue,
         workflowId: randomUUID(),
-        args: [input(queue)],
+        // The waiting run must outlast the first listing's real run time plus its backoff polls.
+        args: [input(queue, 900)],
       });
     const first = await start();
     await firstReading;
@@ -134,6 +145,7 @@ it("serializes two listings at capacity 1 and replays their waiting histories", 
     await secondWaiting;
     expect(reads).toBe(1);
     finish();
+    await readsDone;
     await Promise.all([first.result(), second.result()]);
     expect(reads).toBe(2);
     expect(held.size).toBe(0);

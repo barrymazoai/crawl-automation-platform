@@ -63,8 +63,9 @@ export const LabelProductProvenanceSchema = z.discriminatedUnion("kind", [
 export function projectLabelProductCandidate(sourceId: string, c: LabelImageCandidate | TextCandidateV3) {
   const field = (f: NonNullable<typeof c.formula>["servingSize"]) => f ? { text: f.text, sourceId,
     citation: "evidence" in f ? { kind: "image" as const, evidence: f.evidence } : { kind: "text" as const, start: f.start, end: f.end } } : null;
-  return { formula: c.formula ? LabelProductFormulaSchema.parse({ servingSize: field(c.formula.servingSize), servingsPerContainer: field(c.formula.servingsPerContainer),
+  return { formula: c.formula ? LabelProductFormulaSchema.parse({ ...(c.formula.drugFacts ? { drugFacts: field(c.formula.drugFacts) } : {}), servingSize: field(c.formula.servingSize), servingsPerContainer: field(c.formula.servingsPerContainer),
     columns: c.formula.columns.map(col => ({ heading: field(col.heading), rows: col.rows.map(row => ({ ...row,
+      ...(row.purpose !== undefined ? { purpose: field(row.purpose) } : {}),
       name: field(row.name), amount: field(row.amount), dailyValue: field(row.dailyValue) })) })) }) : null,
     otherIngredients: c.otherIngredients ? LabelProductOtherSchema.parse({ heading: field(c.otherIngredients.heading), items: c.otherIngredients.items.map(field) }) : null };
 }
@@ -89,8 +90,8 @@ export const LabelCollectedProductSchema = z.discriminatedUnion("schemaVersion",
     const owner = p.kind === "text" ? observationIdentity(p.record.input) : p.record.input.selection.observation;
     if (JSON.stringify(owner) !== JSON.stringify(r.observation) || (p.kind === "text" ? p.record.input.resultSchemaVersion !== 3 : !p.record.input.extractionProtocol)) invalid();
   }
-  const fields = [r.formula.servingSize, r.formula.servingsPerContainer,
-    ...r.formula.columns.flatMap(c => [c.heading, ...c.rows.flatMap(row => [row.name, row.amount, row.dailyValue])]),
+  const fields = [r.formula.drugFacts, r.formula.servingSize, r.formula.servingsPerContainer,
+    ...r.formula.columns.flatMap(c => [c.heading, ...c.rows.flatMap(row => [row.name, row.amount, row.dailyValue, row.purpose])]),
     ...(r.otherIngredients ? [r.otherIngredients.heading, ...r.otherIngredients.items] : []), ...r.ingredients.flatMap(i => [i.name, i.amount])];
   for (const f of fields) if (f && sources.get(f.sourceId)?.kind !== f.citation.kind) invalid();
   const quality = ["label-image-first/4", "label-image-first/5"].includes(r.evidencePolicy??"");

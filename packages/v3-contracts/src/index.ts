@@ -53,3 +53,4 @@ export * from "./dtc-control.js";
 export * from "./purchase-conditions.js";
 export * from "./enrichment.js";
 export * from "./commerce.js";
+export * from "./label-drug.js";

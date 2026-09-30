@@ -84,7 +84,7 @@ async function productionShapedConfig() {
         schemaVersion: 1,
         module: "codex.text",
         implementationVersion: "codex-text/3",
-        policyVersion: "label-text/4",
+        policyVersion: "label-text/5",
         resultSchemaVersion: 3,
         configFingerprint: fingerprint,
       },

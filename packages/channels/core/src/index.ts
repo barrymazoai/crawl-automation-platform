@@ -13,6 +13,7 @@ export * from "./page-text.js";
 export * from "./product-family.js";
 export * from "./pipeline/index.js";
 export * from "./label-core-errors.js";
+export * from "./facts/label-sections.js";
 export * from "./listing/brand-scan.js";
 export * from "./listing/listing-pages.js";
 export * from "./listing/listing-pages-factory.js";

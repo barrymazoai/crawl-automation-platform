@@ -4,6 +4,7 @@ import { z } from "zod";
 import {
   LabelImageCandidateSchema,
   LabelImageFieldSchema,
+  legacyLabelExtractionSchema,
   assessLabelCandidate,
   labelImageIntegrityCodes,
   splitLabelIngredients,
@@ -19,7 +20,11 @@ export const labelVisionWireV2Schema = z.strictObject({
   label: LabelImageCandidateSchema,
   otherIngredientsBlock: LabelImageFieldSchema.nullable(),
 });
-export const labelVisionOutputV2Schema = z.toJSONSchema(labelVisionWireV2Schema);
+export const labelVisionOutputV2Schema = z.toJSONSchema(
+  labelVisionWireV2Schema.extend({
+    label: legacyLabelExtractionSchema(LabelImageFieldSchema),
+  }),
+);
 export const labelVisionPromptV2 = `${labelVisionPrompt}
 Instead of the bare label, return the label-visual-wire/2 envelope. Put the structured label in label.
 FIRST transcribe the ENTIRE Other Ingredients BODY into otherIngredientsBlock.text and evidence identically, retaining all commas, semicolons, parentheses and words. Omit only its heading. Join visual line wraps with spaces, NEVER insert separators for a line wrap. Do not invent text from a known formulation. For an absent section use null and mark incomplete when appropriate. Illegible words must produce UNREADABLE, not a confident guess.

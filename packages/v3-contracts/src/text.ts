@@ -30,7 +30,7 @@ export const TextInputSchema = z.strictObject({ ...ObservationSchema.shape, ...T
     // Half-open UTF-16 code-unit offsets into the original decoded text, not bytes or code points.
     range: z.strictObject({ start: z.number().int().nonnegative(), end: z.number().int().positive().max(200000) }).refine(r => r.end > r.start),
 }).superRefine((input, ctx) => {
-    if (input.resultSchemaVersion === 3 && (input.implementationVersion !== "codex-text/3" || !["label-text/1", "label-text/2", "label-text/3", "label-text/4"].includes(input.policyVersion)))
+    if (input.resultSchemaVersion === 3 && (input.implementationVersion !== "codex-text/3" || !["label-text/1", "label-text/2", "label-text/3", "label-text/4", "label-text/5"].includes(input.policyVersion)))
         ctx.addIssue({ code: "custom", message: "Label text requires its explicit implementation and policy" });
     const source = input.source;
     const ref = source.kind === "prepared" ? source.document : source.registration.result;
@@ -94,10 +94,11 @@ export const TextResultCandidateSchema = z.union([TextCandidateV1Schema, TextCan
 /** Extractive candidates only. Normalization and product eligibility belong to the next module. */
 export function assertTextQuotes(candidate: TextCandidate | TextCandidateV3, input: TextInput, fullText: string) {
     const quotes = "codec" in candidate ? [
+        ...(candidate.formula?.drugFacts ? [candidate.formula.drugFacts] : []),
         ...(candidate.formula?.servingSize ? [candidate.formula.servingSize] : []),
         ...(candidate.formula?.servingsPerContainer ? [candidate.formula.servingsPerContainer] : []),
         ...(candidate.formula?.columns.flatMap(c => [...(c.heading ? [c.heading] : []), ...c.rows.flatMap(r =>
-            [r.name, ...(r.amount ? [r.amount] : []), ...(r.dailyValue ? [r.dailyValue] : [])])]) ?? []),
+            [r.name, ...(r.purpose ? [r.purpose] : []), ...(r.amount ? [r.amount] : []), ...(r.dailyValue ? [r.dailyValue] : [])])]) ?? []),
         ...(candidate.otherIngredients ? [candidate.otherIngredients.heading, ...candidate.otherIngredients.items] : []),
         ...candidate.exclusions.map(e => e.quote),
     ] : [...(candidate.formula?.servingSize ? [candidate.formula.servingSize] : []),

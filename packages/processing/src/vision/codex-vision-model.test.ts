@@ -18,7 +18,8 @@ const base = {
 };
 
 // Fingerprints the previous clients computed for the same settings (v3-vision CodexVisionProvider, and the text
-// model before its move onto the shared client): existing tasks and results must stay valid.
+// model before its move onto the shared client). The text label fingerprint now pins label-text/5;
+// historical vision and non-label text fingerprints stay unchanged.
 describe("model setup fingerprints", () => {
   it.each([
     [undefined, "0dedb0376d04695383493ec1a14380935fe1edcc0d5e8d8530245cb060ec01c5"],
@@ -31,8 +32,8 @@ describe("model setup fingerprints", () => {
 
   it.each([
     [undefined, "2573146e2a3aeee817a7663cd465ddb3b42258ec5debe8923c39c64cdc7a071e"],
-    ["label-extraction/1", "49c56e62cc5c8c7f4fefcc534af3b29b410b5f84e25fcf7a095584b8b93a1c54"],
-  ] as const)("text %s is unchanged", (extractionProtocol, fingerprint) => {
+    ["label-extraction/1", "6307c73b0dba4ca3061213cbff96e4d231241a5db7391d638ac3d51deca65d8f"],
+  ] as const)("text %s matches its policy fingerprint", (extractionProtocol, fingerprint) => {
     const config = extractionProtocol ? { ...base, extractionProtocol } : base;
     expect(CodexTextModel.describe(config).configFingerprint).toBe(fingerprint);
   });

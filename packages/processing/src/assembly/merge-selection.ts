@@ -13,10 +13,8 @@ import {
 import type { MergePolicy } from "./merge-policy.js";
 import { byText, fail, words, type MergeState, type Provenance } from "./merge-state.js";
 import { applySourceReview } from "./source-without-label.js";
-
 type Candidate = Provenance["candidate"];
 type Projected = ReturnType<typeof projectLabelProductCandidate>;
-
 const PARTIAL_LABEL: readonly string[] = [
   labelValidationErrors.code("LABEL.INGREDIENTS_INCOMPLETE"),
   labelValidationErrors.code("LABEL.FORMULA_INCOMPLETE"),
@@ -137,7 +135,11 @@ function checkAgainstPackaging(state: MergeState, shape: Shape, pick: Pick): voi
   }
   shape.servingsPerContainer = null;
   const servingSize = packaging.servingSize.value;
-  if (!servingSize || shape.servingSize === words(servingSize)) {
+  if (
+    !servingSize ||
+    (shape.drugFacts && !shape.servingSize) ||
+    shape.servingSize === words(servingSize)
+  ) {
     return;
   }
   if (pick.imageFirst) {

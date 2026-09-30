@@ -52,7 +52,7 @@ function outsideSection(other: Ingredients, item: Ingredients["items"][number], 
     item.start < other.heading.end ||
     warning.test(sinceHeading) ||
     warning.test(item.text) ||
-    /supplement\s+facts/i.test(sinceHeading)
+    /(?:supplement|nutrition|drug)\s+facts/i.test(sinceHeading)
   );
 }
 

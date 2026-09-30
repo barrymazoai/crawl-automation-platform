@@ -114,7 +114,10 @@ describe("LabelImageSelection.manifest reviewed earlier images", () => {
 
   it("refuses to discard an earlier complete label even when its state says Review", async () => {
     const fake = await reviewedImage();
-    fake.review.candidate = { schema: "label-extraction/1", value: labelCandidate() };
+    fake.review.candidate = ReviewRecordSchema.shape.candidate.parse({
+      schema: "label-extraction/1",
+      value: labelCandidate(),
+    });
     await expect(
       fake.selection.manifest(fake.request, new AbortController().signal),
     ).rejects.toMatchObject({ code: "CHANNEL.LABEL_SELECTION_UNVERIFIED" });

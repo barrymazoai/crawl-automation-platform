@@ -1,11 +1,14 @@
 import { labelValidationErrors } from "../../label/validation-errors.js";
 import {
   LabelTextCandidateSchema,
+  LabelAnchorSchema,
+  legacyLabelExtractionSchema,
   LabelTextWireSchema,
   assessLabelCandidate,
   type TextInput,
 } from "@crawl-automation/v3-contracts";
 import type { z } from "zod";
+import { drugStructureCodes } from "./drug-label.js";
 import { coversEveryPrintedCharacter } from "./coverage.js";
 import { evidenceLines, type Quote } from "./evidence-lines.js";
 import { exclusionCodes } from "./label-exclusions.js";
@@ -38,13 +41,18 @@ export interface LabelTextRequest {
 export function decodeLabelText(request: LabelTextRequest): DecodedLabel {
   const { scope, text, response, policyVersion = "label-text/2" } = request;
   assertLimits(scope, text, response);
-  const wire = LabelTextWireSchema.parse(JSON.parse(response));
+  const schema =
+    policyVersion === "label-text/5"
+      ? LabelTextWireSchema
+      : legacyLabelExtractionSchema(LabelAnchorSchema);
+  const wire: Wire = schema.parse(JSON.parse(response));
   const quotes = new QuotePlacer(evidenceLines(scope, text), text);
   const candidate = LabelTextCandidateSchema.parse(quotes.place(wire));
   const assessment = assessLabelCandidate(candidate);
   const codes = new Set([
     ...assessment.codes,
     ...rowOrderCodes(candidate),
+    ...drugStructureCodes(candidate, text, scope.range),
     ...ingredientCodes(candidate, text),
     ...exclusionCodes({ candidate, text, policyVersion }),
   ]);
@@ -81,6 +89,7 @@ class QuotePlacer {
 
   place(wire: Wire) {
     const formula = wire.formula && {
+      ...(wire.formula.drugFacts ? { drugFacts: this.field(wire.formula.drugFacts) } : {}),
       servingSize: this.optional(wire.formula.servingSize),
       servingsPerContainer: this.optional(wire.formula.servingsPerContainer),
       columns: wire.formula.columns.map((column) => ({
@@ -123,6 +132,7 @@ class QuotePlacer {
         name,
         amount: this.optional(row.amount, own),
         dailyValue: this.optional(row.dailyValue, own),
+        ...(row.purpose !== undefined ? { purpose: this.optional(row.purpose, own) } : {}),
       };
     });
   }

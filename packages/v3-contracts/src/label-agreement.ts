@@ -1,7 +1,6 @@
 import { dequal } from "dequal";
 import type { labelFormulaStructure, LabelCandidate } from "./label-extraction.js";
 import { labelNameForComparison, labelTypographyStructure } from "./label-typography.js";
-
 type Formula = NonNullable<ReturnType<typeof labelFormulaStructure>> & {
   wording?: (string | null)[];
 };
@@ -11,17 +10,19 @@ export type LabelAgreement = "exact" | "wording" | "conflict";
 type Comparison = "label-typography/1" | "label-typography/2";
 const fieldText = (value: string | { text: string } | null) =>
   typeof value === "string" ? value : (value?.text ?? null);
-
 /** Accept raw candidate fields as well as comparison projections; citations are not wording. */
 function formulaText(formula: FormulaInput): Formula {
+  const { drugFacts, ...base } = formula;
   return {
-    ...formula,
+    ...base,
+    ...(drugFacts ? { drugFacts: fieldText(drugFacts) } : {}),
     servingSize: fieldText(formula.servingSize),
     servingsPerContainer: fieldText(formula.servingsPerContainer),
     columns: formula.columns.map((column) => ({
       heading: fieldText(column.heading),
-      rows: column.rows.map((row) => ({
+      rows: column.rows.map(({ purpose, ...row }) => ({
         ...row,
+        ...(purpose ? { purpose: fieldText(purpose) } : {}),
         name: fieldText(row.name),
         amount: fieldText(row.amount),
         dailyValue: fieldText(row.dailyValue),
@@ -160,6 +161,7 @@ export function formulaAgreement(
     return "exact";
   }
   const agrees =
+    !!first.drugFacts === !!second.drugFacts &&
     labelMetadataAgreement(first.servingSize, second.servingSize) !== "conflict" &&
     labelMetadataAgreement(first.servingsPerContainer, second.servingsPerContainer) !==
       "conflict" &&

@@ -1,10 +1,16 @@
 import { parseDocument } from "htmlparser2";
-import { labelCoreFailure, type LabelCoreReader } from "@crawl-automation/channels-core";
+import {
+  extractDrugFactsCore,
+  ingredientHeadingIndexes,
+  labelFactsHeadings,
+  labelCoreFailure,
+  type LabelCoreReader,
+} from "@crawl-automation/channels-core";
 
 const MAX_BYTES = 2 * 1024 * 1024;
 const MAX_TEXT_LENGTH = 200_000;
 const FACTS_HEADING = /^(?:Supplement|Nutrition) Facts\s*\n/i;
-const OTHER_INGREDIENTS = /^Other Ingredients[ \t]*:/gim;
+const INGREDIENTS = /^(?:Other Ingredients|Ingredients)[ \t]*(?::|$)/gim;
 // Allergen and trademark notes follow Other Ingredients on many Swanson pages (2026-09-30: 8 Healthy Origins
 // products); they end the ingredient list like the sections after them.
 const NEXT_SECTION =
@@ -36,8 +42,9 @@ function factsSection(sections: string[]): { facts: string; heading: RegExpExecA
   if (sections.length < 1 || sections.length > 2 || !facts || candidates.length !== 1) {
     throw labelCoreFailure("LABEL_CORE.LABEL_SCOPE_AMBIGUOUS");
   }
-  const headings = [...facts.matchAll(OTHER_INGREDIENTS)];
-  const [heading] = headings;
+  const all = [...facts.matchAll(INGREDIENTS)];
+  const headings = ingredientHeadingIndexes(all.map((match) => match[0]));
+  const heading = all[headings[0] ?? -1];
   if (
     !heading ||
     headings.length !== 1 ||
@@ -50,14 +57,24 @@ function factsSection(sections: string[]): { facts: string; heading: RegExpExecA
 }
 
 /**
- * Swanson's label core: the Supplement/Nutrition Facts from the page projection that channel-plan/1 emits, up to the
+ * Swanson's label core: the Supplement/Nutrition/Drug Facts from the page projection that channel-plan/1 emits, up to the
  * end of its other ingredients. Not a general page cleaner: ingredient words, values and grouping are kept as printed.
  */
 export function extractSwansonLabelCore(html: string): string {
   if (Buffer.byteLength(html) > MAX_BYTES) {
     throw labelCoreFailure("LABEL_CORE.SOURCE_LIMIT");
   }
-  const { facts, heading } = factsSection(preSections(parseDocument(html).children));
+  const sections = preSections(parseDocument(html).children);
+  const headings = sections.flatMap(labelFactsHeadings);
+  if (headings.length !== 1 || sections.length > 2) {
+    throw labelCoreFailure("LABEL_CORE.LABEL_SCOPE_AMBIGUOUS");
+  }
+  const drug = sections.find((section) => /^Drug Facts[ \t]*:?[ \t]*$/im.test(section));
+  return normalizeCore(drug ? extractDrugFactsCore(drug) : supplementCore(sections));
+}
+
+function supplementCore(sections: string[]): string {
+  const { facts, heading } = factsSection(sections);
   const after = heading.index + heading[0].length;
   const tail = facts.slice(after);
   const boundary = NEXT_SECTION.exec(tail);
@@ -72,8 +89,11 @@ export function extractSwansonLabelCore(html: string): string {
   ) {
     throw labelCoreFailure("LABEL_CORE.INGREDIENT_SCOPE_AMBIGUOUS");
   }
-  const text = facts
-    .slice(0, after + boundary.index)
+  return facts.slice(0, after + boundary.index);
+}
+
+function normalizeCore(raw: string): string {
+  const text = raw
     .replace(/[\t \u00a0]+/g, " ")
     .replace(/ *\n */g, "\n")
     .replace(/\n{3,}/g, "\n\n")

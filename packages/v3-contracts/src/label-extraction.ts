@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { drugFactsHeading, drugActiveHeading, drugInactiveHeading } from "./label-drug.js";
 import { assessLabelGroups } from "./label-groups.js";
 
 /** New opt-in extraction protocol; never reinterpret a legacy candidate as this codec. */
@@ -14,12 +15,15 @@ export function labelExtractionSchema<F extends z.ZodType>(field: F) {
   const row = z.strictObject({
     kind: z.enum(["nutrient", "group_header", "blend_total", "blend_component"]),
     name: field, amount: field.nullable(), dailyValue: field.nullable(),
+    // Drug Facts Purpose is quoted like every other value; old rows omit this field.
+    purpose: field.nullable().optional(),
     amountStatus: z.enum(["printed", "not_declared", "unreadable", "not_applicable"]),
     // Zero-based index within THIS column, not a name or a global ingredient id.
     parentRowIndex: z.number().int().nonnegative().nullable(),
   });
+  // A cited Drug Facts heading opts into drug validation; absent means existing serving rules.
   return z.strictObject({ codec: z.literal(labelExtractionVersion),
-    formula: z.strictObject({ servingSize: field.nullable(), servingsPerContainer: field.nullable(),
+    formula: z.strictObject({ drugFacts: field.optional(), servingSize: field.nullable(), servingsPerContainer: field.nullable(),
       columns: z.array(z.strictObject({ heading: field.nullable(), rows: z.array(row).min(1).max(200) })).min(1).max(8),
     }).nullable(),
     otherIngredients: z.strictObject({ heading: field, items: z.array(field).min(1).max(300) }).nullable(),
@@ -42,7 +46,7 @@ export type LabelCandidate = LabelTextCandidate | LabelImageCandidate;
 export function isIngredientHeading(raw: string): boolean {
   const text = raw.trim();
   if (!/\b(?:ingredients?|ingr[e\.]{0,2}dients?|oher\s+ingredients)\b/i.test(text)) return false;
-  if (/\b(?:supplement|nutrition)\s+facts\b|amount\s+per\s+serving|daily\s+value|contains\s*:|may\s+contain|allergen/i.test(text)) return false;
+  if (/\b(?:supplement|nutrition|drug)\s+facts\b|amount\s+per\s+serving|daily\s+value|contains\s*:|may\s+contain|allergen/i.test(text)) return false;
   return text.length <= 80;
 }
 /** The rule that fired and where: row index and printed name, or the section concerned. */
@@ -81,7 +85,8 @@ export function assessLabelCandidate(candidate: LabelCandidate) {
     if (candidate.otherIngredients.items.some(i => /\b(?:contains\s*:|may\s+contain|manufactured\s+(?:in|on)|shared\s+equipment)/i.test(i.text))) flag("LABEL.INGREDIENT_ROLE_INVALID", "an ingredient item is an allergen/manufacturing statement");
   }
   if (!candidate.formula && candidate.formulaComplete || !hasIngredients && candidate.ingredientsComplete) flag("LABEL.COMPLETENESS_CONFLICT", "marked complete with nothing extracted");
-  if (candidate.formula && (!candidate.formula.servingSize || !candidate.formulaComplete)) flag("LABEL.FORMULA_INCOMPLETE", !candidate.formula.servingSize ? "formula has no serving size" : "model marked the formula incomplete");
+  if (candidate.formula?.drugFacts && !validDrugFormula(candidate)) flag("LABEL.FORMULA_INCOMPLETE", "Drug Facts requires its heading, active ingredient columns and inactive ingredients");
+  if (candidate.formula && ((!candidate.formula.servingSize && !candidate.formula.drugFacts) || !candidate.formulaComplete)) flag("LABEL.FORMULA_INCOMPLETE", !candidate.formula.servingSize ? "formula has no serving size" : "model marked the formula incomplete");
   if (hasIngredients && !candidate.ingredientsComplete) flag("LABEL.INGREDIENTS_INCOMPLETE", candidate.otherIngredients ? "model marked the ingredient list incomplete" : "only blend components, no Other Ingredients list");
   const uncertain = candidate.issues.find(i => ["UNREADABLE", "AMBIGUOUS", "METADATA_CONFLICT"].includes(i.code));
   if (uncertain) flag("LABEL.EVIDENCE_UNCERTAIN", `model reported ${uncertain.code}${"detail" in uncertain && uncertain.detail ? `: ${String(uncertain.detail).slice(0, 160)}` : ""}`);
@@ -95,9 +100,29 @@ export function assessLabelCandidate(candidate: LabelCandidate) {
 /** Small projection for structural comparison; group identity is never the printed name. */
 export function labelFormulaStructure(candidate: LabelCandidate) {
   const text = (f: { text: string } | null) => f?.text.replace(/\s+/gu, " ").trim() ?? null;
-  return candidate.formula ? { servingSize: text(candidate.formula.servingSize),
+  return candidate.formula ? { ...(candidate.formula.drugFacts ? { drugFacts: text(candidate.formula.drugFacts) } : {}), servingSize: text(candidate.formula.servingSize),
     servingsPerContainer: text(candidate.formula.servingsPerContainer), columns: candidate.formula.columns.map(c => ({
       heading: text(c.heading), rows: c.rows.map(r => ({ kind: r.kind, name: text(r.name), amount: text(r.amount),
+        ...(r.purpose ? { purpose: text(r.purpose) } : {}),
         amountStatus: r.amountStatus, dailyValue: text(r.dailyValue), parentRowIndex: r.parentRowIndex })),
     })) } : null;
+}
+
+/** Drug Facts is an explicit cited panel, never inferred from missing serving metadata. */
+function validDrugFormula(candidate: LabelCandidate): boolean {
+  const formula = candidate.formula;
+  return !!formula?.drugFacts && drugFactsHeading.test(formula.drugFacts.text) &&
+    !!candidate.otherIngredients && drugInactiveHeading.test(candidate.otherIngredients.heading.text) &&
+    formula.columns.every(column => !!column.heading && drugActiveHeading.test(column.heading.text) &&
+      column.rows.every(row => row.kind === "nutrient" && row.parentRowIndex === null && row.dailyValue === null));
+}
+
+/** Freeze historical model output formats; optional contract additions must not alter old prompts. */
+export function legacyLabelExtractionSchema<F extends z.ZodType>(field: F) {
+  const schema = labelExtractionSchema(field);
+  const formula = schema.shape.formula.unwrap();
+  const column = formula.shape.columns.element;
+  return schema.extend({ formula: formula.omit({ drugFacts: true }).extend({
+    columns: z.array(column.extend({ rows: z.array(column.shape.rows.element.omit({ purpose: true })).min(1).max(200) })).min(1).max(8),
+  }).nullable() });
 }

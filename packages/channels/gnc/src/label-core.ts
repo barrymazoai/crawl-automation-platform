@@ -1,5 +1,11 @@
 import { parseDocument } from "htmlparser2";
-import { labelCoreFailure, type LabelCoreReader } from "@crawl-automation/channels-core";
+import {
+  extractDrugFactsCore,
+  ingredientHeadingIndexes,
+  labelFactsHeadings,
+  labelCoreFailure,
+  type LabelCoreReader,
+} from "@crawl-automation/channels-core";
 
 /** The parts of an htmlparser2 node this reader looks at. */
 interface PageNode {
@@ -82,10 +88,14 @@ function otherIngredients(label: PageNode): string {
   const sections = find(label.children ?? [], (node) =>
     hasClass(node, "pdp-details-accordion__section"),
   );
-  const headed = sections.filter((section) =>
-    find(section.children ?? [], (node) => node.name === "h4").some((heading) =>
-      /^other\s+ingredients\s*:?$/i.test(normalize(textOf(heading))),
-    ),
+  const headings = sections.flatMap((section) =>
+    find(section.children ?? [], (node) => node.name === "h4").map((heading) => ({
+      section,
+      text: normalize(textOf(heading)),
+    })),
+  );
+  const headed = ingredientHeadingIndexes(headings.map((heading) => heading.text)).map(
+    (index) => headings[index]?.section,
   );
   const [section] = headed;
   const content = section
@@ -123,7 +133,14 @@ export function extractGncLabelCore(html: string): string {
   if (!label || labels.length !== 1) {
     throw labelCoreFailure("LABEL_CORE.LABEL_SCOPE_AMBIGUOUS");
   }
-  const result = `${factsTable(label)}\n\n${otherIngredients(label)}`;
+  const text = normalize(textOf(label));
+  const headings = labelFactsHeadings(text);
+  if (headings.length > 1) {
+    throw labelCoreFailure("LABEL_CORE.LABEL_SCOPE_AMBIGUOUS");
+  }
+  const result = /^Drug Facts[ \t]*:?[ \t]*$/im.test(text)
+    ? extractDrugFactsCore(text)
+    : `${factsTable(label)}\n\n${otherIngredients(label)}`;
   if (result.length > MAX_TEXT_LENGTH) {
     throw labelCoreFailure("LABEL_CORE.OUTPUT_LIMIT");
   }
