@@ -1,6 +1,15 @@
-import { PostgresListingStates, PostgresProductHistory } from "@crawl-automation/adapters";
+import {
+  PostgresHtmlCaptureRecords,
+  PostgresListingStates,
+  PostgresProductHistory,
+} from "@crawl-automation/adapters";
 import { listingIdentityResolver, MetricsHistory, recordSighting } from "@crawl-automation/app";
-import type { CapturedPage, ChannelRegistry } from "@crawl-automation/channels-core";
+import {
+  HttpCapture,
+  type PageFetcher,
+  type CapturedPage,
+  type ChannelRegistry,
+} from "@crawl-automation/channels-core";
 import { errorCodeOf, type Database, type Logger } from "@crawl-automation/platform";
 
 /**
@@ -41,4 +50,9 @@ export function captureRecords(parts: {
       );
     },
   };
+}
+
+/** HTTP capture admission shared by every channel, using the same database on every worker. */
+export function recordedHttpCapture(pages: PageFetcher, database: Database): HttpCapture {
+  return new HttpCapture(pages, new PostgresHtmlCaptureRecords(database));
 }

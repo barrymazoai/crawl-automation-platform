@@ -23,7 +23,6 @@ import { gncAdapter } from "@crawl-automation/channels-gnc";
 import { amazonProductForAsin } from "@crawl-automation/channels-wholefoods";
 import {
   ChannelRegistry,
-  HttpCapture,
   ProductCapture,
   ProductFiles,
   ProductPlans,
@@ -46,7 +45,7 @@ import {
 import { TextLocalStore } from "@crawl-automation/v3-text";
 import { asFunction, asValue, createContainer, InjectionMode, type AwilixContainer } from "awilix";
 import { buildBrowserParts, type BrowserParts } from "./browser/browser-parts.js";
-import { captureRecords } from "./capture-records.js";
+import { captureRecords, recordedHttpCapture } from "./capture-records.js";
 import type { WorkerConfig } from "./config.js";
 import type { CoreParts } from "./core-parts.js";
 import {
@@ -189,7 +188,7 @@ function captureService(parts: WorkerParts): ProductCapture {
   const settings = { ...config.plan, egressId: fileTransport.egressId };
   return new ProductCapture({
     registry,
-    http: new HttpCapture(pages),
+    http: recordedHttpCapture(pages, parts.database),
     publication,
     sourcePlans: new ProductSourcePlans(publication, settings),
   });

@@ -17,3 +17,10 @@ export * from "./listing/listing-pages.js";
 export * from "./facts/index.js";
 export * from "./planning/index.js";
 export * from "./platforms/index.js";
+export * from "./capture/html-capture-records.js";
+export {
+  HtmlCaptureRequestSchema,
+  SavedHtmlOriginalSchema,
+  type HtmlCaptureRequest,
+  type SavedHtmlOriginal,
+} from "./capture/html-capture-model.js";

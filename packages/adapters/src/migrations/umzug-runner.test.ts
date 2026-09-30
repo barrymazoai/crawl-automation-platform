@@ -180,32 +180,31 @@ describe.skipIf(!hasPostgres || process.env.V3_TEST_SKIP_POSTGRES === "1")(
         sha256: createHash("sha256").update(sql).digest("hex"),
       };
     }
-    it("applies only 032 after existing 001–031 history, then does no replay or backup", async () => {
-      await seedLegacy(31);
+    it("applies only 033 after existing 001–032 history, then does no replay or backup", async () => {
+      await seedLegacy(32);
       await query("INSERT INTO brand(name) VALUES ('Existing brand')");
       const original = await history();
       const dumps = await backups();
       const result = await service().migrate(request());
       expect(result.before).toEqual({
         applied: original.map((row) => row.name),
-        pending: ["032_brand_scan_amazon.sql"],
+        pending: ["033_html_capture.sql"],
       });
       expect(result.after).toEqual({
-        applied: [...result.before.applied, "032_brand_scan_amazon.sql"],
+        applied: [...result.before.applied, "033_html_capture.sql"],
         pending: [],
       });
       const updated = [
         ...original,
         {
-          name: "032_brand_scan_amazon.sql",
-          sha256: "65843e727968a5898f77f58850fe17bac8ca4d8648a08c76f3daf7cb5189566b",
+          name: "033_html_capture.sql",
+          sha256: "76238d6091bedfecccc8ffd956c4c16caf00ec53bbbc1e77b665e144c86e9ec0",
         },
       ];
       expect(await history()).toEqual(updated);
       expect(result.backup).not.toBeNull();
-      const constraint = await query(`SELECT pg_get_constraintdef(oid) AS definition
-        FROM pg_constraint WHERE conname = 'brand_scan_channel_check'`);
-      expect(constraint.rows[0]?.definition).toContain("'amazon'");
+      const table = await query("SELECT to_regclass('html_capture') AS name");
+      expect(table.rows[0]?.name).toBe("html_capture");
       const repeated = await service().migrate(request());
       expect(repeated).toEqual({ before: result.after, after: result.after, backup: null });
       expect(await history()).toEqual(updated);
@@ -220,7 +219,7 @@ describe.skipIf(!hasPostgres || process.env.V3_TEST_SKIP_POSTGRES === "1")(
       const dumps = await backups();
       const result = await service().migrate(request());
       expect(result.before.applied).toHaveLength(2);
-      expect(result.after.applied).toHaveLength(32);
+      expect(result.after.applied).toHaveLength(33);
       expect((await history()).slice(0, 2)).toEqual(original);
       expect(await backups()).toHaveLength(dumps.length + 1);
       const directory = required(result.backup);
@@ -365,10 +364,10 @@ describe.skipIf(!hasPostgres || process.env.V3_TEST_SKIP_POSTGRES === "1")(
       ]);
       expect(
         results.map((result) => result.before.applied.length).sort((left, right) => left - right),
-      ).toEqual([2, 32]);
+      ).toEqual([2, 33]);
       expect(results.filter((result) => result.backup)).toHaveLength(1);
       expect(await backups()).toHaveLength(dumps.length + 1);
-      expect(await history()).toHaveLength(32);
+      expect(await history()).toHaveLength(33);
     });
 
     it("read-only status and dry run create no ledger or backup in an empty database", async () => {
@@ -379,7 +378,7 @@ describe.skipIf(!hasPostgres || process.env.V3_TEST_SKIP_POSTGRES === "1")(
         confirmation: "ignored",
         dryRun: true,
       });
-      expect(result.before.pending).toHaveLength(32);
+      expect(result.before.pending).toHaveLength(33);
       expect(result.after).toEqual(result.before);
       expect(await backups()).toEqual(dumps);
       expect(

@@ -1,3 +1,4 @@
+import { errorCodeOf } from "@crawl-automation/platform";
 import type { ChannelAdapter, FetchedPage, ParsedProduct } from "../adapter.js";
 import { channelErrors } from "../errors.js";
 import {
@@ -9,6 +10,8 @@ import {
 import type { ArchivedHtml, OriginalHtmlArchive } from "./original-html-archive.js";
 import type { PageFetcher } from "./page-fetch.js";
 import { decodeHtml } from "./read-html.js";
+import { htmlCaptureErrors, type HtmlCaptureRecords } from "./html-capture-records.js";
+import type { HtmlCaptureRequest } from "./html-capture-model.js";
 
 export interface CapturedProduct {
   parsed: ParsedProduct;
@@ -32,7 +35,10 @@ type Download = { page: ArchivedHtml } | { sighting: ListingSighting };
  * as an unlisted sighting, not parsed.
  */
 export class HttpCapture {
-  constructor(private readonly pages: PageFetcher) {}
+  constructor(
+    private readonly pages: PageFetcher,
+    private readonly records?: HtmlCaptureRecords,
+  ) {}
 
   async capture(
     adapter: ChannelAdapter,
@@ -45,7 +51,11 @@ export class HttpCapture {
       });
     }
     const archived = await archive.inspect(signal);
-    const download = archived ? { page: archived } : await this.download(adapter, archive, signal);
+    const request = { channel: adapter.id, capture: archive.capture };
+    if (archived) {
+      await this.records?.complete(request, archive.reference(archived));
+    }
+    const download = archived ? { page: archived } : await this.acquire(adapter, archive, signal);
     if ("sighting" in download) {
       return { status: "sighting", sighting: download.sighting };
     }
@@ -64,7 +74,7 @@ export class HttpCapture {
     saved: ArchivedHtml,
   ): HttpCaptureResult {
     const page: FetchedPage = {
-      url: archive.capture.url,
+      url: saved.url,
       html: decodeHtml(saved.bytes),
       capturedAt: saved.capturedAt,
     };
@@ -91,6 +101,56 @@ export class HttpCapture {
     };
   }
 
+  /** Atomic recent-original lookup and reservation, before any paid request or parsing. */
+  private async acquire(
+    adapter: ChannelAdapter,
+    archive: OriginalHtmlArchive,
+    signal: AbortSignal,
+  ): Promise<Download> {
+    if (!this.records) {
+      return this.download(adapter, archive, signal);
+    }
+    const request = { channel: adapter.id, capture: archive.capture };
+    const decision = await this.records.admit(request);
+    if (decision.status === "reuse") {
+      return { page: await archive.reuse(decision.original, signal) };
+    }
+    if (decision.status === "in_flight") {
+      throw htmlCaptureErrors.create("CAPTURE.IN_FLIGHT", {
+        details: { operationId: decision.operationId },
+      });
+    }
+    if (decision.status === "unresolved") {
+      throw channelErrors.create("CAPTURE.DOWNLOAD_UNRESOLVED");
+    }
+    const recovered = await this.recover(archive, decision.previous ?? [], signal);
+    if (recovered) {
+      const page = await archive.reuse(recovered, signal);
+      await this.records.complete(request, recovered);
+      return { page };
+    }
+    return this.download(adapter, archive, signal);
+  }
+
+  /** A stale in-flight record may already have an original in R2; inspect before paying. */
+  private async recover(
+    archive: OriginalHtmlArchive,
+    previous: HtmlCaptureRequest[],
+    signal: AbortSignal,
+  ) {
+    for (const request of previous) {
+      const original = await archive.inspectPrevious(request, signal);
+      if (original) {
+        await this.records?.complete(request, original);
+        const age = Date.now() - Date.parse(original.capturedAt);
+        if (age >= 0 && age < 24 * 60 * 60 * 1000) {
+          return original;
+        }
+      }
+    }
+    return null;
+  }
+
   /** Records the intent, downloads once and archives; a page that no longer exists is a `not_found` sighting. */
   private async download(
     adapter: ChannelAdapter,
@@ -103,13 +163,22 @@ export class HttpCapture {
     try {
       page = await this.pages.fetchPage(request, signal);
     } catch (error) {
+      await this.records?.fail(
+        { channel: adapter.id, capture: archive.capture },
+        errorCodeOf(error),
+      );
       const unlisted = notFoundSighting(error);
       if (unlisted) {
         return { sighting: unlisted };
       }
       throw error;
     }
-    return { page: await archive.save(page.bytes, page.fetchedVia, signal) };
+    const saved = await archive.save(page.bytes, page.fetchedVia, signal);
+    await this.records?.complete(
+      { channel: adapter.id, capture: archive.capture },
+      archive.reference(saved),
+    );
+    return { page: saved };
   }
 
   /** A page a same-site redirect moved to another listing, or to no product at all. */

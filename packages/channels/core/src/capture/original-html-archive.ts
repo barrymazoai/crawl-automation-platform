@@ -1,52 +1,24 @@
 import { isDeepStrictEqual } from "node:util";
 import { RetainedPublication, sha256, verifyBytes } from "@crawl-automation/platform";
-import { ScraperApiOptionsSchema } from "@crawl-automation/platform";
 import { ArtifactRefSchema, type ArtifactRef } from "@crawl-automation/v3-contracts";
 import { z } from "zod";
 import type { ChannelId } from "../adapter.js";
 import { channelErrors } from "../errors.js";
 
+import {
+  HtmlCaptureSchema,
+  FetchedViaSchema,
+  SavedHtmlOriginalSchema,
+  type HtmlCapture,
+  type FetchedVia,
+  type ArchivedHtml,
+  type SavedHtmlOriginal,
+  type HtmlCaptureRequest,
+} from "./html-capture-model.js";
+export { HtmlCaptureSchema, FetchedViaSchema } from "./html-capture-model.js";
+export type { HtmlCapture, FetchedVia, ArchivedHtml } from "./html-capture-model.js";
+
 const encode = (value: unknown) => Buffer.from(JSON.stringify(value));
-
-/** One page download for one capture operation. */
-export const HtmlCaptureSchema = z.strictObject({
-  operationId: z.string().min(1).max(200),
-  sessionId: z.string().min(1).max(200),
-  url: z.url().max(4096),
-  sourceId: z.string().min(1).max(200),
-  listingId: z.string().min(1).max(200),
-  variantId: z.string().min(1).max(200).nullable(),
-});
-export type HtmlCapture = z.infer<typeof HtmlCaptureSchema>;
-
-/**
- * How a page was fetched. `options` and `creditCost` are recorded since the ScraperAPI client moved to platform;
- * earlier archives have neither and stay readable.
- */
-export const FetchedViaSchema = z.strictObject({
-  mode: z.enum(["http", "browser"]),
-  /** The store a browser had chosen, for a channel priced by store (Whole Foods); absent otherwise. */
-  storeId: z
-    .string()
-    .regex(/^\d{1,12}$/)
-    .optional(),
-  routeId: z.string(),
-  egressId: z.string(),
-  provider: z.string(),
-  options: ScraperApiOptionsSchema.optional(),
-  creditCost: z.number().nonnegative().nullable().optional(),
-  /** Where the page was finally read, when a same-site redirect moved it; absent when it was not moved. */
-  finalUrl: z.url().max(4096).optional(),
-});
-export type FetchedVia = z.infer<typeof FetchedViaSchema>;
-
-export interface ArchivedHtml {
-  bytes: Uint8Array;
-  source: ArtifactRef;
-  capturedAt: string;
-  /** Where the page was finally read, when a redirect moved it; null otherwise. */
-  finalUrl: string | null;
-}
 
 /**
  * The original page bytes, committed to R2 and read back before anything parses them. A create-once request is
@@ -113,7 +85,68 @@ export class OriginalHtmlArchive {
       throw channelErrors.create("CAPTURE.ARCHIVE_IDENTITY", { details: { prefix: this.prefix } });
     }
     const finalUrl = receipt.fetchedVia.finalUrl ?? null;
-    return { bytes, source: receipt.source, capturedAt: receipt.capturedAt, finalUrl };
+    return {
+      bytes,
+      source: receipt.source,
+      capturedAt: receipt.capturedAt,
+      url: receipt.capture.url,
+      finalUrl,
+    };
+  }
+
+  /** Reads the producer's original receipt and bytes, retaining every provenance field. */
+  async reuse(original: SavedHtmlOriginal, signal: AbortSignal): Promise<ArchivedHtml> {
+    const sameListing =
+      original.channel === this.target.channel &&
+      original.capture.listingId === this.capture.listingId &&
+      original.capture.variantId === this.capture.variantId;
+    if (!sameListing) {
+      throw channelErrors.create("CAPTURE.ARCHIVE_IDENTITY");
+    }
+    const producer = new OriginalHtmlArchive(this.publication, {
+      ...this.target,
+      capture: original.capture,
+    });
+    const saved = await producer.inspect(signal);
+    if (!saved) {
+      throw channelErrors.create("CAPTURE.ARCHIVE_MISSING");
+    }
+    if (!isDeepStrictEqual(producer.reference(saved), original)) {
+      throw channelErrors.create("CAPTURE.ARCHIVE_IDENTITY");
+    }
+    return saved;
+  }
+
+  /** A reference to this archive's producer, never a new capture of reused bytes. */
+  reference(saved: ArchivedHtml): SavedHtmlOriginal {
+    const { source, capturedAt, finalUrl } = saved;
+    return SavedHtmlOriginalSchema.parse({
+      channel: this.target.channel,
+      capture: this.capture,
+      source,
+      capturedAt,
+      finalUrl,
+    });
+  }
+
+  /** Recover publication whose producer lost its database completion write. */
+  async inspectPrevious(
+    request: HtmlCaptureRequest,
+    signal: AbortSignal,
+  ): Promise<SavedHtmlOriginal | null> {
+    if (
+      request.channel !== this.target.channel ||
+      request.capture.listingId !== this.capture.listingId ||
+      request.capture.variantId !== this.capture.variantId
+    ) {
+      throw channelErrors.create("CAPTURE.ARCHIVE_IDENTITY");
+    }
+    const producer = new OriginalHtmlArchive(this.publication, {
+      ...this.target,
+      capture: request.capture,
+    });
+    const saved = await producer.inspect(signal);
+    return saved ? producer.reference(saved) : null;
   }
 
   /** Commits the page and its receipt, then reads both back. An identical earlier archive is returned as is. */
