@@ -8,12 +8,15 @@ const canonicalExpression = `(
     ? document.querySelector('meta[property="og:url"]')?.content : undefined)
 )`;
 
-const formsExpression = `[...document.querySelectorAll(
-  'product-form-component[data-product-id]'
-)].map(form => ({
-  productId: form.getAttribute('data-product-id'),
-  variantIds: [...form.querySelectorAll('input[name="id"]')].map(input => input.value)
-}))`;
+const formsExpression = `(() => {
+  const forms = [...document.querySelectorAll(
+    'product-form-component[data-product-id]'
+  )].map(form => ({
+    productId: form.getAttribute('data-product-id'),
+    variantIds: [...form.querySelectorAll('input[name="id"]')].map(input => input.value)
+  }));
+  return forms.length ? forms : shopifySelection(${canonicalExpression});
+})()`;
 
 /** Page-owned identity alone, read before title, commerce, gallery or facts validation. */
 export const swansonIdentityExpression = `({
@@ -36,7 +39,7 @@ const pickerExpression = `({
     label: input.value,
     url: new URL(input.getAttribute('data-connected-product-url'), location.href).href,
     variantId: input.getAttribute('data-variant-id'),
-    selected: input.checked,
+    selected: input.checked || input.getAttribute('aria-checked') === 'true',
     available: input.getAttribute('data-option-available') === 'true'
   }))
 })`;

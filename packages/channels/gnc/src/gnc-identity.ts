@@ -1,7 +1,7 @@
 import type { FetchedPage, ProductIdentity } from "@crawl-automation/channels-core";
 import { gncErrors, gncProductAddress, isSku } from "./gnc-address.js";
 import { allElements, gncDocument, refuseChallenge, type Element } from "./gnc-dom.js";
-import { jsonLdProducts } from "./gnc-json-ld.js";
+import { jsonLdProducts, productRecord } from "./gnc-json-ld.js";
 import { productLink } from "./gnc-links.js";
 import { gncPageErrors } from "./gnc-page-errors.js";
 
@@ -35,5 +35,6 @@ export function gncPageIdentity(page: FetchedPage): ProductIdentity {
     const code = skus.size > 1 ? "GNC.SKU_AMBIGUOUS" : "GNC.SKU_UNVERIFIED";
     throw gncPageErrors.create(code);
   }
+  productRecord(products, sku);
   return { listingId: sku, variantId: null };
 }

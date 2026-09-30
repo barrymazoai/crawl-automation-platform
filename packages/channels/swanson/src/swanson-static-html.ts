@@ -10,6 +10,7 @@ import {
   swansonProductExpression,
 } from "./swanson-product-expression.js";
 import { swansonStaticDocument } from "./swanson-static-dom.js";
+import { swansonShopifySelection } from "./swanson-shopify-selection.js";
 
 // The challenge itself, not the precursor script present on normal product pages.
 const CHALLENGE =
@@ -35,11 +36,16 @@ function readProjection(
         location: { href: pageUrl, origin: SWANSON_ORIGIN },
         getComputedStyle: () => ({ visibility: "visible", display: "block" }),
         productTemplateError: swansonErrors.create("SWANSON.PRODUCT_TEMPLATE"),
+        shopifySelection: (canonicalUrl: string) => swansonShopifySelection(document, canonicalUrl),
       },
       { timeout: 10_000 },
     ) as Record<string, unknown>;
   } catch (error) {
-    if (swansonErrors.is(error, "SWANSON.PRODUCT_TEMPLATE")) {
+    if (
+      swansonErrors.is(error, "SWANSON.PRODUCT_TEMPLATE") ||
+      swansonErrors.is(error, "SWANSON.IDENTITY_UNVERIFIED") ||
+      swansonErrors.is(error, "SWANSON.IDENTITY_CONFLICT")
+    ) {
       throw error;
     }
     throw swansonErrors.create("SWANSON.STATIC_PARSE_FAILED", { cause: error });
@@ -49,7 +55,13 @@ function readProjection(
 /** Read only the page's canonical handle and selected Shopify form before full product validation. */
 export function parseSwansonStaticIdentity(html: string, pageUrl: string) {
   const raw = readProjection(html, pageUrl, swansonIdentityExpression);
-  return SwansonRenderedProductSchema.pick({ canonicalUrl: true, selectedForms: true }).parse(raw);
+  try {
+    return SwansonRenderedProductSchema.pick({ canonicalUrl: true, selectedForms: true }).parse(
+      raw,
+    );
+  } catch (error) {
+    throw swansonErrors.create("SWANSON.IDENTITY_UNVERIFIED", { cause: error });
+  }
 }
 
 /** Retained static HTML -> the same public DOM projection used by historical Swanson captures. */

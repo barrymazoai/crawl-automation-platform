@@ -1,3 +1,13 @@
+const stockExpression = `(() => {
+  const selected = [...root.querySelectorAll('variant-picker input[role="radio"]')]
+    .filter(input => input.checked || input.getAttribute('aria-checked') === 'true');
+  if (selected.length !== 1) {
+    return null;
+  }
+  const available = selected[0].getAttribute('data-option-available');
+  return available === 'false' ? 'OutOfStock' : available === 'true' ? 'InStock' : null;
+})()`;
+
 /** Whitelisted Swanson commerce fields. Distinct conflicting values remain unknown. */
 export const swansonCommerceExpression = `(() => {
   const root = document.querySelector('main');
@@ -32,7 +42,7 @@ export const swansonCommerceExpression = `(() => {
     listPrice: value('[data-compare-at-price]'),
     rating: value('[itemprop=ratingValue]'),
     reviewCount: value('[itemprop=reviewCount]'),
-    availability: value('[itemprop=availability]'),
+    availability: value('[itemprop=availability]') || ${stockExpression},
     context: context()
   };
 })()`;

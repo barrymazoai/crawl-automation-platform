@@ -58,10 +58,10 @@ function readPageText(window: StaticWindow): void {
   });
 }
 
-/** The retained HTML alone supplies the DOM; scripts are removed, never executed. */
+/** The retained HTML alone supplies the DOM; scripts remain inert text and are never executed. */
 export function swansonStaticDocument(html: string, pageUrl: string): Document {
   const window = parseHTML(html);
-  for (const element of window.document.querySelectorAll("script,style,noscript,template")) {
+  for (const element of window.document.querySelectorAll("style,noscript,template")) {
     element.remove();
   }
   resolvePageLinks(window, pageUrl);

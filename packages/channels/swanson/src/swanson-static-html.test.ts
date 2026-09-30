@@ -5,6 +5,9 @@ import { parseSwansonStaticHtml } from "./swanson-static-html.js";
 const capturedAt = "2026-09-28T23:45:00.000Z";
 const url = `${SWANSON_ORIGIN}/p/healthy-origins-natural-d-ribose-10-6-oz-pwdr`;
 const read = (html: string) => parseSwansonStaticHtml(html, url, capturedAt);
+const form =
+  '<product-form-component data-product-id="123">' +
+  '<input name="id" value="456"></product-form-component>';
 
 describe("static reader failures use registered errors", () => {
   it.each([
@@ -33,7 +36,7 @@ describe("static reader failures use registered errors", () => {
 
   it("retains the cause when the page expression cannot read the template", () => {
     // One heading passes the heading check, but there is no main commerce region.
-    expect(() => read("<h1>Product</h1>")).toThrowError(
+    expect(() => read(form + "<h1>Product</h1>")).toThrowError(
       expect.objectContaining({
         code: "SWANSON.STATIC_PARSE_FAILED",
         cause: expect.objectContaining({ name: "TypeError" }),
@@ -42,7 +45,7 @@ describe("static reader failures use registered errors", () => {
   });
 
   it("retains schema validation failures as the cause of the parse failure", () => {
-    expect(() => read("<main><h1>Product</h1></main>")).toThrowError(
+    expect(() => read(form + "<main><h1>Product</h1></main>")).toThrowError(
       expect.objectContaining({
         code: "SWANSON.STATIC_PARSE_FAILED",
         cause: expect.objectContaining({ name: "ZodError" }),
