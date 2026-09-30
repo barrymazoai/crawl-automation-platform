@@ -36,10 +36,12 @@ Server 一 API 私有配置，在已有 `brandScans` 下合并：
 退避轮询限定（不是严格的 900 秒墙钟截止）；超限以 `RESOURCE.WAIT_LIMIT` 结束扫描 Review。
 
 Server 一 worker 私有配置新增顶层 `brandScans`，从 API 的 `brandScans` **仅复制**
-`route`、`scraperApi`、`channels` 三个键；`channels` 可省略，默认 `{}`。不要复制 runner、permits、
+`route`、`scraperApi`、`channels` 和 `swanson`；`channels` 可省略，默认 `{}`。不要复制 runner、permits、
 browserQueue 或 R2 字段。HTTP listing 使用这一独立设置，产品抓取的 `capture` 设置保持原用途。
 Worker `storage.r2` 的 bucket/prefix 和 `storage.r2Credentials` 必须能访问 API 原有
 `brandScans.r2` 的同一存档，保留历史原件的复用路径。私有配置不得进入 Git。
+Swanson 的 `constructorKey` 和 Constructor allowed origin 见
+[Swanson brand scan 配置](swanson-brand-scans.md)。API 和执行扫描的 worker 都需要配置。
 
 部署迁移 `database/v3/036_brand_scan_capacity.sql`：只在不存在时插入
 `resource_capacity(resource_id='swanson-brand-scan', capacity=1)`，不覆盖现有值，不新增 GRANT。

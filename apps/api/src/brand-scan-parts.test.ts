@@ -110,6 +110,35 @@ function setup(sources: ScanSource[], browserQueue: string | null = "browser", s
 
 afterEach(() => vi.restoreAllMocks());
 
+it("wires the configured Swanson resolver and JSON reader into the API runner", async () => {
+  const url = "https://www.swansonvitamins.com/collections/brand-herb-pharm";
+  const test = setup([source("swanson", url)]);
+  test.read.mockImplementation(async (request) => ({
+    body:
+      request.label === "resolve"
+        ? '<constructor-plp data-collection-title="Herb Pharm" />'
+        : JSON.stringify({
+            response: {
+              total_num_results: 1,
+              results: [{ value: "Herb", data: { url: "herb", id: "HPH001" } }],
+            },
+          }),
+    archiveKey: request.label,
+    creditCost: 1,
+    fromArchive: false,
+  }));
+  await test.brandScans.request({ requestId, channel: "swanson" });
+  await test.runner?.tick(new AbortController().signal);
+  expect(test.read.mock.calls.map(([request]) => request.answer)).toEqual(["html", "json"]);
+  const api = new URL(test.read.mock.calls[1]?.[0].url ?? "");
+  expect(api.origin).toBe("https://ac.cnstrc.com");
+  expect(api.searchParams.get("key")).toBe("test-public-constructor-key");
+  expect(test.finish).toHaveBeenCalledWith(
+    expect.any(String),
+    expect.objectContaining({ full: true, statedTotal: 1, products: 1 }),
+  );
+});
+
 describe("brand-scan API source routing", () => {
   it.each([
     ["amazon", storeUrl],

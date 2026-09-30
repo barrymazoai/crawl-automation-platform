@@ -64,7 +64,7 @@ export function brandScanParts(parts: {
 }): BrandScanParts {
   const { database, settings, log } = parts;
   const dtcSites = parts.dtcSites ?? [];
-  const registry = channelRegistry(dtcSites);
+  const registry = channelRegistry(dtcSites, settings?.swanson);
   const store = new PostgresBrandScans(database);
   const remote = settings ? createR2Objects(settings.r2, settings.r2Credentials).store : null;
   const browsers = settings ? browserScanners(settings, parts.temporal, dtcSites) : {};

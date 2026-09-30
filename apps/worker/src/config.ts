@@ -16,6 +16,7 @@ import {
   ScraperApiRouteSchema,
 } from "@crawl-automation/v3-contracts";
 import { z } from "zod";
+import { SwansonBrandScanSettingsSchema } from "@crawl-automation/channel-swanson";
 import { CaptureChannelSettingsSchema } from "./capture-channel-settings.js";
 import { BrowserSettingsSchema } from "./browser/browser-settings.js";
 import { ProcessingSettingsSchema } from "./label/processing-settings.js";
@@ -118,7 +119,9 @@ export const WorkerConfigSchema = z
     /** Refreshed only by the process hosting the resources role. */
     resourceHealth: ResourceHealthConfigSchema.optional(),
     /** Listing-only route/options for permit-gated HTTP brand scans; uses storage.r2 for originals. */
-    brandScans: ListingFetchSettingsSchema.optional(),
+    brandScans: ListingFetchSettingsSchema.extend({
+      swanson: SwansonBrandScanSettingsSchema.optional(),
+    }).optional(),
   })
   .refine((config) => config.processes !== undefined || config.taskQueue !== undefined, {
     message: "Name the processes, or the pipeline's task queue",

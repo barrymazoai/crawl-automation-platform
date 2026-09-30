@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { LABEL_TEXT_POLICY, WorkerConfigSchema } from "./config.js";
+import { workerChannelRegistry } from "./channel-registry.js";
 
 const capture = WorkerConfigSchema.shape.capture.unwrap();
 const route = {
@@ -17,6 +18,27 @@ const scraperApi = {
   apiKey: "test_only_canary_NOT_A_KEY",
   allowedOrigins: ["https://www.swansonvitamins.com", "https://www.gnc.com"],
 };
+
+it("validates and wires the Swanson public key on the listing worker only", () => {
+  const schema = WorkerConfigSchema.shape.brandScans.unwrap();
+  const brandScans = schema.parse({
+    route,
+    scraperApi: {
+      ...scraperApi,
+      allowedOrigins: [...scraperApi.allowedOrigins, "https://ac.cnstrc.com"],
+    },
+    swanson: { constructorKey: "test-constructor-key" },
+  });
+  const source = "https://www.swansonvitamins.com/collections/brand-herb-pharm";
+  const adapter = workerChannelRegistry({ brandScans }).forBrandSource("swanson", source);
+  const resolved = adapter.brandScan?.resolve?.parsePage({
+    body: '<constructor-plp data-collection-title="Herb Pharm" />',
+    url: source,
+  });
+  expect(new URL(resolved ?? "").searchParams.get("key")).toBe("test-constructor-key");
+  expect(adapter.httpPolicy.origins).not.toContain("https://ac.cnstrc.com");
+  expect(schema.safeParse({ ...brandScans, swanson: { constructorKey: "" } }).success).toBe(false);
+});
 
 describe("worker capture settings", () => {
   it("still reads the 2026-09-29 settings, with no channel options", () => {

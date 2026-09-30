@@ -2,9 +2,11 @@ import { BrandScanPermitSchema, BrandScanRunnerSettingsSchema } from "@crawl-aut
 import { CHANNEL_IDS, ListingFetchSettingsSchema } from "@crawl-automation/channels-core";
 import { R2ScopeSchema } from "@crawl-automation/platform";
 import { z } from "zod";
+import { SwansonBrandScanSettingsSchema } from "@crawl-automation/channel-swanson";
 
 /** The API's brand-scan settings (private config): R2 to archive listing pages, ScraperAPI to fetch them. */
 export const BrandScanSettingsSchema = ListingFetchSettingsSchema.extend({
+  swanson: SwansonBrandScanSettingsSchema.optional(),
   r2: R2ScopeSchema,
   r2Credentials: z.strictObject({
     accessKeyId: z.string().min(1),

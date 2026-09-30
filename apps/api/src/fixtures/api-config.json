@@ -52,6 +52,7 @@
     "storageId": "tests"
   },
   "brandScans": {
+    "swanson": { "constructorKey": "test-public-constructor-key" },
     "r2": {
       "endpoint": "https://0123456789abcdef0123456789abcdef.r2.cloudflarestorage.com",
       "bucket": "test-bucket",
@@ -75,7 +76,11 @@
     },
     "scraperApi": {
       "apiKey": "test-key-0000",
-      "allowedOrigins": ["https://www.gnc.com"]
+      "allowedOrigins": [
+        "https://www.gnc.com",
+        "https://www.swansonvitamins.com",
+        "https://ac.cnstrc.com"
+      ]
     },
     "browserQueue": "browser"
   }

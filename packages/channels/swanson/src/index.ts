@@ -7,3 +7,9 @@ export { parseSwansonRenderedProduct } from "./swanson-evidence.js";
 export { swansonVariantChoices } from "./swanson-variants.js";
 export { parseSwansonStaticHtml } from "./swanson-static-html.js";
 export { swansonPipelineFixture } from "./testing/pipeline-fixture.js";
+export { createSwansonAdapter } from "./configured-adapter.js";
+export { createSwansonBrandScan } from "./brand-scan.js";
+export {
+  SwansonBrandScanSettingsSchema,
+  type SwansonBrandScanSettings,
+} from "./brand-scan-settings.js";

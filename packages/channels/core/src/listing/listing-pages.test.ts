@@ -92,6 +92,35 @@ describe("listing pages through ScraperAPI", () => {
     expect(get).toHaveBeenCalledOnce();
   });
 
+  it("keeps resolution HTML and cross-origin JSON in separate verified archives", async () => {
+    const { get, pages, remote } = setup();
+    const origins = [ORIGIN, "https://ac.cnstrc.com"];
+    const resolve = {
+      ...request,
+      origins,
+      label: "resolve",
+      answer: "html" as const,
+      url: `${ORIGIN}/collections/brand-example`,
+    };
+    const api = { ...request, origins, url: "https://ac.cnstrc.com/browse/brand/Example" };
+    get.mockResolvedValueOnce({
+      status: 200,
+      url: resolve.url,
+      contentType: "text/html",
+      contentEncoding: null,
+      bytes: Buffer.from('<constructor-plp data-collection-title="Example" />'),
+      creditCost: 1,
+    });
+    for (const target of [resolve, api]) {
+      const first = await pages.read(target, signal());
+      expect(remote.data.get(first.archiveKey)).toEqual(Buffer.from(first.body));
+      const second = await pages.read(target, signal());
+      expect(second).toMatchObject({ body: first.body, fromArchive: true, creditCost: null });
+    }
+    expect(get).toHaveBeenCalledTimes(2);
+    expect(remote.data.size).toBe(4);
+  });
+
   it("stops on a page body whose record was never written, rather than fetching it again", async () => {
     const { remote, get, pages } = setup();
     remote.data.set(`${prefix}.json`, Buffer.from("{}"));

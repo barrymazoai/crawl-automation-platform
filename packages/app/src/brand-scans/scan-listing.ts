@@ -1,20 +1,20 @@
 import {
-  brandScanErrors,
-  type BrandScanReader,
-  type ChannelAdapter,
-  type ChannelId,
   type ChannelRegistry,
   type ListedProduct,
   type ListingPage,
 } from "@crawl-automation/channels-core";
 import type { BrowserBrandScanners, ListingPageReader } from "./ports.js";
-import { type ScanChannel, type ScanRecord } from "./scan-model.js";
+import type { ScanChannel } from "./scan-model.js";
 import { appErrors } from "../errors.js";
+import {
+  readPages,
+  listingTarget,
+  type ListingWork,
+  type ListingScan,
+} from "./http-listing-pages.js";
 import { assertScanReadable } from "./scan-availability.js";
 
-export type ListingScan = Pick<ScanRecord, "scanId"> & {
-  source: Pick<ScanRecord["source"], "sourceId" | "channel" | "url">;
-};
+export type { ListingScan } from "./http-listing-pages.js";
 
 /** Everything that can read a brand listing: adapters' ScraperAPI readers, and the configured browser scanners. */
 export interface ScanReaders {
@@ -35,13 +35,6 @@ export interface BrandListing {
   /** A reader explicitly reported a capped listing. */
   capped?: boolean;
   soldHere?: boolean;
-}
-
-interface ListingWork {
-  scan: ListingScan;
-  adapter: ChannelAdapter;
-  reader: BrandScanReader;
-  pages: ListingPageReader;
 }
 
 /** Select by source before normalisation: Amazon search and Store sources share a channel. */
@@ -115,45 +108,6 @@ export async function readListing(
   };
 }
 
-/** Reads the brand's listing pages in order until the listing ends; more pages than the reader allows is a limit. */
-async function readPages(work: ListingWork, signal: AbortSignal) {
-  const { scan, reader } = work;
-  const pages: ListingPage[] = [];
-  let credits = 0;
-  for (let page = 1; ; page++) {
-    if (page > reader.maxPages) {
-      throw brandScanErrors.create("BRAND_SCAN.PAGE_LIMIT", {
-        details: { maxPages: reader.maxPages },
-      });
-    }
-    const url = reader.pageUrl(scan.source.url, page);
-    const read = await work.pages.read(
-      {
-        ...target(work),
-        url,
-        label: `page-${page}`,
-        answer: reader.answer,
-        maxBytes: reader.maxBytes,
-      },
-      signal,
-    );
-    credits += read.creditCost ?? 0;
-    const listed = reader.parsePage({ body: read.body, url, page });
-    pages.push(listed);
-    if (listed.nextPage === null || listed.products.length === 0) {
-      return { pages, credits };
-    }
-  }
-}
-
-function target(work: ListingWork) {
-  return {
-    scanId: work.scan.scanId,
-    channel: work.adapter.id as ChannelId,
-    origins: work.adapter.httpPolicy.origins,
-  };
-}
-
 /** A family's members, read from the family's own (archived) page. */
 async function familyMembers(work: ListingWork, family: ListedProduct, signal: AbortSignal) {
   const { reader } = work;
@@ -162,7 +116,7 @@ async function familyMembers(work: ListingWork, family: ListedProduct, signal: A
   }
   const read = await work.pages.read(
     {
-      ...target(work),
+      ...listingTarget(work),
       url: family.url,
       label: `family-${family.listingId}`,
       answer: "html",

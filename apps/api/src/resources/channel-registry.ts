@@ -1,14 +1,20 @@
 import { createDtcAdapter, type DtcSitePolicy } from "@crawl-automation/channel-dtc";
 import { wholeFoodsAdapter, WHOLE_FOODS_STORE } from "@crawl-automation/channels-wholefoods";
 import { amazonAdapter } from "@crawl-automation/channel-amazon";
-import { swansonAdapter } from "@crawl-automation/channel-swanson";
+import {
+  createSwansonAdapter,
+  type SwansonBrandScanSettings,
+} from "@crawl-automation/channel-swanson";
 import { ChannelRegistry } from "@crawl-automation/channels-core";
 import { gncAdapter } from "@crawl-automation/channels-gnc";
 
 /** The channels whose product pages this API reads addresses of (product and list runs). */
-export function channelRegistry(dtcSites: readonly DtcSitePolicy[] = []): ChannelRegistry {
+export function channelRegistry(
+  dtcSites: readonly DtcSitePolicy[] = [],
+  swanson?: SwansonBrandScanSettings,
+): ChannelRegistry {
   return new ChannelRegistry([
-    swansonAdapter,
+    createSwansonAdapter(swanson),
     gncAdapter,
     amazonAdapter,
     wholeFoodsAdapter(WHOLE_FOODS_STORE),

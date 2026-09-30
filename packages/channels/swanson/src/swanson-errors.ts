@@ -2,6 +2,14 @@ import { defineErrors } from "@crawl-automation/platform";
 
 /** What the Swanson page reader can refuse; each code becomes the product's Review code. */
 export const swansonErrors = defineErrors({
+  "SWANSON.CONSTRUCTOR_KEY_MISSING": {
+    category: "VALIDATION",
+    message: "Set brandScans.swanson.constructorKey before scanning Swanson brands.",
+  },
+  "SWANSON.COLLECTION_TITLE_MISSING": {
+    category: "SOURCE",
+    message: "The collection page does not name one Constructor brand facet.",
+  },
   "SWANSON.VARIANT_ENUMERATION_UNVERIFIED": {
     category: "SOURCE",
     message: "The complete set of variants could not be verified.",

@@ -45,6 +45,10 @@ export interface ListingPage {
   products: ListedProduct[];
   /** Product tiles on this page (promotion tiles are not products). */
   cards: number;
+  /** Stable card identities, separate from products when a card includes variations. */
+  cardIds?: string[];
+  /** Page position retained by readers that prove a consecutive pagination chain. */
+  pageNumber?: number;
   nextPage: number | null;
   /** The brand total the page states, when it states one. */
   statedTotal: number | null;
@@ -56,6 +60,16 @@ export interface ListingPage {
 export interface BrandScanReader {
   /** Normalises a brand source URL; refuses anything that is not this channel's brand listing. */
   sourceUrl(url: string): string;
+  /** Optional archived entry page resolving the source to an opaque listing base URL. */
+  resolve?: {
+    pageUrl(sourceUrl: string): string;
+    answer: "html" | "json";
+    maxBytes: number;
+    parsePage(page: { body: string; url: string }): string;
+  };
+  /** Listing-only targets; product capture retains its own origin policy. */
+  origins?: readonly string[];
+  /** Receives the resolved base URL when `resolve` is present. */
   pageUrl(sourceUrl: string, page: number): string;
   /** What a listing page answers with. */
   answer: "html" | "json";
