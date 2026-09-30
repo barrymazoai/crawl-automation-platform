@@ -16,7 +16,7 @@ export const appRouter = router({
   history: historyRouter,
   resources: resourcesRouter,
   listingStates: listingStatesRouter,
-  /** Which workers are up, and whether the queue may start new work. */
+  /** Local PM2 jobs and heartbeats, cross-machine Temporal pollers, and OCR health. */
   fleet: router({ status: procedure.query(({ ctx }) => ctx.fleet.status()) }),
 });
 

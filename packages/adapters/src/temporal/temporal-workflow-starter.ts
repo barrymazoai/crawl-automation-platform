@@ -8,6 +8,8 @@ import { COLLECTION_WORKFLOW } from "@crawl-automation/workflows";
 import type { Client } from "@temporalio/client";
 import { inspectExecution, inspectionIssue } from "./inspect-execution.js";
 
+export { TemporalTaskQueues } from "./temporal-task-queues.js";
+
 const CALL_DEADLINE_MS = 15_000;
 /** Brand runs wait for their whole brand (old catalog, or the brand scan): no execution deadline. */
 const UNBOUNDED = new Set(["BrandCollectionWorkflow", COLLECTION_WORKFLOW]);

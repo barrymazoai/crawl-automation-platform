@@ -7,6 +7,8 @@ import { jobHealth, readHealthFile } from "./job-health.js";
 import { loadPm2, pm2Call, type Pm2Api } from "./pm2-client.js";
 import { pm2Errors } from "./pm2-errors.js";
 
+export { Pm2FleetJobs } from "./fleet-jobs.js";
+
 interface RunnerOptions {
   client?: () => Promise<Pm2Api>;
   now?: () => number;

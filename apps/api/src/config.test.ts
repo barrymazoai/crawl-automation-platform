@@ -48,6 +48,76 @@ describe("API config", () => {
   });
 });
 
+describe("API bind address", () => {
+  const hostSchema = ApiConfigSchema.shape.api.shape.host;
+
+  it.each(
+    [
+      [127, 0, 0, 1],
+      [127, 255, 255, 254],
+      [10, 0, 0, 0],
+      [10, 255, 255, 255],
+      [172, 16, 0, 0],
+      [172, 31, 255, 255],
+      [192, 168, 0, 0],
+      [192, 168, 255, 255],
+      [100, 64, 0, 0],
+      [100, 127, 255, 255],
+    ].map((octets) => octets.join(".")),
+  )("accepts loopback, RFC 1918 and CGNAT address %s", (host) => {
+    expect(hostSchema.parse(host)).toBe(host);
+  });
+
+  it.each(["::1", "::ffff:127.0.0.1", "::ffff:10.0.0.1", "::ffff:100.64.0.1"])(
+    "accepts IPv6 loopback or a mapped allowed IPv4 address %s",
+    (host) => expect(hostSchema.parse(host)).toBe(host),
+  );
+
+  it.each(
+    [
+      [0, 0, 0, 0],
+      [9, 255, 255, 255],
+      [11, 0, 0, 0],
+      [126, 255, 255, 255],
+      [128, 0, 0, 0],
+      [172, 15, 255, 255],
+      [172, 32, 0, 0],
+      [192, 167, 255, 255],
+      [192, 169, 0, 0],
+      [100, 0, 0, 1],
+      [100, 63, 255, 255],
+      [100, 128, 0, 0],
+      [100, 255, 255, 255],
+      [192, 0, 2, 1],
+      [198, 51, 100, 1],
+      [169, 254, 0, 1],
+      [224, 0, 0, 1],
+      [255, 255, 255, 255],
+      [127, 256, 0, 1],
+      [100, 64, 0, 999],
+      [127, 1],
+    ].map((octets) => octets.join(".")),
+  )("refuses out-of-range or malformed IPv4 address %s", (host) => {
+    expect(hostSchema.safeParse(host).success).toBe(false);
+  });
+
+  it.each([
+    "",
+    "localhost",
+    "example.test",
+    "::",
+    "[::1]",
+    "fe80::1",
+    "fc00::1",
+    "2001:db8::1",
+    "::ffff:192.0.2.1",
+    "::ffff:100.128.0.1",
+    "::ffff:127.999.0.1",
+  ])("refuses other host input %s", (host) => {
+    expect(hostSchema.safeParse(host).success).toBe(false);
+  });
+});
+
 describe("API capture gates at startup", () => {
   it("loads the production-shaped fixture without a resourceKinds section", async () => {
     await expect(loadSettings(productionShaped)).resolves.toMatchObject({ resourceKinds: {} });

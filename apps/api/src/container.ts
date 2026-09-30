@@ -1,6 +1,5 @@
 import { access } from "node:fs/promises";
 import {
-  FleetStatusFiles,
   PostgresBrandStore,
   PostgresDeliveryJournal,
   PostgresDeliveryScan,
@@ -15,7 +14,7 @@ import {
   CleanupService,
   DeliveryCoordinator,
   DeliveryRunner,
-  FleetService,
+  type FleetService,
   type HistoryService,
   type ProductService,
   QueueService,
@@ -40,6 +39,7 @@ import { brandScanParts, type BrandScanParts } from "./brand-scan-parts.js";
 import { runService } from "./run-parts.js";
 import { listingStateService, productRuns, queueDispatcher, queueService } from "./queue-parts.js";
 import { historyService, productService } from "./results-parts.js";
+import { fleetService } from "./routers/fleet-parts.js";
 
 /** Everything the API is built from. Adapters are created once and shared. */
 export interface ApiParts {
@@ -130,9 +130,7 @@ function registerServices(container: Parts): void {
           log: parts.log,
         }),
     ).singleton(),
-    fleet: asFunction(
-      (parts: ApiParts) => new FleetService({ source: new FleetStatusFiles(parts.config.fleet) }),
-    ).singleton(),
+    fleet: asFunction(fleetService).singleton(),
     listingStates: asFunction((parts: ApiParts) =>
       listingStateService(parts.database, parts.queue),
     ).singleton(),

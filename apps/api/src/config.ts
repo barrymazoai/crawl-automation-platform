@@ -1,6 +1,8 @@
+import { isIP } from "node:net";
 import { isAbsolute } from "node:path";
 import { DeliveryRunnerOptionsSchema, QueueDispatcherOptionsSchema } from "@crawl-automation/app";
 import { ResourceKindsSchema } from "@crawl-automation/channels-core";
+import { OcrApiSettingsSchema } from "@crawl-automation/processing";
 import {
   DatabaseConfigSchema,
   LogConfigSchema,
@@ -14,6 +16,7 @@ import {
   ResourceGateSchema,
 } from "@crawl-automation/v3-contracts";
 import { COLLECTION_WORKFLOW, ProductPipelineInputSchema } from "@crawl-automation/workflows";
+import ipaddr from "ipaddr.js";
 import { z } from "zod";
 import { BrandScanSettingsSchema } from "./brand-scan-config.js";
 import { checkApiResources } from "./resources/resource-check.js";
@@ -25,8 +28,15 @@ const BrandRunTarget = DeliveryTarget.extend({ workflowType: z.literal(COLLECTIO
 
 export const ApiConfigSchema = z.strictObject({
   api: z.strictObject({
-    /** A loopback or Tailscale address; the API has no login, so never a public one. */
-    host: z.string().regex(/^(127|100)(\.\d{1,3}){3}$/),
+    /** Loopback, RFC 1918 or CGNAT; the API has no login, so never a public address. */
+    host: z
+      .string()
+      .refine(
+        (host) =>
+          isIP(host) !== 0 &&
+          ["loopback", "private", "carrierGradeNat"].includes(ipaddr.process(host).range()),
+        "Must be a loopback, RFC 1918 or CGNAT IP address",
+      ),
     port: z.number().int().min(1024).max(65535),
   }),
   log: LogConfigSchema.default({ level: "info" }),
@@ -52,7 +62,17 @@ export const ApiConfigSchema = z.strictObject({
     .default({ queues: { activities: "none", plan: "none", label: "none" }, channels: {} }),
   /** Resource kinds checked against capture modes at startup; overrides the shared known kinds. */
   resourceKinds: ResourceKindsSchema.default({}),
-  fleet: z.strictObject({ monitorStatus: absolutePath, queueHealth: absolutePath }),
+  fleet: z
+    .strictObject({
+      /** Ignored compatibility keys; fleet.status never reads the old monitor or Amazon gate. */
+      monitorStatus: absolutePath.optional(),
+      queueHealth: absolutePath.optional(),
+      /** Additional remote queues, including model/OCR queues absent from this API's routes. */
+      taskQueues: z.array(z.string().min(1).max(200)).default([]),
+      /** The same OCR API settings used by the processing workers. */
+      ocrApi: z.looseObject({ baseUrl: z.url() }).pipe(OcrApiSettingsSchema).optional(),
+    })
+    .default({ taskQueues: [] }),
   /**
    * Read-only access to the evidence in R2, for the Review evidence and recheck procedures. Without it those
    * procedures answer REVIEW.EVIDENCE_NOT_CONFIGURED; nothing else needs it.
