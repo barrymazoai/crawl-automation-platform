@@ -8,7 +8,7 @@ const healthSchema = z.looseObject({
   total_backends: z.number().int().positive(),
 });
 
-/** A read-only GET using the workers' validated OCR address and timeout, without an OCR operation. */
+/** Shared by fleet status and resource admission: a read-only GET, never an OCR operation. */
 export class FleetOcrHealth {
   constructor(
     private readonly settings: OcrApiSettings | undefined,

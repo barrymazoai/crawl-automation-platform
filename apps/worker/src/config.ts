@@ -20,6 +20,7 @@ import { z } from "zod";
 import { BrowserSettingsSchema } from "./browser/browser-settings.js";
 import { ProcessingSettingsSchema } from "./label/processing-settings.js";
 import { WorkerProcessesSchema } from "./processes/process-config.js";
+import { ResourceHealthConfigSchema } from "./resources/resource-health-config.js";
 
 const absolutePath = z.string().refine(isAbsolute, "Must be an absolute path");
 
@@ -108,6 +109,8 @@ export const WorkerConfigSchema = z
      * startup. Today's resources are known already (`resources/known-kinds.ts`); a new resource is named here.
      */
     resourceKinds: ResourceKindsSchema.default({}),
+    /** Refreshed only by the process hosting the resources role. */
+    resourceHealth: ResourceHealthConfigSchema.optional(),
   })
   .refine((config) => config.processes !== undefined || config.taskQueue !== undefined, {
     message: "Name the processes, or the pipeline's task queue",

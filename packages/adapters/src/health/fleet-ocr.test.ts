@@ -9,7 +9,7 @@ const settings = OcrApiSettingsSchema.parse({
 });
 const healthy = { status: "ok", healthy_backends: 4, total_backends: 4 };
 
-describe("fleet OCR health", () => {
+describe("shared fleet OCR health", () => {
   it("GETs only /health using the existing OCR settings and an abort signal", async () => {
     const transport = vi.fn<typeof fetch>().mockResolvedValue(Response.json(healthy));
     const result = await new FleetOcrHealth(settings, transport).health();

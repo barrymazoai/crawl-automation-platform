@@ -1,8 +1,7 @@
-import { Pm2FleetJobs, TemporalTaskQueues } from "@crawl-automation/adapters";
+import { FleetOcrHealth, Pm2FleetJobs, TemporalTaskQueues } from "@crawl-automation/adapters";
 import { FleetService } from "@crawl-automation/app";
 import type { TemporalClient } from "@crawl-automation/platform";
 import type { ApiConfig } from "../config.js";
-import { FleetOcrHealth } from "./fleet-ocr.js";
 
 /** Fleet adapters are lazy: assembling the API neither attaches to PM2 nor probes services. */
 export function fleetService(parts: { config: ApiConfig; temporal: TemporalClient }): FleetService {

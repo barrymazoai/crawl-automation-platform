@@ -31,3 +31,4 @@ export * from "./storage/r2-objects.js";
 export * from "./storage/r2-client.js";
 export * from "./fetch/index.js";
 export * from "./browser/index.js";
+export * from "./errors/resource-health-errors.js";

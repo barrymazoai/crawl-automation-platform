@@ -1,11 +1,10 @@
-import { Pm2FleetJobs } from "@crawl-automation/adapters";
+import { FleetOcrHealth, Pm2FleetJobs } from "@crawl-automation/adapters";
 import { createLogger, type TemporalClient } from "@crawl-automation/platform";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ApiConfigSchema } from "../config.js";
 import { assembleContainer } from "../container.js";
 import productionShaped from "../fixtures/api-config.json" with { type: "json" };
 import { fleetQueueNames } from "./fleet-parts.js";
-import { FleetOcrHealth } from "./fleet-ocr.js";
 
 afterEach(() => vi.restoreAllMocks());
 

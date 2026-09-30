@@ -46,6 +46,10 @@ import { captureRecords, recordedHttpCapture } from "./capture-records.js";
 import type { WorkerConfig } from "./config.js";
 import type { CoreParts } from "./core-parts.js";
 import {
+  buildResourceHealth,
+  type ResourceHealthRunner,
+} from "./resources/resource-health-parts.js";
+import {
   buildAdmission,
   buildLabelParts,
   buildLabelReviews,
@@ -55,6 +59,7 @@ import {
 
 /** Everything the pipeline worker is built from: the base services, then the parts built from them. */
 export interface WorkerParts extends CoreParts {
+  resourceHealth: ResourceHealthRunner;
   /** The label steps (only built when a label role first uses them). */
   label: LabelParts;
   labelTasks: LabelTasks;
@@ -95,6 +100,7 @@ export async function buildContainer(config: WorkerConfig): Promise<Parts> {
     labelReviews: asFunction(buildLabelReviews).singleton(),
     admission: asFunction(buildAdmission).singleton(),
     browser: asFunction(buildBrowserParts).singleton(),
+    resourceHealth: asFunction(buildResourceHealth).singleton(),
   });
   return container;
 }
