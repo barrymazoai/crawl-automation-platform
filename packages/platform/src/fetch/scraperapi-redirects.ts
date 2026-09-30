@@ -3,6 +3,19 @@ import { allowedTarget } from "./scraperapi-settings.js";
 
 const PROVIDER_HOST = "api.scraperapi.com";
 
+/** Explicit verification markers, not arbitrary tracking parameters or similarly named products. */
+export function isChallengeRedirect(location: string | null, target: URL): boolean {
+  const url = location ? URL.parse(location, target) : null;
+  if (!url || url.origin !== target.origin) {
+    return false;
+  }
+  return (
+    [...url.searchParams.keys()].some(
+      (key) => key === "__shopify_bv_challenge" || key.startsWith("__cf_chl_"),
+    ) || /^\/(?:challenge(?:\/|$)|cdn-cgi\/challenge-platform\/)/i.test(url.pathname)
+  );
+}
+
 /**
  * Where a refused redirect pointed, for the Review: the site-side address only (up to 300 characters). An address
  * on ScraperAPI itself, or one carrying a key, is never kept.
@@ -42,7 +55,7 @@ export function allowedHop(
   origins: readonly string[],
 ): URL | null {
   const url = location ? URL.parse(location, target) : null;
-  if (!url) {
+  if (!url || isChallengeRedirect(location, target)) {
     return null;
   }
   try {
@@ -57,3 +70,14 @@ export function allowedHop(
 }
 
 export const isRedirect = (status: number) => status >= 300 && status < 400;
+
+export function redirectError(facts: Parameters<typeof redirectFacts>[0], privateHeaders: boolean) {
+  const challenge = isChallengeRedirect(
+    facts.location ?? facts.finalUrl ?? null,
+    new URL(facts.target),
+  );
+  return scraperApiErrors.create(
+    challenge ? "SOURCE.ACCESS_CHALLENGE" : "SCRAPERAPI.REDIRECT_UNVERIFIED",
+    { details: privateHeaders ? { status: facts.status } : redirectFacts(facts) },
+  );
+}

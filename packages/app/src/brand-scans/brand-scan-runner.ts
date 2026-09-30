@@ -10,6 +10,7 @@ import type { ScanReaders } from "./scan-listing.js";
 import type { ScanChannel, ScanRecord, ScanResult } from "./scan-model.js";
 import type { AmazonScanQueue } from "./amazon-scan-queue.js";
 import { appErrors } from "../errors.js";
+import type { GatedBrandListing } from "./scan-permits.js";
 
 export const BrandScanRunnerSettingsSchema = z.strictObject({
   intervalMs: z.number().int().min(500).max(60_000).default(5_000),
@@ -21,6 +22,7 @@ export const BrandScanRunnerSettingsSchema = z.strictObject({
 export type BrandScanRunnerSettings = z.infer<typeof BrandScanRunnerSettingsSchema>;
 
 export interface BrandScanRunnerDeps extends ScanReaders {
+  gatedListings?: Partial<Record<ScanChannel, GatedBrandListing>>;
   amazonQueue?: AmazonScanQueue;
   store: BrandScanStore;
   queue: Pick<QueueService, "add">;
@@ -91,7 +93,7 @@ export class BrandScanRunner {
 
   private async scan(scan: ScanRecord, signal: AbortSignal): Promise<ScanResult> {
     const amazon = scan.source.channel === "amazon" ? this.amazonQueue() : null;
-    const listing = await readListing(this.deps, scan, signal);
+    const listing = await this.read(scan, signal);
     // Known: queued by an earlier list of this source (the scan's own list is excluded).
     const known = amazon
       ? await amazon.knownListings(scan)
@@ -116,6 +118,11 @@ export class BrandScanRunner {
       credits: listing.credits,
       code: null,
     };
+  }
+
+  private read(scan: ScanRecord, signal: AbortSignal): Promise<BrandListing> {
+    const gated = this.deps.gatedListings?.[scan.source.channel as ScanChannel];
+    return gated ? gated.read(scan, signal) : readListing(this.deps, scan, signal);
   }
 
   /** Every listed product goes into its queue; the scan's ID makes a rerun add nothing. */

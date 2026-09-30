@@ -1,6 +1,22 @@
 import { expect, it, vi } from "vitest";
-import { allowedHop, redirectFacts } from "./scraperapi-redirects.js";
+import { allowedHop, isChallengeRedirect, redirectFacts } from "./scraperapi-redirects.js";
 import * as settings from "./scraperapi-settings.js";
+
+it.each([
+  ["?page=1&__shopify_bv_challenge=token", true],
+  ["/challenge", true],
+  ["/cdn-cgi/challenge-platform/h/g", true],
+  ["/products/challenge-capsules", false],
+  ["?page=2&utm_source=challenge", false],
+  ["https://other.test/challenge", false],
+  ["https://[invalid", false],
+])("recognises only explicit same-site challenge redirects: %s", (location, expected) => {
+  const target = new URL("https://example.com/collections/brand/products.json");
+  expect(isChallengeRedirect(location, target)).toBe(expected);
+  if (expected) {
+    expect(allowedHop(location, target, [target.origin])).toBeNull();
+  }
+});
 
 it("treats SOURCE.ORIGIN_BLOCKED as a refused hop and never exposes provider keys", () => {
   const target = new URL("https://example.com/product");

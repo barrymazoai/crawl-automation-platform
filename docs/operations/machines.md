@@ -4,6 +4,64 @@
 
 更新日期：2026-09-30。此文件是设备身份、连接地址与职责的统一入口。地址、用户名和运行状态分开记录；收到 Tailscale 地址不等于已验证 SSH 或已部署服务。本文不保存真实密码、令牌、私钥或数据库连接串。
 
+## Brand scan 并发许可：Server 一配置（2026-09-30）
+
+本节为待部署配置，未在生产执行迁移、重启或历史 Review 重试。
+实际列表读取原来位于 API `BrandScanRunner`；`CollectionWorkflow` 只轮询扫描结果。
+API 为配置了 `brandScans.permits.<channel>` 的渠道启动新的 `BrandListingWorkflow`，由现有
+ResourceGate 在整个 listing read（分页和 family 展开）期间持有一个许可；获取许可前不发付费请求。
+没有 permit 配置的 GNC、Amazon 等继续原路径。该新工作流不改变已有 Collection/Browser workflow
+的命令序列，所以不需要给历史工作流添加 `patched()` 分支；新增的 Temporal replay 测试由主会话运行。
+
+Server 一 API 私有配置，在已有 `brandScans` 下合并：
+
+```json
+{
+  "permits": {
+    "swanson": {
+      "taskQueue": "v3.pipeline.product.v1",
+      "resourceQueue": "v3.resources.v1",
+      "resourceId": "swanson-brand-scan",
+      "maxWaitSeconds": 900
+    }
+  }
+}
+```
+
+`taskQueue` 必须是部署了新 workflow 和 `readBrandListing` Activity 的 **pipeline role** 队列；
+这里使用现有 `v3.pipeline.product.v1`，不要填只运行 resources Activity 的队列。
+另一个渠道可以命名不同的资源行，实现各自的 N；同一 resourceId 会共享容量。
+`runner.concurrent` 仍是 API 同时处理的扫描总数，不能替代跨进程共享的 resource_capacity。
+沿用现有 ResourceGate 等待策略：资源不健康由 `maxWaitSeconds` 限定，健康但已满由最多 400 次
+退避轮询限定（不是严格的 900 秒墙钟截止）；超限以 `RESOURCE.WAIT_LIMIT` 结束扫描 Review。
+
+Server 一 worker 私有配置新增顶层 `brandScans`，从 API 的 `brandScans` **仅复制**
+`route`、`scraperApi`、`channels` 三个键；`channels` 可省略，默认 `{}`。不要复制 runner、permits、
+browserQueue 或 R2 字段。HTTP listing 使用这一独立设置，产品抓取的 `capture` 设置保持原用途。
+Worker `storage.r2` 的 bucket/prefix 和 `storage.r2Credentials` 必须能访问 API 原有
+`brandScans.r2` 的同一存档，保留历史原件的复用路径。私有配置不得进入 Git。
+
+部署迁移 `database/v3/036_brand_scan_capacity.sql`：只在不存在时插入
+`resource_capacity(resource_id='swanson-brand-scan', capacity=1)`，不覆盖现有值，不新增 GRANT。
+它默认不健康；Server 一 **resources role** 的私有配置 `resourceHealth.resources` 合并：
+
+```json
+{
+  "swanson-brand-scan": { "taskQueues": ["v3.pipeline.product.v1"] }
+}
+```
+
+保留既有 controller、其他健康映射和手动启动约束。资源健康检查应看到这条执行队列的 Activity
+poller 后才放行，不要手动将健康标志强行设为 true。部署前排空旧 API runner 的扫描，再手工切换
+pipeline worker、resources worker 和 API；旧 runner 不受新许可约束。代码依然只能经 origin main
+获取，本次代码任务不执行任何改变 Git 状态的命令。
+
+Shopify `__shopify_bv_challenge`、Cloudflare `__cf_chl_*` 以及明确 challenge 路径的同站重定向，
+在跟随前以共享 `SOURCE.ACCESS_CHALLENGE` 拒绝；listing reader 转成已有
+`BRAND_SCAN.ACCESS_CHALLENGE`，最终保留在扫描 Review。此路径不跟随挑战地址、不重试付费请求。
+同一扫描重复连接复用既有 `brand-listing-<scanId>` 工作流，包括已关闭的结果；无需新增执行锁。
+先在 Mini 验证一项扫描与许可释放，再由 owner 决定批量运行；历史 Review 不自动重排。
+
 ## R39 Browser Worker：双 Mini 配置（2026-09-30）
 
 Owner 决定：**Server 一与 Server 二都运行 browser worker**，共同轮询

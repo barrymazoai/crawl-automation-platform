@@ -1,5 +1,10 @@
 import { createHash } from "node:crypto";
-import { allowedTarget, type ObjectStore, type ScraperApiClient } from "@crawl-automation/platform";
+import {
+  allowedTarget,
+  scraperApiErrors,
+  type ObjectStore,
+  type ScraperApiClient,
+} from "@crawl-automation/platform";
 import type { ChannelId } from "../adapter.js";
 import type { ScraperApiCaptureSettings } from "../capture/page-fetch.js";
 import { channelOptions } from "../capture/channel-options.js";
@@ -98,13 +103,26 @@ export class ListingPages {
     return { body: `${prefix}.${request.answer}`, record: `${prefix}.record.json` };
   }
 
-  private fetch(request: ListingPageRequest, signal: AbortSignal) {
+  private async fetch(request: ListingPageRequest, signal: AbortSignal) {
     const target = allowedTarget(request.url, request.origins).href;
     const tooLarge = () =>
       brandScanErrors.create("BRAND_SCAN.PAGE_LIMIT", { details: { maxBytes: request.maxBytes } });
     const { defaults, channels } = this.deps.settings;
     const options = channelOptions(defaults, channels[request.channel]);
-    return this.deps.client.get({ target, options, maxBytes: request.maxBytes, tooLarge }, signal);
+    try {
+      return await this.deps.client.get(
+        { target, options, maxBytes: request.maxBytes, tooLarge },
+        signal,
+      );
+    } catch (error) {
+      if (scraperApiErrors.is(error, "SOURCE.ACCESS_CHALLENGE")) {
+        throw brandScanErrors.create("BRAND_SCAN.ACCESS_CHALLENGE", {
+          cause: error,
+          details: error.details,
+        });
+      }
+      throw error;
+    }
   }
 
   /** The page bytes first, then the record naming their hash; both read back before the page is parsed. */

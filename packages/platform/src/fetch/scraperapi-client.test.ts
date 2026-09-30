@@ -50,6 +50,34 @@ const request = (changes: Partial<ScraperApiRequest> = {}): ScraperApiRequest =>
 });
 
 describe("ScraperAPI client", () => {
+  it.each(["get", "getOnce"] as const)(
+    "%s refuses a Shopify challenge without following or retrying the paid request",
+    async (method) => {
+      const address = `${ORIGIN}/collections/brand-now-foods/products.json?limit=250&page=1`;
+      const location = `${address}&__shopify_bv_challenge=token`;
+      const { client, calls } = provider({ status: 302, headers: { location } }, { status: 200 });
+      await expect(client[method](request({ target: address }), signal())).rejects.toMatchObject({
+        code: "SOURCE.ACCESS_CHALLENGE",
+        details: { status: 302, target: address, location },
+      });
+      expect(calls).toHaveLength(1);
+    },
+  );
+
+  it.each(["__cf_chl_tk", "__cf_chl_rt_tk", "__cf_chl_f_tk"])(
+    "classifies the provider's final URL marker %s as a challenge",
+    async (marker) => {
+      const { client, calls } = provider({
+        status: 200,
+        headers: { "sa-final-url": `${target}&${marker}=token` },
+      });
+      await expect(client.get(request(), signal())).rejects.toMatchObject({
+        code: "SOURCE.ACCESS_CHALLENGE",
+      });
+      expect(calls).toHaveLength(1);
+    },
+  );
+
   it("sends the whole page address last, the settings separately, and never the key anywhere else", async () => {
     const { client, calls } = provider({ status: 200, headers: { "sa-credit-cost": "5" } });
     const page = await client.get(request({ options: { sessionNumber: 42 } }), signal());

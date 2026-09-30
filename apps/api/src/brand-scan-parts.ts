@@ -4,6 +4,7 @@ import {
   PostgresBrandScans,
   PostgresBrandSourceImport,
   TemporalBrowserScans,
+  TemporalBrandListings,
 } from "@crawl-automation/adapters";
 import {
   BrandScanRunner,
@@ -17,14 +18,8 @@ import {
 } from "@crawl-automation/app";
 import { wholeFoodsSourceFromAmazon } from "./whole-foods-source-derivation.js";
 import { adapterBrowserScanners } from "./browser-scan-gateways.js";
-import { ListingPages } from "@crawl-automation/channels-core";
-import {
-  ScraperApiClient,
-  type TemporalClient,
-  type Database,
-  type Logger,
-  type ObjectStore,
-} from "@crawl-automation/platform";
+import { createListingPages } from "@crawl-automation/channels-core";
+import { type TemporalClient, type Database, type Logger } from "@crawl-automation/platform";
 import { createR2Objects } from "@crawl-automation/platform";
 import type { BrandScanSettings } from "./brand-scan-config.js";
 
@@ -45,25 +40,6 @@ export function browserScanners(
     },
     ...adapterBrowserScanners(channelRegistry(dtcSites), scans),
   };
-}
-
-function listingPages(settings: BrandScanSettings, remote: ObjectStore): ListingPages {
-  const { route, scraperApi, channels } = settings;
-  return new ListingPages({
-    client: new ScraperApiClient(scraperApi),
-    settings: {
-      routeId: route.routeId,
-      egressId: route.egressId,
-      defaults: {
-        countryCode: route.countryCode,
-        sessionNumber: route.sessionNumber,
-        render: route.responseMode === "rendered-html",
-        premium: false,
-      },
-      channels,
-    },
-    remote,
-  });
 }
 
 export interface BrandScanParts {
@@ -97,7 +73,7 @@ export function brandScanParts(parts: {
   if (!settings || !remote) {
     return { brandScans, brandSources, runner: null };
   }
-  const readers = { registry, pages: listingPages(settings, remote), browsers };
+  const readers = { registry, pages: createListingPages(settings, remote), browsers };
   const amazonQueue = new AmazonBrandScanQueue({
     queue: parts.queue,
     knownListings: (scan) => store.knownListings(scan.source, scan.scanId),
@@ -109,8 +85,18 @@ export function brandScanParts(parts: {
     listings: parts.listingStates,
     log,
     amazonQueue,
+    gatedListings: gatedListings(settings, parts.temporal),
   };
   return { brandScans, brandSources, runner: new BrandScanRunner(deps, settings.runner) };
+}
+
+function gatedListings(settings: BrandScanSettings, temporal: TemporalClient) {
+  return Object.fromEntries(
+    Object.entries(settings.permits).map(([channel, permit]) => [
+      channel,
+      new TemporalBrandListings(temporal.client, permit),
+    ]),
+  );
 }
 
 function sourceImports(parts: {

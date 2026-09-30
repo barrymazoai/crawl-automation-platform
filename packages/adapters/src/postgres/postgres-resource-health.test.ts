@@ -90,6 +90,17 @@ describe.skipIf(!hasPostgres || process.env.V3_TEST_SKIP_POSTGRES === "1")(
       ]);
     });
 
+    it("claims a configured row that has no controller yet (a migration just added it)", async () => {
+      await database.query(
+        "INSERT INTO resource_capacity (resource_id, capacity) VALUES ('new-lane', 1)",
+      );
+      expect(await repository.write({ ...ready, resourceId: "new-lane" })).toBe(1);
+      const [row] = await database.query<{ controller: string; healthy: boolean }>(
+        "SELECT controller, healthy FROM resource_capacity WHERE resource_id = 'new-lane'",
+      );
+      expect(row).toEqual({ controller, healthy: true });
+    });
+
     it("matches no rows for a different controller or missing resource, without taking over or inserting", async () => {
       const before = await database.query(
         "SELECT * FROM resource_capacity WHERE resource_id = 'cpu'",

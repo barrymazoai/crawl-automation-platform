@@ -1,6 +1,7 @@
 import type { WorkerSpec } from "@crawl-automation/platform/temporal-worker";
 import { browserActivities } from "../activities/browser-activities.js";
 import { collectionActivities } from "../activities/collection-activities.js";
+import { brandListingActivities } from "../activities/brand-listing-activities.js";
 import {
   labelActivities,
   modelActivities,
@@ -19,7 +20,11 @@ const workflowBundlePath = new URL("./workflows.cjs", import.meta.url).pathname;
 const roleWork: Record<WorkerRole, (parts: WorkerParts) => RoleWork> = {
   // Product runs, and brand runs (CollectionWorkflow) waiting for their brand scan.
   pipeline: (parts) => ({
-    activities: { ...pipelineActivities(parts), ...collectionActivities(parts) },
+    activities: {
+      ...pipelineActivities(parts),
+      ...collectionActivities(parts),
+      ...brandListingActivities(parts),
+    },
     workflowBundlePath,
   }),
   // The Label workflow and its steps that need neither a model nor the OCR API.
@@ -29,7 +34,10 @@ const roleWork: Record<WorkerRole, (parts: WorkerParts) => RoleWork> = {
   resources: (parts) => ({ activities: resourceActivities(parts) }),
   // Browser workers run on each Mac mini with Ego for DTC and Amazon Store-page brands.
   // Whole Foods waits on its fetch test. The role also hosts the API's browser brand-scan workflow.
-  browser: (parts) => ({ activities: browserActivities(parts), workflowBundlePath }),
+  browser: (parts) => ({
+    activities: { ...browserActivities(parts), ...brandListingActivities(parts) },
+    workflowBundlePath,
+  }),
 };
 
 /** One Temporal worker per role of the process, each on its own task queue with its own limits. */

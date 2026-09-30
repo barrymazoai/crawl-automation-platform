@@ -1,7 +1,7 @@
 import { Agent, request, type Dispatcher } from "undici";
 import { isAppError, type AppError } from "../errors/app-error.js";
 import { scraperApiErrors } from "./scraperapi-errors.js";
-import { allowedHop, isRedirect, redirectFacts } from "./scraperapi-redirects.js";
+import { allowedHop, isRedirect, redirectError } from "./scraperapi-redirects.js";
 import {
   ScraperApiAccessSchema,
   ScraperApiOptionsSchema,
@@ -159,9 +159,7 @@ function refusalOf(answer: Answer, target: URL, privateHeaders: boolean): AppErr
   }
   if (isRedirect(status)) {
     const facts = { status, target: target.href, location: header(answer, "location") };
-    return scraperApiErrors.create("SCRAPERAPI.REDIRECT_UNVERIFIED", {
-      details: privateHeaders ? { status } : redirectFacts(facts),
-    });
+    return redirectError(facts, privateHeaders);
   }
   if (!PAGE_STATUSES.has(status)) {
     return scraperApiErrors.create("SCRAPERAPI.PROVIDER_FAILURE", { details: { status } });
@@ -169,9 +167,7 @@ function refusalOf(answer: Answer, target: URL, privateHeaders: boolean): AppErr
   const finalUrl = header(answer, "sa-final-url");
   if (finalUrl && new URL(finalUrl, target).href !== target.href) {
     const facts = { status, target: target.href, finalUrl };
-    return scraperApiErrors.create("SCRAPERAPI.REDIRECT_UNVERIFIED", {
-      details: privateHeaders ? { status } : redirectFacts(facts),
-    });
+    return redirectError(facts, privateHeaders);
   }
   return null;
 }

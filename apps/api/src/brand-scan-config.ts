@@ -1,24 +1,17 @@
-import { BrandScanRunnerSettingsSchema } from "@crawl-automation/app";
-import { CHANNEL_IDS } from "@crawl-automation/channels-core";
-import { ScraperApiAccessSchema, ScraperApiOptionChoicesSchema } from "@crawl-automation/platform";
+import { BrandScanPermitSchema, BrandScanRunnerSettingsSchema } from "@crawl-automation/app";
+import { CHANNEL_IDS, ListingFetchSettingsSchema } from "@crawl-automation/channels-core";
 import { R2ScopeSchema } from "@crawl-automation/platform";
-import { ScraperApiRouteSchema } from "@crawl-automation/v3-contracts";
 import { z } from "zod";
 
 /** The API's brand-scan settings (private config): R2 to archive listing pages, ScraperAPI to fetch them. */
-export const BrandScanSettingsSchema = z.strictObject({
+export const BrandScanSettingsSchema = ListingFetchSettingsSchema.extend({
   r2: R2ScopeSchema,
   r2Credentials: z.strictObject({
     accessKeyId: z.string().min(1),
     secretAccessKey: z.string().min(1),
   }),
-  /** The route's name, egress and default options (country, session; `rendered-html` means render). */
-  route: ScraperApiRouteSchema.refine((route) => route.responseMode !== "binary", {
-    message: "Listing pages are HTML or JSON",
-  }),
-  scraperApi: ScraperApiAccessSchema,
-  /** A channel's own ScraperAPI options over the route's, e.g. `{ "gnc": { "premium": true } }`. */
-  channels: z.partialRecord(z.enum(CHANNEL_IDS), ScraperApiOptionChoicesSchema).default({}),
+  /** Channels with a listing permit run on a worker through the existing Temporal ResourceGate. */
+  permits: z.partialRecord(z.enum(CHANNEL_IDS), BrandScanPermitSchema).default({}),
   runner: BrandScanRunnerSettingsSchema.default({
     intervalMs: 5_000,
     concurrent: 4,

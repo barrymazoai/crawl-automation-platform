@@ -15,6 +15,7 @@ export const scraperApiErrors = defineErrors({
   "SCRAPERAPI.EXECUTION_UNKNOWN": runtime("Whether ScraperAPI fetched the page is unknown."),
   "SCRAPERAPI.REDIRECT_UNVERIFIED": source("The page redirected somewhere that is not allowed."),
   "SOURCE.ORIGIN_BLOCKED": source("The page address is not on an allowed site."),
+  "SOURCE.ACCESS_CHALLENGE": source("The site redirected to human or bot verification."),
 });
 
 export type ScraperApiErrorCode = keyof typeof scraperApiErrors.codes;

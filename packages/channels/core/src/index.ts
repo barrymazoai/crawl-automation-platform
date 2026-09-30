@@ -15,6 +15,8 @@ export * from "./pipeline/index.js";
 export * from "./label-core-errors.js";
 export * from "./listing/brand-scan.js";
 export * from "./listing/listing-pages.js";
+export * from "./listing/listing-pages-factory.js";
+export * from "./listing/listing-fetch-settings.js";
 export * from "./facts/index.js";
 export * from "./planning/index.js";
 export * from "./platforms/index.js";

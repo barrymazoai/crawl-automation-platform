@@ -1,6 +1,6 @@
 import { isAbsolute } from "node:path";
 import type { LabelSettings } from "@crawl-automation/app";
-import { ResourceKindsSchema } from "@crawl-automation/channels-core";
+import { ListingFetchSettingsSchema, ResourceKindsSchema } from "@crawl-automation/channels-core";
 import {
   DatabaseConfigSchema,
   LogConfigSchema,
@@ -25,7 +25,7 @@ import { ResourceHealthConfigSchema } from "./resources/resource-health-config.j
 const absolutePath = z.string().refine(isAbsolute, "Must be an absolute path");
 
 /** New label work reads labels with this protocol only; older versions stay readable for stored answers. */
-export const LABEL_TEXT_POLICY = "label-text/4";
+export const LABEL_TEXT_POLICY = "label-text/5";
 
 export const WorkerConfigSchema = z
   .strictObject({
@@ -117,6 +117,8 @@ export const WorkerConfigSchema = z
     resourceKinds: ResourceKindsSchema.default({}),
     /** Refreshed only by the process hosting the resources role. */
     resourceHealth: ResourceHealthConfigSchema.optional(),
+    /** Listing-only route/options for permit-gated HTTP brand scans; uses storage.r2 for originals. */
+    brandScans: ListingFetchSettingsSchema.optional(),
   })
   .refine((config) => config.processes !== undefined || config.taskQueue !== undefined, {
     message: "Name the processes, or the pipeline's task queue",

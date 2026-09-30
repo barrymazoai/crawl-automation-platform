@@ -1,4 +1,5 @@
 import type { ObjectStore, ScraperApiPage, ScraperApiRequest } from "@crawl-automation/platform";
+import { scraperApiErrors } from "@crawl-automation/platform";
 import { describe, expect, it, vi } from "vitest";
 import { ListingPages, type ListingPageRequest } from "./listing-pages.js";
 
@@ -56,6 +57,18 @@ const signal = () => new AbortController().signal;
 const prefix = `v3/brand-scans/${request.scanId}/page-1`;
 
 describe("listing pages through ScraperAPI", () => {
+  it("preserves challenge evidence as the existing brand-scan challenge code, with no retry", async () => {
+    const { pages, get, remote } = setup();
+    const details = { location: `${request.url}&__shopify_bv_challenge=token` };
+    get.mockRejectedValueOnce(scraperApiErrors.create("SOURCE.ACCESS_CHALLENGE", { details }));
+    await expect(pages.read(request, signal())).rejects.toMatchObject({
+      code: "BRAND_SCAN.ACCESS_CHALLENGE",
+      details,
+    });
+    expect(get).toHaveBeenCalledOnce();
+    expect(remote.data.size).toBe(0);
+  });
+
   it("archives the page and its record before it is read, with the channel's own options", async () => {
     const { remote, get, pages } = setup();
     const read = await pages.read(request, signal());

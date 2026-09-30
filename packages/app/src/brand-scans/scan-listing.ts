@@ -12,6 +12,10 @@ import { type ScanChannel, type ScanRecord } from "./scan-model.js";
 import { appErrors } from "../errors.js";
 import { assertScanReadable } from "./scan-availability.js";
 
+export type ListingScan = Pick<ScanRecord, "scanId"> & {
+  source: Pick<ScanRecord["source"], "sourceId" | "channel" | "url">;
+};
+
 /** Everything that can read a brand listing: adapters' ScraperAPI readers, and the configured browser scanners. */
 export interface ScanReaders {
   registry: ChannelRegistry;
@@ -34,7 +38,7 @@ export interface BrandListing {
 }
 
 interface ListingWork {
-  scan: ScanRecord;
+  scan: ListingScan;
   adapter: ChannelAdapter;
   reader: BrandScanReader;
   pages: ListingPageReader;
@@ -79,7 +83,7 @@ export function sourceUrlOf(
 /** Read this source over HTTP or through its configured browser workflow. */
 export async function readListing(
   readers: ScanReaders,
-  scan: ScanRecord,
+  scan: ListingScan,
   signal: AbortSignal,
 ): Promise<BrandListing> {
   const selected = sourceReader(readers, scan.source.channel as ScanChannel, scan.source.url);
