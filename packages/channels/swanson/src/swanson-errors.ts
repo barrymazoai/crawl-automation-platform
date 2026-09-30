@@ -2,6 +2,11 @@ import { defineErrors } from "@crawl-automation/platform";
 
 /** What the Swanson page reader can refuse; each code becomes the product's Review code. */
 export const swansonErrors = defineErrors({
+  "SWANSON.VARIANT_ENUMERATION_UNVERIFIED": {
+    category: "SOURCE",
+    message: "The complete set of variants could not be verified.",
+  },
+
   "SWANSON.ACCESS_CHALLENGE": {
     category: "SOURCE",
     message: "Swanson returned an access challenge instead of a product page.",

@@ -1,3 +1,4 @@
+import { withCause } from "../errors/with-cause.js";
 import {
   ArtifactRefSchema,
   assertArtifactBelongsTo,
@@ -84,7 +85,7 @@ export class ArtifactResolver {
         error,
         owner,
       );
-      throw artifactErrors.create("ARTIFACT.CACHE_UNAVAILABLE");
+      throw withCause(artifactErrors.create("ARTIFACT.CACHE_UNAVAILABLE"), error);
     }
     await publishArtifact(this.remote, { ref, bytes, maxBytes: this.maxBytes }, signal);
     return { ref, durable: true };

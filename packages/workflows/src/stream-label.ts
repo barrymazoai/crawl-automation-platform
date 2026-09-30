@@ -1,3 +1,5 @@
+import { recordWorkflowRecovery } from "./workflow-recovery.js";
+import { pipelineErrors } from "@crawl-automation/platform/errors/activity";
 import {
   ChannelPlanOutcomeSchema,
   FileAcquireOutcomeSchema,
@@ -77,7 +79,11 @@ export async function streamLabel(step: LabelStep): Promise<unknown> {
     const result = await child.result();
     return review ?? result;
   } catch (error) {
-    await CancellationScope.nonCancellable(() => seal("failed").catch(() => undefined));
+    await CancellationScope.nonCancellable(() =>
+      seal("failed").catch((failure: unknown) => {
+        recordWorkflowRecovery(failure, { operation: "label.seal", originalError: error });
+      }),
+    );
     throw error;
   }
 }
@@ -103,7 +109,7 @@ async function feedFiles(
     if (receipt.operationId !== acquire.operationId) {
       throw ApplicationFailure.nonRetryable(
         "File receipt identity conflict",
-        "PIPELINE.FILE_IDENTITY",
+        pipelineErrors.code("PIPELINE.FILE_IDENTITY"),
       );
     }
     if (receipt.status === "review") {

@@ -1,3 +1,4 @@
+import { pipelineErrors } from "@crawl-automation/platform/errors/activity";
 import { resourceGateCodes } from "@crawl-automation/platform/errors/resource-gate";
 import { ChannelPlanOutcomeSchema } from "@crawl-automation/v3-contracts";
 import { isCancellation, patched, proxyActivities } from "@temporalio/workflow";
@@ -41,7 +42,7 @@ export async function ProductPipelineWorkflow(raw: unknown): Promise<unknown> {
     const causeCode = failureCode(error);
     return pipeline.reviewProduct({
       pipeline: input,
-      code: "PIPELINE.PRODUCT_UNRESOLVED",
+      code: pipelineErrors.code("PIPELINE.PRODUCT_UNRESOLVED"),
       causeCode,
       ...(patched("resource-gate-v1") && causeCode === resourceGateCodes.waitLimit
         ? { executionFact: "not_executed" as const }

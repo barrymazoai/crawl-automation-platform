@@ -4,7 +4,11 @@ import { egoErrors } from "./ego-errors.js";
 import { EGO_MARKER } from "./ego-script.js";
 import type { EgoSettings } from "./ego-settings.js";
 
-const FailureSchema = z.object({ name: z.string(), code: z.string().nullable() });
+export const EgoFailureSchema = z.object({
+  name: z.string(),
+  code: z.string().nullable(),
+  message: z.string().optional(),
+});
 
 const MessageSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("stop"), reason: z.literal("user-control") }),
@@ -13,7 +17,8 @@ const MessageSchema = z.discriminatedUnion("kind", [
     kind: z.literal("result"),
     targetId: z.string().min(1),
     closed: z.boolean(),
-    failure: FailureSchema.nullable(),
+    failure: EgoFailureSchema.nullable(),
+    cleanupFailure: EgoFailureSchema.nullable().optional(),
     value: z.unknown(),
   }),
 ]);
@@ -21,7 +26,7 @@ type Message = z.infer<typeof MessageSchema>;
 type RoundResult = Extract<Message, { kind: "result" }>;
 
 /** What a round's script threw, by its own name and code. */
-export type EgoRoundFailure = z.infer<typeof FailureSchema>;
+export type EgoRoundFailure = z.infer<typeof EgoFailureSchema>;
 
 /** Runs one Ego round script and reads its marked messages. */
 export class EgoRunner {
@@ -50,7 +55,8 @@ export class EgoRunner {
     }
     if (!result.closed) {
       throw egoErrors.create("BROWSER.PAGE_CLEANUP_PENDING", {
-        details: { targetId: result.targetId },
+        cause: result.cleanupFailure,
+        details: { targetId: result.targetId, failure: result.failure },
       });
     }
     return result;

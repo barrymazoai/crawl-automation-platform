@@ -1,3 +1,4 @@
+import { recordRecovery } from "@crawl-automation/platform";
 import { sha256 } from "@crawl-automation/platform";
 import type { AppError, ObjectStore } from "@crawl-automation/platform";
 
@@ -14,7 +15,8 @@ export async function writeOnce(
   const { signal } = options;
   try {
     await store.create(key, bytes, "application/json", signal);
-  } catch {
+  } catch (error) {
+    recordRecovery(error, { operation: "results/write-once" });
     // The read-back below decides.
   }
   const saved = await store.read(key, bytes.length, signal);

@@ -1,3 +1,4 @@
+import { recordRecovery } from "@crawl-automation/platform";
 import { randomUUID } from "node:crypto";
 import type { AppError } from "@crawl-automation/platform";
 import { ReviewRecordSchema, type ReviewRecord } from "@crawl-automation/v3-contracts";
@@ -67,13 +68,17 @@ export async function recordStepReview(
 ): Promise<void> {
   try {
     await reviews.append(review);
-  } catch {
+  } catch (error) {
+    recordRecovery(error, { operation: "step/step-review" });
     // The read-back below decides.
   }
   // An unreachable ledger on the read-back is the same as an unconfirmed Review.
   const confirmed = await inspectRegistration(reviews, review).then(
     (registration) => registration.registered,
-    () => false,
+    (error: unknown) => {
+      recordRecovery(error, { operation: "review.confirm", reviewId: review.reviewId });
+      return false;
+    },
   );
   if (!confirmed) {
     throw unconfirmed();

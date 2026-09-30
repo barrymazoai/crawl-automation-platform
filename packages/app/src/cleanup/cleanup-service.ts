@@ -1,3 +1,5 @@
+import { errorCodeOf } from "@crawl-automation/platform";
+import { ignoreAbort } from "@crawl-automation/platform";
 import { setTimeout as delay } from "node:timers/promises";
 import type { Logger } from "@crawl-automation/platform";
 import type { ResourceService } from "../resources/resource-service.js";
@@ -26,9 +28,9 @@ export class CleanupService {
   async run(signal: AbortSignal): Promise<void> {
     while (!signal.aborted) {
       await this.sweep().catch((error: unknown) => {
-        this.deps.log.error({ err: error }, "cleanup sweep failed");
+        this.deps.log.error({ err: error, code: errorCodeOf(error) }, "cleanup sweep failed");
       });
-      await delay(this.deps.intervalMs, undefined, { signal }).catch(() => undefined);
+      await delay(this.deps.intervalMs, undefined, { signal }).catch(ignoreAbort);
     }
   }
 }

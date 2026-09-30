@@ -1,3 +1,4 @@
+import { assemblyErrors } from "./assembly-errors.js";
 import {
   isCompleteLabelImage,
   isCompleteLabelText,
@@ -39,12 +40,12 @@ export function mergePolicy(state: MergeState, provenance: Provenance[]): MergeP
   const imageFirst = !!state.manifest.evidencePolicy && eligible.some(isCompleteLabelImage);
   const textFallback = FROM_3.includes(policy) && !imageFirst && eligible.some(isCompleteLabelText);
   if (policy === "label-image-first/4" && labelNumericSourceConflict(eligible)) {
-    state.codes.add("LABEL_PRODUCT.SOURCE_NUMERIC_CONFLICT");
+    state.codes.add(assemblyErrors.code("LABEL_PRODUCT.SOURCE_NUMERIC_CONFLICT"));
   }
   if (textFallback) {
     state.warnings.push({
       id: state.manifest.operationId,
-      code: "LABEL_PRODUCT.COMPLETE_TEXT_FALLBACK",
+      code: assemblyErrors.code("LABEL_PRODUCT.COMPLETE_TEXT_FALLBACK"),
     });
   }
   return { quality, imageFirst, textFallback, integrity };

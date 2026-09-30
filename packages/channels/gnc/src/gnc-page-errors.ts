@@ -2,6 +2,17 @@ import { defineErrors } from "@crawl-automation/platform";
 
 /** What the GNC product page reader can refuse; each code becomes the product's Review code. */
 export const gncPageErrors = defineErrors({
+  "GNC.BRAND_MISSING": { category: "SOURCE", message: "Brand missing." },
+  "GNC.FACTS_AMOUNTS_MISSING": { category: "SOURCE", message: "Facts amounts missing." },
+  "GNC.FACTS_DOM_MISSING": { category: "SOURCE", message: "Facts dom missing." },
+  "GNC.FACTS_OTHER_INGREDIENTS_MISSING": {
+    category: "SOURCE",
+    message: "Facts other ingredients missing.",
+  },
+  "GNC.FACTS_SERVING_SIZE_MISSING": { category: "SOURCE", message: "Facts serving size missing." },
+  "GNC.FACTS_TABLE_MISSING": { category: "SOURCE", message: "Facts table missing." },
+  "GNC.GALLERY_UNVERIFIED": { category: "SOURCE", message: "Gallery unverified." },
+
   "GNC.PAGE_LIMIT": {
     category: "SOURCE",
     message: "The page is larger or deeper than a GNC product page may be.",

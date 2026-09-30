@@ -1,3 +1,4 @@
+import { recordRecovery } from "@crawl-automation/platform";
 import type { CommerceEvidence } from "@crawl-automation/channels-core";
 import { DomUtils, parseDocument } from "htmlparser2";
 
@@ -29,7 +30,8 @@ function jsonLdProducts(document: Document): Json[] {
       const value: unknown = JSON.parse(DomUtils.textContent(script));
       const items = Array.isArray(value) ? value : [value];
       return items.filter((item): item is Json => isRecord(item) && item["@type"] === "Product");
-    } catch {
+    } catch (error) {
+      recordRecovery(error, { operation: "gnc-commerce" });
       // A broken JSON-LD block carries no metrics; the product parser reports unreadable product data itself.
       return [];
     }

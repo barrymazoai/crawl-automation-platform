@@ -36,8 +36,9 @@ export function describeCodexError(value: unknown): string | undefined {
     } else {
       return undefined;
     }
-  } catch {
-    return "Codex returned an unreadable error";
+  } catch (error) {
+    // Retain the serialization failure through the same redaction boundary, never log the raw payload.
+    text = error instanceof Error ? `${error.name}: ${error.message}` : "Unreadable Codex error";
   }
   const clean = text.replace(SECRET, redactSecret).replace(/\s+/g, " ").trim();
   return clean ? clean.slice(0, 500) : undefined;

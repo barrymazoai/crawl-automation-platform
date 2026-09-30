@@ -1,3 +1,4 @@
+import { recordWorkflowRecovery } from "../workflow-recovery.js";
 import {
   TextActivityOutcomeSchema,
   TextInputSchema,
@@ -24,6 +25,7 @@ export async function runText(run: LabelRun, at: { id: string; task: TextInput }
     if (isCancellation(error) || isAdmissionFailure(error) || isHeartbeatFailure(error)) {
       throw error;
     }
+    recordWorkflowRecovery(error, { operation: "label.text", operationId: task.operationId });
     // Only read-only reconciliation follows.
   }
   const receipt = TextReceiptOutcomeSchema.parse(

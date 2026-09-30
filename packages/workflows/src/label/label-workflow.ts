@@ -1,3 +1,4 @@
+import { pipelineErrors } from "@crawl-automation/platform/errors/activity";
 import { ApplicationFailure } from "@temporalio/workflow";
 import { imageFirst, type Walk } from "./label-image-first.js";
 import {
@@ -85,7 +86,7 @@ async function stoppedEarly(run: LabelRun, states: State[]): Promise<unknown> {
   if (run.waiting.length || run.quarantined.length) {
     return reviewLabel(run, {
       states,
-      code: "CHANNEL.DEPENDENCY_UNAVAILABLE",
+      code: pipelineErrors.code("CHANNEL.DEPENDENCY_UNAVAILABLE"),
       failures: permitFailures(run),
     });
   }

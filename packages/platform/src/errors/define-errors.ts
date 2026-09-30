@@ -19,5 +19,5 @@ export function defineErrors<const Code extends ErrorCode>(codes: Record<Code, E
     return error instanceof AppError && error.code === code;
   }
 
-  return { codes, create, is };
+  return { codes, create, is, code: <Value extends Code>(code: Value): Value => code };
 }

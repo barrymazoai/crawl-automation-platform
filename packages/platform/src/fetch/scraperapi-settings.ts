@@ -47,12 +47,8 @@ export function allowedTarget(raw: string, origins: readonly string[]): URL {
 
 /** An allowed site is written as its bare origin, e.g. `https://www.swansonvitamins.com`. */
 function isOrigin(raw: string): boolean {
-  try {
-    const url = new URL(raw);
-    return isAllowed(url, [url.origin]) && url.href === `${url.origin}/`;
-  } catch {
-    return false;
-  }
+  const url = URL.parse(raw);
+  return !!url && isAllowed(url, [url.origin]) && url.href === `${url.origin}/`;
 }
 
 /** The private part of the settings: the key and the sites it may be used for. Never logged or returned. */

@@ -1,3 +1,4 @@
+import { recordRecovery } from "@crawl-automation/platform";
 import { readFile } from "node:fs/promises";
 import type { JobDefinition, JobHealth, JobStart } from "@crawl-automation/app";
 import type { ProcessDescription } from "pm2";
@@ -65,6 +66,7 @@ function parseHeartbeat(bytes: string | null) {
     return result.success ? result.data : null;
   } catch (error) {
     if (error instanceof SyntaxError) {
+      recordRecovery(error, { operation: "job.health.parse" });
       return null;
     }
     throw error;
@@ -76,6 +78,7 @@ export async function readHealthFile(path: string): Promise<string | null> {
     return await readFile(path, "utf8");
   } catch (error) {
     if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") {
+      // ENOENT is an absent optional status file; all other I/O errors propagate.
       return null;
     }
     throw error;

@@ -1,3 +1,6 @@
+import { resourceGateCodes } from "@crawl-automation/platform/errors/resource-gate";
+import { recordWorkflowRecovery } from "../workflow-recovery.js";
+import { pipelineErrors } from "@crawl-automation/platform/errors/activity";
 import {
   AcquisitionReviewSchema,
   LabelProductJoinSchema,
@@ -13,7 +16,9 @@ import { identityConflict } from "./identity-conflict.js";
 import { sameJson } from "./same.js";
 import { isHeartbeatFailure } from "./activity-heartbeat.js";
 
-type ReviewCode = "CHANNEL.LABEL_PREPARATION_UNVERIFIED" | "CHANNEL.DEPENDENCY_UNAVAILABLE";
+type ReviewCode =
+  | "CHANNEL.LABEL_PREPARATION_UNVERIFIED"
+  | Extract<keyof typeof pipelineErrors.codes, "CHANNEL.DEPENDENCY_UNAVAILABLE">;
 type Failure = { sourceId: string; code: string; executionFact: string };
 
 /** The product's own label Review, with every source's state and, when known, what held each one up. */
@@ -42,12 +47,12 @@ export function permitFailures(run: LabelRun): Failure[] {
   return [
     ...[...run.waiting].sort().map((sourceId) => ({
       sourceId,
-      code: "RESOURCE.WAIT_LIMIT",
+      code: resourceGateCodes.waitLimit,
       executionFact: "not_executed",
     })),
     ...[...run.quarantined].sort().map((sourceId) => ({
       sourceId,
-      code: "RESOURCE.OWNER_QUARANTINED",
+      code: resourceGateCodes.ownerQuarantined,
       executionFact: "unknown",
     })),
   ];
@@ -69,6 +74,7 @@ export async function labelManifest(
       result: ManifestResultSchema.parse(await run.call("activities", name, request)),
     };
   } catch (error) {
+    recordWorkflowRecovery(error, { operation: "label-finish" });
     if (isCancellation(error) || isHeartbeatFailure(error)) {
       throw error;
     }

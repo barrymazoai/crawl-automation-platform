@@ -1,3 +1,4 @@
+import { factsErrors } from "@crawl-automation/channels-core";
 import { channelErrors, type ProductIdentity } from "@crawl-automation/channels-core";
 import {
   ChannelProductEvidenceSchema,
@@ -116,6 +117,9 @@ export function parseSwansonRenderedProduct(
     detailsHtml: details ? htmlText(details) : null,
     factsCandidates,
     imageCandidates,
-    warnings: ["SWANSON.VARIANT_ENUMERATION_UNVERIFIED", "CHANNEL.DOM_TEXT_PROJECTION"],
+    warnings: [
+      swansonErrors.code("SWANSON.VARIANT_ENUMERATION_UNVERIFIED"),
+      factsErrors.code("CHANNEL.DOM_TEXT_PROJECTION"),
+    ],
   });
 }

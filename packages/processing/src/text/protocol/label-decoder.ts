@@ -1,3 +1,4 @@
+import { labelValidationErrors } from "../../label/validation-errors.js";
 import {
   LabelTextCandidateSchema,
   LabelTextWireSchema,
@@ -48,7 +49,7 @@ export function decodeLabelText(request: LabelTextRequest): DecodedLabel {
     ...exclusionCodes({ candidate, text, policyVersion }),
   ]);
   if (!coversEveryPrintedCharacter(text, scope.range, quotes.placed)) {
-    codes.add("LABEL.EXTRACTION_INCOMPLETE");
+    codes.add(labelValidationErrors.code("LABEL.EXTRACTION_INCOMPLETE"));
   }
   return { candidate, status: codes.size ? "review" : assessment.status, codes: [...codes] };
 }

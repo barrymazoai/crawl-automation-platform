@@ -1,3 +1,4 @@
+import { withCause } from "@crawl-automation/platform";
 import { sha256 } from "@crawl-automation/platform";
 import type { ArtifactRef } from "@crawl-automation/v3-contracts";
 import type { ProcessingInput, RecordCodec, ResultKind, StoredRecord } from "./result-kind.js";
@@ -14,8 +15,8 @@ export function decodeRecord<TRecord>(codec: RecordCodec<TRecord>, bytes: Uint8A
   let raw: unknown;
   try {
     raw = decodeJson(bytes);
-  } catch {
-    throw codec.fail("integrity");
+  } catch (error) {
+    throw withCause(codec.fail("integrity"), error);
   }
   return codec.parseRecord(raw);
 }

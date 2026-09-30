@@ -1,3 +1,4 @@
+import { withCause } from "@crawl-automation/platform";
 import { sha256 } from "@crawl-automation/platform";
 import type { AppError, ObjectStore } from "@crawl-automation/platform";
 
@@ -26,7 +27,7 @@ export async function claimOnce(
   try {
     created = await store.create(claim.key, claim.bytes, "application/json", options.signal);
   } catch (error) {
-    throw options.createFailed ? options.createFailed(error) : error;
+    throw options.createFailed ? withCause(options.createFailed(error), error) : error;
   }
   if (created !== "created") {
     throw options.exists();

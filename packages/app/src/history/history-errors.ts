@@ -2,6 +2,9 @@ import { defineErrors } from "@crawl-automation/platform";
 
 /** Errors of the metrics history. */
 export const historyErrors = defineErrors({
+  "HISTORY.METRIC_TIME_UNKNOWN": { category: "ARTIFACT", message: "Metric time unknown." },
+  "HISTORY.STORAGE_UNAVAILABLE": { category: "ARTIFACT", message: "Storage unavailable." },
+
   "HISTORY.CAPTURE_IDENTITY_UNRESOLVED": {
     category: "IDENTITY",
     message:

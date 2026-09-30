@@ -1,3 +1,4 @@
+import { factsErrors } from "../facts/facts-errors.js";
 import { factsFromHtml } from "../facts/facts-text.js";
 import { pageText } from "../page-text.js";
 import type { FactsText } from "../adapter.js";
@@ -33,10 +34,10 @@ export function completeFacts(html: string | null): FactsText {
   const result = factsFromHtml(html);
   const missing = [...result.missing];
   if (result.text && !/serving size\s*:?\s*\d/i.test(result.text)) {
-    missing.push("FACTS.SERVING_QUANTITY_MISSING");
+    missing.push(factsErrors.code("FACTS.SERVING_QUANTITY_MISSING"));
   }
   if (result.text && !/\b\d[\d,.]*\s*(?:mg|mcg|[µμ]g|g|iu|cfu|ml)\b/i.test(result.text)) {
-    missing.push("FACTS.INGREDIENT_AMOUNTS_MISSING");
+    missing.push(factsErrors.code("FACTS.INGREDIENT_AMOUNTS_MISSING"));
   }
   return { ...result, complete: missing.length === 0, missing };
 }

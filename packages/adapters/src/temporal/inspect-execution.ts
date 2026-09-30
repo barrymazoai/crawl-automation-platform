@@ -1,3 +1,4 @@
+import { recordRecovery } from "@crawl-automation/platform";
 import { inputHash, type ExecutionProof, type Inspection } from "@crawl-automation/app";
 import {
   ExecutionStatus,
@@ -53,7 +54,8 @@ function payloadHash(started: Started): string | null {
   const payload = started.input?.payloads?.[0];
   try {
     return payload ? inputHash(defaultPayloadConverter.fromPayload(payload)) : null;
-  } catch {
+  } catch (error) {
+    recordRecovery(error, { operation: "temporal/inspect-execution" });
     return null;
   }
 }
@@ -186,6 +188,7 @@ export async function inspectExecution(
 }
 
 export function inspectionIssue(error: unknown): DeliveryIssue {
+  recordRecovery(error, { operation: "delivery.inspect" });
   const code = (error as { code?: number } | null)?.code;
   return error instanceof WorkflowNotFoundError || code === 5 ? "NOT_FOUND" : "UNAVAILABLE";
 }

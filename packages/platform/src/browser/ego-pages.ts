@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { egoErrors } from "./ego-errors.js";
-import { EgoRunner, type EgoRoundFailure } from "./ego-runner.js";
+import { EgoRunner, EgoFailureSchema, type EgoRoundFailure } from "./ego-runner.js";
 import { READ_PAGE_BODY, closeTargetScript, pageRoundScript } from "./ego-script.js";
 import { EgoSettingsSchema, type EgoSettings } from "./ego-settings.js";
 
@@ -27,6 +27,7 @@ const BrowserPageSchema = z.object({
   status: z.number().int().nullable(),
   html: z.string(),
   ready: z.boolean(),
+  readinessFailure: EgoFailureSchema.nullable().optional(),
   scroll: z.object({ rounds: z.number().int(), ended: z.enum(["none", "stable", "capped"]) }),
 });
 
@@ -84,5 +85,5 @@ export class EgoPages {
 }
 
 function roundFailed(failure: EgoRoundFailure) {
-  return egoErrors.create("BROWSER.UNAVAILABLE", { details: { failure } });
+  return egoErrors.create("BROWSER.UNAVAILABLE", { cause: failure, details: { failure } });
 }

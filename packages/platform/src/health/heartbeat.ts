@@ -1,3 +1,4 @@
+import { recordRecovery } from "../logger/recovery.js";
 import { randomUUID } from "node:crypto";
 import { rename, writeFile } from "node:fs/promises";
 import { isAbsolute } from "node:path";
@@ -25,7 +26,11 @@ export async function startHeartbeat(path: string, role: string): Promise<Heartb
     await rename(temporary, path);
   };
   await write("WORKER_RUNNING");
-  const timer = setInterval(() => void write("WORKER_RUNNING").catch(() => undefined), BEAT_MS);
+  const beat = () =>
+    void write("WORKER_RUNNING").catch((error: unknown) => {
+      recordRecovery(error, { operation: "health.heartbeat", role });
+    });
+  const timer = setInterval(beat, BEAT_MS);
   return {
     async stop() {
       clearInterval(timer);

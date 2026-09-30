@@ -1,3 +1,4 @@
+import { recordRecovery } from "@crawl-automation/platform";
 import type { BrowserBrandScan } from "@crawl-automation/app";
 import type { ChannelId } from "@crawl-automation/v3-contracts";
 import type { Client } from "@temporalio/client";
@@ -34,7 +35,10 @@ export class TemporalBrowserScans {
       workflowIdConflictPolicy: "USE_EXISTING",
       workflowExecutionTimeout: "90 minutes",
     });
-    const cancel = () => void handle.cancel().catch(() => undefined);
+    const cancel = () =>
+      void handle.cancel().catch((error: unknown) => {
+        recordRecovery(error, { runId: request.scanId, operation: "browserScan.cancel" });
+      });
     signal.addEventListener("abort", cancel, { once: true });
     try {
       const result = BrowserBrandScanSchema.parse(await handle.result());

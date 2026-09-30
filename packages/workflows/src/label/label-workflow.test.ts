@@ -19,6 +19,7 @@ vi.mock("@temporalio/workflow", async () => {
     }
   }
   return {
+    log: { warn: vi.fn() },
     proxyActivities: ({ taskQueue }: { taskQueue: string }) => env.activities[taskQueue],
     defineSignal: (name: string) => name,
     setHandler: (name: string, handler: (raw: unknown) => void) => {

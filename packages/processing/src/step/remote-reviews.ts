@@ -1,3 +1,4 @@
+import { recordRecovery } from "@crawl-automation/platform";
 import type { ObjectStore } from "@crawl-automation/platform";
 import { ExecutionIdSchema, type ReviewRecord } from "@crawl-automation/v3-contracts";
 import { reviewErrors } from "./review-errors.js";
@@ -47,7 +48,8 @@ export class RemoteReviews implements ReviewReader, ReviewWriter {
     // An unknown write is settled by the read-back below, never by assuming success.
     await this.store.create(this.key(record.reviewId), bytes, "application/json", signal).then(
       () => undefined,
-      () => undefined,
+      (error: unknown) =>
+        recordRecovery(error, { operation: "review.append", reviewId: record.reviewId }),
     );
     const stored = await this.read(record.reviewId);
     if (!stored) {

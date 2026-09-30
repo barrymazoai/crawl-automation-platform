@@ -1,3 +1,4 @@
+import { withCause } from "@crawl-automation/platform";
 import { isDeepStrictEqual } from "node:util";
 import type { AppError, ObjectStore } from "@crawl-automation/platform";
 import { decodeJson, encodeJson } from "../results/result-record.js";
@@ -36,7 +37,7 @@ export async function claimIntent<TIntent extends Intent, TSaved extends Intent 
   try {
     created = await store.create(key, encodeJson(intent), "application/json", signal);
   } catch (error) {
-    throw claim.fail("intentUnknown", error);
+    throw withCause(claim.fail("intentUnknown", error), error);
   }
   const bytes = await store.read(key, claim.limit, signal);
   if (!bytes) {
@@ -63,6 +64,6 @@ function savedIntent<TSaved extends Intent>(
   try {
     return claim.parse(decodeJson(bytes));
   } catch (error) {
-    throw claim.fail("intentConflict", error);
+    throw withCause(claim.fail("intentConflict", error), error);
   }
 }

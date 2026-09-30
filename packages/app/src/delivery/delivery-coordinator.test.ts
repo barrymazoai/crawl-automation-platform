@@ -1,3 +1,4 @@
+import * as platform from "@crawl-automation/platform";
 import type {
   CollectionSubmission,
   DeliveryReceipt,
@@ -112,12 +113,19 @@ describe("DeliveryCoordinator", () => {
 
   it("inspects after a failed start instead of starting again", async () => {
     const { coordinator, starter } = setup({ mayStart: true, state: "START_UNKNOWN" });
-    vi.mocked(starter.start).mockRejectedValueOnce(new Error("already started"));
+    const failure = new Error("lost acknowledgement");
+    const recorded = vi.spyOn(platform, "recordRecovery").mockImplementation(() => undefined);
+    vi.mocked(starter.start).mockRejectedValueOnce(failure);
 
     await coordinator.reconcile(requestId);
 
     expect(starter.start).toHaveBeenCalledOnce();
     expect(starter.inspect).toHaveBeenCalledOnce();
+    expect(recorded).toHaveBeenCalledWith(failure, {
+      runId: requestId,
+      operation: "delivery.start",
+    });
+    recorded.mockRestore();
   });
 
   it("refuses a channel without a configured target", async () => {

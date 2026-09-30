@@ -56,6 +56,7 @@ export class R2Objects implements ObjectStore {
       if (r2Status(error) === 404 && error instanceof Error && error.name === "NoSuchKey") {
         return null;
       }
+      // No cause: the SDK error carries request headers (credentials). r2Diagnostics keeps the safe reason.
       throw artifactErrors.create("ARTIFACT.UNAVAILABLE", { details: r2Diagnostics(error) });
     }
   }
@@ -84,6 +85,7 @@ export class R2Objects implements ObjectStore {
       if (error instanceof AppError) {
         throw error;
       }
+      // No cause: the SDK error carries request headers (credentials). r2Diagnostics keeps the safe reason.
       throw artifactErrors.create("ARTIFACT.UPLOAD_UNKNOWN", { details: r2Diagnostics(error) });
     }
   }

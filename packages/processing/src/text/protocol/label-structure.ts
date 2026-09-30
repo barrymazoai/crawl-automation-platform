@@ -1,3 +1,4 @@
+import { labelValidationErrors } from "../../label/validation-errors.js";
 import { isIngredientHeading, type LabelTextCandidateSchema } from "@crawl-automation/v3-contracts";
 import type { z } from "zod";
 
@@ -19,7 +20,7 @@ export function rowOrderCodes(candidate: Candidate): string[] {
       return previous !== undefined && row.name.start <= previous.name.end;
     }),
   );
-  return outOfOrder ? ["LABEL.ROW_ORDER_INVALID"] : [];
+  return outOfOrder ? [labelValidationErrors.code("LABEL.ROW_ORDER_INVALID")] : [];
 }
 
 /** Label codes for the ingredient section: a real heading, items inside it, one item per list entry. */
@@ -32,14 +33,14 @@ export function ingredientCodes(candidate: Candidate, text: string): string[] {
   const lineStart = text.lastIndexOf("\n", other.heading.start - 1) + 1;
   const before = text.slice(lineStart, other.heading.start).trim();
   if (!isIngredientHeading(other.heading.text) || (before && !clauseEnd.test(before))) {
-    codes.add("LABEL.INGREDIENT_HEADING_INVALID");
+    codes.add(labelValidationErrors.code("LABEL.INGREDIENT_HEADING_INVALID"));
   }
   other.items.forEach((item, index) => {
     if (outsideSection(other, item, text)) {
-      codes.add("LABEL.INGREDIENT_ROLE_INVALID");
+      codes.add(labelValidationErrors.code("LABEL.INGREDIENT_ROLE_INVALID"));
     }
     if (crossesBoundary(other, index, text)) {
-      codes.add("LABEL.INGREDIENT_BOUNDARY");
+      codes.add(labelValidationErrors.code("LABEL.INGREDIENT_BOUNDARY"));
     }
   });
   return [...codes];

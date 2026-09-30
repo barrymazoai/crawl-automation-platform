@@ -1,3 +1,4 @@
+import { withCause } from "../errors/with-cause.js";
 import { constants } from "node:fs";
 import { link, lstat, mkdir, open, realpath, unlink } from "node:fs/promises";
 import { isAbsolute, join } from "node:path";
@@ -44,9 +45,10 @@ export class FileCopies implements LocalCopies {
       file = await open(this.path(ref), flags);
     } catch (error) {
       if (codeIs(error, "ENOENT")) {
+        // ENOENT means no local copy exists; the caller may inspect the remote store.
         return null;
       }
-      throw artifactErrors.create("ARTIFACT.CACHE_UNAVAILABLE");
+      throw withCause(artifactErrors.create("ARTIFACT.CACHE_UNAVAILABLE"), error);
     }
     try {
       return await readFileCopy(file, ref, { maxBytes: this.maxBytes, signal });
@@ -93,7 +95,7 @@ export class FileCopies implements LocalCopies {
         throw error;
       }
       if (!(await this.read(paths.ref, signal))) {
-        throw artifactErrors.create("ARTIFACT.CACHE_UNAVAILABLE");
+        throw withCause(artifactErrors.create("ARTIFACT.CACHE_UNAVAILABLE"), error);
       }
     }
   }

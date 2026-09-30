@@ -1,3 +1,4 @@
+import { recordRecovery } from "@crawl-automation/platform";
 import type {
   CollectionSnapshot,
   CollectionSubmission,
@@ -42,7 +43,9 @@ export class DeliveryCoordinator {
     }
     if (intent.mayStart) {
       // A lost response or "already started" is settled by the inspection below, never by a second start.
-      await starter.start(target, submission, input).catch(() => undefined);
+      await starter.start(target, submission, input).catch((error: unknown) => {
+        recordRecovery(error, { runId: requestId, operation: "delivery.start" });
+      });
     }
     return journal.record(requestId, await starter.inspect(target, submission));
   }

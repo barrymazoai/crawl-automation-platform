@@ -1,3 +1,4 @@
+import { gncPageErrors } from "./gnc-page-errors.js";
 import { DomUtils } from "htmlparser2";
 import { allElements, cleanText, gncDocument, visibleText } from "./gnc-dom.js";
 
@@ -39,23 +40,27 @@ function ingredientRows(factsHtml: string): number {
  */
 export function gncFactsTableComplete(factsHtml: string | null): GncFactsVerdict {
   if (!factsHtml?.trim()) {
-    return { complete: false, reasons: ["GNC.FACTS_DOM_MISSING"], ingredientRows: 0 };
+    return {
+      complete: false,
+      reasons: [gncPageErrors.code("GNC.FACTS_DOM_MISSING")],
+      ingredientRows: 0,
+    };
   }
   const document = gncDocument(factsHtml);
   const body = cleanText(visibleText(document));
   const reasons: string[] = [];
   if (!allElements(document).some((element) => element.name === "table")) {
-    reasons.push("GNC.FACTS_TABLE_MISSING");
+    reasons.push(gncPageErrors.code("GNC.FACTS_TABLE_MISSING"));
   }
   if (!/Serving Size/i.test(body)) {
-    reasons.push("GNC.FACTS_SERVING_SIZE_MISSING");
+    reasons.push(gncPageErrors.code("GNC.FACTS_SERVING_SIZE_MISSING"));
   }
   const rows = ingredientRows(factsHtml);
   if (!rows) {
-    reasons.push("GNC.FACTS_AMOUNTS_MISSING");
+    reasons.push(gncPageErrors.code("GNC.FACTS_AMOUNTS_MISSING"));
   }
   if (!/Other Ingredients\s*:?\s*[A-Za-z(]/i.test(body)) {
-    reasons.push("GNC.FACTS_OTHER_INGREDIENTS_MISSING");
+    reasons.push(gncPageErrors.code("GNC.FACTS_OTHER_INGREDIENTS_MISSING"));
   }
   return { complete: reasons.length === 0, reasons, ingredientRows: rows };
 }

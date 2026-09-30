@@ -1,3 +1,5 @@
+import { recordRecovery } from "@crawl-automation/platform";
+import { pipelineErrors } from "@crawl-automation/platform";
 import { LabelPlanInputSchema, type LabelPlanInput } from "@crawl-automation/processing";
 import { sha256 } from "@crawl-automation/platform";
 import { ReviewRecordSchema, type ReviewRecord } from "@crawl-automation/v3-contracts";
@@ -9,7 +11,10 @@ import type { EvidencePublisher, ReviewLedger } from "./ports.js";
 /** The two ways a label product stops before its manifest: sources unverified, or held up by permits. */
 export const LabelReviewRequestSchema = z.strictObject({
   input: z.unknown(),
-  code: z.enum(["CHANNEL.LABEL_PREPARATION_UNVERIFIED", "CHANNEL.DEPENDENCY_UNAVAILABLE"]),
+  code: z.enum([
+    "CHANNEL.LABEL_PREPARATION_UNVERIFIED",
+    pipelineErrors.code("CHANNEL.DEPENDENCY_UNAVAILABLE"),
+  ]),
   states: z.array(z.unknown()).max(100),
   failures: z
     .array(z.strictObject({ sourceId: z.string(), code: z.string(), executionFact: z.string() }))
@@ -43,7 +48,8 @@ export class LabelReviews {
     );
     try {
       await this.deps.reviews.append(record);
-    } catch {
+    } catch (error) {
+      recordRecovery(error, { operation: "pipeline/label-reviews" });
       // The read-back below decides.
     }
     const saved = await this.deps.reviews.read(reviewId);

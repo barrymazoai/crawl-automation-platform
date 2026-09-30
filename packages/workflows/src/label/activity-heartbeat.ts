@@ -1,3 +1,4 @@
+import { withCause } from "@crawl-automation/platform/errors/activity";
 import { activityCodes, activityErrors } from "@crawl-automation/platform/errors/activity";
 import { ApplicationFailure, TimeoutFailure } from "@temporalio/workflow";
 
@@ -27,9 +28,12 @@ export async function withHeartbeatFailure<Result>(work: () => Promise<Result>):
     return await work();
   } catch (error) {
     if (isHeartbeatTimeout(error)) {
-      throw ApplicationFailure.nonRetryable(
-        activityErrors.codes[activityCodes.heartbeatTimeout].message,
-        activityCodes.heartbeatTimeout,
+      throw withCause(
+        ApplicationFailure.nonRetryable(
+          activityErrors.codes[activityCodes.heartbeatTimeout].message,
+          activityCodes.heartbeatTimeout,
+        ),
+        error,
       );
     }
     throw error;

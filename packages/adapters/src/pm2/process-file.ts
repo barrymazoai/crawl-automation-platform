@@ -59,6 +59,7 @@ async function readOptional(path: string): Promise<string | null> {
     return await readFile(path, "utf8");
   } catch (error) {
     if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") {
+      // ENOENT is an absent optional status file; all other I/O errors propagate.
       return null;
     }
     throw error;

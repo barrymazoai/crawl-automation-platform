@@ -55,7 +55,7 @@ export function captureHistoryEntry(
     raw,
     listings: [listing],
     observations: [{ id: canonicalHash(point), ...point }],
-    issues: raw.capturedAt ? [] : ["HISTORY.METRIC_TIME_UNKNOWN"],
+    issues: raw.capturedAt ? [] : [historyErrors.code("HISTORY.METRIC_TIME_UNKNOWN")],
   };
 }
 

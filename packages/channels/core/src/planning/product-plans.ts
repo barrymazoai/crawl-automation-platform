@@ -1,3 +1,4 @@
+import { recordRecovery } from "@crawl-automation/platform";
 import { isDeepStrictEqual } from "node:util";
 import {
   ChannelPlanInputSchema,
@@ -136,7 +137,10 @@ export class ProductPlans {
       return null;
     }
     // Read-only check; if it cannot confirm the plan, the original failure is what gets recorded.
-    const plan = await this.inspect(input, AbortSignal.timeout(10_000)).catch(() => null);
+    const plan = await this.inspect(input, AbortSignal.timeout(10_000)).catch((error: unknown) => {
+      recordRecovery(error, { operation: "plan.inspect", operationId: input.operationId });
+      return null;
+    });
     return plan ? this.prepared(plan) : null;
   }
 

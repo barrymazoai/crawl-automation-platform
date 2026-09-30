@@ -1,12 +1,12 @@
+import { withCause } from "@crawl-automation/platform";
 import { CodexError } from "@crawl-automation/platform";
 import type { ExecutionFact } from "../step/step-failure.js";
 
 /** Vision names Codex failures `VISION.CODEX_*` where text says `TEXT.CODEX_*`, keeping fact and detail. */
 export function asVisionCodexError(error: CodexError): CodexError {
-  return new CodexError(
-    error.code.replace(/^TEXT\./, "VISION."),
-    error.executionFact,
-    error.detail,
+  return withCause(
+    new CodexError(error.code.replace(/^TEXT\./, "VISION."), error.executionFact, error.detail),
+    error,
   );
 }
 

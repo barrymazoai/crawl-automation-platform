@@ -1,3 +1,4 @@
+import { recordRecovery } from "@crawl-automation/platform";
 import { randomUUID } from "node:crypto";
 import type { z } from "zod";
 import { isDeepStrictEqual } from "node:util";
@@ -147,7 +148,8 @@ export async function keepCallFailure(
       signal,
       mismatch: () => visionFailure("VISION.LOCAL_EVIDENCE_CONFLICT"),
     });
-  } catch {
+  } catch (error) {
+    recordRecovery(error, { operation: "vision/vision-attempts" });
     // The call's own failure is what the step reports; these facts only help a later redelivery.
   }
 }
@@ -161,7 +163,8 @@ function causeOf(error: unknown): { detail?: string } {
 function readableJson(bytes: Uint8Array): unknown {
   try {
     return decodeJson(bytes);
-  } catch {
+  } catch (error) {
+    recordRecovery(error, { operation: "vision/vision-attempts" });
     return undefined;
   }
 }

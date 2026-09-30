@@ -1,3 +1,4 @@
+import { withCause } from "@crawl-automation/platform";
 import {
   CodexError,
   CodexRpc,
@@ -69,7 +70,9 @@ export class CodexClient {
         runOwnedTurn({ rpc, cwd, settings: this.settings }, call, lifetime),
       );
     } catch (error) {
-      throw error instanceof CodexError ? this.setup.profile.renameError(error) : error;
+      throw error instanceof CodexError
+        ? withCause(this.setup.profile.renameError(error), error)
+        : error;
     } finally {
       onStopped?.();
     }

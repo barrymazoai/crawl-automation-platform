@@ -1,3 +1,4 @@
+import { recordRecovery } from "@crawl-automation/platform";
 import { readFile } from "node:fs/promises";
 import type { FleetSnapshot, FleetStatusSource, QueueHealth } from "@crawl-automation/app";
 import { differenceInSeconds } from "date-fns";
@@ -28,7 +29,8 @@ export interface FleetStatusPaths {
 async function readJson(path: string): Promise<unknown> {
   try {
     return JSON.parse(await readFile(path, "utf8"));
-  } catch {
+  } catch (error) {
+    recordRecovery(error, { operation: "files/fleet-status-files" });
     return null;
   }
 }

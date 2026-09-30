@@ -1,3 +1,4 @@
+import { recordWorkflowRecovery } from "../workflow-recovery.js";
 import {
   LabelCoreOutcomeSchema,
   PagePrepareOutcomeSchema,
@@ -55,6 +56,7 @@ async function preparedPage(run: LabelRun, source: PageSource) {
     if (isCancellation(error) || isHeartbeatFailure(error)) {
       throw error;
     }
+    recordWorkflowRecovery(error, { operation: "label-page" });
     return null;
   }
 }

@@ -1,3 +1,4 @@
+import { pipelineErrors } from "@crawl-automation/platform/errors/activity";
 import { patched } from "@temporalio/workflow";
 import type { ChannelPlanInput } from "@crawl-automation/v3-contracts";
 import type { Manifest } from "./label/label-model.js";
@@ -14,7 +15,7 @@ type Captured = Extract<CaptureResult, { status: "captured" }>;
 type ReuseResult = ReturnType<typeof SiblingReuseResultSchema.parse>;
 
 /** The reuse activity's answer when a sibling formula exists but the page prints no facts text to check it with. */
-const LABEL_TEXT_UNAVAILABLE = "FORMULA.LABEL_TEXT_UNAVAILABLE";
+const LABEL_TEXT_UNAVAILABLE = pipelineErrors.code("FORMULA.LABEL_TEXT_UNAVAILABLE");
 
 /**
  * Sibling formula reuse: a product with no formula of its own, whose page shows a family, asks whether a size or
@@ -86,7 +87,7 @@ async function checkLabelImage(step: {
 }): Promise<ReuseResult> {
   const labelImage = await labelImageSelection(step);
   if (!labelImage) {
-    return { status: "extract", reason: "FORMULA.LABEL_IMAGE_UNAVAILABLE" };
+    return { status: "extract", reason: pipelineErrors.code("FORMULA.LABEL_IMAGE_UNAVAILABLE") };
   }
   return SiblingReuseResultSchema.parse(
     await step.pipeline.reuseSiblingFormula({ ...step.request, labelImage }),

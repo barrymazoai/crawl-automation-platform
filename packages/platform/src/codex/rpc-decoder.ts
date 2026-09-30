@@ -1,3 +1,4 @@
+import { withCause } from "../errors/with-cause.js";
 import { codexFailure } from "./errors.js";
 
 /** The existing bounded newline/UTF-8 framing; no replacement wire protocol or buffering policy. */
@@ -23,8 +24,8 @@ export class RpcDecoder {
       this.buffer = this.buffer.subarray(end + 1);
       try {
         this.receive(JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(line)));
-      } catch {
-        this.fail(codexFailure("TEXT.CODEX_PROTOCOL"));
+      } catch (error) {
+        this.fail(withCause(codexFailure("TEXT.CODEX_PROTOCOL"), error));
         break;
       }
     }

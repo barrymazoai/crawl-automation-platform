@@ -89,9 +89,9 @@ function namesOf(product: JsonRecord, sku: string) {
 
 function warningsOf(factsHtml: string | null, brandRaw: string | null): string[] {
   return [
-    ...(factsHtml ? [] : ["GNC.FACTS_DOM_MISSING"]),
-    "GNC.GALLERY_UNVERIFIED",
-    ...(brandRaw ? [] : ["GNC.BRAND_MISSING"]),
+    ...(factsHtml ? [] : [gncPageErrors.code("GNC.FACTS_DOM_MISSING")]),
+    gncPageErrors.code("GNC.GALLERY_UNVERIFIED"),
+    ...(brandRaw ? [] : [gncPageErrors.code("GNC.BRAND_MISSING")]),
   ];
 }
 

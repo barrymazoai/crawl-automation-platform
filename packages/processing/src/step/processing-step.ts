@@ -1,3 +1,4 @@
+import { recordRecovery } from "@crawl-automation/platform";
 import type { AppError } from "@crawl-automation/platform";
 import type { ReviewRecord } from "@crawl-automation/v3-contracts";
 import type { ResultFacts } from "../results/result-kind.js";
@@ -76,6 +77,7 @@ export abstract class ProcessingStep<TInput, TOutput, TRecord, TOutcome, TEviden
     try {
       return await this.execute(attempt, signal);
     } catch (error) {
+      recordRecovery(error, { operation: "processing-step" });
       const found = await this.finishedMeanwhile(attempt.input);
       if (found) {
         return found;
@@ -151,7 +153,8 @@ export abstract class ProcessingStep<TInput, TOutput, TRecord, TOutcome, TEviden
     try {
       const facts = await this.stepDeps.results.inspect(input, retentionSignal());
       return this.outcome(input, facts);
-    } catch {
+    } catch (error) {
+      recordRecovery(error, { operation: "step/processing-step" });
       // Whether it finished cannot be shown now; the failure is recorded as a Review instead.
       return null;
     }

@@ -1,3 +1,4 @@
+import { recordRecovery } from "@crawl-automation/platform";
 import { randomUUID } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
 import type { ObjectStore } from "@crawl-automation/platform";
@@ -124,7 +125,8 @@ async function sharedReview(
   if (!bytes) {
     try {
       await remote.create(shared.key, encodeJson(shared.record), "application/json", signal);
-    } catch {
+    } catch (error) {
+      recordRecovery(error, { operation: "assembly/assembly-review" });
       // The read-back below decides.
     }
     bytes = await remote.read(shared.key, ASSEMBLY_LIMIT, signal);

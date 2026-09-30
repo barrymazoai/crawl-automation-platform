@@ -1,3 +1,4 @@
+import { recordWorkflowRecovery } from "../workflow-recovery.js";
 import {
   ChannelSourceReadySchema,
   ChannelStreamSealSchema,
@@ -105,7 +106,8 @@ function belongs(ready: Ready, task: LabelTask): boolean {
   try {
     assertArtifactBelongsTo(ready.file, task.owner);
     return true;
-  } catch {
+  } catch (error) {
+    recordWorkflowRecovery(error, { operation: "label/label-stream" });
     return false;
   }
 }

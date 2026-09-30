@@ -1,3 +1,4 @@
+import { recordRecovery } from "@crawl-automation/platform";
 import { isDeepStrictEqual } from "node:util";
 import { errorCodeOf } from "@crawl-automation/platform";
 import {
@@ -92,7 +93,9 @@ export class PlanReviewLedger {
       throw planErrors.create("CHANNEL.REVIEW_UNVERIFIED");
     }
     // A lost acknowledgement is settled by reading the same ID back, never by a second append.
-    await this.reviews.append(record).catch(() => undefined);
+    await this.reviews.append(record).catch((error: unknown) => {
+      recordRecovery(error, { operation: "plan.review", reviewId: record.reviewId });
+    });
     if (!isDeepStrictEqual(await this.reviews.read(record.reviewId), record)) {
       throw planErrors.create("CHANNEL.REVIEW_UNVERIFIED");
     }

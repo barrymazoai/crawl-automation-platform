@@ -1,3 +1,5 @@
+import { recordRecovery } from "@crawl-automation/platform";
+import { labelValidationErrors } from "../../label/validation-errors.js";
 import { z } from "zod";
 import {
   LabelImageCandidateSchema,
@@ -34,20 +36,21 @@ function splitOtherIngredients(
   codes: Set<string>,
 ) {
   if (!!candidate.otherIngredients !== !!block) {
-    codes.add("LABEL.INGREDIENT_BOUNDARY");
+    codes.add(labelValidationErrors.code("LABEL.INGREDIENT_BOUNDARY"));
   }
   if (!candidate.otherIngredients || !block) {
     return;
   }
   if (block.text !== block.evidence) {
-    codes.add("LABEL.INGREDIENT_BOUNDARY");
+    codes.add(labelValidationErrors.code("LABEL.INGREDIENT_BOUNDARY"));
     return;
   }
   try {
     const items = splitLabelIngredients(block.text).map((text) => ({ text, evidence: text }));
     candidate.otherIngredients.items = items;
-  } catch {
-    codes.add("LABEL.INGREDIENT_BOUNDARY");
+  } catch (error) {
+    recordRecovery(error, { operation: "vision/protocol/label-vision-v2" });
+    codes.add(labelValidationErrors.code("LABEL.INGREDIENT_BOUNDARY"));
   }
 }
 

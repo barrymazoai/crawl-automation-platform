@@ -1,3 +1,4 @@
+import { withCause } from "@crawl-automation/platform";
 import { sha256 } from "@crawl-automation/platform";
 import type { ProcessingInput, ResultFacts, StoredRecord } from "./result-kind.js";
 import { noResult } from "./result-kind.js";
@@ -100,8 +101,8 @@ export class ResultRecovery<
     let prepared: PreparedRecord<TRecord>;
     try {
       prepared = prepareRecord(kind, { input, output: decodeJson(result) as TOutput, storageId });
-    } catch {
-      throw kind.fail("integrity", "executed");
+    } catch (error) {
+      throw withCause(kind.fail("integrity", "executed"), error);
     }
     const same =
       sha256(prepared.bytes) === sha256(result) && sha256(prepared.manifest) === sha256(manifest);

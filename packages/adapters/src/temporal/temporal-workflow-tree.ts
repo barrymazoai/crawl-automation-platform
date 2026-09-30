@@ -49,6 +49,7 @@ export class TemporalWorkflowTree implements WorkflowTree, StopEvidenceReader {
       };
     } catch (error) {
       if (error instanceof WorkflowNotFoundError) {
+        // WorkflowNotFoundError (gRPC NOT_FOUND) is the expected absent execution; other failures propagate.
         return null;
       }
       throw error;

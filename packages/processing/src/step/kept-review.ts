@@ -1,3 +1,4 @@
+import { recordRecovery } from "@crawl-automation/platform";
 import { isDeepStrictEqual } from "node:util";
 import type { AppError, ObjectStore } from "@crawl-automation/platform";
 import { ReviewRecordSchema, type ReviewRecord } from "@crawl-automation/v3-contracts";
@@ -36,7 +37,8 @@ export async function appendConfirmed(
 ): Promise<ReviewRecord> {
   try {
     await reviews.append(review);
-  } catch {
+  } catch (error) {
+    recordRecovery(error, { operation: "step/kept-review" });
     // Read back the exact ID; never append twice.
   }
   const confirmed = await reviews.read(review.reviewId);

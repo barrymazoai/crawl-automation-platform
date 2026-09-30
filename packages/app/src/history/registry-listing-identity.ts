@@ -1,3 +1,4 @@
+import { recordRecovery } from "@crawl-automation/platform";
 import type { ChannelRegistry } from "@crawl-automation/channels-core";
 import { text } from "./canonical.js";
 import type { ListingIdentityResolver, ListingIdentitySource } from "./listing-identity.js";
@@ -14,7 +15,8 @@ export function listingIdentityResolver(registry: ChannelRegistry): ListingIdent
       let address;
       try {
         address = adapter.productAddress(page.url);
-      } catch {
+      } catch (error) {
+        recordRecovery(error, { operation: "history/registry-listing-identity" });
         // A refused address has no verified listing; the capture service records an identity failure.
         return null;
       }

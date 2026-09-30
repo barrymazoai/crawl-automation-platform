@@ -1,3 +1,4 @@
+import { recordRecovery } from "@crawl-automation/platform";
 import type { ListedProduct, ListingPageContent } from "@crawl-automation/channels-core";
 import { DomUtils, parseDocument } from "htmlparser2";
 import { GNC_ORIGIN, isSku } from "./gnc-address.js";
@@ -37,7 +38,8 @@ function groupMembers(root: Root): ListedProduct[] {
       return (Array.isArray(value) ? value : [value]).filter(
         (item): item is Json => isRecord(item) && types(item).includes("ProductGroup"),
       );
-    } catch {
+    } catch (error) {
+      recordRecovery(error, { operation: "gnc-family" });
       // A broken JSON-LD block lists no members; the option links below are read regardless.
       return [];
     }

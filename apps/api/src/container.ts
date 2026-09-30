@@ -1,4 +1,4 @@
-import { access } from "node:fs/promises";
+import { pathAccessible } from "@crawl-automation/platform";
 import {
   createEvidenceService,
   PostgresBrandStore,
@@ -72,12 +72,6 @@ export interface ApiParts {
 }
 
 type Parts = AwilixContainer<ApiParts>;
-
-const exists = (path: string) =>
-  access(path).then(
-    () => true,
-    () => false,
-  );
 
 /** The composition root: the one place that knows which database, Temporal and files are used. */
 export async function buildContainer(config: ApiConfig): Promise<Parts> {
@@ -175,7 +169,7 @@ function registerLoops(container: Parts): void {
           runs: parts.runs,
           log: parts.log,
           productRuns: productRuns(parts),
-          isPaused: () => exists(parts.config.delivery.pauseFile),
+          isPaused: () => pathAccessible(parts.config.delivery.pauseFile),
         },
         parts.config.queue.dispatcher,
       ),
@@ -213,7 +207,7 @@ function deliveryCoordinator(parts: ApiParts): DeliveryCoordinator {
 
 function deliveryRunner(parts: ApiParts): DeliveryRunner {
   const scan = new PostgresDeliveryScan(parts.database);
-  const isPaused = () => exists(parts.config.delivery.pauseFile);
+  const isPaused = () => pathAccessible(parts.config.delivery.pauseFile);
   return new DeliveryRunner(
     { scan, coordinator: parts.deliveryCoordinator, isPaused, log: parts.log },
     parts.config.delivery.runner,

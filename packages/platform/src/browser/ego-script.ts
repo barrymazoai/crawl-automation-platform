@@ -24,21 +24,23 @@ if (task.ownership === "user") {
   emit({ kind: "opened", targetId });
   let value = null;
   let failure = null;
+  let cleanupFailure = null;
   try {
     value = await (async () => {
 ${body}
     })();
   } catch (error) {
-    failure = { name: String(error?.name ?? "Error"), code: typeof error?.code === "string" ? error.code : null };
+    failure = { name: String(error?.name ?? "Error"), code: typeof error?.code === "string" ? error.code : null, message: String(error?.message ?? error) };
   }
   let closed = false;
   try {
     await page.close();
     closed = !(await task.tabs()).some((tab) => tab.targetId === targetId);
-  } catch {
+  } catch (error) {
+    cleanupFailure = { name: String(error?.name ?? "Error"), code: typeof error?.code === "string" ? error.code : null, message: String(error?.message ?? error) };
     closed = false;
   }
-  emit({ kind: "result", targetId, closed, failure, value });
+  emit({ kind: "result", targetId, closed, failure, cleanupFailure, value });
 }`;
 }
 
@@ -68,8 +70,12 @@ if (task.ownership === "user") {
 export const READ_PAGE_BODY = `
 const read = params.read;
 await page.goto(read.url, { timeout: read.timeoutMs, waitUntil: "domcontentloaded" });
+let readinessFailure = null;
 const ready = await page.waitForSelector(read.readySelector, { timeout: read.timeoutMs, state: "attached" })
-  .then(() => true, () => false);
+  .then(() => true, (error) => {
+    readinessFailure = { name: String(error?.name ?? "Error"), code: typeof error?.code === "string" ? error.code : null, message: String(error?.message ?? error) };
+    return false;
+  });
 const count = () => page.evaluate((selector) => document.querySelectorAll(selector).length, read.scroll?.itemSelector ?? "a");
 const markMore = () => page.evaluate((texts) => {
   const wanted = texts.map((text) => text.toLowerCase());
@@ -100,4 +106,4 @@ const snapshot = await page.evaluate(() => {
   const navigation = performance.getEntriesByType("navigation")[0];
   return { url: location.href, status: navigation?.responseStatus || null, html: document.documentElement.outerHTML };
 });
-return { ...snapshot, ready, scroll: { rounds, ended } };`;
+return { ...snapshot, ready, readinessFailure, scroll: { rounds, ended } };`;

@@ -1,3 +1,4 @@
+import { recordWorkflowRecovery } from "../workflow-recovery.js";
 import { CollectionWorkflowInput } from "@crawl-automation/v3-contracts";
 import { proxyActivities, sleep, workflowInfo } from "@temporalio/workflow";
 import { failureCode } from "../failure-code.js";
@@ -53,6 +54,7 @@ async function finishedScan(request: {
         return scan;
       }
     } catch (error) {
+      recordWorkflowRecovery(error, { operation: "collection.inspect" });
       failures += 1;
       // A run whose scan was never requested cannot finish by waiting.
       if (failureCode(error) === SCAN_MISSING || failures >= MAX_READ_FAILURES) {

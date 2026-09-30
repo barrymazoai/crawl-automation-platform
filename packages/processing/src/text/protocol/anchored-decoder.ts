@@ -20,7 +20,8 @@ import { resolveAnchor, type Anchor } from "./resolve-anchor.js";
 type CandidateV1 = z.infer<typeof TextCandidateV1Schema>;
 type CandidateV2 = z.infer<typeof TextCandidateV2Schema>;
 
-const failed = (code: Parameters<typeof textFailure>[0]) => textFailure(code, "executed");
+const failed = (code: Parameters<typeof textFailure>[0], cause?: unknown) =>
+  textFailure(code, "executed", cause);
 
 /** Reads a source-text answer (candidate v1, or anchored/2) and checks every quote against the text. */
 export function decodeTextResponse(
@@ -31,8 +32,8 @@ export function decodeTextResponse(
   let json: unknown;
   try {
     json = JSON.parse(raw);
-  } catch {
-    throw failed("TEXT.MODEL_SCHEMA");
+  } catch (error) {
+    throw failed("TEXT.MODEL_SCHEMA", error);
   }
   if (input.resultSchemaVersion === 1) {
     return decodeCandidateV1(input, text, json);
@@ -51,8 +52,8 @@ function decodeCandidateV1(input: TextInput, text: string, json: unknown): Candi
   }
   try {
     assertTextQuotes(parsed.data, input, text);
-  } catch {
-    throw failed("TEXT.CITATION_INVALID");
+  } catch (error) {
+    throw failed("TEXT.CITATION_INVALID", error);
   }
   return parsed.data;
 }

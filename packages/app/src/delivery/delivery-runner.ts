@@ -1,3 +1,5 @@
+import { errorCodeOf } from "@crawl-automation/platform";
+import { ignoreAbort } from "@crawl-automation/platform";
 import { setTimeout as delay } from "node:timers/promises";
 import type { Logger } from "@crawl-automation/platform";
 import { z } from "zod";
@@ -59,9 +61,9 @@ export class DeliveryRunner {
   async run(signal: AbortSignal): Promise<void> {
     while (!signal.aborted) {
       await this.tick(signal).catch((error: unknown) => {
-        this.deps.log.error({ err: error }, "delivery sweep failed");
+        this.deps.log.error({ err: error, code: errorCodeOf(error) }, "delivery sweep failed");
       });
-      await delay(this.options.intervalMs, undefined, { signal }).catch(() => undefined);
+      await delay(this.options.intervalMs, undefined, { signal }).catch(ignoreAbort);
     }
   }
 
@@ -92,7 +94,10 @@ export class DeliveryRunner {
       log.debug("delivery reconciled");
     } catch (error) {
       const waitMs = this.backoff.failed(requestId);
-      log.warn({ err: error, nextCheckInMs: waitMs }, "delivery reconcile failed");
+      log.warn(
+        { err: error, code: errorCodeOf(error), nextCheckInMs: waitMs },
+        "delivery reconcile failed",
+      );
     }
   }
 }

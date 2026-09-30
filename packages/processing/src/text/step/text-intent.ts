@@ -34,7 +34,7 @@ export function claimTextIntent(
       intent,
       parse: (raw) => TextIntentSchema.parse(raw),
       limit: textLimits.resultBytes,
-      fail: (reason) => textFailure(failureCodes[reason]),
+      fail: (reason, cause) => textFailure(failureCodes[reason], "unknown", cause),
     },
     signal,
   );

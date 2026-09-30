@@ -1,3 +1,4 @@
+import { recordRecovery } from "../logger/recovery.js";
 import type { ArtifactRef } from "@crawl-automation/v3-contracts";
 
 function validText(bytes: Uint8Array, json: boolean): boolean {
@@ -7,7 +8,8 @@ function validText(bytes: Uint8Array, json: boolean): boolean {
       JSON.parse(text);
     }
     return !text.includes("\0");
-  } catch {
+  } catch (error) {
+    recordRecovery(error, { operation: "storage/media-signatures" });
     return false;
   }
 }

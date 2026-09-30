@@ -111,6 +111,7 @@ describe("shared Codex client", () => {
     );
     await expect(opened.client.run(call, signal())).rejects.toMatchObject({
       code: expect.stringMatching(/^VISION\.CODEX_/),
+      cause: expect.objectContaining({ code: expect.stringMatching(/^TEXT\.CODEX_/) }),
     });
     await opened.client.close();
   });

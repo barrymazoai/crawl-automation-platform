@@ -1,3 +1,4 @@
+import { recordRecovery } from "@crawl-automation/platform";
 import { sha256 } from "@crawl-automation/platform";
 import {
   type LabelProductJoin,
@@ -63,6 +64,7 @@ export class LabelAssembly {
       await this.publish(input, { key, bytes: encodeJson(output) }, signal);
       signal.throwIfAborted();
     } catch (error) {
+      recordRecovery(error, { operation: "label-assembly" });
       signal.throwIfAborted();
       const codes = [...new Set([...(output?.result.codes ?? []), assemblyCode(error)])];
       return recordAssemblyReview(this.deps, {
@@ -112,7 +114,8 @@ export class LabelAssembly {
     await claimHandoff(remote, { key: intent, hash: sha256(file.bytes) }, signal);
     try {
       await remote.create(file.key, file.bytes, "application/json", signal);
-    } catch {
+    } catch (error) {
+      recordRecovery(error, { operation: "assembly/label-assembly" });
       // The read-back below decides; never a second write.
     }
     assertSameBytes(await remote.read(file.key, ASSEMBLY_LIMIT, signal), file.bytes);
@@ -177,6 +180,7 @@ export class LabelAssembly {
       }
       at.entries.push(entry);
     } catch (error) {
+      recordRecovery(error, { operation: "label-assembly" });
       signal.throwIfAborted();
       const code = assemblyCode(error);
       if (code === "LABEL_PRODUCT.IDENTITY_CONFLICT") {

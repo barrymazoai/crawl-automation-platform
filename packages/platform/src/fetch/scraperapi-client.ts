@@ -88,7 +88,10 @@ export class ScraperApiClient {
       }
       return await this.accept(answer, { target, page });
     } catch (error) {
-      throw isAppError(error) ? error : scraperApiErrors.create("SCRAPERAPI.EXECUTION_UNKNOWN");
+      // No cause: the request URL carries the API key. Keep only the error's name and code.
+      throw isAppError(error)
+        ? error
+        : scraperApiErrors.create("SCRAPERAPI.EXECUTION_UNKNOWN", { details: safeReason(error) });
     }
   }
 
@@ -180,4 +183,11 @@ async function readWithin(answer: Answer, page: ScraperApiRequest): Promise<Buff
 function creditCostOf(raw: string | null): number | null {
   const cost = raw === null ? Number.NaN : Number(raw);
   return Number.isFinite(cost) && cost >= 0 ? cost : null;
+}
+
+/** The failure's name and code only; never the message, cause or request, which can contain the API key. */
+function safeReason(error: unknown): Record<string, string> {
+  const name = error instanceof Error ? error.name : typeof error;
+  const code = (error as { code?: unknown } | null)?.code;
+  return typeof code === "string" ? { name, code } : { name };
 }

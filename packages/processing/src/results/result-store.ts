@@ -1,3 +1,4 @@
+import { recordRecovery } from "@crawl-automation/platform";
 import { isDeepStrictEqual } from "node:util";
 import type { ObjectStore } from "@crawl-automation/platform";
 import type {
@@ -146,7 +147,8 @@ export class ResultStore<
   protected async registerRecord(registry: ResultRegistry<TRecord>, record: TRecord) {
     try {
       await registry.register(record);
-    } catch {
+    } catch (error) {
+      recordRecovery(error, { operation: "results/result-store" });
       // Settled by the read-back in register().
     }
   }
@@ -194,7 +196,8 @@ export class ResultStore<
   ): Promise<boolean> {
     try {
       return await holdsVerifiedRecord(this.deps.kind, check, signal);
-    } catch {
+    } catch (error) {
+      recordRecovery(error, { operation: "results/result-store" });
       signal.throwIfAborted();
       return false;
     }

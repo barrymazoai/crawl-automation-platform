@@ -1,3 +1,4 @@
+import { historyErrors } from "@crawl-automation/app";
 import {
   PostgresHtmlCaptureRecords,
   PostgresListingStates,
@@ -30,7 +31,7 @@ export function captureRecords(parts: {
       listingIdentityResolver(parts.registry),
     ),
     onHistoryPending(error: unknown, page: CapturedPage) {
-      const code = errorCodeOf(error) ?? "HISTORY.STORAGE_UNAVAILABLE";
+      const code = errorCodeOf(error) ?? historyErrors.code("HISTORY.STORAGE_UNAVAILABLE");
       const { channel, listingId, variantId, archive } = page;
       const where = { event: "HISTORY_PENDING", code, channel, listingId, variantId };
       parts.log.warn({ ...where, archiveKey: archive.objectKey }, "metrics point not stored yet");

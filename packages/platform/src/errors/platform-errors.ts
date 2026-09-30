@@ -2,6 +2,10 @@ import { defineErrors } from "./define-errors.js";
 
 /** Errors raised by the platform layer itself. */
 export const platformErrors = defineErrors({
+  "RUNTIME.RECOVERY_FAILED": {
+    category: "RUNTIME",
+    message: "A recovery path retained an unexpected failure.",
+  },
   "CONFIG.NOT_ABSOLUTE": { category: "RUNTIME", message: "Config path must be absolute." },
   "CONFIG.UNSAFE_FILE": {
     category: "RUNTIME",

@@ -1,3 +1,4 @@
+import { recordRecovery } from "@crawl-automation/platform";
 import { sha256 } from "@crawl-automation/platform";
 import {
   LabelCollectedProductSchema,
@@ -67,6 +68,7 @@ export class LabelCollection {
         evidenceKey: key,
       };
     } catch (error) {
+      recordRecovery(error, { operation: "label-collection" });
       signal.throwIfAborted();
       const review = { input, codes: [assemblyCode(error)], key, stage: "collect" as const };
       const result = await recordAssemblyReview(this.deps, {
@@ -125,7 +127,8 @@ export class LabelCollection {
     at.signal.throwIfAborted();
     try {
       await this.deps.registry.append(candidate);
-    } catch {
+    } catch (error) {
+      recordRecovery(error, { operation: "assembly/label-collection" });
       // Settled by the read-back; the insert is never repeated.
     }
   }

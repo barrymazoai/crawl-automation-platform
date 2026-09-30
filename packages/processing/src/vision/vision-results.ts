@@ -1,3 +1,4 @@
+import { recordRecovery } from "@crawl-automation/platform";
 import { isDeepStrictEqual } from "node:util";
 import type { ObjectStore } from "@crawl-automation/platform";
 import type { VisionRecord, VisionTask } from "@crawl-automation/v3-contracts";
@@ -109,7 +110,9 @@ export class VisionResults implements StepResults<VisionTask, VisionOutput, Visi
       throw visionFailure("VISION.REGISTRY_UNAVAILABLE", "executed");
     }
     // The ledger's answer is not trusted either way: the read-back below decides (a conflict included).
-    await registry.register(facts.record).catch(() => undefined);
+    await registry.register(facts.record).catch((error: unknown) => {
+      recordRecovery(error, { operation: "vision.register" });
+    });
     const after = await this.inspect(task, signal);
     if (!after.resultRegistered) {
       throw visionFailure("VISION.HANDOFF_UNKNOWN", "executed");

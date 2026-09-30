@@ -1,3 +1,4 @@
+import { recordRecovery } from "@crawl-automation/platform";
 import { isDeepStrictEqual } from "node:util";
 import { errorCodeOf, type ObjectStore } from "@crawl-automation/platform";
 import {
@@ -59,6 +60,7 @@ export class ImageOcrTask {
       }
       return await this.prepare(plan, receipt, signal);
     } catch (error) {
+      recordRecovery(error, { operation: "image-ocr-task" });
       return imageReview({ deps: this.deps, input: plan.acquire, plan }, errorCodeOf(error));
     }
   }

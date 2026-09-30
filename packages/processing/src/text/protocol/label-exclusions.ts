@@ -1,3 +1,4 @@
+import { labelValidationErrors } from "../../label/validation-errors.js";
 import type { LabelTextCandidateSchema } from "@crawl-automation/v3-contracts";
 import type { z } from "zod";
 
@@ -26,7 +27,7 @@ export function exclusionCodes(judged: Judged): string[] {
     (exclusion) =>
       !exactlyPlacedExclusion(exclusion, judged) && !allowedExclusion(exclusion, judged),
   );
-  return uncertain ? ["LABEL.COVERAGE_UNCERTAIN"] : [];
+  return uncertain ? [labelValidationErrors.code("LABEL.COVERAGE_UNCERTAIN")] : [];
 }
 
 /** label-text/4: the heading field itself, a field's printed prefix, or a DV footnote symbol. */

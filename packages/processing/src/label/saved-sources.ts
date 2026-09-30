@@ -1,3 +1,4 @@
+import { recordRecovery } from "@crawl-automation/platform";
 import { isDeepStrictEqual } from "node:util";
 import { errorCodeOf } from "@crawl-automation/platform";
 import {
@@ -67,6 +68,7 @@ export class SavedSourceEvidence {
       const ocrSource = await this.tasks.fileOcrSource(source, signal);
       return await this.resolve(ocrSource, state, signal);
     } catch (error) {
+      recordRecovery(error, { operation: "saved-sources" });
       signal.throwIfAborted();
       if (state.status === "review") {
         throw error;
@@ -114,6 +116,7 @@ export class SavedSourceEvidence {
       }
       return await this.claimedImage(source, state, signal);
     } catch (error) {
+      recordRecovery(error, { operation: "saved-sources" });
       signal.throwIfAborted();
       if (errorCodeOf(error) === "SAVED.RECEIPT_INVALID") {
         throw error;

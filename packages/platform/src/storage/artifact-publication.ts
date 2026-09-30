@@ -1,3 +1,5 @@
+import { recordRecovery } from "../logger/recovery.js";
+import { withCause } from "../errors/with-cause.js";
 import type { ArtifactRef } from "@crawl-automation/v3-contracts";
 import { errorCodeOf } from "../errors/error-code.js";
 import { artifactErrors } from "./artifact-errors.js";
@@ -15,6 +17,7 @@ export async function publishArtifact(
     await remote.create(ref.objectKey, bytes, ref.mediaType, signal);
   } catch (error) {
     signal.throwIfAborted();
+    recordRecovery(error, { operation: "artifact.publish" });
     if (errorCodeOf(error) !== "ARTIFACT.UPLOAD_UNKNOWN") {
       throw error;
     }
@@ -22,8 +25,8 @@ export async function publishArtifact(
   const actual = await readPublication(remote, ref, signal);
   try {
     verifyBytes(ref, actual, maxBytes);
-  } catch {
-    throw artifactErrors.create("ARTIFACT.KEY_CONFLICT");
+  } catch (error) {
+    throw withCause(artifactErrors.create("ARTIFACT.KEY_CONFLICT"), error);
   }
 }
 
@@ -34,9 +37,9 @@ async function readPublication(remote: ObjectStore, ref: ArtifactRef, signal: Ab
   } catch (error) {
     signal.throwIfAborted();
     if (errorCodeOf(error) === "ARTIFACT.TOO_LARGE") {
-      throw artifactErrors.create("ARTIFACT.KEY_CONFLICT");
+      throw withCause(artifactErrors.create("ARTIFACT.KEY_CONFLICT"), error);
     }
-    throw artifactErrors.create("ARTIFACT.UPLOAD_UNKNOWN");
+    throw withCause(artifactErrors.create("ARTIFACT.UPLOAD_UNKNOWN"), error);
   }
   if (!actual) {
     throw artifactErrors.create("ARTIFACT.UPLOAD_UNKNOWN");

@@ -1,3 +1,4 @@
+import { recordRecovery } from "@crawl-automation/platform";
 import { isAppError, type ObjectStore } from "@crawl-automation/platform";
 import {
   DefaultKeywordPolicy,
@@ -62,6 +63,7 @@ export class KeywordScreening {
         evidenceKey,
       });
     } catch (error) {
+      recordRecovery(error, { operation: "keyword-screening" });
       const own = isAppError(error) && (KEPT as readonly string[]).includes(error.code);
       const code = own ? error.code : "SCREEN.EVIDENCE_UNRESOLVED";
       const reviewId = await this.recordReview(raw, code);

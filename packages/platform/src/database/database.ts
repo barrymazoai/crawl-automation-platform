@@ -1,3 +1,4 @@
+import { recordRecovery } from "../logger/recovery.js";
 import pg from "pg";
 import type { DatabaseConfig } from "../config/schemas.js";
 import type { Logger } from "../logger/create-logger.js";
@@ -44,7 +45,9 @@ export class PostgresDatabase implements Database {
       await client.query("COMMIT");
       return result;
     } catch (error) {
-      await client.query("ROLLBACK");
+      await client.query("ROLLBACK").catch((rollbackError: unknown) => {
+        recordRecovery(rollbackError, { operation: "database.rollback", originalError: error });
+      });
       throw error;
     } finally {
       client.release();

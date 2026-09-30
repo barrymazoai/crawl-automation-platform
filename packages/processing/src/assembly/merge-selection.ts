@@ -1,3 +1,5 @@
+import { labelValidationErrors } from "../label/validation-errors.js";
+import { assemblyErrors } from "./assembly-errors.js";
 import { isDeepStrictEqual } from "node:util";
 import {
   assessLabelCandidate,
@@ -13,12 +15,12 @@ import { byText, fail, words, type MergeState, type Provenance } from "./merge-s
 type Candidate = Provenance["candidate"];
 type Projected = ReturnType<typeof projectLabelProductCandidate>;
 
-const PARTIAL_LABEL = [
-  "LABEL.INGREDIENTS_INCOMPLETE",
-  "LABEL.FORMULA_INCOMPLETE",
-  "LABEL.AMOUNT_UNREADABLE",
-  "LABEL.CORE_MISSING",
-  "LABEL.EVIDENCE_UNCERTAIN",
+const PARTIAL_LABEL: readonly string[] = [
+  labelValidationErrors.code("LABEL.INGREDIENTS_INCOMPLETE"),
+  labelValidationErrors.code("LABEL.FORMULA_INCOMPLETE"),
+  labelValidationErrors.code("LABEL.AMOUNT_UNREADABLE"),
+  labelValidationErrors.code("LABEL.CORE_MISSING"),
+  labelValidationErrors.code("LABEL.EVIDENCE_UNCERTAIN"),
 ];
 
 /**
@@ -63,7 +65,10 @@ function selectEntry(state: MergeState, entry: Provenance, policy: MergePolicy):
     if (assessed.codes.some((code) => !PARTIAL_LABEL.includes(code))) {
       assessed.codes.forEach((code) => fail(state, entry.id, code));
     } else {
-      state.warnings.push({ id: entry.id, code: "LABEL_PRODUCT.INCOMPLETE_IMAGE_NOT_SELECTED" });
+      state.warnings.push({
+        id: entry.id,
+        code: assemblyErrors.code("LABEL_PRODUCT.INCOMPLETE_IMAGE_NOT_SELECTED"),
+      });
     }
     return;
   }
@@ -102,9 +107,12 @@ function selectFormula(state: MergeState, pick: Pick): void {
   checkAgainstPackaging(state, shape, pick);
   if (state.formulaShape && !isDeepStrictEqual(state.formulaShape, shape)) {
     if (secondaryText) {
-      state.warnings.push({ id: entry.id, code: "LABEL_PRODUCT.SECONDARY_TEXT_FORMULA_CONFLICT" });
+      state.warnings.push({
+        id: entry.id,
+        code: assemblyErrors.code("LABEL_PRODUCT.SECONDARY_TEXT_FORMULA_CONFLICT"),
+      });
     } else {
-      state.codes.add("LABEL_PRODUCT.FORMULA_CONFLICT");
+      state.codes.add(assemblyErrors.code("LABEL_PRODUCT.FORMULA_CONFLICT"));
     }
   }
   if (!state.formula && !secondaryText) {
@@ -133,9 +141,12 @@ function checkAgainstPackaging(state: MergeState, shape: Shape, pick: Pick): voi
     return;
   }
   if (pick.imageFirst) {
-    state.warnings.push({ id: pick.entry.id, code: "PACKAGING.SERVING_SIZE_CONFLICT" });
+    state.warnings.push({
+      id: pick.entry.id,
+      code: assemblyErrors.code("PACKAGING.SERVING_SIZE_CONFLICT"),
+    });
   } else {
-    state.codes.add("PACKAGING.SERVING_SIZE_CONFLICT");
+    state.codes.add(assemblyErrors.code("PACKAGING.SERVING_SIZE_CONFLICT"));
   }
 }
 
@@ -152,10 +163,10 @@ function selectOtherIngredients(state: MergeState, pick: Pick): void {
     if (secondaryText) {
       state.warnings.push({
         id: entry.id,
-        code: "LABEL_PRODUCT.SECONDARY_TEXT_INGREDIENTS_CONFLICT",
+        code: assemblyErrors.code("LABEL_PRODUCT.SECONDARY_TEXT_INGREDIENTS_CONFLICT"),
       });
     } else {
-      state.codes.add("LABEL_PRODUCT.INGREDIENTS_CONFLICT");
+      state.codes.add(assemblyErrors.code("LABEL_PRODUCT.INGREDIENTS_CONFLICT"));
     }
   }
   if (!state.otherIngredients && !secondaryText) {

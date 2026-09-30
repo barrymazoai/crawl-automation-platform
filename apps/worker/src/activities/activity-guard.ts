@@ -1,3 +1,5 @@
+import { withCause } from "@crawl-automation/platform";
+import { pipelineErrors } from "@crawl-automation/platform";
 import { errorCodeOf, type Logger } from "@crawl-automation/platform";
 import { Context } from "@temporalio/activity";
 import { ApplicationFailure } from "@temporalio/common";
@@ -18,7 +20,10 @@ export function guarded(name: string, handler: Handler, log: Logger) {
     const activityLog = activityLogger(log, name, raw);
     if (context.info.attempt !== 1) {
       activityLog.warn({ attempt: context.info.attempt }, "activity retry denied");
-      throw ApplicationFailure.nonRetryable("Automatic retry denied", "PIPELINE.RETRY_DENIED");
+      throw ApplicationFailure.nonRetryable(
+        "Automatic retry denied",
+        pipelineErrors.code("PIPELINE.RETRY_DENIED"),
+      );
     }
     const started = Date.now();
     activityLog.info("activity started");
@@ -34,9 +39,9 @@ export function guarded(name: string, handler: Handler, log: Logger) {
         activityLog.warn({ durationMs, err: error }, "activity cancelled");
       }
       context.cancellationSignal.throwIfAborted();
-      const code = errorCodeOf(error) ?? "PIPELINE.ACTIVITY_UNRESOLVED";
+      const code = errorCodeOf(error) ?? pipelineErrors.code("PIPELINE.ACTIVITY_UNRESOLVED");
       activityLog.error({ code, durationMs, err: error }, "activity failed");
-      throw ApplicationFailure.nonRetryable(`${name} failed`, code);
+      throw withCause(ApplicationFailure.nonRetryable(`${name} failed`, code), error);
     } finally {
       clearInterval(timer);
     }

@@ -1,3 +1,4 @@
+import { pipelineErrors } from "@crawl-automation/platform/errors/activity";
 import { versionedResourceGate } from "./resources/versioned-gate.js";
 import { ApplicationFailure, proxyActivities } from "@temporalio/workflow";
 import {
@@ -21,7 +22,7 @@ export async function collectInBrowser(
   if (!queue) {
     throw ApplicationFailure.nonRetryable(
       "No browser task queue",
-      "PIPELINE.BROWSER_QUEUE_MISSING",
+      pipelineErrors.code("PIPELINE.BROWSER_QUEUE_MISSING"),
     );
   }
   const gate = versionedResourceGate(input.resources, { ignoreLegacyBinding: true });
@@ -46,7 +47,7 @@ export async function collectInBrowser(
   await pipeline.requestAmazonFormula({ brandId: input.brandId, listingId });
   return pipeline.reviewProduct({
     pipeline: input,
-    code: "PIPELINE.FORMULA_PENDING",
-    causeCode: "WHOLEFOODS.AMAZON_FORMULA_MISSING",
+    code: pipelineErrors.code("PIPELINE.FORMULA_PENDING"),
+    causeCode: pipelineErrors.code("WHOLEFOODS.AMAZON_FORMULA_MISSING"),
   });
 }

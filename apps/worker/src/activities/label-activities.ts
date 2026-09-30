@@ -1,3 +1,4 @@
+import { withCause } from "@crawl-automation/platform";
 import type { WorkerParts } from "../container.js";
 import { guarded } from "./activity-guard.js";
 import { activityLogger } from "./activity-log.js";
@@ -72,10 +73,13 @@ async function releaseResource(parts: WorkerParts, raw: unknown): Promise<unknow
   } catch (error) {
     const code = errorCodeOf(error) ?? resourceGateCodes.releaseUnknown;
     log.error({ err: error, code }, "resource release failed");
-    throw ApplicationFailure.create({
-      message: "Resource release failed",
-      type: code,
-      nonRetryable: code === resourceGateCodes.identityConflict,
-    });
+    throw withCause(
+      ApplicationFailure.create({
+        message: "Resource release failed",
+        type: code,
+        nonRetryable: code === resourceGateCodes.identityConflict,
+      }),
+      error,
+    );
   }
 }

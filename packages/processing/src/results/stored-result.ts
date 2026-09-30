@@ -1,3 +1,4 @@
+import { withCause } from "@crawl-automation/platform";
 import { verifyBytes } from "@crawl-automation/platform";
 import type { ArtifactRef } from "@crawl-automation/v3-contracts";
 import type { ObjectStore } from "@crawl-automation/platform";
@@ -74,7 +75,7 @@ function verifyRef<TInput extends ProcessingInput, TOutput>(
 ): void {
   try {
     verifyBytes(stored.ref, stored.bytes, stored.limit);
-  } catch {
-    throw kind.fail("integrity");
+  } catch (error) {
+    throw withCause(kind.fail("integrity"), error);
   }
 }

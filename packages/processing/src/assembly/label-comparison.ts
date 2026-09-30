@@ -1,3 +1,4 @@
+import { labelValidationErrors } from "../label/validation-errors.js";
 import { isDeepStrictEqual } from "node:util";
 import {
   LabelImageCandidateSchema,
@@ -27,7 +28,11 @@ export function compareLabelStructure(left: ComparedSource, right: ComparedSourc
   const checks = [assessLabelCandidate(first), assessLabelCandidate(second)];
   if (checks.some((check) => check.status !== "candidate")) {
     const codes = [
-      ...new Set(checks.flatMap((check) => check.codes).concat("LABEL.SOURCE_NOT_COMPLETE")),
+      ...new Set(
+        checks
+          .flatMap((check) => check.codes)
+          .concat(labelValidationErrors.code("LABEL.SOURCE_NOT_COMPLETE")),
+      ),
     ];
     return { status: "unresolved" as const, codes };
   }
@@ -37,13 +42,13 @@ export function compareLabelStructure(left: ComparedSource, right: ComparedSourc
   const { servingsPerContainer: firstCount, ...firstBody } = firstFormula ?? {};
   const { servingsPerContainer: secondCount, ...secondBody } = secondFormula ?? {};
   if (!isDeepStrictEqual(firstBody, secondBody)) {
-    codes.push("LABEL.FORMULA_CONFLICT");
+    codes.push(labelValidationErrors.code("LABEL.FORMULA_CONFLICT"));
   }
   if (firstCount !== secondCount) {
-    codes.push("LABEL.CONTAINER_COUNT_CONFLICT");
+    codes.push(labelValidationErrors.code("LABEL.CONTAINER_COUNT_CONFLICT"));
   }
   if (!isDeepStrictEqual(otherNames(first), otherNames(second))) {
-    codes.push("LABEL.OTHER_INGREDIENTS_CONFLICT");
+    codes.push(labelValidationErrors.code("LABEL.OTHER_INGREDIENTS_CONFLICT"));
   }
   return { status: codes.length ? ("conflict" as const) : ("match" as const), codes };
 }

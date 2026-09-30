@@ -1,3 +1,4 @@
+import { listingErrors } from "@crawl-automation/platform";
 import { errorCodeOf } from "@crawl-automation/platform";
 import type { ChannelAdapter, ProductAddress, ProductIdentity } from "../adapter.js";
 import { channelErrors } from "../errors.js";
@@ -50,7 +51,7 @@ export function identitySighting(
   return {
     state: "unlisted",
     reason: "identity_conflict",
-    causeCode: "LISTING.IDENTITY_CONFLICT",
+    causeCode: listingErrors.code("LISTING.IDENTITY_CONFLICT"),
     httpStatus: 200,
     requestedListingId: requested.listingId,
     requestedVariantId: requested.variantId,
@@ -70,7 +71,7 @@ export function notFoundSighting(error: unknown): ListingSighting | null {
   return {
     state: "unlisted",
     reason: "not_found",
-    causeCode: "LISTING.NOT_FOUND",
+    causeCode: listingErrors.code("LISTING.NOT_FOUND"),
     httpStatus: typeof status === "number" ? status : null,
     observedListingId: null,
     finalUrl: null,
@@ -102,14 +103,14 @@ export function movedSighting(
     return {
       ...sighting,
       reason: "redirected_away",
-      causeCode: "LISTING.REDIRECTED_AWAY",
+      causeCode: listingErrors.code("LISTING.REDIRECTED_AWAY"),
       observedListingId: null,
     };
   }
   return {
     ...sighting,
     reason: "redirected_to_other_product",
-    causeCode: "LISTING.REDIRECTED_TO_OTHER_PRODUCT",
+    causeCode: listingErrors.code("LISTING.REDIRECTED_TO_OTHER_PRODUCT"),
     observedListingId: landed.listingId,
   };
 }

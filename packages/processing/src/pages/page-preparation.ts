@@ -1,3 +1,4 @@
+import { recordRecovery } from "@crawl-automation/platform";
 import { randomUUID } from "node:crypto";
 import {
   PagePrepareInputSchema,
@@ -43,6 +44,7 @@ export class PagePreparation {
       }
       return { status: "durable", record: await this.prepare(input, signal) };
     } catch (error) {
+      recordRecovery(error, { operation: "page-preparation" });
       const finished = await this.finishedMeanwhile(input);
       return finished ?? this.evidence.review(input, "page.prepare", error);
     }
@@ -56,7 +58,7 @@ export class PagePreparation {
       { key: `page-intents/${input.operationId}.json`, bytes: intent },
       {
         signal,
-        createFailed: () => pageFailure("PAGE.INTENT_UNKNOWN"),
+        createFailed: (cause) => pageFailure("PAGE.INTENT_UNKNOWN", cause),
         exists: () => pageFailure("PAGE.EXECUTION_UNKNOWN"),
         unverified: () => pageFailure("PAGE.INTENT_UNKNOWN"),
       },
@@ -91,7 +93,8 @@ export class PagePreparation {
     try {
       const record = await this.evidence.inspect(input, retentionSignal());
       return record ? { status: "durable", record } : null;
-    } catch {
+    } catch (error) {
+      recordRecovery(error, { operation: "pages/page-preparation" });
       // Whether it finished cannot be shown now; the failure is recorded as a Review instead.
       return null;
     }

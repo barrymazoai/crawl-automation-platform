@@ -1,3 +1,4 @@
+import { recordRecovery } from "@crawl-automation/platform";
 import { errorCodeOf, type ObjectStore } from "@crawl-automation/platform";
 import {
   decodeJson,
@@ -49,7 +50,8 @@ export class ReviewEvidence {
     let prefix: string;
     try {
       prefix = prefixOf(parsed.data.input);
-    } catch {
+    } catch (error) {
+      recordRecovery(error, { operation: "reviews/review-evidence" });
       // An intent that names no valid task has no result files to find; the intent itself is returned as is.
       return [];
     }
@@ -76,12 +78,14 @@ export class ReviewEvidence {
 function readable(bytes: Uint8Array): unknown {
   try {
     return decodeJson(bytes);
-  } catch {
+  } catch (error) {
+    recordRecovery(error, { operation: "reviews/review-evidence" });
     // Not JSON: fall back to the text below.
   }
   try {
     return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
-  } catch {
+  } catch (error) {
+    recordRecovery(error, { operation: "reviews/review-evidence" });
     // Binary evidence (an image, a PDF) is listed with its size only.
     return null;
   }

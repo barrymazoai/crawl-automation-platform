@@ -56,3 +56,14 @@ describe("PostgresDatabase", () => {
     expect(released()).toBe(true);
   });
 });
+
+it("keeps the original transaction error when rollback also fails", async () => {
+  const { pool, released } = fakePool("ROLLBACK");
+  const original = new Error("work failed");
+  await expect(
+    new PostgresDatabase(pool).transaction(async () => {
+      throw original;
+    }),
+  ).rejects.toBe(original);
+  expect(released()).toBe(true);
+});

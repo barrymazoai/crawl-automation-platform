@@ -1,3 +1,5 @@
+import { textErrors } from "@crawl-automation/processing";
+import { recordRecovery } from "@crawl-automation/platform";
 import { errorCodeOf, type ObjectStore } from "@crawl-automation/platform";
 import {
   decodeJson,
@@ -90,19 +92,26 @@ export class TextAnswerRecheck {
     try {
       text = (await this.deps.sources.resolve(input, signal)).text;
     } catch (error) {
+      recordRecovery(error, { operation: "text.recheck", operationId: input.operationId });
       return { status: "unavailable", code: errorCodeOf(error), reason: "source text unreadable" };
     }
     let candidate: ReturnType<typeof decodeTextResult>;
     try {
       candidate = decodeTextResult(input, text, answer);
     } catch (error) {
-      return { status: "fails", code: errorCodeOf(error) ?? "TEXT.UNCLASSIFIED", reason: null };
+      recordRecovery(error, { operation: "text.recheck", operationId: input.operationId });
+      return {
+        status: "fails",
+        code: errorCodeOf(error) ?? textErrors.code("TEXT.UNCLASSIFIED"),
+        reason: null,
+      };
     }
     try {
       assertTextQuotes(candidate, input, text);
-    } catch {
+    } catch (error) {
+      recordRecovery(error, { operation: "text.recheck", operationId: input.operationId });
       // The quote check reports no code of its own; the text step records this as a citation failure.
-      return { status: "fails", code: "TEXT.CITATION_INVALID", reason: null };
+      return { status: "fails", code: textErrors.code("TEXT.CITATION_INVALID"), reason: null };
     }
     return { status: "passes", code: null, reason: null };
   }

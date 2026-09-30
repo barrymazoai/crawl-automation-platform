@@ -1,3 +1,4 @@
+import { withCause } from "../errors/with-cause.js";
 import { randomUUID } from "node:crypto";
 import { artifactErrors } from "./artifact-errors.js";
 import { sha256 } from "./integrity.js";
@@ -24,8 +25,8 @@ export async function claimPublication(
   let claimed;
   try {
     claimed = await remote.create(markerKey, marker, "application/json", signal);
-  } catch {
-    throw artifactErrors.create("ARTIFACT.UPLOAD_UNKNOWN");
+  } catch (error) {
+    throw withCause(artifactErrors.create("ARTIFACT.UPLOAD_UNKNOWN"), error);
   }
   if (claimed !== "created") {
     throw artifactErrors.create("ARTIFACT.UPLOAD_UNKNOWN");

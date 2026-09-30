@@ -81,7 +81,10 @@ describe("CleanupService.run", () => {
     await service.run(controller.signal);
     expect(resources.releaseStopped).toHaveBeenCalledTimes(2);
     expect(runs.settleStopped).toHaveBeenCalledOnce();
-    expect(error).toHaveBeenCalledExactlyOnceWith({ err: failure }, "cleanup sweep failed");
+    expect(error).toHaveBeenCalledExactlyOnceWith(
+      { err: failure, code: null },
+      "cleanup sweep failed",
+    );
   });
 
   it("aborts an idle delay without another sweep or a spurious error", async () => {

@@ -16,6 +16,7 @@ export class TemporalRunExecutions implements RunExecutions {
       return { status, result };
     } catch (error) {
       if (error instanceof WorkflowNotFoundError) {
+        // WorkflowNotFoundError (gRPC NOT_FOUND) is the expected absent execution; other failures propagate.
         return { status: "MISSING", result: null };
       }
       throw error;

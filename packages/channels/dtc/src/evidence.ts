@@ -1,3 +1,4 @@
+import { dtcEvidenceErrors } from "./evidence-errors.js";
 import { imageUrls, type FactsText, type PlatformProduct } from "@crawl-automation/channels-core";
 import {
   ChannelProductEvidenceSchema,
@@ -65,6 +66,7 @@ export function dtcEvidence(product: PlatformProduct, site: DtcSitePolicy): Chan
         ]
       : [],
     imageCandidates: productImages(product, site),
-    warnings: product.variants.length > 1 ? ["DTC.FACTS_VARIANT_UNASSIGNED"] : [],
+    warnings:
+      product.variants.length > 1 ? [dtcEvidenceErrors.code("DTC.FACTS_VARIANT_UNASSIGNED")] : [],
   });
 }

@@ -1,3 +1,4 @@
+import { recordRecovery } from "@crawl-automation/platform";
 import { isDeepStrictEqual } from "node:util";
 import { errorCodeOf, type ObjectStore } from "@crawl-automation/platform";
 import { sha256, type ArtifactResolver } from "@crawl-automation/platform";
@@ -113,7 +114,8 @@ export class LabelCoreStep {
     if (!saved && options.publish) {
       try {
         await remote.create(ref.objectKey, bytes, "application/json", signal);
-      } catch {
+      } catch (error) {
+        recordRecovery(error, { operation: "label/label-core-step" });
         // The read-back below decides.
       }
       saved = await remote.read(ref.objectKey, DOCUMENT_LIMIT, signal);

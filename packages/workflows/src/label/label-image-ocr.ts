@@ -1,3 +1,4 @@
+import { recordWorkflowRecovery } from "../workflow-recovery.js";
 import {
   KeywordReceiptSchema,
   OcrActivityOutcomeSchema,
@@ -105,6 +106,7 @@ async function ocrOnce(run: LabelRun, task: OcrInput): Promise<OcrActivityOutcom
     if (isCancellation(error) || isAdmissionFailure(error) || isHeartbeatFailure(error)) {
       throw error;
     }
+    recordWorkflowRecovery(error, { operation: "label-image-ocr" });
     return null;
   }
 }

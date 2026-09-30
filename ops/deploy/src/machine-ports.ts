@@ -1,4 +1,4 @@
-import { access } from "node:fs/promises";
+import { pathAccessible } from "@crawl-automation/platform";
 import { join } from "node:path";
 import { MigrationService } from "@crawl-automation/app";
 import {
@@ -18,11 +18,7 @@ export function createMachinePorts(logger: Logger): DeployPorts {
   const environment = { ...process.env };
   return {
     run: runCommand,
-    exists: (path) =>
-      access(path).then(
-        () => true,
-        () => false,
-      ),
+    exists: pathAccessible,
     jobs: (machine, source, dryRun) =>
       runMachineJobs(machine, source, { dryRun, print: (line) => logger.info(line) }),
     env: (name) => environment[name],

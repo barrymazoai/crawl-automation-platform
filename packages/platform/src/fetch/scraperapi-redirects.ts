@@ -1,3 +1,4 @@
+import { scraperApiErrors } from "./scraperapi-errors.js";
 import { allowedTarget } from "./scraperapi-settings.js";
 
 const PROVIDER_HOST = "api.scraperapi.com";
@@ -26,13 +27,12 @@ export function redirectFacts(facts: {
 }
 
 function siteAddress(raw: string, base: string): string | null {
-  try {
-    const url = new URL(raw, base);
-    const onProvider = url.hostname === PROVIDER_HOST || url.searchParams.has("api_key");
-    return onProvider ? null : url.href.slice(0, 300);
-  } catch {
+  const url = URL.parse(raw, base);
+  if (!url) {
     return "(unparseable)";
   }
+  const onProvider = url.hostname === PROVIDER_HOST || url.searchParams.has("api_key");
+  return onProvider ? null : url.href.slice(0, 300);
 }
 
 /** The next address of a redirect that stays on an allowed site; null for any other redirect. */
@@ -41,13 +41,18 @@ export function allowedHop(
   target: URL,
   origins: readonly string[],
 ): URL | null {
-  if (!location) {
+  const url = location ? URL.parse(location, target) : null;
+  if (!url) {
     return null;
   }
   try {
-    return allowedTarget(new URL(location, target).href, origins);
-  } catch {
-    return null;
+    return allowedTarget(url.href, origins);
+  } catch (error) {
+    // SOURCE.ORIGIN_BLOCKED is an expected refused hop; the caller records the redirect Review.
+    if (scraperApiErrors.is(error, "SOURCE.ORIGIN_BLOCKED")) {
+      return null;
+    }
+    throw error;
   }
 }
 

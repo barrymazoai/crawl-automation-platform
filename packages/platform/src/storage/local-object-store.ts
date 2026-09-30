@@ -44,6 +44,7 @@ export class LocalObjectStore implements ObjectStore {
       file = await open(await this.pathFor(key, false), flags);
     } catch (error) {
       if ((error as { code?: string }).code === "ENOENT") {
+        // ENOENT means no local copy exists; the caller may inspect the remote store.
         return null;
       }
       throw error;
@@ -79,6 +80,7 @@ export class LocalObjectStore implements ObjectStore {
       return "created" as const;
     } catch (error) {
       if ((error as { code?: string }).code === "EEXIST") {
+        // EEXIST is the successful create-once loser, not a failed write.
         return "exists" as const;
       }
       throw error;

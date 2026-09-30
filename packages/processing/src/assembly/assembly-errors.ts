@@ -6,6 +6,43 @@ const ingest = (message: string) => ({ category: "INGEST" as const, message });
 
 /** Errors of label assembly, packaging evidence and collection. The codes are stored in Reviews and kept as they are. */
 export const assemblyErrors = defineErrors({
+  "LABEL_PRODUCT.COMPLETE_TEXT_FALLBACK": {
+    category: "VALIDATION",
+    message: "A complete text source was selected as the fallback.",
+  },
+  "LABEL_PRODUCT.FORMULA_CONFLICT": { category: "VALIDATION", message: "Formula conflict." },
+  "LABEL_PRODUCT.INCOMPLETE_IMAGE_NOT_SELECTED": {
+    category: "VALIDATION",
+    message: "Incomplete image not selected.",
+  },
+  "LABEL_PRODUCT.INGREDIENTS_CONFLICT": {
+    category: "VALIDATION",
+    message: "Ingredients conflict.",
+  },
+  "LABEL_PRODUCT.SECONDARY_TEXT_FORMULA_CONFLICT": {
+    category: "VALIDATION",
+    message: "Secondary text formula conflict.",
+  },
+  "LABEL_PRODUCT.SECONDARY_TEXT_INGREDIENTS_CONFLICT": {
+    category: "VALIDATION",
+    message: "Secondary text ingredients conflict.",
+  },
+  "LABEL_PRODUCT.SOURCE_NUMERIC_CONFLICT": {
+    category: "VALIDATION",
+    message: "Source numeric conflict.",
+  },
+  "PACKAGING.PACK_MEANING_UNRESOLVED": {
+    category: "VALIDATION",
+    message: "Pack meaning unresolved.",
+  },
+  "PACKAGING.SERVINGS_PER_CONTAINER_CONFLICT": {
+    category: "VALIDATION",
+    message: "Servings per container conflict.",
+  },
+  "PACKAGING.SERVING_SIZE_CONFLICT": { category: "VALIDATION", message: "Serving size conflict." },
+  "VALIDATION.FORMULA_MISSING": { category: "VALIDATION", message: "Formula missing." },
+  "VALIDATION.INGREDIENTS_MISSING": { category: "VALIDATION", message: "Ingredients missing." },
+
   "LABEL_PRODUCT.TEXT_UNVERIFIED": artifact(
     "A text source is not registered and durable, so assembly cannot read it.",
   ),

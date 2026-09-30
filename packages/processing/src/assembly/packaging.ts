@@ -1,3 +1,4 @@
+import { assemblyErrors } from "./assembly-errors.js";
 import { isDeepStrictEqual } from "node:util";
 import type { ArtifactResolver } from "@crawl-automation/platform";
 import {
@@ -63,11 +64,15 @@ function packagingFacts(observation: Observation, claims: PackagingClaim[]): Pac
   const unresolvedPackMentions = claims.filter((claim) => claim.field === "packMention");
   const countConflict = servingsPerContainer.status === "conflict";
   const warnings = [
-    ...(countConflict ? ["PACKAGING.SERVINGS_PER_CONTAINER_CONFLICT"] : []),
-    ...(unresolvedPackMentions.length ? ["PACKAGING.PACK_MEANING_UNRESOLVED"] : []),
+    ...(countConflict ? [assemblyErrors.code("PACKAGING.SERVINGS_PER_CONTAINER_CONFLICT")] : []),
+    ...(unresolvedPackMentions.length
+      ? [assemblyErrors.code("PACKAGING.PACK_MEANING_UNRESOLVED")]
+      : []),
   ];
   const blockingIssues =
-    servingSize.status === "conflict" ? ["PACKAGING.SERVING_SIZE_CONFLICT"] : [];
+    servingSize.status === "conflict"
+      ? [assemblyErrors.code("PACKAGING.SERVING_SIZE_CONFLICT")]
+      : [];
   return PackagingFactsSchema.parse({
     codec: "packaging-facts/1",
     observation,

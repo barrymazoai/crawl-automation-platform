@@ -1,3 +1,4 @@
+import { pipelineErrors } from "@crawl-automation/platform";
 import { ProductFamilySchema, type ProductFamily } from "@crawl-automation/channels-core";
 import { checkSiblingLabel, hashString } from "@crawl-automation/processing";
 import { KeywordResultSchema } from "@crawl-automation/v3-contracts";
@@ -52,19 +53,19 @@ export class SiblingFormulaReuse {
     const request = SiblingReuseRequestSchema.parse(raw);
     const family = ProductFamilySchema.safeParse(request.family);
     if (!family.success) {
-      return extract("FORMULA.FAMILY_UNREADABLE");
+      return extract(pipelineErrors.code("FORMULA.FAMILY_UNREADABLE"));
     }
     if (!SHAREABLE.includes(family.data.differsBy)) {
       return extract(differsCode(family.data.differsBy));
     }
     const found = await this.firstSiblingFormula(request, family.data);
     if (!found) {
-      return extract("FORMULA.NO_SIBLING_FORMULA");
+      return extract(pipelineErrors.code("FORMULA.NO_SIBLING_FORMULA"));
     }
     // Checked only once a sibling formula exists, so the workflow reads the facts image only when it can pay off.
     const label = await this.labelOf(request, signal ?? new AbortController().signal);
     if (!label) {
-      return extract("FORMULA.LABEL_TEXT_UNAVAILABLE");
+      return extract(pipelineErrors.code("FORMULA.LABEL_TEXT_UNAVAILABLE"));
     }
     return this.checkAndLink({ request, family: family.data, found, label });
   }
@@ -107,10 +108,10 @@ export class SiblingFormulaReuse {
     const { request, family, found, label } = parts;
     const saved = await this.deps.index.readSaved(found.operationId);
     if (!saved) {
-      return extract("FORMULA.SIBLING_FORMULA_UNREADABLE");
+      return extract(pipelineErrors.code("FORMULA.SIBLING_FORMULA_UNREADABLE"));
     }
     if (!checkSiblingLabel(label.text, saved).match) {
-      return extract("FORMULA.LABEL_MISMATCH");
+      return extract(pipelineErrors.code("FORMULA.LABEL_MISMATCH"));
     }
     const { channel, listingId, variantId, runId } = request;
     const sibling = { listingId: found.member.listingId, variantId: found.member.variantId };

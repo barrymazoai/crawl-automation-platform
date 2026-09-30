@@ -1,3 +1,4 @@
+import { withCause } from "../errors/with-cause.js";
 import type { CodexRpc } from "./codex-rpc.js";
 import { CodexError, codexFailure } from "./errors.js";
 import { TurnNotifications } from "./turn-notifications.js";
@@ -21,6 +22,7 @@ export class TurnExecution {
       this.reject = reject;
     });
     // The same rejection is awaited after turn/start; mark early rejection handled until then.
+    // TEXT.CODEX_* failures stay on done and are rethrown by its awaiting owner.
     void this.done.catch(() => undefined);
     this.notifications = new TurnNotifications(threadId, resolve);
     this.offFailure = rpc.onFailure((error) => this.fail(error));
@@ -28,7 +30,11 @@ export class TurnExecution {
       try {
         this.notifications.receive(message);
       } catch (error) {
-        this.fail(error instanceof CodexError ? error : codexFailure("TEXT.CODEX_PROTOCOL"));
+        this.fail(
+          error instanceof CodexError
+            ? error
+            : withCause(codexFailure("TEXT.CODEX_PROTOCOL"), error),
+        );
       }
     });
   }

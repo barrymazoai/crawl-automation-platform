@@ -44,7 +44,7 @@ export function decodeTextResult(input: TextInput, text: string, response: strin
     if (isAppError(error) && error.code.startsWith("TEXT.")) {
       throw error;
     }
-    throw textFailure("TEXT.LABEL_INVALID_OUTPUT", "executed");
+    throw textFailure("TEXT.LABEL_INVALID_OUTPUT", "executed", error);
   }
 }
 

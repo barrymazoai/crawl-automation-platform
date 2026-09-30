@@ -1,3 +1,5 @@
+import { recordWorkflowRecovery } from "../workflow-recovery.js";
+import { pipelineErrors } from "@crawl-automation/platform/errors/activity";
 import { versionedResourceGate } from "../resources/versioned-gate.js";
 import { resourceGateCodes } from "@crawl-automation/platform/errors/resource-gate";
 import { activityCodes } from "@crawl-automation/platform/errors/activity";
@@ -36,7 +38,10 @@ export function labelRun(entry: LabelWorkflowInput, stream: LabelStream): LabelR
       const options = { ...labelActivityOptions(entry.queues[kind], heartbeats), ...binding };
       const activity = proxyActivities<Record<string, Activity>>(options)[name];
       if (!activity) {
-        throw ApplicationFailure.nonRetryable("Unknown label activity", "LABEL.ACTIVITY_UNKNOWN");
+        throw ApplicationFailure.nonRetryable(
+          "Unknown label activity",
+          pipelineErrors.code("LABEL.ACTIVITY_UNKNOWN"),
+        );
       }
       // A failed Review write must escape, never cause another Review write from the outer catch.
       return heartbeats && name !== "reviewLabelProduct"
@@ -54,6 +59,7 @@ export function isAdmissionFailure(error: unknown): boolean {
 
 /** Records permit and heartbeat failures with the affected source for the product Review. */
 export function noteSourceFailure(run: LabelRun, sourceId: string, error: unknown): void {
+  recordWorkflowRecovery(error, { operation: "label.source", sourceId });
   if (!(error instanceof ApplicationFailure)) {
     return;
   }

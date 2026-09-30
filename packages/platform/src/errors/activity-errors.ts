@@ -12,4 +12,8 @@ export const activityErrors = defineErrors({
   },
 });
 
+export { withCause } from "./with-cause.js";
+
+export { pipelineErrors } from "./pipeline-errors.js";
+
 export type ActivityErrorCode = keyof typeof activityErrors.codes;

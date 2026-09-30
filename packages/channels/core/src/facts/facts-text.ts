@@ -1,3 +1,4 @@
+import { factsErrors } from "./facts-errors.js";
 import type { FactsText } from "../adapter.js";
 
 /**
@@ -37,19 +38,19 @@ export interface FactsVerdict {
 /** The completeness rule itself; `reasons` names every missing part (FACTS.*). */
 export function factsTextComplete(text: string | null): FactsVerdict {
   if (!text?.trim()) {
-    return { complete: false, reasons: ["FACTS.TEXT_MISSING"], amounts: 0 };
+    return { complete: false, reasons: [factsErrors.code("FACTS.TEXT_MISSING")], amounts: 0 };
   }
   const reasons: string[] = [];
   if (!/Serving Size/i.test(text)) {
-    reasons.push("FACTS.SERVING_SIZE_MISSING");
+    reasons.push(factsErrors.code("FACTS.SERVING_SIZE_MISSING"));
   }
   // Calories carry no unit and do not count; "% Daily Value" headings carry no number and do not match.
   const amounts = (text.match(AMOUNT) ?? []).length;
   if (!amounts) {
-    reasons.push("FACTS.AMOUNTS_MISSING");
+    reasons.push(factsErrors.code("FACTS.AMOUNTS_MISSING"));
   }
   if (!/Other Ingredients\s*:?\s*[A-Za-z(]/i.test(text)) {
-    reasons.push("FACTS.OTHER_INGREDIENTS_MISSING");
+    reasons.push(factsErrors.code("FACTS.OTHER_INGREDIENTS_MISSING"));
   }
   return { complete: reasons.length === 0, reasons, amounts };
 }

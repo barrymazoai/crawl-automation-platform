@@ -1,3 +1,4 @@
+import { recordRecovery } from "@crawl-automation/platform";
 import { randomUUID } from "node:crypto";
 import { sha256 } from "@crawl-automation/platform";
 import type { AppError, ObjectStore } from "@crawl-automation/platform";
@@ -50,7 +51,8 @@ export async function claimedPublish(
   await claimShared(remote, { key: markerKey, bytes: marker }, options);
   try {
     await remote.create(key, bytes, "application/json", signal);
-  } catch {
+  } catch (error) {
+    recordRecovery(error, { operation: "publication/claimed-publication" });
     // The read-back below decides; never a second write.
   }
   verify(await remote.read(key, limit, signal));

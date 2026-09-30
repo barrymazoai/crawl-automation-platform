@@ -1,3 +1,4 @@
+import { recordRecovery } from "@crawl-automation/platform";
 import type {
   CapturedPage,
   CaptureRequest,
@@ -113,6 +114,7 @@ export class PipelineCapture<
     try {
       await this.deps.listings.record(liveSighting(request, page));
     } catch (error) {
+      recordRecovery(error, { operation: "pipeline.listing" });
       this.deps.onListingPending?.(error, page);
     }
   }
@@ -125,6 +127,7 @@ export class PipelineCapture<
     try {
       await this.deps.history.record(page, { runId, operationId, brandId, sourceId });
     } catch (error) {
+      recordRecovery(error, { operation: "pipeline.history" });
       this.deps.onHistoryPending?.(error, page);
     }
   }

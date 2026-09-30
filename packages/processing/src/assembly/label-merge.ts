@@ -1,3 +1,4 @@
+import { assemblyErrors } from "./assembly-errors.js";
 import {
   LabelProductProvenanceSchema,
   type LabelCollectedProduct,
@@ -73,10 +74,10 @@ function mergedLabel(state: MergeState, provenance: Provenance[]) {
 function finalChecks(state: MergeState, ingredientCount: number): void {
   const { formula } = state;
   if (!formula) {
-    state.codes.add("VALIDATION.FORMULA_MISSING");
+    state.codes.add(assemblyErrors.code("VALIDATION.FORMULA_MISSING"));
   }
   if (!ingredientCount) {
-    state.codes.add("VALIDATION.INGREDIENTS_MISSING");
+    state.codes.add(assemblyErrors.code("VALIDATION.INGREDIENTS_MISSING"));
   }
   if (!state.packaging || state.counts.size <= 1) {
     return;
@@ -84,7 +85,7 @@ function finalChecks(state: MergeState, ingredientCount: number): void {
   if (formula) {
     formula.servingsPerContainer = null;
   }
-  const code = "PACKAGING.SERVINGS_PER_CONTAINER_CONFLICT";
+  const code = assemblyErrors.code("PACKAGING.SERVINGS_PER_CONTAINER_CONFLICT");
   if (!state.warnings.some((warning) => warning.code === code)) {
     state.warnings.push({ id: state.manifest.operationId, code });
   }

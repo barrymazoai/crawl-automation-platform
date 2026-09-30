@@ -1,3 +1,4 @@
+import { withCause } from "../errors/with-cause.js";
 import { CodexModelSettingsSchema, type CodexModelSettings } from "@crawl-automation/v3-contracts";
 import type { CodexRpc } from "./codex-rpc.js";
 import { CodexError, codexFailure } from "./errors.js";
@@ -26,8 +27,8 @@ export async function assertCodexModel(
   } catch (error) {
     // Raw catalog/config/remote error bodies can contain private configuration.
     if (error instanceof CodexError) {
-      throw new CodexError(error.code, "not_executed");
+      throw withCause(new CodexError(error.code, "not_executed"), error);
     }
-    throw codexFailure("TEXT.CODEX_PREFLIGHT_INVALID", "not_executed");
+    throw withCause(codexFailure("TEXT.CODEX_PREFLIGHT_INVALID", "not_executed"), error);
   }
 }
