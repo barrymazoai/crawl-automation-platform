@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { recordSighting } from "@crawl-automation/app";
+import { liveSighting, recordSighting } from "@crawl-automation/app";
 import type { Database } from "@crawl-automation/platform";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { PostgresListingStates } from "../src/postgres/postgres-listing-states.js";
@@ -133,5 +133,32 @@ describe.skipIf(!hasPostgres)("listing states against a real PostgreSQL", () => 
       limit: 10,
     });
     expect(delivered[0]?.deliveredAt).not.toBeNull();
+  });
+
+  it("counts a captured page's live sighting", async () => {
+    const request = {
+      runId: "7b0c6a52-3a47-4f5b-9a4e-4c3c1f0a9d11",
+      channel: "gnc" as const,
+      url: "https://www.gnc.com/product/877082.html",
+      brandId,
+      sourceId: "1a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d",
+      operationId: "gnc-4",
+    };
+    const page = {
+      channel: "gnc" as const,
+      url: request.url,
+      listingId: "877082",
+      variantId: null,
+      externalId: "877082",
+      capturedAt: "2026-09-29T12:00:00.000Z",
+      commerce: null,
+      archive: { objectKey: "v3/gnc-html/gnc-4/original.html", sha256: "a".repeat(64) },
+    };
+    await recordSighting(store, liveSighting(request, page));
+    const counts = await store.counts({ channel: "gnc", brandId });
+    expect(counts.byState.live).toBe(1);
+    expect(await store.list({ channel: "gnc", state: "live", limit: 10 })).toMatchObject([
+      { listingId: "877082", reason: null, evidence: { causeCode: "LISTING.LIVE" } },
+    ]);
   });
 });
