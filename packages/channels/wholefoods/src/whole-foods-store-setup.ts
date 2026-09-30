@@ -1,18 +1,16 @@
 import { isAppError } from "@crawl-automation/platform";
 import { z } from "zod";
-import { WHOLE_FOODS_ORIGIN } from "./whole-foods-address.js";
 import { wholeFoodsErrors } from "./whole-foods-errors.js";
 import type { WholeFoodsStore } from "./whole-foods-store.js";
 
 /**
- * In the browser, on one task page: deny the site's location prompt for this profile (it otherwise blocks the page),
+ * In the browser, on one task page (every task page already answers location requests as denied, see ego-script),
  * open the brand search, and when it is priced for another store, pick the configured store through the site's own
  * store picker, then check again. The store is kept in the profile, so this runs once per run, not per page.
  */
 const SET_STORE_BODY = `
-const { store, productUrl, origin, timeoutMs } = params;
+const { store, productUrl, timeoutMs } = params;
 const notSet = () => Object.assign(new Error("store not set"), { code: "WHOLEFOODS.STORE_NOT_SET" });
-await task.cdp("Browser.setPermission", { origin, permission: { name: "geolocation" }, setting: "denied" });
 const open = async () => {
   await page.goto(productUrl, { timeout: timeoutMs, waitUntil: "domcontentloaded" });
   await page.waitForSelector("main", { timeout: timeoutMs, state: "attached" });
@@ -63,7 +61,7 @@ export async function ensureWholeFoodsStore(
   target: { store: WholeFoodsStore; productUrl: string; timeoutMs: number },
   signal: AbortSignal,
 ): Promise<{ changed: boolean }> {
-  const params = { ...target, origin: WHOLE_FOODS_ORIGIN };
+  const params = { ...target };
   try {
     const outcome = OutcomeSchema.parse(await browser.round(SET_STORE_BODY, params, signal));
     return { changed: outcome.changed };

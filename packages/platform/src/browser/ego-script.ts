@@ -5,6 +5,17 @@
  */
 export const EGO_MARKER = "CRAWLV3_EGO:";
 
+/** Runs in the page before its own scripts: location requests fail as denied, so no browser prompt appears. */
+const DENY_LOCATION = `(() => {
+  const denied = { code: 1, PERMISSION_DENIED: 1, message: "denied" };
+  const fail = (_ok, error) => { if (typeof error === "function") setTimeout(() => error(denied), 0); return 0; };
+  try {
+    Object.defineProperty(navigator, "geolocation", { configurable: true, value: { getCurrentPosition: fail, watchPosition: fail, clearWatch: () => {} } });
+    const query = navigator.permissions?.query?.bind(navigator.permissions);
+    if (query) navigator.permissions.query = (d) => d && d.name === "geolocation" ? Promise.resolve({ state: "denied", onchange: null }) : query(d);
+  } catch {}
+})();`;
+
 const prelude = `const emit = (value) => console.log(${JSON.stringify(EGO_MARKER)} + JSON.stringify(value));`;
 
 /**
@@ -22,6 +33,9 @@ if (task.ownership === "user") {
   const page = await task.newPage();
   const targetId = page.targetId;
   emit({ kind: "opened", targetId });
+  // A site's location prompt hands the task space to the user; this Ego version refuses Browser.setPermission, so
+  // every task page answers location requests with "denied" before any site script runs (2026-09-30).
+  await page.cdp("Page.addScriptToEvaluateOnNewDocument", { source: ${JSON.stringify(DENY_LOCATION)} });
   let value = null;
   let failure = null;
   let cleanupFailure = null;
