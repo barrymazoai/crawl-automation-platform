@@ -38,11 +38,14 @@ export class EgoRunner {
       input: script,
       cancelSignal: signal,
       timeout: this.settings.roundTimeoutMs,
-      maxBuffer: { stdout: this.settings.maxHtmlBytes * 2 + 65_536, stderr: 1_048_576 },
+      // Without a terminal (a PM2 job), Ego prints the script's output on stderr, not stdout (2026-09-30): read
+      // both, interleaved; only marked lines count, so Ego's own notices are ignored.
+      all: true,
+      maxBuffer: this.settings.maxHtmlBytes * 2 + 65_536,
       forceKillAfterDelay: 5_000,
       reject: false,
     });
-    const messages = readMessages(answer.stdout);
+    const messages = readMessages(answer.all);
     const opened = messages
       .filter((message) => message.kind === "opened")
       .map((message) => message.targetId);
