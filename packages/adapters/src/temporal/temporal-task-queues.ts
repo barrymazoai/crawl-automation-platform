@@ -1,9 +1,10 @@
 import type { FleetTaskQueues, TaskQueueKind, TaskQueuePoller } from "@crawl-automation/app";
 import type { Client } from "@temporalio/client";
 import { optionalTsToDate } from "@temporalio/common/lib/time.js";
-import { temporal } from "@temporalio/proto";
+// @temporalio/proto is CommonJS: its values come from the default export under Node ESM.
+import proto from "@temporalio/proto";
 
-const { TaskQueueType, TaskQueueKind: QueueKind } = temporal.api.enums.v1;
+const { TaskQueueType, TaskQueueKind: QueueKind } = proto.temporal.api.enums.v1;
 
 /** Poller identities include workers on other machines sharing the client's namespace. */
 export class TemporalTaskQueues implements FleetTaskQueues {
