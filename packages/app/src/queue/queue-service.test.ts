@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   AddToQueueSchema,
   PauseQueueSchema,
+  QueueChannelSchema,
   QueueItemsQuerySchema,
   type QueueChannel,
   type QueueStore,
@@ -40,40 +41,62 @@ const product = {
   listingId: "350123",
 };
 
+function fixture() {
+  const channels = fakeStore();
+  const amazonHistory = { migrationPreview: vi.fn(async () => ({ pending: 7, alreadyCopied: 2 })) };
+  const service = new QueueService({ channels, amazonHistory, log: silent });
+  return { service, channels, amazonHistory };
+}
+
 describe("QueueService", () => {
-  it("routes Amazon to its existing tables and every other channel to the shared queue", async () => {
-    const amazon = fakeStore();
-    const channels = fakeStore();
-    const service = new QueueService({ amazon, channels, log: silent });
-    await service.status("amazon");
-    await service.status("gnc");
-    await service.pause(PauseQueueSchema.parse({ channel: "swanson" }));
-    expect(amazon.status).toHaveBeenCalledWith("amazon");
-    expect(channels.status).toHaveBeenCalledWith("gnc");
-    expect(channels.pause).toHaveBeenCalledWith({
-      channel: "swanson",
-      force: false,
-      graceSeconds: 900,
-    });
-    expect(amazon.pause).not.toHaveBeenCalled();
+  it.each(QueueChannelSchema.options)(
+    "routes every %s operation to the shared store",
+    async (channel) => {
+      const { service, channels, amazonHistory } = fixture();
+      const query = QueueItemsQuerySchema.parse({ channel });
+      const limits = { channel, ready: 4, running: 2 };
+      const pause = PauseQueueSchema.parse({ channel });
+      const requeue = { channel, itemIds: ["a".repeat(64)] };
+      const list = AddToQueueSchema.parse({
+        channel,
+        batchId: "33333333-3333-4333-8333-333333333333",
+        label: "scan",
+        products: [product],
+      });
+      expect((await service.status(channel)).channel).toBe(channel);
+      expect(await service.items(query)).toEqual([]);
+      expect(await service.add(list)).toEqual({ added: 1 });
+      await service.setLimits(limits);
+      await service.pause(pause);
+      await service.resume(channel);
+      expect(await service.requeue(requeue)).toEqual({ requeued: 1 });
+      expect(channels.status).toHaveBeenCalledTimes(4);
+      expect(channels.status).toHaveBeenCalledWith(channel);
+      expect(channels.items).toHaveBeenCalledWith(query);
+      expect(channels.add).toHaveBeenCalledWith(list);
+      expect(channels.setLimits).toHaveBeenCalledWith(limits);
+      expect(channels.pause).toHaveBeenCalledWith(pause);
+      expect(channels.resume).toHaveBeenCalledWith(channel);
+      expect(channels.requeue).toHaveBeenCalledWith(requeue);
+      expect(amazonHistory.migrationPreview).not.toHaveBeenCalled();
+    },
+  );
+
+  it("returns a read-only migration preview without changing either queue", async () => {
+    const { service, channels, amazonHistory } = fixture();
+    expect(await service.amazonMigrationPreview()).toEqual({ pending: 7, alreadyCopied: 2 });
+    expect(amazonHistory.migrationPreview).toHaveBeenCalledOnce();
+    for (const method of Object.values(channels)) {
+      expect(method).not.toHaveBeenCalled();
+    }
   });
 
-  it("adds another channel's product list to the shared queue", async () => {
-    const amazon = fakeStore();
-    const channels = fakeStore();
-    const service = new QueueService({ amazon, channels, log: silent });
-    const list = AddToQueueSchema.parse({
-      channel: "gnc",
-      batchId: "33333333-3333-4333-8333-333333333333",
-      label: "GNC Optimum Nutrition scan",
-      products: [product],
-    });
-    expect(await service.add(list)).toEqual({ added: 1 });
-    expect(channels.add).toHaveBeenCalledWith({
-      ...list,
-      products: [{ ...product, variantId: null }],
-    });
-    expect(amazon.add).not.toHaveBeenCalled();
+  it("preserves a refusal from the shared store without trying the legacy queue", async () => {
+    const { service, channels } = fixture();
+    const error = new Error("cleanup pending");
+    vi.mocked(channels.resume).mockRejectedValueOnce(error);
+    await expect(service.resume("amazon")).rejects.toBe(error);
+    expect(channels.status).not.toHaveBeenCalled();
   });
 });
 
@@ -86,7 +109,7 @@ describe("queue inputs", () => {
     });
   });
 
-  it("refuses a product list for Amazon's queue and a page that is not HTTPS", () => {
+  it("accepts Amazon URL lists and refuses legacy batches or a page that is not HTTPS", () => {
     const batchId = "33333333-3333-4333-8333-333333333333";
     const amazonList = { channel: "amazon", batchId, label: "x", products: [product] };
     const plainHttp = {
@@ -95,7 +118,10 @@ describe("queue inputs", () => {
       label: "x",
       products: [{ ...product, url: "http://www.gnc.com/x" }],
     };
-    expect(AddToQueueSchema.safeParse(amazonList).success).toBe(false);
+    expect(AddToQueueSchema.safeParse(amazonList).success).toBe(true);
+    expect(
+      AddToQueueSchema.safeParse({ channel: "amazon", campaignId: "old", batches: [] }).success,
+    ).toBe(false);
     expect(AddToQueueSchema.safeParse(plainHttp).success).toBe(false);
   });
 });

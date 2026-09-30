@@ -34,10 +34,10 @@ export function productRuns(parts: {
   });
 }
 
-/** Amazon's queue on its existing tables; every other channel's on the shared queue tables. */
+/** Every channel uses the shared queue; Amazon's legacy store only supplies a migration preview. */
 export function queueService(database: Database, log: Logger): QueueService {
   return new QueueService({
-    amazon: new PostgresQueueStore(database),
+    amazonHistory: new PostgresQueueStore(database),
     channels: new PostgresChannelQueueStore(database),
     log,
   });

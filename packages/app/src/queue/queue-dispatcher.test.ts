@@ -122,6 +122,30 @@ describe("QueueDispatcher", () => {
     });
   });
 
+  it("starts Amazon items (including formula requests) through the same product starter", async () => {
+    const { store, starter, queue } = dispatcher({});
+    store.control = { ...store.control, channel: "amazon" };
+    const amazon = {
+      ...item("amazon-formula"),
+      channel: "amazon" as const,
+      url: "https://www.amazon.com/dp/B000000001",
+    };
+    store.claimable = [amazon];
+    await queue.tick(signal());
+    expect(starter.submit).toHaveBeenCalledExactlyOnceWith({
+      kind: "product",
+      requestId: amazon.runId,
+      sourceId: amazon.sourceId,
+      url: amazon.url,
+    });
+    store.runningItems = [amazon];
+    await queue.tick(signal());
+    expect(starter.submit.mock.calls.map(([run]) => run.requestId)).toEqual([
+      "amazon-formula",
+      "amazon-formula",
+    ]);
+  });
+
   it("a refused start is a Review with the refusal's code, never started again", async () => {
     const { store, starter, queue } = dispatcher({});
     starter.submit.mockRejectedValueOnce(appErrors.create("RUN.CHANNEL_UNSUPPORTED"));

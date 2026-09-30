@@ -19,7 +19,7 @@ import {
 
 const sha256 = (value: unknown) => createHash("sha256").update(JSON.stringify(value)).digest("hex");
 
-/** The shared queue tables (queue_control, link_batch, queue_item, queue_attempt) of every channel but Amazon. */
+/** The shared queue tables (queue_control, link_batch, queue_item, queue_attempt) of every channel. */
 export class PostgresChannelQueueStore implements QueueStore {
   constructor(private readonly database: Database) {}
 
@@ -32,18 +32,12 @@ export class PostgresChannelQueueStore implements QueueStore {
   }
 
   add(input: AddToQueue): Promise<{ added: number }> {
-    if (input.channel === "amazon") {
-      throw appErrors.create("RUN.CHANNEL_UNSUPPORTED", { details: { channel: input.channel } });
-    }
     return this.addList(input);
   }
 
-  /**
-   * Amazon products held in the shared queue until Amazon's product runs move onto it (5.5). Amazon's own queue
-   * still runs on its old tables, so the shared queue's Amazon row stays paused and these items wait `queued`.
-   */
+  /** Formula requests from Whole Foods use the same Amazon queue and dispatcher as direct product lists. */
   holdAmazonProducts(list: Omit<AddProducts, "channel">): Promise<{ added: number }> {
-    return this.addList({ ...list, channel: "amazon" });
+    return this.add({ ...list, channel: "amazon" });
   }
 
   /** The brand's source for the formula request, preferring enabled entries; no particular URL is required. */

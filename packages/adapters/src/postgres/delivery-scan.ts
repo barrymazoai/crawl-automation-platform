@@ -9,14 +9,16 @@ const Cursor = z.strictObject({ createdAt: z.iso.datetime(), requestId: Id });
 const fields = `to_char(r.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS "createdAt",
   r.request_id AS "requestId"`;
 
-/** Amazon queue attempts are started by the queue runner, not here. */
+/** Product queue runs live in product_run and are started by the shared dispatcher. */
 const from = `FROM collection_submission r
   JOIN source_submission_guard g ON g.request_id = r.request_id
-  LEFT JOIN workflow_delivery d ON d.request_id = r.request_id
-  LEFT JOIN amazon_queue_attempt q ON q.request_id = r.request_id`;
+  LEFT JOIN workflow_delivery d ON d.request_id = r.request_id`;
 
 /** A request with an unresolved issue is checked hourly, not in a hot loop. */
-const due = `d.closed_at IS NULL AND q.request_id IS NULL AND (d.checked_at IS NULL
+// Retained legacy link authorizations must never be delivered again as brand collections.
+const due = `d.closed_at IS NULL
+  AND NOT EXISTS (SELECT 1 FROM amazon_link_batch b WHERE b.request_id = r.request_id)
+  AND (d.checked_at IS NULL
   OR d.checked_at <= clock_timestamp() - CASE WHEN d.last_issue IS NOT NULL
     THEN interval '1 hour' ELSE interval '15 seconds' END)`;
 

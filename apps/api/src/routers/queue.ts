@@ -12,6 +12,9 @@ const channelOf = (input: unknown) => ChannelQueueSchema.parse(input ?? {}).chan
 
 /** Every channel's product queue; a call without a channel is about Amazon's. */
 export const queueRouter = router({
+  /** Read-only counts before or after copying never-started legacy Amazon items into the shared queue. */
+  amazonMigrationPreview: procedure.query(({ ctx }) => ctx.queue.amazonMigrationPreview()),
+
   /** Mode, limits and item counts by state. */
   status: procedure
     .input(ChannelQueueSchema.optional())

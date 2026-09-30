@@ -1,4 +1,3 @@
-import { AmazonLinkBatchesSchema } from "@crawl-automation/v3-channels";
 import { ChannelIdSchema } from "@crawl-automation/v3-contracts";
 import { z } from "zod";
 
@@ -25,25 +24,26 @@ export const QueuedProductSchema = z.strictObject({
 });
 export type QueuedProduct = z.infer<typeof QueuedProductSchema>;
 
-/**
- * A product list: Amazon link batches (Amazon's existing queue), or products of any other channel. The list ID
- * makes adding the same list twice add nothing.
- */
-export const AddToQueueSchema = z.discriminatedUnion("channel", [
-  z.strictObject({
-    channel: z.literal("amazon"),
-    campaignId: z.string().min(1).max(200),
-    batches: AmazonLinkBatchesSchema,
-  }),
-  z.strictObject({
-    channel: QueueChannelSchema.exclude(["amazon"]),
-    batchId: z.uuid(),
-    label: z.string().min(1).max(200),
-    products: z.array(QueuedProductSchema).min(1).max(10_000),
-  }),
-]);
+/** A product list for any channel. Its ID makes adding the same list twice add nothing. */
+export const AddToQueueSchema = z.strictObject({
+  channel: QueueChannelSchema,
+  batchId: z.uuid(),
+  label: z.string().min(1).max(200),
+  products: z.array(QueuedProductSchema).min(1).max(10_000),
+});
 export type AddToQueue = z.infer<typeof AddToQueueSchema>;
-export type AddProducts = Exclude<AddToQueue, { channel: "amazon" }>;
+export type AddProducts = AddToQueue;
+
+/** Eligible legacy items still to copy, and eligible items already present in the shared queue. */
+export interface AmazonMigrationPreview {
+  pending: number;
+  alreadyCopied: number;
+}
+
+/** Read-only access to Amazon's retired queue. */
+export interface AmazonQueueHistory {
+  migrationPreview(): Promise<AmazonMigrationPreview>;
+}
 
 export const QueueItemsQuerySchema = z.strictObject({
   channel,
@@ -91,11 +91,11 @@ export interface QueueStatus {
 
 export interface QueueItemView {
   itemId: string;
-  /** The list the item came from: its campaign (Amazon) or batch ID. */
+  /** The list the item came from: its batch ID. */
   batch: string;
   state: QueueState;
   attempt: number;
-  /** The current attempt's product run (Amazon: its request). */
+  /** The current attempt's product run. */
   runId: string | null;
   listingId: string | null;
   lastError: string | null;
