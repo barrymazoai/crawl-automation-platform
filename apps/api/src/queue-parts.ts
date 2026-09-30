@@ -14,16 +14,11 @@ import {
   QueueService,
   type RunService,
 } from "@crawl-automation/app";
-import { swansonAdapter } from "@crawl-automation/channel-swanson";
-import { ChannelRegistry } from "@crawl-automation/channels-core";
-import { gncAdapter } from "@crawl-automation/channels-gnc";
 import type { Database, Logger, TemporalClient } from "@crawl-automation/platform";
 import type { ApiConfig } from "./config.js";
+import { channelRegistry } from "./resources/channel-registry.js";
 
-/** The channels whose product pages this API reads addresses of (product and list runs). */
-export function channelRegistry(): ChannelRegistry {
-  return new ChannelRegistry([swansonAdapter, gncAdapter]);
-}
+export { channelRegistry } from "./resources/channel-registry.js";
 
 /** Product runs: started straight away on the shared pipeline. A channel is enabled by its adapter and config. */
 export function productRuns(parts: {

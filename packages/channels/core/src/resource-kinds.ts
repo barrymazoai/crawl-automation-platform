@@ -13,6 +13,17 @@ export type ResourceKind = (typeof RESOURCE_KINDS)[number];
 export const ResourceKindsSchema = z.record(z.string().min(1).max(200), z.enum(RESOURCE_KINDS));
 export type ResourceKinds = z.infer<typeof ResourceKindsSchema>;
 
+/**
+ * The kinds of the resources the machine configs name today (2026-09-30), so those configs keep starting without a
+ * `resourceKinds` section. A config's own `resourceKinds` wins; any other resource must be given a kind there.
+ */
+export const KNOWN_RESOURCE_KINDS: ResourceKinds = {
+  "scraperapi-lane": "http-lane",
+  "mini-model-account": "model",
+  "mini-cpu": "cpu",
+  "windows-ocr": "ocr",
+};
+
 /** The kind of a resource, by its ID. */
 export type ResourceKindOf = (resourceId: string) => ResourceKind;
 

@@ -1,5 +1,6 @@
 import { isAbsolute } from "node:path";
 import { DeliveryRunnerOptionsSchema, QueueDispatcherOptionsSchema } from "@crawl-automation/app";
+import { ResourceKindsSchema } from "@crawl-automation/channels-core";
 import {
   DatabaseConfigSchema,
   LogConfigSchema,
@@ -15,6 +16,7 @@ import {
 import { COLLECTION_WORKFLOW, ProductPipelineInputSchema } from "@crawl-automation/workflows";
 import { z } from "zod";
 import { BrandScanSettingsSchema } from "./brand-scan-config.js";
+import { checkApiResources } from "./resources/resource-check.js";
 
 const absolutePath = z.string().refine(isAbsolute, "Must be an absolute path");
 
@@ -48,6 +50,8 @@ export const ApiConfigSchema = z.strictObject({
       channels: z.partialRecord(ChannelIdSchema, z.strictObject({ resources: ResourceGateSchema })),
     })
     .default({ queues: { activities: "none", plan: "none", label: "none" }, channels: {} }),
+  /** Resource kinds checked against capture modes at startup; overrides the shared known kinds. */
+  resourceKinds: ResourceKindsSchema.default({}),
   fleet: z.strictObject({ monitorStatus: absolutePath, queueHealth: absolutePath }),
   /**
    * Read-only access to the evidence in R2, for the Review evidence and recheck procedures. Without it those
@@ -81,7 +85,9 @@ export const ApiConfigSchema = z.strictObject({
 });
 export type ApiConfig = z.infer<typeof ApiConfigSchema>;
 
-/** The API's settings come from one private JSON file named by `V3_API_CONFIG`. */
-export function loadApiConfig(env: NodeJS.ProcessEnv = process.env): Promise<ApiConfig> {
-  return loadConfig(ApiConfigSchema, env["V3_API_CONFIG"] ?? "");
+/** Reads the private `V3_API_CONFIG` file and checks capture permits before the API starts. */
+export async function loadApiConfig(env: NodeJS.ProcessEnv = process.env): Promise<ApiConfig> {
+  const config = await loadConfig(ApiConfigSchema, env["V3_API_CONFIG"] ?? "");
+  checkApiResources(config.pipeline.channels, config.resourceKinds);
+  return config;
 }
