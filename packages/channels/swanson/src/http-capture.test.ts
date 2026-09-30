@@ -6,8 +6,6 @@ import {
   type HttpCaptureResult,
 } from "@crawl-automation/channels-core";
 import { RetainedPublication, type ObjectStore } from "@crawl-automation/platform";
-// Old workers wrote archives with this class; the test proves the shared archive reads them unchanged.
-import { SwansonHtmlArchive } from "@crawl-automation/v3-channels";
 import { describe, expect, it, vi } from "vitest";
 import { SWANSON_HTTP_POLICY, swansonAdapter } from "./adapter.js";
 import { fakeScraperApiPages } from "./testing/fake-scraperapi.js";
@@ -118,20 +116,5 @@ describe("a revisit of a Swanson listing that is no longer that product", () => 
         finalUrl: moved,
       },
     });
-  });
-});
-
-describe("OriginalHtmlArchive and the earlier Swanson archive", () => {
-  const fetchedVia = { mode: "http" as const, routeId: "r", egressId: "e", provider: "p" };
-
-  it("reads an original the earlier Swanson archive wrote, and the other way round", async () => {
-    const { publication, archive } = setup();
-    await new SwansonHtmlArchive(publication, capture).save(body, signal(), fetchedVia);
-
-    const read = await archive().inspect(signal());
-
-    expect(read && Buffer.from(read.bytes).equals(body)).toBe(true);
-    const again = await new SwansonHtmlArchive(publication, capture).inspect(signal());
-    expect(again?.source).toEqual(read?.source);
   });
 });

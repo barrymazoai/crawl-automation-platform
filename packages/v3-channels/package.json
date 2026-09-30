@@ -20,17 +20,20 @@
     "test:integration": "vitest run integration --testTimeout=15000"
   },
   "dependencies": {
-    "@crawl-automation/v3-contracts": "workspace:*",
     "@crawl-automation/v3-acquisition": "workspace:*",
     "@crawl-automation/v3-artifacts": "workspace:*",
+    "@crawl-automation/v3-contracts": "workspace:*",
     "htmlparser2": "10.1.0",
-    "zod": "catalog:",
-    "linkedom": "0.18.13"
+    "linkedom": "0.18.13",
+    "zod": "catalog:"
   },
   "devDependencies": {
+    "@crawl-automation/channel-swanson": "workspace:*",
+    "@crawl-automation/channels-core": "workspace:*",
+    "@crawl-automation/platform": "workspace:*",
     "@types/node": "catalog:",
-    "typescript": "catalog:",
     "tsdown": "catalog:",
+    "typescript": "catalog:",
     "vitest": "catalog:"
   }
 }

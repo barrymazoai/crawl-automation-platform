@@ -18,20 +18,20 @@
     "test": "vitest run src"
   },
   "dependencies": {
+    "@crawl-automation/platform": "workspace:*",
     "@crawl-automation/v3-contracts": "workspace:*",
     "@crawl-automation/v3-product": "workspace:*",
     "@temporalio/workflow": "1.23.0",
-    "zod": "catalog:",
-    "@crawl-automation/platform": "workspace:*"
+    "zod": "catalog:"
   },
   "devDependencies": {
-    "@crawl-automation/v3-channels": "workspace:*",
-    "@types/node": "catalog:",
-    "typescript": "catalog:",
-    "vitest": "catalog:",
+    "@crawl-automation/channel-swanson": "workspace:*",
+    "@temporalio/activity": "1.23.0",
+    "@temporalio/common": "1.23.0",
     "@temporalio/testing": "1.23.0",
     "@temporalio/worker": "1.23.0",
-    "@temporalio/activity": "1.23.0",
-    "@temporalio/common": "1.23.0"
+    "@types/node": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
   }
 }

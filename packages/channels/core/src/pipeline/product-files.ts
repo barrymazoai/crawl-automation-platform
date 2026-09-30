@@ -5,7 +5,7 @@ import {
   type FileEvidence,
   type FileTransport,
   type SourceAccess,
-} from "@crawl-automation/v3-acquisition";
+} from "../files/index.js";
 import {
   observationIdentity,
   type ChannelPlanInput,

@@ -41,16 +41,7 @@ export const PAGE_CONFIG_FINGERPRINT = hex(
   ]),
 );
 
-/** The same file policy fingerprint the file step has always used (file.acquire/1). */
-export const FILE_CONFIG_FINGERPRINT = hex(
-  JSON.stringify([
-    "file.acquire/1",
-    { maxBytes: 32 * 1024 * 1024, maxPixels: 40000000, maxRedirects: 3, timeoutMs: 30000 },
-  ]),
-);
-
-/** The image ID a planned file download produces, from its operation ID. */
-export const acquiredImageId = (operationId: string) => `file-${hex(operationId)}`;
+export { FILE_CONFIG_FINGERPRINT, acquiredImageId } from "../files/file-policy.js";
 
 /** A fingerprinted task input: the fingerprint field is hashed over its own canonical material. */
 export const fingerprinted = (material: string) => hex(Buffer.from(material));

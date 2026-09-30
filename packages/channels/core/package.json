@@ -15,9 +15,10 @@
   },
   "dependencies": {
     "@crawl-automation/platform": "workspace:*",
-    "@crawl-automation/v3-acquisition": "workspace:*",
     "@crawl-automation/v3-contracts": "workspace:*",
     "html-to-text": "catalog:",
+    "image-size": "2.0.2",
+    "ipaddr.js": "catalog:",
     "zod": "catalog:"
   },
   "devDependencies": {

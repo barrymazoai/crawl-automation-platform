@@ -1,6 +1,6 @@
 import { swansonAdapter } from "@crawl-automation/channel-swanson";
 import { ChannelRegistry } from "@crawl-automation/channels-core";
-import { swansonLiveFixture } from "@crawl-automation/v3-channels/testing/swanson-live";
+import { swansonPipelineFixture } from "@crawl-automation/channel-swanson";
 import type { ReviewRecord } from "@crawl-automation/v3-contracts";
 import type { ProductPipelineInput } from "@crawl-automation/workflows";
 import { describe, expect, it, vi } from "vitest";
@@ -55,8 +55,8 @@ function evidenceStore() {
 
 describe("LabelHandoffs", () => {
   async function setup(planned: unknown = { manifest: {} }) {
-    const fixture = swansonLiveFixture();
-    const { sourcePlan } = await fixture.live.capture(await fixture.job(), signal());
+    const fixture = await swansonPipelineFixture(signal());
+    const { sourcePlan } = fixture;
     const evidence = evidenceStore();
     const executions = { register: vi.fn(async () => undefined) };
     const handoffs = new LabelHandoffs({

@@ -1,6 +1,6 @@
 import { swansonAdapter } from "@crawl-automation/channel-swanson";
 import { ChannelRegistry } from "@crawl-automation/channels-core";
-import { swansonLiveFixture } from "@crawl-automation/v3-channels/testing/swanson-live";
+import { swansonPipelineFixture } from "@crawl-automation/channel-swanson";
 import type { ReviewRecord } from "@crawl-automation/v3-contracts";
 import type { ProductPipelineInput } from "@crawl-automation/workflows";
 import type { SharedLabelSettings } from "./label-handoffs.js";
@@ -27,8 +27,8 @@ const shared = { queues: { activities: "label", ocr: "label-ocr", model: "label-
 async function setup(
   options: { planned?: unknown; withShared?: boolean; shared?: SharedLabelSettings } = {},
 ) {
-  const fixture = swansonLiveFixture();
-  const { sourcePlan } = await fixture.live.capture(await fixture.job(), signal());
+  const fixture = await swansonPipelineFixture(signal());
+  const { sourcePlan } = fixture;
   const saved = new Map<string, Uint8Array>();
   const evidence = {
     publish: vi.fn(async (key: string, bytes: Uint8Array) => void saved.set(key, bytes)),

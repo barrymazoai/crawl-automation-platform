@@ -15,7 +15,7 @@ import {
   type DownloadedFiles,
   type LabelCorePolicies,
 } from "@crawl-automation/processing";
-import { acquiredImageId, acquisitionKey, FileEvidence } from "@crawl-automation/v3-acquisition";
+import { acquiredImageId, acquisitionKey, FileEvidence } from "@crawl-automation/channels-core";
 import { ArtifactResolver } from "@crawl-automation/platform";
 import type { OcrRegistration } from "@crawl-automation/v3-contracts";
 import type { CoreParts } from "../core-parts.js";

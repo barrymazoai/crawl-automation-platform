@@ -25,3 +25,4 @@ export {
   type HtmlCaptureRequest,
   type SavedHtmlOriginal,
 } from "./capture/html-capture-model.js";
+export * from "./files/index.js";

@@ -23,7 +23,6 @@
   "devDependencies": {
     "@types/node": "catalog:",
     "typescript": "catalog:",
-    "vitest": "catalog:",
-    "@crawl-automation/v3-channels": "workspace:*"
+    "vitest": "catalog:"
   }
 }

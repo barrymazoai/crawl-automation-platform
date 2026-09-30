@@ -14,9 +14,9 @@ import type {
   ProductPlans,
 } from "@crawl-automation/channels-core";
 import type { Database, Logger } from "@crawl-automation/platform";
-import type { FileTransport } from "@crawl-automation/v3-acquisition";
+import type { FileTransport } from "@crawl-automation/channels-core";
 import type { createR2Objects, FileCopies, RetainedPublication } from "@crawl-automation/platform";
-import type { TextLocalStore } from "@crawl-automation/v3-text";
+import type { LocalObjectStore } from "@crawl-automation/platform";
 import type { WorkerConfig } from "./config.js";
 
 type R2 = ReturnType<typeof createR2Objects>;
@@ -30,7 +30,7 @@ export interface CoreParts {
   log: Logger;
   database: Database;
   r2: R2;
-  local: TextLocalStore;
+  local: LocalObjectStore;
   copies: FileCopies;
   publication: RetainedPublication;
   registry: ChannelRegistry;

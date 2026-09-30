@@ -5,3 +5,5 @@ export { swansonProductAddress, swansonUrl, SWANSON_ORIGIN } from "./swanson-add
 export { swansonErrors } from "./swanson-errors.js";
 export { parseSwansonRenderedProduct } from "./swanson-evidence.js";
 export { swansonVariantChoices } from "./swanson-variants.js";
+export { parseSwansonStaticHtml } from "./swanson-static-html.js";
+export { swansonPipelineFixture } from "./testing/pipeline-fixture.js";

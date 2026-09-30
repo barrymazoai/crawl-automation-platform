@@ -26,9 +26,7 @@
     "@crawl-automation/channels-wholefoods": "workspace:*",
     "@crawl-automation/platform": "workspace:*",
     "@crawl-automation/processing": "workspace:*",
-    "@crawl-automation/v3-artifacts": "workspace:*",
     "@crawl-automation/v3-contracts": "workspace:*",
-    "@crawl-automation/v3-text": "workspace:*",
     "@crawl-automation/workflows": "workspace:*",
     "@hono/node-server": "catalog:",
     "@hono/trpc-server": "^0.4.2",
@@ -40,9 +38,9 @@
   },
   "devDependencies": {
     "@types/node": "catalog:",
+    "tsdown": "catalog:",
     "tsx": "catalog:",
     "typescript": "catalog:",
-    "vitest": "catalog:",
-    "tsdown": "catalog:"
+    "vitest": "catalog:"
   }
 }

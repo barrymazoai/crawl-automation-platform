@@ -41,7 +41,7 @@ vi.mock("@temporalio/workflow", () => {
   };
 });
 
-import { swansonLiveFixture } from "@crawl-automation/v3-channels/testing/swanson-live";
+import { swansonPipelineFixture } from "@crawl-automation/channel-swanson";
 import { ProductPipelineWorkflow } from "./product-pipeline-workflow.js";
 
 const signal = () => AbortSignal.timeout(5000);
@@ -83,8 +83,8 @@ beforeEach(() => {
 });
 
 async function setup() {
-  const fixture = swansonLiveFixture();
-  const { sourcePlan } = await fixture.live.capture(await fixture.job(), signal());
+  const fixture = await swansonPipelineFixture(signal());
+  const { sourcePlan } = fixture;
   const file = {
     ...sourcePlan.source,
     kind: "source-image",

@@ -1,37 +1,8 @@
-import { readFileSync } from "node:fs";
-import { gunzipSync } from "node:zlib";
-import { pageText } from "@crawl-automation/channels-core";
-// Only this parity test reads the old parser; production uses the Swanson-owned reader.
-import { parseSwansonStaticHtml as oldReader } from "@crawl-automation/v3-channels";
 import { describe, expect, it } from "vitest";
 import { SWANSON_ORIGIN } from "./swanson-address.js";
 import { parseSwansonStaticHtml } from "./swanson-static-html.js";
 
 const capturedAt = "2026-09-28T23:45:00.000Z";
-const fixtures = [
-  {
-    file: "healthy-origins-d-ribose.html.gz",
-    path: "/p/healthy-origins-natural-d-ribose-10-6-oz-pwdr",
-  },
-  {
-    file: "healthy-origins-ubiquinol-variant.html.gz",
-    path: "/p/healthy-origins-ubiquinol-kaneka-qh-100-mg-60-sgels?variant=46318812168330",
-  },
-];
-
-describe("the Swanson-owned static reader matches the previous adapter's reader", () => {
-  it.each(fixtures)("preserves the entire projection of $file", ({ file, path }) => {
-    const html = gunzipSync(readFileSync(new URL(`./fixtures/${file}`, import.meta.url))).toString(
-      "utf8",
-    );
-    const url = `${SWANSON_ORIGIN}${path}`;
-    // The adapter already supplied pageText before this move; compare with that exact old call.
-    const previous = oldReader(html, url, capturedAt, (element) => pageText(element.innerHTML));
-
-    expect(parseSwansonStaticHtml(html, url, capturedAt)).toStrictEqual(previous);
-  });
-});
-
 const url = `${SWANSON_ORIGIN}/p/healthy-origins-natural-d-ribose-10-6-oz-pwdr`;
 const read = (html: string) => parseSwansonStaticHtml(html, url, capturedAt);
 

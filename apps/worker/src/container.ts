@@ -34,7 +34,7 @@ import {
   DirectHttpsTransport,
   FileEvidence,
   SystemHttpsTransport,
-} from "@crawl-automation/v3-acquisition";
+} from "@crawl-automation/channels-core";
 import {
   ArtifactResolver,
   createR2Objects,
@@ -42,7 +42,7 @@ import {
   RetainedPublication,
   verifyBytes,
 } from "@crawl-automation/platform";
-import { TextLocalStore } from "@crawl-automation/v3-text";
+import { LocalObjectStore } from "@crawl-automation/platform";
 import { asFunction, asValue, createContainer, InjectionMode, type AwilixContainer } from "awilix";
 import { buildBrowserParts, type BrowserParts } from "./browser/browser-parts.js";
 import { captureRecords, recordedHttpCapture } from "./capture-records.js";
@@ -82,7 +82,7 @@ export async function buildContainer(config: WorkerConfig): Promise<Parts> {
     log: asValue(log),
     database: asValue(createDatabase(config.database, log)),
     r2: asValue(createR2Objects(storage.r2, storage.r2Credentials)),
-    local: asValue(await TextLocalStore.open(storage.journalRoot)),
+    local: asValue(await LocalObjectStore.open(storage.journalRoot)),
     copies: asValue(await FileCopies.open(storage.cacheRoot)),
     // Channels this worker can collect. A new channel is one adapter added here.
     registry: asValue(new ChannelRegistry([swansonAdapter, gncAdapter, amazonAdapter])),

@@ -2,7 +2,8 @@ import { ReviewEvidence, TextAnswerRecheck } from "@crawl-automation/app";
 import { defineErrors, type ObjectStore } from "@crawl-automation/platform";
 import { OcrResults, TextEvidence, noResult } from "@crawl-automation/processing";
 import { ArtifactResolver, createR2Objects } from "@crawl-automation/platform";
-import { legacyLabelCorePolicies } from "@crawl-automation/v3-text";
+import { swansonLabelCore } from "@crawl-automation/channel-swanson";
+import { gncLabelCore } from "@crawl-automation/channels-gnc";
 import type { ApiConfig } from "./config.js";
 
 const apiErrors = defineErrors({
@@ -18,8 +19,7 @@ const refuseWrite = async (): Promise<never> => {
 
 /**
  * The Review evidence readers: R2 read only, no local copies, no ledger writes. Text sources that came from OCR are
- * checked against R2 alone, as a worker without a ledger does. The label-core policies still come from the old text
- * package until the channels supply them.
+ * checked against R2 alone, as a worker without a ledger does. Each channel supplies its label-core reader.
  */
 export function evidenceReaders(storage: NonNullable<ApiConfig["storage"]>) {
   const r2 = createR2Objects(storage.r2, storage.r2Credentials);
@@ -39,7 +39,7 @@ export function evidenceReaders(storage: NonNullable<ApiConfig["storage"]>) {
     artifacts: new ArtifactResolver(noCopies, remote),
     ocr: { inspect: async () => noResult },
     remoteOcr,
-    labelCores: legacyLabelCorePolicies,
+    labelCores: { "swanson-label-core/1": swansonLabelCore, "gnc-label-core/1": gncLabelCore },
   });
   const readers = {
     files: new ReviewEvidence({ objects: remote }),
