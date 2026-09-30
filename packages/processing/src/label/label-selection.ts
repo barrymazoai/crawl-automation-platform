@@ -79,7 +79,14 @@ export class LabelImageSelection {
       signal,
     );
     const { sources, skipped } = outcome;
-    return this.plans.publishManifest({ input, sources, skipped, documents: [] }, signal);
+    const documents = input.admission
+      ? sources.flatMap((source) =>
+          source.kind === "text" && source.task.source.kind === "prepared"
+            ? [source.task.source.document]
+            : [],
+        )
+      : [];
+    return this.plans.publishManifest({ input, sources, skipped, documents }, signal);
   }
 
   /** The selected image is registered and really holds a complete label. */

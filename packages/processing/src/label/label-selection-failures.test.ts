@@ -114,13 +114,16 @@ describe("LabelImageSelection.manifest dependency failures", () => {
     );
   });
 
-  // label-selection.ts always passes documents: [], so valid packaging admission fails the manifest schema.
-  it.fails(
-    "retains the full page document when image-first selection also requires packaging admission",
-    async () => {
+  it.each(["image-1", null])(
+    "retains the full page document for packaging admission with selected image %s",
+    async (selectedImageId) => {
       const fake = await selectionFixture();
       fake.request.input.admission = "label-packaging/1";
       fake.request.states[0] = { id: "page", status: "registered" };
+      fake.request.selectedImageId = selectedImageId;
+      if (selectedImageId === null) {
+        fake.request.states = fake.request.states.map(({ id }) => ({ id, status: "registered" }));
+      }
       const prepared = fake.plan.prepared.source;
       if (prepared.kind !== "prepared") {
         throw new Error("fixture page must have a prepared document");
@@ -128,8 +131,48 @@ describe("LabelImageSelection.manifest dependency failures", () => {
       await expect(
         fake.selection.manifest(fake.request, new AbortController().signal),
       ).resolves.toMatchObject({
-        manifest: { admission: { documents: [prepared.document] } },
+        manifest: {
+          admission: {
+            policy: "label-packaging/1",
+            comparison: "label-typography/2",
+            documents: [prepared.document],
+          },
+        },
       });
     },
   );
+
+  it("does not borrow a document from a skipped page to satisfy packaging admission", async () => {
+    const fake = await selectionFixture();
+    fake.request.input.admission = "label-packaging/1";
+    await expect(
+      fake.selection.manifest(fake.request, new AbortController().signal),
+    ).rejects.toMatchObject({ name: "ZodError" });
+    expect(fake.publishManifest).toHaveBeenCalledWith(
+      expect.objectContaining({ documents: [], skipped: ["page", "image-0"] }),
+      expect.any(AbortSignal),
+    );
+    expect(fake.plan.resolve.mock.calls.some(([source]) => source.id === "page")).toBe(false);
+  });
+
+  it("does not substitute a label-core fragment for a full packaging document", async () => {
+    const fake = await selectionFixture();
+    fake.request.input.admission = "label-packaging/1";
+    fake.request.states[0] = { id: "page", status: "registered" };
+    fake.source.mockRestore();
+    const resolve = fake.plan.labelPlans.source.bind(fake.plan.labelPlans);
+    vi.spyOn(fake.plan.labelPlans, "source").mockImplementation(async (request, signal) => {
+      const result = await resolve(request, signal);
+      if (result.status === "prepared" && result.source.kind === "text") {
+        const source = result.source.task.source;
+        if (source.kind === "prepared") {
+          source.document.producer.module = "label.core.prepare";
+        }
+      }
+      return result;
+    });
+    await expect(
+      fake.selection.manifest(fake.request, new AbortController().signal),
+    ).rejects.toMatchObject({ name: "ZodError" });
+  });
 });

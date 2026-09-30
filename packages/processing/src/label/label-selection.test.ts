@@ -224,6 +224,11 @@ describe("LabelImageSelection.manifest selection checks", () => {
     ]);
     expect(result.skipped).toEqual([]);
     expect(fake.inspector.image).not.toHaveBeenCalled();
+    expect(result.manifest.admission).toBeUndefined();
+    expect(fake.publishManifest).toHaveBeenCalledWith(
+      expect.objectContaining({ documents: [] }),
+      expect.any(AbortSignal),
+    );
   });
 
   it.each(["registered", "not_matched"] as const)(

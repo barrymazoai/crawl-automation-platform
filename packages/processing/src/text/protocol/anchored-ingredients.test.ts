@@ -139,9 +139,49 @@ describe("assertIngredientBoundaries", () => {
     expect(() => assertIngredientBoundaries(items, text)).not.toThrow();
   });
 
-  // The regex strips only innermost parentheses, then mistakes an enclosing-list comma for a top-level separator.
-  it.fails("keeps nested parenthetical subingredients inside a single ingredient", () => {
+  it("keeps nested parenthetical subingredients inside a single ingredient", () => {
     const text = "extract (leaf (dry), root)";
     expect(() => assertIngredientBoundaries([item(text, text)], text)).not.toThrow();
+  });
+
+  it.each([
+    "capsule [gelatin, water]",
+    "extract [leaf [dry], root]",
+    "extract (leaf [dry], root)",
+    "extract [leaf (dry); root]",
+    "extract (leaf (dry (powder), fresh), root)",
+    "extract [leaf [dry [powder], fresh]; root]",
+    "extract (leaf [dry (powder), fresh]; root)",
+  ])("keeps separators inside round, square and mixed nested brackets: %s", (text) => {
+    expect(() => assertIngredientBoundaries([item(text, text)], text)).not.toThrow();
+  });
+
+  it.each([",", ";"])("still rejects a top-level %s after nested brackets close", (separator) => {
+    const first = "extract (leaf [dry (powder), fresh]; root)";
+    const text = `${first}${separator} cellulose`;
+    expect(() => assertIngredientBoundaries([item(text, text)], text)).toThrow(
+      expect.objectContaining({ code: "TEXT.INGREDIENT_BOUNDARY" }),
+    );
+    expect(() =>
+      assertIngredientBoundaries([item(text, first), item(text, "cellulose")], text),
+    ).not.toThrow();
+  });
+
+  it.each([
+    "extract (leaf, root",
+    "extract [leaf; root",
+    "extract (leaf (dry), root",
+    "extract (leaf",
+    "extract leaf), root",
+    "extract leaf]; root",
+    "extract (leaf], root)",
+    "extract ([leaf)], root",
+  ])("reports a boundary failure for unbalanced brackets: %s", (text) => {
+    expect(() => assertIngredientBoundaries([item(text, text)], text)).toThrow(
+      expect.objectContaining({
+        code: "TEXT.INGREDIENT_BOUNDARY",
+        details: { executionFact: "executed" },
+      }),
+    );
   });
 });

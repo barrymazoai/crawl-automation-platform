@@ -73,7 +73,7 @@ export function assertIngredientBoundaries(items: readonly AnchoredItem[], text:
   ordered.forEach((item, index) => {
     const previous = ordered[index - 1];
     // A line wrap is not an ingredient delimiter; a top-level comma is.
-    if (/[,;]/.test(item.text.replace(/\([^()]*\)/g, ""))) {
+    if (invalidIngredientBoundary(item.text)) {
       throw textFailure("TEXT.INGREDIENT_BOUNDARY", "executed");
     }
     const sameList =
@@ -83,4 +83,21 @@ export function assertIngredientBoundaries(items: readonly AnchoredItem[], text:
       throw textFailure("TEXT.INGREDIENT_BOUNDARY", "executed");
     }
   });
+}
+
+/** Separators count only at depth zero; unmatched or mismatched brackets leave the boundary unverified. */
+function invalidIngredientBoundary(text: string): boolean {
+  const closingBrackets: string[] = [];
+  for (const character of text) {
+    if (character === "(" || character === "[") {
+      closingBrackets.push(character === "(" ? ")" : "]");
+    } else if (character === ")" || character === "]") {
+      if (closingBrackets.pop() !== character) {
+        return true;
+      }
+    } else if (/[,;]/.test(character) && closingBrackets.length === 0) {
+      return true;
+    }
+  }
+  return closingBrackets.length !== 0;
 }
