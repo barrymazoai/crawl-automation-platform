@@ -1,5 +1,6 @@
 export * from "./adapter.js";
 export * from "./capture.js";
+export * from "./resource-kinds.js";
 export * from "./errors.js";
 export * from "./registry.js";
 export * from "./capture/http-capture.js";

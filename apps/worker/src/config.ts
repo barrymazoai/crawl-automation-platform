@@ -1,13 +1,12 @@
 import { isAbsolute } from "node:path";
 import type { LabelSettings } from "@crawl-automation/app";
-import { CHANNEL_IDS } from "@crawl-automation/channels-core";
+import { CHANNEL_IDS, ResourceKindsSchema } from "@crawl-automation/channels-core";
 import {
   DatabaseConfigSchema,
   LogConfigSchema,
   ScraperApiAccessSchema,
   ScraperApiOptionChoicesSchema,
   TemporalConfigSchema,
-  loadConfig,
 } from "@crawl-automation/platform";
 import { R2ScopeSchema } from "@crawl-automation/v3-artifacts";
 import {
@@ -99,19 +98,15 @@ export const WorkerConfigSchema = z
     }) satisfies z.ZodType<LabelSettings>,
     /** The label steps on this machine: storage, node name, Codex and the OCR API (see `label/processing-settings.ts`). */
     processing: ProcessingSettingsSchema.optional(),
-    /** The browser machine only (Server 二): Ego and the Whole Foods store (see `browser/browser-settings.ts`). */
+    /** A machine with the browser role (both Mac minis): Ego and the Whole Foods store (`browser/browser-settings.ts`). */
     browser: BrowserSettingsSchema.optional(),
+    /**
+     * The kind of each resource the permits name (browser, http-lane, model, ocr, cpu…), checked against the work at
+     * startup. Today's resources are known already (`resources/known-kinds.ts`); a new resource is named here.
+     */
+    resourceKinds: ResourceKindsSchema.default({}),
   })
   .refine((config) => config.processes !== undefined || config.taskQueue !== undefined, {
     message: "Name the processes, or the pipeline's task queue",
   });
 export type WorkerConfig = z.infer<typeof WorkerConfigSchema>;
-
-/**
- * The worker's settings come from one private JSON file named by `V3_PIPELINE_CONFIG`. Not `V3_WORKER_CONFIG`: the
- * deployment control reads that variable as an old-style worker config and then also requires a role and build ID
- * in the health file, so the pipeline worker would never count as ready.
- */
-export function loadWorkerConfig(env: NodeJS.ProcessEnv = process.env): Promise<WorkerConfig> {
-  return loadConfig(WorkerConfigSchema, env["V3_PIPELINE_CONFIG"] ?? "");
-}

@@ -28,6 +28,15 @@ export const channelErrors = defineErrors({
     message:
       "The capture permit is the wrong kind for the capture mode (e.g. a browser permit for HTTP).",
   },
+  "CHANNEL.CAPTURE_LANE_MISSING": {
+    category: "RUNTIME",
+    message: "The capture gate has no permit of the kind its capture mode needs.",
+  },
+  "CHANNEL.RESOURCE_KIND_UNKNOWN": {
+    category: "RUNTIME",
+    message:
+      "A permit's resource has no kind in the config (browser, http-lane, model, ocr, cpu…).",
+  },
   "CAPTURE.DOWNLOAD_UNRESOLVED": {
     category: "SOURCE",
     message: "A download for this page was already begun and never confirmed; it is not repeated.",

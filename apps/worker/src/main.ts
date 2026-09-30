@@ -1,6 +1,6 @@
 import { startHeartbeat } from "@crawl-automation/platform";
 import { runWorkers } from "@crawl-automation/platform/temporal-worker";
-import { loadWorkerConfig } from "./config.js";
+import { loadWorkerConfig } from "./load-config.js";
 import { buildContainer } from "./container.js";
 import { roleWorkers } from "./processes/role-workers.js";
 import { selectProcess } from "./processes/select-process.js";
