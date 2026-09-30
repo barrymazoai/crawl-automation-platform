@@ -7,12 +7,7 @@ import {
   type PipelineActivities,
   type ProductPipelineInput,
 } from "./pipeline-model.js";
-
-const once = {
-  startToCloseTimeout: "10 minutes",
-  scheduleToCloseTimeout: "30 minutes",
-  retry: { maximumAttempts: 1 },
-} as const;
+import { once } from "./activity-options.js";
 
 /**
  * A product whose page only a browser can read (Whole Foods): the page is read and archived on the browser

@@ -1,7 +1,8 @@
-import { ApplicationFailure, isCancellation } from "@temporalio/workflow";
+import { isCancellation } from "@temporalio/workflow";
 import { ocrImage } from "./label-image-ocr.js";
 import { processSource, type SourceWork } from "./label-source.js";
 import { ImageCheckSchema, type ImageSource, type Manifest, type State } from "./label-model.js";
+import { identityConflict } from "./identity-conflict.js";
 import { sameJson } from "./same.js";
 
 export interface Walk {
@@ -9,12 +10,6 @@ export interface Walk {
   notStarted: { id: string; status: "not_started" }[];
   selectedImageId: string | null;
 }
-
-const identityConflict = () =>
-  ApplicationFailure.nonRetryable(
-    "Label source identity conflict",
-    "CHANNEL.LABEL_IDENTITY_CONFLICT",
-  );
 
 /**
  * Image-first labels: every image's OCR starts at once (cheap), then images are tried in order and the image model

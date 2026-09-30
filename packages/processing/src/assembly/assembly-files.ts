@@ -4,6 +4,7 @@ import { sha256 } from "@crawl-automation/v3-artifacts";
 import { LabelProductJoinSchema, type LabelProductJoin } from "@crawl-automation/v3-contracts";
 import { encodeJson } from "../results/result-record.js";
 import { writeOnce } from "../results/write-once.js";
+import { claimOnce } from "../publication/claim-once.js";
 import { assemblyFailure } from "./assembly-errors.js";
 import { byText } from "./merge-state.js";
 
@@ -64,15 +65,16 @@ export async function claimHandoff(
     throw assemblyFailure("LABEL_PRODUCT.HANDOFF_PENDING");
   }
   const bytes = encodeJson({ hash: claim.hash, nonce: randomUUID() });
-  let created;
-  try {
-    created = await remote.create(claim.key, bytes, "application/json", signal);
-  } catch {
-    // An unconfirmed claim may exist; it is never taken over.
-    throw assemblyFailure("LABEL_PRODUCT.HANDOFF_PENDING");
-  }
-  if (created !== "created") {
-    throw assemblyFailure("LABEL_PRODUCT.HANDOFF_PENDING");
-  }
-  assertSameBytes(await remote.read(claim.key, INTENT_LIMIT, signal), bytes);
+  // An existing or unconfirmed claim is never taken over.
+  const pending = () => assemblyFailure("LABEL_PRODUCT.HANDOFF_PENDING");
+  await claimOnce(
+    remote,
+    { key: claim.key, bytes },
+    {
+      signal,
+      createFailed: pending,
+      exists: pending,
+      unverified: () => assemblyFailure("LABEL_PRODUCT.HANDOFF_UNVERIFIED"),
+    },
+  );
 }

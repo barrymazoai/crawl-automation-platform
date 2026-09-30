@@ -18,8 +18,8 @@ import { pageFailure } from "./page-errors.js";
 import type { PageEvidence } from "./page-evidence.js";
 import { checkedPageInput, pageCompletionKey, pagePolicy } from "./page-input.js";
 import { parsePage } from "./page-parser.js";
+import { retentionSignal } from "../step/retention.js";
 
-const RETENTION_MS = 10_000;
 const MAX_TEXT_LENGTH = 200_000;
 const COMPLETION_LIMIT = 65_536;
 
@@ -56,8 +56,9 @@ export class PagePreparation {
       { key: `page-intents/${input.operationId}.json`, bytes: intent },
       {
         signal,
-        unknown: () => pageFailure("PAGE.INTENT_UNKNOWN"),
-        executionUnknown: () => pageFailure("PAGE.EXECUTION_UNKNOWN"),
+        createFailed: () => pageFailure("PAGE.INTENT_UNKNOWN"),
+        exists: () => pageFailure("PAGE.EXECUTION_UNKNOWN"),
+        unverified: () => pageFailure("PAGE.INTENT_UNKNOWN"),
       },
     );
     const prepared = preparedFiles(input, source, signal);
@@ -75,7 +76,7 @@ export class PagePreparation {
 
   /** Every computed file is kept locally before anything is published; nothing is cleaned up afterwards. */
   private async keepLocally(files: PreparedFiles["files"]): Promise<void> {
-    const signal = AbortSignal.timeout(RETENTION_MS);
+    const signal = retentionSignal();
     for (const [key, value] of files) {
       await writeOnce(
         this.evidence.deps.local,
@@ -88,7 +89,7 @@ export class PagePreparation {
   /** After a failure, a page that was in fact prepared still counts; it is never prepared or uploaded again. */
   private async finishedMeanwhile(input: PagePrepareInput): Promise<PagePrepareOutcome | null> {
     try {
-      const record = await this.evidence.inspect(input, AbortSignal.timeout(RETENTION_MS));
+      const record = await this.evidence.inspect(input, retentionSignal());
       return record ? { status: "durable", record } : null;
     } catch {
       // Whether it finished cannot be shown now; the failure is recorded as a Review instead.

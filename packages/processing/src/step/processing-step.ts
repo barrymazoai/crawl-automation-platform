@@ -4,6 +4,7 @@ import type { PrivateReviewReader, ReviewWriter } from "@crawl-automation/v3-rev
 import type { ResultFacts } from "../results/result-kind.js";
 import { recordStepReview } from "./step-review.js";
 import type { ExecutionFact } from "./step-failure.js";
+import { retentionSignal } from "./retention.js";
 
 /** One run of a step: its task, whether the service has run, and what it answered (kept for a Review). */
 export interface StepAttempt<TInput> {
@@ -33,9 +34,6 @@ export interface StepDeps<TInput, TOutput, TRecord> {
   /** "register" writes the ledger; "upload-only" (cloud mode) leaves registration to the receipt step. */
   mode?: "register" | "upload-only";
 }
-
-/** How long storing a result or a Review may take after the service answered, even if the task was cancelled. */
-const RETENTION_MS = 10_000;
 
 /**
  * Every processing step (Template Method): reuse a finished result, read the evidence, claim the task once, call the
@@ -113,7 +111,7 @@ export abstract class ProcessingStep<TInput, TOutput, TRecord, TOutcome, TEviden
   /** Keeps the output (even after a late cancellation), uploads it, and registers it unless in cloud mode. */
   private async storeAndRegister(input: TInput, output: TOutput, signal: AbortSignal) {
     const { results } = this.stepDeps;
-    await results.capture(input, output, AbortSignal.timeout(RETENTION_MS));
+    await results.capture(input, output, retentionSignal());
     signal.throwIfAborted();
     await results.uploadMissing(input, signal);
     const facts = this.uploadOnly
@@ -151,7 +149,7 @@ export abstract class ProcessingStep<TInput, TOutput, TRecord, TOutcome, TEviden
   /** After a failure, a result that was in fact completed still counts; absence is never assumed. */
   private async finishedMeanwhile(input: TInput): Promise<TOutcome | null> {
     try {
-      const facts = await this.stepDeps.results.inspect(input, AbortSignal.timeout(RETENTION_MS));
+      const facts = await this.stepDeps.results.inspect(input, retentionSignal());
       return this.outcome(input, facts);
     } catch {
       // Whether it finished cannot be shown now; the failure is recorded as a Review instead.

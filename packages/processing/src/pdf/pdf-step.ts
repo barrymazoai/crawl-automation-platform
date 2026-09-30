@@ -73,8 +73,9 @@ export class PdfStep extends PdfEvidence {
       { key: `pdf-intents/${input.operationId}.json`, bytes: intent },
       {
         signal,
-        unknown: () => pdfFailure("PDF.INTENT_UNKNOWN"),
-        executionUnknown: () => pdfFailure("PDF.EXECUTION_UNKNOWN"),
+        createFailed: () => pdfFailure("PDF.INTENT_UNKNOWN"),
+        exists: () => pdfFailure("PDF.EXECUTION_UNKNOWN"),
+        unverified: () => pdfFailure("PDF.INTENT_UNKNOWN"),
       },
     );
     const source = await this.durableSource(input, signal);

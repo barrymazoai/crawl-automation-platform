@@ -9,16 +9,11 @@ import type { LabelRun } from "./label-run.js";
 import type { Issued } from "./label-source.js";
 import { ManifestResultSchema, type ManifestResult, type State } from "./label-model.js";
 import type { Walk } from "./label-image-first.js";
+import { identityConflict } from "./identity-conflict.js";
 import { sameJson } from "./same.js";
 
 type ReviewCode = "CHANNEL.LABEL_PREPARATION_UNVERIFIED" | "CHANNEL.DEPENDENCY_UNAVAILABLE";
 type Failure = { sourceId: string; code: string; executionFact: string };
-
-const identityConflict = () =>
-  ApplicationFailure.nonRetryable(
-    "Label source identity conflict",
-    "CHANNEL.LABEL_IDENTITY_CONFLICT",
-  );
 
 /** The product's own label Review, with every source's state and, when known, what held each one up. */
 export async function reviewLabel(

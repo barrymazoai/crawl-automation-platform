@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import type { z } from "zod";
 import { isDeepStrictEqual } from "node:util";
 import { errorCodeOf, isAppError, type ObjectStore } from "@crawl-automation/platform";
 import { CodexError } from "@crawl-automation/v3-codex";
@@ -6,8 +7,14 @@ import { codexDetailOf, codexFactOf } from "../codex/codex-errors.js";
 import type { VisionTask } from "@crawl-automation/v3-contracts";
 import { decodeJson, encodeJson } from "../results/result-record.js";
 import { writeOnce } from "../results/write-once.js";
+import { claimIntent, type IntentFailure } from "../step/intent-claim.js";
 import { recordedFact } from "../step/step-failure.js";
-import { isVisionErrorCode, visionErrors, visionFailure } from "./vision-errors.js";
+import {
+  isVisionErrorCode,
+  visionErrors,
+  visionFailure,
+  type VisionErrorCode,
+} from "./vision-errors.js";
 import {
   VisionFailureFileSchema,
   VisionIntentSchema,
@@ -15,8 +22,15 @@ import {
   visionLimits,
   visionTaskFingerprint,
 } from "./vision-files.js";
+import { retentionSignal } from "../step/retention.js";
 
-const RETENTION_MS = 10_000;
+type VisionIntent = z.infer<typeof VisionIntentSchema>;
+
+const intentCodes: Record<IntentFailure, VisionErrorCode> = {
+  intentUnknown: "VISION.INTENT_UNVERIFIED",
+  intentConflict: "VISION.INPUT_CONFLICT",
+  executionUnknown: "VISION.EXECUTION_UNKNOWN",
+};
 
 /**
  * Claims the only right to call the model for this task: a create-once intent in R2. When an intent already exists,
@@ -32,24 +46,33 @@ export async function claimVisionIntent(
   if (existing) {
     throw await earlierAttempt(stores, { task, intent: existing }, signal);
   }
-  const bytes = encodeJson({
+  const intent: VisionIntent = {
     fingerprint: visionTaskFingerprint(task),
     nonce: randomUUID(),
     input: task.input,
-  });
-  let created;
-  try {
-    created = await stores.remote.create(key, bytes, "application/json", signal);
-  } catch (error) {
-    throw visionFailure("VISION.INTENT_UNVERIFIED", "unknown", error);
-  }
-  if (created !== "created") {
-    throw visionFailure("VISION.EXECUTION_UNKNOWN");
-  }
-  const saved = await stores.remote.read(key, visionLimits.intentBytes, signal);
-  if (!saved || !Buffer.from(saved).equals(bytes)) {
-    throw visionFailure("VISION.INTENT_UNVERIFIED");
-  }
+  };
+  return claimIntent<VisionIntent, VisionIntent>(
+    {
+      store: stores.remote,
+      key,
+      intent,
+      parse: (raw) => VisionIntentSchema.parse(raw),
+      limit: visionLimits.intentBytes,
+      sameTask: sameVisionTask,
+      fail: (reason, cause) => visionFailure(intentCodes[reason], "unknown", cause),
+    },
+    signal,
+  );
+}
+
+/** Whether two intents are the same task: the same input on the same vision setup. */
+function sameVisionTask(
+  saved: { fingerprint: string; input: unknown },
+  proposed: { fingerprint: string; input: unknown },
+): boolean {
+  return (
+    saved.fingerprint === proposed.fingerprint && isDeepStrictEqual(saved.input, proposed.input)
+  );
 }
 
 /** What an earlier attempt left: another task's intent, a kept answer, a recorded failure, or nothing known. */
@@ -61,11 +84,7 @@ async function earlierAttempt(
   const { task } = earlier;
   const intent = VisionIntentSchema.safeParse(readableJson(earlier.intent));
   const fingerprint = visionTaskFingerprint(task);
-  if (
-    !intent.success ||
-    intent.data.fingerprint !== fingerprint ||
-    !isDeepStrictEqual(intent.data.input, task.input)
-  ) {
+  if (!intent.success || !sameVisionTask(intent.data, { fingerprint, input: task.input })) {
     return visionFailure("VISION.INPUT_CONFLICT");
   }
   const response = visionKeys.response(task);
@@ -122,7 +141,7 @@ export async function keepCallFailure(
     key: visionKeys.failure(task),
     bytes: encodeJson(VisionFailureFileSchema.parse(failure)),
   };
-  const signal = AbortSignal.timeout(RETENTION_MS);
+  const signal = retentionSignal();
   try {
     await writeOnce(local, entry, {
       signal,

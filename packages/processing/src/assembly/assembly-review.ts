@@ -13,6 +13,7 @@ import { appendConfirmed, type ReviewLedger } from "../step/kept-review.js";
 import { buildStepReview } from "../step/step-review.js";
 import { assemblyFailure } from "./assembly-errors.js";
 import { ASSEMBLY_LIMIT, keepLocally } from "./assembly-files.js";
+import { retentionSignal } from "../step/retention.js";
 
 export interface AssemblyStores {
   local: ObjectStore;
@@ -42,7 +43,6 @@ const STABLE = [
   "label-image-first/4",
   "label-image-first/5",
 ];
-const RETENTION_MS = 10_000;
 const unverified = () => assemblyFailure("LABEL_PRODUCT.REVIEW_UNVERIFIED");
 
 /** The Review of a product that could not be assembled or collected: kept locally, then in the ledger. */
@@ -50,7 +50,7 @@ export async function recordAssemblyReview(
   stores: AssemblyStores,
   review: AssemblyReviewCase,
 ): Promise<ProductImageOutcome> {
-  const signal = AbortSignal.timeout(RETENTION_MS);
+  const signal = retentionSignal();
   const stable = STABLE.includes(review.input.manifest.evidencePolicy ?? "");
   const identity = stable ? sha256(encodeJson(identityParts(review))) : randomUUID();
   let record = assemblyReviewRecord(review, identity);

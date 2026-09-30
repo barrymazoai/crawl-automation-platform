@@ -2,8 +2,7 @@ import { randomUUID } from "node:crypto";
 import { sha256 } from "@crawl-automation/v3-artifacts";
 import type { AppError, ObjectStore } from "@crawl-automation/platform";
 import { hashString } from "../results/result-record.js";
-
-const MARKER_LIMIT = 65_536;
+import { claimOnce } from "./claim-once.js";
 
 export interface ClaimedPublicationFailures {
   /** Different bytes are already stored under the key, or the read-back differs. */
@@ -57,38 +56,26 @@ export async function claimedPublish(
   verify(await remote.read(key, limit, signal));
 }
 
-async function claimLocally(
+function claimLocally(
   local: ObjectStore,
   marker: { key: string; bytes: Uint8Array },
   options: ClaimedPublicationFailures & { signal: AbortSignal },
 ): Promise<void> {
-  const claim = await local.create(marker.key, marker.bytes, "application/json", options.signal);
-  if (claim !== "created") {
-    throw options.pending();
-  }
-  const retained = await local.read(marker.key, MARKER_LIMIT, options.signal);
-  if (!retained || sha256(retained) !== sha256(marker.bytes)) {
-    throw options.localUnverified();
-  }
+  const { signal, pending, localUnverified } = options;
+  return claimOnce(local, marker, { signal, exists: pending, unverified: localUnverified });
 }
 
-async function claimShared(
+function claimShared(
   remote: ObjectStore,
   marker: { key: string; bytes: Uint8Array },
   options: ClaimedPublicationFailures & { signal: AbortSignal },
 ): Promise<void> {
-  let shared;
-  try {
-    shared = await remote.create(marker.key, marker.bytes, "application/json", options.signal);
-  } catch {
-    // An unconfirmed shared claim may exist; it is never taken over.
-    throw options.pending();
-  }
-  if (shared !== "created") {
-    throw options.pending();
-  }
-  const confirmed = await remote.read(marker.key, MARKER_LIMIT, options.signal);
-  if (!confirmed || sha256(confirmed) !== sha256(marker.bytes)) {
-    throw options.pending();
-  }
+  // An unconfirmed shared claim may exist; it is never taken over.
+  const { signal, pending } = options;
+  return claimOnce(remote, marker, {
+    signal,
+    createFailed: pending,
+    exists: pending,
+    unverified: pending,
+  });
 }

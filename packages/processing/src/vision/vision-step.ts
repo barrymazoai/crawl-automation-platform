@@ -23,6 +23,7 @@ import { visionKeys, visionResponse } from "./vision-files.js";
 import type { VisionOutcome } from "./vision-outcome.js";
 import { visionReview } from "./vision-review.js";
 import type { VisionOutput, VisionResults } from "./vision-results.js";
+import { retentionSignal } from "../step/retention.js";
 
 export interface VisionStepDeps {
   model: Pick<VisionModel, "fingerprint" | "extractionProtocol" | "interpret">;
@@ -44,8 +45,6 @@ const handoffCodes = {
   unknown: "VISION.HANDOFF_UNKNOWN",
   reviewUnknown: "VISION.REVIEW_UNVERIFIED",
 } as const;
-const RETENTION_MS = 10_000;
-
 /** The vision step: reads one selected label image with the model once and keeps its answer as the vision result. */
 export class VisionStep extends ProcessingStep<
   VisionTask,
@@ -179,7 +178,7 @@ export class VisionStep extends ProcessingStep<
     const entry = { key: visionKeys.response(task), bytes };
     const mismatch = () => visionFailure("VISION.LOCAL_EVIDENCE_CONFLICT", "executed");
     return writeOnce(this.deps.local, entry, {
-      signal: AbortSignal.timeout(RETENTION_MS),
+      signal: retentionSignal(),
       mismatch,
     });
   }
