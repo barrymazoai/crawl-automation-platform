@@ -9,6 +9,7 @@ export * from "./runs/run-model.js";
 export * from "./runs/ports.js";
 export * from "./runs/run-service.js";
 export * from "./runs/product-runs.js";
+export * from "./runs/list-runs.js";
 export * from "./resources/resource-service.js";
 export * from "./fleet/fleet-service.js";
 export * from "./queue/queue-model.js";

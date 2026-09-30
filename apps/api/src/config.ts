@@ -12,11 +12,14 @@ import {
   DeliveryTarget,
   ResourceGateSchema,
 } from "@crawl-automation/v3-contracts";
-import { ProductPipelineInputSchema } from "@crawl-automation/workflows";
+import { COLLECTION_WORKFLOW, ProductPipelineInputSchema } from "@crawl-automation/workflows";
 import { z } from "zod";
 import { BrandScanSettingsSchema } from "./brand-scan-config.js";
 
 const absolutePath = z.string().refine(isAbsolute, "Must be an absolute path");
+
+/** Where a brand run's CollectionWorkflow starts; the old per-channel brand workflows are refused. */
+const BrandRunTarget = DeliveryTarget.extend({ workflowType: z.literal(COLLECTION_WORKFLOW) });
 
 export const ApiConfigSchema = z.strictObject({
   api: z.strictObject({
@@ -29,7 +32,7 @@ export const ApiConfigSchema = z.strictObject({
   temporal: TemporalConfigSchema,
   delivery: z.strictObject({
     clusterId: z.string().min(1),
-    channels: z.partialRecord(ChannelIdSchema, DeliveryTarget),
+    channels: z.partialRecord(ChannelIdSchema, BrandRunTarget),
     /** While this file exists, no new run is started. */
     pauseFile: absolutePath,
     runner: DeliveryRunnerOptionsSchema.default({

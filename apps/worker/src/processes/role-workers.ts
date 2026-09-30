@@ -1,5 +1,6 @@
 import type { WorkerSpec } from "@crawl-automation/platform/temporal-worker";
 import { browserActivities } from "../activities/browser-activities.js";
+import { collectionActivities } from "../activities/collection-activities.js";
 import {
   labelActivities,
   modelActivities,
@@ -16,7 +17,11 @@ type RoleWork = Pick<WorkerSpec, "activities" | "workflowBundlePath">;
 const workflowBundlePath = new URL("./workflows.cjs", import.meta.url).pathname;
 
 const roleWork: Record<WorkerRole, (parts: WorkerParts) => RoleWork> = {
-  pipeline: (parts) => ({ activities: pipelineActivities(parts), workflowBundlePath }),
+  // Product runs, and brand runs (CollectionWorkflow) waiting for their brand scan.
+  pipeline: (parts) => ({
+    activities: { ...pipelineActivities(parts), ...collectionActivities(parts) },
+    workflowBundlePath,
+  }),
   // The Label workflow and its steps that need neither a model nor the OCR API.
   label: (parts) => ({ activities: labelActivities(parts), workflowBundlePath }),
   "label-ocr": (parts) => ({ activities: ocrActivities(parts) }),

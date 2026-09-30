@@ -10,6 +10,10 @@ export const appErrors = defineErrors({
   },
   "RUN.SOURCE_DISABLED": { category: "VALIDATION", message: "Enable the source before a run." },
   "RUN.SOURCE_BUSY": { category: "VALIDATION", message: "This source already has an active run." },
+  "RUN.SCAN_MISSING": {
+    category: "RUNTIME",
+    message: "A brand run has no brand scan; it was accepted without one.",
+  },
   "RUN.REVISION_CONFLICT": { category: "VALIDATION", message: "Source changed; reload it first." },
   "RUN.STILL_RUNNING": {
     category: "VALIDATION",

@@ -7,9 +7,16 @@ import {
 import { z } from "zod";
 import type { Channel } from "../delivery/delivery-coordinator.js";
 
+/** A product page of a list run, and the brand source it belongs to. */
+export const ListRunProductSchema = z.strictObject({
+  sourceId: Id,
+  url: z.url({ protocol: /^https$/ }).max(4096),
+});
+
 /**
- * A run of one brand on one channel, or of one product page. A product run's channel and brand come from its
- * source; its URL must be a product page of that channel. Single Amazon products still go through the queue.
+ * A run of one brand on one channel, of one product page, or of a list of product pages. A brand run scans the
+ * brand and queues every product it lists; a list run queues its pages. A product run's channel and brand come from
+ * its source; its URL must be a product page of that channel. Single Amazon products still go through the queue.
  */
 export const SubmitRunSchema = z.discriminatedUnion("kind", [
   z.strictObject({
@@ -25,10 +32,29 @@ export const SubmitRunSchema = z.discriminatedUnion("kind", [
     sourceId: Id,
     url: z.url({ protocol: /^https$/ }).max(4096),
   }),
+  z.strictObject({
+    kind: z.literal("list"),
+    /** Also the queue list's ID: submitting the same list again adds nothing. */
+    requestId: Id,
+    channel: ChannelIdSchema.exclude(["amazon"]),
+    label: z.string().min(1).max(200),
+    products: z.array(ListRunProductSchema).min(1).max(10_000),
+  }),
 ]);
 export type SubmitRun = z.infer<typeof SubmitRunSchema>;
 export type BrandRun = Extract<SubmitRun, { kind: "brand" }>;
 export type ProductRun = Extract<SubmitRun, { kind: "product" }>;
+export type ListRun = Extract<SubmitRun, { kind: "list" }>;
+
+/** An accepted list run: its pages are in the shared queue, each started there as its own product run. */
+export interface ListRunSummary {
+  kind: "list";
+  runId: string;
+  channel: ListRun["channel"];
+  label: string;
+  /** Pages new to the queue; a page already queued by this list is not added twice. */
+  added: number;
+}
 
 export const RunFilterSchema = z.strictObject({
   channel: ChannelIdSchema.optional(),

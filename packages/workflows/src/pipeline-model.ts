@@ -6,6 +6,7 @@ import {
   ResourceGateSchema,
   ReviewCodeSchema,
   ReviewSchema,
+  ChannelIdSchema,
   ChannelSavedLabelWorkflowInputSchema,
   type ChannelPlanInput,
   type FileAcquireOutcome,
@@ -13,14 +14,8 @@ import {
 import { z } from "zod";
 import type { LabelWorkflowInput } from "./label/label-model.js";
 
-export const PipelineChannelSchema = z.enum([
-  "amazon",
-  "gnc",
-  "swanson",
-  "dtc",
-  "costco",
-  "wholefoods",
-]);
+/** Every channel (the one channel list, v3-contracts). */
+export const PipelineChannelSchema = ChannelIdSchema;
 
 /** One product of one channel, collected by the shared pipeline. */
 export const ProductPipelineInputSchema = z.strictObject({

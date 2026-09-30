@@ -118,6 +118,15 @@ export class PostgresBrandScans implements BrandScanStore {
     return rows[0] ? scanOf(rows[0]) : null;
   }
 
+  async byRequest(requestId: string, sourceId: string): Promise<ScanRecord | null> {
+    const rows = await this.database.query(
+      `SELECT ${SCAN_COLUMNS} FROM ${SCAN_FROM}
+       WHERE sc.request_id = $1::uuid AND sc.source_id = $2::uuid`,
+      [requestId, sourceId],
+    );
+    return rows[0] ? scanOf(rows[0]) : null;
+  }
+
   async revisits(revisitBatchId: string): Promise<ScanRevisits> {
     return revisitsOf(await this.database.query(REVISIT_OUTCOMES, [revisitBatchId]));
   }

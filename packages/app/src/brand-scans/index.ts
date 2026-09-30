@@ -4,3 +4,4 @@ export * from "./ports.js";
 export * from "./scan-listing.js";
 export * from "./scan-model.js";
 export * from "./scan-readers.js";
+export * from "./run-scans.js";

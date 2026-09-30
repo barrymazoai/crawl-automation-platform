@@ -20,6 +20,11 @@ import { gncAdapter } from "@crawl-automation/channels-gnc";
 import type { Database, Logger, TemporalClient } from "@crawl-automation/platform";
 import type { ApiConfig } from "./config.js";
 
+/** The channels whose product pages this API reads addresses of (product and list runs). */
+export function channelRegistry(): ChannelRegistry {
+  return new ChannelRegistry([swansonAdapter, gncAdapter]);
+}
+
 /** Product runs: started straight away on the shared pipeline. A channel is enabled by its adapter and config. */
 export function productRuns(parts: {
   database: Database;
@@ -29,7 +34,7 @@ export function productRuns(parts: {
   return new ProductRuns({
     store: new PostgresProductRunStore(parts.database),
     starter: new TemporalPipelineStarter(parts.temporal.client),
-    registry: new ChannelRegistry([swansonAdapter, gncAdapter]),
+    registry: channelRegistry(),
     targets: parts.config.pipeline,
   });
 }

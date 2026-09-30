@@ -1,9 +1,19 @@
 import type { Logger } from "@crawl-automation/platform";
 import { appErrors } from "../errors.js";
 import { judgePermits } from "../stops/judge-permits.js";
+import type { BrandScanService } from "../brand-scans/brand-scan-service.js";
+import type { ListRuns } from "./list-runs.js";
 import type { PermitStore, RunStore, WorkflowTree } from "./ports.js";
 import type { ProductRuns } from "./product-runs.js";
-import type { RunDetail, RunFilter, RunSummary, SubmitRun, WorkflowMember } from "./run-model.js";
+import type {
+  BrandRun,
+  ListRunSummary,
+  RunDetail,
+  RunFilter,
+  RunSummary,
+  SubmitRun,
+  WorkflowMember,
+} from "./run-model.js";
 
 const CANCEL_BATCH = 20;
 /** How many ended-but-unsettled runs one cleanup sweep looks at. */
@@ -14,6 +24,9 @@ export interface RunServiceDeps {
   tree: WorkflowTree;
   permits: PermitStore;
   productRuns: Pick<ProductRuns, "submit">;
+  listRuns: Pick<ListRuns, "submit">;
+  /** A brand run's scan, requested when the run is accepted; its CollectionWorkflow waits for it. */
+  brandScans: Pick<BrandScanService, "request">;
   log: Logger;
   now?: () => Date;
 }
@@ -28,14 +41,16 @@ export class RunService {
   constructor(private readonly deps: RunServiceDeps) {}
 
   /**
-   * Accepts a run. A brand run's workflow is started by the delivery runner within seconds; a product run's
-   * workflow is started before this returns.
+   * Accepts a run. A brand run's scan is requested and its CollectionWorkflow started by the delivery runner within
+   * seconds; a product run's workflow is started before this returns; a list run's pages are queued.
    */
-  async submit(run: SubmitRun): Promise<RunSummary> {
+  async submit(run: SubmitRun): Promise<RunSummary | ListRunSummary> {
     const accepted =
       run.kind === "brand"
-        ? await this.deps.runs.accept(run)
-        : await this.summary(await this.deps.productRuns.submit(run));
+        ? await this.acceptBrand(run)
+        : run.kind === "list"
+          ? await this.deps.listRuns.submit(run)
+          : await this.summary(await this.deps.productRuns.submit(run));
     this.deps.log.info({ runId: accepted.runId, kind: run.kind }, "run accepted");
     return accepted;
   }
@@ -108,6 +123,12 @@ export class RunService {
       }
     }
     return settled;
+  }
+
+  /** The scan first (asking again returns the same scan), then the run that waits for it. */
+  private async acceptBrand(run: BrandRun): Promise<RunSummary> {
+    await this.deps.brandScans.request({ requestId: run.requestId, sourceIds: [run.sourceId] });
+    return this.deps.runs.accept(run);
   }
 
   private now(): Date {

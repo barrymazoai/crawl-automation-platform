@@ -27,6 +27,8 @@ export interface BrandScanStore {
   finish(scanId: string, result: ScanResult): Promise<void>;
   list(query: ScanListQuery): Promise<ScanRecord[]>;
   get(scanId: string): Promise<ScanRecord | null>;
+  /** The scan one request asked for one source (a brand run's scan); null when it was never requested. */
+  byRequest(requestId: string, sourceId: string): Promise<ScanRecord | null>;
   /** The latest sighting of each listing in the scan's revisit list, seen by that list's own runs. */
   revisits(revisitBatchId: string): Promise<ScanRevisits>;
   /** The listings of this source ever queued by earlier lists (not by the scan itself). */

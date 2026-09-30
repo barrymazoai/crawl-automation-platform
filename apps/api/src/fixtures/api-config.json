@@ -1,14 +1,28 @@
 {
-  "api": { "host": "127.0.0.1", "port": 4188 },
-  "database": { "connectionString": "postgresql://user:password@db.test:1/none" },
+  "api": {
+    "host": "127.0.0.1",
+    "port": 4188
+  },
+  "database": {
+    "connectionString": "postgresql://user:password@db.test:1/none"
+  },
   "temporal": {
     "address": "temporal.test:7233",
     "namespace": "tests",
-    "transport": { "mode": "insecure" }
+    "transport": {
+      "mode": "insecure"
+    }
   },
   "delivery": {
     "clusterId": "tests",
-    "channels": {},
+    "channels": {
+      "gnc": {
+        "clusterId": "tests",
+        "namespace": "tests",
+        "taskQueue": "v3.pipeline.product.v1",
+        "workflowType": "CollectionWorkflow"
+      }
+    },
     "pauseFile": "/tmp/v3-api-container-test-paused"
   },
   "pipeline": {
@@ -20,7 +34,10 @@
     },
     "channels": {}
   },
-  "fleet": { "monitorStatus": "/tmp/status.json", "queueHealth": "/tmp/health.json" },
+  "fleet": {
+    "monitorStatus": "/tmp/status.json",
+    "queueHealth": "/tmp/health.json"
+  },
   "storage": {
     "r2": {
       "endpoint": "https://0123456789abcdef0123456789abcdef.r2.cloudflarestorage.com",
@@ -28,7 +45,10 @@
       "prefix": "tests/v3",
       "timeoutMs": 20000
     },
-    "r2Credentials": { "accessKeyId": "test-key-id", "secretAccessKey": "test-secret" },
+    "r2Credentials": {
+      "accessKeyId": "test-key-id",
+      "secretAccessKey": "test-secret"
+    },
     "storageId": "tests"
   },
   "brandScans": {
@@ -38,7 +58,10 @@
       "prefix": "tests/v3",
       "timeoutMs": 20000
     },
-    "r2Credentials": { "accessKeyId": "test-key-id", "secretAccessKey": "test-secret" },
+    "r2Credentials": {
+      "accessKeyId": "test-key-id",
+      "secretAccessKey": "test-secret"
+    },
     "route": {
       "routeId": "scraperapi-us",
       "version": "scraperapi/1",
@@ -50,7 +73,10 @@
       "responseMode": "html",
       "providerPolicy": "scraperapi-sync/1"
     },
-    "scraperApi": { "apiKey": "test-key-0000", "allowedOrigins": ["https://www.gnc.com"] },
+    "scraperApi": {
+      "apiKey": "test-key-0000",
+      "allowedOrigins": ["https://www.gnc.com"]
+    },
     "browserQueue": "browser"
   }
 }

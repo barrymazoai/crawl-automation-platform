@@ -37,6 +37,7 @@ import { asFunction, asValue, createContainer, InjectionMode, type AwilixContain
 import type { ApiConfig } from "./config.js";
 import { evidenceReaders } from "./evidence-readers.js";
 import { brandScanParts, type BrandScanParts } from "./brand-scan-parts.js";
+import { runService } from "./run-parts.js";
 import { listingStateService, productRuns, queueDispatcher, queueService } from "./queue-parts.js";
 import { historyService, productService } from "./results-parts.js";
 
@@ -112,16 +113,7 @@ function registerAdapters(container: Parts): void {
 
 function registerServices(container: Parts): void {
   container.register({
-    runs: asFunction(
-      (parts: ApiParts) =>
-        new RunService({
-          runs: parts.runStore,
-          tree: parts.workflowTree,
-          permits: parts.resourceStore,
-          productRuns: productRuns(parts),
-          log: parts.log,
-        }),
-    ).singleton(),
+    runs: asFunction(runService).singleton(),
     queue: asFunction((parts: ApiParts) => queueService(parts.database, parts.log)).singleton(),
     brands: asFunction(
       (parts: ApiParts) =>

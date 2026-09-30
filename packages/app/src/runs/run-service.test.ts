@@ -3,7 +3,7 @@ import { createLogger } from "@crawl-automation/platform";
 import { describe, expect, it, vi } from "vitest";
 import type { StopEvidence } from "../stops/stop-policy.js";
 import type { PermitStore, RunStore, WorkflowTree } from "./ports.js";
-import type { HeldPermit, RunSummary, WorkflowMember } from "./run-model.js";
+import type { HeldPermit, ListRunSummary, RunSummary, WorkflowMember } from "./run-model.js";
 import { RunService } from "./run-service.js";
 
 const silent = createLogger({
@@ -31,6 +31,14 @@ const summary: RunSummary = {
     lastIssue: "UNCONFIRMED_TERMINAL",
     closedAt: null,
   },
+};
+
+const listSummary: ListRunSummary = {
+  kind: "list",
+  runId,
+  channel: "gnc",
+  label: "ten GNC products",
+  added: 2,
 };
 
 function member(workflowId: string, status: string): WorkflowMember {
@@ -75,8 +83,14 @@ function setup({ members, held = [], evidence = null }: Setup) {
   };
   const permits: PermitStore = { heldBy: vi.fn(async () => held) };
   const productRuns = { submit: vi.fn(async () => runId) };
-  const service = new RunService({ runs, tree, permits, productRuns, log: silent, now: () => now });
-  return { service, runs, tree, productRuns };
+  const listRuns = { submit: vi.fn(async () => listSummary) };
+  const brandScans = { request: vi.fn(async () => []) };
+  const service = new RunService({
+    ...{ runs, tree, permits, productRuns, listRuns, brandScans },
+    log: silent,
+    now: () => now,
+  });
+  return { service, runs, tree, productRuns, listRuns, brandScans };
 }
 
 const stoppedEvidence: StopEvidence = {
@@ -85,6 +99,41 @@ const stoppedEvidence: StopEvidence = {
   closedAt: minutesAgo(10),
   pendingActivities: 0,
 };
+
+describe("RunService submit", () => {
+  const sourceId = summary.sourceId;
+
+  it("requests a brand run's scan before accepting the run", async () => {
+    const { service, runs, brandScans } = setup({ members: [] });
+    const run = { kind: "brand" as const, requestId: runId, brandId: summary.brandId, sourceId };
+    expect(await service.submit(run)).toBe(summary);
+    expect(brandScans.request).toHaveBeenCalledWith({ requestId: runId, sourceIds: [sourceId] });
+    expect(runs.accept).toHaveBeenCalledWith(run);
+    const scanOrder = brandScans.request.mock.invocationCallOrder[0] ?? 0;
+    expect(scanOrder).toBeLessThan(vi.mocked(runs.accept).mock.invocationCallOrder[0] ?? 0);
+  });
+
+  it("accepts no brand run whose scan is refused", async () => {
+    const { service, runs, brandScans } = setup({ members: [] });
+    brandScans.request.mockRejectedValueOnce(new Error("BRAND_SCAN.NOT_CONFIGURED"));
+    const run = { kind: "brand" as const, requestId: runId, brandId: summary.brandId, sourceId };
+    await expect(service.submit(run)).rejects.toThrow();
+    expect(runs.accept).not.toHaveBeenCalled();
+  });
+
+  it("queues a list run's pages", async () => {
+    const { service, listRuns } = setup({ members: [] });
+    const run = {
+      kind: "list" as const,
+      requestId: runId,
+      channel: "gnc" as const,
+      label: "ten GNC products",
+      products: [{ sourceId, url: "https://www.gnc.com/877080.html" }],
+    };
+    expect(await service.submit(run)).toBe(listSummary);
+    expect(listRuns.submit).toHaveBeenCalledWith(run);
+  });
+});
 
 describe("RunService", () => {
   it("reports progress, workflow counts and held permits", async () => {

@@ -4,10 +4,13 @@ import type {
   CollectionWorkflowInput,
   DeliveryTarget,
 } from "@crawl-automation/v3-contracts";
+import { COLLECTION_WORKFLOW } from "@crawl-automation/workflows";
 import type { Client } from "@temporalio/client";
 import { inspectExecution, inspectionIssue } from "./inspect-execution.js";
 
 const CALL_DEADLINE_MS = 15_000;
+/** Brand runs wait for their whole brand (old catalog, or the brand scan): no execution deadline. */
+const UNBOUNDED = new Set(["BrandCollectionWorkflow", COLLECTION_WORKFLOW]);
 
 /** Starts brand collections on Temporal and inspects them. */
 export class TemporalWorkflowStarter implements WorkflowStarter {
@@ -25,10 +28,8 @@ export class TemporalWorkflowStarter implements WorkflowStarter {
         args: [input],
         workflowIdReusePolicy: "REJECT_DUPLICATE",
         workflowIdConflictPolicy: "FAIL",
-        // A brand waits for its whole catalog, so it has no execution deadline; each Activity has its own.
-        ...(target.workflowType === "BrandCollectionWorkflow"
-          ? {}
-          : { workflowExecutionTimeout: "30 minutes" }),
+        // Each Activity has its own deadline.
+        ...(UNBOUNDED.has(target.workflowType) ? {} : { workflowExecutionTimeout: "30 minutes" }),
       }),
     );
   }
