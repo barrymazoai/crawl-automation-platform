@@ -1,0 +1,33 @@
+{
+  "$schema": "./node_modules/syncpack/schema.json",
+  "versionGroups": [
+    {
+      "label": "The old gate for histories started before resource-gate-v1 (R05); removed with the old gate.",
+      "packages": ["@crawl-automation/workflows"],
+      "dependencies": ["@crawl-automation/v3-product"],
+      "isIgnored": true
+    },
+    {
+      "label": "New code never depends on the old packages except v3-contracts (R01).",
+      "packages": [
+        "@crawl-automation/api",
+        "@crawl-automation/worker",
+        "@crawl-automation/ops-deploy",
+        "@crawl-automation/app",
+        "@crawl-automation/adapters",
+        "@crawl-automation/workflows",
+        "@crawl-automation/processing",
+        "@crawl-automation/platform",
+        "@crawl-automation/channels-core",
+        "@crawl-automation/channel-*"
+      ],
+      "dependencies": ["@crawl-automation/v3-*", "!@crawl-automation/v3-contracts"],
+      "isBanned": true
+    },
+    {
+      "label": "Everything else is outside this check.",
+      "dependencies": ["**"],
+      "isIgnored": true
+    }
+  ]
+}
