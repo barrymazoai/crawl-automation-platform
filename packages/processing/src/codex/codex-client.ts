@@ -6,7 +6,7 @@ import {
   codexWorkspace,
   finishCodexWorkspace,
   type CodexConnectionFactory,
-} from "@crawl-automation/v3-codex";
+} from "@crawl-automation/platform";
 import type { CodexModelProfile } from "./codex-profile.js";
 import { privateSettings, type CodexClientSettings } from "./codex-settings.js";
 import { runOwnedTurn, type CodexCall } from "./codex-turn.js";
@@ -39,8 +39,10 @@ export class CodexClient {
     let settings: CodexClientSettings;
     try {
       settings = await privateSettings(raw);
-    } catch {
-      throw options.profile.privateConfig();
+    } catch (cause) {
+      const error = options.profile.privateConfig();
+      error.cause = cause;
+      throw error;
     }
     const setup = { profile: options.profile, connect: options.connect ?? defaultConnection };
     return new CodexClient(Object.freeze(settings), { ...options.environment }, setup);
@@ -52,7 +54,11 @@ export class CodexClient {
     await this.withConnection(lifetime, async ({ rpc, cwd }) => {
       await rpc.initialize(lifetime);
       const { settings } = this.settings;
-      await assertCodexModel(rpc, settings, cwd, lifetime, this.setup.profile.modalities);
+      await assertCodexModel(rpc, settings, {
+        cwd,
+        signal: lifetime,
+        modalities: this.setup.profile.modalities,
+      });
     });
   }
 

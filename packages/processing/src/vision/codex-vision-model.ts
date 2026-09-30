@@ -6,7 +6,7 @@ import {
   labelValidationVersion,
   type ArtifactRef,
 } from "@crawl-automation/v3-contracts";
-import type { CodexConnectionFactory } from "@crawl-automation/v3-codex";
+import type { CodexConnectionFactory } from "@crawl-automation/platform";
 import { CodexClient } from "../codex/codex-client.js";
 import { asVisionCodexError } from "../codex/codex-errors.js";
 import type { CodexModelProfile } from "../codex/codex-profile.js";

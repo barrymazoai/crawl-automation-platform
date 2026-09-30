@@ -1,5 +1,5 @@
 import { defineErrors, isAppError, type AppError } from "@crawl-automation/platform";
-import { CodexError } from "@crawl-automation/v3-codex";
+import { CodexError } from "@crawl-automation/platform";
 import { recordedFact, stepFailure, type ExecutionFact } from "../step/step-failure.js";
 
 export type { ExecutionFact } from "../step/step-failure.js";

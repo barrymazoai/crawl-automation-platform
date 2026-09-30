@@ -1,5 +1,5 @@
 import { storageErrors } from "@crawl-automation/platform";
-import { CodexError } from "@crawl-automation/v3-codex";
+import { CodexError } from "@crawl-automation/platform";
 import { describe, expect, it } from "vitest";
 import { signal, textFixture } from "../testing/text-fixture.js";
 import { TextStep } from "./text-step.js";

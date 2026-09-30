@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { CodexError, CodexRpc, type CodexConnectionOptions } from "@crawl-automation/v3-codex";
+import { CodexError, CodexRpc, type CodexConnectionOptions } from "@crawl-automation/platform";
 import { CodexClient } from "./codex-client.js";
 import { asVisionCodexError } from "./codex-errors.js";
 import type { CodexModelProfile } from "./codex-profile.js";
@@ -145,6 +145,18 @@ describe("shared Codex client", () => {
     };
     await expect(
       CodexClient.open(settings, { environment: {}, profile: profile() }),
-    ).rejects.toThrow("private config");
+    ).rejects.toMatchObject({
+      message: "private config",
+      cause: { code: "CONFIG.UNSAFE_DIRECTORY" },
+    });
+  });
+
+  it("preserves a missing directory as the private-config failure's cause", async () => {
+    const opened = await openClient({ path: textServer, args: ["success"] });
+    const settings = { ...opened.settings, codexHome: join(opened.root, "absent") };
+    await expect(
+      CodexClient.open(settings, { environment: {}, profile: profile() }),
+    ).rejects.toMatchObject({ message: "private config", cause: { code: "ENOENT" } });
+    await opened.client.close();
   });
 });

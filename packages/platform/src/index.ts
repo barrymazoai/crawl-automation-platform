@@ -5,6 +5,8 @@ export * from "./errors/app-error.js";
 export * from "./errors/define-errors.js";
 export * from "./errors/error-code.js";
 export * from "./errors/platform-errors.js";
+export * from "./errors/codex-errors.js";
+export * from "./codex/index.js";
 export * from "./health/heartbeat.js";
 export * from "./logger/create-logger.js";
 export * from "./temporal/connect-temporal.js";

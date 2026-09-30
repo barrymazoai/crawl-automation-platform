@@ -1,7 +1,7 @@
 import {
   CodexExecutionConfigSchema,
   type CodexConnectionFactory,
-} from "@crawl-automation/v3-codex";
+} from "@crawl-automation/platform";
 import { z } from "zod";
 import { CodexClient } from "../../codex/codex-client.js";
 import type { CodexModelProfile } from "../../codex/codex-profile.js";

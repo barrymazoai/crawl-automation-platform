@@ -1,5 +1,6 @@
 import { lstat, mkdir, realpath } from "node:fs/promises";
-import { CodexExecutionConfigSchema, type CodexExecutionConfig } from "@crawl-automation/v3-codex";
+import { platformErrors } from "@crawl-automation/platform";
+import { CodexExecutionConfigSchema, type CodexExecutionConfig } from "@crawl-automation/platform";
 
 export { CodexExecutionConfigSchema as CodexClientSettingsSchema };
 export type CodexClientSettings = CodexExecutionConfig;
@@ -26,6 +27,6 @@ async function assertPrivateDirectory(directory: string): Promise<void> {
   const stat = await lstat(directory);
   const shared = process.platform !== "win32" && (stat.mode & 0o077) !== 0;
   if (!stat.isDirectory() || stat.isSymbolicLink() || shared) {
-    throw new Error("directory is not private");
+    throw platformErrors.create("CONFIG.UNSAFE_DIRECTORY");
   }
 }

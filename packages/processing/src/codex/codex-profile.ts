@@ -1,4 +1,4 @@
-import type { CodexError } from "@crawl-automation/v3-codex";
+import type { CodexError } from "@crawl-automation/platform";
 
 /**
  * What differs between the models that share the Codex client (text, vision): the prefix of their working

@@ -8,7 +8,7 @@ import {
   signal,
   visionSetup,
 } from "../testing/vision-fixture.js";
-import { CodexError } from "@crawl-automation/v3-codex";
+import { CodexError } from "@crawl-automation/platform";
 import { visionKeys } from "./vision-files.js";
 import type { VisionOutcome } from "./vision-outcome.js";
 import { VisionStep } from "./vision-step.js";

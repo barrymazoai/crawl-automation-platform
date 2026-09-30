@@ -1,4 +1,4 @@
-import { CodexError } from "@crawl-automation/v3-codex";
+import { CodexError } from "@crawl-automation/platform";
 import { describe, expect, it } from "vitest";
 import { executionFactOf, isKnownTextFailure, textFailure } from "./errors.js";
 

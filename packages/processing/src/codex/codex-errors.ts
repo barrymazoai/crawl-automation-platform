@@ -1,4 +1,4 @@
-import { CodexError } from "@crawl-automation/v3-codex";
+import { CodexError } from "@crawl-automation/platform";
 import type { ExecutionFact } from "../step/step-failure.js";
 
 /** Vision names Codex failures `VISION.CODEX_*` where text says `TEXT.CODEX_*`, keeping fact and detail. */

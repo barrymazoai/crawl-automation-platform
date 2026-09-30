@@ -4,7 +4,7 @@ import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { CodexRpc, type CodexConnectionOptions } from "@crawl-automation/v3-codex";
+import { CodexRpc, type CodexConnectionOptions } from "@crawl-automation/platform";
 import { image, JPEG, labelAnswer } from "../testing/vision-fixture.js";
 import { CodexVisionModel } from "./codex-vision-model.js";
 

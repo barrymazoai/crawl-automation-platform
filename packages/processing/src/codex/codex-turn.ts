@@ -1,6 +1,6 @@
 import { open } from "node:fs/promises";
 import { join } from "node:path";
-import { runCodexTurn, type CodexRpc } from "@crawl-automation/v3-codex";
+import { runCodexTurn, type CodexRpc } from "@crawl-automation/platform";
 import type { CodexClientSettings } from "./codex-settings.js";
 
 export interface CodexCall {
@@ -27,7 +27,7 @@ export async function runOwnedTurn(
     outputSchema: call.outputSchema,
     ...(image ? { image } : {}),
   };
-  return runCodexTurn(rpc, turn, signal, settings.timeoutMs);
+  return runCodexTurn(rpc, turn, { signal, timeoutMs: settings.timeoutMs });
 }
 
 /** Created new and readable only by this user. */

@@ -1,6 +1,6 @@
 import { textObservation, type ReviewRecord, type TextInput } from "@crawl-automation/v3-contracts";
 import { isAppError } from "@crawl-automation/platform";
-import { CodexError } from "@crawl-automation/v3-codex";
+import { CodexError } from "@crawl-automation/platform";
 import type { StepAttempt, StepFailure } from "../../step/processing-step.js";
 import { buildStepReview, newReviewId } from "../../step/step-review.js";
 import { textKeys } from "../results/text-record.js";

@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { z } from "zod";
 import { isDeepStrictEqual } from "node:util";
 import { errorCodeOf, isAppError, type ObjectStore } from "@crawl-automation/platform";
-import { CodexError } from "@crawl-automation/v3-codex";
+import { CodexError } from "@crawl-automation/platform";
 import { codexDetailOf, codexFactOf } from "../codex/codex-errors.js";
 import type { VisionTask } from "@crawl-automation/v3-contracts";
 import { decodeJson, encodeJson } from "../results/result-record.js";

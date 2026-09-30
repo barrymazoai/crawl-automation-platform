@@ -9,6 +9,10 @@ export const platformErrors = defineErrors({
   },
   "CONFIG.TOO_LARGE": { category: "RUNTIME", message: "Config file is larger than 4 MiB." },
   "CONFIG.INVALID": { category: "RUNTIME", message: "Config does not match its schema." },
+  "CONFIG.UNSAFE_DIRECTORY": {
+    category: "RUNTIME",
+    message: "Config directory must be a real directory accessible only by its owner.",
+  },
   "DATABASE.UNAVAILABLE": { category: "RUNTIME", message: "Database is unavailable." },
   "HEALTH.PATH_NOT_ABSOLUTE": {
     category: "RUNTIME",
