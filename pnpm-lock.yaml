@@ -796,7 +796,7 @@ importers:
         specifier: ^4.1.0
         version: 4.4.0
       pm2:
-        specifier: ^7.0.4
+        specifier: 7.0.4
         version: 7.0.4
       umzug:
         specifier: 3.8.3
@@ -851,6 +851,43 @@ importers:
       '@crawl-automation/channel-swanson':
         specifier: workspace:*
         version: link:../channels/swanson
+      '@types/node':
+        specifier: 'catalog:'
+        version: 22.20.1
+      typescript:
+        specifier: 'catalog:'
+        version: 5.9.3
+      vitest:
+        specifier: 'catalog:'
+        version: 3.2.7(@types/node@22.20.1)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.51.2)(tsx@4.23.12)(yaml@2.9.0)
+
+  packages/channels/amazon:
+    dependencies:
+      '@crawl-automation/channels-core':
+        specifier: workspace:*
+        version: link:../core
+      '@crawl-automation/platform':
+        specifier: workspace:*
+        version: link:../../platform
+      '@crawl-automation/v3-contracts':
+        specifier: workspace:*
+        version: link:../../v3-contracts
+      acorn:
+        specifier: 8.18.0
+        version: 8.18.0
+      acorn-walk:
+        specifier: 8.3.5
+        version: 8.3.5
+      linkedom:
+        specifier: 0.18.13
+        version: 0.18.13
+      zod:
+        specifier: 'catalog:'
+        version: 4.4.3
+    devDependencies:
+      '@crawl-automation/v3-artifacts':
+        specifier: workspace:*
+        version: link:../../v3-artifacts
       '@types/node':
         specifier: 'catalog:'
         version: 22.20.1
