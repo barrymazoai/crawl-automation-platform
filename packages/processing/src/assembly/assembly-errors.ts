@@ -34,6 +34,9 @@ export const assemblyErrors = defineErrors({
   "LABEL_PRODUCT.SOURCE_WORDING_DIFFERS": validation(
     "Label sources agree after wording normalization; the selected source is retained.",
   ),
+  "LABEL_PRODUCT.SOURCE_WITHOUT_LABEL": validation(
+    "A source without a label was skipped because another source provides a complete label.",
+  ),
   "PACKAGING.PACK_MEANING_UNRESOLVED": {
     category: "VALIDATION",
     message: "Pack meaning unresolved.",

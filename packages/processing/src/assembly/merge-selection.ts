@@ -12,6 +12,7 @@ import {
 } from "@crawl-automation/v3-contracts";
 import type { MergePolicy } from "./merge-policy.js";
 import { byText, fail, words, type MergeState, type Provenance } from "./merge-state.js";
+import { applySourceReview } from "./source-without-label.js";
 
 type Candidate = Provenance["candidate"];
 type Projected = ReturnType<typeof projectLabelProductCandidate>;
@@ -74,7 +75,7 @@ function selectEntry(state: MergeState, entry: Provenance, policy: MergePolicy):
     return;
   }
   if (assessed.status === "review") {
-    assessed.codes.forEach((code) => fail(state, entry.id, code));
+    applySourceReview(state, { id: entry.id, codes: assessed.codes }, policy.completeLabel);
     return;
   }
   const projected = projectLabelProductCandidate(entry.id, candidate);

@@ -5,7 +5,8 @@ import {
   labelImageIntegrityCodes,
   labelNumericSourceConflict,
 } from "@crawl-automation/v3-contracts";
-import { fail, type MergeFailure, type MergeState, type Provenance } from "./merge-state.js";
+import type { MergeFailure, MergeState, Provenance } from "./merge-state.js";
+import { applySourceReview } from "./source-without-label.js";
 
 /** What the manifest's evidence policy decides for this set of verified sources. */
 export interface MergePolicy {
@@ -15,6 +16,8 @@ export interface MergePolicy {
   imageFirst: boolean;
   /** No complete image, but a complete text: the text is used and images only warn. */
   textFallback: boolean;
+  /** A complete, eligible label is available, independently of image-first policy. */
+  completeLabel: boolean;
   integrity(entry: Provenance): string[];
 }
 
@@ -37,6 +40,7 @@ export function mergePolicy(state: MergeState, provenance: Provenance[]): MergeP
   const integrity = (entry: Provenance) =>
     quality && entry.kind === "image" ? labelImageIntegrityCodes(entry.candidate) : [];
   const eligible = provenance.filter((entry) => !integrity(entry).length);
+  const completeLabel = eligible.some(isCompleteLabelImage) || eligible.some(isCompleteLabelText);
   const imageFirst = !!state.manifest.evidencePolicy && eligible.some(isCompleteLabelImage);
   const textFallback = FROM_3.includes(policy) && !imageFirst && eligible.some(isCompleteLabelText);
   if (policy === "label-image-first/4" && labelNumericSourceConflict(eligible)) {
@@ -48,13 +52,13 @@ export function mergePolicy(state: MergeState, provenance: Provenance[]): MergeP
       code: assemblyErrors.code("LABEL_PRODUCT.COMPLETE_TEXT_FALLBACK"),
     });
   }
-  return { quality, imageFirst, textFallback, integrity };
+  return { quality, imageFirst, textFallback, completeLabel, integrity };
 }
 
 /**
- * `/1` keeps its required-source barrier. From `/2`, a verified, executed text quality Review is only a warning when a
- * complete image carries the label; with a text fallback, a verified partial-image Review only warns. Unknown
- * execution, missing receipts, identity failures and failed images still block.
+ * An absent text label only warns beside a complete label. From `/2`, a verified, executed text
+ * quality Review warns when a complete image carries the label; with a text fallback, a verified
+ * partial-image Review only warns. Unknown execution, missing receipts and identity failures block.
  */
 export function applyFailures(
   state: MergeState,
@@ -65,7 +69,11 @@ export function applyFailures(
     if (excused(state, failure, policy)) {
       state.warnings.push({ id: failure.id, code: failure.code });
     } else {
-      fail(state, failure.id, failure.code);
+      applySourceReview(
+        state,
+        { id: failure.id, codes: [failure.code] },
+        policy.completeLabel && failure.verifiedExecuted === true,
+      );
     }
   }
 }
