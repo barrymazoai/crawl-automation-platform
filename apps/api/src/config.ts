@@ -1,3 +1,4 @@
+import { DtcSettingsSchema } from "@crawl-automation/channel-dtc";
 import { isIP } from "node:net";
 import { isAbsolute } from "node:path";
 import {
@@ -98,6 +99,8 @@ export const ApiConfigSchema = z.strictObject({
    * together enable Whole Foods scans in the Ego browser (an owner-approved browser case).
    */
   brandScans: BrandScanSettingsSchema.optional(),
+  /** The same browser-verified site list configured on the pipeline and browser workers. */
+  browser: z.strictObject({ dtc: DtcSettingsSchema.default({ sites: [] }) }).optional(),
   /** Manual test captures use their own bucket-level tests/ prefix, never storage.r2.prefix. */
   evidence: z
     .strictObject({

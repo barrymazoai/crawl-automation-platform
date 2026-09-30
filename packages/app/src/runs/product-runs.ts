@@ -78,6 +78,7 @@ export class ProductRuns {
       codec: "product-pipeline/1",
       runId: run.runId,
       channel: run.channel,
+      capture: this.deps.registry.get(run.channel).captureModes[0],
       url: run.url,
       brandId: run.brandId,
       sourceId: run.sourceId,

@@ -55,6 +55,11 @@ export function catalogStartUrl(raw: string, site: DtcSitePolicy): string {
   return url;
 }
 
+/** A browser brand scan starts at exactly the configured catalog entry. */
+export function dtcBrandSourceUrl(raw: string, sites: readonly DtcSitePolicy[]): string {
+  return catalogStartUrl(raw, siteForUrl(raw, sites));
+}
+
 export function catalogUrl(raw: string, site: DtcSitePolicy): string {
   siteForUrl(raw, [site]);
   if (!site.catalogUrl) {

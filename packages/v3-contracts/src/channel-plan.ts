@@ -20,7 +20,7 @@ export const ChannelPlanInputSchema = z.strictObject({
   // A projection comes from an owned browser page or, for Amazon, Swanson and GNC, from one archived static HTTP fetch
   // through a provider route (ScraperAPI).
   if (i.source.kind !== "result-json" || ![`${i.channel}.browser-projection`, ...(i.channel === "amazon" || i.channel === "swanson" || i.channel === "gnc" ? [`${i.channel}.http-projection`] : [])].includes(i.source.producer.module) ||
-    i.source.producer.implementationVersion !== i.parserVersion || i.parserVersion !== `${i.channel}-rendered/1` || i.source.producer.operationId === i.operationId || (i.channel === "swanson" ? i.owner.variantId === null : i.owner.variantId !== null))
+    i.source.producer.implementationVersion !== i.parserVersion || i.parserVersion !== `${i.channel}-rendered/1` || i.source.producer.operationId === i.operationId || (i.channel === "swanson" ? i.owner.variantId === null : i.channel !== "dtc" && i.owner.variantId !== null))
     ctx.addIssue({ code: "custom", message: "Rendered source provenance required" });
 });
 export type ChannelPlanInput = z.infer<typeof ChannelPlanInputSchema>;

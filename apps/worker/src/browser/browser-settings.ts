@@ -1,3 +1,4 @@
+import { DtcSettingsSchema } from "@crawl-automation/channel-dtc";
 import { WholeFoodsStoreSchema } from "@crawl-automation/channels-wholefoods";
 import { EgoSettingsSchema } from "@crawl-automation/platform";
 import { z } from "zod";
@@ -8,6 +9,7 @@ import { z } from "zod";
  */
 export const BrowserSettingsSchema = z.strictObject({
   ego: EgoSettingsSchema,
+  dtc: DtcSettingsSchema.default({ sites: [] }),
   wholefoods: WholeFoodsStoreSchema,
   /** Names this browser route in each page's archive record. */
   routeId: z.string().min(1).max(120).default("ego-browser"),

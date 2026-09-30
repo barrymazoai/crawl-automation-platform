@@ -7,7 +7,7 @@ import {
   type ProductIdentity,
 } from "@crawl-automation/channels-core";
 import { ChannelProductEvidenceSchema } from "@crawl-automation/v3-contracts";
-import { dtcProductAddress, siteForUrl } from "./address.js";
+import { dtcBrandSourceUrl, dtcProductAddress, siteForUrl } from "./address.js";
 import { dtcEvidence, type DtcRendered } from "./evidence.js";
 import { dtcPageIdentity, readDtcProduct } from "./product.js";
 import { DTC_PAGE_LIMITS, DTC_SITES, type DtcSitePolicy } from "./site-policy.js";
@@ -70,6 +70,10 @@ export function createDtcAdapter(
   return {
     id: "dtc",
     captureModes: ["browser"],
+    scanCapture: (url) => {
+      dtcBrandSourceUrl(url, sites);
+      return "browser";
+    },
     httpPolicy: {
       origins: [...new Set(sites.flatMap((site) => site.origins))],
       ...DTC_PAGE_LIMITS,

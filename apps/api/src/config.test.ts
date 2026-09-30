@@ -221,7 +221,7 @@ describe("API capture gates at startup", () => {
   });
 
   it("refuses a configured channel without a registered adapter", async () => {
-    const settings = withChannels({ dtc: captureGate("scraperapi-lane") });
+    const settings = withChannels({ costco: captureGate("scraperapi-lane") });
     await expect(loadSettings(settings)).rejects.toMatchObject({ code: "CHANNEL.UNKNOWN" });
   });
 
@@ -232,4 +232,30 @@ describe("API capture gates at startup", () => {
       details: { issues: ["resourceKinds.custom-lane"] },
     });
   });
+});
+
+it("accepts DTC browser settings and checks its browser permit kind", async () => {
+  const browser = {
+    dtc: {
+      sites: [
+        {
+          siteKey: "shop.example",
+          platform: "shopify",
+          catalogUrl: "https://shop.example/collections/all",
+        },
+      ],
+    },
+  };
+  const settings = {
+    ...withChannels({ dtc: captureGate("dtc-browser") }),
+    browser,
+    resourceKinds: { "dtc-browser": "browser" },
+  };
+  expect((await loadSettings(settings)).browser).toEqual(browser);
+  expect(ApiConfigSchema.parse({ ...productionShaped, browser: {} }).browser?.dtc.sites).toEqual(
+    [],
+  );
+  await expect(
+    loadSettings({ ...settings, resourceKinds: { "dtc-browser": "http-lane" } }),
+  ).rejects.toMatchObject({ code: "CHANNEL.CAPTURE_LANE_MISMATCH" });
 });

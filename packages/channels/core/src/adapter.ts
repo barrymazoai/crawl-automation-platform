@@ -110,7 +110,7 @@ export interface LabelCoreReader {
  */
 export interface ChannelAdapter<Rendered = unknown> {
   readonly id: ChannelId;
-  /** Product pages are fetched only through ScraperAPI (`http`); never in a browser. */
+  /** Allowed product capture strategies; browser-only channels never use ScraperAPI. */
   readonly captureModes: readonly CaptureMode[];
   /** Shared listing-ID namespace for formula reuse; absent means formulas stay on this channel. */
   readonly formulaFamily?: string;

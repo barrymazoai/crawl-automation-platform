@@ -1,3 +1,5 @@
+import { dtcBrandSourceUrl, type DtcSitePolicy } from "@crawl-automation/channel-dtc";
+import { channelRegistry } from "./resources/channel-registry.js";
 import {
   PostgresBrandScans,
   PostgresBrandSourceImport,
@@ -9,13 +11,12 @@ import {
   AmazonBrandScanQueue,
   BrandSourceImport,
   type BrowserBrandScanners,
+  type BrowserBrandScanner,
   type ListingStateService,
   type QueueService,
 } from "@crawl-automation/app";
-import { swansonAdapter } from "@crawl-automation/channel-swanson";
-import { amazonAdapter, amazonStoreSourceUrl } from "@crawl-automation/channel-amazon";
-import { ChannelRegistry, ListingPages } from "@crawl-automation/channels-core";
-import { gncAdapter } from "@crawl-automation/channels-gnc";
+import { amazonStoreSourceUrl } from "@crawl-automation/channel-amazon";
+import { ListingPages } from "@crawl-automation/channels-core";
 import { wholeFoodsBrandSourceUrl } from "@crawl-automation/channels-wholefoods";
 import {
   ScraperApiClient,
@@ -27,19 +28,21 @@ import {
 import { createR2Objects } from "@crawl-automation/platform";
 import type { BrandScanSettings } from "./brand-scan-config.js";
 
-/** The channels brand scans read with their adapters' ScraperAPI readers. */
-const scanRegistry = () => new ChannelRegistry([swansonAdapter, gncAdapter, amazonAdapter]);
-
 /** Browser sources run in Ego on the browser worker; HTTP sources never call these gateways. */
-function browserScanners(
+export function browserScanners(
   settings: BrandScanSettings,
   temporal: TemporalClient,
-): BrowserBrandScanners {
+  dtcSites: readonly DtcSitePolicy[],
+): BrowserBrandScanners & { dtc?: BrowserBrandScanner } {
   if (!settings.browserQueue) {
     return {};
   }
   const scans = new TemporalBrowserScans(temporal.client, settings.browserQueue);
   return {
+    dtc: {
+      sourceUrl: (url) => dtcBrandSourceUrl(url, dtcSites),
+      scan: (request, signal) => scans.scan({ channel: "dtc", ...request }, signal),
+    },
     amazon: {
       sourceUrl: amazonStoreSourceUrl,
       scan: (request, signal) => scans.scan({ channel: "amazon", ...request }, signal),
@@ -86,14 +89,16 @@ export function brandScanParts(parts: {
   queue: QueueService;
   listingStates: ListingStateService;
   settings: BrandScanSettings | undefined;
+  dtcSites?: readonly DtcSitePolicy[];
   temporal: TemporalClient;
   log: Logger;
 }): BrandScanParts {
   const { database, settings, log } = parts;
-  const registry = scanRegistry();
+  const dtcSites = parts.dtcSites ?? [];
+  const registry = channelRegistry(dtcSites);
   const store = new PostgresBrandScans(database);
   const remote = settings ? createR2Objects(settings.r2, settings.r2Credentials).store : null;
-  const browsers = settings ? browserScanners(settings, parts.temporal) : {};
+  const browsers = settings ? browserScanners(settings, parts.temporal, dtcSites) : {};
   const brandSources = new BrandSourceImport({
     store: new PostgresBrandSourceImport(database),
     registry,

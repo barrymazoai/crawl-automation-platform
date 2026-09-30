@@ -20,6 +20,7 @@
     "@crawl-automation/adapters": "workspace:*",
     "@crawl-automation/app": "workspace:*",
     "@crawl-automation/channel-amazon": "workspace:*",
+    "@crawl-automation/channel-dtc": "workspace:*",
     "@crawl-automation/channel-swanson": "workspace:*",
     "@crawl-automation/channels-core": "workspace:*",
     "@crawl-automation/channels-gnc": "workspace:*",

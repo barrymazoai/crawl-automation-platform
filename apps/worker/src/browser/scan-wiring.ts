@@ -1,4 +1,11 @@
 import {
+  createDtcAdapter,
+  dtcBrandSourceUrl,
+  DtcBrandScan,
+  DtcCatalogPages,
+  type DtcSitePolicy,
+} from "@crawl-automation/channel-dtc";
+import {
   AmazonStoreBrandScan,
   AmazonStorePages,
   amazonStoreSourceUrl,
@@ -33,9 +40,22 @@ export function buildBrowserScanners(deps: {
   rounds: ManagedBrowserRounds;
   publication: RetainedPublication;
   store: WholeFoodsStore;
+  dtcSites?: readonly DtcSitePolicy[];
 }): BrowserScanners {
   const { ego, store, publication } = deps;
+  const sites = deps.dtcSites ?? [];
   return new BrowserScanners([
+    {
+      accepts: (url) =>
+        acceptsAddress(
+          [(source) => dtcBrandSourceUrl(source, sites), createDtcAdapter(sites).productAddress],
+          url,
+        ),
+      scanner: new DtcBrandScan({
+        pages: new DtcCatalogPages({ browser: ego, publication }),
+        sites,
+      }),
+    },
     {
       accepts: (url) => acceptsAddress([amazonStoreSourceUrl], url),
       scanner: new AmazonStoreBrandScan({ pages: new AmazonStorePages(deps.rounds), publication }),

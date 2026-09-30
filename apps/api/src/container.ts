@@ -1,3 +1,4 @@
+import { configuredDtcSites } from "@crawl-automation/channel-dtc";
 import { pathAccessible } from "@crawl-automation/platform";
 import {
   createEvidenceService,
@@ -113,7 +114,7 @@ function evidenceService({ config }: ApiParts): EvidenceService {
   return createEvidenceService({
     ...config.evidence,
     storage: config.storage,
-    channels: channelRegistry(),
+    channels: channelRegistry(configuredDtcSites(config.browser?.dtc)),
     createPages: (client, settings) => new ScraperApiPages(client, settings),
   });
 }
@@ -156,6 +157,7 @@ function registerLoops(container: Parts): void {
         queue: parts.queue,
         listingStates: parts.listingStates,
         settings: parts.config.brandScans,
+        dtcSites: configuredDtcSites(parts.config.browser?.dtc),
         temporal: parts.temporal,
         log: parts.log,
       }),

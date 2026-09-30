@@ -6,19 +6,24 @@ import type {
   ScanRecord,
   ScanSource,
 } from "@crawl-automation/app";
+import { configuredDtcSites } from "@crawl-automation/channel-dtc";
 import { amazonBrandScan } from "@crawl-automation/channel-amazon";
 import { ListingPages, type ListingPage } from "@crawl-automation/channels-core";
 import { wholeFoodsAdapter } from "@crawl-automation/channels-wholefoods";
 import { createLogger, type Database, type TemporalClient } from "@crawl-automation/platform";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { BrandScanSettingsSchema } from "./brand-scan-config.js";
-import { brandScanParts } from "./brand-scan-parts.js";
+import { brandScanParts, browserScanners } from "./brand-scan-parts.js";
 import fixture from "./fixtures/api-config.json" with { type: "json" };
 
 const storeUrl =
   "https://www.amazon.com/stores/HerbPharm/page/11111111-1111-4111-8111-111111111111";
 const searchUrl = "https://www.amazon.com/s?rh=p_89%3AHerb+Pharm";
 const wholeUrl = "https://www.wholefoodsmarket.com/grocery/search?k=Herb+Pharm&rh=p_123%3A12345";
+const dtcUrl = "https://shop.example/collections/all";
+const dtcSites = configuredDtcSites({
+  sites: [{ siteKey: "shop.example", platform: "shopify", catalogUrl: dtcUrl }],
+});
 const requestId = "11111111-1111-4111-8111-111111111111";
 const log = createLogger({
   name: "scan-routing-test",
@@ -61,6 +66,7 @@ const page: ListingPage = {
 function setup(sources: ScanSource[], browserQueue: string | null = "browser") {
   const scans: ScanRecord[] = [];
   vi.spyOn(PostgresBrandScans.prototype, "enabledSources").mockResolvedValue(sources);
+  vi.spyOn(PostgresBrandScans.prototype, "sources").mockResolvedValue(sources);
   const request = vi
     .spyOn(PostgresBrandScans.prototype, "request")
     .mockImplementation(async (_id, rows) => {
@@ -89,6 +95,7 @@ function setup(sources: ScanSource[], browserQueue: string | null = "browser") {
   const queue = { add: vi.fn(async () => ({ added: 1 })) };
   const parts = brandScanParts({
     database: {} as Database,
+    dtcSites,
     queue: queue as unknown as QueueService,
     listingStates: { requestRevisits: vi.fn() } as unknown as ListingStateService,
     settings: BrandScanSettingsSchema.parse({
@@ -220,4 +227,51 @@ describe("brand-scan API source routing", () => {
     expect(test.read).not.toHaveBeenCalled();
     expect(test.start).not.toHaveBeenCalled();
   });
+});
+
+it("accepts a DTC brand request through the application scan schema", async () => {
+  const test = setup([source("dtc", dtcUrl)]);
+  await test.brandScans.request({ requestId, channel: "dtc" });
+  await test.runner?.tick(new AbortController().signal);
+  expect(test.start).toHaveBeenCalledOnce();
+  expect(test.read).not.toHaveBeenCalled();
+});
+
+it("wires the DTC scanner to the browser workflow with a configured catalog", async () => {
+  const start = vi.fn(async () => ({
+    result: async () => ({ pages: [], complete: true, soldHere: true, archiveKeys: [] }),
+    cancel: vi.fn(),
+  }));
+  const settings = BrandScanSettingsSchema.parse({
+    ...fixture.brandScans,
+    browserQueue: "browser",
+  });
+  const temporal = { client: { workflow: { start } } } as unknown as TemporalClient;
+  const scanner = browserScanners(settings, temporal, dtcSites).dtc;
+  expect(scanner?.sourceUrl(dtcUrl)).toBe(dtcUrl);
+  expect(() => scanner?.sourceUrl("https://unknown.example/collections/all")).toThrow();
+  await scanner?.scan({ scanId: requestId, sourceUrl: dtcUrl }, new AbortController().signal);
+  expect(start).toHaveBeenCalledWith(
+    "BrowserScanWorkflow",
+    expect.objectContaining({
+      taskQueue: "browser",
+      args: [{ channel: "dtc", capture: "browser", scanId: requestId, sourceUrl: dtcUrl }],
+    }),
+  );
+});
+
+it("routes a named DTC source by scanCapture through the API runner, never HTTP", async () => {
+  const row = source("dtc", dtcUrl);
+  const test = setup([row]);
+  await test.brandScans.request({ requestId, sourceIds: [row.sourceId] });
+  await test.runner?.tick(new AbortController().signal);
+  expect(test.start).toHaveBeenCalledWith(
+    "BrowserScanWorkflow",
+    expect.objectContaining({
+      taskQueue: "browser",
+      args: [{ channel: "dtc", capture: "browser", scanId: row.sourceId, sourceUrl: dtcUrl }],
+    }),
+  );
+  expect(test.read).not.toHaveBeenCalled();
+  expect(test.queue.add).toHaveBeenCalledWith(expect.objectContaining({ channel: "dtc" }));
 });

@@ -14,6 +14,7 @@ export interface DtcBrandScanResult {
   sourceUrl: string;
   pages: ListingPage[];
   complete: boolean;
+  soldHere: boolean;
   archiveKeys: string[];
   stopped: "end" | "scroll_limit" | "page_limit";
 }
@@ -32,7 +33,14 @@ function listingPage(listing: PlatformCatalog, site: DtcSitePolicy, position: nu
 }
 
 function initialState(sourceUrl: string): DtcBrandScanResult {
-  return { sourceUrl, pages: [], complete: false, archiveKeys: [], stopped: "page_limit" };
+  return {
+    sourceUrl,
+    pages: [],
+    complete: false,
+    soldHere: true,
+    archiveKeys: [],
+    stopped: "page_limit",
+  };
 }
 
 /** Separate browser scan, like Whole Foods; never attached to the HTTP-only BrandScanReader hook. */

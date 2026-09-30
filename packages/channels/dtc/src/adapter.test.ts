@@ -48,11 +48,14 @@ describe("DTC adapter contracts (small synthetic boundary cases, not saved-page 
     expect(registry.forCapture("dtc", "browser")).toBe(adapter);
     expect(() => registry.forCapture("dtc", "http")).toThrow();
     expect(adapter.brandScan).toBeUndefined();
+    expect(adapter.scanCapture?.(site.catalogUrl ?? "")).toBe("browser");
+    expect(() => adapter.scanCapture?.(url)).toThrow();
   });
-  it("keeps the requested first site unverified", () => {
+  it("does not enable the requested first site before its browser check", () => {
     expect(() =>
       dtcAdapter.parseProduct({ ...page(), url: "https://nutriessential.com/products/sleep" }),
-    ).toThrowError(/browser check/);
+    ).toThrowError();
+    expect(dtcAdapter.httpPolicy.origins).toEqual([]);
   });
   it("namespaces product IDs by site and keeps variant IDs", () => {
     const parsed = adapter.parseProduct(page());

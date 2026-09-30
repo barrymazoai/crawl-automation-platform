@@ -1,3 +1,4 @@
+import { workerChannelRegistry } from "./channel-registry.js";
 import {
   type PostgresResourceAdmission,
   PostgresChannelQueueStore,
@@ -17,12 +18,8 @@ import {
   ProductReviews,
   SiblingFormulaReuse,
 } from "@crawl-automation/app";
-import { amazonAdapter } from "@crawl-automation/channel-amazon";
-import { swansonAdapter } from "@crawl-automation/channel-swanson";
-import { gncAdapter } from "@crawl-automation/channels-gnc";
 import { amazonProductForAsin } from "@crawl-automation/channels-wholefoods";
 import {
-  ChannelRegistry,
   ProductCapture,
   ProductFiles,
   ProductPlans,
@@ -63,7 +60,7 @@ export interface WorkerParts extends CoreParts {
   labelTasks: LabelTasks;
   labelReviews: LabelReviews;
   admission: PostgresResourceAdmission;
-  /** Whole Foods in Ego (the browser machine only). */
+  /** Browser product capture and brand scans on the Ego machine. */
   browser: BrowserParts;
 }
 
@@ -85,7 +82,7 @@ export async function buildContainer(config: WorkerConfig): Promise<Parts> {
     local: asValue(await LocalObjectStore.open(storage.journalRoot)),
     copies: asValue(await FileCopies.open(storage.cacheRoot)),
     // Channels this worker can collect. A new channel is one adapter added here.
-    registry: asValue(new ChannelRegistry([swansonAdapter, gncAdapter, amazonAdapter])),
+    registry: asValue(workerChannelRegistry(config)),
     fileTransport: asValue(
       config.files.resolve === "system" ? new SystemHttpsTransport() : new DirectHttpsTransport(),
     ),

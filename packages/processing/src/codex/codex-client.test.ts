@@ -1,20 +1,17 @@
 import { mkdir, mkdtemp, readdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { dirname, join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { CodexError, CodexRpc, type CodexConnectionOptions } from "@crawl-automation/platform";
+import {
+  CodexError,
+  CodexRpc,
+  fakeCodexServerPath,
+  type CodexConnectionOptions,
+} from "@crawl-automation/platform";
 import { CodexClient } from "./codex-client.js";
 import { asVisionCodexError } from "./codex-errors.js";
 import type { CodexModelProfile } from "./codex-profile.js";
 
-// The old packages' fake app-servers: one answers text turns, the other checks an attached original image.
-const textServer = fileURLToPath(
-  new URL("../../../v3-text/src/codex.fixture.mjs", import.meta.url),
-);
-const imageServer = fileURLToPath(
-  new URL("../../../v3-vision/src/codex.fixture.mjs", import.meta.url),
-);
 const signal = () => AbortSignal.timeout(5000);
 
 const profile = (changes: Partial<CodexModelProfile> = {}): CodexModelProfile => ({
@@ -27,7 +24,7 @@ const profile = (changes: Partial<CodexModelProfile> = {}): CodexModelProfile =>
 });
 
 async function openClient(
-  server: { path: string; args: string[] },
+  scenario: string,
   options: { profile?: CodexModelProfile; effort?: string; model?: string } = {},
 ) {
   const root = await mkdtemp(join(tmpdir(), "codex-client-"));
@@ -51,7 +48,9 @@ async function openClient(
     return new CodexRpc({
       ...connection,
       executable: process.execPath,
-      args: [server.path, ...server.args],
+      args: ["--import", "tsx", fakeCodexServerPath, scenario],
+      // Resolve the test loader from platform; the thread still receives its isolated workspace.
+      cwd: dirname(fakeCodexServerPath),
       env: {},
     });
   };
@@ -68,7 +67,7 @@ const call = { prompt: "evidence", outputSchema: { type: "object" } };
 
 describe("shared Codex client", () => {
   it("runs one owned app-server process per call, with retries off, and removes its directory", async () => {
-    const opened = await openClient({ path: textServer, args: ["success"] });
+    const opened = await openClient("success");
     expect(await opened.client.run(call, signal())).toContain('"formula"');
     const [connection] = opened.connections;
     expect(connection?.args).toContain("model_providers.fixture.request_max_retries=0");
@@ -79,10 +78,11 @@ describe("shared Codex client", () => {
 
   it("attaches the original image, and checks the model accepts images", async () => {
     const imageProfile = profile({ workspace: "vision-", modalities: ["text", "image"] });
-    const opened = await openClient(
-      { path: imageServer, args: [] },
-      { profile: imageProfile, effort: "medium", model: "fixture" },
-    );
+    const opened = await openClient("vision", {
+      profile: imageProfile,
+      effort: "medium",
+      model: "fixture",
+    });
     await opened.client.check(signal());
     const bytes = Buffer.from([0xff, 0xd8, 0xff, 0x00]);
     const answer = await opened.client.run(
@@ -95,7 +95,7 @@ describe("shared Codex client", () => {
   });
 
   it("a failed turn is never restarted, and the stop is reported", async () => {
-    const opened = await openClient({ path: textServer, args: ["failed-turn"] });
+    const opened = await openClient("failed-turn");
     let stopped = 0;
     await expect(opened.client.run(call, signal(), () => stopped++)).rejects.toBeInstanceOf(
       CodexError,
@@ -105,10 +105,9 @@ describe("shared Codex client", () => {
   });
 
   it("names failures the model's way (vision: VISION.*)", async () => {
-    const opened = await openClient(
-      { path: textServer, args: ["failed-turn"] },
-      { profile: profile({ renameError: asVisionCodexError }) },
-    );
+    const opened = await openClient("failed-turn", {
+      profile: profile({ renameError: asVisionCodexError }),
+    });
     await expect(opened.client.run(call, signal())).rejects.toMatchObject({
       code: expect.stringMatching(/^VISION\.CODEX_/),
       cause: expect.objectContaining({ code: expect.stringMatching(/^TEXT\.CODEX_/) }),
@@ -117,7 +116,7 @@ describe("shared Codex client", () => {
   });
 
   it("the startup check reads capabilities only, and refuses another provider", async () => {
-    const opened = await openClient({ path: textServer, args: ["catalog-provider"] });
+    const opened = await openClient("catalog-provider");
     await expect(opened.client.check(signal())).rejects.toMatchObject({
       code: "TEXT.CODEX_CATALOG_PROVIDER_MISMATCH",
     });
@@ -125,7 +124,7 @@ describe("shared Codex client", () => {
   });
 
   it("after close, new calls fail without starting a process", async () => {
-    const opened = await openClient({ path: textServer, args: ["success"] });
+    const opened = await openClient("success");
     await opened.client.close();
     await expect(opened.client.run(call, signal())).rejects.toThrow();
     expect(opened.connections).toHaveLength(0);
@@ -153,7 +152,7 @@ describe("shared Codex client", () => {
   });
 
   it("preserves a missing directory as the private-config failure's cause", async () => {
-    const opened = await openClient({ path: textServer, args: ["success"] });
+    const opened = await openClient("success");
     const settings = { ...opened.settings, codexHome: join(opened.root, "absent") };
     await expect(
       CodexClient.open(settings, { environment: {}, profile: profile() }),

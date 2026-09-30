@@ -176,6 +176,8 @@ export const BrowserCaptureResultSchema = z.discriminatedUnion("status", [
     listingId: z.string().min(1).max(200),
     variantId: z.string().min(1).max(200).nullable(),
     archiveKey: z.string().min(1).max(1024),
+    /** Browser adapters with their own formulas use the shared planning and Label path. */
+    planned: CaptureResultSchema.options[0].optional(),
   }),
   AcquisitionReviewSchema,
   ListingResultSchema,

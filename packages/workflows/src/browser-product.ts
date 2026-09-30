@@ -1,6 +1,6 @@
 import { pipelineErrors } from "@crawl-automation/platform/errors/activity";
 import { versionedResourceGate } from "./resources/versioned-gate.js";
-import { ApplicationFailure, proxyActivities } from "@temporalio/workflow";
+import { ApplicationFailure, patched, proxyActivities } from "@temporalio/workflow";
 import {
   BrowserCaptureResultSchema,
   KnownFormulaSchema,
@@ -9,9 +9,10 @@ import {
   type ProductPipelineInput,
 } from "./pipeline-model.js";
 import { once } from "./activity-options.js";
+import { collectCapturedProduct } from "./collect-captured-product.js";
 
 /**
- * A browser capture records metrics, then looks up a formula in the adapter-declared family.
+ * A browser capture with a plan enters the shared formula pipeline; otherwise it reuses a family formula.
  * The formula-request activity name and failure code remain the recorded legacy protocol.
  */
 export async function collectInBrowser(
@@ -37,6 +38,10 @@ export async function collectInBrowser(
   );
   if (captured.status !== "captured") {
     return captured;
+  }
+  // Old browser results have no plan and keep their recorded formula-family command sequence.
+  if (captured.planned && patched("browser-formula-plan-v1")) {
+    return collectCapturedProduct(input, pipeline, captured.planned);
   }
   const { listingId, variantId } = captured;
   const request = { runId: input.runId, channel: input.channel, listingId, variantId };

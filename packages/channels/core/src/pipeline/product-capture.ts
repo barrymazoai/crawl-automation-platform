@@ -7,12 +7,14 @@ import type { ChannelRegistry } from "../registry.js";
 import type { CaptureRequest, ProductCaptureResult } from "./capture-request.js";
 import { capturedPage } from "./captured-page.js";
 import type { ProductSourcePlans } from "./source-plans.js";
+import type { CaptureMode } from "../capture.js";
 
 export interface ProductCaptureDeps {
   registry: ChannelRegistry;
   http: HttpCapture;
   publication: RetainedPublication;
   sourcePlans: ProductSourcePlans;
+  mode?: CaptureMode;
 }
 
 /**
@@ -23,7 +25,7 @@ export class ProductCapture {
   constructor(private readonly deps: ProductCaptureDeps) {}
 
   async capture(request: CaptureRequest, signal: AbortSignal): Promise<ProductCaptureResult> {
-    const adapter = this.deps.registry.forCapture(request.channel, "http");
+    const adapter = this.deps.registry.forCapture(request.channel, this.deps.mode ?? "http");
     const planning = adapter.planning;
     if (!planning) {
       throw channelErrors.create("CHANNEL.PLANNING_UNSUPPORTED", {

@@ -1,9 +1,15 @@
+import {
+  configuredDtcSites,
+  createDtcAdapter,
+  DTC_BROWSER_POLICY,
+} from "@crawl-automation/channel-dtc";
 import { PipelineCapture } from "@crawl-automation/app";
 import {
   BrowserPages,
   BrowserProductCapture,
   ChannelRegistry,
   HttpCapture,
+  ProductSourcePlans,
   type BrowserCaptureResult,
 } from "@crawl-automation/channels-core";
 import {
@@ -28,26 +34,41 @@ export interface BrowserParts {
   ensureStore(productUrl: string, signal: AbortSignal): Promise<void>;
 }
 
-export function buildBrowserParts(parts: CoreParts): BrowserParts {
+function browserSettings(parts: CoreParts) {
   const settings = parts.config.browser;
   if (!settings) {
     throw workerErrors.create("WORKER.PROCESSING_SETTINGS_MISSING", {
       details: { part: "browser" },
     });
   }
+  return settings;
+}
+
+export function buildBrowserParts(parts: CoreParts): BrowserParts {
+  const settings = browserSettings(parts);
+  const dtcSites = configuredDtcSites(settings.dtc);
   const store: WholeFoodsStore = settings.wholefoods;
   const ego = new EgoPages(settings.ego);
   const pages = new BrowserPages(ego, {
     routeId: settings.routeId,
     egressId: settings.egressId,
-    channels: { wholefoods: wholeFoodsBrowserPolicy(store) },
+    channels: { wholefoods: wholeFoodsBrowserPolicy(store), dtc: DTC_BROWSER_POLICY },
   });
-  const registry = new ChannelRegistry([wholeFoodsAdapter(store)]);
+  const registry = new ChannelRegistry([wholeFoodsAdapter(store), createDtcAdapter(dtcSites)]);
   const http = new HttpCapture(pages);
-  const capture = new BrowserProductCapture({ registry, http, publication: parts.publication });
+  const capture = new BrowserProductCapture({
+    registry,
+    http,
+    publication: parts.publication,
+    sourcePlans: new ProductSourcePlans(parts.publication, {
+      ...parts.config.plan,
+      egressId: parts.fileTransport.egressId,
+    }),
+  });
   const scanner = buildBrowserScanners({
     ego,
     store,
+    dtcSites,
     publication: parts.publication,
     rounds: new ManagedBrowserRounds(
       new StoreEgoRounds({ settings: settings.ego, pages: ego }),

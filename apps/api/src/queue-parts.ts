@@ -1,3 +1,4 @@
+import { configuredDtcSites } from "@crawl-automation/channel-dtc";
 import {
   PostgresChannelQueueStore,
   PostgresListingStates,
@@ -24,12 +25,12 @@ export { channelRegistry } from "./resources/channel-registry.js";
 export function productRuns(parts: {
   database: Database;
   temporal: TemporalClient;
-  config: Pick<ApiConfig, "pipeline">;
+  config: Pick<ApiConfig, "pipeline" | "browser">;
 }): ProductRuns {
   return new ProductRuns({
     store: new PostgresProductRunStore(parts.database),
     starter: new TemporalPipelineStarter(parts.temporal.client),
-    registry: channelRegistry(),
+    registry: channelRegistry(configuredDtcSites(parts.config.browser?.dtc)),
     targets: parts.config.pipeline,
   });
 }

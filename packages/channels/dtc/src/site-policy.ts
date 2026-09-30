@@ -64,12 +64,5 @@ export function dtcSitePolicy(
   };
 }
 
-/** The first requested site remains unverified; no platform is inferred from its refused plain request. */
-export const DTC_SITES: readonly DtcSitePolicy[] = [
-  dtcSitePolicy({
-    siteKey: "nutriessential.com",
-    platform: "unverified",
-    catalogUrl: null,
-    origins: ["https://nutriessential.com", "https://www.nutriessential.com"],
-  }),
-];
+/** Sites are enabled only through config after a browser check, including the requested first site. */
+export const DTC_SITES: readonly DtcSitePolicy[] = [];

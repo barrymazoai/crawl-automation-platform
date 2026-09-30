@@ -1,3 +1,4 @@
+import { configuredDtcSites } from "@crawl-automation/channel-dtc";
 import type {
   PostgresResourceStore,
   PostgresRunStore,
@@ -11,7 +12,7 @@ import { channelRegistry, productRuns } from "./queue-parts.js";
 
 /** What the run service is built from (named, so the container's cradle is never spread). */
 export interface RunParts {
-  config: Pick<ApiConfig, "pipeline">;
+  config: Pick<ApiConfig, "pipeline" | "browser">;
   database: Database;
   temporal: TemporalClient;
   runStore: PostgresRunStore;
@@ -32,7 +33,10 @@ export function runService(parts: RunParts): RunService {
     tree: parts.workflowTree,
     permits: parts.resourceStore,
     productRuns: productRuns(parts),
-    listRuns: new ListRuns({ registry: channelRegistry(), queue: parts.queue }),
+    listRuns: new ListRuns({
+      registry: channelRegistry(configuredDtcSites(parts.config.browser?.dtc)),
+      queue: parts.queue,
+    }),
     brandScans: parts.brandScanParts.brandScans,
     log: parts.log,
   });

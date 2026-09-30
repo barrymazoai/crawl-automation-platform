@@ -4,13 +4,14 @@ import { QueueChannelSchema } from "../queue/queue-model.js";
 
 /**
  * Channels with a wired brand scan (migration 032 adds amazon; its products go to Amazon's product queue through a
- * bridge). DTC and Costco join when their scans are wired.
+ * bridge). Costco joins when its scan is wired.
  */
 export const ScanChannelSchema = QueueChannelSchema.extract([
   "swanson",
   "gnc",
   "amazon",
   "wholefoods",
+  "dtc",
 ]);
 export type ScanChannel = z.infer<typeof ScanChannelSchema>;
 

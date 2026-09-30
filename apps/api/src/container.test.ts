@@ -20,8 +20,10 @@ describe("API composition root", () => {
 
   it("registers the Amazon adapter for HTTP capture alongside Swanson and GNC", () => {
     const registry = channelRegistry();
-    expect(registry.channels()).toEqual(["swanson", "gnc", "amazon"]);
+    expect(registry.channels()).toEqual(["swanson", "gnc", "amazon", "dtc"]);
     expect(registry.forCapture("amazon", "http")).toBe(amazonAdapter);
+    expect(registry.forCapture("dtc", "browser").planning?.channel).toBe("dtc");
+    expect(() => registry.forCapture("dtc", "http")).toThrow();
     expect(
       registry.get("amazon").productAddress("https://www.amazon.com/dp/B012345678"),
     ).toMatchObject({ listingId: "B012345678", variantId: null });

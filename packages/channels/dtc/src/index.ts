@@ -6,3 +6,4 @@ export * from "./evidence.js";
 export * from "./brand-scan.js";
 export * from "./catalog-pages.js";
 export * from "./identity.js";
+export * from "./settings.js";

@@ -1,13 +1,13 @@
-import { fileURLToPath } from "node:url";
+import { dirname } from "node:path";
 import { it, expect } from "vitest";
 import { CodexRpc } from "./codex-rpc.js";
 import { runCodexTurn } from "./codex-turn.js";
-const fixture = fileURLToPath(new URL("../../../v3-text/src/codex.fixture.mjs", import.meta.url));
+import { fakeCodexServerPath } from "./testing/fixture-path.js";
 const rpc = (scenario: string) =>
   new CodexRpc({
     executable: process.execPath,
-    args: [fixture, scenario],
-    cwd: process.cwd(),
+    args: ["--import", "tsx", fakeCodexServerPath, scenario],
+    cwd: dirname(fakeCodexServerPath),
     env: {},
   });
 const input = {

@@ -4,8 +4,8 @@ import { guarded } from "./activity-guard.js";
 
 /**
  * The browser worker's activities (it runs on each Mac mini that has Ego): a browser-captured product page for the
- * pipeline, and a brand listing scanned in the browser for the API's brand scan (Whole Foods today; DTC and Amazon
- * Store-page brands next). The Whole Foods store is set before the first page.
+ * pipeline, and brand listings for DTC, Amazon Store and Whole Foods. Only Whole Foods pages need
+ * store preparation; DTC reads use the configured Ego browser.
  */
 export function browserActivities(parts: WorkerParts) {
   const handlers = {
