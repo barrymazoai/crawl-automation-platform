@@ -1,4 +1,5 @@
 import type { SavedFormula } from "@crawl-automation/processing";
+import type { KeywordResult } from "@crawl-automation/v3-contracts";
 
 /** One product's key across the channels that share formulas with its own. */
 export interface FormulaQuery {
@@ -33,4 +34,12 @@ export interface FormulaLink {
 /** Link records: written once; the same link again is read back, a different one is a conflict. */
 export interface FormulaLinks {
   record(link: FormulaLink): Promise<FormulaLink>;
+}
+
+/**
+ * The OCR text behind a facts image's keyword selection, read back from the registered OCR result and checked
+ * against the selection (never text a caller passes in).
+ */
+export interface LabelImageText {
+  verifiedText(selection: KeywordResult, signal: AbortSignal): Promise<string>;
 }

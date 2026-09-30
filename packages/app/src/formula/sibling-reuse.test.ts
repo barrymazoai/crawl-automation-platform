@@ -1,7 +1,13 @@
-import type { SavedFormula } from "@crawl-automation/processing";
+import { screenKeywords, type SavedFormula } from "@crawl-automation/processing";
 import { describe, expect, it, vi } from "vitest";
 import { FormulaLookup, formulaChannels } from "./formula-lookup.js";
-import type { FormulaIndex, FormulaLink, FormulaLinks, FormulaQuery } from "./ports.js";
+import type {
+  FormulaIndex,
+  FormulaLink,
+  FormulaLinks,
+  FormulaQuery,
+  LabelImageText,
+} from "./ports.js";
 import { SiblingFormulaReuse } from "./sibling-reuse.js";
 
 const LABEL = "Serving Size 2 Capsules\nD-Ribose 500 mg\nOther Ingredients: Rice Flour, Gelatin.";
@@ -60,7 +66,38 @@ function request(changes: Record<string, unknown> = {}) {
   };
 }
 
-function setup(known: Record<string, string> = { "ribose-60": "formula-60" }) {
+/** A facts image's keyword selection, as the Label workflow's OCR and keyword steps return it. */
+function factsImageSelection() {
+  const owner = { listingId: "ribose-120", sourceId: "source-1", observationId: "obs-1" };
+  return screenKeywords({
+    observation: {
+      schemaVersion: 1,
+      requestId: "req-1",
+      brandId: "brand-1",
+      variantId: null,
+      ...owner,
+    },
+    image: {
+      schemaVersion: 1,
+      artifactId: "image-2",
+      variantId: null,
+      ...owner,
+      kind: "source-image",
+      mediaType: "image/jpeg",
+      objectKey: "sources/image-2.jpg",
+      sha256: "c".repeat(64),
+      byteSize: 1000,
+      producer: { operationId: "file-2", module: "file.acquire", implementationVersion: "1" },
+    },
+    ocrOperationId: "ocr-2",
+    text: `Supplement Facts\n${LABEL}`,
+  });
+}
+
+function setup(
+  known: Record<string, string> = { "ribose-60": "formula-60" },
+  ocrText = `Supplement Facts\n${LABEL}`,
+) {
   const index: FormulaIndex = {
     findKnown: vi.fn(async () => null),
     findForMember: vi.fn(async (query: FormulaQuery) => {
@@ -76,7 +113,9 @@ function setup(known: Record<string, string> = { "ribose-60": "formula-60" }) {
       return link;
     }),
   };
-  return { index, links, reuse: new SiblingFormulaReuse({ index, links }) };
+  const labelImages: LabelImageText = { verifiedText: vi.fn(async () => ocrText) };
+  const reuse = new SiblingFormulaReuse({ index, links, labelImages });
+  return { index, links, labelImages, reuse };
 }
 
 describe("sibling formula reuse", () => {
@@ -144,6 +183,55 @@ describe("sibling formula reuse", () => {
       status: "extract",
       reason: "FORMULA.NO_SIBLING_FORMULA",
     });
+  });
+});
+
+describe("sibling formula reuse by the facts image's OCR text", () => {
+  const noText = (changes: Record<string, unknown> = {}) =>
+    request({ labelText: null, labelImage: factsImageSelection(), ...changes });
+
+  it("links the sibling's formula when the facts image prints exactly that formula", async () => {
+    const { reuse, links, labelImages } = setup();
+    expect(await reuse.reuse(noText())).toMatchObject({
+      status: "reused",
+      formulaOperationId: "formula-60",
+    });
+    expect(labelImages.verifiedText).toHaveBeenCalledOnce();
+    expect(links.saved[0]?.evidence).toMatchObject({
+      check: "label-ocr-match/1",
+      labelImage: { ocrOperationId: "ocr-2", imageId: "image-2" },
+    });
+  });
+
+  it("extracts in full when the facts image differs from the sibling's formula", async () => {
+    const { reuse, links } = setup(undefined, LABEL.replace("500 mg", "250 mg"));
+    expect(await reuse.reuse(noText())).toEqual({
+      status: "extract",
+      reason: "FORMULA.LABEL_MISMATCH",
+    });
+    expect(links.saved).toHaveLength(0);
+  });
+
+  it("asks for a label only once a sibling formula exists, and never reads an image it was not given", async () => {
+    const { reuse, labelImages } = setup();
+    expect(await reuse.reuse(request({ labelText: null }))).toEqual({
+      status: "extract",
+      reason: "FORMULA.LABEL_TEXT_UNAVAILABLE",
+    });
+    const none = setup({});
+    expect(await none.reuse.reuse(noText())).toEqual({
+      status: "extract",
+      reason: "FORMULA.NO_SIBLING_FORMULA",
+    });
+    expect(labelImages.verifiedText).not.toHaveBeenCalled();
+    expect(none.labelImages.verifiedText).not.toHaveBeenCalled();
+  });
+
+  it("an OCR text that cannot be verified fails the ask (a Review), never a silent reuse", async () => {
+    const { reuse, labelImages, links } = setup();
+    vi.mocked(labelImages.verifiedText).mockRejectedValue(new Error("SCREEN.UPSTREAM_UNVERIFIED"));
+    await expect(reuse.reuse(noText())).rejects.toThrow();
+    expect(links.saved).toHaveLength(0);
   });
 });
 

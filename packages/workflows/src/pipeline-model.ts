@@ -99,10 +99,14 @@ export type FormulaKey = z.infer<typeof FormulaKeySchema>;
 export const FormulaRequestSchema = FormulaKeySchema.extend({ runId: z.uuid() });
 export type FormulaRequest = z.infer<typeof FormulaRequestSchema>;
 
-/** A product without a formula of its own, with what its page showed: its family and its facts text. */
+/**
+ * A product without a formula of its own, with what its page showed: its family and its facts text. When the page
+ * prints no facts text, a second ask carries the facts image's keyword selection, whose OCR text is the label.
+ */
 export const SiblingReuseRequestSchema = FormulaRequestSchema.extend({
   family: z.unknown(),
   labelText: z.string().max(200_000).nullable(),
+  labelImage: z.unknown().optional(),
 });
 export type SiblingReuseRequest = z.infer<typeof SiblingReuseRequestSchema>;
 

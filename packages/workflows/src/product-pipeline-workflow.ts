@@ -10,16 +10,10 @@ import {
   type PlanActivities,
   type ProductPipelineInput,
 } from "./pipeline-model.js";
+import { once } from "./activity-options.js";
 import { collectInBrowser } from "./browser-product.js";
 import { reuseSiblingFormula } from "./sibling-reuse.js";
 import { streamLabel } from "./stream-label.js";
-
-/** One attempt per Activity: a failure becomes a Review, never an automatic retry of paid or model work. */
-const once = {
-  startToCloseTimeout: "10 minutes",
-  scheduleToCloseTimeout: "30 minutes",
-  retry: { maximumAttempts: 1 },
-} as const;
 
 /**
  * The shared product pipeline for every channel:
@@ -82,7 +76,7 @@ async function collect(
       observation: sourcePlan.owner,
     };
   }
-  const reused = await reuseSiblingFormula({ input, pipeline, captured });
+  const reused = await reuseSiblingFormula({ input, pipeline, captured, plan: outcome });
   if (reused) {
     return reused;
   }

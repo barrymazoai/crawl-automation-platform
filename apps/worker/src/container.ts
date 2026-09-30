@@ -131,10 +131,7 @@ function registerServices(container: Parts): void {
     formulaLookup: asFunction(
       ({ formulaIndex }: WorkerParts) => new FormulaLookup(formulaIndex),
     ).singleton(),
-    siblingReuse: asFunction(
-      ({ formulaIndex, database }: WorkerParts) =>
-        new SiblingFormulaReuse({ index: formulaIndex, links: new PostgresFormulaLinks(database) }),
-    ).singleton(),
+    siblingReuse: asFunction(siblingReuseService).singleton(),
     // A Whole Foods ASIN with no Amazon formula is held once in Amazon's queue for its formula.
     amazonFormulaRequests: asFunction(
       ({ database }: WorkerParts) =>
@@ -188,4 +185,16 @@ function filesService(parts: WorkerParts): ProductFiles {
   const { registry, channelPlans, local, r2, copies, reviewLedger, fileTransport } = parts;
   const files = new FileEvidence({ local, remote: r2.store, copies, reviews: reviewLedger });
   return new ProductFiles({ registry, plans: channelPlans, files, transport: fileTransport });
+}
+
+/** Sibling formula reuse; a page without facts text is checked with its facts image's OCR text (OCR ledger). */
+function siblingReuseService(parts: WorkerParts): SiblingFormulaReuse {
+  return new SiblingFormulaReuse({
+    index: parts.formulaIndex,
+    links: new PostgresFormulaLinks(parts.database),
+    labelImages: {
+      verifiedText: (selection, signal) =>
+        parts.label.stores.ocrText.verifiedText(selection, signal),
+    },
+  });
 }
