@@ -109,7 +109,7 @@ function setup(rawResponse: string | null, files?: Record<string, unknown>) {
   const store: ReviewStore = {
     ...{ list: async () => ({ items: [{ reviewId: record.reviewId }] }), find: async () => null },
     ...{ read: async (id: string) => (id === record.reviewId ? record : null) },
-    ...{ summary: async () => null, inspect: async () => null },
+    ...{ summary: async () => null },
   };
   const service = new ReviewService({
     reviews: store,

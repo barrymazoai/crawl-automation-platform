@@ -13,7 +13,7 @@ import {
   type OcrRegistration,
   type ReviewRecord,
 } from "@crawl-automation/v3-contracts";
-import type { PrivateReviewReader, ReviewWriter } from "@crawl-automation/v3-review";
+import type { ReviewReader, ReviewWriter } from "../step/review-ledger.js";
 import { claimIntent, type IntentFailure } from "../step/intent-claim.js";
 import { ProcessingStep, type StepAttempt, type StepFailure } from "../step/processing-step.js";
 import { recordedFact, type ExecutionFact } from "../step/step-failure.js";
@@ -29,7 +29,7 @@ export interface OcrStepDeps {
   artifacts: Pick<ArtifactResolver, "resolve">;
   results: OcrResults;
   remote: ObjectStore;
-  reviews: ReviewWriter & PrivateReviewReader;
+  reviews: ReviewWriter & ReviewReader;
   nodeId: string;
   storageId: string;
   /** "register" writes the ledger; "upload-only" (cloud mode) leaves registration to the receipt step. */

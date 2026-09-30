@@ -5,7 +5,6 @@ function storeWith(review: unknown): ReviewStore {
   return {
     list: vi.fn(),
     summary: vi.fn(),
-    inspect: vi.fn(),
     find: vi.fn(async () => review),
     read: vi.fn(async () => null),
   };

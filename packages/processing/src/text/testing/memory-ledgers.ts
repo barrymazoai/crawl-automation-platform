@@ -1,5 +1,5 @@
 import type { ReviewRecord, TextRecord } from "@crawl-automation/v3-contracts";
-import { digest, parseRecord } from "@crawl-automation/v3-review";
+import { parseReviewRecord, reviewDigest } from "../../step/review-record.js";
 import type { TextResultRegistry } from "../ports.js";
 
 /** An in-memory result ledger for tests, with a lost-acknowledgement and an unavailable switch. */
@@ -36,8 +36,12 @@ export class MemoryReviews {
     if (this.failAppends) {
       throw new Error("Review ledger unavailable");
     }
-    const record = parseRecord(raw);
+    const record = parseReviewRecord(raw);
     this.records.set(record.reviewId, record);
-    return { registered: true as const, reviewId: record.reviewId, recordHash: digest(record) };
+    return {
+      registered: true as const,
+      reviewId: record.reviewId,
+      recordHash: reviewDigest(record),
+    };
   }
 }

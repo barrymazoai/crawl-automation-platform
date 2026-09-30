@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { RemoteReviews } from "@crawl-automation/v3-review";
+import { RemoteReviews } from "../step/remote-reviews.js";
 import { defined } from "../testing/defined.js";
 import { MemoryStore } from "../testing/memory-store.js";
 import { STORAGE_ID, ocrStepSetup, resigned, signal } from "../testing/ocr-fixture.js";

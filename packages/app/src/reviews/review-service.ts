@@ -1,6 +1,7 @@
 import type { ReviewListQuery, ReviewRecord } from "@crawl-automation/v3-contracts";
 import { appErrors } from "../errors.js";
 import type { ReviewEvidence } from "./review-evidence.js";
+import { inspectReview } from "./review-inspection.js";
 import { ReviewPageSchema, type ReviewRecheckInput } from "./review-model.js";
 import type { RecheckResult, RecheckStatus, TextAnswerRecheck } from "./text-recheck.js";
 
@@ -10,7 +11,6 @@ export interface ReviewStore {
   /** The full stored record, or null. */
   read(reviewId: string): Promise<ReviewRecord | null>;
   summary(): Promise<unknown>;
-  inspect(reviewId: string): Promise<unknown>;
 }
 
 export interface ReviewServiceDeps {
@@ -42,9 +42,9 @@ export class ReviewService {
     return review;
   }
 
-  /** The Review with its retained evidence checked. */
-  inspect(reviewId: string): Promise<unknown> {
-    return this.deps.reviews.inspect(reviewId);
+  /** A read-only view of the Review's inspection target. */
+  async inspect(reviewId: string) {
+    return inspectReview(await this.record(reviewId));
   }
 
   /** The full Review record with its evidence files from R2. Read only. */

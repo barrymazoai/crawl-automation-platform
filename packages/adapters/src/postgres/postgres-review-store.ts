@@ -1,29 +1,15 @@
-import { appErrors, type ReviewLedger, type ReviewStore } from "@crawl-automation/app";
+import type { ReviewLedger, ReviewStore } from "@crawl-automation/app";
 import type { Database } from "@crawl-automation/platform";
+import type { ReviewReceipt } from "@crawl-automation/processing";
 import type { ReviewListQuery, ReviewRecord } from "@crawl-automation/v3-contracts";
-import { PostgresReviews, ReviewError, ReviewInspector } from "@crawl-automation/v3-review";
+import { PostgresReviewRecords } from "./postgres-review-records.js";
 
-type PgQueryable = ConstructorParameters<typeof PostgresReviews>[0];
-
-/**
- * `v3-review` expects a `pg`-style `query` that returns `{ rows }`; the platform database returns the rows.
- * This bridge exists until that package moves under the platform in the channel phase.
- */
-function pgStyle(database: Database): PgQueryable {
-  const query = async (sql: string, values?: unknown[]) => ({
-    rows: await database.query(sql, values),
-  });
-  return { query } as unknown as PgQueryable;
-}
-
-/** Reviews stored by `v3-review` in `review_record`. Read-only; `read` returns the full record (evidence API). */
+/** Reviews in `review_record`, read only; `read` returns the full record (evidence API). */
 export class PostgresReviewStore implements ReviewStore {
-  private readonly reviews: PostgresReviews;
-  private readonly inspector: ReviewInspector;
+  private readonly reviews: PostgresReviewRecords;
 
   constructor(database: Database) {
-    this.reviews = new PostgresReviews(pgStyle(database));
-    this.inspector = new ReviewInspector(this.reviews);
+    this.reviews = new PostgresReviewRecords(database);
   }
 
   list(query: ReviewListQuery): Promise<unknown> {
@@ -42,25 +28,14 @@ export class PostgresReviewStore implements ReviewStore {
   read(reviewId: string): Promise<ReviewRecord | null> {
     return this.reviews.read(reviewId);
   }
-
-  async inspect(reviewId: string): Promise<unknown> {
-    try {
-      return await this.inspector.inspect(reviewId);
-    } catch (error) {
-      if (error instanceof ReviewError && error.code === "REVIEW.NOT_FOUND") {
-        throw appErrors.create("REVIEW.NOT_FOUND", { details: { reviewId }, cause: error });
-      }
-      throw error;
-    }
-  }
 }
 
-/** Writes Reviews into `review_record` through `v3-review`, which checks each record. */
+/** Writes Reviews into `review_record`; each record is checked before it is stored. */
 export class PostgresReviewLedger implements ReviewLedger {
-  private readonly reviews: PostgresReviews;
+  private readonly reviews: PostgresReviewRecords;
 
   constructor(database: Database) {
-    this.reviews = new PostgresReviews(pgStyle(database));
+    this.reviews = new PostgresReviewRecords(database);
   }
 
   read(reviewId: string): Promise<ReviewRecord | null> {
@@ -68,7 +43,7 @@ export class PostgresReviewLedger implements ReviewLedger {
   }
 
   /** The ledger's receipt (ID, record hash), which the processing steps read back. */
-  append(record: ReviewRecord): ReturnType<PostgresReviews["append"]> {
+  append(record: ReviewRecord): Promise<ReviewReceipt> {
     return this.reviews.append(record);
   }
 }

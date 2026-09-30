@@ -1,7 +1,7 @@
 import type { AppError } from "@crawl-automation/platform";
 import type { ReviewRecord } from "@crawl-automation/v3-contracts";
-import type { PrivateReviewReader, ReviewWriter } from "@crawl-automation/v3-review";
 import type { ResultFacts } from "../results/result-kind.js";
+import type { ReviewReader, ReviewWriter } from "./review-ledger.js";
 import { recordStepReview } from "./step-review.js";
 import type { ExecutionFact } from "./step-failure.js";
 import { retentionSignal } from "./retention.js";
@@ -30,7 +30,7 @@ export interface StepResults<TInput, TOutput, TRecord> {
 
 export interface StepDeps<TInput, TOutput, TRecord> {
   results: StepResults<TInput, TOutput, TRecord>;
-  reviews: ReviewWriter & PrivateReviewReader;
+  reviews: ReviewWriter & ReviewReader;
   /** "register" writes the ledger; "upload-only" (cloud mode) leaves registration to the receipt step. */
   mode?: "register" | "upload-only";
 }

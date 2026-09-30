@@ -7,7 +7,7 @@ import {
   type TextOutput,
   type TextRecord,
 } from "@crawl-automation/v3-contracts";
-import type { PrivateReviewReader, ReviewWriter } from "@crawl-automation/v3-review";
+import type { ReviewReader, ReviewWriter } from "../../step/review-ledger.js";
 import { ProcessingStep, type StepAttempt, type StepFailure } from "../../step/processing-step.js";
 import type { ExecutionFact } from "../../step/step-failure.js";
 import { executionFactOf, isKnownTextFailure, textFailure } from "../errors.js";
@@ -26,7 +26,7 @@ import { textReview } from "./text-review.js";
 export interface TextStepDeps {
   model: TextModel;
   results: TextResults;
-  reviews: ReviewWriter & PrivateReviewReader;
+  reviews: ReviewWriter & ReviewReader;
   nodeId: string;
   /** "register" writes the ledger; "upload-only" (cloud mode) leaves registration to the receipt step. */
   mode?: "register" | "upload-only";

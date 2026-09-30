@@ -7,7 +7,7 @@ import {
   type VisionRecord,
   type VisionTask,
 } from "@crawl-automation/v3-contracts";
-import type { PrivateReviewReader, ReviewWriter } from "@crawl-automation/v3-review";
+import type { ReviewReader, ReviewWriter } from "../step/review-ledger.js";
 import { encodeJson } from "../results/result-record.js";
 import { writeOnce } from "../results/write-once.js";
 import { ProcessingStep, type StepAttempt, type StepFailure } from "../step/processing-step.js";
@@ -33,7 +33,7 @@ export interface VisionStepDeps {
   artifacts: Pick<ArtifactResolver, "resolve">;
   local: ObjectStore;
   remote: ObjectStore;
-  reviews: ReviewWriter & PrivateReviewReader;
+  reviews: ReviewWriter & ReviewReader;
   /** "register" writes the ledger; "upload-only" (cloud mode) leaves registration to the receipt step. */
   mode?: "register" | "upload-only";
 }

@@ -1,11 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { AppError } from "@crawl-automation/platform";
 import { ReviewRecordSchema, type ReviewRecord } from "@crawl-automation/v3-contracts";
-import {
-  inspectRegistration,
-  type PrivateReviewReader,
-  type ReviewWriter,
-} from "@crawl-automation/v3-review";
+import { inspectRegistration, type ReviewReader, type ReviewWriter } from "./review-ledger.js";
 import type { ExecutionFact } from "./step-failure.js";
 
 /** The task a Review is about. */
@@ -65,7 +61,7 @@ export function buildStepReview(parts: StepReviewParts): ReviewRecord {
 
 /** Appends the Review and reads it back; a lost acknowledgement is checked, never appended twice. */
 export async function recordStepReview(
-  reviews: ReviewWriter & PrivateReviewReader,
+  reviews: ReviewWriter & ReviewReader,
   review: ReviewRecord,
   unconfirmed: () => AppError,
 ): Promise<void> {

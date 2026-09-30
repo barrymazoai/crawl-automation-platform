@@ -2,13 +2,13 @@ import { isDeepStrictEqual } from "node:util";
 import type { AppError, ObjectStore } from "@crawl-automation/platform";
 import { ReviewRecordSchema, type ReviewRecord } from "@crawl-automation/v3-contracts";
 import { retentionSignal } from "./retention.js";
+import { MAX_REVIEW_BYTES } from "./review-record.js";
 
 export interface ReviewLedger {
   read(id: string): Promise<ReviewRecord | null>;
   append(record: ReviewRecord): Promise<unknown>;
 }
 
-const MAX_REVIEW_BYTES = 2 * 1024 * 1024;
 /**
  * A Review kept in the local store first (so it survives a lost ledger write), then appended once and read back by
  * its ID. Used by the steps that write their own Review outside the processing step template.

@@ -1,6 +1,6 @@
 import { isDeepStrictEqual } from "node:util";
 import type { ReviewRecord } from "@crawl-automation/v3-contracts";
-import { digest, parseRecord } from "@crawl-automation/v3-review";
+import { parseReviewRecord, reviewDigest } from "../step/review-record.js";
 import type { ResultRegistry } from "../results/result-kind.js";
 
 /** An in-memory result ledger for tests: keeps the first record per operation, like the real table. */
@@ -55,11 +55,15 @@ export class MemoryReviews {
     if (this.failAppends || this.unavailable) {
       throw new Error("Review ledger unavailable");
     }
-    const record = parseRecord(raw);
+    const record = parseReviewRecord(raw);
     this.records.set(record.reviewId, record);
     if (this.loseAcknowledgement) {
       throw new Error("acknowledgement lost");
     }
-    return { registered: true as const, reviewId: record.reviewId, recordHash: digest(record) };
+    return {
+      registered: true as const,
+      reviewId: record.reviewId,
+      recordHash: reviewDigest(record),
+    };
   }
 }
