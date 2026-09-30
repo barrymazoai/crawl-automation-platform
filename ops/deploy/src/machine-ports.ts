@@ -1,5 +1,4 @@
-import { access, readFile, rename, writeFile } from "node:fs/promises";
-import { setTimeout as sleep } from "node:timers/promises";
+import { access } from "node:fs/promises";
 import { join } from "node:path";
 import { MigrationService } from "@crawl-automation/app";
 import {
@@ -12,6 +11,7 @@ import { execa } from "execa";
 import type { CommandStep } from "./deploy-plan.js";
 import type { DeployPorts } from "./deployment.js";
 import { deployErrors } from "./deploy-errors.js";
+import { runMachineJobs } from "./job-health.js";
 
 /** Capture the environment once. A dry run never constructs a database connection. */
 export function createMachinePorts(logger: Logger): DeployPorts {
@@ -23,11 +23,9 @@ export function createMachinePorts(logger: Logger): DeployPorts {
         () => true,
         () => false,
       ),
-    readJson: async (path) => JSON.parse(await readFile(path, "utf8")) as unknown,
-    writeJson: writeJson,
+    jobs: (machine, source, dryRun) =>
+      runMachineJobs(machine, source, { dryRun, print: (line) => logger.info(line) }),
     env: (name) => environment[name],
-    now: () => new Date(),
-    sleep: (milliseconds) => sleep(milliseconds),
     print: (line) => logger.info(line),
     async migrate(source, settings) {
       const value = environment.V3_DATABASE_URL;
@@ -67,12 +65,6 @@ async function runCommand(step: CommandStep): Promise<string> {
     });
   }
   return String(result.stdout);
-}
-
-async function writeJson(path: string, value: unknown): Promise<void> {
-  const temporary = `${path}.writing-${process.pid}`;
-  await writeFile(temporary, `${JSON.stringify(value, null, 2)}\n`, { mode: 0o600, flag: "wx" });
-  await rename(temporary, path);
 }
 
 /** The last lines of a command's error output, for the failure report. */

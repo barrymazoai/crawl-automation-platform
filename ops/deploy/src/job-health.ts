@@ -1,21 +1,28 @@
-import { z } from "zod";
-import { deployErrors } from "./deploy-errors.js";
+import { setTimeout as sleep } from "node:timers/promises";
+import { JobService } from "@crawl-automation/app";
+import { Pm2JobRunner, Pm2ProcessFile } from "@crawl-automation/adapters";
+import { releaseJobs } from "./job-list.js";
+import type { MachineConfig } from "./machine-config.js";
 
-/** The control script's `status <id>` answer: each job it reports, with whether it counts as ready. */
-const StatusAnswerSchema = z.object({
-  jobs: z.array(z.object({ id: z.string(), ready: z.boolean() }).passthrough()),
-});
-
-/** Whether every job reports ready. An answer that cannot be read stops the deployment; it is never "healthy". */
-export function jobsHealthy(ids: readonly string[], answers: readonly string[]): boolean {
-  const reported = answers.flatMap((answer) => readAnswer(answer).jobs);
-  return ids.every((id) => reported.some((job) => job.id === id && job.ready));
-}
-
-function readAnswer(answer: string) {
-  try {
-    return StatusAnswerSchema.parse(JSON.parse(answer));
-  } catch (error) {
-    throw deployErrors.create("DEPLOY.HEALTH_UNREADABLE", { cause: error });
+/** Deployment composition: the application service owns switching, stopping, starting and readiness. */
+export async function runMachineJobs(
+  machine: MachineConfig,
+  source: string,
+  options: { dryRun: boolean; print(line: string): void },
+): Promise<void> {
+  const service = new JobService({
+    file: new Pm2ProcessFile(machine.pm2),
+    runner: new Pm2JobRunner(),
+    sleep: (milliseconds) => sleep(milliseconds),
+  });
+  const request = { jobs: releaseJobs(machine, source), health: machine.health };
+  if (options.dryRun) {
+    const change = await service.preview(request);
+    options.print(`  PM2 file: ${machine.pm2.file}; backups: ${machine.pm2.backups}`);
+    options.print(`  changed: ${change.changed.join(", ") || "none"}`);
+    options.print(`  removed: ${change.removed.join(", ") || "none"}`);
+    return;
   }
+  const progress = await service.deploy(request);
+  options.print(`  jobs verified: ${JSON.stringify(progress)}`);
 }

@@ -21,14 +21,38 @@ release it builds). Always read the `--dry-run` output first.
    validate the existing history, make one private `pg_dump` backup if SQL is pending, apply all pending
    migrations and their history rows in one transaction, and recheck before committing. No `v3-api db`
    subprocess or new database CLI is used. Any failure stops before the job-list switch.
-5. Backs up the job list to `<jobList.backups>/deployment.before-<commit>-<time>.json`, then writes the new one:
-   exactly the machine config's jobs, started from the new release. Jobs not in the machine config (old code) are
-   removed, and every resource stops naming them.
-6. Stops removed jobs; stops and starts only the jobs whose entry or settings changed (`manual-control.mjs`).
-7. Asks the control script for each job's status until all are ready, or stops with `DEPLOY.UNHEALTHY`.
+5. `JobService` reads the previous PM2 ecosystem file and compares complete process definitions
+   (name, script, arguments, working directory, interpreter, environment and log paths).
+   It checks the running PM2 inventory for conflicting names before changing anything.
+6. Backs up the previous file **byte for byte** to `<pm2.backups>/ecosystem.before-<time>-<uuid>.json`
+   with mode `0600`, then atomically replaces `<pm2.file>` with exactly this machine's jobs.
+   A missing file is a first deployment; an unreadable, malformed or legacy file stops the deployment.
+7. Stops and deletes removed/changed definitions before starting any changed/new jobs. Deleting a stopped
+   definition ensures old environment values and executable paths do not survive a replacement.
+   Unchanged jobs are never restarted, including jobs that crashed or were stopped manually.
+8. Waits for every configured job to be ready. PM2 must report it online; its health file must report
+   `WORKER_RUNNING`, the expected role (`api` or `<process>-worker`), that PM2 PID, and a `reportedAt`
+   strictly after the process start, no later than now and less than 15 seconds old. A changed job must
+   also match the PID and start time recorded by this deployment. Polling is bounded by `health`.
 
-Any failure stops the deployment where it is. To go back: restore the backed-up job list and restart those jobs.
-This does not undo a committed database migration. Database restore remains a separate, quarantined operation.
+Every job has `autorestart: false`, `watch: false`, fork mode and one instance. A crashed worker stays
+stopped. There are no startup, login, resurrection or process-list persistence commands.
+The adapter uses [PM2's programmatic API](https://pm2.keymetrics.io/docs/usage/pm2-api/);
+no shell control script is involved.
+
+Failures are `JOBS.APPLY_FAILED` with the failed phase/name, file switch state, backup path,
+acknowledged stops/deletions/starts and the underlying error. The failed operation can have an unknown
+outcome; inspect PM2 before intervening. There is no retry or automatic rollback. A readiness timeout
+includes every job's health reason. Already started jobs remain visible for inspection, and the client
+always disconnects (disconnect failures are reported too). A backup-write failure leaves the old file
+in place; a later file-write failure includes any created backup in the underlying error details.
+
+To recover: keep queues paused, inspect the reported progress and `pm2 list`, stop only the affected
+job names, and restore the reported process-file backup if needed. Delete affected stopped definitions
+before starting the restored JSON so paths/environment are replaced. Do not rerun a partially applied
+deployment as a retry: the process file may already contain the new definitions, and the release
+folder already exists. Recovery never undoes a committed database migration; database restore remains
+a separate quarantined operation.
 
 `--dry-run` prints the migration step without opening a database connection, creating a backup, or writing
 history. The service's separate `status()` operation validates history in a read-only transaction; it never
@@ -44,18 +68,33 @@ creates a ledger. A database already at the release's version is validated witho
   "repository": "git@github.com:<owner>/<repo>.git",
   "root": "/Users/<user>/apps/crawler-v3",
   "tools": { "node": "<absolute node>", "pnpm": "<absolute pnpm>", "git": "/usr/bin/git" },
-  "jobList": {
-    "file": "/Users/<user>/apps/crawler-v3/live/deployment.json",
-    "control": "/Users/<user>/apps/crawler-v3/manual-control.mjs",
+  "pm2": {
+    "file": "/Users/<user>/apps/crawler-v3/live/ecosystem.json",
     "backups": "/Users/<user>/apps/crawler-v3/manual-releases"
   },
   "jobs": [
-    { "id": "collection-api", "app": "api", "env": { "V3_API_CONFIG": "<private api config>" } },
+    {
+      "id": "collection-api",
+      "app": "api",
+      "args": [],
+      "env": { "V3_API_CONFIG": "/Users/<user>/apps/crawler-v3/private/api.json" },
+      "healthFile": "/Users/<user>/apps/crawler-v3/health/api.json",
+      "logs": {
+        "out": "/Users/<user>/apps/crawler-v3/logs/api.out.log",
+        "error": "/Users/<user>/apps/crawler-v3/logs/api.err.log"
+      }
+    },
     {
       "id": "pipeline-worker",
       "app": "worker",
       "process": "pipeline",
-      "env": { "V3_PIPELINE_CONFIG": "<private worker config>" }
+      "args": [],
+      "env": { "V3_PIPELINE_CONFIG": "/Users/<user>/apps/crawler-v3/private/worker.json" },
+      "healthFile": "/Users/<user>/apps/crawler-v3/health/pipeline.json",
+      "logs": {
+        "out": "/Users/<user>/apps/crawler-v3/logs/pipeline.out.log",
+        "error": "/Users/<user>/apps/crawler-v3/logs/pipeline.err.log"
+      }
     }
   ],
   "migrations": {
@@ -67,7 +106,59 @@ creates a ledger. A database already at the release's version is validated witho
 }
 ```
 
-A worker job names the process it runs; the command sets `V3_WORKER_PROCESS` from it.
+A worker job names the process it runs; the writer sets `V3_WORKER_PROCESS` from it. The writer also
+sets `V3_WORKER_HEALTH_FILE` from the unique `healthFile`. These two variables cannot be overridden in
+`env`. API jobs require an absolute `V3_API_CONFIG`; workers require an absolute `V3_PIPELINE_CONFIG`.
+`args` defaults to `[]`; job names and health files must be unique. Job name `all` is reserved.
+The entry is the release's `apps/<app>/dist/main.js`, `cwd` is that release's source directory, and
+`interpreter` is `tools.node`. The adapter creates health/log parent directories before starting.
+Comparison covers process definitions, not the contents of referenced private configuration files.
+After editing a private file in place, explicitly stop/start the affected job to load the new settings.
+
+### Manual PM2 setup and control
+
+On each Mac that will run the machine config's Node jobs, install the same PM2 version as adapters
+(`7.0.4`) and start its daemon **by hand**, under the job owner's account:
+
+```sh
+npm install --global pm2@7.0.4
+export PM2_HOME="$HOME/apps/crawler-v3/pm2"
+pm2 ping
+```
+
+Use that same absolute `PM2_HOME` for deployment and every PM2 command. The deploy adapter requires
+an already live PID and RPC socket before loading PM2. PM2's API can otherwise spawn a daemon during
+`connect`; the adapter blocks its 7.0.4 daemon-launch fallback as well, covering a daemon exit between
+preflight and connect. An incompatible client fails closed. Revalidate this guard before upgrading PM2.
+No PM2 daemon or worker is launched by importing the adapter or printing a dry run.
+Do not configure boot/login startup or save a resurrectable process snapshot. Repeat daemon/job starts
+manually after reboot. Never share this PM2 home with another account or run concurrent deploys.
+
+Server 一 runs its API and worker jobs through its own ecosystem file. Server 二 needs its own PM2
+installation/home/file only for Node jobs assigned there; Temporal remains Docker and Ego remains
+separate. Windows currently runs only the OCR service: this ticket does not migrate that service into
+the `api`/`worker` job schema, and its existing manual-start procedure remains necessary.
+
+After pausing/draining the queue through the API (see the private-network guide), control exact names:
+
+```sh
+pm2 stop pipeline-worker
+pm2 stop collection-api
+pm2 list
+pm2 start /absolute/path/to/ecosystem.json --only collection-api,pipeline-worker
+pm2 describe collection-api
+pm2 describe pipeline-worker
+```
+
+Substitute this machine's configured names; never stop all processes in a shared daemon. After a manual
+start, compare `pm2 describe` with each configured health file using the readiness rule above.
+A deploy checks this automatically. The owner explicitly starts a stopped/crashed job when appropriate;
+deploying unchanged definitions does not revive it.
+
+For the first cutover, drain work and stop the exact legacy job PIDs with their existing owner-approved
+procedure, then verify process/page cleanup before starting replacements. R09 does not adopt or stop
+processes outside PM2 or rewrite the legacy resource ledger. Use a **new** `pm2.file` path; keep the old
+job list as historical evidence. Later deployments manage only names from the previous ecosystem file.
 
 Migration URLs retain the old tool's local-target policy: `localhost` or loopback IPv4,
 `crawler_v3_dev` or `crawler_v3_test`, explicit username/password, no query or fragment overrides.
@@ -80,12 +171,13 @@ the ordered release files, including the SHA-256 of their original bytes. Gaps, 
 hashes, restore quarantine and a non-empty unversioned database stop deployment. There is no baseline,
 down, rerun or history-repair operation. See [database operations](../../database/v3/OPERATIONS.md).
 
-### Required package declarations for R08
+### Package declarations (R08/R09)
 
-Add `"@crawl-automation/app": "workspace:*"` and `"@crawl-automation/adapters": "workspace:*"` to
-`ops/deploy/package.json` dependencies, then update workspace links/lockfile through the normal dependency
-workflow. R08 deliberately leaves package manifests and the lockfile untouched. Umzug `3.8.3` is already
-declared by adapters. No additional database CLI dependency is needed.
+Required dependencies are already declared in this checkout: `@crawl-automation/app` and
+`@crawl-automation/adapters` in `ops/deploy`, and `pm2` (`^7.0.4`, installed `7.0.4`) in adapters.
+R09 needs no further package.json changes or new type package (PM2 ships its types).
+This ticket does not edit manifests or install dependencies. Use the normal locked dependency workflow
+on each fresh release. Umzug `3.8.3` remains the migration dependency; there is no additional database CLI.
 
 ## Worker processes
 

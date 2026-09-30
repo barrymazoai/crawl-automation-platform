@@ -12,6 +12,8 @@ export * from "./runs/product-runs.js";
 export * from "./runs/list-runs.js";
 export * from "./resources/resource-service.js";
 export * from "./fleet/fleet-service.js";
+export * from "./fleet/job-ports.js";
+export * from "./fleet/job-service.js";
 export * from "./queue/queue-model.js";
 export * from "./queue/queue-service.js";
 export * from "./queue/dispatch-model.js";

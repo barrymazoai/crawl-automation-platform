@@ -1,58 +1,76 @@
 import { describe, expect, it } from "vitest";
-import { nextJobList, releaseJob } from "./job-list.js";
+import { releaseJobs } from "./job-list.js";
+import { MachineConfigSchema, MachineJobSchema } from "./machine-config.js";
 import { serverOne } from "./testing.js";
 
 const source = "/srv/crawler/releases/new/source";
-const machine = serverOne();
-const [apiJob] = machine.jobs;
-if (!apiJob) {
-  throw new Error("the fixture machine runs the API");
-}
-const current = {
-  platform: "darwin",
-  host: "server-one",
-  jobs: [
-    releaseJob(apiJob, source),
-    {
-      id: "pipeline-worker",
-      entry: "/srv/crawler/releases/old/source/apps/worker/dist/main.js",
-      env: {},
-    },
-    { id: "amazon-ocr-7", entry: "/srv/crawler/releases/old/worker.js", env: {} },
-  ],
-  resources: [
-    { resourceId: "mini-model", capacity: 10, jobs: ["amazon-ocr-7"], minFreeBytes: 0 },
-    {
-      resourceId: "scraperapi-lane",
-      capacity: 40,
-      jobs: ["pipeline-worker", "amazon-ocr-7"],
-      minFreeBytes: 0,
-    },
-  ],
-};
 
-describe("next job list", () => {
-  const change = nextJobList(current, machine, source);
-
-  it("runs exactly the machine config's jobs from the new release", () => {
-    expect(change.next.jobs.map((job) => job.id)).toEqual(["collection-api", "pipeline-worker"]);
-    expect(change.next.jobs[1]).toEqual({
-      id: "pipeline-worker",
-      entry: `${source}/apps/worker/dist/main.js`,
-      env: { V3_PIPELINE_CONFIG: "/srv/private/worker.json", V3_WORKER_PROCESS: "pipeline" },
-    });
-  });
-
-  it("restarts only the jobs that start differently, and removes old-code jobs", () => {
-    expect(change.changed).toEqual(["pipeline-worker"]);
-    expect(change.removed).toEqual(["amazon-ocr-7"]);
-  });
-
-  it("stops resources naming removed jobs, and keeps the rest of the file", () => {
-    expect(change.next.resources).toEqual([
-      { resourceId: "scraperapi-lane", capacity: 40, jobs: ["pipeline-worker"], minFreeBytes: 0 },
+describe("machine process definitions", () => {
+  it("supplies release executable, arguments, cwd, environment and logs for each job", () => {
+    const machine = serverOne();
+    expect(releaseJobs(machine, source)).toEqual([
+      {
+        name: "collection-api",
+        script: `${source}/apps/api/dist/main.js`,
+        args: [],
+        cwd: source,
+        interpreter: "/opt/node",
+        env: {
+          V3_API_CONFIG: "/srv/private/api.json",
+          V3_WORKER_HEALTH_FILE: "/srv/health/api.json",
+        },
+        outFile: "/srv/logs/api.out",
+        errorFile: "/srv/logs/api.err",
+      },
+      {
+        name: "pipeline-worker",
+        script: `${source}/apps/worker/dist/main.js`,
+        args: [],
+        cwd: source,
+        interpreter: "/opt/node",
+        env: {
+          V3_PIPELINE_CONFIG: "/srv/private/worker.json",
+          V3_WORKER_PROCESS: "pipeline",
+          V3_WORKER_HEALTH_FILE: "/srv/health/pipeline.json",
+        },
+        outFile: "/srv/logs/pipeline.out",
+        errorFile: "/srv/logs/pipeline.err",
+      },
     ]);
-    expect(change.droppedResources).toBe(1);
-    expect(change.next).toMatchObject({ platform: "darwin", host: "server-one" });
+  });
+
+  it.each(["V3_WORKER_PROCESS", "V3_WORKER_HEALTH_FILE"])(
+    "rejects an environment override of %s",
+    (name) => {
+      const job = serverOne().jobs[1];
+      expect(
+        MachineJobSchema.safeParse({ ...job, env: { ...job?.env, [name]: "/override" } }).success,
+      ).toBe(false);
+    },
+  );
+
+  it("requires a matching config file and worker process", () => {
+    const job = serverOne().jobs[1];
+    expect(MachineJobSchema.safeParse({ ...job, process: undefined }).success).toBe(false);
+    expect(MachineJobSchema.safeParse({ ...job, env: {} }).success).toBe(false);
+  });
+
+  it("requires unique names and health files, and refuses the old control-script config", () => {
+    const machine = serverOne();
+    expect(
+      MachineConfigSchema.safeParse({ ...machine, jobs: [machine.jobs[0], machine.jobs[0]] })
+        .success,
+    ).toBe(false);
+    expect(
+      MachineConfigSchema.safeParse({
+        ...machine,
+        jobs: machine.jobs.map((job) => ({ ...job, healthFile: "/same" })),
+      }).success,
+    ).toBe(false);
+    expect(
+      MachineConfigSchema.safeParse({ ...machine, jobList: { control: "/manual-control.mjs" } })
+        .success,
+    ).toBe(false);
+    expect(MachineJobSchema.safeParse({ ...machine.jobs[0], id: "all" }).success).toBe(false);
   });
 });

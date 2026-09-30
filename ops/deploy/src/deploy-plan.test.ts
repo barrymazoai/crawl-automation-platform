@@ -15,15 +15,13 @@ describe("deploy plan", () => {
       "Install locked dependencies",
       "Build api",
       "Build worker",
-      "Switch the job list to the release",
-      "Restart the jobs that changed",
-      "Check the jobs are healthy",
+      "Write the PM2 file, replace changed jobs and wait for ready",
     ]);
   });
 
   it("upgrades the database only when asked, with a backup first, before the switch", () => {
     const steps = titles(true);
-    const switchAt = steps.indexOf("Switch the job list to the release");
+    const switchAt = steps.indexOf("Write the PM2 file, replace changed jobs and wait for ready");
     expect(steps.slice(switchAt - 2, switchAt)).toEqual([
       "Check V3_DATABASE_URL is set",
       "Validate, back up, migrate and recheck the database",

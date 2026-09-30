@@ -16,9 +16,7 @@ export type Step =
   | { kind: "fresh-release"; title: string; path: string }
   | { kind: "require-env"; title: string; name: string }
   | { kind: "migrate"; title: string; source: string }
-  | { kind: "switch-jobs"; title: string; source: string }
-  | { kind: "restart"; title: string }
-  | { kind: "health"; title: string };
+  | { kind: "jobs"; title: string; source: string };
 
 export interface DeployOptions {
   /** A full commit of origin `main`. */
@@ -66,9 +64,7 @@ export function deployPlan(machine: MachineConfig, options: DeployOptions): Step
       cwd: source,
     })),
     ...(options.migrate ? migrationSteps(machine, source) : []),
-    { kind: "switch-jobs", title: "Switch the job list to the release", source },
-    { kind: "restart", title: "Restart the jobs that changed" },
-    { kind: "health", title: "Check the jobs are healthy" },
+    { kind: "jobs", title: "Write the PM2 file, replace changed jobs and wait for ready", source },
   ];
 }
 

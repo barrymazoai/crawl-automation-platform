@@ -1,4 +1,6 @@
 export * from "./errors.js";
+export * from "./pm2/job-runner.js";
+export * from "./pm2/process-file.js";
 export * from "./migrations/sql-catalog.js";
 export * from "./postgres/migration-repository.js";
 export * from "./files/fleet-status-files.js";

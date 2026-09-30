@@ -2,7 +2,10 @@ import { isAbsolute } from "node:path";
 import { z } from "zod";
 
 const absolutePath = z.string().refine(isAbsolute, "an absolute path");
-const jobId = z.string().regex(/^[a-z][a-z0-9-]{0,63}$/);
+const jobId = z
+  .string()
+  .regex(/^[a-z][a-z0-9-]{0,63}$/)
+  .refine((name) => name !== "all");
 
 /** The apps a machine can run, the workspace package each is built from, and the file the job starts. */
 export const APPS = {
@@ -21,6 +24,9 @@ export const MachineJobSchema = z
       .string()
       .regex(/^[a-z][a-z0-9-]{0,62}$/)
       .optional(),
+    args: z.array(z.string()).default([]),
+    healthFile: absolutePath,
+    logs: z.strictObject({ out: absolutePath, error: absolutePath }),
     /** The job's environment, e.g. `V3_API_CONFIG` or `V3_PIPELINE_CONFIG` naming a private settings file. */
     env: z.record(z.string().regex(/^V3_[A-Z_]+$/), z.string().min(1)),
   })
@@ -29,7 +35,16 @@ export const MachineJobSchema = z
   })
   .refine((job) => !("V3_WORKER_PROCESS" in job.env), {
     message: "V3_WORKER_PROCESS comes from `process`",
-  });
+  })
+  .refine((job) => !("V3_WORKER_HEALTH_FILE" in job.env), {
+    message: "V3_WORKER_HEALTH_FILE comes from `healthFile`",
+  })
+  .refine(
+    (job) =>
+      absolutePath.safeParse(job.env[job.app === "api" ? "V3_API_CONFIG" : "V3_PIPELINE_CONFIG"])
+        .success,
+    { message: "each job needs its absolute API or pipeline config path" },
+  );
 export type MachineJob = z.output<typeof MachineJobSchema>;
 
 /**
@@ -44,8 +59,8 @@ export const MachineConfigSchema = z
     /** Releases go to `<root>/releases/<commit>/source`. */
     root: absolutePath,
     tools: z.strictObject({ node: absolutePath, pnpm: absolutePath, git: absolutePath }),
-    /** The machine's job list and its control script (Server 一: `live/deployment.json`, `manual-control.mjs`). */
-    jobList: z.strictObject({ file: absolutePath, control: absolutePath, backups: absolutePath }),
+    /** One PM2 ecosystem JSON file, with byte-exact backups before replacement. */
+    pm2: z.strictObject({ file: absolutePath, backups: absolutePath }),
     jobs: z.array(MachineJobSchema).min(1).max(32),
     /** Database upgrades (only with `--migrate`); the connection string comes from the operator's V3_DATABASE_URL. */
     migrations: z
@@ -66,5 +81,11 @@ export const MachineConfigSchema = z
   })
   .refine((config) => new Set(config.jobs.map((job) => job.id)).size === config.jobs.length, {
     message: "job ids are unique",
-  });
+  })
+  .refine(
+    (config) => new Set(config.jobs.map((job) => job.healthFile)).size === config.jobs.length,
+    {
+      message: "each job needs a separate health file",
+    },
+  );
 export type MachineConfig = z.output<typeof MachineConfigSchema>;
