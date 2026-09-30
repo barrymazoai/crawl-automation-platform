@@ -44,6 +44,17 @@ describe("Swanson label core", () => {
     },
   );
 
+  it.each(["Allergen Information: Contains: Egg", "Trademark Information: NEM® is a trademark."])(
+    "ends the ingredient list at a following note (%s)",
+    (note) => {
+      const core = extractSwansonLabelCore(
+        escape(label.replace("\n\nSuggested Use", `\n\n${note}\n\nSuggested Use`)),
+      );
+      expect(core).toMatch(/Other Ingredients: Gelatin, water\.$/);
+      expect(core).not.toContain(note);
+    },
+  );
+
   it.each(Object.keys(ambiguous))("refuses an ambiguous page (%s)", (kind) => {
     expect(() => extractSwansonLabelCore(ambiguous[kind] ?? "")).toThrow(
       expect.objectContaining({ code: expect.stringMatching(/^LABEL_CORE\./) }),

@@ -5,8 +5,10 @@ const MAX_BYTES = 2 * 1024 * 1024;
 const MAX_TEXT_LENGTH = 200_000;
 const FACTS_HEADING = /^(?:Supplement|Nutrition) Facts\s*\n/i;
 const OTHER_INGREDIENTS = /^Other Ingredients[ \t]*:/gim;
+// Allergen and trademark notes follow Other Ingredients on many Swanson pages (2026-09-30: 8 Healthy Origins
+// products); they end the ingredient list like the sections after them.
 const NEXT_SECTION =
-  /^\s*(?:Suggested Use|Directions|Warning|Warnings|Storage Instructions|Other Information)\s*:/im;
+  /^\s*(?:Allergen Information|Trademark Information|Suggested Use|Directions|Warning|Warnings|Storage Instructions|Other Information)\s*:/im;
 
 type Nodes = ReturnType<typeof parseDocument>["children"];
 
