@@ -15,6 +15,7 @@ export type Step =
   | CommandStep
   | { kind: "fresh-release"; title: string; path: string }
   | { kind: "require-env"; title: string; name: string }
+  | { kind: "migrate"; title: string; source: string }
   | { kind: "switch-jobs"; title: string; source: string }
   | { kind: "restart"; title: string }
   | { kind: "health"; title: string };
@@ -22,7 +23,7 @@ export type Step =
 export interface DeployOptions {
   /** A full commit of origin `main`. */
   commit: string;
-  /** Upgrade the database with the migration tool before the jobs switch. */
+  /** Upgrade the database through the in-process service before the jobs switch. */
   migrate: boolean;
 }
 
@@ -75,22 +76,14 @@ function command(title: string, executable: string, args: string[]): CommandStep
   return { kind: "command", title, command: executable, args };
 }
 
-/** The existing migration tool: status, a backup, the upgrade, status again. Never implicit. */
+/** One service call owns validation, backup, migration and recheck under the same lock. */
 function migrationSteps(machine: MachineConfig, source: string): Step[] {
   const settings = machine.migrations;
   if (!settings) {
     throw deployErrors.create("DEPLOY.MIGRATIONS_NOT_CONFIGURED");
   }
-  const tool = (title: string, args: string[]): Step => ({
-    ...command(title, machine.tools.pnpm, ["--filter", "@crawl-automation/v3-api", "db", ...args]),
-    cwd: source,
-    env: { V3_DB_CONFIRM: settings.confirm },
-  });
   return [
     { kind: "require-env", title: "Check V3_DATABASE_URL is set", name: "V3_DATABASE_URL" },
-    tool("Database status", ["status"]),
-    tool("Back up the database", ["backup", settings.backups]),
-    tool("Upgrade the database", ["migrate", settings.backups]),
-    tool("Database status after the upgrade", ["status"]),
+    { kind: "migrate", title: "Validate, back up, migrate and recheck the database", source },
   ];
 }

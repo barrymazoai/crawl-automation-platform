@@ -16,8 +16,11 @@ release it builds). Always read the `--dry-run` output first.
 1. Refuses a release directory that already exists: `<root>/releases/<commit>/source` is always a fresh clone.
 2. `git clone --no-checkout <origin>`, checks the commit is on `origin/main`, checks it out detached.
 3. `pnpm install --frozen-lockfile`, then builds each app the machine's jobs use (`api`, `worker`).
-4. Only with `--migrate`: the existing migration tool — `db status`, `db backup`, `db migrate`, `db status` — with
-   `V3_DB_CONFIRM` from the machine config and `V3_DATABASE_URL` from the operator's shell (never from a file in git).
+4. Only with `--migrate`: call `MigrationService` in process using this release's `database/v3` SQL.
+   Confirm the target from `migrations.confirm` against `V3_DATABASE_URL`, take advisory lock `73110311`,
+   validate the existing history, make one private `pg_dump` backup if SQL is pending, apply all pending
+   migrations and their history rows in one transaction, and recheck before committing. No `v3-api db`
+   subprocess or new database CLI is used. Any failure stops before the job-list switch.
 5. Backs up the job list to `<jobList.backups>/deployment.before-<commit>-<time>.json`, then writes the new one:
    exactly the machine config's jobs, started from the new release. Jobs not in the machine config (old code) are
    removed, and every resource stops naming them.
@@ -25,6 +28,11 @@ release it builds). Always read the `--dry-run` output first.
 7. Asks the control script for each job's status until all are ready, or stops with `DEPLOY.UNHEALTHY`.
 
 Any failure stops the deployment where it is. To go back: restore the backed-up job list and restart those jobs.
+This does not undo a committed database migration. Database restore remains a separate, quarantined operation.
+
+`--dry-run` prints the migration step without opening a database connection, creating a backup, or writing
+history. The service's separate `status()` operation validates history in a read-only transaction; it never
+creates a ledger. A database already at the release's version is validated without replay or another dump.
 
 ## Machine config (private, one per machine)
 
@@ -50,12 +58,34 @@ Any failure stops the deployment where it is. To go back: restore the backed-up 
       "env": { "V3_PIPELINE_CONFIG": "<private worker config>" }
     }
   ],
-  "migrations": { "backups": "<private backup directory>", "confirm": "<host>:<port>/<database>" },
+  "migrations": {
+    "backups": "<existing private backup directory>",
+    "confirm": "<host>:<port>/<database>",
+    "pgDump": "<optional absolute pg_dump executable>"
+  },
   "health": { "attempts": 12, "intervalMs": 5000 }
 }
 ```
 
 A worker job names the process it runs; the command sets `V3_WORKER_PROCESS` from it.
+
+Migration URLs retain the old tool's local-target policy: `localhost` or loopback IPv4,
+`crawler_v3_dev` or `crawler_v3_test`, explicit username/password, no query or fragment overrides.
+Stop that database's writers manually before a real migration. The advisory lock coordinates migrators;
+it does not stop normal application writes. `pgDump` may be omitted to use `pg_dump` on PATH. Use a version
+compatible with the server. Backup subdirectories are `0700`; dumps and manifests are `0600`.
+
+The existing `public.v3_local_migration(name, sha256)` remains the only ledger. Every applied row must match
+the ordered release files, including the SHA-256 of their original bytes. Gaps, unknown versions, changed
+hashes, restore quarantine and a non-empty unversioned database stop deployment. There is no baseline,
+down, rerun or history-repair operation. See [database operations](../../database/v3/OPERATIONS.md).
+
+### Required package declarations for R08
+
+Add `"@crawl-automation/app": "workspace:*"` and `"@crawl-automation/adapters": "workspace:*"` to
+`ops/deploy/package.json` dependencies, then update workspace links/lockfile through the normal dependency
+workflow. R08 deliberately leaves package manifests and the lockfile untouched. Umzug `3.8.3` is already
+declared by adapters. No additional database CLI dependency is needed.
 
 ## Worker processes
 
@@ -83,8 +113,7 @@ keeps its old `taskQueue` and runs as the `pipeline` process.
 | 030       | `brand_scan`                                                                                                     | SELECT, INSERT, UPDATE                                                                                                     |
 | 031       | `product_history_source`, `_listing`, `_listing_source`, `_observation`, `_observation_source` (metrics history) | SELECT, INSERT                                                                                                             |
 
-Each migration grants these itself when the role exists. Run them with `--migrate` (or the migration tool
-directly); never replay SQL by hand.
+Each migration grants these itself when the role exists. Run them with `--migrate`; never replay SQL by hand.
 
 ## API private config: new sections
 

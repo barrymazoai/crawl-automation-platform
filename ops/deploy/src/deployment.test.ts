@@ -1,4 +1,5 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import { deployErrors } from "./deploy-errors.js";
 import { deployPlan } from "./deploy-plan.js";
 import { Deployment } from "./deployment.js";
 import { releaseJob } from "./job-list.js";
@@ -31,9 +32,36 @@ describe("deployment", () => {
     const fake = await deploy({ dryRun: true, migrate: true });
     expect(fake.commands).toEqual([]);
     expect(fake.writes).toEqual([]);
+    expect(fake.migrations).toEqual([]);
     expect(fake.lines.join("\n")).toContain("git clone --no-checkout git@example.test:crawler.git");
     expect(fake.lines.join("\n")).toContain("removed (old code, stopped): amazon-ocr-7");
     expect(fake.lines.at(-1)).toBe("Dry run: nothing was changed.");
+  });
+
+  it("uses one in-process migration of the release before switching jobs", async () => {
+    const fake = fakeMachine(oldList);
+    const migrate = fake.ports.migrate;
+    fake.ports.migrate = async (source, settings) => {
+      expect(fake.writes).toEqual([]);
+      await migrate(source, settings);
+    };
+    await deploy({ dryRun: false, migrate: true }, fake);
+    expect(fake.migrations).toEqual([
+      {
+        source: `/srv/crawler/releases/${COMMIT}/source`,
+        settings: machine.migrations,
+      },
+    ]);
+    expect(fake.commands.some((command) => command.includes("v3-api"))).toBe(false);
+  });
+
+  it("a migration failure stops before any job-list write or job restart", async () => {
+    const fake = fakeMachine(oldList);
+    const failure = deployErrors.create("DEPLOY.COMMAND_FAILED");
+    fake.ports.migrate = vi.fn().mockRejectedValue(failure);
+    await expect(deploy({ dryRun: false, migrate: true }, fake)).rejects.toBe(failure);
+    expect(fake.writes).toEqual([]);
+    expect(fake.commands.some((command) => command.startsWith("/opt/node"))).toBe(false);
   });
 
   it("backs up the job list before writing the new one, then restarts only changed jobs", async () => {

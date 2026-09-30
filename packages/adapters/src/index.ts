@@ -1,4 +1,6 @@
 export * from "./errors.js";
+export * from "./migrations/sql-catalog.js";
+export * from "./postgres/migration-repository.js";
 export * from "./files/fleet-status-files.js";
 export * from "./postgres/delivery-journal.js";
 export * from "./postgres/delivery-scan.js";

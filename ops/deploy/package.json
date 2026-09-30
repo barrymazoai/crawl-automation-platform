@@ -15,7 +15,9 @@
     "@crawl-automation/platform": "workspace:*",
     "commander": "^14.0.3",
     "execa": "catalog:",
-    "zod": "catalog:"
+    "zod": "catalog:",
+    "@crawl-automation/app": "workspace:*",
+    "@crawl-automation/adapters": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "catalog:",

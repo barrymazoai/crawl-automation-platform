@@ -51,8 +51,10 @@ export const MachineConfigSchema = z
     migrations: z
       .strictObject({
         backups: absolutePath,
-        /** The target the migration tool must see, e.g. `127.0.0.1:55432/crawler_v3_dev`. */
+        /** The exact host:port/database that the migration service must confirm. */
         confirm: z.string().min(3),
+        /** Optional absolute path to the PostgreSQL dump executable; otherwise pg_dump on PATH. */
+        pgDump: absolutePath.optional(),
       })
       .optional(),
     health: z

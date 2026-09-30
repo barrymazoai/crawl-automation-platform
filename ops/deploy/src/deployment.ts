@@ -16,6 +16,7 @@ export interface DeployPorts {
   now(): Date;
   sleep(milliseconds: number): Promise<void>;
   print(line: string): void;
+  migrate(source: string, settings: NonNullable<MachineConfig["migrations"]>): Promise<void>;
 }
 
 /** Carries out a deployment plan step by step, or, in a dry run, prints every step without doing it. */
@@ -44,6 +45,8 @@ export class Deployment {
         return this.freshRelease(step.path);
       case "require-env":
         return this.requireEnv(step.name);
+      case "migrate":
+        return this.migrate(step.source);
       case "switch-jobs":
         return this.switchJobs(step.source);
       case "restart":
@@ -71,6 +74,17 @@ export class Deployment {
   private async requireEnv(name: string): Promise<void> {
     if (!this.ports.env(name) && !this.options.dryRun) {
       throw deployErrors.create("DEPLOY.ENV_MISSING", { details: { name } });
+    }
+  }
+
+  private async migrate(source: string): Promise<void> {
+    const settings = this.machine.migrations;
+    if (!settings) {
+      throw deployErrors.create("DEPLOY.MIGRATIONS_NOT_CONFIGURED");
+    }
+    this.ports.print(`  SQL: ${source}/database/v3; backup parent: ${settings.backups}`);
+    if (!this.options.dryRun) {
+      await this.ports.migrate(source, settings);
     }
   }
 

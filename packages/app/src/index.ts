@@ -1,4 +1,6 @@
 export * from "./errors.js";
+export * from "./deployment/migration-ports.js";
+export * from "./deployment/migration-service.js";
 export * from "./delivery/ports.js";
 export * from "./delivery/proof-policy.js";
 export * from "./delivery/delivery-coordinator.js";

@@ -24,12 +24,9 @@ describe("deploy plan", () => {
   it("upgrades the database only when asked, with a backup first, before the switch", () => {
     const steps = titles(true);
     const switchAt = steps.indexOf("Switch the job list to the release");
-    expect(steps.slice(switchAt - 5, switchAt)).toEqual([
+    expect(steps.slice(switchAt - 2, switchAt)).toEqual([
       "Check V3_DATABASE_URL is set",
-      "Database status",
-      "Back up the database",
-      "Upgrade the database",
-      "Database status after the upgrade",
+      "Validate, back up, migrate and recheck the database",
     ]);
   });
 

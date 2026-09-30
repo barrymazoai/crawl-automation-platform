@@ -40,6 +40,7 @@ export function fakeMachine(jobList: unknown, ready: (id: string) => boolean = (
   const writes: { path: string; value: unknown }[] = [];
   const lines: string[] = [];
   const existing = new Set<string>();
+  const migrations: { source: string; settings: MachineConfig["migrations"] }[] = [];
   const ports: DeployPorts = {
     run: async (step: CommandStep) => {
       commands.push([step.command, ...step.args].join(" "));
@@ -55,6 +56,9 @@ export function fakeMachine(jobList: unknown, ready: (id: string) => boolean = (
     now: () => new Date("2026-09-30T01:02:03.000Z"),
     sleep: async () => undefined,
     print: (line) => lines.push(line),
+    migrate: async (source, settings) => {
+      migrations.push({ source, settings });
+    },
   };
-  return { ports, commands, writes, lines, existing };
+  return { ports, commands, writes, lines, existing, migrations };
 }

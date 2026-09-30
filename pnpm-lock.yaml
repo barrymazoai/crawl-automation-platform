@@ -752,6 +752,12 @@ importers:
 
   ops/deploy:
     dependencies:
+      '@crawl-automation/adapters':
+        specifier: workspace:*
+        version: link:../../packages/adapters
+      '@crawl-automation/app':
+        specifier: workspace:*
+        version: link:../../packages/app
       '@crawl-automation/platform':
         specifier: workspace:*
         version: link:../../packages/platform

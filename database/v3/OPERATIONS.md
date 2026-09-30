@@ -1,37 +1,73 @@
-# V3 开发业务库：迁移、凭证与恢复
+# V3 数据库迁移与恢复
 
-CRAWLV3-11。仅管理新 V3 业务库，不是旧库迁移，也不管理 Temporal 内部库。工具代码在 `apps/v3-api/src/bootstrap/{schema,backup,credentials}.ts`，CLI 为 `src/database-cli.ts`。
+R08 部署迁移入口是 `packages/app/src/deployment/migration-service.ts`，数据库实现位于
+`packages/adapters/src/{migrations,postgres}`。`ops/deploy` 直接调用服务；不再启动四次旧
+`v3-api db` 子进程，也不增加新的数据库 CLI。现有开发启动器、凭证初始化和恢复功能尚未迁移，
+下方保留其独立操作说明；它们不是新部署路径的一部分。
 
-## 安全边界
+## 目标与维护窗口
 
-- 仅显式 `V3_DATABASE_URL`，不猜旧 `DATABASE_URL` 或 `.env`。普通 CLI 只接受 `127.0.0.1` / `localhost` 的 `crawler_v3_dev` / `crawler_v3_test`，用户名和密码必填；禁止查询参数覆盖目标。不是远程/生产迁移工具。
-- 修改前停掉该库的 API、投递运行器和其他写入者，核对主机、端口、数据库、操作者与备份目录；不得顺手停止别的系统。CLI 的确认字符串不是身份认证，也不能代替现场核对。
-- 迁移/恢复仅用专用 V3 集群的维护账号，业务运行不用维护账号。不要指向同名但不是本项目的库。新建云端资源、修改现有持久库仍需明确确认目标与授权；本轮只在临时库测试。
-- 运行脚本需要 Node/pnpm 和 PostgreSQL 的 `pg_dump` / `pg_restore`。部署须携带整个 monorepo 的 `database/v3/*.sql`，不能只拷贝 `dist`。使用与服务端兼容的 PostgreSQL 工具版本。
+- 连接只读取操作者显式提供的 `V3_DATABASE_URL`，不使用旧 `DATABASE_URL` 或猜测 `.env`。
+  保留旧 URL 限制：`localhost` / loopback IPv4、`crawler_v3_dev` / `crawler_v3_test`、
+  显式用户名和密码，无 query/fragment。不得连接旧业务库或 Temporal 数据库。
+- 私有机器配置的 `migrations.confirm` 必须精确匹配 `host:port/database`，默认端口为 5432。
+  新部署服务不读取 `V3_DB_CONFIRM`。确认串不是认证，也不代替核对真实目标和授权。
+- 迁移前手动停止该库的 API、投递运行器及其他写入者；只操作已确认的目标。使用维护账号，
+  不使用业务运行账号。部署服务不会自动暂停数据库写入者。
+- `migrations.backups` 为已存在的绝对路径。可选 `migrations.pgDump` 指定绝对可执行路径，
+  否则使用 PATH 中的 `pg_dump`，版本须与服务器兼容。
+- 部署携带完整的 release `database/v3/*.sql`，不只复制 dist。代码仍只通过 git 到服务器。
 
-## 版本化迁移与启动检查
+## 迁移顺序与历史兼容
 
-沿用已有 `v3_local_migration(name, sha256)`，不改写已发布迁移。当前清单到 010（同表接纳图片 /1、混合 /2 与分组配方 /3 采集快照）；清单按编号追加，缺失前缀、未知/超前版本、hash 变化立即失败。没有自动 baseline、降级、删表重建或修复 hash 功能。009/010 仅更换 codec 版本约束，不更新既有记录、不放宽 observation 唯一性或不可变规则；本轮只在临时库验证，已有持久库尚未升级。
+服务执行：验证历史 → 备份 → 迁移 → 再检查。修改流程先核对目标，再在同一个数据库事务中
+取得 advisory lock `73110311`。历史检查在锁取得之后执行，避免两个迁移器同时读取旧前缀。
+锁持续到提交或回滚；连接随后关闭。锁只协调使用此锁的迁移器，不阻止普通写入或人工 DDL。
 
-迁移器取得事务级 advisory lock 后，将本次所有新增 DDL 与版本登记放进同一事务。失败整体回滚；重复执行无新版本时不重放 SQL。已有版本且需要升级时，必须先成功生成新备份；备份失败不执行 DDL。该锁只协调本工具，不阻止管理员手工 DDL，因此仍需维护窗口。
+沿用 `public.v3_local_migration(name text PRIMARY KEY, sha256 text NOT NULL)`，只写原有两列，
+不创建 SequelizeMeta 或另一套 Umzug 元数据。Umzug 3.8.3 的 custom storage `executed()` 返回
+**完整验证后的**已应用名称。目录当前为 001–031，按原始文件名排序、连续编号；不重命名文件。
+SHA-256 覆盖原始 UTF-8 文件字节，包含注释、换行、BEGIN 和 COMMIT，与旧工具对现有文件的
+hash 完全一致。执行时才移除旧工具同样移除的外层 BEGIN/COMMIT。
 
-正常 API 与投递运行器只读检查：版本/hash、必需列、有效扫描/Review/采集索引、七个已启用的完整性触发器，以及恢复隔离标记。缺版本时不启动、不自动迁移。此检查不是数据库完整 schema diff，也不证明管理员没有篡改同名触发器函数体。
+每一条历史记录必须是发布目录的完整、未变更前缀。缺口、未知/超前版本、顺序或名称变化、
+hash 变化、`public.v3_restore_hold` 隔离标记均会失败。无历史但已有业务对象的数据库拒绝接管，
+包括历史表存在却为空的情况。只允许空库首次初始化；不自动 baseline、down、rerun 或修复历史。
 
-从仓库根目录操作，连接串通过私有环境/密钥管理注入，不把密码粘进命令历史或日志：
+有待执行 SQL 时，在锁内、任何 DDL 之前创建**一次**备份，包括首次初始化空库。
+使用当前事务导出的快照调用 `pg_dump --format=custom --no-owner --no-acl --no-password`。
+凭据只进入子进程环境，不出现在参数和日志中，并清除继承的 PG* 连接设置。
+备份目录为 0700，dump 从创建起为 0600，manifest 为 0600。原有 manifest 格式保留：
+`format: 1`、数据库名、时间、dump SHA-256、`applied` 数量、`recovery: quarantine-required`。
+首次空库备份的 `applied` 为 0。备份失败不执行任何迁移；失败的私有临时目录保留供排查。
+
+全部待执行 SQL 与对应历史行在**同一个事务**中提交，最后再次验证历史完整性。后续迁移或
+再检查失败时，前面本次新增的 DDL 与历史行一并回滚。已到目标版本的库不重放 SQL、不另做备份。
+任何失败直接终止部署，不切换 job list、不自动重试、修复或恢复。提交后的数据库升级不会随
+job list 回退而撤销；恢复必须单独核对备份与隔离状态。
+
+## 只读检查与演练
+
+`MigrationService.status()` 使用只读事务，验证历史但不创建版本表、备份或加迁移锁。
+`MigrationService.migrate({ ..., dryRun: true })` 只返回当前已应用与待执行名称。
+部署 `--dry-run` 仅展示步骤，连数据库都不连接，因为新的 release 尚未实际 clone。
+这些历史检查不是完整 schema diff，也不能证明管理员未修改触发器或表结构。
+旧 API 的启动完整性检查保持原样，不隐式迁移。
+
+部署用法与所需 workspace 依赖见 [ops/deploy/README.md](../../ops/deploy/README.md)。
+单元及隔离 PostgreSQL 测试：
 
 ```sh
-# 先设置 V3_DATABASE_URL，再核对输出目标；不显示密码。
-pnpm --filter @crawl-automation/v3-api db status
-# 将核实后的目标设为 V3_DB_CONFIRM，例如 127.0.0.1:55440/crawler_v3_dev。
-# 目录必须已存在且为绝对路径。工具在其中创建私有的新子目录，不覆盖旧备份。
-pnpm --filter @crawl-automation/v3-api db backup /absolute/private/backups
-pnpm --filter @crawl-automation/v3-api db migrate /absolute/private/backups
-pnpm --filter @crawl-automation/v3-api db status
+npx vitest run --config vitest.v3.config.ts packages/app/src/deployment packages/adapters ops/deploy
 ```
 
-只有空的新库可以首次初始化；未登记但已有业务对象的库拒绝接管。状态检查不会创建版本表。失败时保持服务停止，查迁移日志和数据库日志，修复原因后原命令重跑；不要删除版本记录绕过检查。程序脱敏错误，不输出数据库原始异常/凭据。
+迁移集成测试在 `packages/adapters/src/migrations/umzug-runner.test.ts`，有 `initdb`、`pg_ctl`、
+`pg_dump`、`pg_restore` 时创建专用临时集群，仅私有 Unix socket、不监听 TCP。SQL 测试样例
+运行时生成，现有 001–031 文件只读；不把 fixture 或数据库数据提交 git。结束后关闭服务并保留
+临时目录。无工具时 `skipIf` 跳过；沙箱明确禁止共享内存等能力时，可设置
+`V3_TEST_SKIP_POSTGRES=1` 运行其余测试，但必须另行报告集成测试未完成，不能视为通过。
 
-## 当前 socket-only 开发启动器
+## 旧开发启动器与独立维护功能（未迁入 R08）
 
 `dev:local` 只在它刚创建的全新数据库初始化结构；**已有库启动只检查，不再自动补迁移**。既有 001/002 库需要显式升级，但本轮没有升级或重启它。
 
