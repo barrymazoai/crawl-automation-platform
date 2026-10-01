@@ -42,7 +42,7 @@ export const brandsRouter = router({
   /** Needs the brand's current revision; a stale revision is refused. */
   update: procedure.input(UpdateBrandSchema).mutation(({ ctx, input }) => ctx.brands.update(input)),
 
-  /** A brand's source URLs on each channel. */
+  /** Sources by brand or channel, with latest scan facts, queue counts and toggle revisions. */
   sources: procedure.input(ListSourcesSchema).query(({ ctx, input }) => ctx.brands.sources(input)),
 
   createSource: procedure

@@ -13,6 +13,8 @@ import {
 } from "@crawl-automation/v3-contracts";
 import { z } from "zod";
 import { appErrors } from "../errors.js";
+import { ListSourcesSchema, type SourceScanView } from "./source-query.js";
+export * from "./source-query.js";
 
 /** Every change carries a request ID; repeating the same request is safe. */
 const withRequest = { requestId: Id };
@@ -29,12 +31,11 @@ export const ToggleSourceSchema = ToggleSource.extend({
   brandId: Id,
   sourceId: Id,
 });
-export const ListSourcesSchema = ListQuery.extend({ brandId: Id });
 
 export interface BrandStore {
   list(query: ListQuery): Promise<Page<Brand>>;
   find(brandId: string): Promise<Brand | null>;
-  sources(query: z.infer<typeof ListSourcesSchema>): Promise<Page<Source>>;
+  sources(query: z.infer<typeof ListSourcesSchema>): Promise<Page<SourceScanView>>;
   create(input: z.infer<typeof CreateBrandSchema>): Promise<Brand>;
   update(input: z.infer<typeof UpdateBrandSchema>): Promise<Brand>;
   createSource(input: z.infer<typeof CreateSourceSchema>): Promise<Source>;
@@ -58,7 +59,7 @@ export class BrandService {
     return brand;
   }
 
-  sources(query: z.infer<typeof ListSourcesSchema>): Promise<Page<Source>> {
+  sources(query: z.infer<typeof ListSourcesSchema>): Promise<Page<SourceScanView>> {
     return this.deps.brands.sources(query);
   }
 

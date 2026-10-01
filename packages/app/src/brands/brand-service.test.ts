@@ -32,7 +32,12 @@ function storeWith(found: boolean): BrandStore {
   return {
     list: vi.fn(async () => ({ items: [brand], limit: 25, offset: 0, hasMore: false })),
     find: vi.fn(async () => (found ? brand : null)),
-    sources: vi.fn(async () => ({ items: [source], limit: 25, offset: 0, hasMore: false })),
+    sources: vi.fn(async () => ({
+      items: [{ ...source, brandName: brand.name, lastScan: null, queueProductCount: 0 }],
+      limit: 25,
+      offset: 0,
+      hasMore: false,
+    })),
     create: vi.fn(async () => brand),
     update: vi.fn(async () => brand),
     createSource: vi.fn(async () => source),
@@ -65,6 +70,10 @@ describe("BrandService", () => {
   it.each([
     ["list", { limit: 25, offset: 0, q: "" }],
     ["sources", { brandId: brand.id, limit: 25, offset: 0, q: "" }],
+    [
+      "sources",
+      { channel: "wholefoods", enabled: false, scanned: true, limit: 25, offset: 0, q: "" },
+    ],
     ["create", { requestId, name: "Healthy Origins", note: "" }],
     ["update", { ...ids, name: "Healthy Origins", note: "", revision: 1 }],
     ["createSource", { requestId, brandId: brand.id, ...fields }],

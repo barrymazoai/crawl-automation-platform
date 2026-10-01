@@ -1,9 +1,4 @@
-import type {
-  AmazonMigrationPreview,
-  QueueItemsQuery,
-  QueueItemView,
-  QueueStatus,
-} from "@crawl-automation/app";
+import type { AmazonMigrationPreview, QueueItemsQuery, QueueStatus } from "@crawl-automation/app";
 import type { Queryable } from "@crawl-automation/platform";
 import { z } from "zod";
 import { ItemRow, StatusRow } from "./queue-rows.js";
@@ -38,7 +33,7 @@ export async function queueStatus(db: Queryable): Promise<QueueStatus> {
 }
 
 /** Amazon queue items in one state, most recently changed first; a Review item carries its one-line reason. */
-export async function queueItems(db: Queryable, query: QueueItemsQuery): Promise<QueueItemView[]> {
+export async function queueItems(db: Queryable, query: QueueItemsQuery) {
   const rows = await db.query(
     `SELECT i.item_id AS "itemId", i.campaign_id AS batch, i.state, i.attempt,
        i.request_id AS "runId", i.input->'entries'->0->'entry'->>'listingId' AS "listingId",

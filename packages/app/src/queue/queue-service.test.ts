@@ -6,6 +6,7 @@ import {
   PauseQueueSchema,
   QueueChannelSchema,
   QueueItemsQuerySchema,
+  RequeueSchema,
   type QueueChannel,
   type QueueStore,
 } from "./queue-model.js";
@@ -27,6 +28,7 @@ function fakeStore(): QueueStore {
       attention: 0,
     })),
     items: vi.fn(async () => []),
+    summary: vi.fn(async () => []),
     add: vi.fn(async () => ({ added: 1 })),
     setLimits: vi.fn(async () => undefined),
     pause: vi.fn(async () => undefined),
@@ -65,6 +67,7 @@ describe("QueueService", () => {
       });
       expect((await service.status(channel)).channel).toBe(channel);
       expect(await service.items(query)).toEqual([]);
+      expect(await service.summary({ channel })).toEqual([]);
       expect(await service.add(list)).toEqual({ added: 1 });
       await service.setLimits(limits);
       await service.pause(pause);
@@ -73,6 +76,7 @@ describe("QueueService", () => {
       expect(channels.status).toHaveBeenCalledTimes(4);
       expect(channels.status).toHaveBeenCalledWith(channel);
       expect(channels.items).toHaveBeenCalledWith(query);
+      expect(channels.summary).toHaveBeenCalledWith({ channel });
       expect(channels.add).toHaveBeenCalledWith(list);
       expect(channels.setLimits).toHaveBeenCalledWith(limits);
       expect(channels.pause).toHaveBeenCalledWith(pause);
@@ -89,6 +93,53 @@ describe("QueueService", () => {
     for (const method of Object.values(channels)) {
       expect(method).not.toHaveBeenCalled();
     }
+  });
+
+  it("passes all item filters and exact scan request summaries to the shared store", async () => {
+    const { service, channels } = fixture();
+    const filters = {
+      channel: "amazon" as const,
+      state: "review" as const,
+      limit: 25,
+      reasons: ["QUEUE.RUN_FAILED"],
+      updatedSince: "2026-10-01T00:00:00Z",
+      createdSince: "2026-09-30T00:00:00Z",
+      sourceIds: [product.sourceId],
+      listingIds: ["B001"],
+    };
+    await service.items(filters);
+    expect(channels.items).toHaveBeenCalledExactlyOnceWith(filters);
+    const summary = {
+      channel: filters.channel,
+      sourceIds: filters.sourceIds,
+      createdSince: filters.createdSince,
+      requestId: "33333333-3333-4333-8333-333333333333",
+    };
+    await service.summary(summary);
+    expect(channels.summary).toHaveBeenCalledExactlyOnceWith(summary);
+  });
+
+  it("previews by default and delegates explicit filter execution once without resuming intake", async () => {
+    const { service, channels } = fixture();
+    const input = RequeueSchema.parse({ channel: "amazon", filter: { state: "review" }, limit: 7 });
+    const preview = { dryRun: true as const, count: 4, sample: [] };
+    vi.mocked(channels.requeue).mockResolvedValueOnce(preview);
+    expect(await service.requeue(input)).toEqual(preview);
+    expect(channels.requeue).toHaveBeenCalledExactlyOnceWith({ ...input, dryRun: true });
+    const execute = { ...input, dryRun: false };
+    expect(await service.requeue(execute)).toEqual({ requeued: 1 });
+    expect(channels.requeue).toHaveBeenLastCalledWith(execute);
+    expect(channels.resume).not.toHaveBeenCalled();
+    expect(channels.add).not.toHaveBeenCalled();
+  });
+
+  it("does not retry a failed filter requeue", async () => {
+    const { service, channels } = fixture();
+    const failure = new Error("transaction failed");
+    vi.mocked(channels.requeue).mockRejectedValueOnce(failure);
+    const input = RequeueSchema.parse({ filter: { state: "review" }, limit: 1, dryRun: false });
+    await expect(service.requeue(input)).rejects.toBe(failure);
+    expect(channels.requeue).toHaveBeenCalledOnce();
   });
 
   it("preserves a refusal from the shared store without trying the legacy queue", async () => {

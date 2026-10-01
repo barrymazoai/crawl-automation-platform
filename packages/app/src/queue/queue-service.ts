@@ -14,6 +14,8 @@ import type {
   QueueStatus,
   QueueStore,
   Requeue,
+  RequeueResult,
+  QueueSummaryQuery,
 } from "./queue-model.js";
 
 export interface QueueServiceDeps {
@@ -36,6 +38,10 @@ export class QueueService {
 
   items(query: QueueItemsQuery): Promise<QueueItemView[]> {
     return this.deps.channels.items(query);
+  }
+
+  summary(query: QueueSummaryQuery) {
+    return this.deps.channels.summary(query);
   }
 
   async add(input: AddToQueue): Promise<{ added: number; following?: number }> {
@@ -63,9 +69,10 @@ export class QueueService {
     return this.status(channel);
   }
 
-  async requeue(input: Requeue): Promise<{ requeued: number }> {
+  async requeue(input: Requeue): Promise<RequeueResult> {
     const result = await this.deps.channels.requeue(input);
-    this.deps.log.info({ channel: input.channel, ...result }, "products queued again");
+    const message = "dryRun" in result ? "requeue preview" : "products queued again";
+    this.deps.log.info({ channel: input.channel, ...result }, message);
     return result;
   }
 

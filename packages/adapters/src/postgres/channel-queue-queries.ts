@@ -5,7 +5,8 @@ import type {
   QueueStatus,
 } from "@crawl-automation/app";
 import type { Queryable } from "@crawl-automation/platform";
-import { ItemRow, StatusRow } from "./queue-rows.js";
+import { StatusRow } from "./queue-rows.js";
+import { PostgresQueueReader } from "./postgres-queue-reader.js";
 
 /** The shared queue's lock space; each channel has its own key in it. */
 const CHANNEL_QUEUE_LOCK = 73110325;
@@ -37,11 +38,5 @@ export async function channelQueueItems(
   db: Queryable,
   query: QueueItemsQuery,
 ): Promise<QueueItemView[]> {
-  const rows = await db.query(
-    `SELECT item_id AS "itemId", batch_id::text AS batch, state, attempt, run_id::text AS "runId",
-       listing_id AS "listingId", NULL AS "lastError", reason, follows_item_id AS "followsItemId"
-     FROM queue_item WHERE channel = $1 AND state = $2 ORDER BY updated_at DESC LIMIT $3`,
-    [query.channel, query.state, query.limit],
-  );
-  return rows.map((row) => ItemRow.parse(row));
+  return new PostgresQueueReader(db).items(query);
 }

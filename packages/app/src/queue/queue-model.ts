@@ -1,22 +1,16 @@
 import { ChannelIdSchema } from "@crawl-automation/v3-contracts";
 import { z } from "zod";
 import type { FamilyFormulaOutcomes } from "./family-formula-outcome.js";
+import { QueueFilterFields } from "./queue-filters.js";
+import type { QueueSourceSummary, QueueSummaryQuery } from "./queue-summary.js";
+import { QueueStateSchema, type QueueState } from "./queue-state.js";
 export * from "./family-formula-outcome.js";
+export * from "./queue-summary.js";
+export * from "./queue-state.js";
 
 /** Every channel has its own queue: its own mode and limits. */
 export const QueueChannelSchema = ChannelIdSchema;
 export type QueueChannel = z.infer<typeof QueueChannelSchema>;
-
-export const QueueStateSchema = z.enum([
-  "queued",
-  "ready",
-  "running",
-  "following",
-  "pending",
-  "review",
-  "completed",
-]);
-export type QueueState = z.infer<typeof QueueStateSchema>;
 
 /** The queue a call is about; Amazon unless named. */
 const channel = QueueChannelSchema.default("amazon");
@@ -56,6 +50,7 @@ export interface AmazonQueueHistory {
 }
 
 export const QueueItemsQuerySchema = z.strictObject({
+  ...QueueFilterFields,
   channel,
   state: QueueStateSchema.default("running"),
   limit: z.number().int().min(1).max(10_000).default(200),
@@ -78,14 +73,23 @@ export const QueueLimitsSchema = z.strictObject({
 });
 export type QueueLimits = z.infer<typeof QueueLimitsSchema>;
 
-export const RequeueSchema = z.strictObject({
+const RequeueIdsSchema = z.strictObject({
   channel,
   itemIds: z
     .array(z.string().regex(/^[a-f0-9]{64}$/))
     .min(1)
     .max(10_000),
 });
+export const RequeueFilterSchema = z.strictObject({
+  channel,
+  filter: z.strictObject({ ...QueueFilterFields, state: z.literal("review") }),
+  limit: z.number().int().min(1).max(10_000),
+  dryRun: z.boolean().default(true),
+});
+export const RequeueSchema = z.union([RequeueIdsSchema, RequeueFilterSchema]);
 export type Requeue = z.infer<typeof RequeueSchema>;
+export type RequeueResult =
+  { requeued: number } | { dryRun: true; count: number; sample: QueueItemView[] };
 
 export type QueueMode = "running" | "paused" | "draining" | "stopping";
 
@@ -108,6 +112,8 @@ export interface QueueItemView {
   /** The current attempt's product run. */
   runId: string | null;
   listingId: string | null;
+  sourceId: string;
+  updatedAt: string;
   lastError: string | null;
   /** For Review items: the one-line reason or failure code. */
   reason: string | null;
@@ -119,9 +125,10 @@ export interface QueueItemView {
 export interface QueueStore extends Partial<FamilyFormulaOutcomes> {
   status(channel: QueueChannel): Promise<QueueStatus>;
   items(query: QueueItemsQuery): Promise<QueueItemView[]>;
+  summary(query: QueueSummaryQuery): Promise<QueueSourceSummary[]>;
   add(input: AddToQueue): Promise<{ added: number; following?: number }>;
   setLimits(limits: QueueLimits): Promise<void>;
   pause(options: PauseQueue): Promise<void>;
   resume(channel: QueueChannel): Promise<void>;
-  requeue(input: Requeue): Promise<{ requeued: number }>;
+  requeue(input: Requeue): Promise<RequeueResult>;
 }

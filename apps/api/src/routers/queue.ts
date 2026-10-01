@@ -4,6 +4,7 @@ import {
   PauseQueueSchema,
   QueueItemsQuerySchema,
   QueueLimitsSchema,
+  QueueSummaryQuerySchema,
   RequeueSchema,
   FamilyFormulaQuerySchema,
 } from "@crawl-automation/app";
@@ -32,6 +33,11 @@ export const queueRouter = router({
     .input(QueueItemsQuerySchema.optional())
     .query(({ ctx, input }) => ctx.queue.items(QueueItemsQuerySchema.parse(input ?? {}))),
 
+  /** Current queue counts per source; requestId restricts these to that scan request's discovery batches. */
+  summary: procedure
+    .input(QueueSummaryQuerySchema)
+    .query(({ ctx, input }) => ctx.queue.summary(input)),
+
   /** Add a product list; adding the same list again adds nothing. */
   add: procedure.input(AddToQueueSchema).mutation(({ ctx, input }) => ctx.queue.add(input)),
 
@@ -49,6 +55,6 @@ export const queueRouter = router({
     .input(QueueLimitsSchema)
     .mutation(({ ctx, input }) => ctx.queue.setLimits(input)),
 
-  /** Queue completed or Review products again. */
+  /** Explicit IDs keep the existing behavior; a bounded Review filter defaults to a read-only preview. */
   requeue: procedure.input(RequeueSchema).mutation(({ ctx, input }) => ctx.queue.requeue(input)),
 });

@@ -99,9 +99,9 @@ describe.skipIf(!hasPostgres)("the shared product queue against a real PostgreSQ
     }
     await dispatch.settle(first, { state: "completed", reason: null });
     await dispatch.settle(first, { state: "review", reason: "QUEUE.RUN_FAILED" });
-    await dispatch.settle(second, { state: "review", reason: "SOURCE.GONE" });
+    await dispatch.settle(second, { state: "review", reason: "CAPTURE.NOT_FOUND" });
     const review = await store.items({ channel: "gnc", state: "review", limit: 10 });
-    expect(review.map((item) => item.reason)).toEqual(["SOURCE.GONE"]);
+    expect(review.map((item) => item.reason)).toEqual(["CAPTURE.NOT_FOUND"]);
     await expect(
       store.requeue({
         channel: "gnc",

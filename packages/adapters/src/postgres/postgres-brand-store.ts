@@ -12,6 +12,7 @@ import type { Database, Queryable } from "@crawl-automation/platform";
 import { Brand, Source, type ListQuery, type Page } from "@crawl-automation/v3-contracts";
 import type { z } from "zod";
 import { oncePerRequest } from "./request-receipt.js";
+import { PostgresBrandSources } from "./postgres-brand-sources.js";
 
 type Input<Schema extends z.ZodType> = z.infer<Schema>;
 
@@ -69,13 +70,8 @@ export class PostgresBrandStore implements BrandStore {
     return rows[0] ? toBrand(rows[0]) : null;
   }
 
-  async sources(query: Input<typeof ListSourcesSchema>): Promise<Page<Source>> {
-    const rows = await this.database.query(
-      `SELECT ${sourceColumns} FROM brand_source WHERE brand_id = $1 AND strpos(lower(url), lower($2)) > 0
-       ORDER BY created_at, id LIMIT $3 OFFSET $4`,
-      [query.brandId, query.q, query.limit + 1, query.offset],
-    );
-    return page(rows.map(toSource), query);
+  sources(query: Input<typeof ListSourcesSchema>) {
+    return new PostgresBrandSources(this.database).sources(query);
   }
 
   create(input: Input<typeof CreateBrandSchema>): Promise<Brand> {

@@ -9,17 +9,17 @@ import {
   type QueueLimits,
   type QueueStore,
   type Requeue,
+  type QueueSummaryQuery,
 } from "@crawl-automation/app";
 import type { Database, Queryable } from "@crawl-automation/platform";
 import type { FamilyFormulaOutcome, FamilyFormulaQuery } from "@crawl-automation/app";
 import { recordFamilyOutcome, familyOutcomes } from "./queue-family-queries.js";
 import { PostgresFormulaIndex } from "./postgres-formula-index.js";
 import type { FormulaQuery } from "@crawl-automation/app";
-import {
-  channelQueueItems,
-  channelQueueStatus,
-  lockChannelQueue,
-} from "./channel-queue-queries.js";
+import { channelQueueStatus, lockChannelQueue } from "./channel-queue-queries.js";
+import { PostgresQueueReader } from "./postgres-queue-reader.js";
+import { PostgresQueueRequeue } from "./postgres-queue-requeue.js";
+import { PostgresQueueSummary } from "./postgres-queue-summary.js";
 
 const sha256 = (value: unknown) => createHash("sha256").update(JSON.stringify(value)).digest("hex");
 
@@ -44,7 +44,11 @@ export class PostgresChannelQueueStore implements QueueStore {
   }
 
   items(query: QueueItemsQuery) {
-    return channelQueueItems(this.database, query);
+    return new PostgresQueueReader(this.database).items(query);
+  }
+
+  summary(query: QueueSummaryQuery) {
+    return new PostgresQueueSummary(this.database).summary(query);
   }
 
   add(input: AddToQueue): Promise<{ added: number; following?: number }> {
@@ -127,23 +131,8 @@ export class PostgresChannelQueueStore implements QueueStore {
     });
   }
 
-  requeue(input: Requeue): Promise<{ requeued: number }> {
-    return this.locked(input.channel, async (tx) => {
-      const rows = await tx.query<{ state: string }>(
-        "SELECT state FROM queue_item WHERE channel = $1 AND item_id = ANY($2::text[]) FOR UPDATE",
-        [input.channel, input.itemIds],
-      );
-      const settled = rows.every((row) => ["completed", "review", "pending"].includes(row.state));
-      if (rows.length !== new Set(input.itemIds).size || !settled) {
-        throw appErrors.create("QUEUE.REQUEUE_NOT_SETTLED");
-      }
-      await tx.query(
-        `UPDATE queue_item SET state = 'queued', run_id = NULL, reason = NULL, updated_at = clock_timestamp()
-         WHERE channel = $1 AND item_id = ANY($2::text[])`,
-        [input.channel, input.itemIds],
-      );
-      return { requeued: rows.length };
-    });
+  requeue(input: Requeue) {
+    return this.locked(input.channel, (tx) => new PostgresQueueRequeue(tx).requeue(input));
   }
 
   private locked<Result>(
