@@ -55,8 +55,10 @@ export class PostgresRecoveryLedger implements RecoveryLedger {
 
   async record(input: Parameters<RecoveryLedger["record"]>[0]): Promise<RecoveryOutcome> {
     return this.database.transaction(async (tx) => {
-      await tx.query("SELECT review_id FROM review_record WHERE review_id = $1 FOR UPDATE", [
-        input.item.reviewId,
+      // One publication per Review at a time. An advisory lock, not FOR UPDATE: the API role may only read
+      // review_record (Reviews are immutable), and any row lock needs UPDATE permission.
+      await tx.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [
+        `review-recovery:${input.item.reviewId}`,
       ]);
       await assertOriginal(tx, input.item);
       const prior = await recoveryStatus(tx, input.item.reviewId);

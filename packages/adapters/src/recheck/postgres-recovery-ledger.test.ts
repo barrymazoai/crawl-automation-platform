@@ -89,7 +89,10 @@ function databaseFixture(data: ReturnType<typeof fixture>) {
     }
     throw new Error(`Unexpected SQL: ${sql}`);
   };
-  const query = vi.fn(run);
+  // The publication's advisory lock answers nothing.
+  const query = vi.fn((sql: string, params?: readonly unknown[]) =>
+    sql.includes("pg_advisory_xact_lock") ? Promise.resolve([]) : run(sql, params),
+  );
   const typedQuery: Queryable["query"] = async <Row extends object>(
     sql: string,
     params?: readonly unknown[],
@@ -161,9 +164,7 @@ describe("recovery ledger", () => {
     expect(db.transaction).toHaveBeenCalledOnce();
     expect(await ledger.status(data.review.reviewId)).toEqual(outcome);
     expect(data.review).toEqual(before);
-    expect(
-      db.query.mock.calls.every(([sql]) => !/UPDATE|DELETE/.test(sql.replace("FOR UPDATE", ""))),
-    ).toBe(true);
+    expect(db.query.mock.calls.every(([sql]) => !/UPDATE|DELETE/.test(sql))).toBe(true);
     expect(await ledger.record(input)).toEqual(outcome);
     expect(db.receipts).toHaveLength(1);
   });
