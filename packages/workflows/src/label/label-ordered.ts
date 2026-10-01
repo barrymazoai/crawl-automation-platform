@@ -1,4 +1,4 @@
-import { isCancellation, log } from "@temporalio/workflow";
+import { isCancellation, log, patched } from "@temporalio/workflow";
 import { z } from "zod";
 import { processSource, type SourceWork } from "./label-source.js";
 import { type LoadedPlanSchema, type Source, type State } from "./label-model.js";
@@ -15,10 +15,12 @@ const ProgressSchema = z.strictObject({
   complete: z.boolean(),
   terminal: z.boolean(),
   reason: SourceFailureSchema.optional(),
+  failures: z.array(SourceFailureSchema).max(100).optional(),
 });
 
 /** One source at a time, including acquisition and OCR; only verified completeness stops fallback. */
 export async function orderedLabel(work: SourceWork, loaded: Loaded): Promise<OrderedWalk> {
+  work.run.pageVerdictFallback = patched("label-page-verdict-fallback-v1");
   const sources = sourceOrder(loaded);
   const walk: OrderedWalk = {
     ordered: true,
@@ -84,6 +86,9 @@ async function checkProgress(work: SourceWork, walk: OrderedWalk): Promise<boole
       throw identityConflict();
     }
     walk.complete = check.complete;
+    if (work.run.pageVerdictFallback && check.failures) {
+      walk.failures = check.failures;
+    }
     log.info("Label source inspected", {
       complete: check.complete,
       terminal: check.terminal,

@@ -1,5 +1,6 @@
 import type { WorkerParts } from "../container.js";
 import { guarded } from "./activity-guard.js";
+import { runOcrActivity } from "../label/ocr-activity.js";
 
 type Handler = (raw: unknown, signal: AbortSignal) => Promise<unknown>;
 
@@ -46,6 +47,6 @@ export function modelActivities(parts: WorkerParts) {
 /** OCR API calls, one per image. */
 export function ocrActivities(parts: WorkerParts) {
   return guardAll(parts, {
-    ocrFile: (raw, signal) => parts.label.models.ocrStep().run(raw, signal),
+    ocrFile: (raw, signal) => runOcrActivity(parts.label.models, raw, signal),
   });
 }

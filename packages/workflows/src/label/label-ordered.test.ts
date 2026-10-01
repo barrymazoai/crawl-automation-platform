@@ -3,6 +3,7 @@ const mocks = vi.hoisted(() => ({ process: vi.fn(), log: vi.fn() }));
 vi.mock("@temporalio/workflow", async () => ({
   ApplicationFailure: (await import("@temporalio/common")).ApplicationFailure,
   isCancellation: () => false,
+  patched: () => true,
   log: { info: mocks.log, warn: vi.fn() },
 }));
 vi.mock("./label-source.js", () => ({ processSource: mocks.process }));

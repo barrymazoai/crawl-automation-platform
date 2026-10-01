@@ -13,6 +13,7 @@ export interface Walk {
   ordered?: true;
   complete?: boolean;
   reason?: { sourceId: string; code: string; executionFact: string };
+  failures?: { sourceId: string; code: string; executionFact: string }[];
 }
 
 /**

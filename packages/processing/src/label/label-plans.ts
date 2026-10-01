@@ -100,7 +100,7 @@ export class LabelPlans {
     }
     let result: LabelSourceResult;
     if (resolution.status === "not_matched") {
-      if (source.kind !== "file-image") {
+      if (source.kind !== "file-image" && !request.input.sourcePolicy) {
         throw labelFailure("CHANNEL.LABEL_IDENTITY_CONFLICT");
       }
       result = { ...resolution, input: request };

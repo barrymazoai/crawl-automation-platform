@@ -23,7 +23,8 @@ export const OcrApiSettingsSchema = z.strictObject({
   provider: VersionTagSchema,
   /** Enable only after every backend on this endpoint supports durable job control. */
   jobControl: z.boolean().default(false),
-  timeoutMs: z.number().int().min(100).max(60_000).default(45_000),
+  /** Includes upload and queue wait; tune with the activity deadline and stop-verification budget. */
+  timeoutMs: z.number().int().min(100).max(600_000).default(45_000),
   /** Covers the service's 90 s inference hard limit plus 30 s for shutdown and observation. */
   stopVerificationTimeoutMs: z.number().int().min(100).max(600_000).default(120_000),
   stopVerificationPollMs: z.number().int().min(10).max(5_000).default(1_000),

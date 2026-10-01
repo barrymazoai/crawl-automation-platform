@@ -15,7 +15,7 @@ import { ocrClient } from "./ocr-client.js";
 export interface LabelModels {
   textStep(): Promise<TextStep>;
   visionStep(): Promise<VisionStep>;
-  ocrStep(): OcrStep;
+  ocrStep(verifiedFailures?: boolean): OcrStep;
   close(): Promise<void>;
 }
 
@@ -63,22 +63,9 @@ const missing = (part: string) =>
 export function labelModels(stores: LabelStores): LabelModels {
   const { settings, local, remote, reviews, artifacts } = stores;
   const clients = modelClients(settings);
-  const ocrStep = once(() => {
-    if (!settings.ocrApi) {
-      throw missing("ocrApi");
-    }
-    const { nodeId, storageId } = settings;
-    const api = measuredProvider(ocrClient(settings.ocrApi), "recognize", "ocr");
-    return new OcrStep({
-      api,
-      artifacts,
-      results: stores.ocrResults,
-      remote,
-      reviews,
-      nodeId,
-      storageId,
-    });
-  });
+  const legacyOcr = once(() => createOcrStep(stores, false));
+  const verifiedOcr = once(() => createOcrStep(stores, true));
+  const ocrStep = (verifiedFailures = false) => (verifiedFailures ? verifiedOcr() : legacyOcr());
   const textStep = once(async () => {
     const model = measuredProvider(await clients.text(), "interpret", "model-text");
     return new TextStep({ model, results: stores.textResults, reviews, nodeId: settings.nodeId });
@@ -89,4 +76,26 @@ export function labelModels(stores: LabelStores): LabelModels {
     return new VisionStep({ model, results, ocrText, artifacts, local, remote, reviews });
   });
   return { textStep, visionStep, ocrStep, close: clients.close };
+}
+
+function createOcrStep(stores: LabelStores, verifiedFailures: boolean): OcrStep {
+  const { settings, artifacts, remote, reviews } = stores;
+  if (!settings.ocrApi) {
+    throw missing("ocrApi");
+  }
+  const { nodeId, storageId } = settings;
+  const api = measuredProvider(
+    ocrClient(settings.ocrApi, globalThis.fetch, verifiedFailures),
+    "recognize",
+    "ocr",
+  );
+  return new OcrStep({
+    api,
+    artifacts,
+    results: stores.ocrResults,
+    remote,
+    reviews,
+    nodeId,
+    storageId,
+  });
 }

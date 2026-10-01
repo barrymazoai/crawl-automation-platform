@@ -43,7 +43,7 @@ export const ProductEvidenceJoinSchema = z.strictObject({ manifest: ProductEvide
     z.strictObject({ id: ExecutionIdSchema, status: z.literal("registered") }),
     z.strictObject({ id: ExecutionIdSchema, status: z.literal("unresolved") }),
     z.strictObject({ id: ExecutionIdSchema, status: z.literal("rejected") }),
-    z.strictObject({ id: ExecutionIdSchema, status: z.literal("not_matched") }),
+    z.strictObject({ id: ExecutionIdSchema, status: z.literal("not_matched"), reason: z.string().min(1).max(120).optional() }),
     z.strictObject({ id: ExecutionIdSchema, status: z.literal("review"), reviewId: ExecutionIdSchema }),
   ])).max(100),
 });

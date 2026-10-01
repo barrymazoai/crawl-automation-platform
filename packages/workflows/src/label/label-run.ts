@@ -22,6 +22,8 @@ const QUARANTINED = new Set<string>([
 export interface LabelRun {
   entry: LabelWorkflowInput;
   stream: LabelStream;
+  /** Set only by the patched, ordered source walk. */
+  pageVerdictFallback?: boolean;
   call(kind: QueueKind, name: string, value: unknown): Promise<unknown>;
   waiting: string[];
   quarantined: string[];

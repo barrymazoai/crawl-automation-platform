@@ -4,9 +4,10 @@ import { OcrApi, OcrHttpJobControl, type OcrApiSettings } from "@crawl-automatio
 export function ocrClient(
   settings: OcrApiSettings,
   fetch: (request: Request) => Promise<Response> = globalThis.fetch,
+  verifiedFailures = true,
 ) {
   const jobControl = settings.jobControl
     ? new OcrHttpJobControl({ baseUrl: settings.baseUrl, fetch })
     : undefined;
-  return new OcrApi(settings, { fetch, ...(jobControl ? { jobControl } : {}) });
+  return new OcrApi(settings, { fetch, verifiedFailures, ...(jobControl ? { jobControl } : {}) });
 }

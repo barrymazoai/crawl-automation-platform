@@ -1,3 +1,4 @@
+import { readSourceState } from "./ordered-source-state.js";
 import { isDeepStrictEqual } from "node:util";
 import {
   ReviewRecordSchema,
@@ -58,16 +59,7 @@ async function readState(
 ) {
   const { source, state } = at;
   const { plans, deps, evidence, request, signal } = reading;
-  if (["unresolved", "rejected"].includes(state.status)) {
-    evidence.terminal = true;
-    evidence.reasons.push({
-      progress: 0,
-      failure: {
-        sourceId: source.id,
-        code: "CHANNEL.LABEL_PREPARATION_UNVERIFIED",
-        executionFact: "unknown",
-      },
-    });
+  if (readSourceState(reading, at)) {
     return;
   }
   if (state.status === "review" && (await preparationReview(reading, { source, state }))) {
@@ -79,6 +71,10 @@ async function readState(
     if (state.status !== "not_matched") {
       throw labelFailure("CHANNEL.LABEL_IDENTITY_CONFLICT");
     }
+    evidence.reasons.push({
+      progress: 1,
+      failure: { sourceId: source.id, code: "CHANNEL.LABEL_NO_SOURCE", executionFact: "executed" },
+    });
     return;
   }
   evidence.sources.push(result.source);

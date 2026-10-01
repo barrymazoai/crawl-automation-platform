@@ -179,3 +179,15 @@ export async function finishLabel(
   }
   return saved.data;
 }
+
+/** Keep all known source causes, while the furthest useful evidence remains the primary reason. */
+export function orderedReviewFailures(walk: Walk) {
+  const failures = new Map(walk.failures?.map((failure) => [failure.sourceId, failure]));
+  if (walk.reason) {
+    failures.set(walk.reason.sourceId, walk.reason);
+  }
+  return {
+    ...(failures.size ? { failures: [...failures.values()] } : {}),
+    ...(walk.reason ? { primaryFailure: walk.reason } : {}),
+  };
+}

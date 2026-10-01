@@ -1,3 +1,5 @@
+import { isLabelCoreVerdict } from "@crawl-automation/platform/errors/label-core";
+import { failureCode } from "../failure-code.js";
 import { ExecutionIdSchema, observationIdentity } from "@crawl-automation/v3-contracts";
 import { isCancellation } from "@temporalio/workflow";
 import { ocrImage, type OcrOutcome } from "./label-image-ocr.js";
@@ -36,6 +38,16 @@ export async function processSource(work: SourceWork, source: Source): Promise<S
       throw error;
     }
     noteSourceFailure(work.run, source.id, error);
+    // Once a model task is issued, its failure can never be treated as a pure parser verdict.
+    const code = failureCode(error);
+    if (
+      work.run.pageVerdictFallback &&
+      source.kind === "page" &&
+      !work.issued.has(source.id) &&
+      isLabelCoreVerdict(code)
+    ) {
+      return { id: source.id, status: "not_matched", reason: code };
+    }
     return stateOf(source, "unresolved");
   }
 }
@@ -70,8 +82,9 @@ async function labelTask(
   }
   if (result.status === "not_matched") {
     const unmatched =
-      evidence.kind === "image" &&
-      (evidence.selection as { status?: string }).status === "not_matched";
+      evidence.kind === "page"
+        ? run.pageVerdictFallback
+        : (evidence.selection as { status?: string }).status === "not_matched";
     return stateOf(source, unmatched ? "not_matched" : "rejected");
   }
   const next = result.source;

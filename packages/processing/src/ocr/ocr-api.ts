@@ -1,7 +1,6 @@
 import { randomUUID } from "node:crypto";
 import createClient, { type Client } from "openapi-fetch";
 import {
-  isAppError,
   provePermitExecutionStopped,
   recordPermitExecution,
   verifyBytes,
@@ -14,6 +13,7 @@ import {
 } from "@crawl-automation/v3-contracts";
 import type { paths } from "./api/ocr-api.generated.js";
 import { ocrFailure } from "./ocr-errors.js";
+import { verifiedOcrFailure } from "./ocr-verified-failure.js";
 import { ocrCompatibility, type OcrApiSettings } from "./ocr-api-settings.js";
 import {
   verifyOcrStop,
@@ -27,6 +27,8 @@ type OcrFile = OcrInput["file"];
 interface OcrTransport {
   fetch?: (request: Request) => Promise<Response>;
   jobControl?: OcrJobControl;
+  /** False only for OCR activities scheduled before ocr-verified-failure-v1. */
+  verifiedFailures?: boolean;
 }
 
 const extensions: Record<string, string> = {
@@ -44,6 +46,7 @@ export class OcrApi {
   readonly supported: ProcessingCompatibility;
   private readonly client: Client<paths>;
   private readonly jobControl: OcrJobControl | undefined;
+  private readonly verifiedFailures: boolean;
 
   /** `transport.fetch` replaces the global fetch, e.g. with a recorded answer in tests. */
   constructor(
@@ -52,8 +55,9 @@ export class OcrApi {
   ) {
     this.provider = settings.provider;
     this.supported = ocrCompatibility(settings);
-    const { jobControl, ...clientTransport } = transport;
+    const { jobControl, verifiedFailures = true, ...clientTransport } = transport;
     this.jobControl = jobControl;
+    this.verifiedFailures = verifiedFailures;
     this.client = createClient<paths>({ baseUrl: settings.baseUrl, ...clientTransport });
   }
 
@@ -80,10 +84,7 @@ export class OcrApi {
       return output;
     } catch (error) {
       const cleanup = await this.stopAndVerify(identity);
-      if (isAppError(error)) {
-        error.details["cleanup"] = cleanup;
-      }
-      throw error;
+      throw verifiedOcrFailure(error, cleanup, this.verifiedFailures);
     }
   }
 

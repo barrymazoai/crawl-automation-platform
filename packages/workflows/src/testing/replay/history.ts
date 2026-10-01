@@ -4,6 +4,7 @@ import { Worker, type WorkerOptions } from "@temporalio/worker";
 import { expect } from "vitest";
 import {
   labelNoSourceMarker,
+  labelPageVerdictMarker,
   pipelineMarkers,
   stopProofMarker,
   type PatchMarker,
@@ -62,6 +63,7 @@ export function expectMarkers(history: History, expected: readonly PatchMarker[]
   const markers = [
     ...pipelineMarkers,
     labelNoSourceMarker,
+    labelPageVerdictMarker,
     "formula-family-capture-v1",
     "brand-listing-gap-v1",
     "browser-scan-permit-v1",
@@ -69,15 +71,21 @@ export function expectMarkers(history: History, expected: readonly PatchMarker[]
     "brand-listing-cooldown-v1",
     stopProofMarker,
   ] as const;
-  const recorded = (history.events ?? []).flatMap((event) =>
-    Object.values(event.markerRecordedEventAttributes?.details ?? {}).flatMap(
-      (values) => values.payloads?.map((value) => Buffer.from(value.data ?? []).toString()) ?? [],
+  const found = markers.filter((marker) => hasMarker(history, marker));
+  expect(found).toEqual(markers.filter((marker) => expected.includes(marker)));
+}
+
+/** Patch names are stored as encoded payloads, so a plain text search of the history never finds them. */
+export function hasMarker(history: History, marker: PatchMarker): boolean {
+  return (history.events ?? []).some((event) =>
+    Object.values(event.markerRecordedEventAttributes?.details ?? {}).some((values) =>
+      values.payloads?.some((value) =>
+        Buffer.from(value.data ?? [])
+          .toString()
+          .includes(`"${marker}"`),
+      ),
     ),
   );
-  const found = markers.filter((marker) =>
-    recorded.some((payload) => payload.includes(`"${marker}"`)),
-  );
-  expect(found).toEqual(markers.filter((marker) => expected.includes(marker)));
 }
 
 export function scheduledActivities(history: History): string[] {

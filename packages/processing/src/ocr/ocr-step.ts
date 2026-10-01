@@ -145,7 +145,14 @@ export class OcrStep extends ProcessingStep<
       fact,
       evidenceKey: ocrKeys.intent(input),
       blockedBy: null,
-      error: { name: "OcrStageFailure", details: { code, executionFact: fact } },
+      error: {
+        name: "OcrStageFailure",
+        details: {
+          ...(isAppError(failure.error) ? failure.error.details : {}),
+          code,
+          executionFact: fact,
+        },
+      },
       candidate: attempt.candidate,
       inspection: { kind: "ocr-result", input },
     });

@@ -16,6 +16,10 @@
       "types": "./src/errors/resource-gate-errors.ts",
       "import": "./src/errors/resource-gate-errors.ts"
     },
+    "./errors/label-core": {
+      "types": "./src/errors/label-core-errors.ts",
+      "import": "./src/errors/label-core-errors.ts"
+    },
     "./errors/activity": {
       "types": "./src/errors/activity-errors.ts",
       "import": "./src/errors/activity-errors.ts"

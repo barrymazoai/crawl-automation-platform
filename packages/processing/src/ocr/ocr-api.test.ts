@@ -104,6 +104,16 @@ describe("OCR API settings", () => {
   const valid = (baseUrl: string) =>
     OcrApiSettingsSchema.safeParse({ baseUrl, provider: "x/1" }).success;
 
+  it("keeps the timeout default but allows queue wait plus the 90 s server deadline", () => {
+    const settings = OcrApiSettingsSchema.parse({ baseUrl: BASE_URL, provider: "test/1" });
+    expect(settings.timeoutMs).toBe(45_000);
+    expect(OcrApiSettingsSchema.parse({ ...settings, timeoutMs: 180_000 }).timeoutMs).toBe(180_000);
+    expect(OcrApiSettingsSchema.safeParse({ ...settings, timeoutMs: 600_001 }).success).toBe(false);
+    expect(ocrCompatibility({ ...settings, timeoutMs: 180_000 })).toEqual(
+      ocrCompatibility(settings),
+    );
+  });
+
   it.each(addresses.allowed)("allow %s", (address) => expect(valid(address)).toBe(true));
   it.each(addresses.refused)("refuse %s", (address) => expect(valid(address)).toBe(false));
 

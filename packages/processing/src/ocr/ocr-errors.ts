@@ -15,6 +15,7 @@ export const ocrErrors = defineErrors({
   "OCR.INPUT_INTEGRITY": artifact("The image bytes do not match their reference."),
   "OCR.CANCELLED": processing("The OCR task was cancelled."),
   "OCR.TIMEOUT": processing("The OCR API did not answer in time."),
+  "OCR.JOB_FAILED": processing("The OCR job stopped without a usable response."),
   "OCR.RATE_LIMIT": processing("The OCR API refused the call as too many."),
   "OCR.HTTP_STATUS": processing("The OCR API answered with an error status."),
   "OCR.PROTOCOL": processing("The OCR API answer is not the expected JSON."),

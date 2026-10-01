@@ -124,8 +124,11 @@ function progress(request: OrderedProgress, evidence: OrderedEvidence) {
       }
     }
   }
-  const reason = reasons.sort((left, right) => right.progress - left.progress)[0]?.failure;
-  return { ...base, ...(reason ? { reason } : {}) };
+  const reason = [...reasons].sort((left, right) => right.progress - left.progress)[0]?.failure;
+  return {
+    ...base,
+    ...(reason ? { reason, failures: reasons.map((entry) => entry.failure) } : {}),
+  };
 }
 
 function candidateProgress(candidate: OrderedEvidence["entries"][number]["candidate"]) {
@@ -151,7 +154,7 @@ function assertCoverage(loaded: LoadedPlan, states: { id: string }[]) {
 
 function decisionsFor(
   loaded: LoadedPlan,
-  states: { id: string; status: string }[],
+  states: { id: string; status: string; reason?: string | undefined }[],
   selected: Set<string>,
 ) {
   const eligible = new Set(orderedSources(loaded));
@@ -164,6 +167,6 @@ function decisionsFor(
         ? "no_label_section"
         : state.status === "not_started"
           ? "complete_label_already_selected"
-          : state.status,
+          : (state.reason ?? state.status),
   }));
 }

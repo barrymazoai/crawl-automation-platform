@@ -12,11 +12,14 @@ export const pipelineMarkers = [
   "label-heartbeat-v1",
 ] as const;
 export const labelMarkers = ["resource-gate-v1", "label-heartbeat-v1"] as const;
+export const labelPageVerdictMarker = "label-page-verdict-fallback-v1";
 export const labelNoSourceMarker = "label-no-source-review-v1";
 export const stopProofMarker = "resource-execution-stop-proof-v1";
 export type PatchMarker =
+  | "ocr-verified-failure-v1"
   | "product-enrichment-v1"
   | (typeof pipelineMarkers)[number]
+  | typeof labelPageVerdictMarker
   | typeof labelNoSourceMarker
   | typeof stopProofMarker
   | "formula-family-capture-v1"

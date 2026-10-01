@@ -7,6 +7,7 @@ import {
   finishLabel,
   labelManifest,
   permitFailures,
+  orderedReviewFailures,
   reviewLabel,
 } from "./label-finish.js";
 import {
@@ -107,7 +108,7 @@ async function finish(
     return reviewLabel(work.run, {
       states: [...states, ...walk.notStarted],
       code: "CHANNEL.LABEL_NO_SOURCE",
-      ...(walk.reason ? { failures: [walk.reason], primaryFailure: walk.reason } : {}),
+      ...orderedReviewFailures(walk),
     });
   }
   const outcome = await labelManifest(work.run, walk);

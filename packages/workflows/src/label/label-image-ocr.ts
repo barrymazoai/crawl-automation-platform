@@ -7,7 +7,7 @@ import {
   type OcrActivityOutcome,
   type OcrInput,
 } from "@crawl-automation/v3-contracts";
-import { isCancellation } from "@temporalio/workflow";
+import { isCancellation, patched } from "@temporalio/workflow";
 import { isAdmissionFailure, noteSourceFailure, type LabelRun } from "./label-run.js";
 import { sameJson } from "./same.js";
 import { ImagePrepareSchema, type ImageSource, type State, type Status } from "./label-model.js";
@@ -80,6 +80,8 @@ async function recognized(
     await run.call("activities", "resolveOcrReceipt", { input: task, outcome }),
   );
   if (receipt.status === "review") {
+    // A verified OCR failure stays a Review. Ordered evidence re-reads its execution fact/code
+    // and can continue to the next image; unknown or unverified Reviews still stop the walk.
     return receipt.operationId === task.operationId
       ? {
           kind: "state",
@@ -105,7 +107,10 @@ async function recognized(
 /** The OCR call; a lost outcome leaves the receipt to inspect, and a permit failure stops the product. */
 async function ocrOnce(run: LabelRun, task: OcrInput): Promise<OcrActivityOutcome | null> {
   try {
-    return OcrActivityOutcomeSchema.parse(await run.call("ocr", "ocrFile", task));
+    const request = patched("ocr-verified-failure-v1")
+      ? { input: task, verifiedFailure: true }
+      : task;
+    return OcrActivityOutcomeSchema.parse(await run.call("ocr", "ocrFile", request));
   } catch (error) {
     if (isCancellation(error) || isAdmissionFailure(error) || isHeartbeatFailure(error)) {
       throw error;

@@ -48,8 +48,11 @@ it.each([undefined, false, true])(
     const client = ocrClient(settings, fetch);
     await expect(client.recognize(file, bytes, new AbortController().signal)).rejects.toMatchObject(
       {
-        code: "OCR.RESPONSE_UNKNOWN",
-        details: { cleanup: { stopped: jobControl === true } },
+        code: jobControl ? "OCR.JOB_FAILED" : "OCR.RESPONSE_UNKNOWN",
+        details: {
+          executionFact: jobControl ? "executed" : "unknown",
+          cleanup: { stopped: jobControl === true },
+        },
       },
     );
     expect(fetch).toHaveBeenCalledTimes(jobControl ? 2 : 1);
