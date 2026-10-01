@@ -1,3 +1,5 @@
+import { PostgresBrandScans } from "@crawl-automation/adapters";
+import { checkScanCancellation } from "@crawl-automation/app";
 import { BrowserScanInputSchema, ProductPipelineInputSchema } from "@crawl-automation/workflows";
 import type { WorkerParts } from "../container.js";
 import { guarded } from "./activity-guard.js";
@@ -20,9 +22,12 @@ export function browserActivities(parts: WorkerParts) {
         capture: _capture,
         ...request
       } = BrowserScanInputSchema.parse(raw);
+      const checkpoint = () =>
+        checkScanCancellation(new PostgresBrandScans(parts.database), request.scanId);
+      await checkpoint();
       const { sourceUrl } = request;
       await parts.browser.ensureStore(sourceUrl, signal);
-      return parts.browser.scanner.scan(request, signal);
+      return parts.browser.scanner.scan({ ...request, checkpoint }, signal);
     },
   };
   return Object.fromEntries(

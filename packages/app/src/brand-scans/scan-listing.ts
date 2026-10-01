@@ -23,6 +23,7 @@ export interface ScanReaders {
   registry: ChannelRegistry;
   pages: ListingPageReader;
   browsers: BrowserBrandScanners;
+  checkpoint?: ((scanId: string) => Promise<void>) | undefined;
   channels?: Partial<Record<ChannelId, { requestIntervalMs: number }>>;
 }
 
@@ -72,11 +73,12 @@ export async function readListing(
   signal: AbortSignal,
 ): Promise<BrandListing> {
   const selected = sourceReader(readers, scan.source.channel as ScanChannel, scan.source.url);
-  const url = selected.reader.sourceUrl(scan.source.url);
   if (selected.capture === "http") {
+    await readers.checkpoint?.(scan.scanId);
     return readBrandListing(
       {
         scan,
+        checkpoint: () => readers.checkpoint?.(scan.scanId) ?? Promise.resolve(),
         adapter: selected.adapter,
         reader: selected.reader,
         pages: readers.pages,
@@ -87,9 +89,10 @@ export async function readListing(
   }
   const request = {
     scanId: scan.scanId,
-    sourceUrl: url,
+    sourceUrl: selected.reader.sourceUrl(scan.source.url),
     sourceId: scan.source.sourceId,
   };
+  // Reattach remote browser executions even after cancellation; only their worker can prove page cleanup.
   const found = await selected.reader.scan(request, signal);
   const products = found.pages.flatMap((page) => page.products);
   const unique = new Map(
@@ -112,6 +115,7 @@ async function familyMembers(work: ListingWork, family: ListedProduct, signal: A
   if (!reader.familyMembers) {
     return { members: [] as ListedProduct[], credits: 0 };
   }
+  await work.checkpoint?.();
   const read = await work.pages.read(
     {
       ...listingTarget(work),

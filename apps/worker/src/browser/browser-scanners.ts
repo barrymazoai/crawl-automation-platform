@@ -28,6 +28,7 @@ export class BrowserScanners {
   }
 
   async scan(request: Parameters<BrowserBrandScanner["scan"]>[0], signal: AbortSignal) {
+    await request.checkpoint?.();
     const capability = this.select(request.sourceUrl);
     await capability.prepare?.(request.sourceUrl, signal);
     return capability.scanner.scan(request, signal);

@@ -90,9 +90,9 @@ const legacyMigrations = [
 ];
 
 describe("release SQL catalog", () => {
-  it("pins all 001–044 names and hashes in order", async () => {
+  it("pins all 001–045 names and hashes in order", async () => {
     const catalog = await loadSqlCatalog(release);
-    expect(catalog).toHaveLength(44);
+    expect(catalog).toHaveLength(45);
     expect(catalog.map(({ name, sha256 }) => [name, sha256])).toEqual([
       ...legacyMigrations,
       [
@@ -144,8 +144,12 @@ describe("release SQL catalog", () => {
         "044_queue_operator_queries.sql",
         "e5b9b181360a8708030f63d4bd55982515985a21ba7d823368dc63c2ece96d8f",
       ],
+      [
+        "045_brand_scan_cancellation.sql",
+        "b26e669f05005261632ca7e9ba7f5dce3a0c11fe17a1373f6e2697df1ad5516f",
+      ],
     ]);
-    expect(catalog.at(-1)?.name).toBe("044_queue_operator_queries.sql");
+    expect(catalog.at(-1)?.name).toBe("045_brand_scan_cancellation.sql");
   });
 
   it("preserves bytes and hashes exactly like the old UTF-8 tool", async () => {

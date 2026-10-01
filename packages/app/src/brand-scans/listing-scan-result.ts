@@ -8,7 +8,7 @@ export function listingScanResult(
   return {
     state: listing.full
       ? "complete"
-      : listing.code && !listing.products.length
+      : listing.code && !listing.products.length && listing.soldHere !== false
         ? "review"
         : "partial",
     pages: listing.pages.length,

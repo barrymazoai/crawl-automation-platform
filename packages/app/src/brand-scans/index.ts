@@ -7,3 +7,4 @@ export * from "./scan-model.js";
 export type { ScanReaders } from "./scan-listing.js";
 export * from "./run-scans.js";
 export * from "./scan-permits.js";
+export * from "./scan-cancellation.js";

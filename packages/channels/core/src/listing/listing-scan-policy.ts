@@ -8,6 +8,8 @@ export const ListingScanMetricsSchema = z.object({
   /** Successful observations and catalogue agreement are distinct; absent in older records. */
   readsFinished: z.boolean().optional(),
   catalogueAgreement: z.boolean().optional(),
+  /** Compatible subsets still differ; only stable, individually complete reads prove the catalogue. */
+  catalogueStable: z.boolean().optional(),
   attempts: z.array(
     z.object({
       read: z.string(),

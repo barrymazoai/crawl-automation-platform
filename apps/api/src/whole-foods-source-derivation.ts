@@ -1,4 +1,4 @@
-import { amazonBrandFilterId } from "@crawl-automation/channel-amazon";
+import { amazonBrandFilterId, amazonBrandSearchName } from "@crawl-automation/channel-amazon";
 import { wholeFoodsBrandSearchUrl } from "@crawl-automation/channels-wholefoods";
 import { brandScanErrors } from "@crawl-automation/channels-core";
 import { wholeFoodsErrors } from "@crawl-automation/channels-wholefoods";
@@ -10,13 +10,15 @@ const addressRefusals: ReadonlySet<string> = new Set([
   wholeFoodsErrors.code("WHOLEFOODS.URL"),
 ]);
 
-/** The URL itself must be a valid Amazon Brand-filter search. Source names are existing brand identities. */
+/** Source keywords identify the retail brand; the brand record may name its holding company. */
 export function wholeFoodsSourceFromAmazon(source: ScanSource): string | null {
+  if (source.channel !== "amazon") {
+    return null;
+  }
   try {
+    const name = amazonBrandSearchName(source.url);
     const amazonBrandId = amazonBrandFilterId(source.url);
-    return amazonBrandId
-      ? wholeFoodsBrandSearchUrl({ name: source.brandName, amazonBrandId })
-      : null;
+    return amazonBrandId && name ? wholeFoodsBrandSearchUrl({ name, amazonBrandId }) : null;
   } catch (error) {
     if (!isAppError(error) || !addressRefusals.has(error.code)) {
       throw error;

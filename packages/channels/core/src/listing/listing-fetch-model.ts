@@ -11,6 +11,8 @@ export interface ListingPageRequest {
   answer: "html" | "json";
   origins: readonly string[];
   maxBytes: number;
+  /** Bounds the paid request only; a received original is still fully archived. */
+  timeoutMs?: number;
   /** Reader-required transport options, applied after configured channel defaults. */
   options?: Partial<ScraperApiOptions>;
 }

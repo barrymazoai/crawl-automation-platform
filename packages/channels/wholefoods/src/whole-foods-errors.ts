@@ -4,6 +4,10 @@ const source = (message: string) => ({ category: "SOURCE" as const, message });
 
 /** Errors of reading Whole Foods pages. */
 export const wholeFoodsErrors = defineErrors({
+  "WHOLEFOODS.EMPTY_EXHAUSTED": source("The allowed empty-answer attempts were exhausted."),
+  "WHOLEFOODS.BRAND_NOT_LISTED": source(
+    "No products found for this brand query at this store; the canary returned products.",
+  ),
   "WHOLEFOODS.SEARCH_THROTTLED": source(
     "The brand search and canary could not establish a trustworthy result at this store.",
   ),

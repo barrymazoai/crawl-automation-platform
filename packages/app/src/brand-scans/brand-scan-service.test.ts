@@ -52,6 +52,7 @@ const source = (overrides: Partial<ScanSource> = {}): ScanSource => ({
 
 function service(sources: ScanSource[], adapters = registry) {
   const store = {
+    cancel: vi.fn(async () => ({ cancelled: 1, cancellationRequested: 2 })),
     sources: vi.fn(async (ids: readonly string[]) =>
       sources.filter((item) => ids.includes(item.sourceId)),
     ),
@@ -177,4 +178,13 @@ describe("brand source import", () => {
       refused: [{ name: "Nordic Naturals", code: "BRAND_SCAN.URL" }],
     });
   });
+});
+
+it("validates cancellation selectors and returns separate terminal and requested counts", async () => {
+  const { scans, store } = service([]);
+  const input = { requestId, channel: "wholefoods" };
+  await expect(scans.cancel(input)).resolves.toEqual({ cancelled: 1, cancellationRequested: 2 });
+  expect(store.cancel).toHaveBeenCalledWith(input);
+  expect(() => scans.cancel({})).toThrow();
+  expect(store.cancel).toHaveBeenCalledOnce();
 });

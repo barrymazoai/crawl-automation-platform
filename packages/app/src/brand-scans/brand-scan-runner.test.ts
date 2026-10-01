@@ -21,7 +21,6 @@ const product = (id: string, kind: ListedProduct["kind"] = "product"): ListedPro
   title: null,
   kind,
 });
-
 function reader(options: { full?: boolean; maxPages?: number } = {}): BrandScanReader {
   return {
     sourceUrl: (url) => url,
@@ -42,7 +41,6 @@ function reader(options: { full?: boolean; maxPages?: number } = {}): BrandScanR
     familyMembers: (page) => (page.html ? page.html.split(",").map((id) => product(id)) : []),
   };
 }
-
 function adapter(
   scanReader: BrandScanReader,
   channel: ChannelAdapter["id"] = "gnc",
@@ -58,7 +56,6 @@ function adapter(
     },
   };
 }
-
 const scan: ScanRecord = {
   scanId: "5f7a3c9e-6f0b-4c1e-9a3b-111111111111",
   requestId: "5f7a3c9e-6f0b-4c1e-9a3b-222222222222",
@@ -77,7 +74,6 @@ const scan: ScanRecord = {
   startedAt: "2026-09-29T00:00:01.000Z",
   finishedAt: null,
 };
-
 function setup(input: {
   bodies: Record<string, string>;
   known?: string[];
@@ -94,6 +90,7 @@ function setup(input: {
     variantId: null,
   }));
   const store = {
+    isCancellationRequested: vi.fn(async () => false),
     claim: vi.fn(async () => [
       {
         ...scan,
@@ -144,9 +141,8 @@ function setup(input: {
   const runner = new BrandScanRunner(deps);
   return { runner, finished, queue, lists, listings, pages, store, amazonQueue, deps };
 }
-
 const signal = () => new AbortController().signal;
-it.each([undefined, false, true])(
+it.each([undefined, false, true, "compatible"] as const)(
   "gates WF missing-listing revisits on explicit agreement %s",
   async (agreement) => {
     const fixture = setup({ bodies: {}, channel: "wholefoods", known: ["missing"] });
@@ -168,7 +164,11 @@ it.each([undefined, false, true])(
               unionSize: 1,
               ...(agreement === undefined
                 ? {}
-                : { readsFinished: true, catalogueAgreement: agreement }),
+                : {
+                    readsFinished: true,
+                    catalogueAgreement: agreement === "compatible" || agreement,
+                    catalogueStable: agreement !== "compatible",
+                  }),
             },
           }),
         },
@@ -177,7 +177,7 @@ it.each([undefined, false, true])(
     await runner.tick(signal());
     expect(fixture.lists[0]?.products).toHaveLength(1);
     expect(fixture.finished[0]?.full).toBe(agreement === true);
-    expect(fixture.listings.requestRevisits).toHaveBeenCalledTimes(agreement ? 1 : 0);
+    expect(fixture.listings.requestRevisits).toHaveBeenCalledTimes(agreement === true ? 1 : 0);
   },
 );
 
@@ -200,7 +200,6 @@ describe("brand scan runner", () => {
       expect(fixture.finished[0]).toMatchObject({ state: "complete", nameResolution });
     },
   );
-
   it("queues all Amazon scan products once, retains capped=true and never requests missing revisits", async () => {
     const bodies = Object.fromEntries(
       Array.from({ length: 7 }, (_, index) => [
@@ -240,7 +239,6 @@ describe("brand scan runner", () => {
     });
     expect(fixture.listings.requestRevisits).not.toHaveBeenCalled();
   });
-
   it("stops an Amazon scan on an empty page and preserves earlier products", async () => {
     const fixture = setup({
       channel: "amazon",
@@ -261,7 +259,6 @@ describe("brand scan runner", () => {
     expect(vi.mocked(fixture.amazonQueue.add).mock.calls[0]?.[1][0]?.listingId).toBe("B0016B5U20");
     expect(fixture.listings.requestRevisits).not.toHaveBeenCalled();
   });
-
   it("queues missing Amazon products through the same Amazon bridge only after a full scan", async () => {
     const fixture = setup({
       channel: "amazon",
@@ -278,7 +275,6 @@ describe("brand scan runner", () => {
     expect(fixture.finished[0]).toMatchObject({ full: true, capped: false, missing: 1 });
     expect(fixture.listings.requestRevisits).not.toHaveBeenCalled();
   });
-
   it("fails before any paid page read if the Amazon queue bridge is not configured", async () => {
     const fixture = setup({ channel: "amazon", bodies: {} });
     const { amazonQueue: _amazon, ...deps } = fixture.deps;
@@ -289,7 +285,6 @@ describe("brand scan runner", () => {
       code: "BRAND_SCAN.NOT_CONFIGURED",
     });
   });
-
   it("queues every listed product in one list, and revisits known listings a full scan no longer shows", async () => {
     const bodies = {
       "page-1": JSON.stringify({ ids: ["100001", "100002"], next: 2 }),
@@ -317,7 +312,6 @@ describe("brand scan runner", () => {
       credits: 2,
     });
   });
-
   it("expands families into their members; a family with no members makes the scan not full", async () => {
     const bodies = {
       "page-1": JSON.stringify({ ids: ["100001", "fam-shake", "fam-empty"], next: null }),
@@ -336,7 +330,6 @@ describe("brand scan runner", () => {
     });
     expect(fixture.listings.requestRevisits).not.toHaveBeenCalled();
   });
-
   it("never suggests delisting after a partial scan", async () => {
     const bodies = { "page-1": JSON.stringify({ ids: ["100001"], next: null }) };
     const fixture = setup({ bodies, known: ["999999"], scanReader: reader({ full: false }) });
@@ -366,7 +359,6 @@ describe("brand scan runner", () => {
     expect(fixture.finished[0]).toMatchObject({ state: "review", code });
     expect(fixture.queue.add).not.toHaveBeenCalled();
   });
-
   it("reads a browser channel with its configured browser scanner; a list not scrolled to its end is partial", async () => {
     const whole = { ...scan, source: { ...scan.source, channel: "wholefoods" } };
     const browser = {
@@ -385,7 +377,6 @@ describe("brand scan runner", () => {
     expect(fixture.finished[0]).toMatchObject({ state: "partial", full: false, soldHere: true });
     expect(fixture.listings.requestRevisits).not.toHaveBeenCalled();
   });
-
   it("refuses a browser channel with no browser configured, as a Review with a clear code", async () => {
     const whole = { ...scan, source: { ...scan.source, channel: "wholefoods" } };
     const fixture = setup({ bodies: {}, channel: "wholefoods", capture: "browser" });

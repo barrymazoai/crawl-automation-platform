@@ -6,7 +6,7 @@ export const COLLECTION_WORKFLOW = "CollectionWorkflow";
 /** The brand scan a brand run waits for, as its activity reads it from the scan table. */
 export const CollectionScanSchema = z.strictObject({
   scanId: z.uuid(),
-  state: z.enum(["queued", "running", "complete", "partial", "review"]),
+  state: z.enum(["queued", "running", "complete", "partial", "review", "cancelled"]),
   /** Products the finished scan put into the shared queue; null while it runs. */
   queued: z.number().int().min(0).nullable(),
   /** Why a scan ended in Review; null otherwise. */
@@ -25,7 +25,7 @@ export interface CollectionResult {
   codec: "collection-settled/1";
   requestId: string;
   scanId: string;
-  state: "complete" | "partial" | "review";
+  state: "complete" | "partial" | "review" | "cancelled";
   queued: number;
   code: string | null;
 }

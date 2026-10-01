@@ -58,7 +58,8 @@ it("defaults to two size-100 JSON reads, configured store headers and API counts
     size: 100,
     maxEmptyAttempts: 5,
     emptyPauseMs: 2000,
-    readPauseMs: 60000,
+    readPauseMs: 2000,
+    requestTimeoutMs: 60000,
   });
   expect(result).toMatchObject({
     complete: true,
@@ -69,7 +70,7 @@ it("defaults to two size-100 JSON reads, configured store headers and API counts
     code: null,
     metrics: { storeId: "10259", unionSize: 2 },
   });
-  expect(test.pause).toHaveBeenCalledExactlyOnceWith(60000);
+  expect(test.pause).toHaveBeenCalledExactlyOnceWith(2000);
   const request = test.read.mock.calls[0]?.[0];
   const url = new URL(request?.url ?? "");
   expect(Object.fromEntries(url.searchParams)).toEqual({
@@ -98,22 +99,26 @@ it("defaults to two size-100 JSON reads, configured store headers and API counts
   }
 });
 
-it("pages each read by configured size until the API's own count is covered", async () => {
-  const test = setup([answer([1, 2], 3), answer([3], 3), answer([1, 2], 3), answer([3], 3)], {
-    size: 2,
-  });
+it("pages each read by size 100 until the API's own count is covered", async () => {
+  const hundred = Array.from({ length: 100 }, (_, index) => index + 1);
+  const test = setup([
+    answer(hundred, 101),
+    answer([101], 101),
+    answer(hundred, 101),
+    answer([101], 101),
+  ]);
   const result = await test.run();
   expect(result.complete).toBe(true);
   expect(
     test.read.mock.calls.map(([request]) => new URL(request.url).searchParams.get("offset")),
-  ).toEqual(["0", "2", "0", "2"]);
+  ).toEqual(["0", "100", "0", "100"]);
   expect(result.metrics.reads).toEqual(
     ["read-1", "read-2"].map((read) => ({
       read,
       pages: 2,
-      cards: 3,
-      products: 3,
-      availableCounts: [3, 3],
+      cards: 101,
+      products: 101,
+      availableCounts: [101, 101],
       succeeded: true,
       code: null,
     })),
@@ -129,7 +134,7 @@ it("repeats only empty pages, counts every try and credit, and pauses before rep
     [false, 2],
     [false, 1],
   ]);
-  expect(test.pause.mock.calls).toEqual([[2000], [60000]]);
+  expect(test.pause.mock.calls).toEqual([[2000], [2000]]);
   expect(test.read.mock.calls[0]?.[0].url).toBe(test.read.mock.calls[1]?.[0].url);
   expect(new Set(test.read.mock.calls.map(([request]) => request.label)).size).toBe(3);
 });
@@ -142,8 +147,8 @@ it("accepts not sold only after five empty tries and a healthy unfiltered canary
     complete: false,
     credits: 6,
     pages: [],
-    code: null,
-    cooldownRequested: true,
+    code: "WHOLEFOODS.BRAND_NOT_LISTED",
+    cooldownRequested: false,
     metrics: { unionSize: 0 },
   });
   const url = new URL(test.read.mock.calls[5]?.[0].url ?? "");
@@ -172,7 +177,7 @@ it("keeps the first read when the second exhausts its empty tries; no canary", a
     complete: false,
     credits: 6,
     soldHere: true,
-    code: "WHOLEFOODS.SEARCH_THROTTLED",
+    code: "WHOLEFOODS.EMPTY_EXHAUSTED",
     metrics: { unionSize: 2 },
   });
   expect(result.pages).toHaveLength(1);
@@ -246,11 +251,11 @@ it("records the paid HTTP error's cost and keeps a canary failure's own code", a
 });
 
 it.each([
-  [answer([1, 2], 3), answer([2], 3)],
-  [answer([1, 2], 3), answer([3], 2)],
-  [answer([1], 3), answer([3], 3)],
+  [answer([1, 2], 101), answer([2], 101)],
+  [answer([1, 2], 101), answer([3], 2)],
+  [answer([1], 101), answer([3], 101)],
 ])("fails closed on duplicate, shifting or incomplete page coverage", async (first, second) => {
-  const test = setup([first, second, first, second], { size: 2 });
+  const test = setup([first, second, first, second]);
   expect(await test.run()).toMatchObject({
     complete: false,
     code: "WHOLEFOODS.LISTING_UNVERIFIED",
@@ -261,13 +266,13 @@ it("does not retry empty cards with a positive total or canary a later empty pag
   const sparse = setup([answer([], 2), answer([], 2)]);
   expect(await sparse.run()).toMatchObject({ complete: false, cooldownRequested: false });
   expect(sparse.read).toHaveBeenCalledTimes(2);
-  const later = setup([answer([1], 2), answer([])], { size: 1, maxEmptyAttempts: 1 });
+  const later = setup([answer([1], 101), answer([])], { maxEmptyAttempts: 1 });
   expect(await later.run()).toMatchObject({ complete: false, metrics: { unionSize: 1 } });
   expect(later.read).toHaveBeenCalledTimes(2);
 });
 
 it("bounds paging and respects cancellation without another paid attempt", async () => {
-  const capped = setup([answer([1], 2)], { size: 1, maxPages: 1 });
+  const capped = setup([answer([1], 101)], { maxPages: 1 });
   expect(await capped.run()).toMatchObject({ code: "BRAND_SCAN.PAGE_LIMIT", complete: false });
   const cancelled = setup([answer([])]);
   cancelled.pause.mockImplementation(async () => cancelled.controller.abort());
@@ -304,4 +309,68 @@ it("does not retry a provider timeout or an unverified archive", async () => {
     });
     expect(test.read).toHaveBeenCalledOnce();
   }
+});
+
+it.each([
+  [
+    [1, 2],
+    [1, 2, 3],
+  ],
+  [
+    [1, 2, 3],
+    [2, 1],
+  ],
+])(
+  "treats complete subsets as compatible but never stable enough for delisting",
+  async (first, second) => {
+    const result = await setup([answer(first), answer(second)]).run();
+    expect(result).toMatchObject({
+      complete: false,
+      metrics: { catalogueAgreement: true, catalogueStable: false, unionSize: 3 },
+    });
+    expect(result.metrics.attempts).toEqual([
+      expect.objectContaining({
+        read: "read-1",
+        page: 1,
+        attempt: 1,
+        archiveKey: "read-1-page-1-attempt-1.json",
+        creditCost: 1,
+        empty: false,
+      }),
+      expect.objectContaining({
+        read: "read-2",
+        page: 1,
+        attempt: 1,
+        archiveKey: "read-2-page-1-attempt-1.json",
+        creditCost: 1,
+        empty: false,
+      }),
+    ]);
+  },
+);
+
+it("applies bounded timing overrides without widening paid retries or changing size", async () => {
+  const test = setup([answer([]), answer([1]), answer([1])], {
+    emptyPauseMs: 17,
+    readPauseMs: 23,
+    requestTimeoutMs: 12000,
+  });
+  await test.run();
+  expect(test.pause.mock.calls).toEqual([[17], [23]]);
+  expect(test.read.mock.calls.every(([request]) => request.timeoutMs === 12000)).toBe(true);
+  for (const invalid of [
+    { size: 99 },
+    { maxEmptyAttempts: 6 },
+    { requestTimeoutMs: 0 },
+    { requestTimeoutMs: 70001 },
+    { emptyPauseMs: -1 },
+  ]) {
+    expect(WholeFoodsHttpScanSettingsSchema.safeParse(invalid).success).toBe(false);
+  }
+});
+
+it("preserves an actual provider throttle without retry or a canary", async () => {
+  const test = setup([scraperApiErrors.create("SCRAPERAPI.THROTTLED")]);
+  expect(await test.run()).toMatchObject({ code: "SCRAPERAPI.THROTTLED", complete: false });
+  expect(test.read).toHaveBeenCalledOnce();
 });

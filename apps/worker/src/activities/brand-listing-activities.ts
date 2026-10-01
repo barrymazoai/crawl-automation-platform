@@ -1,3 +1,5 @@
+import { PostgresBrandScans } from "@crawl-automation/adapters";
+import { checkScanCancellation } from "@crawl-automation/app";
 import { readListing, type BrowserBrandScanner, type ScanReaders } from "@crawl-automation/app";
 import { createListingPages } from "@crawl-automation/channels-core";
 import { BrandListingRequestSchema } from "@crawl-automation/workflows";
@@ -17,11 +19,20 @@ export function brandListingActivities(parts: WorkerParts) {
     const browser: BrowserBrandScanner | undefined = brandScan
       ? {
           sourceUrl: (sourceUrl) => brandScan.sourceUrl(sourceUrl),
-          scan: (request, signal) => parts.browser.scanner.scan(request, signal),
+          scan: (request, signal) =>
+            parts.browser.scanner.scan(
+              {
+                ...request,
+                checkpoint: () =>
+                  checkScanCancellation(new PostgresBrandScans(parts.database), request.scanId),
+              },
+              signal,
+            ),
         }
       : undefined;
     const readers: ScanReaders = {
       registry: parts.registry,
+      checkpoint: (scanId) => checkScanCancellation(new PostgresBrandScans(parts.database), scanId),
       channels: parts.config.brandScans?.channels ?? {},
       pages: {
         read: (request, signal) => {

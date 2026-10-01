@@ -21,7 +21,12 @@ function fixture(channel = "swanson") {
   const finish = vi.fn();
   const read = vi.fn(async () => listing);
   const deps = {
-    store: { claim: async () => [scan], finish, knownListings: async () => [] },
+    store: {
+      isCancellationRequested: async () => false,
+      claim: async () => [scan],
+      finish,
+      knownListings: async () => [],
+    },
     queue: { add: vi.fn() },
     amazonQueue: { knownListings: async () => [], add: vi.fn() },
     gatedListings: { swanson: { read } },

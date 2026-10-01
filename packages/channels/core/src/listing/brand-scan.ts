@@ -5,6 +5,7 @@ const source = (message: string) => ({ category: "SOURCE" as const, message });
 
 /** Errors of reading a brand's listing pages. The codes match the 09-28 scan tools' `BRAND_SCAN.*` codes. */
 export const brandScanErrors = defineErrors({
+  "BRAND_SCAN.CANCELLED": { category: "SCHEDULER", message: "The brand scan was cancelled." },
   "BRAND_SCAN.URL": source("The address is not this channel's brand listing."),
   "BRAND_SCAN.ACCESS_CHALLENGE": source("The site answered with a human-verification page."),
   "BRAND_SCAN.NOT_JSON": source("The listing answer is not the expected JSON."),

@@ -1,3 +1,4 @@
+import type { BrowserScanRequest } from "@crawl-automation/channels-core";
 import { brandScanErrors, type ListedProduct } from "@crawl-automation/channels-core";
 import type { RetainedPublication } from "@crawl-automation/platform";
 import { amazonErrors } from "./errors.js";
@@ -73,7 +74,7 @@ export class AmazonStoreBrandScan {
   readonly capture = "browser" as const;
   constructor(private readonly deps: AmazonStoreScanDeps) {}
 
-  async scan(request: { scanId: string; sourceUrl: string }, signal: AbortSignal) {
+  async scan(request: BrowserScanRequest, signal: AbortSignal) {
     const source = amazonStoreAddress(request.sourceUrl);
     const pending = new Set([source.url]);
     const pages: AmazonStoreListing[] = [];
@@ -82,6 +83,7 @@ export class AmazonStoreBrandScan {
     const seen = new Set<string>();
     for (const url of pending) {
       signal.throwIfAborted();
+      await request.checkpoint?.();
       if (pages.length >= amazonStoreBrandScan.maxPages) {
         break;
       }

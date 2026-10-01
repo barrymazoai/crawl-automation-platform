@@ -78,3 +78,8 @@ export function amazonScanBrandFilter(url: string): string {
     filtersOf(new URL(amazonScanSourceUrl(url))).find((filter) => BRAND_FILTER.test(filter)) ?? ""
   );
 }
+
+/** The observed retail brand keyword, never a fallback to a holding-company record. */
+export function amazonBrandSearchName(url: string): string | null {
+  return new URL(amazonScanSourceUrl(url)).searchParams.get("k")?.trim() || null;
+}

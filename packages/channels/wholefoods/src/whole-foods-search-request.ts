@@ -41,6 +41,7 @@ export function wholeFoodsSearchRequest(
     url: wholeFoodsSearchUrl(target.sourceUrl, target.page, settings),
     label: `${target.read}-page-${target.page}-attempt-${target.attempt}`,
     answer: "json",
+    timeoutMs: settings.requestTimeoutMs,
     maxBytes: 8 * 1024 * 1024,
     options: {
       render: false,

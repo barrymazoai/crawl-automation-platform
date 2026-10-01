@@ -177,4 +177,52 @@ describe.skipIf(!hasPostgres)("brand scans against a real PostgreSQL", () => {
     const [latest] = await scans.list({ channel: "gnc", limit: 1 });
     expect(latest?.result).toMatchObject({ newListings: null, knownListings: null });
   });
+  it("cancels queued scans atomically and never reclaims or overwrites their terminal rows", async () => {
+    const sources = await scans.sources([sourceId]);
+    const requestId = "12121212-1212-4212-8212-121212121212";
+    const [scan] = await scans.request(requestId, sources);
+    if (!scan) {
+      throw new Error("scan fixture missing");
+    }
+    expect(await scans.cancel({ requestId, channel: "wholefoods" })).toEqual({
+      cancelled: 0,
+      cancellationRequested: 0,
+    });
+    expect(await scans.cancel({ scanIds: [scan.scanId], requestId, channel: "gnc" })).toEqual({
+      cancelled: 1,
+      cancellationRequested: 0,
+    });
+    expect(await scans.cancel({ requestId })).toEqual({ cancelled: 0, cancellationRequested: 0 });
+    expect(await scans.get(scan.scanId)).toMatchObject({
+      state: "cancelled",
+      result: { state: "cancelled", code: "BRAND_SCAN.CANCELLED", full: false, queued: 0 },
+    });
+    expect(await scans.claim(10, 0)).toEqual([]);
+    await scans.finish(scan.scanId, result);
+    expect((await scans.get(scan.scanId))?.state).toBe("cancelled");
+  });
+
+  it("recovers a stale cancellation request and lets cancellation win a racing completion", async () => {
+    const sources = await scans.sources([sourceId]);
+    const requestId = "13131313-1313-4313-8313-131313131313";
+    const [scan] = await scans.request(requestId, sources);
+    if (!scan) {
+      throw new Error("scan fixture missing");
+    }
+    await scans.claim(1, 0);
+    expect(await scans.cancel({ requestId })).toEqual({ cancelled: 0, cancellationRequested: 1 });
+    expect((await scans.get(scan.scanId))?.state).toBe("running");
+    expect(await scans.isCancellationRequested(scan.scanId)).toBe(true);
+    expect(await scans.cancel({ requestId })).toEqual({ cancelled: 0, cancellationRequested: 0 });
+    expect(await scans.claim(1, 0)).toMatchObject([{ scanId: scan.scanId, state: "running" }]);
+    // A runner's completion may already be in flight when the cancellation is requested.
+    await scans.finish(scan.scanId, { ...result, queued: 3 });
+    expect((await scans.get(scan.scanId))?.result).toMatchObject({
+      state: "cancelled",
+      full: false,
+      queued: 3,
+      code: "BRAND_SCAN.CANCELLED",
+    });
+    expect(await scans.claim(10, 0)).toEqual([]);
+  });
 });

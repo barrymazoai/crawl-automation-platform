@@ -1,5 +1,6 @@
 import {
   CreateBrandSchema,
+  CancelScansSchema,
   DerivedSourcesSchema,
   CreateSourceSchema,
   ImportSourcesSchema,
@@ -57,6 +58,10 @@ export const brandsRouter = router({
   scan: procedure
     .input(ScanRequestInput)
     .mutation(({ ctx, input }) => ctx.brandScans.request(input)),
+
+  cancelScans: procedure
+    .input(CancelScansSchema)
+    .mutation(({ ctx, input }) => ctx.brandScans.cancel(input)),
 
   /** Brand scans, newest first, with what each found. */
   scans: procedure.input(ScanListInput).query(({ ctx, input }) => ctx.brandScans.list(input ?? {})),

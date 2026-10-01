@@ -39,7 +39,9 @@ function outcome(
 ): ListingScanOutcome {
   const pages = reads.flatMap((read) => read.pages);
   const readsFinished = reads.length === 2 && reads.every((read) => read.summary.code === null);
-  const complete = readsFinished && catalogueAgreement(reads);
+  const agreement = readsFinished && catalogueAgreement(reads);
+  const stable = agreement && new Set(reads.map((read) => read.summary.products)).size === 1;
+  const complete = stable;
   const code = reads.find((read) => read.summary.code)?.summary.code ?? null;
   return {
     pages,
@@ -52,7 +54,8 @@ function outcome(
     metrics: {
       storeId: run.settings.store.storeId,
       readsFinished,
-      catalogueAgreement: complete,
+      catalogueAgreement: agreement,
+      catalogueStable: stable,
       attempts: run.observations.attempts,
       reads: reads.map((read) => read.summary),
       unionSize: new Set(pages.flatMap((page) => page.products.map((item) => item.listingId))).size,
@@ -60,6 +63,8 @@ function outcome(
   };
 }
 
+/** Subsets are compatible observations, but a changing set never authorizes absence work.
+ * Relevance-ranked size-100 answers can expose different subsets; keep their union, not heading totals. */
 function catalogueAgreement(reads: WholeFoodsSearchRead[]): boolean {
   if (!reads.every((read) => read.summary.succeeded)) {
     return false;
@@ -70,8 +75,7 @@ function catalogueAgreement(reads: WholeFoodsSearchRead[]): boolean {
   return (
     !!first &&
     !!second &&
-    first.size === second.size &&
-    [...first].every((asin) => second.has(asin))
+    ([...first].every((asin) => second.has(asin)) || [...second].every((asin) => first.has(asin)))
   );
 }
 
@@ -101,10 +105,17 @@ async function canaryOutcome(
   const result = outcome(run, [first]);
   result.metrics.reads.push(canary.summary);
   result.code = canary.summary.succeeded
-    ? null
-    : (canary.summary.code ?? wholeFoodsErrors.code("WHOLEFOODS.SEARCH_THROTTLED"));
+    ? wholeFoodsErrors.code("WHOLEFOODS.BRAND_NOT_LISTED")
+    : canaryFailureCode(canary.summary.code);
   if (canary.summary.succeeded) {
     result.soldHere = false;
+    result.cooldownRequested = false;
   }
   return result;
+}
+
+function canaryFailureCode(code: string | null): string {
+  return code && code !== wholeFoodsErrors.code("WHOLEFOODS.EMPTY_EXHAUSTED")
+    ? code
+    : wholeFoodsErrors.code("WHOLEFOODS.SEARCH_THROTTLED");
 }

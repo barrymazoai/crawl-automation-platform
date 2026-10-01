@@ -1,3 +1,4 @@
+import { CancelScansSchema, type CancelScanCounts } from "./scan-cancellation.js";
 import type { ChannelRegistry } from "@crawl-automation/channels-core";
 import type { BrowserBrandScanners } from "./ports.js";
 import { sourceUrlOf } from "./scan-listing.js";
@@ -47,6 +48,10 @@ export class BrandScanService {
       "brand scans requested",
     );
     return scans;
+  }
+
+  cancel(raw: unknown): Promise<CancelScanCounts> {
+    return this.deps.store.cancel(CancelScansSchema.parse(raw));
   }
 
   list(raw: unknown): Promise<ScanRecord[]> {

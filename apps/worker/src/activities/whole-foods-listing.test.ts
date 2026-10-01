@@ -8,6 +8,7 @@ import {
 } from "@crawl-automation/channels-wholefoods";
 import {
   BrandScanRunner,
+  type AddToQueue,
   type BrandScanStore,
   type ScanRecord,
   type ScanResult,
@@ -127,6 +128,7 @@ it("archives each observation byte-exact and queues the first-seen union through
 function runnerFixture(test: ReturnType<typeof fixture>) {
   const results: ScanResult[] = [];
   const store = {
+    isCancellationRequested: vi.fn(async () => false),
     claim: async () => [scan],
     finish: async (_id: string, result: ScanResult) => {
       results.push(result);
@@ -135,7 +137,7 @@ function runnerFixture(test: ReturnType<typeof fixture>) {
       { sourceId: "source", url: "https://example.test/old", listingId: "old", variantId: null },
     ],
   } as unknown as BrandScanStore;
-  const add = vi.fn(async () => ({ added: 3 }));
+  const add = vi.fn(async (_request: AddToQueue) => ({ added: 3 }));
   const requestRevisits = vi.fn(async () => ({ queued: 1 }));
   const runner = new BrandScanRunner({
     ...test.readers,
@@ -188,4 +190,53 @@ it("defaults worker routing to HTTP and keeps the explicitly selected browser re
   );
   expect(browser.scanCapture?.(source.url)).toBe("browser");
   expect(browser.brandScan?.answer).toBe("html");
+});
+
+it("ends an exhausted empty brand with a healthy canary as partial, without cooling or revisits", async () => {
+  const runner = runnerFixture(fixture([body([]), body([asins[0] ?? ""])]));
+  await runner.runner.tick(new AbortController().signal);
+  expect(runner.results[0]).toMatchObject({
+    state: "partial",
+    full: false,
+    products: 0,
+    queued: 0,
+    credits: 2,
+    soldHere: false,
+    code: "WHOLEFOODS.BRAND_NOT_LISTED",
+    cooldownRequested: false,
+  });
+  expect(runner.requestRevisits).not.toHaveBeenCalled();
+  expect(runner.add).not.toHaveBeenCalled();
+});
+
+it("queues all 68 discoveries from the reported 46/63 MegaFood observations without delisting", async () => {
+  const ids = (start: number, length: number) =>
+    Array.from({ length }, (_, index) => `B0${String(start + index).padStart(8, "0")}`);
+  const runner = runnerFixture(fixture([body(ids(1, 46)), body(ids(6, 63))]));
+  runner.add.mockResolvedValue({ added: 68 });
+  await runner.runner.tick(new AbortController().signal);
+  expect(runner.add).toHaveBeenCalledOnce();
+  expect(runner.add).toHaveBeenCalledWith(
+    expect.objectContaining({
+      products: expect.arrayContaining([expect.objectContaining({ listingId: "B000000068" })]),
+    }),
+  );
+  expect(runner.add.mock.calls[0]?.[0].products).toHaveLength(68);
+  expect(runner.results[0]).toMatchObject({
+    state: "partial",
+    full: false,
+    products: 68,
+    queued: 68,
+    metrics: {
+      catalogueAgreement: false,
+      catalogueStable: false,
+      unionSize: 68,
+      reads: [{ products: 46 }, { products: 63 }],
+      attempts: [
+        { read: "read-1", page: 1, attempt: 1, creditCost: 1, empty: false },
+        { read: "read-2", page: 1, attempt: 1, creditCost: 1, empty: false },
+      ],
+    },
+  });
+  expect(runner.requestRevisits).not.toHaveBeenCalled();
 });

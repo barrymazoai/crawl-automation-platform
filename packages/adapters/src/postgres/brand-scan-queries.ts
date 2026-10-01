@@ -11,6 +11,8 @@ import { z } from "zod";
 /** The columns a scan is read with: the scan, its source and its brand. */
 export const SCAN_COLUMNS = `sc.scan_id::text AS "scanId", sc.request_id::text AS "requestId",
   s.id::text AS "sourceId", s.brand_id::text AS "brandId", b.name AS "brandName", sc.channel, sc.url,
+  to_char(sc.cancellation_requested_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')
+    AS "cancellationRequestedAt",
   s.enabled, sc.revisit_batch_id::text AS "revisitBatchId", sc.state, sc.result,
   to_char(sc.requested_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS "requestedAt",
   to_char(sc.started_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS "startedAt",
@@ -31,7 +33,7 @@ const SourceRow = z.object({
 });
 
 const ResultSchema = z.object({
-  state: z.enum(["complete", "partial", "review"]),
+  state: z.enum(["complete", "partial", "review", "cancelled"]),
   metrics: ListingScanMetricsSchema.optional(),
   cooldownRequested: z.boolean().optional(),
   pages: z.number(),
@@ -57,11 +59,12 @@ const ScanRow = SourceRow.extend({
   scanId: z.string(),
   requestId: z.string(),
   revisitBatchId: z.string(),
-  state: z.enum(["queued", "running", "complete", "partial", "review"]),
+  state: z.enum(["queued", "running", "complete", "partial", "review", "cancelled"]),
   result: ResultSchema.nullable(),
   requestedAt: z.string(),
   startedAt: z.string().nullable(),
   finishedAt: z.string().nullable(),
+  cancellationRequestedAt: z.string().nullable().default(null),
 });
 
 export function sourceOf(row: unknown): ScanSource {
@@ -82,6 +85,7 @@ export function scanOf(row: unknown): ScanRecord {
     requestedAt,
     startedAt,
     finishedAt,
+    cancellationRequestedAt: parsed.cancellationRequestedAt,
   };
 }
 

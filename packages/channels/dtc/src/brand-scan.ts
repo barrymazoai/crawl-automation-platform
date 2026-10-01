@@ -1,3 +1,4 @@
+import type { BrowserScanRequest } from "@crawl-automation/channels-core";
 import {
   brandScanErrors,
   platformPageErrors,
@@ -78,10 +79,7 @@ export class DtcBrandScan {
     },
   ) {}
 
-  async scan(
-    request: { scanId: string; sourceUrl: string },
-    signal: AbortSignal,
-  ): Promise<DtcBrandScanResult> {
+  async scan(request: BrowserScanRequest, signal: AbortSignal): Promise<DtcBrandScanResult> {
     const site = siteForUrl(request.sourceUrl, this.deps.sites ?? DTC_SITES);
     if (site.platform === "unverified") {
       throw platformPageErrors.create("DTC.PLATFORM_UNVERIFIED");
@@ -92,6 +90,7 @@ export class DtcBrandScan {
     let url = catalogUrl(source.catalogUrl, site, source.catalogUrl);
     for (let position = 1; position <= (this.deps.maxPages ?? 100); position += 1) {
       signal.throwIfAborted();
+      await request.checkpoint?.();
       if (seen.has(url)) {
         throw brandScanErrors.create("BRAND_SCAN.PAGINATION");
       }

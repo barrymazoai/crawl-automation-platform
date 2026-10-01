@@ -1,3 +1,4 @@
+import { setTimeout as delay } from "node:timers/promises";
 import type { ObjectStore, ScraperApiPage, ScraperApiRequest } from "@crawl-automation/platform";
 import { scraperApiErrors } from "@crawl-automation/platform";
 import { describe, expect, it, vi } from "vitest";
@@ -36,15 +37,17 @@ const settings = {
 
 function setup(page: Partial<ScraperApiPage> = {}) {
   const remote = new MemoryStore();
-  const get = vi.fn(async (asked: ScraperApiRequest): Promise<ScraperApiPage> => ({
-    status: 200,
-    url: asked.target,
-    contentType: "application/json; charset=utf-8",
-    contentEncoding: null,
-    bytes: Buffer.from('{"products":[]}'),
-    creditCost: 1,
-    ...page,
-  }));
+  const get = vi.fn(
+    async (asked: ScraperApiRequest, _signal: AbortSignal): Promise<ScraperApiPage> => ({
+      status: 200,
+      url: asked.target,
+      contentType: "application/json; charset=utf-8",
+      contentEncoding: null,
+      bytes: Buffer.from('{"products":[]}'),
+      creditCost: 1,
+      ...page,
+    }),
+  );
   const pages = new ListingPages({
     client: { provider: "scraperapi-sync/1", get },
     settings,
@@ -178,4 +181,30 @@ it("preserves the billed cost of an HTTP failure without repeating it", async ()
     details: { creditCost: 2 },
   });
   expect(test.get).toHaveBeenCalledOnce();
+});
+
+it("bounds the provider request and does not retry a timeout", async () => {
+  const test = setup();
+  test.get.mockImplementation(async (_request, signal) => {
+    await delay(1000, undefined, { signal });
+    throw new Error("deadline was not applied");
+  });
+  await expect(test.pages.read({ ...request, timeoutMs: 10 }, signal())).rejects.toThrow();
+  expect(test.get).toHaveBeenCalledOnce();
+  expect(test.remote.data.size).toBe(0);
+});
+
+it("finishes both archive writes after a received response even if the request deadline elapses", async () => {
+  const test = setup();
+  const create = test.remote.create.bind(test.remote);
+  vi.spyOn(test.remote, "create").mockImplementation(async (key, bytes) => {
+    await delay(15);
+    return create(key, bytes);
+  });
+  await expect(test.pages.read({ ...request, timeoutMs: 10 }, signal())).resolves.toMatchObject({
+    archiveKey: `${prefix}.json`,
+    fromArchive: false,
+  });
+  expect(test.get.mock.calls[0]?.[1].aborted).toBe(true);
+  expect(test.remote.data.has(`${prefix}.record.json`)).toBe(true);
 });

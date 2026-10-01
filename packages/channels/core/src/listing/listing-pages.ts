@@ -103,7 +103,9 @@ export class ListingPages {
     try {
       return await this.deps.client.get(
         { target, options, maxBytes: request.maxBytes, tooLarge },
-        signal,
+        request.timeoutMs === undefined
+          ? signal
+          : AbortSignal.any([signal, AbortSignal.timeout(request.timeoutMs)]),
       );
     } catch (error) {
       if (scraperApiErrors.is(error, "SOURCE.ACCESS_CHALLENGE")) {

@@ -1,4 +1,5 @@
-import { afterEach, expect, it, vi } from "vitest";
+import { PostgresBrandScans } from "@crawl-automation/adapters";
+import { beforeEach, afterEach, expect, it, vi } from "vitest";
 
 vi.mock("@temporalio/activity", () => ({
   Context: {
@@ -36,6 +37,10 @@ import type { WorkerParts } from "../container.js";
 import type { CoreParts } from "../core-parts.js";
 import { buildBrowserParts } from "./browser-parts.js";
 import { BrowserSettingsSchema } from "./browser-settings.js";
+
+beforeEach(() => {
+  vi.spyOn(PostgresBrandScans.prototype, "isCancellationRequested").mockResolvedValue(false);
+});
 
 const origin = "https://shop.example";
 const url = `${origin}/products/sleep`;
@@ -357,7 +362,12 @@ it.each([false, true])(
       expect(test.read.mock.calls.map(([input]) => input.url)).toEqual([alphaUrl, next]);
     }
     expect(scan).toHaveBeenCalledWith(
-      { scanId: request.scanId, sourceId: request.sourceId, sourceUrl: alphaUrl },
+      {
+        scanId: request.scanId,
+        sourceId: request.sourceId,
+        sourceUrl: alphaUrl,
+        checkpoint: expect.any(Function),
+      },
       expect.any(AbortSignal),
     );
   },

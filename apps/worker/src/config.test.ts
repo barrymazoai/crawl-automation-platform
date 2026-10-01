@@ -121,7 +121,7 @@ it.each(["http", "browser"])(
       scraperApi,
       wholefoods: {
         brandScanMode,
-        size: 30,
+        size: 100,
         store: {
           storeId: "10259",
           label: "The Alameda",
@@ -139,7 +139,7 @@ it.each(["http", "browser"])(
         2,
       );
       expect(pageUrl).toContain("old=TEST");
-      expect(pageUrl).toContain("categories=123&offset=30&size=30");
+      expect(pageUrl).toContain("categories=123&offset=100&size=100");
     }
     expect(
       schema.safeParse({ route, scraperApi, wholefoods: { maxEmptyAttempts: 0 } }).success,

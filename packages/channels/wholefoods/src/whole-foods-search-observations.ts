@@ -33,7 +33,7 @@ export class WholeFoodsSearchObservations {
       }
     }
     this.cooldownRequested = true;
-    throw wholeFoodsErrors.create("WHOLEFOODS.SEARCH_THROTTLED", {
+    throw wholeFoodsErrors.create("WHOLEFOODS.EMPTY_EXHAUSTED", {
       details: { cooldownRequested: true, emptyExhausted: true },
     });
   }

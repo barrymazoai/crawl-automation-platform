@@ -18,6 +18,10 @@ export const BROWSER_SCAN_PERMITS = {
 const HTTP_WHOLE_FOODS_PERMIT = {
   ...BROWSER_SCAN_PERMITS.wholefoods,
   taskQueue: "v3.pipeline.product.v1",
+  // JSON scans must not inherit the browser challenge hold of thirty minutes.
+  gapAfterSeconds: 2,
+  cooldownSeconds: 60,
+  maxWaitSeconds: 120,
 };
 
 export const BrandScanPermitsSchema = z

@@ -1,3 +1,4 @@
+import { brandScanErrors } from "@crawl-automation/channels-core";
 import { configuredDtcSites } from "@crawl-automation/channel-dtc";
 import { amazonStoreSourceUrl } from "@crawl-automation/channel-amazon";
 import { EgoPages, RetainedPublication, type ObjectStore } from "@crawl-automation/platform";
@@ -199,4 +200,21 @@ it("routes Costco to Ego with pacing and no store switching", async () => {
   ).toMatchObject({ complete: true, pages: [{ products: [{ listingId: "123" }] }] });
   expect(read.mock.calls[0]?.[0].scroll?.pressDelayMs).toEqual({ min: 5000, max: 6000 });
   expect(round).not.toHaveBeenCalled();
+});
+
+it("checks cancellation before store preparation or opening a browser page", async () => {
+  const prepare = vi.fn();
+  const scan = vi.fn();
+  const scanners = new BrowserScanners([{ accepts: () => true, prepare, scanner: { scan } }]);
+  const checkpoint = async () => {
+    throw brandScanErrors.create("BRAND_SCAN.CANCELLED");
+  };
+  await expect(
+    scanners.scan(
+      { scanId: "cancelled", sourceUrl: "https://example.test", checkpoint },
+      new AbortController().signal,
+    ),
+  ).rejects.toMatchObject({ code: "BRAND_SCAN.CANCELLED" });
+  expect(prepare).not.toHaveBeenCalled();
+  expect(scan).not.toHaveBeenCalled();
 });

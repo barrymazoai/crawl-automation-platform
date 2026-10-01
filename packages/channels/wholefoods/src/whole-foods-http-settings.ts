@@ -15,11 +15,12 @@ export const WholeFoodsHttpScanSettingsSchema = z.strictObject({
     offerListingDiscriminator: "A0GA",
     categoryId: "18473610011",
   }),
-  size: z.number().int().min(1).max(100).default(100),
+  size: z.literal(100).default(100),
   maxPages: z.number().int().min(1).max(250).default(250),
-  maxEmptyAttempts: z.number().int().min(1).max(10).default(5),
+  maxEmptyAttempts: z.number().int().min(1).max(5).default(5),
   emptyPauseMs: z.number().int().min(0).max(60_000).default(2_000),
-  readPauseMs: z.number().int().min(0).max(300_000).default(60_000),
+  readPauseMs: z.number().int().min(0).max(300_000).default(2_000),
+  requestTimeoutMs: z.number().int().min(1_000).max(70_000).default(60_000),
   canaryText: z.string().trim().min(1).max(200).default("365 by Whole Foods Market"),
 });
 export type WholeFoodsHttpScanSettings = z.infer<typeof WholeFoodsHttpScanSettingsSchema>;

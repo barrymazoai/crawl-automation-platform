@@ -6,7 +6,7 @@ const sourceId = "11111111-1111-4111-8111-111111111111";
 const source = {
   sourceId,
   brandId: sourceId,
-  brandName: "Example Brand",
+  brandName: "Quincy Bioscience Holding Company, Inc.",
   channel: "amazon",
   enabled: false,
 };
@@ -15,12 +15,14 @@ it("builds a Whole Foods source through its own URL builder from a category-scop
   expect(
     wholeFoodsSourceFromAmazon({
       ...source,
-      url: "https://www.amazon.com/s?rh=n%3A3760901%2Cp_123%3A263310",
+      url: "https://www.amazon.com/s?k=Prevagen&i=hpc&rh=n%3A3760901%2Cp_123%3A263310",
     }),
-  ).toBe("https://www.wholefoodsmarket.com/grocery/search?k=Example+Brand&rh=p_123%3A263310");
+  ).toBe("https://www.wholefoodsmarket.com/grocery/search?k=Prevagen&rh=p_123%3A263310");
 });
 
 it.each([
+  "https://www.amazon.com/s?rh=p_123%3A263310",
+  "https://www.amazon.com/s?k=+&rh=p_123%3A263310",
   "https://www.amazon.com/s?rh=p_6%3A263310",
   "https://www.amazon.com/s?rh=p_89%3AExample",
   "https://www.amazon.com/stores/page/11111111-1111-4111-8111-111111111111",
@@ -45,4 +47,14 @@ it("validates the new API input and returns the service counts", async () => {
   );
   expect(invalid.status).toBe(400);
   expect(deriveWholeFoods).toHaveBeenCalledOnce();
+});
+
+it("preserves the source display keyword and filter, independent of the company name", () => {
+  const url = wholeFoodsSourceFromAmazon({
+    ...source,
+    url: "https://www.amazon.com/s?k=Amazing+Herbs&i=hpc&rh=n%3A3760901%2Cp_123%3A469986&dc=",
+  });
+  expect(url).toBe(
+    "https://www.wholefoodsmarket.com/grocery/search?k=Amazing+Herbs&rh=p_123%3A469986",
+  );
 });

@@ -24,6 +24,7 @@ export interface ListingWork {
   reader: BrandScanReader;
   pages: ListingPageReader;
   requestIntervalMs?: number;
+  checkpoint?: (() => Promise<void>) | undefined;
 }
 
 export function listingTarget(work: ListingWork) {
@@ -43,11 +44,13 @@ export function pageReads(work: ListingWork, signal: AbortSignal) {
       return credits;
     },
     read: async (request: ListingPolicyRequest) => {
+      await work.checkpoint?.();
       const interval = work.requestIntervalMs ?? 0;
       if (started && interval > 0) {
         await setTimeout(interval, undefined, { signal });
       }
       signal.throwIfAborted();
+      await work.checkpoint?.();
       started = true;
       const read = await work.pages.read({ ...listingTarget(work), ...request }, signal);
       credits += read.creditCost ?? 0;

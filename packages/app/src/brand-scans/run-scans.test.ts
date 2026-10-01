@@ -1,3 +1,4 @@
+import { CollectionScanSchema } from "@crawl-automation/workflows";
 import { describe, expect, it, vi } from "vitest";
 import { RunScans } from "./run-scans.js";
 import type { ScanRecord, ScanResult } from "./scan-model.js";
@@ -60,4 +61,17 @@ describe("RunScans", () => {
       code: "RUN.SCAN_MISSING",
     });
   });
+});
+
+it("exposes cancelled as a terminal collection scan with any already queued products", async () => {
+  const store = {
+    byRequest: async () =>
+      record("cancelled", {
+        state: "cancelled",
+        queued: 2,
+        code: "BRAND_SCAN.CANCELLED",
+      }),
+  };
+  const result = await new RunScans(store).scanOf({ requestId, sourceId });
+  expect(CollectionScanSchema.parse(result)).toMatchObject({ state: "cancelled", queued: 2 });
 });

@@ -14,9 +14,11 @@ export async function readPolicyListing(
     read: pageReads(work, signal).read,
     pause: async (milliseconds) => {
       signal.throwIfAborted();
+      await work.checkpoint?.();
       if (milliseconds > 0) {
         await setTimeout(milliseconds, undefined, { signal });
       }
+      await work.checkpoint?.();
     },
   });
 }

@@ -1,3 +1,4 @@
+import { PostgresBrandScans } from "@crawl-automation/adapters";
 import {
   ChannelRegistry,
   type BrandScanReader,
@@ -11,7 +12,10 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { brandListingActivities } from "./brand-listing-activities.js";
 
 vi.mock("node:timers/promises", () => ({ setTimeout: vi.fn(async () => undefined) }));
-beforeEach(() => vi.mocked(setTimeout).mockClear());
+beforeEach(() => {
+  vi.mocked(setTimeout).mockClear();
+  vi.spyOn(PostgresBrandScans.prototype, "isCancellationRequested").mockResolvedValue(false);
+});
 
 vi.mock("./activity-guard.js", () => ({
   guarded:
@@ -90,6 +94,7 @@ it("selects browser capture by capability, regardless of channel name", async ()
       scanId: request.scanId,
       sourceId: request.source.sourceId,
       sourceUrl: request.source.url,
+      checkpoint: expect.any(Function),
     },
     expect.any(AbortSignal),
   );
@@ -124,4 +129,25 @@ it("passes the channel's configured interval to the activity's page loop", async
   expect(setTimeout).toHaveBeenCalledExactlyOnceWith(3000, undefined, {
     signal: expect.any(AbortSignal),
   });
+});
+
+it("checks durable cancellation between archived requests on the remote worker", async () => {
+  const test = fixture("http");
+  const reader = test.adapter.brandScan;
+  if (!reader) {
+    throw new Error("reader fixture missing");
+  }
+  reader.parsePage = () => ({
+    ...page,
+    products: [
+      { url: request.source.url, listingId: "one", variantId: null, kind: "product", title: null },
+    ],
+    nextPage: 2,
+  });
+  test.read.mockImplementation(async () => {
+    vi.mocked(PostgresBrandScans.prototype.isCancellationRequested).mockResolvedValue(true);
+    return { body: "{}", creditCost: 1 };
+  });
+  await expect(test.activity(request)).rejects.toMatchObject({ code: "BRAND_SCAN.CANCELLED" });
+  expect(test.read).toHaveBeenCalledOnce();
 });

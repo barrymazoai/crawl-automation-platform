@@ -1,3 +1,4 @@
+import { brandScanErrors } from "@crawl-automation/channels-core";
 import { readFileSync } from "node:fs";
 import {
   egoErrors,
@@ -286,4 +287,18 @@ it("does not certify completeness after readiness failed", async () => {
   expect(await scanner.scan({ scanId: "not-ready", sourceUrl }, signal())).toMatchObject({
     complete: false,
   });
+});
+
+it("honors cancellation between a fully archived browser answer and the canary", async () => {
+  const test = scanSetup(fixture("search-no-results.html"));
+  const checkpoint = vi.fn(async () => {
+    if (test.browser.read.mock.calls.length) {
+      throw brandScanErrors.create("BRAND_SCAN.CANCELLED");
+    }
+  });
+  await expect(
+    test.scanner.scan({ scanId: "cancel", sourceUrl, checkpoint }, signal()),
+  ).rejects.toMatchObject({ code: "BRAND_SCAN.CANCELLED" });
+  expect(test.browser.read).toHaveBeenCalledOnce();
+  expect(test.remote.data.has("v3/brand-scans/cancel/search.record.json")).toBe(true);
 });

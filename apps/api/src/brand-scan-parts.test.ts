@@ -14,10 +14,14 @@ import {
   WholeFoodsHttpScanSettingsSchema,
 } from "@crawl-automation/channels-wholefoods";
 import { createLogger, type Database, type TemporalClient } from "@crawl-automation/platform";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
 import { BrandScanSettingsSchema } from "./brand-scan-config.js";
 import { brandScanParts, browserScanners } from "./brand-scan-parts.js";
 import fixture from "./fixtures/api-config.json" with { type: "json" };
+
+beforeEach(() => {
+  vi.spyOn(PostgresBrandScans.prototype, "isCancellationRequested").mockResolvedValue(false);
+});
 
 const storeUrl =
   "https://www.amazon.com/stores/HerbPharm/page/11111111-1111-4111-8111-111111111111";

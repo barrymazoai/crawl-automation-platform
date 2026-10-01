@@ -25,6 +25,7 @@ it.each(["swanson", "wholefoods"])(
       { scanId, source } as Awaited<ReturnType<PostgresBrandScans["claim"]>>[number],
     ]);
     vi.spyOn(PostgresBrandScans.prototype, "knownListings").mockResolvedValue([]);
+    vi.spyOn(PostgresBrandScans.prototype, "isCancellationRequested").mockResolvedValue(false);
     const finish = vi.spyOn(PostgresBrandScans.prototype, "finish").mockResolvedValue();
     const read = vi.spyOn(ListingPages.prototype, "read");
     const start = vi.fn(async () => ({
@@ -67,10 +68,10 @@ it.each(["swanson", "wholefoods"])(
             scanId,
             source,
             gapAfterSeconds: 30,
-            ...(channel === "wholefoods" ? { cooldownSeconds: 1800 } : {}),
+            ...(channel === "wholefoods" ? { cooldownSeconds: 60 } : {}),
             resources: {
               queue: "resources",
-              maxWaitSeconds: 900,
+              maxWaitSeconds: channel === "wholefoods" ? 120 : 900,
               activities: { readBrandListing: [{ resourceId: `${channel}-brand-scan`, units: 1 }] },
             },
           },
@@ -95,9 +96,9 @@ it("defaults Whole Foods pacing and accepts validated overrides without changing
     taskQueue: "v3.pipeline.product.v1",
     resourceQueue: "v3.resources.v1",
     resourceId: "wholefoods-brand-scan",
-    maxWaitSeconds: 900,
-    gapAfterSeconds: 60,
-    cooldownSeconds: 1800,
+    maxWaitSeconds: 120,
+    gapAfterSeconds: 2,
+    cooldownSeconds: 60,
   });
   const settings = BrandScanSettingsSchema.parse({
     ...fixture.brandScans,

@@ -17,7 +17,7 @@ export const SourceScanViewSchema = Source.extend({
     .strictObject({
       scanId: z.uuid(),
       requestId: z.uuid(),
-      state: z.enum(["queued", "running", "complete", "partial", "review"]),
+      state: z.enum(["queued", "running", "complete", "partial", "review", "cancelled"]),
       requestedAt: z.iso.datetime({ offset: true }),
       startedAt: z.iso.datetime({ offset: true }).nullable(),
       finishedAt: z.iso.datetime({ offset: true }).nullable(),

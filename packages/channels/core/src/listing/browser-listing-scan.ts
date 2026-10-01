@@ -13,6 +13,13 @@ export interface ScanBrowser {
   read(request: BrowserRead, signal: AbortSignal): Promise<BrowserPage>;
 }
 
+export interface BrowserScanRequest {
+  scanId: string;
+  sourceUrl: string;
+  /** Checked only between completed page reads and archives. Local worker callback, never serialized. */
+  checkpoint?: (() => Promise<void>) | undefined;
+}
+
 export interface BrowserBrandScan {
   sourceUrl: string;
   pages: ListingPage[];
@@ -40,15 +47,14 @@ export class BrowserListingScan extends BrowserListingReader {
     super(options);
   }
 
-  async scan(
-    request: { scanId: string; sourceUrl: string },
-    signal: AbortSignal,
-  ): Promise<BrowserBrandScan> {
+  async scan(request: BrowserScanRequest, signal: AbortSignal): Promise<BrowserBrandScan> {
+    await request.checkpoint?.();
     const url = this.sourceUrl(request.sourceUrl);
     const saved = await this.read({ scanId: request.scanId, label: "search", url }, signal);
     const listing = this.options.parse(saved.html, saved.record.scroll.observedItems);
     const archiveKeys = [saved.key];
     if (!listing.soldHere) {
+      await request.checkpoint?.();
       archiveKeys.push(await this.checkCanary(request.scanId, signal));
       if (!clean(saved)) {
         throw this.options.throttled(archiveKeys);

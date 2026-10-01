@@ -1,6 +1,12 @@
+import { compareScanListings } from "./scan-comparison.js";
+import {
+  cancelledScanResult,
+  checkScanCancellation,
+  emptyScanResult,
+} from "./scan-cancellation.js";
 import { listingScanResult } from "./listing-scan-result.js";
 import { setTimeout as delay } from "node:timers/promises";
-import { errorCodeOf, type Logger } from "@crawl-automation/platform";
+import { pipelineErrors, errorCodeOf, type Logger } from "@crawl-automation/platform";
 import { z } from "zod";
 import type { ListingStateService } from "../listings/listing-state-service.js";
 import type { QueueService } from "../queue/queue-service.js";
@@ -79,32 +85,51 @@ export class BrandScanRunner {
       result = await this.scan(scan, signal);
     } catch (error) {
       result = {
-        ...emptyResult(),
+        ...emptyScanResult(),
         state: "review",
-        code: errorCodeOf(error) ?? "BRAND_SCAN.UNRESOLVED",
+        code: errorCodeOf(error) ?? pipelineErrors.code("BRAND_SCAN.UNRESOLVED"),
       };
       this.deps.log.warn(
         { scanId: scan.scanId, err: error, code: result.code },
         "brand scan review",
       );
     }
+    if (await this.deps.store.isCancellationRequested(scan.scanId)) {
+      result = cancelledScanResult(result);
+    }
     await this.deps.store.finish(scan.scanId, result);
-    this.deps.log.info({ scanId: scan.scanId, ...result }, "brand scan finished");
+    this.deps.log.info({ scanId: scan.scanId }, "brand scan finished");
   }
 
   private async scan(scan: ScanRecord, signal: AbortSignal): Promise<ScanResult> {
     const amazon = scan.source.channel === "amazon" ? this.amazonQueue() : null;
     const listing = await this.read(scan, signal);
     // Older WF results called two changing reads full. Only the stronger policy may authorize absence work.
-    if (scan.source.channel === "wholefoods" && listing.metrics?.catalogueAgreement !== true) {
+    if (
+      scan.source.channel === "wholefoods" &&
+      (listing.metrics?.catalogueAgreement !== true || listing.metrics.catalogueStable === false)
+    ) {
       listing.full = false;
     }
+    const result: ScanResult = {
+      ...listingScanResult(listing),
+      newListings: null,
+      knownListings: null,
+      missing: 0,
+      queued: 0,
+    };
     // Known: queued by an earlier list of this source (the scan's own list is excluded).
     const known = amazon
       ? await amazon.knownListings(scan)
       : await this.deps.store.knownListings(scan.source, scan.scanId);
+    if (await this.deps.store.isCancellationRequested(scan.scanId)) {
+      return cancelledScanResult(result);
+    }
     const queued = await this.queueAll(scan, listing);
-    const counts = compare(listing, known);
+    const counts = compareScanListings(listing, known);
+    if (await this.deps.store.isCancellationRequested(scan.scanId)) {
+      return cancelledScanResult({ ...result, ...counts, missing: 0, queued });
+    }
     const missing = listing.full ? await this.revisitMissing(scan, counts.missing) : 0;
     return {
       ...listingScanResult(listing),
@@ -117,7 +142,16 @@ export class BrandScanRunner {
 
   private read(scan: ScanRecord, signal: AbortSignal): Promise<BrandListing> {
     const gated = this.deps.gatedListings?.[scan.source.channel as ScanChannel];
-    return gated ? gated.read(scan, signal) : readListing(this.deps, scan, signal);
+    return gated
+      ? gated.read(scan, signal)
+      : readListing(
+          {
+            ...this.deps,
+            checkpoint: (scanId) => checkScanCancellation(this.deps.store, scanId),
+          },
+          scan,
+          signal,
+        );
   }
 
   /** Every listed product goes into its queue; the scan's ID makes a rerun add nothing. */
@@ -162,38 +196,4 @@ export class BrandScanRunner {
     }
     return this.deps.amazonQueue;
   }
-}
-
-const keyOf = (item: { listingId: string; variantId: string | null }) =>
-  `${item.listingId}\u0000${item.variantId ?? ""}`;
-
-/** Listed products split into new and already known; known listings the listing no longer shows. */
-function compare(listing: BrandListing, known: QueuedProduct[]) {
-  const knownKeys = new Set(known.map(keyOf));
-  const listedKeys = new Set(listing.products.map(keyOf));
-  const knownListings = [...listedKeys].filter((key) => knownKeys.has(key)).length;
-  return {
-    newListings: listedKeys.size - knownListings,
-    knownListings,
-    missing: known.filter((item) => !listedKeys.has(keyOf(item))),
-  };
-}
-
-function emptyResult(): ScanResult {
-  return {
-    state: "review",
-    pages: 0,
-    products: 0,
-    families: 0,
-    unresolvedFamilies: 0,
-    statedTotal: null,
-    full: false,
-    capped: false,
-    newListings: null,
-    knownListings: null,
-    missing: 0,
-    queued: 0,
-    credits: 0,
-    code: null,
-  };
 }

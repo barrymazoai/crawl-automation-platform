@@ -1,4 +1,6 @@
+import type { CancelScans, CancelScanCounts } from "./scan-cancellation.js";
 import type {
+  BrowserScanRequest,
   ListingPage,
   ListingPageRead,
   ListingPageRequest,
@@ -24,6 +26,8 @@ export interface BrandScanStore {
    * (their pages are archived, so running them again reads the archive and pays nothing twice).
    */
   claim(limit: number, staleMs: number): Promise<ScanRecord[]>;
+  cancel(query: CancelScans): Promise<CancelScanCounts>;
+  isCancellationRequested(scanId: string): Promise<boolean>;
   finish(scanId: string, result: ScanResult): Promise<void>;
   list(query: ScanListQuery): Promise<ScanRecord[]>;
   get(scanId: string): Promise<ScanRecord | null>;
@@ -60,7 +64,7 @@ export interface BrowserBrandScan {
 export interface BrowserBrandScanner {
   sourceUrl(url: string): string;
   scan(
-    request: { scanId: string; sourceUrl: string; sourceId?: string | undefined },
+    request: BrowserScanRequest & { sourceId?: string | undefined },
     signal: AbortSignal,
   ): Promise<BrowserBrandScan>;
 }

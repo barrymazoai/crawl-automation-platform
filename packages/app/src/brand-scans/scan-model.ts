@@ -31,7 +31,14 @@ export const RequestScansSchema = z
   });
 export type RequestScans = z.infer<typeof RequestScansSchema>;
 
-export const ScanStateSchema = z.enum(["queued", "running", "complete", "partial", "review"]);
+export const ScanStateSchema = z.enum([
+  "queued",
+  "running",
+  "complete",
+  "partial",
+  "review",
+  "cancelled",
+]);
 export type ScanState = z.infer<typeof ScanStateSchema>;
 
 export const ScanListQuerySchema = z.strictObject({
@@ -107,6 +114,7 @@ export interface ScanRecord {
   requestedAt: string;
   startedAt: string | null;
   finishedAt: string | null;
+  cancellationRequestedAt?: string | null;
 }
 
 export { ListingScanMetricsSchema } from "@crawl-automation/channels-core";

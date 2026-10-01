@@ -1,3 +1,5 @@
+import { cancelledScanResult } from "@crawl-automation/app";
+import { PostgresScanCancellation } from "./postgres-scan-cancellation.js";
 import type {
   BrandScanStore,
   QueuedProduct,
@@ -28,8 +30,10 @@ const KnownRow = z.object({
 });
 
 /** `brand_scan` and the brand sources it reads. A finished scan is never changed (the table's trigger). */
-export class PostgresBrandScans implements BrandScanStore {
-  constructor(private readonly database: Database) {}
+export class PostgresBrandScans extends PostgresScanCancellation implements BrandScanStore {
+  constructor(private readonly database: Database) {
+    super(database);
+  }
 
   async sources(sourceIds: readonly string[]): Promise<ScanSource[]> {
     const rows = await this.database.query(
@@ -94,9 +98,19 @@ export class PostgresBrandScans implements BrandScanStore {
 
   async finish(scanId: string, result: ScanResult): Promise<void> {
     await this.database.query(
-      `UPDATE brand_scan SET state = $2, result = $3::jsonb, code = $4, finished_at = clock_timestamp()
+      `UPDATE brand_scan SET
+         state = CASE WHEN cancellation_requested_at IS NULL THEN $2 ELSE 'cancelled' END,
+         result = CASE WHEN cancellation_requested_at IS NULL THEN $3::jsonb ELSE $5::jsonb END,
+         code = CASE WHEN cancellation_requested_at IS NULL THEN $4 ELSE $5::jsonb->>'code' END,
+         finished_at = clock_timestamp()
        WHERE scan_id = $1::uuid AND finished_at IS NULL`,
-      [scanId, result.state, JSON.stringify(result), result.code],
+      [
+        scanId,
+        result.state,
+        JSON.stringify(result),
+        result.code,
+        JSON.stringify(cancelledScanResult(result)),
+      ],
     );
   }
 
