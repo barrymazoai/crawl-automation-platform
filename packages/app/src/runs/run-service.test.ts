@@ -52,6 +52,7 @@ const permit: HeldPermit = {
   runId: "product-1-run",
   resources: ["mini-ego-space-1"],
   grantedAt: "2026-09-29T11:30:00.000Z",
+  cleanup: { state: "stopped", attempts: 1, failure: null, executions: [] },
 };
 
 interface Setup {

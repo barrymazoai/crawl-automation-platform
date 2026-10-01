@@ -16,16 +16,27 @@ export async function judgePermits(
   reader: StopEvidenceReader,
   now: Date,
 ): Promise<JudgedPermit[]> {
-  const verdicts = new Map<string, StopVerdict>();
+  const evidenceByOwner = new Map<string, StopEvidence | null>();
   for (const permit of permits) {
     const owner = `${permit.workflowId}/${permit.runId}`;
-    if (!verdicts.has(owner)) {
+    if (!evidenceByOwner.has(owner)) {
       const evidence = await reader.stopEvidence(permit.workflowId, permit.runId);
-      verdicts.set(owner, stopVerdict(evidence, now));
+      evidenceByOwner.set(owner, evidence);
     }
   }
-  return permits.map((permit) => ({
-    permit,
-    verdict: verdicts.get(`${permit.workflowId}/${permit.runId}`) ?? "not-proven",
-  }));
+  return permits.map((permit) => {
+    const evidence = evidenceByOwner.get(`${permit.workflowId}/${permit.runId}`);
+    return {
+      permit,
+      verdict: stopVerdict(
+        evidence
+          ? {
+              ...evidence,
+              executionStopped: permit.cleanup?.state === "stopped",
+            }
+          : null,
+        now,
+      ),
+    };
+  });
 }

@@ -1,4 +1,7 @@
 import type { Logger } from "@crawl-automation/platform";
+import { appErrors } from "../errors.js";
+import type { FamilyFormulaQuery } from "./family-formula-outcome.js";
+import { reconcileFamilyFormulas } from "./reconcile-family-formulas.js";
 import type {
   AddToQueue,
   AmazonMigrationPreview,
@@ -35,7 +38,7 @@ export class QueueService {
     return this.deps.channels.items(query);
   }
 
-  async add(input: AddToQueue): Promise<{ added: number }> {
+  async add(input: AddToQueue): Promise<{ added: number; following?: number }> {
     const result = await this.deps.channels.add(input);
     const list = input.batchId;
     this.deps.log.info({ channel: input.channel, list, ...result }, "products queued");
@@ -68,5 +71,16 @@ export class QueueService {
 
   amazonMigrationPreview(): Promise<AmazonMigrationPreview> {
     return this.deps.amazonHistory.migrationPreview();
+  }
+
+  familyOutcomes(query: FamilyFormulaQuery) {
+    if (!this.deps.channels.familyOutcomes) {
+      throw appErrors.create("QUEUE.NOT_CONFIGURED");
+    }
+    return this.deps.channels.familyOutcomes(query);
+  }
+
+  reconcileFamilyOutcomes(query: FamilyFormulaQuery) {
+    return reconcileFamilyFormulas(this.deps.channels, query);
   }
 }

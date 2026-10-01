@@ -1,6 +1,7 @@
 import type { HeldPermit, PermitStore, ResourceState, ResourceStore } from "@crawl-automation/app";
 import type { Database } from "@crawl-automation/platform";
 import { z } from "zod";
+import { PermitCleanupSchema, permitCleanupView } from "./permit-cleanup-view.js";
 
 const ResourceRow = z.object({
   resourceId: z.string(),
@@ -16,11 +17,12 @@ const PermitRow = z.object({
   runId: z.string(),
   resources: z.array(z.string()),
   grantedAt: z.date(),
+  cleanup: PermitCleanupSchema,
 });
 
 const selectHeld = `
   SELECT p.permit_id AS "permitId", p.request->>'workflowId' AS "workflowId",
-    p.request->>'runId' AS "runId",
+    p.request->>'runId' AS "runId", ${permitCleanupView},
     array_agg(n.resource_id ORDER BY n.resource_id) AS resources, p.granted_at AS "grantedAt"
   FROM resource_permit p JOIN resource_permit_need n USING (permit_id)
   WHERE p.released_at IS NULL`;

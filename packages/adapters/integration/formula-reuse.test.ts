@@ -101,13 +101,14 @@ describe.skipIf(!hasPostgres)("formula reuse against a real PostgreSQL", () => {
     expect(await lookup.findKnown({ channel: "swanson", ...asin })).toBeNull();
   });
 
-  it("a family member is matched by listing, its variant only when both name one; a product's own formula strictly", async () => {
+  it("both a family member and a product's own formula require the exact variant", async () => {
     const channels = ["swanson"];
     expect(
       await index.findForMember({ channels, listingId: "omega-60", variantId: "4412" }),
-    ).toEqual({
-      operationId: "swanson-60",
-    });
+    ).toBeNull();
+    expect(await index.findForMember({ channels, listingId: "omega-60", variantId: null })).toEqual(
+      { operationId: "swanson-60", listingId: "omega-60", variantId: null },
+    );
     expect(
       await index.findKnown({ channels, listingId: "omega-60", variantId: "4412" }),
     ).toBeNull();
@@ -171,7 +172,22 @@ describe.skipIf(!hasPostgres)("formula reuse against a real PostgreSQL", () => {
       },
     });
     // The label text lacks the saved formula's rows, so the product is extracted in full: nothing linked.
-    expect(result).toEqual({ status: "extract", reason: "FORMULA.LABEL_MISMATCH" });
+    expect(result).toEqual({
+      status: "extract",
+      reason: "FORMULA.LABEL_MISMATCH",
+      coverage: {
+        scope: "enumerated-family",
+        members: [
+          {
+            listingId: "omega-60",
+            variantId: null,
+            url: "https://www.swansonvitamins.com/p/omega-60",
+            seen: false,
+            queued: false,
+          },
+        ],
+      },
+    });
   });
 });
 

@@ -2,6 +2,7 @@ import { describeCodexError } from "../codex/error-detail.js";
 import { platformErrors } from "../errors/platform-errors.js";
 import { errorCodeOf } from "../errors/error-code.js";
 import { createLogger } from "../logger/create-logger.js";
+import { currentMeasurement } from "../logging/measurement-context.js";
 
 const log = createLogger({ name: "artifact-storage" });
 
@@ -12,5 +13,15 @@ export function logStorageRecovery(
   context: Record<string, unknown> = {},
 ): void {
   const code = errorCodeOf(error) ?? platformErrors.code("RUNTIME.RECOVERY_FAILED");
-  log.warn({ runId: null, ...context, code, reason: describeCodexError(error) }, message);
+  log.warn(
+    {
+      runId: null,
+      ...currentMeasurement()?.identity,
+      ...context,
+      code,
+      outcomeCode: code,
+      reason: describeCodexError(error),
+    },
+    message,
+  );
 }

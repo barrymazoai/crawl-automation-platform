@@ -126,7 +126,7 @@ describe("GNC product planning on the real 877080 page", () => {
     }
   });
 
-  it("plans the complete Supplement Facts table as the only formula source, with no image", async () => {
+  it("plans complete Supplement Facts first and retains inactive image fallbacks", async () => {
     const remote = new Memory();
     const publication = new RetainedPublication(new Memory(), remote);
     const registry = new ChannelRegistry([gncAdapter]);
@@ -156,7 +156,17 @@ describe("GNC product planning on the real 877080 page", () => {
 
     expect(planned.status).toBe("prepared");
     const sources = planned.status === "prepared" ? planned.manifest.sources : [];
-    expect(sources.map((source) => [source.kind, source.required])).toEqual([["page", true]]);
+    expect(result.sourcePlan.sourcePolicy).toEqual({
+      version: "label-sources/1",
+      order: "text-first",
+    });
+    expect(sources.map((source) => [source.kind, source.required])).toEqual([
+      ["page", true],
+      ["file-image", false],
+      ["file-image", false],
+      ["file-image", false],
+      ["file-image", false],
+    ]);
     expect(gncAdapter.planning).toMatchObject({
       corePolicy: "gnc-label-core/1",
       labelCore: gncLabelCore,

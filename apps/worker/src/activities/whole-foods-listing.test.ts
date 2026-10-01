@@ -85,7 +85,12 @@ it("archives each observation byte-exact and queues the first-seen union through
     asins[0],
     asins[2],
   ]);
-  expect(listing).toMatchObject({ full: true, statedTotal: 2, credits: 2 });
+  expect(listing).toMatchObject({
+    full: false,
+    statedTotal: 2,
+    credits: 2,
+    metrics: { catalogueAgreement: false, unionSize: 3 },
+  });
   for (let index = 0; index < originals.length; index++) {
     const key = `v3/brand-scans/scan/read-${index + 1}-page-1-attempt-1.json`;
     expect(Buffer.from(test.data.get(key) ?? []).toString()).toBe(originals[index]);
@@ -108,12 +113,15 @@ it("archives each observation byte-exact and queues the first-seen union through
     }),
   );
   expect(runner.results[0]).toMatchObject({
-    state: "complete",
+    state: "partial",
     products: 3,
     statedTotal: 2,
     credits: 2,
-    metrics: { unionSize: 3 },
+    full: false,
+    missing: 0,
+    metrics: { unionSize: 3, catalogueAgreement: false },
   });
+  expect(runner.requestRevisits).not.toHaveBeenCalled();
 });
 
 function runnerFixture(test: ReturnType<typeof fixture>) {

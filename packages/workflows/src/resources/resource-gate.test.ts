@@ -3,12 +3,17 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 const state = vi.hoisted(() => ({
   reserve: vi.fn(),
   release: vi.fn(),
+  prepare: vi.fn(),
+  stop: vi.fn(),
+  patched: true,
+  log: vi.fn(),
   options: [] as Array<Record<string, unknown>>,
   protected: 0,
   now: 0,
 }));
 
 vi.mock("@temporalio/workflow", () => ({
+  log: { info: state.log },
   ApplicationFailure: class extends Error {
     constructor(
       message: string,
@@ -22,6 +27,7 @@ vi.mock("@temporalio/workflow", () => ({
     }
   },
   ActivityCancellationType: { WAIT_CANCELLATION_COMPLETED: "WAIT" },
+  patched: () => state.patched,
   CancellationScope: {
     nonCancellable: async (run: () => Promise<unknown>) => {
       state.protected++;
@@ -38,7 +44,12 @@ vi.mock("@temporalio/workflow", () => ({
   }),
   proxyActivities: (options: Record<string, unknown>) => {
     state.options.push(options);
-    return { reserveResources: state.reserve, releaseResources: state.release };
+    return {
+      reserveResources: state.reserve,
+      releaseResources: state.release,
+      prepareResourceExecution: state.prepare,
+      stopResourceExecution: state.stop,
+    };
   },
   sleep: async (milliseconds: number) => {
     state.now += milliseconds;
@@ -50,12 +61,18 @@ import { resourceGate } from "./resource-gate.js";
 const config = {
   queue: "resources",
   maxWaitSeconds: 10,
+  stopVerificationSeconds: 150,
+  stopVerificationPollSeconds: 5,
   activities: { work: [{ resourceId: "model", units: 1 }] },
 };
 
 beforeEach(() => {
   state.reserve.mockReset();
   state.release.mockReset();
+  state.prepare.mockReset();
+  state.stop.mockReset();
+  state.patched = true;
+  state.log.mockReset();
   state.options = [];
   state.protected = 0;
   state.now = 0;
@@ -68,6 +85,11 @@ beforeEach(() => {
     expect(state.protected).toBeGreaterThan(0);
     return { permitId, status: "released", reason: "released" };
   });
+  state.stop.mockImplementation(async ({ permitId }: { permitId: string }) => ({
+    permitId,
+    state: "stopped",
+    attempts: 1,
+  }));
 });
 
 afterEach(() => vi.restoreAllMocks());
@@ -81,6 +103,8 @@ it("releases completion and supplies cancellation acknowledgement and heartbeats
       heartbeatTimeout: "30 seconds",
     }),
   );
+  expect(state.prepare).not.toHaveBeenCalled();
+  expect(state.stop).not.toHaveBeenCalled();
   expect(state.release).toHaveBeenCalledWith(state.reserve.mock.calls[0]?.[0]);
   expect(state.options.map((options) => options.retry)).toMatchObject([
     { maximumAttempts: 1 },
@@ -89,7 +113,7 @@ it("releases completion and supplies cancellation acknowledgement and heartbeats
 });
 
 it.each(["failure", "cancellation", "timeout"])(
-  "releases after %s and preserves the error",
+  "releases unknown %s only after proof and preserves the error",
   async (name) => {
     const failure = new Error(name);
     await expect(
@@ -156,5 +180,139 @@ it("gives concurrent calls distinct permit IDs", async () => {
 it("ungated work does not touch the permit ledger", async () => {
   expect(await resourceGate(undefined)("work", async () => "done")).toBe("done");
   expect(state.reserve).not.toHaveBeenCalled();
+  expect(state.release).not.toHaveBeenCalled();
+});
+
+it("logs requested/granted/released times while retaining the existing wait cadence", async () => {
+  state.reserve.mockResolvedValueOnce({
+    permitId: "permit-7b0c6a52-3a47-4f5b-9a4e-4c3c1f0a9d11-0",
+    status: "waiting",
+    reason: "capacity",
+  });
+  await resourceGate(config)("work", async () => "done");
+  expect(state.log.mock.calls.map(([message]) => message)).toEqual([
+    "resource permit requested",
+    "resource permit granted",
+    "resource permit released",
+  ]);
+  expect(state.log.mock.calls[1]?.[1]).toMatchObject({
+    requestedAt: 0,
+    grantedAt: 10_000,
+    waitMs: 10_000,
+  });
+  expect(state.log.mock.calls[2]?.[1]).toMatchObject({ releasedAt: 10_000 });
+});
+
+it("holds unknown OCR execution after its bounded stop window and preserves the failure", async () => {
+  state.stop.mockImplementation(async ({ permitId }: { permitId: string }) => ({
+    permitId,
+    state: "CLEANUP_UNVERIFIED",
+    attempts: 3,
+  }));
+  const work = vi.fn(async () => {
+    throw new Error("OCR outcome unknown");
+  });
+  await expect(resourceGate(config)("work", work)).rejects.toMatchObject({
+    type: "RESOURCE.CLEANUP_UNVERIFIED",
+  });
+  expect(state.prepare).not.toHaveBeenCalled();
+  expect(state.stop).toHaveBeenCalledTimes(31);
+  expect(state.stop).toHaveBeenLastCalledWith(
+    expect.objectContaining({
+      cleanupFailure: { message: "Error: OCR outcome unknown" },
+    }),
+  );
+  expect(state.release).not.toHaveBeenCalled();
+  expect(work).toHaveBeenCalledOnce();
+  expect(state.now).toBe(150_000);
+});
+
+it("releases an unknown execution only after its durable stop proof arrives", async () => {
+  state.stop.mockResolvedValueOnce({
+    permitId: "permit-7b0c6a52-3a47-4f5b-9a4e-4c3c1f0a9d11-0",
+    state: "CLEANUP_UNVERIFIED",
+    attempts: 1,
+  });
+  const error = new Error("OCR outcome unknown");
+  await expect(
+    resourceGate(config)("work", async () => {
+      throw error;
+    }),
+  ).rejects.toBe(error);
+  expect(state.stop).toHaveBeenCalledTimes(2);
+  expect(state.release).toHaveBeenCalledOnce();
+  expect(state.stop.mock.invocationCallOrder[1]).toBeLessThan(
+    state.release.mock.invocationCallOrder[0] ?? 0,
+  );
+});
+
+it("a successful result with unproved external cleanup still keeps the permit held", async () => {
+  state.stop.mockResolvedValue({ permitId: "wrong", state: "stopped", attempts: 1 });
+  await expect(
+    resourceGate(config)("work", async () => ({ cleanup: { stopped: false } })),
+  ).rejects.toMatchObject({
+    type: "RESOURCE.CLEANUP_UNVERIFIED",
+  });
+  expect(state.release).not.toHaveBeenCalled();
+});
+
+it("replays a pre-proof gate without introducing cleanup activity commands", async () => {
+  state.patched = false;
+  await resourceGate(config)("work", async () => "done");
+  expect(state.prepare).not.toHaveBeenCalled();
+  expect(state.stop).not.toHaveBeenCalled();
+  expect(state.release).toHaveBeenCalledOnce();
+});
+
+it("keeps known executed failures on the old activity sequence", async () => {
+  const { ApplicationFailure } = await import("@temporalio/workflow");
+  const failure = ApplicationFailure.nonRetryable("challenge", "BRAND_SCAN.ACCESS_CHALLENGE");
+  await expect(
+    resourceGate(config)("work", async () => {
+      throw failure;
+    }),
+  ).rejects.toBe(failure);
+  expect(state.prepare).not.toHaveBeenCalled();
+  expect(state.stop).not.toHaveBeenCalled();
+  expect(state.release).toHaveBeenCalledOnce();
+});
+
+it("checks pending cleanup rejected by the release transaction without rerunning work", async () => {
+  const { ApplicationFailure } = await import("@temporalio/workflow");
+  state.release.mockRejectedValueOnce(
+    ApplicationFailure.nonRetryable("pending", "RESOURCE.CLEANUP_UNVERIFIED"),
+  );
+  const work = vi.fn(async () => ({ status: "review" }));
+  await expect(resourceGate(config)("work", work)).resolves.toEqual({ status: "review" });
+  expect(state.stop).toHaveBeenCalledOnce();
+  expect(state.release).toHaveBeenCalledTimes(2);
+  expect(work).toHaveBeenCalledOnce();
+});
+
+it("waits past OCR's 90 second hard limit for a durable receipt", async () => {
+  state.stop.mockImplementation(async ({ permitId }: { permitId: string }) => ({
+    permitId,
+    state: state.now >= 95_000 ? "stopped" : "CLEANUP_UNVERIFIED",
+    attempts: 1,
+  }));
+  await resourceGate(config)("work", async () => ({ executionFact: "unknown" }));
+  expect(state.now).toBe(95_000);
+  expect(state.release).toHaveBeenCalledOnce();
+});
+
+it("uses a configured bounded window and never releases on unknown", async () => {
+  state.stop.mockImplementation(async ({ permitId }: { permitId: string }) => ({
+    permitId,
+    state: "unknown",
+    attempts: 1,
+  }));
+  await expect(
+    resourceGate({ ...config, stopVerificationSeconds: 2, stopVerificationPollSeconds: 1 })(
+      "work",
+      async () => ({ executionFact: "unknown" }),
+    ),
+  ).rejects.toMatchObject({ type: "RESOURCE.CLEANUP_UNVERIFIED" });
+  expect(state.now).toBe(2_000);
+  expect(state.stop).toHaveBeenCalledTimes(3);
   expect(state.release).not.toHaveBeenCalled();
 });

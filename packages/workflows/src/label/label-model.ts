@@ -2,6 +2,8 @@ import {
   ExecutionIdSchema,
   ImageOcrPrepareOutcomeSchema,
   LabelEvidencePolicySchema,
+  LabelSourcePolicySchema,
+  LabelPreparationSchema,
   LabelProductManifestSchema,
   LabelProductSourceSchema,
   ObservationSchema,
@@ -19,20 +21,26 @@ const queue = z.string().min(1).max(200);
  * One product's label task, for every channel. It mirrors processing's `LabelPlanInputSchema` field for field: the
  * workflow bundle cannot load the processing package, and every activity re-checks the task with that schema.
  */
-export const LabelTaskSchema = z.strictObject({
-  operationId: ExecutionIdSchema,
-  owner: ObservationSchema,
-  plan: z.strictObject({
+export const LabelTaskSchema = z
+  .strictObject({
     operationId: ExecutionIdSchema,
-    sourceOperationId: ExecutionIdSchema,
-    input: z.json(),
-  }),
-  text: TextCompatibilitySchema.refine((text) => text.resultSchemaVersion === 3),
-  visionConfigFingerprint: Sha256Schema,
-  corePolicy: z.string().min(1).max(120).optional(),
-  evidencePolicy: LabelEvidencePolicySchema.optional(),
-  admission: z.literal("label-packaging/1").optional(),
-});
+    owner: ObservationSchema,
+    plan: z.strictObject({
+      operationId: ExecutionIdSchema,
+      sourceOperationId: ExecutionIdSchema,
+      input: z.json(),
+    }),
+    text: TextCompatibilitySchema.refine((text) => text.resultSchemaVersion === 3),
+    visionConfigFingerprint: Sha256Schema,
+    corePolicy: z.string().min(1).max(120).optional(),
+    evidencePolicy: LabelEvidencePolicySchema.optional(),
+    sourcePolicy: LabelSourcePolicySchema.optional(),
+    admission: z.literal("label-packaging/1").optional(),
+  })
+  .refine(
+    (input) => !input.sourcePolicy || input.evidencePolicy === "label-image-first/6",
+    "Ordered labels retain the current merge safeguards",
+  );
 export type LabelTask = z.infer<typeof LabelTaskSchema>;
 
 /** The Label workflow's input: the task, its three task queues and its permits. */
@@ -71,6 +79,7 @@ export const LoadedPlanSchema = z.strictObject({
   input: LabelTaskSchema,
   manifest: SavedProductWorkflowInputSchema.shape.manifest,
   imageOrder: z.array(ExecutionIdSchema).max(100).optional(),
+  labelPreparation: LabelPreparationSchema.optional(),
 });
 
 const SourceRequestSchema = z.strictObject({ input: LabelTaskSchema, sourceId: ExecutionIdSchema });

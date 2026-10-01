@@ -182,9 +182,31 @@ it("keeps the first read when the second exhausts its empty tries; no canary", a
 it("counts the union even when different successful reads have different totals", async () => {
   const test = setup([answer([2, 1]), answer([3, 2, 4])]);
   expect(await test.run()).toMatchObject({
-    complete: true,
+    complete: false,
     statedTotal: 2,
-    metrics: { unionSize: 4, reads: [{ availableCounts: [2] }, { availableCounts: [3] }] },
+    metrics: {
+      readsFinished: true,
+      catalogueAgreement: false,
+      unionSize: 4,
+      reads: [{ availableCounts: [2] }, { availableCounts: [3] }],
+    },
+  });
+});
+
+it("does not call equal counts a full catalogue when the ASIN sets differ", async () => {
+  const result = await setup([answer([1, 2]), answer([2, 3])]).run();
+  expect(result).toMatchObject({
+    complete: false,
+    credits: 2,
+    metrics: { readsFinished: true, catalogueAgreement: false, unionSize: 3 },
+  });
+});
+
+it("accepts matching full sets in different orders", async () => {
+  const result = await setup([answer([1, 2]), answer([2, 1])]).run();
+  expect(result).toMatchObject({
+    complete: true,
+    metrics: { readsFinished: true, catalogueAgreement: true, unionSize: 2 },
   });
 });
 

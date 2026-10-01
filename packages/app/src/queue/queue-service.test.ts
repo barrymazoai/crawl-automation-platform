@@ -98,6 +98,30 @@ describe("QueueService", () => {
     await expect(service.resume("amazon")).rejects.toBe(error);
     expect(channels.status).not.toHaveBeenCalled();
   });
+
+  it("reads and reconciles family outcomes without requeueing Whole Foods", async () => {
+    const { channels, service } = fixture();
+    channels.familyOutcomes = vi.fn(async () => []);
+    channels.recordFamilyOutcome = vi.fn(async () => undefined);
+    channels.findFamilyFormula = vi.fn(async () => null);
+    const query = { operationIds: ["wf-capture"] };
+    expect(await service.familyOutcomes(query)).toEqual([]);
+    expect(await service.reconcileFamilyOutcomes(query)).toEqual([]);
+    expect(channels.familyOutcomes).toHaveBeenCalledWith(query);
+    expect(channels.familyOutcomes).toHaveBeenCalledTimes(3);
+    expect(channels.add).not.toHaveBeenCalled();
+    expect(channels.requeue).not.toHaveBeenCalled();
+  });
+
+  it("refuses missing outcome storage explicitly", async () => {
+    const { service } = fixture();
+    expect(() => service.familyOutcomes({ operationIds: ["wf"] })).toThrow(
+      expect.objectContaining({ code: "QUEUE.NOT_CONFIGURED" }),
+    );
+    await expect(service.reconcileFamilyOutcomes({ operationIds: ["wf"] })).rejects.toMatchObject({
+      code: "QUEUE.NOT_CONFIGURED",
+    });
+  });
 });
 
 describe("queue inputs", () => {

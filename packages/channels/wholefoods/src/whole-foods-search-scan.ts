@@ -38,7 +38,8 @@ function outcome(
   reads: WholeFoodsSearchRead[],
 ): ListingScanOutcome {
   const pages = reads.flatMap((read) => read.pages);
-  const complete = reads.length === 2 && reads.every((read) => read.summary.succeeded);
+  const readsFinished = reads.length === 2 && reads.every((read) => read.summary.code === null);
+  const complete = readsFinished && catalogueAgreement(reads);
   const code = reads.find((read) => read.summary.code)?.summary.code ?? null;
   return {
     pages,
@@ -47,14 +48,35 @@ function outcome(
     statedTotal: reads[0]?.pages[0]?.statedTotal ?? null,
     ...(pages.some((page) => page.cards > 0) ? { soldHere: true } : {}),
     cooldownRequested: run.observations.cooldownRequested,
-    code: code ?? (complete ? null : wholeFoodsErrors.code("WHOLEFOODS.LISTING_UNVERIFIED")),
+    code: scanCode(code, complete),
     metrics: {
       storeId: run.settings.store.storeId,
+      readsFinished,
+      catalogueAgreement: complete,
       attempts: run.observations.attempts,
       reads: reads.map((read) => read.summary),
       unionSize: new Set(pages.flatMap((page) => page.products.map((item) => item.listingId))).size,
     },
   };
+}
+
+function catalogueAgreement(reads: WholeFoodsSearchRead[]): boolean {
+  if (!reads.every((read) => read.summary.succeeded)) {
+    return false;
+  }
+  const sets = reads.map((read) => new Set(read.pages.flatMap((page) => page.cardIds ?? [])));
+  const first = sets[0];
+  const second = sets[1];
+  return (
+    !!first &&
+    !!second &&
+    first.size === second.size &&
+    [...first].every((asin) => second.has(asin))
+  );
+}
+
+function scanCode(code: string | null, complete: boolean) {
+  return code ?? (complete ? null : wholeFoodsErrors.code("WHOLEFOODS.LISTING_UNVERIFIED"));
 }
 
 async function canaryOutcome(

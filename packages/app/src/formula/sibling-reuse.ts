@@ -4,9 +4,15 @@ import { checkSiblingLabel, hashString } from "@crawl-automation/processing";
 import { KeywordResultSchema } from "@crawl-automation/v3-contracts";
 import { SiblingReuseRequestSchema, type SiblingReuseRequest } from "@crawl-automation/workflows";
 import { formulaChannels } from "./formula-lookup.js";
-import type { FormulaFamilies, FormulaIndex, FormulaLinks, LabelImageText } from "./ports.js";
+import type {
+  FamilyCoverage,
+  FormulaFamilies,
+  FormulaIndex,
+  FormulaLinks,
+  LabelImageText,
+} from "./ports.js";
 
-export type SiblingReuseResult =
+export type SiblingReuseResult = (
   | {
       status: "reused";
       formulaOperationId: string;
@@ -14,7 +20,8 @@ export type SiblingReuseResult =
       siblingListingId: string;
       siblingVariantId: string | null;
     }
-  | { status: "extract"; reason: string };
+  | { status: "extract"; reason: string }
+) & { coverage?: FamilyCoverage };
 
 /** Only these differences may share a formula, and only after the label check. */
 const SHAREABLE: readonly string[] = ["size", "pack-count"];
@@ -55,10 +62,28 @@ export class SiblingFormulaReuse {
     if (!family.success) {
       return extract(pipelineErrors.code("FORMULA.FAMILY_UNREADABLE"));
     }
-    if (!SHAREABLE.includes(family.data.differsBy)) {
-      return extract(differsCode(family.data.differsBy));
+    const coverage = await this.deps.index.familyCoverage?.(
+      family.data.members.map((member) => ({
+        channels: formulaChannels(request.channel, this.deps.families),
+        listingId: member.listingId,
+        variantId: member.variantId,
+        memberUrl: member.url,
+      })),
+    );
+    const result = await this.reuseFamily({ request, family: family.data, signal });
+    return coverage ? { ...result, coverage } : result;
+  }
+
+  private async reuseFamily(input: {
+    request: SiblingReuseRequest;
+    family: ProductFamily;
+    signal: AbortSignal | undefined;
+  }): Promise<SiblingReuseResult> {
+    const { request, family, signal } = input;
+    if (!SHAREABLE.includes(family.differsBy)) {
+      return extract(differsCode(family.differsBy));
     }
-    const found = await this.firstSiblingFormula(request, family.data);
+    const found = await this.firstSiblingFormula(request, family);
     if (!found) {
       return extract(pipelineErrors.code("FORMULA.NO_SIBLING_FORMULA"));
     }
@@ -67,7 +92,7 @@ export class SiblingFormulaReuse {
     if (!label) {
       return extract(pipelineErrors.code("FORMULA.LABEL_TEXT_UNAVAILABLE"));
     }
-    return this.checkAndLink({ request, family: family.data, found, label });
+    return this.checkAndLink({ request, family, found, label });
   }
 
   /** The first family member, in page order, that has a formula across this channel's formula family. */
@@ -78,9 +103,19 @@ export class SiblingFormulaReuse {
     const channels = formulaChannels(request.channel, this.deps.families);
     for (const member of family.members) {
       const { listingId, variantId } = member;
-      const formula = await this.deps.index.findForMember({ channels, listingId, variantId });
-      if (formula) {
-        return { member, operationId: formula.operationId };
+      const formula = await this.deps.index.findForMember({
+        channels,
+        listingId,
+        variantId,
+        memberUrl: member.url,
+      });
+      if (formula && (formula.variantId === undefined || formula.variantId === variantId)) {
+        const resolved = {
+          ...member,
+          listingId: formula.listingId ?? listingId,
+          variantId: formula.variantId === undefined ? variantId : formula.variantId,
+        };
+        return { member: resolved, operationId: formula.operationId };
       }
     }
     return null;

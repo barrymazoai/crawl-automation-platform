@@ -1,5 +1,6 @@
 import {
   createEvidenceService,
+  createReviewRecovery,
   PostgresHtmlCaptureReader,
   PostgresReviewStore,
 } from "@crawl-automation/adapters";
@@ -41,5 +42,7 @@ export function originalEvidenceService(parts: ReadParts): OriginalEvidenceServi
 export function reviewService(parts: ReadParts): ReviewService {
   const reviews = new PostgresReviewStore(parts.database);
   const evidence = parts.storageReaders?.readers;
-  return new ReviewService(evidence ? { reviews, evidence } : { reviews });
+  const recovery =
+    parts.storageReaders && createReviewRecovery(parts.database, parts.storageReaders.recovery);
+  return new ReviewService(evidence && recovery ? { reviews, evidence, recovery } : { reviews });
 }

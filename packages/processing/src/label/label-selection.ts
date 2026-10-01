@@ -20,6 +20,8 @@ import {
 } from "./selection-checks.js";
 import type { LabelInspection, SelectionContext, SelectionOutcome } from "./selection-model.js";
 import { SkipEvidence } from "./skip-evidence.js";
+import { LabelOrderedSelection } from "./ordered-selection.js";
+import { OrderedProgressSchema, OrderedSelectionSchema } from "./ordered-model.js";
 
 type Source = LabelProductManifest["sources"][number];
 
@@ -34,6 +36,7 @@ const unverified = () => labelFailure("CHANNEL.LABEL_SELECTION_UNVERIFIED");
 export class LabelImageSelection {
   private readonly inspection: LabelInspection;
   private readonly evidence: SkipEvidence;
+  private readonly ordered: LabelOrderedSelection;
 
   constructor(
     private readonly plans: LabelPlans,
@@ -41,10 +44,14 @@ export class LabelImageSelection {
   ) {
     this.inspection = deps.inspection;
     this.evidence = new SkipEvidence(deps);
+    this.ordered = new LabelOrderedSelection(plans, deps);
   }
 
   /** Whether one image's registered answer holds a complete, intact label. */
   async imageCheck(raw: unknown, signal: AbortSignal) {
+    if (OrderedProgressSchema.safeParse(raw).success) {
+      return this.ordered.inspect(raw, signal);
+    }
     const request = LabelSourceRequestSchema.parse(raw);
     if (request.input.evidencePolicy !== "label-image-first/5") {
       throw labelFailure("CHANNEL.LABEL_SELECTION_UNAVAILABLE");
@@ -61,6 +68,9 @@ export class LabelImageSelection {
   }
 
   async manifest(raw: unknown, signal: AbortSignal): Promise<LabelManifestResult> {
+    if (OrderedSelectionSchema.safeParse(raw).success) {
+      return this.ordered.manifest(raw, signal);
+    }
     const context = await selectionContext(this.plans, raw, signal);
     await this.assertSelected(context);
     await assertFilesRetained(this.inspection, context);

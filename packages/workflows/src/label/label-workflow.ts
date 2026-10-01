@@ -1,5 +1,6 @@
 import { pipelineErrors } from "@crawl-automation/platform/errors/activity";
-import { ApplicationFailure } from "@temporalio/workflow";
+import { ApplicationFailure, patched } from "@temporalio/workflow";
+import { orderedLabel } from "./label-ordered.js";
 import { imageFirst, type Walk } from "./label-image-first.js";
 import {
   assertManifest,
@@ -28,7 +29,8 @@ import { isHeartbeatFailure } from "./activity-heartbeat.js";
  */
 export async function LabelWorkflow(raw: unknown): Promise<unknown> {
   const entry = LabelWorkflowInputSchema.parse(raw);
-  const run = labelRun(entry, labelStream(entry.input));
+  const ordered = !!entry.input.sourcePolicy && patched("label-source-order-v1");
+  const run = labelRun(entry, labelStream(entry.input, ordered));
   try {
     return await executeLabel(run);
   } catch (error) {
@@ -59,8 +61,11 @@ async function executeLabel(run: LabelRun): Promise<unknown> {
     );
   }
   const work: SourceWork = { run, issued: new Map(), ocrPending: new Map() };
-  const walk =
-    entry.input.evidencePolicy === "label-image-first/5" ? await imageFirst(work, loaded) : null;
+  const walk = run.stream.demand
+    ? await orderedLabel(work, loaded)
+    : entry.input.evidencePolicy === "label-image-first/5"
+      ? await imageFirst(work, loaded)
+      : null;
   const states = walk
     ? walk.states
     : await Promise.all(loaded.manifest.sources.map((source) => processSource(work, source)));
@@ -98,6 +103,13 @@ async function finish(
   at: { manifest: Manifest; states: State[]; walk: Walk | null },
 ): Promise<unknown> {
   const { states, walk } = at;
+  if (walk?.ordered && !walk.complete) {
+    return reviewLabel(work.run, {
+      states: [...states, ...walk.notStarted],
+      code: "CHANNEL.LABEL_NO_SOURCE",
+      ...(walk.reason ? { failures: [walk.reason], primaryFailure: walk.reason } : {}),
+    });
+  }
   const outcome = await labelManifest(work.run, walk);
   if (outcome.kind === "review") {
     return outcome.review;

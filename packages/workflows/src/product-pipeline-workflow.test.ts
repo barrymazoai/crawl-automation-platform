@@ -1,4 +1,5 @@
 import { beforeEach, expect, it, vi } from "vitest";
+import { pipelinePermits } from "./testing/pipeline-permits.js";
 
 const env = vi.hoisted(() => ({
   activities: {} as Record<string, unknown>,
@@ -22,14 +23,15 @@ vi.mock("@temporalio/workflow", () => {
     }
   }
   return {
-    log: { warn: vi.fn() },
+    defineSignal: (name: string) => name,
+    log: { warn: vi.fn(), info: vi.fn() },
     proxyActivities: ({ taskQueue }: { taskQueue: string }) => env.activities[taskQueue],
     startChild: env.start,
     workflowInfo: () => ({
       workflowId: "product-run-1",
       runId: "00000000-0000-4000-8000-000000000001",
     }),
-    patched: () => env.patched,
+    patched: (marker: string) => (marker === "product-enrichment-v1" ? false : env.patched),
     sleep: async () => undefined,
     isCancellation: (error: unknown) => (error as { type?: string }).type === "CANCELLED",
     CancellationScope: { nonCancellable: (run: () => unknown) => run() },
@@ -123,16 +125,7 @@ async function setup() {
       fixture.plans.run(raw, signal()),
     ),
   };
-  const resource = {
-    reserveResources: vi.fn(async (request: { permitId: string }) => {
-      env.held = true;
-      return { permitId: request.permitId, status: "granted", reason: "available" };
-    }),
-    releaseResources: vi.fn(async (request: { permitId: string }) => {
-      env.held = false;
-      return { permitId: request.permitId, status: "released", reason: "released" };
-    }),
-  };
+  const resource = pipelinePermits(env);
   env.activities = { pipeline, plan, resource };
   env.start.mockResolvedValue({
     signal: vi.fn(async (name: string, body: unknown) => {
@@ -380,15 +373,18 @@ it.each([false, true])(
     pipeline.findKnownFormula.mockResolvedValue(known ? { operationId: "amazon-formula" } : null);
     expect(
       await ProductPipelineWorkflow({ ...input, channel: "wholefoods", capture: "http" }),
-    ).toMatchObject({ status: "collected", ...(known ? {} : { formulaPending: true }) });
+    ).toMatchObject({
+      status: known ? "formula-linked" : "formula-pending",
+      metricsStatus: "metrics-complete",
+    });
     expect(plan.prepareChannelProduct).not.toHaveBeenCalled();
-    expect(pipeline.requestAmazonFormula).toHaveBeenCalledTimes(known ? 0 : 1);
-    if (!known) {
-      expect(pipeline.requestAmazonFormula).toHaveBeenCalledWith({
+    expect(pipeline.requestAmazonFormula).toHaveBeenCalledOnce();
+    expect(pipeline.requestAmazonFormula).toHaveBeenCalledWith(
+      expect.objectContaining({
         brandId: input.brandId,
         listingId: "B0096M5PBW",
-      });
-    }
+      }),
+    );
     expect(env.held).toBe(false);
     expect(env.start).not.toHaveBeenCalled();
   },

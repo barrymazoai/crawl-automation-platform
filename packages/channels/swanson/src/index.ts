@@ -1,4 +1,5 @@
 export { swansonAdapter } from "./adapter.js";
+export { swansonIdentityMapping } from "./identity-map.js";
 export { extractSwansonLabelCore, swansonLabelCore } from "./label-core.js";
 export { SWANSON_HTTP_POLICY } from "./adapter.js";
 export { swansonProductAddress, swansonUrl, SWANSON_ORIGIN } from "./swanson-address.js";

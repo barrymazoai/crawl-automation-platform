@@ -6,10 +6,15 @@ export const resourceGateCodes = {
   releaseUnknown: "RESOURCE.RELEASE_UNKNOWN",
   ownerQuarantined: "RESOURCE.OWNER_QUARANTINED",
   reviewStopUnverified: "RESOURCE.REVIEW_STOP_UNVERIFIED",
+  cleanupUnverified: "RESOURCE.CLEANUP_UNVERIFIED",
 } as const;
 
 /** Workflow-safe registry: this module and its imports contain no Node dependencies. */
 export const resourceGateErrors = defineErrors({
+  [resourceGateCodes.cleanupUnverified]: {
+    category: "SCHEDULER",
+    message: "Executor or task-page shutdown is unverified; the permit remains quarantined.",
+  },
   [resourceGateCodes.waitLimit]: {
     category: "SCHEDULER",
     message: "Resource wait limit reached; business execution did not start.",

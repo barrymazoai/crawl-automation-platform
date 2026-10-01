@@ -20,7 +20,14 @@ vi.mock("@temporalio/workflow", async () => {
     }
   }
   return {
-    log: { warn: vi.fn() },
+    log: { warn: vi.fn(), info: vi.fn() },
+    getExternalWorkflowHandle: () => ({
+      signal: async (name: string) => {
+        if (name === "labelSourcesFinished") {
+          env.handlers["labelStreamSealed"]?.({ operationId: "label-1", status: "closed" });
+        }
+      },
+    }),
     proxyActivities: ({ taskQueue }: { taskQueue: string }) => env.activities[taskQueue],
     defineSignal: (name: string) => name,
     setHandler: (name: string, handler: (raw: unknown) => void) => {
@@ -31,7 +38,11 @@ vi.mock("@temporalio/workflow", async () => {
     },
     patched: (marker: string) => !env.missingPatches.includes(marker),
     sleep: async () => undefined,
-    workflowInfo: () => ({ workflowId: "product-run-1-label", runId: "run-1" }),
+    workflowInfo: () => ({
+      workflowId: "product-run-1-label",
+      runId: "run-1",
+      parent: { workflowId: "parent", runId: "parent-run" },
+    }),
     isCancellation: (error: unknown) => (error as { type?: string }).type === "CANCELLED",
     CancellationScope: { nonCancellable: (run: () => unknown) => run() },
     ActivityCancellationType: { WAIT_CANCELLATION_COMPLETED: "WAIT" },
@@ -308,4 +319,36 @@ it("a heartbeat timeout writing the Review escapes without a second Review write
   steps["reviewLabelProduct"]?.mockRejectedValue(timeout);
   await expect(run("failed")).rejects.toBe(timeout);
   expect(steps["reviewLabelProduct"]).toHaveBeenCalledOnce();
+});
+
+it("runs a versioned text-first workflow through its selection manifest without image work", async () => {
+  const { steps, model } = setup();
+  const original = pageActivities();
+  const loaded = await original.loadLabelPlan();
+  const input = {
+    ...entry.input,
+    sourcePolicy: { version: "label-sources/1", order: "text-first" },
+    evidencePolicy: "label-image-first/6",
+  };
+  steps["loadLabelPlan"]?.mockResolvedValue({
+    ...loaded,
+    input,
+    imageOrder: [],
+    labelPreparation: { pageHasLabelSection: true, pageFactsComplete: true },
+  });
+  steps["inspectLabelImage"] = vi.fn(async (request) => ({
+    input: request,
+    complete: true,
+    terminal: false,
+  }));
+  const prepared = await original.prepareLabelManifest();
+  steps["prepareSingleLabelManifest"] = vi.fn(async () => ({
+    ...prepared,
+    input,
+    manifest: { ...prepared.manifest, evidencePolicy: input.evidencePolicy },
+  }));
+  expect(await LabelWorkflow({ ...entry, input })).toEqual(collected);
+  expect(model.interpretText).toHaveBeenCalledOnce();
+  expect(steps["prepareLabelManifest"]).not.toHaveBeenCalled();
+  expect(steps["prepareSingleLabelManifest"]).toHaveBeenCalledOnce();
 });

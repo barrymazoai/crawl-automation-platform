@@ -11,6 +11,10 @@ import {
   type Requeue,
 } from "@crawl-automation/app";
 import type { Database, Queryable } from "@crawl-automation/platform";
+import type { FamilyFormulaOutcome, FamilyFormulaQuery } from "@crawl-automation/app";
+import { recordFamilyOutcome, familyOutcomes } from "./queue-family-queries.js";
+import { PostgresFormulaIndex } from "./postgres-formula-index.js";
+import type { FormulaQuery } from "@crawl-automation/app";
 import {
   channelQueueItems,
   channelQueueStatus,
@@ -23,6 +27,18 @@ const sha256 = (value: unknown) => createHash("sha256").update(JSON.stringify(va
 export class PostgresChannelQueueStore implements QueueStore {
   constructor(private readonly database: Database) {}
 
+  recordFamilyOutcome(outcome: FamilyFormulaOutcome) {
+    return recordFamilyOutcome(this.database, outcome);
+  }
+
+  familyOutcomes(query: FamilyFormulaQuery) {
+    return familyOutcomes(this.database, query);
+  }
+
+  findFamilyFormula(query: FormulaQuery) {
+    return new PostgresFormulaIndex(this.database).findKnown(query);
+  }
+
   status(channel: QueueChannel) {
     return channelQueueStatus(this.database, channel);
   }
@@ -31,7 +47,7 @@ export class PostgresChannelQueueStore implements QueueStore {
     return channelQueueItems(this.database, query);
   }
 
-  add(input: AddToQueue): Promise<{ added: number }> {
+  add(input: AddToQueue): Promise<{ added: number; following?: number }> {
     return this.addList(input);
   }
 
@@ -50,13 +66,13 @@ export class PostgresChannelQueueStore implements QueueStore {
     return rows[0]?.id ?? null;
   }
 
-  private addList(input: ProductList): Promise<{ added: number }> {
+  private addList(input: ProductList): Promise<{ added: number; following?: number }> {
     return this.locked(input.channel, async (tx) => {
       await assertSourcesOnChannel(tx, input);
       if (!(await insertBatch(tx, input))) {
         return { added: 0 };
       }
-      return { added: await insertItems(tx, input) };
+      return insertItems(tx, input);
     });
   }
 
@@ -117,7 +133,7 @@ export class PostgresChannelQueueStore implements QueueStore {
         "SELECT state FROM queue_item WHERE channel = $1 AND item_id = ANY($2::text[]) FOR UPDATE",
         [input.channel, input.itemIds],
       );
-      const settled = rows.every((row) => row.state === "completed" || row.state === "review");
+      const settled = rows.every((row) => ["completed", "review", "pending"].includes(row.state));
       if (rows.length !== new Set(input.itemIds).size || !settled) {
         throw appErrors.create("QUEUE.REQUEUE_NOT_SETTLED");
       }
@@ -180,7 +196,7 @@ async function insertBatch(tx: Queryable, input: ProductList): Promise<boolean> 
 }
 
 /** One item per product of the list; the same product twice in one list is one item. */
-async function insertItems(tx: Queryable, input: ProductList): Promise<number> {
+async function insertItems(tx: Queryable, input: ProductList) {
   const rows = input.products.map((product) => ({
     item_id: sha256([input.channel, input.batchId, product.listingId, product.variantId]),
     source_id: product.sourceId,
@@ -188,13 +204,17 @@ async function insertItems(tx: Queryable, input: ProductList): Promise<number> {
     listing_id: product.listingId,
     variant_id: product.variantId,
   }));
-  const inserted = await tx.query(
+  const inserted = await tx.query<{ state: string }>(
     `INSERT INTO queue_item (item_id, channel, batch_id, source_id, url, listing_id, variant_id)
      SELECT r.item_id, $1, $2, r.source_id, r.url, r.listing_id, r.variant_id
      FROM jsonb_to_recordset($3::jsonb)
        AS r(item_id text, source_id uuid, url text, listing_id text, variant_id text)
-     ON CONFLICT DO NOTHING RETURNING item_id`,
+     ON CONFLICT DO NOTHING RETURNING item_id, state`,
     [input.channel, input.batchId, JSON.stringify(rows)],
   );
-  return inserted.length;
+  const following = inserted.filter((item) => item.state === "following").length;
+  return {
+    added: inserted.filter((item) => item.state === "queued").length,
+    ...(following ? { following } : {}),
+  };
 }

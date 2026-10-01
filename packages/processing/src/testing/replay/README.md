@@ -89,3 +89,9 @@ All paths below are relative to `packages/`.
 - `processing/src/testing/`: `simple-label.ts`; `replay/README.md`, `replay/assembly-decisions.ts`,
   `replay/saved-evidence.ts`, `replay/saved-label-replay.test.ts`, `replay/text-answers.ts`.
 - `v3-contracts/src/label-product.ts`: assembly policy enum and corresponding policy validation only.
+
+# Production recovery
+
+Text decoding is shared with `src/recheck/decode-text.ts`. This replay remains a
+counterfactual report: publication requires the bounded `reviews.recover` API,
+which verifies source bytes, registered receipts and identities before writing.

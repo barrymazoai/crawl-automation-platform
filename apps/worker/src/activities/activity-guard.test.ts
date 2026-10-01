@@ -1,7 +1,12 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 const context = vi.hoisted(() => ({
-  info: { attempt: 1, workflowExecution: { workflowId: "product-1", runId: "temporal-run-1" } },
+  info: {
+    activityId: "activity-1",
+    attempt: 1,
+    workflowExecution: { workflowId: "product-1", runId: "temporal-run-1" } as
+      { workflowId: string; runId: string } | undefined,
+  },
   heartbeat: vi.fn(),
   cancellationSignal: new AbortController().signal,
 }));
@@ -18,6 +23,7 @@ const log = createLogger({
 
 beforeEach(() => {
   context.info.attempt = 1;
+  context.info.workflowExecution = { workflowId: "product-1", runId: "temporal-run-1" };
   context.heartbeat.mockClear();
   context.cancellationSignal = new AbortController().signal;
   lines.length = 0;
@@ -29,6 +35,16 @@ it("runs the first attempt and returns its result", async () => {
   const run = guarded("captureProduct", async (raw) => ({ echoed: raw }), log);
 
   await expect(run("input")).resolves.toEqual({ echoed: "input" });
+});
+
+it("refuses provider work without its workflow owner", async () => {
+  context.info.workflowExecution = undefined;
+  const handler = vi.fn(async () => "ran");
+  await expect(guarded("captureProduct", handler, log)("input")).rejects.toMatchObject({
+    type: "RESOURCE.IDENTITY_CONFLICT",
+    nonRetryable: true,
+  });
+  expect(handler).not.toHaveBeenCalled();
 });
 
 it("refuses a second attempt without running the handler", async () => {
@@ -100,6 +116,24 @@ it("a failure without a code leaves as unresolved", async () => {
   });
 });
 
+it("preserves unknown execution and cleanup facts for the workflow gate", async () => {
+  const details = { executionFact: "unknown", cleanup: { stopped: false } };
+  const failure = new AppError("OCR.RESPONSE_UNKNOWN", "PROCESSING", { message: "lost", details });
+  await expect(
+    guarded(
+      "ocrFile",
+      async () => {
+        throw failure;
+      },
+      log,
+    )({}),
+  ).rejects.toMatchObject({
+    type: "OCR.RESPONSE_UNKNOWN",
+    details: [details],
+    nonRetryable: true,
+  });
+});
+
 it("carries the scan cool-down request in serializable Temporal failure details", async () => {
   const { wholeFoodsErrors } = await import("@crawl-automation/channels-wholefoods");
   const failure = wholeFoodsErrors.create("WHOLEFOODS.SEARCH_THROTTLED", {
@@ -125,7 +159,11 @@ it("logs start and end with the run, product, workflow and Temporal run IDs", as
   const input = { pipeline: { runId, operationId: "product-op-1" } };
   await guarded("reviewProduct", async () => "done", log)(input);
 
-  expect(lines.map((line) => line["msg"])).toEqual(["activity started", "activity finished"]);
+  expect(lines.map((line) => line["msg"])).toEqual([
+    "activity started",
+    "activity finished",
+    "usage measured",
+  ]);
   expect(lines[1]).toMatchObject({
     activity: "reviewProduct",
     runId,

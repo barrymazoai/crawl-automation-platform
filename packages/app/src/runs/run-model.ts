@@ -6,6 +6,7 @@ import {
 } from "@crawl-automation/v3-contracts";
 import { z } from "zod";
 import type { Channel } from "../delivery/delivery-coordinator.js";
+import type { PermitCleanup } from "../stops/permit-cleanup.js";
 
 /** A product page of a list run, and the brand source it belongs to. */
 export const ListRunProductSchema = z.strictObject({
@@ -100,6 +101,7 @@ export interface WorkflowMember {
 }
 
 export interface HeldPermit {
+  cleanup?: PermitCleanup;
   permitId: string;
   workflowId: string;
   /** The owner's Temporal run ID, so its stop can be checked exactly. */

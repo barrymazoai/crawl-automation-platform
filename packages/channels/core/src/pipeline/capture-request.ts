@@ -21,6 +21,10 @@ export interface CaptureRequest {
 export type PlanSettings = Pick<ChannelPlanInput, "text" | "ocr" | "visionConfigFingerprint"> & {
   egressId: string;
   factsPolicy?: ChannelPlanInput["factsPolicy"];
+  /** Whole Foods formula requests use the Amazon setting. */
+  sourceOrder?: Partial<
+    Record<Exclude<ChannelId, "wholefoods">, NonNullable<ChannelPlanInput["sourcePolicy"]>["order"]>
+  >;
 };
 
 export interface FamilyCaptureResult {

@@ -2,6 +2,8 @@ import { isDeepStrictEqual } from "node:util";
 import type { Database, Queryable } from "@crawl-automation/platform";
 import { ResourceRequestSchema, type ResourceRequest } from "@crawl-automation/v3-contracts";
 import { storeErrors } from "../errors.js";
+import { recordPermitRequest } from "./permit-events.js";
+import { assertPermitStopped } from "./permit-stop-proof.js";
 
 type Decision = { permitId: string; status: "granted" | "waiting" | "released"; reason: string };
 
@@ -22,6 +24,7 @@ export class PostgresResourceAdmission {
   async reserve(raw: unknown): Promise<Decision> {
     const request = ResourceRequestSchema.parse(raw);
     return this.database.transaction(async (tx) => {
+      await recordPermitRequest(tx, request);
       await tx.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [
         `permit:${request.permitId}`,
       ]);
@@ -64,6 +67,7 @@ export class PostgresResourceAdmission {
       if (!prior || !isDeepStrictEqual(ResourceRequestSchema.parse(prior.request), request)) {
         throw conflict();
       }
+      await assertPermitStopped(tx, request.permitId);
       await tx.query(
         "UPDATE resource_permit SET released_at = coalesce(released_at, now()) WHERE permit_id = $1",
         [request.permitId],

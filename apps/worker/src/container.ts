@@ -1,4 +1,7 @@
 import { workerChannelRegistry } from "./channel-registry.js";
+import { activityContextParts } from "./activities/activity-context-parts.js";
+import { PostgresPermitExecutions } from "@crawl-automation/adapters";
+import { configurePermitActivityLedger } from "@crawl-automation/app";
 import {
   type PostgresResourceAdmission,
   PostgresChannelQueueStore,
@@ -90,7 +93,9 @@ export async function buildContainer(config: WorkerConfig): Promise<Parts> {
       config.files.resolve === "system" ? new SystemHttpsTransport() : new DirectHttpsTransport(),
     ),
   });
+  activityContextParts(log, container.cradle.database);
   registerStores(container);
+  configurePermitActivityLedger(new PostgresPermitExecutions(container.cradle.database));
   registerServices(container);
   container.register({
     label: asFunction(buildLabelParts).singleton(),

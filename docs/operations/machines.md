@@ -513,6 +513,22 @@ SHA256:G0nkbUe2En//nb9EO4/3L5fRxR6VgQKQ5Yck534UKqU
 
 ## 美国 Windows
 
+- **2026-10-01 OCR job control（代码已接线，未部署）：** Worker 的 `processing.ocrApi.jobControl` 默认 `false`。
+  只有按 [OCR 服务部署说明](../../apps/ocr-service/README.md) 通过 Git 更新 Windows、验证全部后端支持
+  `job_control_supported=true`，并从 Mini 的既有 OCR 路由验证 `/jobs/{id}` 与取消接口后，才设置为 `true`。
+  OCR 请求与 job control 共用 `processing.ocrApi.baseUrl` 和同一个 HTTP transport；旧服务或混合版本不能开启。
+  回退旧服务前先关闭该设置；手动启动要求不变。
+- R59 的 OCR 失败清理使用独立于已取消请求的信号，`processing.ocrApi.stopVerificationTimeoutMs` 默认
+  `120000`，覆盖服务 `OCR_REQUEST_TIMEOUT_SECONDS=90` 的硬限及 30 秒余量；
+  `stopVerificationPollMs` 默认 `1000`。若调整服务硬限，同步配置清理窗口至少为硬限加余量。
+  首次取消后立即复查，随后按间隔查询同一 endpoint/job ID。只查询和取消，不重发 OCR；只有终态查询后写入
+  持久 stop proof 才能释放许可。`unknown`、取消回执、经过时长或窗口耗尽均不是停止证明，保留待恢复状态。
+- ResourceGate 的 `resources.stopVerificationSeconds` 默认 `150`、
+  `resources.stopVerificationPollSeconds` 默认 `5`，为 OCR 的 120 秒清理及持久化回执再留 30 秒余量。
+  这两个可选字段随工作流资源配置传入；调整 OCR 清理窗口时同步调整 gate 窗口。
+  正常完成和已知失败仍使用原有 reserve/work/release 活动顺序；未知结果或 release 事务发现待清理执行时，
+  才在 `resource-execution-stop-proof-v1` 分支内查询 stop journal。期限耗尽仍持有许可，不重试业务活动。
+
 - 历史核验主机名：`RC-workstation`；项目根目录 `D:\crawlv3-cloud`。
 - Node 路径：`D:\crawl-automation\tools\node-v22.17.0-win-x64\node.exe`。
 - 美国主 Mini 到 Windows 的已配置 OCR 地址：`http://192.168.68.69:8081`，健康入口 `/health`，处理入口 `/ocr`。两机已有局域网连接时使用此地址。
@@ -558,6 +574,33 @@ SHA256:G0nkbUe2En//nb9EO4/3L5fRxR6VgQKQ5Yck534UKqU
 - 这份包含内部地址的清单保留在本地工作记录；本次未授权把它发布到公开仓库。
 - [美国主 Mini 初始环境](../quality/2026-09-21-us-mac-mini-environment.md)是历史安装记录，其中“独立空库、未迁移”的描述已被后续迁移记录取代。
 - [迁移进展与局域网 OCR](../quality/2026-09-22-us-migration-progress.md) · [单商品恢复记录](../quality/2026-09-23-single-products-resumed.md) · [部署纠正约定](../quality/2026-09-22-migration-corrections.md)
+
+## Label source order (R52 integration; source only)
+
+Merge this fragment into each pipeline/browser product worker's private config:
+
+```json
+{
+  "plan": {
+    "sourceOrder": {
+      "amazon": "images-first",
+      "gnc": "text-first",
+      "swanson": "text-first",
+      "costco": "text-first",
+      "dtc": "text-first"
+    }
+  },
+  "label": { "evidencePolicy": "label-image-first/6" }
+}
+```
+
+These are the defaults when `plan.sourceOrder` or a channel entry is omitted. Each entry
+accepts `images-first` or `text-first`; unknown channels and values fail startup validation.
+Whole Foods obtains formulas through Amazon and therefore uses the Amazon entry, with no
+separate Whole Foods override. New source plans persist
+`sourcePolicy: { version: "label-sources/1", order }`; new label tasks copy that policy
+and keep the independent merge policy `label-image-first/6`. Existing saved plans and
+workflow inputs are not rewritten. This change does not start workers or retry any task.
 
 ## Costco channel (R21; source only, pending Mini acceptance)
 

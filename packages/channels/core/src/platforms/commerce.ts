@@ -15,7 +15,7 @@ export function amount(value: unknown, cents = false): string | null {
 
 export function availability(value: unknown): string | null {
   if (typeof value === "boolean") {
-    return value ? "in_stock" : "unavailable";
+    return value ? "InStock" : "OutOfStock";
   }
   return string(value)?.split("/").pop() ?? null;
 }

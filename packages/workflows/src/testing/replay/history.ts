@@ -5,6 +5,7 @@ import { expect } from "vitest";
 import {
   labelNoSourceMarker,
   pipelineMarkers,
+  stopProofMarker,
   type PatchMarker,
   type ReplayBundle,
 } from "./bundles.js";
@@ -64,6 +65,9 @@ export function expectMarkers(history: History, expected: readonly PatchMarker[]
     "formula-family-capture-v1",
     "brand-listing-gap-v1",
     "browser-scan-permit-v1",
+    "family-formula-outcomes-v1",
+    "brand-listing-cooldown-v1",
+    stopProofMarker,
   ] as const;
   const recorded = (history.events ?? []).flatMap((event) =>
     Object.values(event.markerRecordedEventAttributes?.details ?? {}).flatMap(

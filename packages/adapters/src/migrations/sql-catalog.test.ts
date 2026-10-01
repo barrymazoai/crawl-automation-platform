@@ -90,9 +90,9 @@ const legacyMigrations = [
 ];
 
 describe("release SQL catalog", () => {
-  it("pins all 001–038 names and hashes in order", async () => {
+  it("pins all 001–042 names and hashes in order", async () => {
     const catalog = await loadSqlCatalog(release);
-    expect(catalog).toHaveLength(38);
+    expect(catalog).toHaveLength(42);
     expect(catalog.map(({ name, sha256 }) => [name, sha256])).toEqual([
       ...legacyMigrations,
       [
@@ -120,8 +120,24 @@ describe("release SQL catalog", () => {
         "038_costco_brand_scan_capacity.sql",
         "ae88a07cd47d8801e646577fec76458ebc8ad3d900ce9b215bfcb2f5bc423201",
       ],
+      [
+        "039_shared_enrichment.sql",
+        "ea58f192cbb70f3705b4f5359bd7c2637be7f446caaba8f03b53b70afa601924",
+      ],
+      [
+        "040_queue_followers_family_outcomes.sql",
+        "727271d20210ed9c26d3c0d5b923648898e4f51c17f95994c0a177c438e882bd",
+      ],
+      [
+        "041_usage_attribution.sql",
+        "371346765ad7ea48cb33c90b43414b1fe95893f002159f1215e0d64989db520d",
+      ],
+      [
+        "042_permit_stop_proof.sql",
+        "33316cc5a57a39845956c659176cc9a3492dc6b0e62985ddeeca1d7e5c5c3d47",
+      ],
     ]);
-    expect(catalog.at(-1)?.name).toBe("038_costco_brand_scan_capacity.sql");
+    expect(catalog.at(-1)?.name).toBe("042_permit_stop_proof.sql");
   });
 
   it("preserves bytes and hashes exactly like the old UTF-8 tool", async () => {

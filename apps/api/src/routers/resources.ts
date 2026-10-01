@@ -8,7 +8,7 @@ export const resourcesRouter = router({
   /** Permits not yet released, with the workflow that holds each. */
   permits: procedure.query(({ ctx }) => ctx.resources.heldPermits()),
 
-  /** Release one permit whose workflow stopped more than two minutes ago. */
+  /** Release only with exact executor/page stop proof and a closed workflow. */
   releasePermit: procedure
     .input(z.strictObject({ permitId: z.string().min(1).max(200) }))
     .mutation(({ ctx, input }) => ctx.resources.release(input.permitId)),

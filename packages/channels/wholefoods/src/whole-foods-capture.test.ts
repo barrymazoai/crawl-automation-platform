@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import { syntheticIdentity } from "./identity-fixture.js";
 import {
   ProductCapture,
   ScraperApiPages,
@@ -13,7 +14,9 @@ import { wholeFoodsAdapter } from "./whole-foods-adapter.js";
 import { WHOLE_FOODS_STORE, wholeFoodsStoreCookie } from "./whole-foods-store.js";
 
 // Existing synthetic page; real Whole Foods identity evidence is still ticket R22.
-const html = readFileSync(new URL("./fixtures/product-b0096m5pbw.html", import.meta.url), "utf8");
+const html =
+  readFileSync(new URL("./fixtures/product-b0096m5pbw.html", import.meta.url), "utf8") +
+  syntheticIdentity();
 const url = "https://www.wholefoodsmarket.com/grocery/product/other-product-b002cqu54q";
 const store = { storeId: "10259", label: "The Alameda", postalCode: "95126" };
 const request = {
@@ -68,14 +71,21 @@ function setup(landedUrl = url, status = 200) {
   return { adapter, capture, data, read };
 }
 
-describe("Whole Foods capture with page identity unknown (R22)", () => {
-  it("does not infer a conflict from a different requested ASIN or invent metadata", async () => {
+describe("Whole Foods page-owned identity", () => {
+  it("records an unlisted identity conflict before parsing a different product", async () => {
     const { adapter, capture, data, read } = setup();
-    expect(
-      adapter.pageIdentity?.({ url, html, capturedAt: "2026-09-30T08:00:00.000Z" }),
-    ).toBeNull();
+    expect(adapter.pageIdentity?.({ url, html, capturedAt: "2026-09-30T08:00:00.000Z" })).toEqual({
+      listingId: "B0096M5PBW",
+      variantId: null,
+    });
+    const parse = vi.spyOn(adapter, "parseProduct");
     const first = await capture.captureForAdapter(request, signal());
-    expect(first).toMatchObject({ status: "captured-family", listingId: "B002CQU54Q" });
+    expect(first).toMatchObject({
+      status: "sighted",
+      listingId: "B002CQU54Q",
+      sighting: { state: "unlisted", reason: "identity_conflict", observedListingId: "B0096M5PBW" },
+    });
+    expect(parse).not.toHaveBeenCalled();
     expect(data.get("v3/wholefoods-html/wholefoods-capture/original.html")).toEqual(
       Buffer.from(html),
     );
@@ -89,6 +99,16 @@ describe("Whole Foods capture with page identity unknown (R22)", () => {
       }),
       expect.anything(),
     );
+  });
+
+  it("captures metrics only when the requested ASIN matches the page-owned ASIN", async () => {
+    const matching = url.replace("b002cqu54q", "b0096m5pbw");
+    const { capture, read } = setup(matching);
+    expect(await capture.captureForAdapter({ ...request, url: matching }, signal())).toMatchObject({
+      status: "captured-family",
+      listingId: "B0096M5PBW",
+    });
+    expect(read).toHaveBeenCalledOnce();
   });
 
   it.each([

@@ -5,6 +5,7 @@ import {
   QueueItemsQuerySchema,
   QueueLimitsSchema,
   RequeueSchema,
+  FamilyFormulaQuerySchema,
 } from "@crawl-automation/app";
 import { procedure, router } from "../trpc.js";
 
@@ -12,6 +13,12 @@ const channelOf = (input: unknown) => ChannelQueueSchema.parse(input ?? {}).chan
 
 /** Every channel's product queue; a call without a channel is about Amazon's. */
 export const queueRouter = router({
+  familyOutcomes: procedure
+    .input(FamilyFormulaQuerySchema)
+    .query(({ ctx, input }) => ctx.queue.familyOutcomes(input)),
+  reconcileFamilyOutcomes: procedure
+    .input(FamilyFormulaQuerySchema)
+    .mutation(({ ctx, input }) => ctx.queue.reconcileFamilyOutcomes(input)),
   /** Read-only counts before or after copying never-started legacy Amazon items into the shared queue. */
   amazonMigrationPreview: procedure.query(({ ctx }) => ctx.queue.amazonMigrationPreview()),
 

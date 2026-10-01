@@ -13,10 +13,15 @@ export const pipelineMarkers = [
 ] as const;
 export const labelMarkers = ["resource-gate-v1", "label-heartbeat-v1"] as const;
 export const labelNoSourceMarker = "label-no-source-review-v1";
+export const stopProofMarker = "resource-execution-stop-proof-v1";
 export type PatchMarker =
+  | "product-enrichment-v1"
   | (typeof pipelineMarkers)[number]
   | typeof labelNoSourceMarker
+  | typeof stopProofMarker
   | "formula-family-capture-v1"
+  | "family-formula-outcomes-v1"
+  | "capture-follower-v1"
   | "brand-listing-gap-v1"
   | "brand-listing-cooldown-v1"
   | "browser-scan-permit-v1";

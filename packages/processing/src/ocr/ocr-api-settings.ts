@@ -21,7 +21,12 @@ export const OcrApiSettingsSchema = z.strictObject({
   /** The OCR API's base address, e.g. `https://192.0.2.20:8081` (documentation address). */
   baseUrl: z.url().refine(isAllowedAddress, "HTTPS, or HTTP to a private-network address"),
   provider: VersionTagSchema,
+  /** Enable only after every backend on this endpoint supports durable job control. */
+  jobControl: z.boolean().default(false),
   timeoutMs: z.number().int().min(100).max(60_000).default(45_000),
+  /** Covers the service's 90 s inference hard limit plus 30 s for shutdown and observation. */
+  stopVerificationTimeoutMs: z.number().int().min(100).max(600_000).default(120_000),
+  stopVerificationPollMs: z.number().int().min(10).max(5_000).default(1_000),
   maxInputBytes: z.number().int().min(1).max(16_777_216).default(16_777_216),
   maxResponseBytes: z.number().int().min(1).max(8_388_608).default(8_388_608),
   /** Lines scored below this are dropped by the OCR API; its own default applies when unset. */

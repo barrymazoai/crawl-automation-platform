@@ -71,11 +71,35 @@ describe("LabelTasks", () => {
         sourceOperationId: sourcePlan.source.producer.operationId,
       },
       corePolicy: "swanson-label-core/1",
-      evidencePolicy: "label-image-first/5",
+      admission: "label-packaging/1",
+      evidencePolicy: "label-image-first/6",
+      sourcePolicy: { version: "label-sources/1", order: "text-first" },
     });
     expect(task.input.plan.input).toEqual(sourcePlan);
     expect(saved.has("v3/product-runs/pipeline-capture-1/label-task.json")).toBe(true);
     expect(executions.register).toHaveBeenCalledWith(sourcePlan.owner.observationId, execution);
+  });
+
+  it("does not add a source policy to a saved plan that predates ordering", async () => {
+    const { tasks, sourcePlan, execution } = await setup();
+    const { sourcePolicy: _policy, ...legacyPlan } = sourcePlan;
+    const task = await tasks.prepare({ pipeline, sourcePlan: legacyPlan, execution }, signal());
+    expect(task.input).not.toHaveProperty("sourcePolicy");
+    expect(task.input.plan.input).toEqual(legacyPlan);
+  });
+
+  it("forwards explicit source ordering while preserving packaging page preparation", async () => {
+    const { tasks, sourcePlan, execution } = await setup();
+    const sourcePolicy = { version: "label-sources/1" as const, order: "images-first" as const };
+    const task = await tasks.prepare(
+      { pipeline, sourcePlan: { ...sourcePlan, sourcePolicy }, execution },
+      signal(),
+    );
+    expect(task.input).toMatchObject({
+      sourcePolicy,
+      admission: "label-packaging/1",
+      evidencePolicy: "label-image-first/6",
+    });
   });
 
   it("label permits release on a Review, with no review-stop check (the worker hosts no stop verifier)", async () => {

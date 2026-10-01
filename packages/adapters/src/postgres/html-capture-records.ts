@@ -10,6 +10,7 @@ import {
   type SavedHtmlOriginal,
 } from "@crawl-automation/app";
 import type { Database, Queryable } from "@crawl-automation/platform";
+import { captureCreditCost, captureWasCalled, measureCaptureReuse } from "./html-capture-cost.js";
 import {
   inFlight,
   insertCapture,
@@ -29,15 +30,17 @@ export class PostgresHtmlCaptureRecords implements HtmlCaptureRecords {
 
   async admit(raw: HtmlCaptureRequest): Promise<HtmlCaptureAdmission> {
     const request = HtmlCaptureRequestSchema.parse(raw);
-    return this.locked(request, async (transaction) => {
+    const admission = await this.locked<HtmlCaptureAdmission>(request, async (transaction) => {
       const prior = await readCapture(transaction, request.capture.operationId);
       if (prior) {
         if (!isDeepStrictEqual(prior.request, request)) {
           throw conflict();
         }
-        return prior.state === "done"
-          ? { status: "reuse", original: SavedHtmlOriginalSchema.parse(prior.original) }
-          : { status: "unresolved" };
+        if (prior.state !== "done") {
+          return { status: "unresolved" };
+        }
+        const saved = SavedHtmlOriginalSchema.parse(prior.original);
+        return { status: "reuse", original: saved };
       }
       const original = await recentOriginal(transaction, request, this.reuseWindowMs);
       if (original) {
@@ -52,6 +55,10 @@ export class PostgresHtmlCaptureRecords implements HtmlCaptureRecords {
       await insertCapture(transaction, request, null);
       return previous.length ? { status: "download", previous } : { status: "download" };
     });
+    if (admission.status === "reuse") {
+      await measureCaptureReuse(request, admission.original);
+    }
+    return admission;
   }
 
   async complete(raw: HtmlCaptureRequest, saved: SavedHtmlOriginal): Promise<void> {
@@ -82,10 +89,24 @@ export class PostgresHtmlCaptureRecords implements HtmlCaptureRecords {
         return;
       }
       await transaction.query(
-        "UPDATE html_capture SET state='done',original=$2,captured_at=$3 WHERE operation_id=$1",
-        [request.capture.operationId, original, original.capturedAt],
+        `UPDATE html_capture SET state='done',original=$2,captured_at=$3,credit_cost=$4,reused=$5
+         WHERE operation_id=$1`,
+        [
+          request.capture.operationId,
+          original,
+          original.capturedAt,
+          captureCreditCost(request, original),
+          original.capture.operationId !== request.capture.operationId,
+        ],
       );
     });
+    await this.measureCompletedReuse(request, original);
+  }
+
+  private async measureCompletedReuse(request: HtmlCaptureRequest, original: SavedHtmlOriginal) {
+    if (!captureWasCalled()) {
+      await measureCaptureReuse(request, original);
+    }
   }
 
   async fail(raw: HtmlCaptureRequest, causeCode: string | null): Promise<void> {
@@ -106,8 +127,8 @@ export class PostgresHtmlCaptureRecords implements HtmlCaptureRecords {
         return;
       }
       await transaction.query(
-        "UPDATE html_capture SET state='failed',cause_code=$2 WHERE operation_id=$1",
-        [request.capture.operationId, causeCode],
+        "UPDATE html_capture SET state='failed',cause_code=$2,credit_cost=$3 WHERE operation_id=$1",
+        [request.capture.operationId, causeCode, captureCreditCost(request, null)],
       );
     });
   }

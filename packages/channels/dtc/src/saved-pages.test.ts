@@ -32,7 +32,7 @@ describe.skipIf(!shopify)(
       expect(product.variants[0]).toMatchObject({
         id: "42250782867542",
         price: "390.00",
-        availability: "in_stock",
+        availability: "InStock",
       });
       expect(product.images.length).toBeGreaterThan(1);
       expect(

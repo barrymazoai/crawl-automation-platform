@@ -10,12 +10,14 @@ function evidence(overrides: Partial<StopEvidence>): StopEvidence {
     status: "CANCELLED",
     closedAt: minutesAgo(10),
     pendingActivities: 0,
+    executionStopped: true,
     ...overrides,
   };
 }
 
 describe("stopVerdict", () => {
-  it("proves a stop: closed, nothing pending, closed five minutes ago or more", () => {
+  it("requires executor proof even when Temporal closed long ago", () => {
+    expect(stopVerdict(evidence({ executionStopped: false }), now)).toBe("not-proven");
     expect(stopVerdict(evidence({}), now)).toBe("stopped");
     expect(stopVerdict(evidence({ status: "COMPLETED", closedAt: minutesAgo(5) }), now)).toBe(
       "stopped",
@@ -30,8 +32,8 @@ describe("stopVerdict", () => {
     expect(stopVerdict(evidence({ pendingActivities: 1 }), now)).toBe("not-proven");
   });
 
-  it("does not prove a stop right after the close", () => {
-    expect(stopVerdict(evidence({ closedAt: minutesAgo(2) }), now)).toBe("not-proven");
+  it("allows an observed stop immediately instead of treating elapsed time as proof", () => {
+    expect(stopVerdict(evidence({ closedAt: minutesAgo(2) }), now)).toBe("stopped");
   });
 
   it("does not treat a workflow Temporal cannot find as stopped", () => {

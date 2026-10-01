@@ -180,7 +180,7 @@ describe.skipIf(!hasPostgres || process.env.V3_TEST_SKIP_POSTGRES === "1")(
         sha256: createHash("sha256").update(sql).digest("hex"),
       };
     }
-    it("applies only 034–038 after existing 001–033 history, then does no replay or backup", async () => {
+    it("applies pending migrations after existing 001–033 history, then does no replay or backup", async () => {
       await seedLegacy(33);
       await query("INSERT INTO brand(name) VALUES ('Existing brand')");
       const original = await history();
@@ -220,7 +220,7 @@ describe.skipIf(!hasPostgres || process.env.V3_TEST_SKIP_POSTGRES === "1")(
       const dumps = await backups();
       const result = await service().migrate(request());
       expect(result.before.applied).toHaveLength(2);
-      expect(result.after.applied).toHaveLength(38);
+      expect(result.after.applied).toEqual(catalog.map(({ name }) => name));
       expect((await history()).slice(0, 2)).toEqual(original);
       expect(await backups()).toHaveLength(dumps.length + 1);
       const directory = required(result.backup);
@@ -365,10 +365,10 @@ describe.skipIf(!hasPostgres || process.env.V3_TEST_SKIP_POSTGRES === "1")(
       ]);
       expect(
         results.map((result) => result.before.applied.length).sort((left, right) => left - right),
-      ).toEqual([2, 38]);
+      ).toEqual([2, catalog.length]);
       expect(results.filter((result) => result.backup)).toHaveLength(1);
       expect(await backups()).toHaveLength(dumps.length + 1);
-      expect(await history()).toHaveLength(38);
+      expect(await history()).toEqual(catalog.map(({ name, sha256 }) => ({ name, sha256 })));
     });
 
     it("read-only status and dry run create no ledger or backup in an empty database", async () => {
@@ -379,7 +379,7 @@ describe.skipIf(!hasPostgres || process.env.V3_TEST_SKIP_POSTGRES === "1")(
         confirmation: "ignored",
         dryRun: true,
       });
-      expect(result.before.pending).toHaveLength(38);
+      expect(result.before.pending).toEqual(catalog.map(({ name }) => name));
       expect(result.after).toEqual(result.before);
       expect(await backups()).toEqual(dumps);
       expect(

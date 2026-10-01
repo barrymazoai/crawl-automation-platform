@@ -22,12 +22,33 @@ function readablePicker(rendered: SwansonRenderedProduct): Picker | null {
 
 function member(option: Option) {
   const address = swansonProductAddress(option.url);
+  address.url.searchParams.set("variant", option.variantId);
   return {
     listingId: address.handle,
     variantId: option.variantId,
     url: address.url.href,
     label: option.label,
   };
+}
+
+/** Size wording cannot hide a change of flavour or other label identity. */
+function difference(group: string, labels: string[]) {
+  const kind = classifyFamily(group, labels);
+  if (kind !== "size" && kind !== "pack-count") {
+    return kind;
+  }
+  const remainder = labels.map((label) =>
+    label
+      .toLowerCase()
+      .replace(/\b(?:pack of \d+|\d+\s*-?\s*pack|\d+\s*x\b)/gu, " ")
+      .replace(
+        /\b\d+(?:[.,]\d+)?\s*(?:fl\.?\s*oz|oz|lbs?|kg|grams?|g|ml|liters?|l|softgels?|capsules?|caps?|tablets?|tabs?|gummies|count|ct|servings?)\b/gu,
+        " ",
+      )
+      .replace(/\s+/gu, " ")
+      .trim(),
+  );
+  return new Set(remainder).size === 1 ? kind : "unknown";
 }
 
 /**
@@ -48,7 +69,7 @@ export function swansonFamily(parsed: ParsedProduct<SwansonRenderedProduct>): Pr
   }
   const labels = picker.options.map((option) => option.label);
   return {
-    differsBy: classifyFamily(group, labels),
+    differsBy: difference(group, labels),
     group,
     selectedLabel: selected.label,
     members: others.map(member),

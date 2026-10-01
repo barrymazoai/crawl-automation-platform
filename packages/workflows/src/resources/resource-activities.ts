@@ -1,10 +1,16 @@
 import { ResourceDecisionSchema, type ResourceRequest } from "@crawl-automation/v3-contracts";
-import { proxyActivities } from "@temporalio/workflow";
+import { log, proxyActivities } from "@temporalio/workflow";
 import { resourceFailure } from "./resource-failure.js";
 
 export interface ResourceActivities {
   reserveResources(request: ResourceRequest): Promise<unknown>;
   releaseResources(request: ResourceRequest): Promise<unknown>;
+  prepareResourceExecution(request: ResourceRequest): Promise<unknown>;
+  stopResourceExecution(
+    request: ResourceRequest & {
+      cleanupFailure: Record<string, unknown> | null;
+    },
+  ): Promise<unknown>;
 }
 
 export function resourceActivities(queue: string): ResourceActivities {
@@ -22,7 +28,12 @@ export function resourceActivities(queue: string): ResourceActivities {
     ...options,
     retry: { maximumAttempts: 3, initialInterval: "1 second", maximumInterval: "5 seconds" },
   });
-  return { reserveResources: reserve.reserveResources, releaseResources: release.releaseResources };
+  return {
+    reserveResources: reserve.reserveResources,
+    releaseResources: release.releaseResources,
+    prepareResourceExecution: release.prepareResourceExecution,
+    stopResourceExecution: reserve.stopResourceExecution,
+  };
 }
 
 export async function releasePermit(ports: ResourceActivities, request: ResourceRequest) {
@@ -34,4 +45,5 @@ export async function releasePermit(ports: ResourceActivities, request: Resource
   ) {
     throw resourceFailure("RESOURCE.RELEASE_UNKNOWN", { request });
   }
+  log.info("resource permit released", { ...request, releasedAt: Date.now() });
 }

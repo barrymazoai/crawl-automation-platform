@@ -26,14 +26,16 @@ interface Cluster {
  * A throwaway local PostgreSQL with every V3 migration applied: a private Unix socket only, no TCP listener,
  * never an existing instance. Needs `initdb` and `pg_ctl` (Postgres 18) on PATH.
  */
-export async function startTemporaryPostgres(): Promise<TemporaryPostgres> {
+export async function startTemporaryPostgres(
+  throughMigration?: number,
+): Promise<TemporaryPostgres> {
   const cluster = await createCluster();
   const { data, socket, options } = cluster;
   const logFile = join(cluster.root, "postgres.log");
   const serverOptions = `-h '' -k '${socket}' -p ${PORT}`;
   await exec("pg_ctl", ["-D", data, "-l", logFile, "-o", serverOptions, "-w", "start"], options);
   const pool = new pg.Pool({ host: socket, port: PORT, user: USER, database: "postgres", max: 4 });
-  await applyMigrations(pool);
+  await applyMigrations(pool, throughMigration);
   return {
     database: new PostgresDatabase(pool),
     stop: async () => {
@@ -58,10 +60,13 @@ async function createCluster(): Promise<Cluster> {
   return { root, data, socket, options };
 }
 
-async function applyMigrations(pool: pg.Pool): Promise<void> {
+async function applyMigrations(pool: pg.Pool, throughMigration?: number): Promise<void> {
   const directory = new URL("../../../database/v3/", import.meta.url);
   const names = (await readdir(directory)).filter((name) => /^\d{3}_.+\.sql$/.test(name)).sort();
   for (const name of names) {
+    if (throughMigration !== undefined && Number(name.slice(0, 3)) > throughMigration) {
+      break;
+    }
     await pool.query(await readFile(new URL(name, directory), "utf8"));
   }
 }

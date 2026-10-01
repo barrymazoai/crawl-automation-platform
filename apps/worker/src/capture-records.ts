@@ -13,6 +13,7 @@ import {
 } from "@crawl-automation/channels-core";
 import { errorCodeOf, type Database, type Logger } from "@crawl-automation/platform";
 import type { CoreParts } from "./core-parts.js";
+import { measuredPages } from "./activities/activity-provider-context.js";
 
 /** Capture metrics and sightings before either formula planning or shared-formula lookup. */
 export function recordedPipelineCapture(
@@ -72,5 +73,8 @@ export function recordedHttpCapture(
   database: Database,
   reuseHours: number,
 ): HttpCapture {
-  return new HttpCapture(pages, new PostgresHtmlCaptureRecords(database, reuseHours * 3_600_000));
+  return new HttpCapture(
+    measuredPages(pages),
+    new PostgresHtmlCaptureRecords(database, reuseHours * 3_600_000),
+  );
 }

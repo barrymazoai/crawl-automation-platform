@@ -1,7 +1,12 @@
 import { RetainedPublication, sha256 } from "@crawl-automation/platform";
-import { ChannelPlanInputSchema, type ChannelPlanInput } from "@crawl-automation/v3-contracts";
+import {
+  ChannelPlanInputSchema,
+  type ArtifactRef,
+  type ChannelPlanInput,
+} from "@crawl-automation/v3-contracts";
 import type { ChannelPlanning, ParsedProduct, ProductIdentity } from "../adapter.js";
 import type { CaptureRequest, PlanSettings } from "./capture-request.js";
+import { labelSourcePolicy } from "../planning/source-order.js";
 
 const encode = (value: unknown) => Buffer.from(JSON.stringify(value));
 
@@ -34,7 +39,7 @@ export class ProductSourcePlans {
   }
 
   private planInput(projected: Projected, planning: ChannelPlanning): ChannelPlanInput {
-    const { request, identity, bytes } = projected;
+    const { request, identity } = projected;
     const key = sha256(encode([request.operationId, identity]));
     const owner = {
       schemaVersion: 1,
@@ -44,7 +49,8 @@ export class ProductSourcePlans {
       sourceId: request.sourceId,
       ...identity,
     };
-    const { egressId, ...providers } = this.settings;
+    const { egressId, sourceOrder, ...providers } = this.settings;
+    const channel = request.channel === "wholefoods" ? "amazon" : request.channel;
     return ChannelPlanInputSchema.parse({
       operationId: `plan-${key}`,
       owner,
@@ -53,23 +59,29 @@ export class ProductSourcePlans {
       expectedUrl: request.url,
       binding: { sessionId: request.operationId, egressId },
       ...providers,
-      source: {
-        schemaVersion: 1,
-        artifactId: `source-${key}`,
-        observationId: owner.observationId,
-        sourceId: owner.sourceId,
-        ...identity,
-        kind: "result-json",
-        mediaType: "application/json",
-        objectKey: `v3/${request.channel}-products/${request.operationId}/projection.json`,
-        byteSize: bytes.length,
-        sha256: sha256(bytes),
-        producer: {
-          operationId: request.operationId,
-          module: planning.projectionModule,
-          implementationVersion: planning.parserVersion,
-        },
-      },
+      sourcePolicy: labelSourcePolicy(channel, sourceOrder?.[channel]),
+      source: this.source(projected, planning, key),
     });
+  }
+
+  private source(projected: Projected, planning: ChannelPlanning, key: string): ArtifactRef {
+    const { request, identity, bytes } = projected;
+    return {
+      schemaVersion: 1,
+      artifactId: `source-${key}`,
+      observationId: `${request.channel}-${key}`,
+      sourceId: request.sourceId,
+      ...identity,
+      kind: "result-json",
+      mediaType: "application/json",
+      objectKey: `v3/${request.channel}-products/${request.operationId}/projection.json`,
+      byteSize: bytes.length,
+      sha256: sha256(bytes),
+      producer: {
+        operationId: request.operationId,
+        module: planning.projectionModule,
+        implementationVersion: planning.parserVersion,
+      },
+    };
   }
 }

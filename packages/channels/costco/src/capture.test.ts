@@ -132,6 +132,8 @@ it("captures Costco through the shared archive, records warehouse commerce and p
   if (planned.status === "prepared") {
     expect(planned.manifest.sources.map((source) => [source.kind, source.required])).toEqual([
       ["page", true],
+      ["file-image", false],
+      ["file-image", false],
     ]);
   }
   expect(await capture.capture(request, signal())).toEqual(result);

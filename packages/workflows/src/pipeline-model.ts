@@ -123,8 +123,13 @@ export const SiblingReuseResultSchema = z.discriminatedUnion("status", [
     linkId: z.string().regex(/^[a-f0-9]{64}$/),
     siblingListingId: z.string().min(1).max(200),
     siblingVariantId: z.string().min(1).max(200).nullable(),
+    coverage: z.unknown().optional(),
   }),
-  z.strictObject({ status: z.literal("extract"), reason: z.string().min(1).max(120) }),
+  z.strictObject({
+    status: z.literal("extract"),
+    reason: z.string().min(1).max(120),
+    coverage: z.unknown().optional(),
+  }),
 ]);
 
 export const LabelHandoffRequestSchema = z.strictObject({
@@ -168,6 +173,17 @@ export interface PipelineActivities {
 export const AmazonFormulaRequestSchema = z.strictObject({
   brandId: z.uuid(),
   listingId: z.string().min(1).max(200),
+  /** New family outcome protocol; absent from historical activity commands. */
+  formulaOperationId: z.string().min(1).max(300).nullable().optional(),
+  metrics: z
+    .strictObject({
+      operationId: ExecutionIdSchema,
+      runId: z.uuid(),
+      channel: z.literal("wholefoods"),
+      variantId: z.string().nullable(),
+      archiveKey: z.string().min(1).max(1024),
+    })
+    .optional(),
 });
 export type AmazonFormulaRequest = z.infer<typeof AmazonFormulaRequestSchema>;
 

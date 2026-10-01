@@ -4,6 +4,8 @@ import type { ApiContext } from "./trpc.js";
 /** Select services explicitly: spreading the awilix cradle would resolve every registration. */
 export function apiContext(parts: ApiParts): ApiContext {
   return {
+    usage: parts.usage,
+    enrichment: parts.enrichment,
     evidence: parts.evidence,
     originals: parts.originals,
     runs: parts.runs,

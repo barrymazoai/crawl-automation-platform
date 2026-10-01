@@ -7,16 +7,23 @@ import type { ResourceRequest } from "@crawl-automation/v3-contracts";
 import { afterAll, beforeAll, expect, it, vi } from "vitest";
 import { expectMarkers, recordHistory, scheduledActivities } from "../testing/replay/history.js";
 import type { History } from "../testing/replay/history.js";
-import { withoutPatches } from "../testing/replay/bundles.js";
+import { stopProofMarker, withoutPatches, type ReplayBundle } from "../testing/replay/bundles.js";
+import { permitCommands, stopProofActivities } from "../testing/replay/permits.js";
 import { gateFixture } from "../resources/testing/gate-fixture.js";
 
 let environment: TestWorkflowEnvironment;
 let bundle: Awaited<ReturnType<typeof bundleWorkflowCode>>;
+let preProof: ReplayBundle;
+
+function recordingBundle(proof: boolean) {
+  return proof ? bundle : preProof;
+}
 
 beforeAll(async () => {
   bundle = await bundleWorkflowCode({
     workflowsPath: fileURLToPath(new URL("./brand-listing-workflow.ts", import.meta.url)),
   });
+  preProof = withoutPatches(bundle, [stopProofMarker]);
   // A real-time local server: with two gated runs in flight, the time-skipping server jumped the clock while the
   // waiting run's workflow task was in progress (task timeouts until the run timed out).
   environment = await TestWorkflowEnvironment.createLocal();
@@ -58,7 +65,15 @@ function listingFixture(ending: string) {
     expect(held.delete(permitId)).toBe(true);
     return { permitId, status: "released", reason: "released" };
   });
-  return { held, activities: { readBrandListing, reserveResources, releaseResources } };
+  return {
+    held,
+    activities: {
+      ...stopProofActivities(held),
+      readBrandListing,
+      reserveResources,
+      releaseResources,
+    },
+  };
 }
 
 function expectGap(history: History, gap: number) {
@@ -77,27 +92,30 @@ function expectGap(history: History, gap: number) {
   }
 }
 
-it.each([
-  { ending: "complete", legacy: true, gap: 0 },
-  { ending: "challenge", legacy: true, gap: 0 },
-  { ending: "complete", legacy: false, gap: 0 },
-  { ending: "complete", legacy: false, gap: 1 },
-  { ending: "review", legacy: false, gap: 1 },
-  { ending: "challenge", legacy: false, gap: 1 },
-  { ending: "wait-limit", legacy: false, gap: 1 },
-])(
-  "replays $ending (legacy=$legacy, gap=$gap)",
-  async ({ ending, legacy, gap }) => {
+it.each(
+  [
+    { ending: "complete", legacy: true, gap: 0 },
+    { ending: "challenge", legacy: true, gap: 0 },
+    { ending: "complete", legacy: false, gap: 0 },
+    { ending: "complete", legacy: false, gap: 1 },
+    { ending: "review", legacy: false, gap: 1 },
+    { ending: "challenge", legacy: false, gap: 1 },
+    { ending: "wait-limit", legacy: false, gap: 1 },
+  ].flatMap((scenario) => [false, true].map((proof) => ({ ...scenario, proof }))),
+)(
+  "replays $ending (legacy=$legacy, gap=$gap, proof=$proof)",
+  async ({ ending, legacy, gap, proof }) => {
     const queue = `listing-replay-${randomUUID()}`;
     const { held, activities } = listingFixture(ending);
     const { readBrandListing, releaseResources } = activities;
     const request = input(queue, 10, gap);
     const { gapAfterSeconds: _gap, ...oldRequest } = request;
+    const recording = recordingBundle(proof);
     const { history, workflowId } = await recordHistory({
       environment,
       bundle: legacy
-        ? withoutPatches(bundle, ["brand-listing-gap-v1", "brand-listing-cooldown-v1"])
-        : bundle,
+        ? withoutPatches(recording, ["brand-listing-gap-v1", "brand-listing-cooldown-v1"])
+        : recording,
       queue,
       workflow: "BrandListingWorkflow",
       input: legacy ? oldRequest : request,
@@ -110,9 +128,11 @@ it.each([
     expect(scheduledActivities(history)).toEqual(
       ending === "wait-limit"
         ? ["reserveResources", "reserveResources"]
-        : ["reserveResources", "readBrandListing", "releaseResources"],
+        : permitCommands("readBrandListing"),
     );
-    expectMarkers(history, legacy ? [] : ["brand-listing-gap-v1", "brand-listing-cooldown-v1"]);
+    expectMarkers(history, [
+      ...(legacy ? [] : (["brand-listing-gap-v1", "brand-listing-cooldown-v1"] as const)),
+    ]);
     if (ending !== "wait-limit") {
       expectGap(history, gap);
     }
@@ -148,6 +168,7 @@ it("serializes two listings at capacity 1 and replays their waiting histories", 
     workflowBundle: bundle,
     taskQueue: queue,
     activities: {
+      ...stopProofActivities(held),
       reserveResources: async ({ permitId }: ResourceRequest) => {
         if (held.size === 1 && !held.has(permitId)) {
           waiting();
@@ -275,10 +296,10 @@ it.each([true, false])(
       input: legacy ? input(queue) : request,
       activities: fixture.activities,
     });
-    expectMarkers(
-      history,
-      legacy ? ["brand-listing-gap-v1"] : ["brand-listing-gap-v1", "brand-listing-cooldown-v1"],
-    );
+    expectMarkers(history, [
+      "brand-listing-gap-v1",
+      ...(legacy ? [] : (["brand-listing-cooldown-v1"] as const)),
+    ]);
     expectGap(history, legacy ? 0 : 1);
     await Worker.runReplayHistory({ workflowBundle: bundle }, history, workflowId);
   },

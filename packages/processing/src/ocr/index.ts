@@ -1,5 +1,6 @@
 export * from "./ocr-api.js";
 export * from "./ocr-api-settings.js";
+export * from "./ocr-job-control.js";
 export * from "./ocr-errors.js";
 export * from "./ocr-kind.js";
 export * from "./ocr-receipt.js";

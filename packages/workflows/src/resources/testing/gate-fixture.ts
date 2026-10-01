@@ -11,6 +11,12 @@ export function gateFixture() {
     started = resolve;
   });
   const activities = {
+    prepareResourceExecution: async () => undefined,
+    stopResourceExecution: async (request: ResourceRequest) => ({
+      permitId: request.permitId,
+      state: calls.stopped || calls.work === 0 ? "stopped" : "CLEANUP_UNVERIFIED",
+      attempts: 1,
+    }),
     reserveResources: async (request: ResourceRequest) => {
       calls.reserved++;
       held.add(request.permitId);

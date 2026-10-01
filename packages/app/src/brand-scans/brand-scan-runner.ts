@@ -95,6 +95,10 @@ export class BrandScanRunner {
   private async scan(scan: ScanRecord, signal: AbortSignal): Promise<ScanResult> {
     const amazon = scan.source.channel === "amazon" ? this.amazonQueue() : null;
     const listing = await this.read(scan, signal);
+    // Older WF results called two changing reads full. Only the stronger policy may authorize absence work.
+    if (scan.source.channel === "wholefoods" && listing.metrics?.catalogueAgreement !== true) {
+      listing.full = false;
+    }
     // Known: queued by an earlier list of this source (the scan's own list is excluded).
     const known = amazon
       ? await amazon.knownListings(scan)

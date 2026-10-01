@@ -16,6 +16,7 @@ const permit = (permitId: string, changes: Partial<HeldPermit> = {}): HeldPermit
   runId: "run-one",
   resources: ["model"],
   grantedAt: "2026-09-30T09:00:00Z",
+  cleanup: { state: "stopped", attempts: 1, failure: null, executions: [] },
   ...changes,
 });
 
@@ -55,7 +56,7 @@ describe("judgePermits", () => {
     [{ ...stopped, status: "RUNNING" }, "running"],
     [{ ...stopped, closedAt: null }, "not-proven"],
     [{ ...stopped, pendingActivities: 1 }, "not-proven"],
-    [{ ...stopped, closedAt: new Date(now.getTime() - 299_999) }, "not-proven"],
+    [{ ...stopped, closedAt: new Date(now.getTime() - 299_999) }, "stopped"],
     [{ ...stopped, closedAt: new Date(now.getTime() + 1) }, "not-proven"],
     [stopped, "stopped"],
     [{ ...stopped, status: "FAILED" }, "stopped"],
@@ -74,5 +75,21 @@ describe("judgePermits", () => {
     const stopEvidence = vi.fn().mockRejectedValue(failure);
     await expect(judgePermits([permit("one")], { stopEvidence }, now)).rejects.toBe(failure);
     expect(stopEvidence).toHaveBeenCalledOnce();
+  });
+
+  it("requires proof for each permit even when they share a closed workflow", async () => {
+    const unknown = permit("unknown", {
+      cleanup: { state: "CLEANUP_UNVERIFIED", attempts: 3, failure: null, executions: [] },
+    });
+    const legacy = permit("legacy");
+    delete legacy.cleanup;
+    const result = await judgePermits(
+      [permit("proved"), unknown, legacy],
+      {
+        stopEvidence: async () => stopped,
+      },
+      now,
+    );
+    expect(result.map(({ verdict }) => verdict)).toEqual(["stopped", "not-proven", "not-proven"]);
   });
 });

@@ -1,4 +1,6 @@
 import type {
+  UsageService,
+  EnrichmentBackfill,
   BrandScanService,
   BrandService,
   BrandSourceImport,
@@ -16,6 +18,8 @@ import { isAppError, type AppError } from "@crawl-automation/platform";
 import { initTRPC, TRPCError } from "@trpc/server";
 
 export interface ApiContext {
+  usage?: UsageService | undefined;
+  enrichment?: EnrichmentBackfill;
   runs: RunService;
   queue: QueueService;
   brands: BrandService;

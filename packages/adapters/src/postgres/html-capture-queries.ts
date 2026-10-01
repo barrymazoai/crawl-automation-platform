@@ -5,6 +5,7 @@ import {
   type SavedHtmlOriginal,
 } from "@crawl-automation/app";
 import type { Queryable } from "@crawl-automation/platform";
+import { captureCreditCost } from "./html-capture-cost.js";
 
 const IDENTITY = "channel=$1 AND listing_id=$2 AND variant_id IS NOT DISTINCT FROM $3";
 
@@ -65,8 +66,8 @@ export async function insertCapture(
 ) {
   await database.query(
     `INSERT INTO html_capture
-       (channel,listing_id,variant_id,operation_id,request,state,original,captured_at)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+       (channel,listing_id,variant_id,operation_id,request,state,original,captured_at,credit_cost,reused)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
     [
       ...identityValues(request),
       request.capture.operationId,
@@ -74,6 +75,8 @@ export async function insertCapture(
       original ? "done" : "in_flight",
       original,
       original?.capturedAt ?? null,
+      captureCreditCost(request, original),
+      original ? original.capture.operationId !== request.capture.operationId : false,
     ],
   );
 }

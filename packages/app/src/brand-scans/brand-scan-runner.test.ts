@@ -13,7 +13,6 @@ import { BrandScanRunner } from "./brand-scan-runner.js";
 import type { BrandScanStore, BrowserBrandScanners, ListingPageReader } from "./ports.js";
 import type { ScanRecord, ScanResult } from "./scan-model.js";
 import type { AmazonScanQueue } from "./amazon-scan-queue.js";
-
 const ORIGIN = "https://shop.example";
 const product = (id: string, kind: ListedProduct["kind"] = "product"): ListedProduct => ({
   url: `${ORIGIN}/p/${id}`,
@@ -23,7 +22,6 @@ const product = (id: string, kind: ListedProduct["kind"] = "product"): ListedPro
   kind,
 });
 
-/** A reader whose listing pages are JSON lists of product IDs (a family ID starts with "fam-"). */
 function reader(options: { full?: boolean; maxPages?: number } = {}): BrandScanReader {
   return {
     sourceUrl: (url) => url,
@@ -148,6 +146,40 @@ function setup(input: {
 }
 
 const signal = () => new AbortController().signal;
+it.each([undefined, false, true])(
+  "gates WF missing-listing revisits on explicit agreement %s",
+  async (agreement) => {
+    const fixture = setup({ bodies: {}, channel: "wholefoods", known: ["missing"] });
+    const runner = new BrandScanRunner({
+      ...fixture.deps,
+      gatedListings: {
+        wholefoods: {
+          read: async () => ({
+            pages: [],
+            products: [product("seen")],
+            families: 0,
+            unresolvedFamilies: 0,
+            credits: 2,
+            full: true,
+            metrics: {
+              storeId: "10259",
+              attempts: [],
+              reads: [],
+              unionSize: 1,
+              ...(agreement === undefined
+                ? {}
+                : { readsFinished: true, catalogueAgreement: agreement }),
+            },
+          }),
+        },
+      },
+    });
+    await runner.tick(signal());
+    expect(fixture.lists[0]?.products).toHaveLength(1);
+    expect(fixture.finished[0]?.full).toBe(agreement === true);
+    expect(fixture.listings.requestRevisits).toHaveBeenCalledTimes(agreement ? 1 : 0);
+  },
+);
 
 describe("brand scan runner", () => {
   it.each([true, false])(

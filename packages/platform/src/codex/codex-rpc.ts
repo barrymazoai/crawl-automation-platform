@@ -1,4 +1,10 @@
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
+import { randomUUID } from "node:crypto";
+import { hostname } from "node:os";
+import {
+  recordPermitExecution,
+  provePermitExecutionStopped,
+} from "../execution/permit-execution.js";
 import { codexFailure } from "./errors.js";
 import { ProcessExit } from "./process-exit.js";
 import { RpcDecoder } from "./rpc-decoder.js";
@@ -15,6 +21,9 @@ export class CodexRpc {
   private readonly exit: ProcessExit;
   private nextId = 0;
   private stopped = false;
+  private readonly executionId = randomUUID();
+  private readonly startedAt = new Date().toISOString();
+  private recorded = false;
   private failure: Error | null = null;
   private readonly pending = new Map<number, PendingRequest>();
   private readonly listeners = new Set<(message: RpcMessage) => void>();
@@ -124,6 +133,8 @@ export class CodexRpc {
   }
 
   async initialize(signal: AbortSignal) {
+    await recordPermitExecution(this.identity());
+    this.recorded = true;
     await this.request(
       "initialize",
       {
@@ -136,12 +147,35 @@ export class CodexRpc {
   }
 
   /** Terminates only the child created by this connection. */
-  async close() {
+  async close(options: { proveStopped?: boolean } = {}) {
     if (!this.stopped) {
       this.stopped = true;
       this.fail(codexFailure("TEXT.CODEX_CLOSED"));
       this.child.kill("SIGTERM");
     }
     await this.exit.confirm();
+    if (options.proveStopped) {
+      await this.proveStopped();
+    }
+  }
+
+  /** Called by the owning turn after close, never by detached cancellation callbacks. */
+  private async proveStopped(): Promise<void> {
+    if (this.recorded) {
+      await provePermitExecutionStopped(this.identity(), {
+        kind: "process-exit",
+        observedAt: new Date().toISOString(),
+      });
+    }
+  }
+
+  private identity() {
+    return {
+      kind: "codex" as const,
+      executionId: this.executionId,
+      pid: this.child.pid ?? 0,
+      host: hostname(),
+      startedAt: this.startedAt,
+    };
   }
 }

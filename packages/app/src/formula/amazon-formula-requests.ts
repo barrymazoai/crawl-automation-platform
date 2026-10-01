@@ -1,8 +1,16 @@
 import { createHash } from "node:crypto";
+import { appErrors } from "../errors.js";
 import type { QueuedProduct } from "../queue/queue-model.js";
+import type {
+  FamilyMetrics,
+  FamilyFormulaOutcome,
+  FamilyFormulaOutcomes,
+} from "../queue/family-formula-outcome.js";
 
 /** The shared queue's Amazon hold and the brand's Amazon source. */
-export interface AmazonFormulaQueue {
+export interface AmazonFormulaQueue extends Partial<
+  Pick<FamilyFormulaOutcomes, "recordFamilyOutcome">
+> {
   amazonSourceOf(brandId: string): Promise<string | null>;
   holdAmazonProducts(list: {
     batchId: string;
@@ -13,7 +21,8 @@ export interface AmazonFormulaQueue {
 
 export type AmazonFormulaRequest =
   | { status: "queued" | "already-queued"; listingId: string }
-  | { status: "no-amazon-source"; listingId: string };
+  | { status: "no-amazon-source"; listingId: string }
+  | { status: "formula-linked"; listingId: string; operationId: string };
 
 const LABEL = "ASIN seen on Whole Foods without an Amazon formula";
 
@@ -37,15 +46,42 @@ export class AmazonFormulaRequests {
     },
   ) {}
 
-  async request(input: { brandId: string; asin: string }): Promise<AmazonFormulaRequest> {
+  async request(input: {
+    brandId: string;
+    asin: string;
+    metrics?: FamilyMetrics | undefined;
+    formulaOperationId?: string | null | undefined;
+  }): Promise<AmazonFormulaRequest> {
     const listingId = input.asin.toUpperCase();
+    const save = async (status: FamilyFormulaOutcome["status"]) => {
+      if (input.metrics) {
+        if (!this.deps.queue.recordFamilyOutcome) {
+          throw appErrors.create("QUEUE.NOT_CONFIGURED");
+        }
+        await this.deps.queue.recordFamilyOutcome({
+          ...input.metrics,
+          brandId: input.brandId,
+          listingId,
+          status,
+          formulaOperationId:
+            status === "formula-linked" ? (input.formulaOperationId ?? null) : null,
+        });
+      }
+    };
+    await save("metrics-complete");
+    if (input.formulaOperationId) {
+      await save("formula-linked");
+      return { status: "formula-linked", listingId, operationId: input.formulaOperationId };
+    }
     const sourceId = await this.deps.queue.amazonSourceOf(input.brandId);
     if (!sourceId) {
+      await save("no-amazon-source");
       return { status: "no-amazon-source", listingId };
     }
     const product = this.deps.amazonProduct(listingId, sourceId);
     const list = { batchId: requestBatchId(listingId), label: LABEL, products: [product] };
     const { added } = await this.deps.queue.holdAmazonProducts(list);
+    await save("formula-pending");
     return { status: added ? "queued" : "already-queued", listingId };
   }
 }

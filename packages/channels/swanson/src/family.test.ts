@@ -39,7 +39,7 @@ describe("Swanson product family", () => {
         {
           listingId: "ho-ribose-21-oz",
           variantId: "15",
-          url: `${base}/ho-ribose-21-oz`,
+          url: `${base}/ho-ribose-21-oz?variant=15`,
           label: "21.2 oz Pwdr",
         },
       ],
@@ -55,6 +55,17 @@ describe("Swanson product family", () => {
       ],
     };
     expect(swansonFamily(parsedWith(picker))?.differsBy).toBe("flavour");
+  });
+
+  it("refuses flavour changes concealed in size labels", () => {
+    const picker = {
+      unmapped: 0,
+      options: [
+        option("whey-choc", "60 g Chocolate", { selected: true }),
+        option("whey-van", "120 g Vanilla", { selected: false }),
+      ],
+    };
+    expect(swansonFamily(parsedWith(picker))?.differsBy).toBe("unknown");
   });
 
   it("reads no family when the picker is absent, partial or unclear", () => {

@@ -10,6 +10,7 @@ import type {
   LabelImageText,
 } from "./ports.js";
 import { SiblingFormulaReuse } from "./sibling-reuse.js";
+import { SiblingReuseResultSchema } from "@crawl-automation/workflows";
 
 const families: FormulaFamilies = { channels: (channel) => [channel] };
 
@@ -123,6 +124,96 @@ function setup(
 }
 
 describe("sibling formula reuse", () => {
+  it.each(["size", "pack-count"])(
+    "uses the resolved numeric ID for a %s sibling after label agreement",
+    async (differsBy) => {
+      const { reuse, index, links } = setup();
+      vi.mocked(index.findForMember).mockResolvedValue({
+        operationId: "formula-60",
+        listingId: "8572274245770",
+        variantId: "46318812168330",
+      });
+      const input = request({
+        family: {
+          ...request().family,
+          differsBy,
+          members: [
+            {
+              ...member("ribose-60", "60 Caps"),
+              variantId: "46318812168330",
+              url: "https://www.swansonvitamins.com/p/ribose-60?variant=46318812168330",
+            },
+          ],
+        },
+      });
+      expect(await reuse.reuse(input)).toMatchObject({
+        status: "reused",
+        siblingListingId: "8572274245770",
+        siblingVariantId: "46318812168330",
+      });
+      expect(index.findForMember).toHaveBeenCalledWith({
+        channels: ["swanson"],
+        listingId: "ribose-60",
+        variantId: "46318812168330",
+        memberUrl: "https://www.swansonvitamins.com/p/ribose-60?variant=46318812168330",
+      });
+      expect(links.saved[0]?.evidence["check"]).toBe("label-text-match/1");
+      expect(links.saved[0]?.sibling.listingId).toBe("8572274245770");
+    },
+  );
+
+  it("refuses a resolved sibling with a different variant even when its label matches", async () => {
+    const { reuse, index, links } = setup();
+    vi.mocked(index.findForMember).mockResolvedValue({
+      operationId: "wrong-variant",
+      listingId: "8572274245770",
+      variantId: "999",
+    });
+    expect(await reuse.reuse(request())).toEqual({
+      status: "extract",
+      reason: "FORMULA.NO_SIBLING_FORMULA",
+    });
+    expect(index.readSaved).not.toHaveBeenCalled();
+    expect(links.saved).toHaveLength(0);
+  });
+
+  it("reports linked SKU coverage even for flavours that must be extracted independently", async () => {
+    const { reuse, index, links } = setup();
+    const coverage = {
+      scope: "enumerated-family" as const,
+      members: [
+        {
+          listingId: "vanilla",
+          variantId: "12",
+          url: "https://www.swansonvitamins.com/p/vanilla?variant=12",
+          seen: false,
+          queued: true,
+        },
+      ],
+    };
+    index.familyCoverage = vi.fn(async () => coverage);
+    const result = await reuse.reuse(
+      request({
+        family: {
+          differsBy: "flavour",
+          group: "Flavor",
+          selectedLabel: "Chocolate",
+          members: [
+            { ...member("vanilla", "Vanilla"), variantId: "12", url: coverage.members[0]?.url },
+          ],
+        },
+      }),
+    );
+    expect(result).toEqual({
+      status: "extract",
+      reason: "FORMULA.FAMILY_DIFFERS_BY_FLAVOUR",
+      coverage,
+    });
+    expect(SiblingReuseResultSchema.parse(result)).toEqual(result);
+    expect(index.findForMember).not.toHaveBeenCalled();
+    expect(links.saved).toHaveLength(0);
+  });
+
   it("links a size sibling's formula when the label prints exactly that formula", async () => {
     const { reuse, links } = setup();
     expect(await reuse.reuse(request())).toMatchObject({

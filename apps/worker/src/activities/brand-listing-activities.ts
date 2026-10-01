@@ -4,6 +4,7 @@ import { BrandListingRequestSchema } from "@crawl-automation/workflows";
 import type { WorkerParts } from "../container.js";
 import { requireRoleSection } from "../processes/role-settings.js";
 import { guarded } from "./activity-guard.js";
+import { measuredListingRequest } from "./activity-provider-context.js";
 
 /** Full listing read inside one gated, non-retrying Activity; source capabilities choose the transport. */
 export function brandListingActivities(parts: WorkerParts) {
@@ -28,7 +29,7 @@ export function brandListingActivities(parts: WorkerParts) {
             requireRoleSection(parts.config, "brandScans", "pipeline"),
             parts.r2.store,
           );
-          return pages.read(request, signal);
+          return measuredListingRequest(pages, request, signal);
         },
       },
       browsers: browser ? { [channel]: browser } : {},

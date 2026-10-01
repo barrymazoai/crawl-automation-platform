@@ -21,6 +21,7 @@ import type { SavedEvidenceSource } from "@crawl-automation/v3-contracts";
 import type { CoreParts } from "../core-parts.js";
 import type { LabelStores } from "./label-stores.js";
 import { labelSourceReader } from "./label-source-reader.js";
+import { measuredLabelPlans } from "../activities/activity-provider-context.js";
 
 /** The label steps that need no model and no OCR API: plans, pages, receipts, keywords, assembly and collection. */
 export interface LabelSteps {
@@ -42,7 +43,13 @@ function planReader(parts: CoreParts): ProductPlanReader {
   return {
     async inspect(plan, signal) {
       const saved = await parts.channelPlans.inspect(plan.input, signal);
-      return saved ? { manifest: saved.manifest, files: saved.files } : null;
+      return saved
+        ? {
+            manifest: saved.manifest,
+            files: saved.files,
+            ...(saved.labelPreparation ? { labelPreparation: saved.labelPreparation } : {}),
+          }
+        : null;
     },
   };
 }
@@ -58,12 +65,14 @@ export function labelSteps(parts: CoreParts, stores: LabelStores): LabelSteps {
   // A fresh source has no receipt yet: its evidence alone says what it resolved to.
   const resolve = (source: SavedEvidenceSource, signal: AbortSignal) =>
     saved.resolve(source, { id: source.id, status: "unresolved" }, signal);
-  const plans = new LabelPlans({
-    plans: planReader(parts),
-    publication: parts.publication,
-    resolve,
-    core: labelCore,
-  });
+  const plans = measuredLabelPlans(
+    new LabelPlans({
+      plans: planReader(parts),
+      publication: parts.publication,
+      resolve,
+      core: labelCore,
+    }),
+  );
   const inspection = labelInspection(stores, saved);
   const assembly = assemblyStep(stores);
   const registry = new PostgresCollectedProducts(parts.database);
@@ -117,6 +126,7 @@ function assemblyStep(stores: LabelStores): LabelAssembly {
 /** How image-first selection inspects evidence: a download, a registered vision answer, a Review. */
 function labelInspection(stores: LabelStores, saved: SavedSourceEvidence): LabelInspection {
   return {
+    readSource: labelSourceReader(stores),
     file: async (source, signal) =>
       source.kind === "file-image" &&
       !!(await stores.downloads.inspect(source.plan.acquire, signal)),

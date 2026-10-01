@@ -1,3 +1,4 @@
+import { ApplicationFailure } from "@temporalio/common";
 import { beforeEach, expect, it, vi } from "vitest";
 
 const state = vi.hoisted(() => ({
@@ -6,16 +7,23 @@ const state = vi.hoisted(() => ({
   scan: vi.fn(),
   reserve: vi.fn(),
   release: vi.fn(),
+  stop: vi.fn(),
   sleep: vi.fn(),
   options: [] as Array<Record<string, unknown>>,
 }));
-vi.mock("@temporalio/workflow", () => ({
+vi.mock("@temporalio/workflow", async () => ({
+  ApplicationFailure: (
+    await vi.importActual<typeof import("@temporalio/common")>("@temporalio/common")
+  ).ApplicationFailure,
+  log: { info: vi.fn() },
   proxyActivities: (options: Record<string, unknown>) => {
     state.options.push(options);
     return {
       scanBrandInBrowser: state.scan,
       reserveResources: state.reserve,
       releaseResources: state.release,
+      prepareResourceExecution: async () => undefined,
+      stopResourceExecution: state.stop,
     };
   },
   workflowInfo: () => ({
@@ -48,6 +56,9 @@ beforeEach(() => {
     status: "released",
     reason: "released",
   }));
+  state.stop
+    .mockReset()
+    .mockImplementation(async ({ permitId }) => ({ permitId, state: "stopped", attempts: 1 }));
   state.sleep.mockReset().mockResolvedValue(undefined);
 });
 
@@ -95,13 +106,11 @@ it.each(
 )("holds the $channel permit through $ending and its delay", async ({ channel, ending }) => {
   const result = { complete: ending === "complete", cooldownRequested: ending === "broken" };
   const failure = {
-    cause: {
-      type:
-        ending === "throttled"
-          ? `${channel.toUpperCase()}.SEARCH_THROTTLED`
-          : "BROWSER.UNAVAILABLE",
-      details: [{ cooldownRequested: ending === "throttled" }],
-    },
+    cause: ApplicationFailure.nonRetryable(
+      "scan failed",
+      ending === "throttled" ? `${channel.toUpperCase()}.SEARCH_THROTTLED` : "BROWSER.UNAVAILABLE",
+      { cooldownRequested: ending === "throttled" },
+    ),
   };
   const fails = ending === "throttled" || ending === "failure";
   state.scan.mockImplementation(async () => {
@@ -146,6 +155,7 @@ it.each(
   finish();
   await outcome;
   expect(state.release).toHaveBeenCalledExactlyOnceWith(state.reserve.mock.calls[0]?.[0]);
+  expect(state.stop).not.toHaveBeenCalled();
 });
 
 it("does not scan while another machine holds capacity", async () => {

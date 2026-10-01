@@ -39,7 +39,7 @@ export async function channelQueueItems(
 ): Promise<QueueItemView[]> {
   const rows = await db.query(
     `SELECT item_id AS "itemId", batch_id::text AS batch, state, attempt, run_id::text AS "runId",
-       listing_id AS "listingId", NULL AS "lastError", reason
+       listing_id AS "listingId", NULL AS "lastError", reason, follows_item_id AS "followsItemId"
      FROM queue_item WHERE channel = $1 AND state = $2 ORDER BY updated_at DESC LIMIT $3`,
     [query.channel, query.state, query.limit],
   );

@@ -30,6 +30,10 @@ const stateOf = (source: ImageSource, status: Status, ready = true): OcrOutcome 
 export async function ocrImage(run: LabelRun, source: ImageSource): Promise<OcrOutcome> {
   try {
     if (!(await run.stream.ready(source))) {
+      const failure = run.stream.failure?.(source);
+      if (failure) {
+        return { kind: "state", state: failure, ready: false };
+      }
       return stateOf(source, "unresolved", false);
     }
     const prepared = ImagePrepareSchema.parse(

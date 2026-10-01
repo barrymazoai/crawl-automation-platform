@@ -11,7 +11,12 @@ import {
 } from "./pipeline-model.js";
 import { once, withDownloadHeartbeat } from "./activity-options.js";
 import { collectInBrowser } from "./browser-product.js";
-import { collectCapturedProduct } from "./collect-captured-product.js";
+import {
+  collectCapturedProduct,
+  enrichCollectedResult,
+  runProductEnrichment,
+} from "./collect-captured-product.js";
+import { EnrichmentWorkflowInputSchema } from "@crawl-automation/v3-contracts";
 import { captureProduct } from "./resources/capture-product.js";
 
 /**
@@ -31,12 +36,16 @@ export async function ProductPipelineWorkflow(raw: unknown): Promise<unknown> {
     const browser = patched("capture-mode-v1")
       ? input.capture === "browser"
       : legacyBrowserCapture(input.channel);
-    return await (browser ? collectInBrowser(input, pipeline) : collect(input, pipeline));
+    const result = await (browser ? collectInBrowser(input, pipeline) : collect(input, pipeline));
+    return patched("product-enrichment-v1") ? await enrichCollectedResult(input, result) : result;
   } catch (error) {
     if (isCancellation(error)) {
       throw error;
     }
     const causeCode = failureCode(error);
+    if (causeCode === "CAPTURE.IN_FLIGHT" && patched("capture-follower-v1")) {
+      return { status: "pending", code: causeCode, operationId: input.operationId };
+    }
     return pipeline.reviewProduct({
       pipeline: input,
       code: pipelineErrors.code("PIPELINE.PRODUCT_UNRESOLVED"),
@@ -46,6 +55,12 @@ export async function ProductPipelineWorkflow(raw: unknown): Promise<unknown> {
         : {}),
     });
   }
+}
+
+/** Manually started from the bounded enrichment API; no product capture or formula extraction. */
+export async function ProductEnrichmentWorkflow(raw: unknown): Promise<unknown> {
+  const input = EnrichmentWorkflowInputSchema.parse(raw);
+  return runProductEnrichment(input.request, input.activitiesQueue);
 }
 
 async function collect(

@@ -13,6 +13,7 @@ const state = vi.hoisted(() => ({
   options: [] as Array<Record<string, unknown>>,
 }));
 vi.mock("@temporalio/workflow", () => ({
+  log: { info: vi.fn() },
   ApplicationFailure: class extends Error {
     static nonRetryable(message: string, type: string, ...details: unknown[]) {
       return Object.assign(new Error(message), { type, details });
@@ -36,6 +37,12 @@ vi.mock("@temporalio/workflow", () => ({
     return {
       reserveResources: state.reserve,
       releaseResources: state.release,
+      prepareResourceExecution: async () => undefined,
+      stopResourceExecution: async ({ permitId }: { permitId: string }) => ({
+        permitId,
+        state: "stopped",
+        attempts: 1,
+      }),
       readBrandListing: state.read,
     };
   },

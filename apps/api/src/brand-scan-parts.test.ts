@@ -191,7 +191,8 @@ describe("brand-scan API source routing", () => {
     expect(test.finish).toHaveBeenCalledWith(
       test.scans[0]?.scanId,
       expect.objectContaining({
-        state: "complete",
+        state: channel === "wholefoods" ? "partial" : "complete",
+        full: channel !== "wholefoods",
         products: 1,
         queued: 1,
         credits: 0,

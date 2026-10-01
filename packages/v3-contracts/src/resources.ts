@@ -7,6 +7,9 @@ export type ResourceRequest = z.infer<typeof ResourceRequestSchema>;
 export const ResourceDecisionSchema = z.strictObject({ permitId: ExecutionIdSchema, status: z.enum(["granted", "waiting", "released"]),
   reason: z.enum(["available", "capacity", "unhealthy", "released"]) });
 export const ResourceGateSchema = z.strictObject({ queue: VersionTagSchema,
+  // Allow OCR's 120 s independent cleanup to finish and publish its journal receipt.
+  stopVerificationSeconds: z.number().int().min(1).max(600).optional(),
+  stopVerificationPollSeconds: z.number().int().min(1).max(30).optional(),
   reviewStopCheck: z.boolean().optional(),
   // The gated work is one synchronous provider request (no browser, no owned process): a Review receipt from the
   // Activity already means nothing is running outside it, so the permit is released without a stop proof.

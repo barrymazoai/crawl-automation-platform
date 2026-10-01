@@ -40,5 +40,5 @@ export function wholeFoodsSearchComplete(pages: readonly ListingPage[]): boolean
     return false;
   }
   const unique = new Set(pages.flatMap((page) => page.cardIds ?? []));
-  return unique.size >= total && pages.every((page) => page.statedTotal === total);
+  return unique.size === total && pages.every((page) => page.statedTotal === total);
 }

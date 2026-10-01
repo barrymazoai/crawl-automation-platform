@@ -1,5 +1,6 @@
 import { pino, type DestinationStream, type Logger } from "pino";
 import type { LogConfig } from "../config/schemas.js";
+import { measurementLogFields } from "../logging/measurement-context.js";
 
 export type { Logger } from "pino";
 
@@ -15,6 +16,10 @@ export interface LoggerOptions extends Partial<LogConfig> {
  * so every line of one run can be found with a single filter.
  */
 export function createLogger(options: LoggerOptions): Logger {
-  const settings = { name: options.name, level: options.level ?? "info" };
+  const settings = {
+    name: options.name,
+    level: options.level ?? "info",
+    mixin: measurementLogFields,
+  };
   return options.destination ? pino(settings, options.destination) : pino(settings);
 }

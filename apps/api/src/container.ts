@@ -1,6 +1,10 @@
 import { configuredDtcSites } from "@crawl-automation/channel-dtc";
+import type { UsageService } from "@crawl-automation/app";
+import { usageService } from "./usage-parts.js";
 import { pathAccessible } from "@crawl-automation/platform";
 import {
+  PostgresEnrichmentRepository,
+  EnrichmentWorkflowStarter,
   PostgresBrandStore,
   PostgresDeliveryJournal,
   PostgresDeliveryScan,
@@ -10,6 +14,7 @@ import {
   TemporalWorkflowTree,
 } from "@crawl-automation/adapters";
 import {
+  EnrichmentBackfill,
   BrandService,
   CleanupService,
   DeliveryCoordinator,
@@ -46,6 +51,8 @@ import { fleetService } from "./routers/fleet-parts.js";
 
 /** Everything the API is built from. Adapters are created once and shared. */
 export interface ApiParts {
+  usage: UsageService;
+  enrichment: EnrichmentBackfill;
   config: ApiConfig;
   log: Logger;
   temporal: TemporalClient;
@@ -115,6 +122,8 @@ function registerAdapters(container: Parts): void {
 
 function registerServices(container: Parts): void {
   container.register({
+    usage: asFunction(usageService).singleton(),
+    enrichment: asFunction(enrichmentService).singleton(),
     runs: asFunction(runService).singleton(),
     queue: asFunction((parts: ApiParts) => queueService(parts.database, parts.log)).singleton(),
     brands: asFunction(
@@ -200,3 +209,9 @@ function deliveryRunner(parts: ApiParts): DeliveryRunner {
     parts.config.delivery.runner,
   );
 }
+
+const enrichmentService = (parts: ApiParts) =>
+  new EnrichmentBackfill(
+    new PostgresEnrichmentRepository(parts.database),
+    new EnrichmentWorkflowStarter(parts.temporal.client, parts.config.pipeline.queues.activities),
+  );

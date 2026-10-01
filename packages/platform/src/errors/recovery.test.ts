@@ -14,7 +14,13 @@ describe("recovery diagnostics", () => {
     const error = platformErrors.create("DATABASE.UNAVAILABLE", { cause });
     recordRecovery(error, { runId: "run-1", operation: "read" });
     expect(warn).toHaveBeenLastCalledWith(
-      { runId: "run-1", operation: "read", code: "DATABASE.UNAVAILABLE", err: error },
+      {
+        runId: "run-1",
+        operation: "read",
+        code: "DATABASE.UNAVAILABLE",
+        outcomeCode: "DATABASE.UNAVAILABLE",
+        err: error,
+      },
       expect.any(String),
     );
     expect(warn.mock.lastCall?.[0].err.cause).toBe(cause);

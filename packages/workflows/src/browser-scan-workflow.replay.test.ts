@@ -4,14 +4,22 @@ import { TestWorkflowEnvironment } from "@temporalio/testing";
 import { Worker } from "@temporalio/worker";
 import { afterAll, beforeAll, expect, it, vi } from "vitest";
 import type { ResourceRequest } from "@crawl-automation/v3-contracts";
-import { currentBundle, withoutPatches, type ReplayBundle } from "./testing/replay/bundles.js";
+import {
+  currentBundle,
+  stopProofMarker,
+  withoutPatches,
+  type ReplayBundle,
+} from "./testing/replay/bundles.js";
+import { permitCommands, stopProofActivities } from "./testing/replay/permits.js";
 import { expectMarkers, recordHistory, scheduledActivities } from "./testing/replay/history.js";
 
 let environment: TestWorkflowEnvironment;
 let current: ReplayBundle;
+let preProof: ReplayBundle;
 
 beforeAll(async () => {
   current = await currentBundle();
+  preProof = withoutPatches(current, [stopProofMarker]);
   environment = await TestWorkflowEnvironment.createTimeSkipping();
 }, 60_000);
 
@@ -69,11 +77,13 @@ it.each(
 
 it.each(
   ["wholefoods", "costco"].flatMap((channel) =>
-    ["complete", "broken", "throttled", "failure"].map((ending) => ({ channel, ending })),
+    ["complete", "broken", "throttled", "failure"].flatMap((ending) =>
+      [false, true].map((proof) => ({ channel, ending, proof })),
+    ),
   ),
 )(
-  "replays a gated $channel $ending scan with its gap or cool-down before release",
-  async ({ channel, ending }) => {
+  "replays a gated $channel $ending scan with its gap or cool-down before release (proof=$proof)",
+  async ({ channel, ending, proof }) => {
     const queue = `paced-scan-${randomUUID()}`;
     const input = {
       channel,
@@ -112,21 +122,23 @@ it.each(
     };
     const { history, workflowId } = await recordHistory({
       environment,
-      bundle: current,
+      // Record the retained old branch as well as current commands, then replay both unchanged.
+      bundle: proof ? current : preProof,
       queue,
       workflow: "BrowserScanWorkflow",
       input,
-      activities: { scanBrandInBrowser, reserveResources, releaseResources },
+      activities: {
+        ...stopProofActivities(held),
+        scanBrandInBrowser,
+        reserveResources,
+        releaseResources,
+      },
       fails: ending === "throttled" || ending === "failure",
     });
     expect(held.size).toBe(0);
     expect(scanBrandInBrowser).toHaveBeenCalledOnce();
     expectMarkers(history, ["browser-scan-permit-v1"]);
-    expect(scheduledActivities(history)).toEqual([
-      "reserveResources",
-      "scanBrandInBrowser",
-      "releaseResources",
-    ]);
+    expect(scheduledActivities(history)).toEqual(permitCommands("scanBrandInBrowser"));
     const events = history.events ?? [];
     const timers = events.filter((event) => event.timerStartedEventAttributes);
     expect(timers).toHaveLength(1);

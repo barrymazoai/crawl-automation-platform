@@ -2,13 +2,14 @@ import { delimiter, dirname } from "node:path";
 import {
   CodexTextModel,
   CodexVisionModel,
-  OcrApi,
   OcrStep,
   TextStep,
   VisionStep,
 } from "@crawl-automation/processing";
 import { workerErrors } from "../errors.js";
 import type { LabelStores } from "./label-stores.js";
+import { measuredProvider } from "@crawl-automation/platform";
+import { ocrClient } from "./ocr-client.js";
 
 /** The steps that call a model or the OCR API. Each client opens on first use, so other roles never need one. */
 export interface LabelModels {
@@ -67,7 +68,7 @@ export function labelModels(stores: LabelStores): LabelModels {
       throw missing("ocrApi");
     }
     const { nodeId, storageId } = settings;
-    const api = new OcrApi(settings.ocrApi);
+    const api = measuredProvider(ocrClient(settings.ocrApi), "recognize", "ocr");
     return new OcrStep({
       api,
       artifacts,
@@ -79,11 +80,11 @@ export function labelModels(stores: LabelStores): LabelModels {
     });
   });
   const textStep = once(async () => {
-    const model = await clients.text();
+    const model = measuredProvider(await clients.text(), "interpret", "model-text");
     return new TextStep({ model, results: stores.textResults, reviews, nodeId: settings.nodeId });
   });
   const visionStep = once(async () => {
-    const model = await clients.vision();
+    const model = measuredProvider(await clients.vision(), "interpret", "model-image");
     const { visionResults: results, ocrText } = stores;
     return new VisionStep({ model, results, ocrText, artifacts, local, remote, reviews });
   });

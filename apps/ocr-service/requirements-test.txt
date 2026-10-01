@@ -1,0 +1,6 @@
+# Engine/native Windows dependencies are mocked; no RapidOCR or CUDA required.
+pytest>=8,<10
+fastapi>=0.115,<1
+httpx>=0.27,<1
+python-multipart>=0.0.9
+numpy>=1.26,<3

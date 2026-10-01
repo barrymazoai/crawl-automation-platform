@@ -1,4 +1,8 @@
-import { ProductListSchema, ReviewRecheckInputSchema } from "@crawl-automation/app";
+import {
+  ProductListSchema,
+  ReviewRecheckInputSchema,
+  ReviewRecoveryInputSchema,
+} from "@crawl-automation/app";
 import { ReviewListQuerySchema } from "@crawl-automation/v3-contracts";
 import { z } from "zod";
 import { procedure, router } from "../trpc.js";
@@ -29,6 +33,11 @@ export const reviewsRouter = router({
   recheck: procedure
     .input(ReviewRecheckInputSchema)
     .query(({ ctx, input }) => ctx.reviews.recheck(input)),
+
+  /** Manual recovery: dry run first, then publish that preview using retained answers only. */
+  recover: procedure
+    .input(ReviewRecoveryInputSchema)
+    .mutation(({ ctx, input }) => ctx.reviews.recover(input)),
 });
 
 export const productsRouter = router({

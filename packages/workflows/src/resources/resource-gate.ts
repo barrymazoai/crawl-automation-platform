@@ -1,15 +1,11 @@
 import { ResourceGateSchema, type ResourceRequest } from "@crawl-automation/v3-contracts";
-import { ActivityCancellationType, CancellationScope, workflowInfo } from "@temporalio/workflow";
-import { releasePermit, resourceActivities } from "./resource-activities.js";
+import { workflowInfo } from "@temporalio/workflow";
+import { resourceActivities } from "./resource-activities.js";
 import { waitForResource } from "./wait-for-resource.js";
+import { executePermit } from "./execute-permit.js";
 
-export interface ResourceActivityBinding {
-  activityId: string;
-  cancellationType: typeof ActivityCancellationType.WAIT_CANCELLATION_COMPLETED;
-  heartbeatTimeout?: "30 seconds";
-}
-
-export type GatedWork<T> = (binding?: ResourceActivityBinding) => Promise<T>;
+import type { GatedWork } from "./resource-binding.js";
+export type { GatedWork, ResourceActivityBinding } from "./resource-binding.js";
 
 /**
  * One permit per step. Activity cancellation waits for acknowledgement; activity/scope timeouts also
@@ -33,14 +29,6 @@ export function resourceGate(raw: unknown) {
     };
     const ports = resourceActivities(config.queue);
     await waitForResource({ config, request, ports, waiting });
-    try {
-      return await run({
-        activityId: request.permitId,
-        cancellationType: ActivityCancellationType.WAIT_CANCELLATION_COMPLETED,
-        heartbeatTimeout: "30 seconds",
-      });
-    } finally {
-      await CancellationScope.nonCancellable(() => releasePermit(ports, request));
-    }
+    return executePermit({ request, ports, config }, run);
   };
 }

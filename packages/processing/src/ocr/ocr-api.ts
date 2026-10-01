@@ -1,5 +1,11 @@
+import { randomUUID } from "node:crypto";
 import createClient, { type Client } from "openapi-fetch";
-import { verifyBytes } from "@crawl-automation/platform";
+import {
+  isAppError,
+  provePermitExecutionStopped,
+  recordPermitExecution,
+  verifyBytes,
+} from "@crawl-automation/platform";
 import {
   OcrResponseSchema,
   type OcrInput,
@@ -9,8 +15,19 @@ import {
 import type { paths } from "./api/ocr-api.generated.js";
 import { ocrFailure } from "./ocr-errors.js";
 import { ocrCompatibility, type OcrApiSettings } from "./ocr-api-settings.js";
+import {
+  verifyOcrStop,
+  type OcrExecutionIdentity,
+  type OcrJobControl,
+  type OcrStopResult,
+} from "./ocr-stop.js";
+export type { OcrExecutionIdentity, OcrJobControl, OcrStopResult } from "./ocr-stop.js";
 
 type OcrFile = OcrInput["file"];
+interface OcrTransport {
+  fetch?: (request: Request) => Promise<Response>;
+  jobControl?: OcrJobControl;
+}
 
 const extensions: Record<string, string> = {
   "image/png": "png",
@@ -26,31 +43,63 @@ export class OcrApi {
   readonly provider: string;
   readonly supported: ProcessingCompatibility;
   private readonly client: Client<paths>;
+  private readonly jobControl: OcrJobControl | undefined;
 
   /** `transport.fetch` replaces the global fetch, e.g. with a recorded answer in tests. */
   constructor(
     private readonly settings: OcrApiSettings,
-    transport: { fetch?: (request: Request) => Promise<Response> } = {},
+    transport: OcrTransport = {},
   ) {
     this.provider = settings.provider;
     this.supported = ocrCompatibility(settings);
-    this.client = createClient<paths>({ baseUrl: settings.baseUrl, ...transport });
+    const { jobControl, ...clientTransport } = transport;
+    this.jobControl = jobControl;
+    this.client = createClient<paths>({ baseUrl: settings.baseUrl, ...clientTransport });
   }
 
   /** One call for one image. Nothing is sent unless the bytes are exactly the image's reference. */
   async recognize(file: OcrFile, bytes: Uint8Array, signal: AbortSignal): Promise<OcrResponse> {
     this.assertSendable(file, bytes);
-    const answer = await this.post(file, bytes, signal);
-    if (answer.status === 429) {
-      throw ocrFailure("OCR.RATE_LIMIT");
+    if (signal.aborted) {
+      throw ocrFailure("OCR.CANCELLED", "not_executed", signal.reason);
     }
+    const identity: OcrExecutionIdentity = {
+      kind: "ocr",
+      executionId: randomUUID(),
+      endpoint: this.settings.baseUrl,
+      metadata: { jobControlSupported: this.jobControl !== undefined },
+    };
+    await recordPermitExecution(identity);
+    try {
+      const answer = await this.post(file, bytes, { signal, identity });
+      const output = this.readAnswer(answer);
+      await provePermitExecutionStopped(identity, {
+        kind: "ocr-synchronous-response",
+        observedAt: new Date().toISOString(),
+      });
+      return output;
+    } catch (error) {
+      const cleanup = await this.stopAndVerify(identity);
+      if (isAppError(error)) {
+        error.details["cleanup"] = cleanup;
+      }
+      throw error;
+    }
+  }
+
+  private readAnswer(answer: { status: number; contentType: string; body: string }): OcrResponse {
     if (answer.status !== 200) {
-      throw ocrFailure("OCR.HTTP_STATUS");
+      throw ocrFailure(answer.status === 429 ? "OCR.RATE_LIMIT" : "OCR.HTTP_STATUS");
     }
     if (!/^application\/json(?:\s*;|$)/i.test(answer.contentType)) {
       throw ocrFailure("OCR.PROTOCOL");
     }
     return this.read(answer.body);
+  }
+
+  /** A cancel receipt alone is insufficient; only a terminal query result proves shutdown. */
+  async stopAndVerify(identity: OcrExecutionIdentity): Promise<OcrStopResult> {
+    return verifyOcrStop({ identity, control: this.jobControl, settings: this.settings });
   }
 
   private assertSendable(file: OcrFile, bytes: Uint8Array): void {
@@ -67,11 +116,17 @@ export class OcrApi {
     }
   }
 
-  private async post(file: OcrFile, bytes: Uint8Array, signal: AbortSignal) {
+  private async post(
+    file: OcrFile,
+    bytes: Uint8Array,
+    options: { signal: AbortSignal; identity: OcrExecutionIdentity },
+  ) {
+    const { signal, identity } = options;
     const timeout = AbortSignal.timeout(this.settings.timeoutMs);
     const minScore = this.settings.minScore;
     try {
       const { data, response } = await this.client.POST("/ocr", {
+        headers: this.jobControl?.requestHeaders(identity.executionId) ?? {},
         params: { query: minScore === undefined ? {} : { min_score: minScore } },
         body: { file: new Blob([Buffer.from(bytes)], { type: file.mediaType }) },
         bodySerializer: (body) => formWith(body.file, `image.${extensions[file.mediaType]}`),

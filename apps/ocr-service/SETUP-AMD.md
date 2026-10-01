@@ -1,4 +1,6 @@
-# 本地 Windows（RX 9070 XT）：只装 OCR 服务，worker 留在 mini
+# 本地 Windows（RX 9070 XT）：历史安装记录
+
+> 当前 Git 部署、任务控制和手动启动规则见 [README.md](README.md)。下文环境参数仅作历史参考，不得按旧打包方式传代码。
 
 ## 包里有什么
 
@@ -19,7 +21,7 @@
 ## 必须满足的四条
 
 1. **接口。** `POST http://<本机IP>:8081/ocr?min_score=0.3`，multipart/form-data，字段名 `file`。返回 JSON：`text` 是所有行用 `\n` 拼接的字符串；`lines` 数组每项 `{"text","score","polygon"}`，`score` 0 到 1，`polygon` 四个整数 `[x,y]` 点；只保留 `score >= min_score` 的行；没文字也返回 200、空 `text`、空 `lines`；额外字段随意，建议带 `backend`、`worker_pid`、`elapsed_ms`；GET 或 HEAD 打 `/ocr` 返回 405。
-   - `GET /health` 必须返回 200 和 JSON，且**必须**包含这三个字段：`"status": "ok"`、`"healthy_backends": <整数>`、`"total_backends": <整数>`。mini 的健康探测只认这三个字段，`healthy_backends` 小于 2 或字段缺失都会把 OCR 资源判成不可用，整条流水线停止派发。多进程服务每个进程都按"配置的进程总数"报这两个数即可；其他字段随意加。
+   - `GET /health` 必须返回 200 和 JSON，且**必须**包含这三个字段：`"status": "ok"`、`"healthy_backends": <整数>`、`"total_backends": <整数>`。mini 的健康探测只认这三个字段，`healthy_backends` 小于 2 或字段缺失都会把 OCR 资源判成不可用，整条流水线停止派发。健康数必须由 BackendHealth 校验实际存活进程及创建时间，不能把配置数量当作健康数量。
 2. **走显卡，真 8 路。** AMD 卡在 Windows 上用 ONNX Runtime 的 DirectML 后端，PaddleOCR 原生 GPU 不支持 AMD。PP-OCRv5 英文检测加识别。8 个独立进程各持一份模型。
 3. **全部在 D 盘。** `D:\ocr` 下，C 盘不放东西。
 4. **先在 8082 试跑，验收后再切到 8081**，或验收时停掉旧的 CPU 服务。mini 指向的是 8081。
@@ -40,7 +42,7 @@ python -c "import onnxruntime as ort; print(ort.__version__, ort.get_available_p
 
 最后一行必须打印出 `DmlExecutionProvider`。打印不出就是装成了 CPU 版，`pip uninstall -y onnxruntime` 后重装 `onnxruntime-directml`。Python 用 3.11 或 3.12，3.13 没有 DirectML 的包。
 
-把包里的文件放到 `D:\ocr\service\`，样图放 `D:\ocr\samples\`。先单进程跑一次让模型下载到 venv 里：
+当前代码只能通过 origin main 的 Git 更新到仓库目录，不能复制代码包。以下旧目录命令仅是历史记录；实际部署按 README 执行。
 
 ```bat
 set OCR_BACKEND=directml
@@ -65,7 +67,7 @@ python D:\ocr\service\probe.py --url http://127.0.0.1:8082/ocr?min_score=0.3 --i
 - 部署清单里 `windows-ocr` 资源 capacity 从 2 改 8，数据库 `resource_capacity` 同步。
 - 长期用 8082 的话 OCR 角色配置里的 endpoint 要改；切回 8081 则不用动。
 
-## 防火墙与自启
+## 防火墙与手动启动
 
 - 只放行局域网：`netsh advfirewall firewall add rule name="crawlv3-ocr" dir=in action=allow protocol=TCP localport=8081 remoteip=192.168.0.0/24`
-- 任务计划程序，触发器"登录时"，运行 `D:\ocr\service\start-amd.cmd`，勾选"不管用户是否登录都要运行"。
+- 只能手动启动；不得创建登录或开机自启动、计划任务。

@@ -32,6 +32,7 @@ export interface LoadedPlan {
   manifest: SavedManifest;
   /** Image sources in the order to try them (image-first policy only). */
   imageOrder?: string[];
+  labelPreparation?: { pageHasLabelSection: boolean; pageFactsComplete: boolean };
 }
 
 /** Filename hints choose an attempt order only; verified extraction decides whether an image holds the label. */
@@ -65,7 +66,7 @@ export class LabelPlans {
     ) {
       throw labelFailure("CHANNEL.LABEL_IDENTITY_CONFLICT");
     }
-    if (input.evidencePolicy !== "label-image-first/5") {
+    if (input.evidencePolicy !== "label-image-first/5" && !input.sourcePolicy) {
       return { input, manifest };
     }
     const urls = new Map((plan.files ?? []).map((file) => [file.resourceId, file.url]));
@@ -77,7 +78,12 @@ export class LabelPlans {
     const imageOrder = images
       .sort((left, right) => rank(left) - rank(right))
       .map((source) => source.id);
-    return { input, manifest, imageOrder };
+    return {
+      input,
+      manifest,
+      imageOrder,
+      ...(plan.labelPreparation ? { labelPreparation: plan.labelPreparation } : {}),
+    };
   }
 
   /** One source's label task (or "not matched"), published as evidence. */
@@ -110,7 +116,7 @@ export class LabelPlans {
   /** The label manifest over every source (not for image-first tasks, which select first). */
   async manifest(raw: unknown, signal: AbortSignal): Promise<LabelManifestResult> {
     const { input, manifest } = await this.load(raw, signal);
-    if (input.evidencePolicy === "label-image-first/5") {
+    if (input.evidencePolicy === "label-image-first/5" || input.sourcePolicy) {
       throw labelFailure("CHANNEL.LABEL_SELECTION_REQUIRED");
     }
     const sources = [];
@@ -167,10 +173,7 @@ export class LabelPlans {
   }
 
   /** The full prepared page documents, for packaging admission. */
-  private async fullDocuments(
-    manifest: SavedManifest,
-    signal: AbortSignal,
-  ): Promise<ArtifactRef[]> {
+  async fullDocuments(manifest: SavedManifest, signal: AbortSignal): Promise<ArtifactRef[]> {
     const documents: ArtifactRef[] = [];
     for (const source of manifest.sources.filter((entry) => entry.kind === "page")) {
       const full = await this.deps.resolve(source, signal);

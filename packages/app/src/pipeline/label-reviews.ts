@@ -17,6 +17,9 @@ export const LabelReviewRequestSchema = z.strictObject({
     pipelineErrors.code("CHANNEL.DEPENDENCY_UNAVAILABLE"),
   ]),
   states: z.array(z.unknown()).max(100),
+  primaryFailure: z
+    .strictObject({ sourceId: z.string(), code: z.string(), executionFact: z.string() })
+    .optional(),
   failures: z
     .array(z.strictObject({ sourceId: z.string(), code: z.string(), executionFact: z.string() }))
     .max(100)
@@ -89,6 +92,7 @@ function labelReview(at: {
     input,
     states: request.states,
     ...(request.failures ? { failures: request.failures } : {}),
+    ...(request.primaryFailure ? { primaryFailure: request.primaryFailure } : {}),
   };
   return ReviewRecordSchema.parse({
     schemaVersion: 1,
@@ -103,7 +107,7 @@ function labelReview(at: {
       inputFingerprint: at.fingerprint,
       stage: "channel.label-input",
       category: "PROCESSING",
-      code: request.code,
+      code: request.primaryFailure?.code ?? request.code,
       executionFact: "unknown",
       evidenceKey: at.evidenceKey,
       blockedBy: null,

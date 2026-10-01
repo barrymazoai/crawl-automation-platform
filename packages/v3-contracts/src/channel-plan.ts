@@ -6,7 +6,11 @@ import { SourceBindingSchema, AcquisitionReviewSchema } from "./acquisition.js";
 import { SavedProductWorkflowInputSchema } from "./product-evidence.js";
 import { ChannelProductEvidenceSchema } from "./channel-evidence.js";
 
+/** Execution order is independent of the label merge policy; omitted inputs retain legacy plans. */
+export const LabelSourcePolicySchema = z.strictObject({ version: z.literal("label-sources/1"), order: z.enum(["images-first", "text-first"]) });
+export const LabelPreparationSchema = z.strictObject({ pageHasLabelSection: z.boolean(), pageFactsComplete: z.boolean() });
 export const ChannelPlanInputSchema = z.strictObject({
+  sourcePolicy: LabelSourcePolicySchema.optional(),
   operationId: ExecutionIdSchema, owner: ObservationSchema, channel: z.enum(["swanson", "amazon", "dtc", "gnc", "costco"]),
   parserVersion: z.enum(["swanson-rendered/1", "amazon-rendered/1", "dtc-rendered/1", "gnc-rendered/1", "costco-rendered/1"]), expectedUrl: z.string().url().max(4096), source: ArtifactRefSchema,
   binding: SourceBindingSchema, text: TextCompatibilitySchema.refine(c => c.resultSchemaVersion === 2),
@@ -25,6 +29,7 @@ export const ChannelPlanInputSchema = z.strictObject({
 });
 export type ChannelPlanInput = z.infer<typeof ChannelPlanInputSchema>;
 export const ChannelProductPlanSchema = z.strictObject({ codec: z.literal("channel-plan/1"), input: ChannelPlanInputSchema,
+  labelPreparation: LabelPreparationSchema.optional(),
   product: ChannelProductEvidenceSchema, fragment: ArtifactRefSchema.nullable(), manifest: SavedProductWorkflowInputSchema.shape.manifest,
   // Retained private-side plan only. Temporal outcome contains opaque resource IDs, not provider URLs.
   files: z.array(z.strictObject({ resourceId: ExecutionIdSchema, url: z.string().url().max(4096) })).max(100),

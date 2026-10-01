@@ -95,6 +95,23 @@ describe("worker label settings", () => {
   );
 });
 
+describe("label source order configuration", () => {
+  const sourceOrder = WorkerConfigSchema.shape.plan.unwrap().shape.sourceOrder;
+
+  it("uses channel defaults when omitted and accepts explicit channel overrides", () => {
+    expect(sourceOrder.parse(undefined)).toEqual({});
+    expect(sourceOrder.parse({ amazon: "text-first", gnc: "images-first" })).toEqual({
+      amazon: "text-first",
+      gnc: "images-first",
+    });
+  });
+
+  it.each([{ amazon: "parallel" }, { wholefoods: "text-first" }, { walmart: "text-first" }])(
+    "rejects invalid orders and channels: %j",
+    (value) => expect(sourceOrder.safeParse(value).success).toBe(false),
+  );
+});
+
 it.each(["http", "browser"])(
   "wires Whole Foods %s mode and catalog config at startup",
   (brandScanMode) => {

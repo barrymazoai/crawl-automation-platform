@@ -5,6 +5,9 @@ import type { ListingPageRead, ListingPageRequest } from "./listing-fetch-model.
 /** Per-observation accounting survives partial and failed reads in the scan's JSON result. */
 export const ListingScanMetricsSchema = z.object({
   storeId: z.string(),
+  /** Successful observations and catalogue agreement are distinct; absent in older records. */
+  readsFinished: z.boolean().optional(),
+  catalogueAgreement: z.boolean().optional(),
   attempts: z.array(
     z.object({
       read: z.string(),

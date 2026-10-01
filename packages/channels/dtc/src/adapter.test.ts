@@ -67,13 +67,20 @@ describe("DTC adapter contracts (small synthetic boundary cases, not saved-page 
     expect(parsed.commerce).toMatchObject({
       price: "10.00",
       currency: "USD",
-      availability: "in_stock",
+      availability: "InStock",
     });
     expect(parsed.variants[0]?.variantId).toBe("11");
   });
   it("takes gallery and accordion images without recommendations", () => {
     const urls = adapter.parseProduct(page()).evidence.imageCandidates.map((image) => image.url);
     expect(urls).toEqual(["https://shop.example/front.jpg", "https://shop.example/label.jpg"]);
+  });
+  it.each([
+    [true, "InStock"],
+    [false, "OutOfStock"],
+  ])("maps selected Shopify stock %s to %s", (available, expected) => {
+    const product = { ...data, variants: [{ ...data.variants[0], available }] };
+    expect(adapter.parseProduct(page({ data: product })).commerce?.availability).toBe(expected);
   });
   it("keeps observed description label images and variant-featured images", () => {
     const product = {

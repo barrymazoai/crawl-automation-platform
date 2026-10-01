@@ -78,7 +78,14 @@ it.each(["swanson", "wholefoods"])(
       }),
     );
     expect(read).not.toHaveBeenCalled();
-    expect(finish).toHaveBeenCalledWith(scanId, expect.objectContaining({ state: "complete" }));
+    // Older Whole Foods responses have no catalogue-agreement proof, even when full was true.
+    expect(finish).toHaveBeenCalledWith(
+      scanId,
+      expect.objectContaining({
+        state: channel === "wholefoods" ? "partial" : "complete",
+        full: channel !== "wholefoods",
+      }),
+    );
   },
 );
 

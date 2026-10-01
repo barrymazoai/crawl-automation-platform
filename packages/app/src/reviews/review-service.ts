@@ -4,19 +4,19 @@ import type { ReviewEvidence } from "./review-evidence.js";
 import { inspectReview } from "./review-inspection.js";
 import { ReviewPageSchema, type ReviewRecheckInput } from "./review-model.js";
 import type { RecheckResult, RecheckStatus, TextAnswerRecheck } from "./text-recheck.js";
+import type { ReviewRecoveryService } from "./recovery-service.js";
+import type { ReviewRecoveryInput } from "./recovery-model.js";
+import { z } from "zod";
+import { recoveredReviewPage } from "./recovery-read-model.js";
 
-export interface ReviewStore {
-  list(query: ReviewListQuery): Promise<unknown>;
-  find(reviewId: string): Promise<unknown>;
-  /** The full stored record, or null. */
-  read(reviewId: string): Promise<ReviewRecord | null>;
-  summary(): Promise<unknown>;
-}
+import type { ReviewStore } from "./review-ports.js";
+export type { ReviewStore } from "./review-ports.js";
 
 export interface ReviewServiceDeps {
   reviews: ReviewStore;
   /** Reading evidence from R2; absent when the API has no storage settings. */
   evidence?: { files: ReviewEvidence; recheck: TextAnswerRecheck };
+  recovery?: ReviewRecoveryService;
 }
 
 /** How long one recheck or evidence request may read R2. */
@@ -26,8 +26,9 @@ const EVIDENCE_TIMEOUT_MS = 120_000;
 export class ReviewService {
   constructor(private readonly deps: ReviewServiceDeps) {}
 
-  list(query: ReviewListQuery): Promise<unknown> {
-    return this.deps.reviews.list(query);
+  async list(query: ReviewListQuery): Promise<unknown> {
+    const page = await this.deps.reviews.list(query);
+    return this.deps.recovery ? recoveredReviewPage(page, this.deps.recovery) : page;
   }
 
   summary(): Promise<unknown> {
@@ -39,7 +40,12 @@ export class ReviewService {
     if (review === null) {
       throw appErrors.create("REVIEW.NOT_FOUND", { details: { reviewId } });
     }
-    return review;
+    return this.deps.recovery
+      ? {
+          ...z.record(z.string(), z.unknown()).parse(review),
+          recovery: await this.deps.recovery.status(reviewId),
+        }
+      : review;
   }
 
   /** A read-only view of the Review's inspection target. */
@@ -63,6 +69,13 @@ export class ReviewService {
       items.push(await recheck.check(await this.record(reviewId), signal));
     }
     return { items, summary: countByStatus(items) };
+  }
+
+  recover(input: ReviewRecoveryInput) {
+    if (!this.deps.recovery) {
+      throw appErrors.create("REVIEW.EVIDENCE_NOT_CONFIGURED");
+    }
+    return this.deps.recovery.run(input);
   }
 
   private async selected(input: ReviewRecheckInput): Promise<string[]> {

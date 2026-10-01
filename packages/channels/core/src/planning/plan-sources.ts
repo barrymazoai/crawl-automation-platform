@@ -1,5 +1,4 @@
 import {
-  ArtifactRefSchema,
   ChannelProductPlanSchema,
   FileAcquireInputSchema,
   PagePrepareInputSchema,
@@ -21,46 +20,12 @@ import {
 } from "./plan-codec.js";
 import { planErrors } from "./plan-errors.js";
 import type { PlannedProduct } from "../adapter.js";
+import { hasLabelSection } from "./source-order.js";
+import { fragmentOf } from "./plan-fragment.js";
 
 type Sources = ChannelProductPlan["manifest"]["sources"];
 type Files = ChannelProductPlan["files"];
 type ImageCandidate = ChannelProductEvidence["imageCandidates"][number];
-
-/** The page text the text step reads: the selected product's facts plus its details, never the whole page. */
-function fragmentOf(
-  input: ChannelPlanInput,
-  evidence: ChannelProductEvidence,
-  sourceModule: string,
-) {
-  const selected = evidence.factsCandidates.filter((facts) => facts.scope === "selected-product");
-  const html = [...selected.map((facts) => facts.html), evidence.detailsHtml]
-    .filter(Boolean)
-    .join("\n");
-  const bytes = Buffer.from(html);
-  if (!html) {
-    return { fragment: null, bytes };
-  }
-  const { owner, operationId } = input;
-  const fragment = ArtifactRefSchema.parse({
-    schemaVersion: 1,
-    artifactId: planTaskId(operationId, "fragment"),
-    observationId: owner.observationId,
-    sourceId: owner.sourceId,
-    listingId: owner.listingId,
-    variantId: owner.variantId,
-    kind: "source-html",
-    mediaType: "text/html",
-    objectKey: `v3/channel-plans/${operationId}/derived.html`,
-    byteSize: bytes.length,
-    sha256: fingerprinted(html),
-    producer: {
-      operationId,
-      module: sourceModule,
-      implementationVersion: "channel-plan/1",
-    },
-  });
-  return { fragment, bytes };
-}
 
 function pageSource(input: ChannelPlanInput, fragment: ArtifactRef, required: boolean) {
   const raw = PagePrepareInputSchema.parse({
@@ -151,8 +116,8 @@ function taskOperations(sources: Sources): string[] {
 }
 
 /**
- * text-facts-first/1: when the adapter judges the selected product's facts text complete, that page text is the only
- * (required) formula source and no image is planned; otherwise the page text and every image are planned.
+ * Complete page facts make the text source required. Ordered plans retain inactive image fallback
+ * descriptors; saved plans without sourcePolicy preserve their original text-only behavior.
  */
 export function buildPlan(
   input: ChannelPlanInput,
@@ -163,7 +128,7 @@ export function buildPlan(
   const { fragment, bytes } = fragmentOf(input, evidence, sourceModule);
   const textOnly = input.factsPolicy === "text-facts-first/1" && !!fragment && facts.complete;
   const page = fragment ? [pageSource(input, fragment, textOnly)] : [];
-  const images = textOnly ? { sources: [], files: [] } : imageSources(input, evidence);
+  const images = plannedImages(input, { evidence, textOnly });
   const sources: Sources = [...page, ...images.sources];
   if (!sources.length) {
     throw planErrors.create("CHANNEL.NO_PRODUCT_SOURCES");
@@ -176,6 +141,7 @@ export function buildPlan(
     fragment,
     files: images.files,
     manifest,
+    ...labelPreparation(input, { html: bytes.toString(), complete: facts.complete }),
   });
   if (taskOperations(sources).includes(input.source.producer.operationId)) {
     throw planErrors.create("CHANNEL.OPERATION_CONFLICT");
@@ -184,4 +150,24 @@ export function buildPlan(
     throw planErrors.create("CHANNEL.OUTPUT_LIMIT");
   }
   return { plan, bytes };
+}
+
+function plannedImages(
+  input: ChannelPlanInput,
+  at: { evidence: ChannelProductEvidence; textOnly: boolean },
+) {
+  return at.textOnly && !input.sourcePolicy
+    ? { sources: [], files: [] }
+    : imageSources(input, at.evidence);
+}
+
+function labelPreparation(input: ChannelPlanInput, at: { html: string; complete: boolean }) {
+  return input.sourcePolicy
+    ? {
+        labelPreparation: {
+          pageHasLabelSection: hasLabelSection(at.html),
+          pageFactsComplete: at.complete,
+        },
+      }
+    : {};
 }

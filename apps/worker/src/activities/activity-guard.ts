@@ -1,9 +1,13 @@
 import { withCause, isAppError } from "@crawl-automation/platform";
 import { pipelineErrors } from "@crawl-automation/platform";
+import { resourceGateErrors } from "@crawl-automation/platform/errors/resource-gate";
 import { errorCodeOf, type Logger } from "@crawl-automation/platform";
 import { Context } from "@temporalio/activity";
 import { ApplicationFailure } from "@temporalio/common";
 import { activityLogger } from "./activity-log.js";
+import { runWithPermitActivity } from "@crawl-automation/app";
+import { inActivityContext } from "./activity-context.js";
+import { activityOutcome, measureActivity } from "./activity-outcome.js";
 
 type Handler = (raw: unknown, signal: AbortSignal) => Promise<unknown>;
 
@@ -15,37 +19,72 @@ const HEARTBEAT_MS = 2_000;
  * non-retryable failure carrying the error's code.
  */
 export function guarded(name: string, handler: Handler, log: Logger) {
-  return async (raw: unknown): Promise<unknown> => {
-    const context = Context.current();
-    const activityLog = activityLogger(log, name, raw);
-    if (context.info.attempt !== 1) {
-      activityLog.warn({ attempt: context.info.attempt }, "activity retry denied");
-      throw ApplicationFailure.nonRetryable(
-        "Automatic retry denied",
-        pipelineErrors.code("PIPELINE.RETRY_DENIED"),
-      );
-    }
-    const started = Date.now();
-    activityLog.info("activity started");
-    const timer = setInterval(() => context.heartbeat(), HEARTBEAT_MS);
-    try {
-      context.heartbeat();
-      const result = await handler(raw, context.cancellationSignal);
-      activityLog.info({ durationMs: Date.now() - started }, "activity finished");
-      return result;
-    } catch (error) {
-      const durationMs = Date.now() - started;
-      if (context.cancellationSignal.aborted) {
-        activityLog.warn({ durationMs, err: error }, "activity cancelled");
-      }
-      context.cancellationSignal.throwIfAborted();
-      const code = errorCodeOf(error) ?? pipelineErrors.code("PIPELINE.ACTIVITY_UNRESOLVED");
-      activityLog.error({ code, durationMs, err: error }, "activity failed");
-      const details =
-        isAppError(error) && error.details.cooldownRequested === true ? [error.details] : [];
-      throw withCause(ApplicationFailure.nonRetryable(`${name} failed`, code, ...details), error);
-    } finally {
-      clearInterval(timer);
-    }
+  return (raw: unknown): Promise<unknown> =>
+    inActivityContext({ raw, log }, () => executeActivity({ name, handler, log }, raw));
+}
+
+async function executeActivity(
+  work: { name: string; handler: Handler; log: Logger },
+  raw: unknown,
+): Promise<unknown> {
+  const { name, handler, log } = work;
+  const context = Context.current();
+  const activityLog = activityLogger(log, name, raw);
+  if (context.info.attempt !== 1) {
+    activityLog.warn(
+      { attempt: context.info.attempt, outcomeCode: pipelineErrors.code("PIPELINE.RETRY_DENIED") },
+      "activity retry denied",
+    );
+    throw ApplicationFailure.nonRetryable(
+      "Automatic retry denied",
+      pipelineErrors.code("PIPELINE.RETRY_DENIED"),
+    );
+  }
+  const started = Date.now();
+  activityLog.info("activity started");
+  const timer = setInterval(() => context.heartbeat(), HEARTBEAT_MS);
+  try {
+    context.heartbeat();
+    const result = await executeHandler(handler, raw);
+    const facts = activityOutcome(name, result);
+    activityLog.info({ ...facts, durationMs: Date.now() - started }, "activity finished");
+    await measureActivity(name, started, facts);
+    return result;
+  } catch (error) {
+    return failActivity({ name, started, log: activityLog }, error);
+  } finally {
+    clearInterval(timer);
+  }
+}
+
+/** Pipeline work must have an exact workflow owner before it can use provider capacity. */
+function executeHandler(handler: Handler, raw: unknown): Promise<unknown> {
+  const context = Context.current();
+  const { activityId, workflowExecution } = context.info;
+  if (!workflowExecution) {
+    throw resourceGateErrors.create("RESOURCE.IDENTITY_CONFLICT");
+  }
+  return runWithPermitActivity({ activityId, workflowExecution }, () =>
+    handler(raw, context.cancellationSignal),
+  );
+}
+
+async function failActivity(
+  work: { name: string; started: number; log: Logger },
+  error: unknown,
+): Promise<never> {
+  const signal = Context.current().cancellationSignal;
+  const code = errorCodeOf(error) ?? pipelineErrors.code("PIPELINE.ACTIVITY_UNRESOLVED");
+  const facts = {
+    ...activityOutcome(work.name, null),
+    outcomeCode: signal.aborted ? "cancelled" : code,
   };
+  await measureActivity(work.name, work.started, facts);
+  work.log.error(
+    { ...facts, code, durationMs: Date.now() - work.started, err: error },
+    "activity failed",
+  );
+  signal.throwIfAborted();
+  const details = isAppError(error) ? [error.details] : [];
+  throw withCause(ApplicationFailure.nonRetryable(`${work.name} failed`, code, ...details), error);
 }

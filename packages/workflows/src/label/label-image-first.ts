@@ -10,6 +10,9 @@ export interface Walk {
   states: State[];
   notStarted: { id: string; status: "not_started" }[];
   selectedImageId: string | null;
+  ordered?: true;
+  complete?: boolean;
+  reason?: { sourceId: string; code: string; executionFact: string };
 }
 
 /**

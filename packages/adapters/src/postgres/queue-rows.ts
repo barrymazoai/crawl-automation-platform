@@ -13,7 +13,8 @@ export const StatusRow = z.object({
 export const ItemRow = z.object({
   itemId: z.string(),
   batch: z.string(),
-  state: z.enum(["queued", "ready", "running", "review", "completed"]),
+  state: z.enum(["queued", "ready", "running", "following", "pending", "review", "completed"]),
+  followsItemId: z.string().nullable().optional(),
   attempt: z.number(),
   runId: z.string().nullable(),
   listingId: z.string().nullable(),

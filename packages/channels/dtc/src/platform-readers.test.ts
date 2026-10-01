@@ -50,7 +50,7 @@ describe("platform reader boundary cases (synthetic)", () => {
     expect(product.variants[1]?.url).toContain("attribute_size=120");
     expect(product.commerce).toMatchObject({
       price: "40",
-      availability: "unavailable",
+      availability: "OutOfStock",
       currency: "USD",
     });
   });

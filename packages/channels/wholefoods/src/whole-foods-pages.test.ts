@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import { syntheticIdentity } from "./identity-fixture.js";
 import { describe, expect, it } from "vitest";
 import { WholeFoodsHttpScanSettingsSchema } from "./whole-foods-http-settings.js";
 import { wholeFoodsAdapter } from "./whole-foods-adapter.js";
@@ -19,7 +20,7 @@ const productUrl =
   "https://www.wholefoodsmarket.com/grocery/product/nordic-naturals-nordic-naturals-omega-3-liquid-1560mg-fish-oil-epa-dha-lemon-flavor-8oz-b0096m5pbw";
 const page = (name: string) => ({
   url: productUrl,
-  html: fixture(name),
+  html: fixture(name) + syntheticIdentity(),
   capturedAt: "2026-09-30T08:00:00.000Z",
 });
 
@@ -55,16 +56,15 @@ describe("Whole Foods addresses", () => {
 });
 
 describe("Whole Foods product page", () => {
-  it("reports page identity unknown for a different requested ASIN until R22 verifies real evidence", () => {
+  it("reads the selected-product ASIN independently of the requested address", () => {
     const adapter = wholeFoodsAdapter(store);
     const saved = {
       ...page("product-b0096m5pbw.html"),
       url: productUrl.replace("b0096m5pbw", "b000000001"),
     };
-    expect(adapter.pageIdentity?.(saved)).toBeNull();
-    // This ASIN only associates metrics with the request; it does not identify the page.
+    expect(adapter.pageIdentity?.(saved)).toEqual({ listingId: "B0096M5PBW", variantId: null });
     expect(adapter.parseProduct(saved).identity).toEqual({
-      listingId: "B000000001",
+      listingId: "B0096M5PBW",
       variantId: null,
     });
   });

@@ -3,11 +3,12 @@ import { beforeEach, expect, it, vi } from "vitest";
 const env = vi.hoisted(() => ({
   activities: {} as Record<string, unknown>,
   start: vi.fn(),
-  patched: vi.fn(() => true),
+  patched: vi.fn((_marker: string) => true),
   held: false,
 }));
 
 vi.mock("@temporalio/workflow", () => ({
+  defineSignal: (name: string) => name,
   proxyActivities: ({ taskQueue }: { taskQueue: string }) => env.activities[taskQueue],
   patched: env.patched,
   startChild: env.start,
@@ -91,7 +92,8 @@ async function setup() {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  env.patched.mockReturnValue(true);
+  // Capture-routing histories before enrichment keep their original child/result sequence.
+  env.patched.mockImplementation((marker: string) => marker !== "product-enrichment-v1");
 });
 
 it("sends a DTC browser capture through planning and the normal Label workflow", async () => {

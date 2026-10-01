@@ -45,5 +45,11 @@ export function evidenceReaders(storage: NonNullable<ApiConfig["storage"]>) {
     files: new ReviewEvidence({ objects: remote }),
     recheck: new TextAnswerRecheck({ objects: remote, sources }),
   };
-  return { readers, objects: remote, close: r2.close };
+  const recovery = {
+    objects: r2.store,
+    text: sources,
+    storageId: storage.storageId,
+    labelCores: { "swanson-label-core/1": swansonLabelCore, "gnc-label-core/1": gncLabelCore },
+  };
+  return { readers, objects: remote, recovery, close: r2.close };
 }

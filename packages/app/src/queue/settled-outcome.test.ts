@@ -35,4 +35,22 @@ describe("settledOutcome remaining terminal and malformed cases", () => {
   it("does not settle an unrecognized workflow status", () => {
     expect(settledOutcome({ status: "CONTINUED_AS_NEW", result: null })).toBeNull();
   });
+
+  it.each(["metrics-complete", "formula-pending", "no-amazon-source", "formula-linked"])(
+    "settles execution with a separate %s business outcome",
+    (status) => {
+      expect(settledOutcome({ status: "COMPLETED", result: { status } })).toEqual({
+        state: "completed",
+        reason: null,
+      });
+    },
+  );
+  it("records an in-flight follower as pending, never a Review or completed label", () => {
+    expect(
+      settledOutcome({
+        status: "COMPLETED",
+        result: { status: "pending", code: "CAPTURE.IN_FLIGHT" },
+      }),
+    ).toEqual({ state: "pending", reason: "CAPTURE.IN_FLIGHT" });
+  });
 });

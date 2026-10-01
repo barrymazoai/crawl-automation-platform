@@ -69,8 +69,8 @@ export function pipelineActivities(parts: WorkerParts) {
     reviewProduct: (raw: unknown, signal: AbortSignal) =>
       parts.productReviews.review(ReviewRequestSchema.parse(raw), signal),
     requestAmazonFormula: (raw: unknown) => {
-      const { brandId, listingId } = AmazonFormulaRequestSchema.parse(raw);
-      return parts.amazonFormulaRequests.request({ brandId, asin: listingId });
+      const { brandId, listingId, ...outcome } = AmazonFormulaRequestSchema.parse(raw);
+      return parts.amazonFormulaRequests.request({ brandId, asin: listingId, ...outcome });
     },
   };
   return Object.fromEntries(

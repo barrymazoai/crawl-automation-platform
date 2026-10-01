@@ -9,6 +9,7 @@ import {
   currentBundle,
   labelMarkers,
   labelNoSourceMarker,
+  stopProofMarker,
   withoutPatches,
   type PatchMarker,
   type ReplayBundle,
@@ -20,6 +21,7 @@ import {
   scheduledActivities,
   type History,
 } from "../testing/replay/history.js";
+import { permitCommands } from "../testing/replay/permits.js";
 
 let environment: TestWorkflowEnvironment;
 let current: ReplayBundle;
@@ -27,7 +29,8 @@ const recordingBundles = new Map<string, ReplayBundle>();
 const versions = [
   { name: "all markers present", missing: [] },
   ...labelMarkers.map((marker) => ({ name: `without ${marker}`, missing: [marker] })),
-  { name: "before both patches", missing: [...labelMarkers] },
+  { name: "before executor stop proof", missing: [stopProofMarker] },
+  { name: "before all gate patches", missing: [...labelMarkers, stopProofMarker] },
 ] satisfies Array<{ name: string; missing: PatchMarker[] }>;
 
 beforeAll(async () => {
@@ -134,10 +137,7 @@ it.each(cases)(
         code: "CHANNEL.LABEL_PREPARATION_UNVERIFIED",
       });
     }
-    expectMarkers(
-      history,
-      labelMarkers.filter((marker) => !missing.includes(marker)),
-    );
+    expectMarkers(history, [...labelMarkers.filter((marker) => !missing.includes(marker))]);
     expectHeartbeats(history, missing);
     expectLostReceipt(history);
     const finish =
@@ -149,9 +149,7 @@ it.each(cases)(
       "prepareHtmlPage",
       "preparePageText",
       "prepareLabelSource",
-      "reserveResources",
-      "interpretText",
-      "releaseResources",
+      ...permitCommands("interpretText"),
       "resolveTextReceipt",
       ...finish,
     ]);

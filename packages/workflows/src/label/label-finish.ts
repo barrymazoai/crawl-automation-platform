@@ -25,7 +25,7 @@ type Failure = { sourceId: string; code: string; executionFact: string };
 /** The product's own label Review, with every source's state and, when known, what held each one up. */
 export async function reviewLabel(
   run: LabelRun,
-  at: { states: unknown[]; code: ReviewCode; failures?: Failure[] },
+  at: { states: unknown[]; code: ReviewCode; failures?: Failure[]; primaryFailure?: Failure },
 ): Promise<unknown> {
   const { input } = run.entry;
   const request = {
@@ -33,11 +33,15 @@ export async function reviewLabel(
     states: at.states,
     code: at.code,
     ...(at.failures ? { failures: at.failures } : {}),
+    ...(at.primaryFailure ? { primaryFailure: at.primaryFailure } : {}),
   };
   const review = AcquisitionReviewSchema.parse(
     await run.call("activities", "reviewLabelProduct", request),
   );
-  if (review.operationId !== input.operationId || review.code !== at.code) {
+  if (
+    review.operationId !== input.operationId ||
+    review.code !== (at.primaryFailure?.code ?? at.code)
+  ) {
     throw identityConflict();
   }
   return review;

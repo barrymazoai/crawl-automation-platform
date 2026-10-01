@@ -1,4 +1,7 @@
 import { z } from "zod";
+import { ChannelIdSchema } from "./channels.js";
+import { ResourceGateSchema } from "./resources.js";
+import { ChannelPlanInputSchema } from "./channel-plan.js";
 import { ExecutionIdSchema, ObjectKeySchema, ObservationSchema, Sha256Schema, VersionTagSchema } from "./artifacts.js";
 
 /** Bump when the prompt/output contract changes; existing rows for the old protocol are kept, not reused. */
@@ -55,3 +58,64 @@ export const ExistingFormulaInputSchema = z.strictObject({ schemaVersion: z.lite
 export const RecentAttemptInputSchema = z.strictObject({ schemaVersion: z.literal(1), listingId: z.string().min(1).max(200), withinHours: z.number().int().min(1).max(24 * 30) });
 export const RecentAttemptSchema = z.strictObject({ schemaVersion: z.literal(1), attemptedAt: z.iso.datetime().nullable(), kind: z.enum(["collected", "review"]).nullable() });
 export type RecentAttempt = z.infer<typeof RecentAttemptSchema>;
+
+/** Shared pipeline protocol: hashes the actual title and label, independently of provenance. */
+export const SHARED_ENRICHMENT_PROTOCOL = "product-enrichment/2";
+export const EnrichmentRequestSchema = z.strictObject({
+  collectionOperationId: ExecutionIdSchema,
+  channel: ChannelIdSchema,
+  captureOperationId: ExecutionIdSchema.optional(),
+  listingId: z.string().min(1).max(200).optional(),
+  variantId: z.string().min(1).max(200).nullable().optional(),
+  sourcePlan: ChannelPlanInputSchema.optional(),
+});
+export type EnrichmentRequest = z.infer<typeof EnrichmentRequestSchema>;
+
+export const EnrichmentSubjectSchema = z.strictObject({
+  channel: ChannelIdSchema,
+  listingId: z.string().min(1).max(200),
+  variantId: z.string().min(1).max(200).nullable(),
+  collectionOperationId: ExecutionIdSchema,
+  observation: ObservationSchema,
+  title: z.string().max(4000).nullable(),
+  titleEvidence: z.strictObject({ sourceId: z.string(), sha256: Sha256Schema }).nullable(),
+});
+export type EnrichmentSubject = z.infer<typeof EnrichmentSubjectSchema>;
+
+export const SharedEnrichmentRecordSchema = z.strictObject({
+  codec: z.literal(SHARED_ENRICHMENT_PROTOCOL),
+  enrichmentId: Sha256Schema,
+  formulaHash: Sha256Schema,
+  inputHash: Sha256Schema,
+  provider: VersionTagSchema,
+  createdAt: z.iso.datetime(),
+  subject: EnrichmentSubjectSchema,
+  candidate: EnrichmentCandidateSchema,
+  /** A content identity for variant attributes, never a manufacturer SKU. */
+  variantCode: Sha256Schema,
+  evidenceKey: ObjectKeySchema,
+  promptSha256: Sha256Schema,
+  responseSha256: Sha256Schema,
+});
+export type SharedEnrichmentRecord = z.infer<typeof SharedEnrichmentRecordSchema>;
+
+export const SharedEnrichmentOutcomeSchema = z.discriminatedUnion("status", [
+  z.strictObject({
+    status: z.literal("registered"), enrichmentId: Sha256Schema, reused: z.boolean(),
+    candidate: EnrichmentCandidateSchema, variantCode: Sha256Schema, evidenceKey: ObjectKeySchema,
+  }),
+  z.strictObject({ status: z.literal("review"), reviewId: ExecutionIdSchema,
+    code: z.string().min(1).max(120) }),
+  z.strictObject({ status: z.literal("pending"), enrichmentId: Sha256Schema,
+    code: z.string().min(1).max(120) }),
+]);
+export type SharedEnrichmentOutcome = z.infer<typeof SharedEnrichmentOutcomeSchema>;
+
+export const EnrichmentRouteSchema = z.strictObject({
+  queue: z.string().min(1).max(200),
+  resources: ResourceGateSchema,
+});
+export const EnrichmentWorkflowInputSchema = z.strictObject({
+  request: EnrichmentRequestSchema,
+  activitiesQueue: z.string().min(1).max(200),
+});

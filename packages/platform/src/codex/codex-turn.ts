@@ -66,6 +66,6 @@ export async function runCodexTurn(
   } finally {
     execution?.unsubscribe();
     lifetime.removeEventListener("abort", abort);
-    await rpc.close();
+    await rpc.close({ proveStopped: true });
   }
 }

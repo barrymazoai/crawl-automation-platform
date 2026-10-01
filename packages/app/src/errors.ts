@@ -88,6 +88,10 @@ export const appErrors = defineErrors({
     category: "VALIDATION",
     message: "A product in this list is already queued with different details.",
   },
+  "QUEUE.NOT_CONFIGURED": {
+    category: "SCHEDULER",
+    message: "The queue repository does not support the requested operation.",
+  },
   "QUEUE.CLEANUP_PENDING": {
     category: "VALIDATION",
     message: "A forced stop is still settling running products; resume once they have ended.",

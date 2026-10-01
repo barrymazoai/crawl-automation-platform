@@ -1,11 +1,6 @@
 import { recordWorkflowRecovery } from "./workflow-recovery.js";
 import { pipelineErrors } from "@crawl-automation/platform/errors/activity";
-import {
-  ChannelPlanOutcomeSchema,
-  FileAcquireOutcomeSchema,
-  type ChannelPlanInput,
-  type FileAcquireOutcome,
-} from "@crawl-automation/v3-contracts";
+import { FileAcquireOutcomeSchema, type FileAcquireOutcome } from "@crawl-automation/v3-contracts";
 import {
   ApplicationFailure,
   CancellationScope,
@@ -16,21 +11,11 @@ import {
   workflowInfo,
   type ChildWorkflowHandle,
 } from "@temporalio/workflow";
-import type { z } from "zod";
-import type { PipelineActivities, ProductPipelineInput } from "./pipeline-model.js";
+import type { LabelStep } from "./label/label-step.js";
+export type { LabelStep } from "./label/label-step.js";
+import { demandFeed } from "./label/label-demand-feed.js";
 
-type Manifest = Extract<
-  z.infer<typeof ChannelPlanOutcomeSchema>,
-  { status: "prepared" }
->["manifest"];
 type LabelChild = ChildWorkflowHandle<(raw: unknown) => Promise<unknown>>;
-
-export interface LabelStep {
-  input: ProductPipelineInput;
-  pipeline: PipelineActivities;
-  sourcePlan: ChannelPlanInput;
-  manifest: Manifest;
-}
 
 /** The signals each label workflow understands (the shared one, and the earlier per-channel one). */
 interface StreamSignals {
@@ -63,6 +48,8 @@ export async function streamLabel(step: LabelStep): Promise<unknown> {
     : await step.pipeline.prepareLabelHandoff(request);
   const signals = shared ? SHARED : EARLIER;
   const labelId = handoff.input.operationId;
+  const ordered = demandEnabled(shared, handoff.input);
+  const feed = ordered ? demandFeed(step, labelId) : null;
   const child: LabelChild = await startChild(signals.workflowType, {
     workflowId: `${workflowInfo().workflowId}-label`,
     taskQueue: step.input.queues.label,
@@ -74,7 +61,9 @@ export async function streamLabel(step: LabelStep): Promise<unknown> {
   const seal = (status: "closed" | "failed") =>
     child.signal(signals.sealed, { operationId: labelId, status });
   try {
-    const review = await feedFiles(step, { child, labelId, signal: signals.ready });
+    const review = feed
+      ? await feed(child)
+      : await feedFiles(step, { child, labelId, signal: signals.ready });
     await seal(review ? "failed" : "closed");
     const result = await child.result();
     return review ?? result;
@@ -86,6 +75,12 @@ export async function streamLabel(step: LabelStep): Promise<unknown> {
     );
     throw error;
   }
+}
+
+function demandEnabled(shared: boolean, input: object): boolean {
+  return (
+    shared && "sourcePolicy" in input && !!input.sourcePolicy && patched("label-demand-files-v1")
+  );
 }
 
 /** Downloads each label image and signals it to the label workflow; a file Review stops the feed. */

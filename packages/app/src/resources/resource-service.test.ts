@@ -18,6 +18,7 @@ const permit = (permitId: string, workflowId: string): HeldPermit => ({
   runId: `${workflowId}-run`,
   resources: ["scraperapi-lane"],
   grantedAt: "2026-09-29T11:00:00.000Z",
+  cleanup: { state: "stopped", attempts: 1, failure: null, executions: [] },
 });
 
 function setup(held: HeldPermit[], evidence: Record<string, StopEvidence | null>) {
@@ -83,6 +84,9 @@ describe("ResourceService.release", () => {
 describe("ResourceService.releaseStopped", () => {
   it("releases only permits whose owners provably stopped, asking once per owner", async () => {
     const held = [permit("p1", "w1"), permit("p2", "w1"), permit("p3", "w2"), permit("p4", "w3")];
+    if (held[2]) {
+      delete held[2].cleanup;
+    }
     const { service, workflows } = setup(held, {
       w1: stopped("w1"),
       w2: stopped("w2", 0, 2),

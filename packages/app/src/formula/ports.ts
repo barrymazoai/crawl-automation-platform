@@ -6,14 +6,36 @@ export interface FormulaQuery {
   channels: readonly string[];
   listingId: string;
   variantId: string | null;
+  /** Page-observed member URL; resolves URL keys against retained capture identity. */
+  memberUrl?: string;
+}
+
+export interface FamilyCoverage {
+  scope: "enumerated-family";
+  members: {
+    listingId: string;
+    variantId: string | null;
+    url: string;
+    seen: boolean;
+    queued: boolean;
+  }[];
+}
+
+export interface MemberFormula {
+  operationId: string;
+  /** Resolved saved identity, when the member URL uses a different key namespace. */
+  listingId?: string;
+  variantId?: string | null;
 }
 
 /** Collected formulas: this product's own (or a formula linked to it), and a saved formula's contents. */
 export interface FormulaIndex {
   /** The newest formula for this product: collected for it, or linked to it from a sibling. */
   findKnown(query: FormulaQuery): Promise<{ operationId: string } | null>;
-  /** A family member's formula: same listing, and the same variant when both name one. */
-  findForMember(query: FormulaQuery): Promise<{ operationId: string } | null>;
+  /** A family member's formula: resolved listing and exact variant, including null. */
+  findForMember(query: FormulaQuery): Promise<MemberFormula | null>;
+  /** Read-only coverage of explicit family links; never queues or retries a member. */
+  familyCoverage?(queries: FormulaQuery[]): Promise<FamilyCoverage>;
   /** The formula and other ingredients a collected product stored; null when it has none. */
   readSaved(operationId: string): Promise<SavedFormula | null>;
 }

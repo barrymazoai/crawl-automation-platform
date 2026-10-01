@@ -3,7 +3,7 @@ import {
   type ResourceGate,
   type ResourceRequest,
 } from "@crawl-automation/v3-contracts";
-import { CancellationScope, sleep } from "@temporalio/workflow";
+import { CancellationScope, log, sleep } from "@temporalio/workflow";
 import type { ResourceActivities } from "./resource-activities.js";
 import { resourceFailure } from "./resource-failure.js";
 
@@ -14,7 +14,9 @@ export async function waitForResource(at: {
   ports: ResourceActivities;
   waiting: { polls: number };
 }): Promise<void> {
-  const deadline = Date.now() + at.config.maxWaitSeconds * 1000;
+  const requestedAt = Date.now();
+  const deadline = requestedAt + at.config.maxWaitSeconds * 1000;
+  log.info("resource permit requested", { ...at.request, requestedAt });
   for (;;) {
     const result = ResourceDecisionSchema.safeParse(
       await CancellationScope.nonCancellable(() => at.ports.reserveResources(at.request)),
@@ -27,6 +29,12 @@ export async function waitForResource(at: {
       throw resourceFailure("RESOURCE.IDENTITY_CONFLICT", { request: at.request });
     }
     if (result.data.status === "granted") {
+      log.info("resource permit granted", {
+        ...at.request,
+        requestedAt,
+        grantedAt: Date.now(),
+        waitMs: Date.now() - requestedAt,
+      });
       return;
     }
     at.waiting.polls++;

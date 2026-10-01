@@ -7,8 +7,12 @@ import { queueRouter } from "./queue.js";
 import { resourcesRouter } from "./resources.js";
 import { productsRouter, reviewsRouter } from "./results.js";
 import { runsRouter } from "./runs.js";
+import { usageRouter } from "./usage.js";
+import { enrichmentRouter } from "./enrichment.js";
 
 export const appRouter = router({
+  usage: usageRouter,
+  enrichment: enrichmentRouter,
   evidence: evidenceRouter,
   runs: runsRouter,
   queue: queueRouter,

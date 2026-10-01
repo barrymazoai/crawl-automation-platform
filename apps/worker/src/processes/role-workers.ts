@@ -2,13 +2,13 @@ import type { WorkerSpec } from "@crawl-automation/platform/temporal-worker";
 import { browserActivities } from "../activities/browser-activities.js";
 import { collectionActivities } from "../activities/collection-activities.js";
 import { brandListingActivities } from "../activities/brand-listing-activities.js";
-import {
-  labelActivities,
-  modelActivities,
-  ocrActivities,
-  resourceActivities,
-} from "../activities/label-activities.js";
+import { labelActivities, modelActivities, ocrActivities } from "../activities/label-activities.js";
+import { resourceActivities } from "../activities/resource-activities.js";
 import { pipelineActivities } from "../activities/pipeline-activities.js";
+import {
+  enrichmentModelActivities,
+  enrichmentPipelineActivities,
+} from "../activities/enrichment-activities.js";
 import type { WorkerParts } from "../container.js";
 import type { ProcessRole, WorkerRole } from "./process-config.js";
 
@@ -22,6 +22,7 @@ const roleWork: Record<WorkerRole, (parts: WorkerParts) => RoleWork> = {
   pipeline: (parts) => ({
     activities: {
       ...pipelineActivities(parts),
+      ...enrichmentPipelineActivities(parts),
       ...collectionActivities(parts),
       ...brandListingActivities(parts),
     },
@@ -30,7 +31,9 @@ const roleWork: Record<WorkerRole, (parts: WorkerParts) => RoleWork> = {
   // The Label workflow and its steps that need neither a model nor the OCR API.
   label: (parts) => ({ activities: labelActivities(parts), workflowBundlePath }),
   "label-ocr": (parts) => ({ activities: ocrActivities(parts) }),
-  "label-model": (parts) => ({ activities: modelActivities(parts) }),
+  "label-model": (parts) => ({
+    activities: { ...modelActivities(parts), ...enrichmentModelActivities(parts) },
+  }),
   resources: (parts) => ({ activities: resourceActivities(parts) }),
   // Browser workers run on each Mac mini with Ego for DTC and Amazon Store-page brands.
   // Whole Foods waits on its fetch test. The role also hosts the API's browser brand-scan workflow.

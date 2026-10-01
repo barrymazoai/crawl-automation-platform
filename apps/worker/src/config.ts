@@ -16,6 +16,7 @@ import {
   ChannelLabelInputSchema,
   ChannelPlanInputSchema,
   ChannelSavedLabelWorkflowInputSchema,
+  LabelSourcePolicySchema,
   ResourceGateSchema,
   ScraperApiRouteSchema,
 } from "@crawl-automation/v3-contracts";
@@ -90,6 +91,13 @@ export const WorkerConfigSchema = z
         ocr: ChannelPlanInputSchema.shape.ocr,
         visionConfigFingerprint: ChannelPlanInputSchema.shape.visionConfigFingerprint,
         factsPolicy: z.literal("text-facts-first/1").optional(),
+        /** Per-channel order for new plans; Whole Foods formulas use Amazon's order. */
+        sourceOrder: z
+          .partialRecord(
+            z.enum(["amazon", "gnc", "swanson", "costco", "dtc"]),
+            LabelSourcePolicySchema.shape.order,
+          )
+          .default({}),
       })
       .optional(),
     /** Required by pipeline to hand off label work; label execution roles use processing. */

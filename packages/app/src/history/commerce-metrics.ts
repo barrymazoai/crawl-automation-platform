@@ -21,12 +21,16 @@ const IN_STOCK = [
   /^In stock\.?$/i,
   /^Only [1-9]\d* left in stock(?:\s*-\s*order soon\.?)?$/i,
   /^available$/i,
+  /^in_stock$/i,
+  /^(?:https?:\/\/schema.org\/)?(?:LimitedAvailability|OnlineOnly|InStoreOnly)$/i,
 ];
 const OUT_OF_STOCK = [
   /^(?:https?:\/\/schema.org\/)?(?:OutOfStock|SoldOut)$/i,
   /^(?:Out of stock|Sold out)\.?$/i,
   /^Currently unavailable\.(?: We don't know when or if this item will be back in stock\.)?$/i,
   /^unavailable$/i,
+  /^(?:out_of_stock|sold_out)$/i,
+  /^(?:https?:\/\/schema.org\/)?Discontinued$/i,
 ];
 
 function currency(value: unknown): string | null {
@@ -124,6 +128,7 @@ export function commerceMetrics(raw: unknown): Metrics {
     listPrice: amount(commerce["listPrice"]),
     rating: rating(commerce["rating"]),
     reviewCount: reviewCount(commerce["reviewCount"]),
+    // The legacy Amazon reader did not extract Best Sellers Rank; no verified rank source yet.
     salesRank: null,
     inStock: inStock(commerce["availability"]),
     unitsSold: null,

@@ -1,11 +1,21 @@
 import { ChannelIdSchema } from "@crawl-automation/v3-contracts";
 import { z } from "zod";
+import type { FamilyFormulaOutcomes } from "./family-formula-outcome.js";
+export * from "./family-formula-outcome.js";
 
 /** Every channel has its own queue: its own mode and limits. */
 export const QueueChannelSchema = ChannelIdSchema;
 export type QueueChannel = z.infer<typeof QueueChannelSchema>;
 
-export const QueueStateSchema = z.enum(["queued", "ready", "running", "review", "completed"]);
+export const QueueStateSchema = z.enum([
+  "queued",
+  "ready",
+  "running",
+  "following",
+  "pending",
+  "review",
+  "completed",
+]);
 export type QueueState = z.infer<typeof QueueStateSchema>;
 
 /** The queue a call is about; Amazon unless named. */
@@ -101,13 +111,15 @@ export interface QueueItemView {
   lastError: string | null;
   /** For Review items: the one-line reason or failure code. */
   reason: string | null;
+  /** The active request this batch follows; followers never create their own execution. */
+  followsItemId?: string | null | undefined;
 }
 
 /** One channel's queue tables; every change runs under the queue's lock. */
-export interface QueueStore {
+export interface QueueStore extends Partial<FamilyFormulaOutcomes> {
   status(channel: QueueChannel): Promise<QueueStatus>;
   items(query: QueueItemsQuery): Promise<QueueItemView[]>;
-  add(input: AddToQueue): Promise<{ added: number }>;
+  add(input: AddToQueue): Promise<{ added: number; following?: number }>;
   setLimits(limits: QueueLimits): Promise<void>;
   pause(options: PauseQueue): Promise<void>;
   resume(channel: QueueChannel): Promise<void>;

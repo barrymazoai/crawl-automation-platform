@@ -8,6 +8,7 @@ import {
   childBundle,
   currentBundle,
   pipelineMarkers,
+  stopProofMarker,
   withoutPatches,
   type PatchMarker,
   type ReplayBundle,
@@ -22,14 +23,17 @@ import {
 } from "./testing/replay/history.js";
 import { pipelineFixture } from "./testing/replay/product-fixture.js";
 import type { ProductPlanRequest } from "./pipeline-model.js";
+import { permitCommands } from "./testing/replay/permits.js";
 
 let environment: TestWorkflowEnvironment;
 let current: ReplayBundle;
+let preEnrichment: ReplayBundle;
 let children: ReplayBundle;
 const recordingBundles = new Map<string, ReplayBundle>();
 const cases = [
   { name: "all markers present", missing: [] },
   ...pipelineMarkers.map((marker) => ({ name: `without ${marker}`, missing: [marker] })),
+  { name: "before executor stop proof", missing: [stopProofMarker] },
   {
     name: "before heartbeat patches",
     missing: ["download-heartbeat-v1", "label-heartbeat-v1"],
@@ -38,13 +42,14 @@ const cases = [
     name: "legacy gate before heartbeat patches",
     missing: ["resource-gate-v1", "download-heartbeat-v1", "label-heartbeat-v1"],
   },
-  { name: "before all patches", missing: [...pipelineMarkers] },
+  { name: "before all patches", missing: [...pipelineMarkers, stopProofMarker] },
 ] satisfies Array<{ name: string; missing: PatchMarker[] }>;
 
 beforeAll(async () => {
   [current, children] = await Promise.all([currentBundle(), childBundle()]);
+  preEnrichment = withoutPatches(current, ["product-enrichment-v1"]);
   for (const scenario of cases) {
-    recordingBundles.set(scenario.name, withoutPatches(current, scenario.missing));
+    recordingBundles.set(scenario.name, withoutPatches(preEnrichment, scenario.missing));
   }
   // Validate the generated contracts even when the local Temporal server cannot start.
   pipelineFixture("replay-preflight");
@@ -93,6 +98,8 @@ it.each(cases)(
       ),
     );
     const activities = scheduledActivities(history);
+    const captureCommands = permitCommands("captureProduct");
+    expect(activities.slice(0, captureCommands.length)).toEqual(captureCommands);
     expect(activities.filter((activity) => activity === "reuseSiblingFormula")).toHaveLength(
       reuse ? 1 : 0,
     );
@@ -177,7 +184,7 @@ it.each([false, true])(
     );
     const { history, result, workflowId } = await recordHistory({
       environment,
-      bundle: current,
+      bundle: preEnrichment,
       queue,
       workflow: "ProductPipelineWorkflow",
       input,
@@ -194,9 +201,7 @@ it.each([false, true])(
       bound ? { ...sourcePlan, sourceUrl } : sourcePlan,
     );
     expect(scheduledActivities(history)).toEqual([
-      "reserveResources",
-      "captureBrowserProduct",
-      "releaseResources",
+      ...permitCommands("captureBrowserProduct"),
       "prepareChannelProduct",
       "findKnownFormula",
     ]);
@@ -215,7 +220,7 @@ it.each([false, true])(
     const reviewProduct = vi.fn(async (_request: unknown) => captureReview());
     const { history, result, workflowId } = await recordHistory({
       environment,
-      bundle: patched ? current : withoutPatches(current, ["resource-gate-v1"]),
+      bundle: patched ? preEnrichment : withoutPatches(preEnrichment, ["resource-gate-v1"]),
       queue,
       workflow: "ProductPipelineWorkflow",
       input: productInput(queue),
@@ -262,8 +267,10 @@ it.each([false, true])(
     const { history, result, workflowId } = await recordHistory({
       environment,
       bundle: withoutPatches(
-        current,
-        patched ? ["capture-mode-v1"] : ["capture-mode-v1", "resource-gate-v1"],
+        preEnrichment,
+        patched
+          ? ["capture-mode-v1", "family-formula-outcomes-v1"]
+          : ["capture-mode-v1", "resource-gate-v1", "family-formula-outcomes-v1"],
       ),
       queue,
       workflow: "ProductPipelineWorkflow",
@@ -282,9 +289,7 @@ it.each([false, true])(
     expect(result).toMatchObject({ status: "collected", reusedFormula: true });
     expectMarkers(history, patched ? ["resource-gate-v1"] : []);
     expect(scheduledActivities(history)).toEqual([
-      "reserveResources",
-      "captureBrowserProduct",
-      "releaseResources",
+      ...permitCommands("captureBrowserProduct"),
       "findKnownFormula",
     ]);
     expect(gate.held.size).toBe(0);
@@ -303,18 +308,16 @@ it.each(["http", "browser"] as const)(
     const captureBrowserProduct = vi.fn(async () => captureReview());
     const { history, result, workflowId } = await recordHistory({
       environment,
-      bundle: current,
+      bundle: preEnrichment,
       queue,
       workflow: "ProductPipelineWorkflow",
       input: { ...productInput(queue, channel), capture },
       activities: { ...gate.activities, captureProduct, captureBrowserProduct },
     });
     expect(result).toEqual(captureReview());
-    expect(scheduledActivities(history)).toEqual([
-      "reserveResources",
-      capture === "http" ? "captureProduct" : "captureBrowserProduct",
-      "releaseResources",
-    ]);
+    expect(scheduledActivities(history)).toEqual(
+      permitCommands(capture === "http" ? "captureProduct" : "captureBrowserProduct"),
+    );
     const markers = history.events?.flatMap((event) =>
       Object.values(event.markerRecordedEventAttributes?.details ?? {}).flatMap(
         (values) => values.payloads?.map((value) => Buffer.from(value.data ?? []).toString()) ?? [],
@@ -336,7 +339,7 @@ it.each([false, true])(
     const requestAmazonFormula = vi.fn(async () => ({ status: "queued" }));
     const { history, result, workflowId } = await recordHistory({
       environment,
-      bundle: current,
+      bundle: preEnrichment,
       queue,
       workflow: "ProductPipelineWorkflow",
       input,
@@ -354,18 +357,21 @@ it.each([false, true])(
       },
     });
     expect(result).toMatchObject({
-      status: "collected",
+      status: known ? "formula-linked" : "formula-pending",
       ...(known ? {} : { formulaPending: true }),
     });
     expect(scheduledActivities(history)).toEqual([
-      "reserveResources",
-      "captureProduct",
-      "releaseResources",
+      ...permitCommands("captureProduct"),
       "findKnownFormula",
-      ...(known ? [] : ["requestAmazonFormula"]),
+      "requestAmazonFormula",
     ]);
-    expectMarkers(history, ["capture-mode-v1", "resource-gate-v1", "formula-family-capture-v1"]);
-    expect(requestAmazonFormula).toHaveBeenCalledTimes(known ? 0 : 1);
+    expectMarkers(history, [
+      "capture-mode-v1",
+      "resource-gate-v1",
+      "formula-family-capture-v1",
+      "family-formula-outcomes-v1",
+    ]);
+    expect(requestAmazonFormula).toHaveBeenCalledOnce();
     expect(gate.held.size).toBe(0);
     await Worker.runReplayHistory({ workflowBundle: current }, history, workflowId);
   },

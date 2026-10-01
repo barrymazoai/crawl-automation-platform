@@ -22,7 +22,7 @@ export interface StartedItem {
 
 /** How an item ended. The reason is the Review's failure code; null when completed. */
 export interface SettledOutcome {
-  state: "completed" | "review";
+  state: "completed" | "review" | "pending";
   reason: string | null;
 }
 
@@ -94,11 +94,26 @@ export function settledOutcome(execution: RunExecution): SettledOutcome | null {
 /** A completed run: collected or unlisted is done; a Review keeps its own code; anything else is unrecognized. */
 function completedOutcome(raw: unknown): SettledOutcome {
   const result = PipelineResultSchema.safeParse(raw);
+  if (!result.success) {
+    return { state: "review", reason: "QUEUE.OUTCOME_UNRECOGNIZED" };
+  }
   // `listing`: the revisit found the listing unlisted and recorded that sighting with its reason; the run is done.
-  if (result.success && ["collected", "listing"].includes(result.data.status)) {
+  if (
+    [
+      "collected",
+      "listing",
+      "metrics-complete",
+      "formula-linked",
+      "formula-pending",
+      "no-amazon-source",
+    ].includes(result.data.status)
+  ) {
     return { state: "completed", reason: null };
   }
-  if (!result.success || result.data.status !== "review") {
+  if (result.data.status === "pending" && result.data.code === "CAPTURE.IN_FLIGHT") {
+    return { state: "pending", reason: result.data.code };
+  }
+  if (result.data.status !== "review") {
     return { state: "review", reason: "QUEUE.OUTCOME_UNRECOGNIZED" };
   }
   return {

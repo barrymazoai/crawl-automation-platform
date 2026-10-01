@@ -2,6 +2,7 @@ import { pageText, type FetchedPage } from "@crawl-automation/channels-core";
 import { wholeFoodsContent } from "./whole-foods-content.js";
 import { parseHTML } from "linkedom";
 import { wholeFoodsProductAddress } from "./whole-foods-address.js";
+import { requireWholeFoodsIdentity } from "./whole-foods-identity.js";
 import { wholeFoodsErrors } from "./whole-foods-errors.js";
 import { assertStore, type WholeFoodsStore } from "./whole-foods-store.js";
 
@@ -46,8 +47,9 @@ export function parseWholeFoodsProduct(
   store: WholeFoodsStore,
 ): WholeFoodsProduct {
   const address = wholeFoodsProductAddress(page.url);
+  const identity = requireWholeFoodsIdentity(page);
   const { document } = parseHTML(page.html);
-  const content = wholeFoodsContent(document, { asin: address.listingId, url: address.url });
+  const content = wholeFoodsContent(document, { asin: identity.listingId, url: address.url });
   const title =
     document.querySelector("h1")?.textContent?.replace(/\s+/g, " ").trim() || content.title;
   if (!title) {
@@ -60,8 +62,7 @@ export function parseWholeFoodsProduct(
   const block = blockAfterTitle(text, title);
   return {
     codec: "wholefoods-product/1",
-    // The requested ASIN is an association only, not verified page identity (R22).
-    asin: address.listingId,
+    asin: identity.listingId,
     url: address.url,
     ...content,
     title,

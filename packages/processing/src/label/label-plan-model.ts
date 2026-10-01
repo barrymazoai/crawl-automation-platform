@@ -2,6 +2,8 @@ import { z } from "zod";
 import {
   ExecutionIdSchema,
   LabelEvidencePolicySchema,
+  LabelSourcePolicySchema,
+  LabelPreparationSchema,
   LabelProductManifestSchema,
   LabelProductSourceSchema,
   ObservationSchema,
@@ -32,12 +34,17 @@ export const LabelPlanInputSchema = z
     visionConfigFingerprint: Sha256Schema,
     corePolicy: z.string().min(1).max(120).optional(),
     evidencePolicy: LabelEvidencePolicySchema.optional(),
+    sourcePolicy: LabelSourcePolicySchema.optional(),
     /** Packaging admission: the label is compared with the product's full page documents. */
     admission: z.literal("label-packaging/1").optional(),
   })
   .refine(
     (input) => ![input.plan.operationId, input.plan.sourceOperationId].includes(input.operationId),
     "The label task is its own operation",
+  )
+  .refine(
+    (input) => !input.sourcePolicy || input.evidencePolicy === "label-image-first/6",
+    "Ordered labels retain the current merge safeguards",
   );
 export type LabelPlanInput = z.infer<typeof LabelPlanInputSchema>;
 
@@ -93,7 +100,11 @@ export interface ProductPlanReader {
   inspect(
     plan: LabelPlanInput["plan"],
     signal: AbortSignal,
-  ): Promise<{ manifest: SavedManifest; files?: { resourceId: string; url: string }[] } | null>;
+  ): Promise<{
+    manifest: SavedManifest;
+    files?: { resourceId: string; url: string }[];
+    labelPreparation?: z.infer<typeof LabelPreparationSchema>;
+  } | null>;
 }
 
 /** What a saved source's prepared evidence resolves to (see SavedSourceEvidence). */

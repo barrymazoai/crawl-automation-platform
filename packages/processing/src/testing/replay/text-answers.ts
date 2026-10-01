@@ -1,7 +1,8 @@
 import { strict as assert } from "node:assert";
 import { z } from "zod";
 import { type ReviewRecord, type TextInput } from "@crawl-automation/v3-contracts";
-import { decodeLabelText, type DecodedLabel } from "../../text/protocol/label-decoder.js";
+import type { DecodedLabel } from "../../text/protocol/label-decoder.js";
+import { recheckTextAnswer } from "../../recheck/decode-text.js";
 import { documentText, textInput, type SavedEvidence } from "./saved-evidence.js";
 
 const RawSchema = z.object({ rawResponse: z.string() });
@@ -26,12 +27,7 @@ export function replayText(data: SavedEvidence): Map<string, ReplayedText> {
     const answer: ReplayedText = { review, input };
     try {
       const response = RawSchema.parse(review.candidate.value).rawResponse;
-      answer.decoded = decodeLabelText({
-        scope: input,
-        text: documentText(data, input),
-        response,
-        policyVersion: input.policyVersion,
-      });
+      answer.decoded = recheckTextAnswer(input, documentText(data, input), response);
     } catch (error) {
       answer.error =
         error instanceof Error && "code" in error ? String(error.code) : "schema-or-evidence";

@@ -15,10 +15,12 @@ vi.mock("@temporalio/workflow", () => {
     }
   }
   return {
+    defineSignal: (name: string) => name,
     proxyActivities: ({ taskQueue }: { taskQueue: string }) => env.activities[taskQueue],
     workflowInfo: () => ({ workflowId: "product-run-1", runId: "run-1" }),
     // Historical browser product results retain their recorded route before capture-mode-v1.
-    patched: (marker: string) => marker !== "capture-mode-v1",
+    patched: (marker: string) =>
+      !["capture-mode-v1", "family-formula-outcomes-v1", "product-enrichment-v1"].includes(marker),
     sleep: async () => undefined,
     isCancellation: (error: unknown) => (error as { type?: string }).type === "CANCELLED",
     CancellationScope: { nonCancellable: (run: () => unknown) => run() },

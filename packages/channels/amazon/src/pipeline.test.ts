@@ -149,10 +149,11 @@ describe.skipIf(!fixture.available)(`${fixture.name}: shared capture and plannin
     );
     expect(await setup.capture.capture(request, AbortSignal.timeout(10_000))).toEqual(result);
     expect(setup.client.get).toHaveBeenCalledTimes(1);
-  });
+    // This hashes and parses a retained multi-megabyte page twice under suite-wide CPU load.
+  }, 20_000);
 
   it.each([false, true])(
-    "text-facts-first plans complete=%s with the expected image work",
+    "keeps image fallback descriptors when page facts are complete=%s",
     async (complete) => {
       const setup = captureSetup(complete ? withCompleteFacts() : fixture.read());
       const result = await setup.capture.capture(request, AbortSignal.timeout(10_000));
@@ -171,9 +172,14 @@ describe.skipIf(!fixture.available)(`${fixture.name}: shared capture and plannin
       }
       const { plan } = buildPlan(result.sourcePlan, product);
       expect(result.factsComplete).toBe(complete);
-      expect(plan.files).toHaveLength(complete ? 0 : 6);
+      expect(result.sourcePlan.sourcePolicy).toEqual({
+        version: "label-sources/1",
+        order: "images-first",
+      });
+      expect(plan.files).toHaveLength(6);
       expect(plan.manifest.sources[0]).toMatchObject({ kind: "page", required: complete });
-      expect(plan.manifest.sources).toHaveLength(complete ? 1 : 7);
+      expect(plan.manifest.sources).toHaveLength(7);
+      expect(plan.manifest.sources.slice(1).every((source) => !source.required)).toBe(true);
     },
   );
 

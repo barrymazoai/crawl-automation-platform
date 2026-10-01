@@ -58,6 +58,11 @@ export class LabelTasks {
 
   private labelTask(pipeline: ProductPipelineInput, sourcePlan: ChannelPlanInput) {
     const { text, visionConfigFingerprint, evidencePolicy } = this.deps.settings;
+    // Legacy /5 drops page preparation after a complete image. Packaging needs that document.
+    const policy =
+      sourcePlan.sourcePolicy || evidencePolicy === "label-image-first/5"
+        ? "label-image-first/6"
+        : evidencePolicy;
     const corePolicy = this.deps.registry.get(pipeline.channel).planning?.corePolicy;
     const identity = Buffer.from(JSON.stringify([pipeline.operationId, sourcePlan.operationId]));
     return LabelPlanInputSchema.parse({
@@ -70,7 +75,9 @@ export class LabelTasks {
       },
       text,
       visionConfigFingerprint,
-      ...(evidencePolicy ? { evidencePolicy } : {}),
+      admission: "label-packaging/1",
+      ...(policy ? { evidencePolicy: policy } : {}),
+      ...(sourcePlan.sourcePolicy ? { sourcePolicy: sourcePlan.sourcePolicy } : {}),
       ...(corePolicy ? { corePolicy } : {}),
     });
   }

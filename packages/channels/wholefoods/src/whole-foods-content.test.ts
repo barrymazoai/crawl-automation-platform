@@ -1,10 +1,11 @@
 import { expect, it } from "vitest";
+import { syntheticIdentity } from "./identity-fixture.js";
 import { ChannelProductEvidenceSchema } from "@crawl-automation/v3-contracts";
 import { wholeFoodsAdapter } from "./whole-foods-adapter.js";
 import { WHOLE_FOODS_STORE } from "./whole-foods-store.js";
 
 const url = "https://www.wholefoodsmarket.com/grocery/product/oil-b0096m5pbw";
-const ALAMEDA = `<script type="application/json">{"storePreference":{"buid":"10259","storeName":"The Alameda"}}</script>`;
+const ALAMEDA = syntheticIdentity();
 const parse = (markup: string) =>
   wholeFoodsAdapter(WHOLE_FOODS_STORE).parseProduct({
     url,
