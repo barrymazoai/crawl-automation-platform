@@ -131,6 +131,9 @@ importers:
       '@crawl-automation/channels-core':
         specifier: workspace:*
         version: link:../../packages/channels/core
+      '@crawl-automation/channels-costco':
+        specifier: workspace:*
+        version: link:../../packages/channels/costco
       '@crawl-automation/channels-gnc':
         specifier: workspace:*
         version: link:../../packages/channels/gnc
@@ -210,6 +213,9 @@ importers:
       '@crawl-automation/channels-core':
         specifier: workspace:*
         version: link:../../packages/channels/core
+      '@crawl-automation/channels-costco':
+        specifier: workspace:*
+        version: link:../../packages/channels/costco
       '@crawl-automation/channels-gnc':
         specifier: workspace:*
         version: link:../../packages/channels/gnc
@@ -454,6 +460,34 @@ importers:
       '@types/html-to-text':
         specifier: 'catalog:'
         version: 9.0.4
+      '@types/node':
+        specifier: 'catalog:'
+        version: 22.20.1
+      typescript:
+        specifier: 'catalog:'
+        version: 5.9.3
+      vitest:
+        specifier: 'catalog:'
+        version: 3.2.7(@types/node@22.20.1)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.51.2)(tsx@4.23.12)(yaml@2.9.0)
+
+  packages/channels/costco:
+    dependencies:
+      '@crawl-automation/channels-core':
+        specifier: workspace:*
+        version: link:../core
+      '@crawl-automation/platform':
+        specifier: workspace:*
+        version: link:../../platform
+      '@crawl-automation/v3-contracts':
+        specifier: workspace:*
+        version: link:../../v3-contracts
+      linkedom:
+        specifier: 0.18.13
+        version: 0.18.13
+      zod:
+        specifier: 'catalog:'
+        version: 4.4.3
+    devDependencies:
       '@types/node':
         specifier: 'catalog:'
         version: 22.20.1

@@ -13,3 +13,11 @@ it("always sets the fixed Whole Foods cookie and keeps it scoped to that channel
   expect(channels.amazon).toEqual({ premium: true });
   expect(CaptureChannelSettingsSchema.parse(undefined).wholefoods.headers.cookie).toBe(storeCookie);
 });
+
+it("fetches Costco raw product HTML by default and accepts explicit provider overrides", () => {
+  expect(CaptureChannelSettingsSchema.parse(undefined).costco).toEqual({ render: false });
+  expect(CaptureChannelSettingsSchema.parse({ costco: { premium: true } }).costco).toEqual({
+    render: false,
+    premium: true,
+  });
+});

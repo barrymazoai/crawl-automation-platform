@@ -57,6 +57,7 @@ describe("worker capture settings", () => {
     const parsed = capture.parse({ route, scraperApi, channels: { gnc: { premium: true } } });
     expect(parsed.channels).toMatchObject({
       gnc: { premium: true },
+      costco: { render: false },
       wholefoods: { headers: { cookie: expect.stringMatching(/^wfm_store_d8=/) } },
     });
   });

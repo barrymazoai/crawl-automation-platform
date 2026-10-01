@@ -21,6 +21,7 @@ export const KNOWN_RESOURCE_KINDS: ResourceKinds = {
   "scraperapi-lane": "http-lane",
   "swanson-brand-scan": "http-lane",
   "wholefoods-brand-scan": "browser",
+  "costco-brand-scan": "browser",
   "mini-model-account": "model",
   "mini-cpu": "cpu",
   "windows-ocr": "ocr",

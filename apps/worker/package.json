@@ -15,6 +15,7 @@
     "@crawl-automation/channel-dtc": "workspace:*",
     "@crawl-automation/channel-swanson": "workspace:*",
     "@crawl-automation/channels-core": "workspace:*",
+    "@crawl-automation/channels-costco": "workspace:*",
     "@crawl-automation/channels-gnc": "workspace:*",
     "@crawl-automation/channels-wholefoods": "workspace:*",
     "@crawl-automation/platform": "workspace:*",

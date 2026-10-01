@@ -67,12 +67,16 @@ it.each(
   30_000,
 );
 
-it.each(["complete", "broken", "throttled", "failure"])(
-  "replays a gated %s scan with its gap or cool-down before release",
-  async (ending) => {
+it.each(
+  ["wholefoods", "costco"].flatMap((channel) =>
+    ["complete", "broken", "throttled", "failure"].map((ending) => ({ channel, ending })),
+  ),
+)(
+  "replays a gated $channel $ending scan with its gap or cool-down before release",
+  async ({ channel, ending }) => {
     const queue = `paced-scan-${randomUUID()}`;
     const input = {
-      channel: "wholefoods",
+      channel,
       capture: "browser",
       scanId: "scan-paced",
       sourceUrl: "https://example.com/brand",
@@ -81,16 +85,20 @@ it.each(["complete", "broken", "throttled", "failure"])(
       resources: {
         queue,
         maxWaitSeconds: 10,
-        activities: { scanBrandInBrowser: [{ resourceId: "wholefoods-brand-scan", units: 1 }] },
+        activities: { scanBrandInBrowser: [{ resourceId: `${channel}-brand-scan`, units: 1 }] },
       },
     };
     const held = new Set<string>();
     const scanBrandInBrowser = vi.fn(async () => {
       expect(held.size).toBe(1);
       if (ending === "throttled" || ending === "failure") {
-        throw ApplicationFailure.nonRetryable("unresolved", "WHOLEFOODS.SEARCH_THROTTLED", {
-          cooldownRequested: ending === "throttled",
-        });
+        throw ApplicationFailure.nonRetryable(
+          "unresolved",
+          `${channel.toUpperCase()}.SEARCH_THROTTLED`,
+          {
+            cooldownRequested: ending === "throttled",
+          },
+        );
       }
       return { complete: ending === "complete", cooldownRequested: ending === "broken" };
     });

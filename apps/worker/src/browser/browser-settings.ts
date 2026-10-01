@@ -1,3 +1,8 @@
+import {
+  CostcoStoreSchema,
+  CostcoScanSettingsSchema,
+  COSTCO_STORE,
+} from "@crawl-automation/channels-costco";
 import { DtcSettingsSchema } from "@crawl-automation/channel-dtc";
 import {
   WholeFoodsStoreSchema,
@@ -13,6 +18,14 @@ import { z } from "zod";
  */
 export const BrowserSettingsSchema = z.strictObject({
   ego: EgoSettingsSchema,
+  costcoScan: CostcoScanSettingsSchema.prefault({}),
+  costco: CostcoStoreSchema.refine(
+    (store) =>
+      store.storeId === COSTCO_STORE.storeId &&
+      store.label === COSTCO_STORE.label &&
+      store.postalCode === COSTCO_STORE.postalCode,
+    "Costco scans verify Southlake warehouse 669 / ZIP 76051",
+  ).default(COSTCO_STORE),
   dtc: DtcSettingsSchema.default({ sites: [] }),
   wholefoodsScan: WholeFoodsScanSettingsSchema.prefault({}),
   wholefoods: WholeFoodsStoreSchema.refine(

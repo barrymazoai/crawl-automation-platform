@@ -20,7 +20,14 @@ describe("API composition root", () => {
 
   it("registers the Amazon adapter for HTTP capture alongside Swanson and GNC", () => {
     const registry = channelRegistry();
-    expect(registry.channels()).toEqual(["swanson", "gnc", "amazon", "wholefoods", "dtc"]);
+    expect(registry.channels()).toEqual([
+      "swanson",
+      "gnc",
+      "amazon",
+      "wholefoods",
+      "costco",
+      "dtc",
+    ]);
     expect(registry.forCapture("amazon", "http")).toBe(amazonAdapter);
     expect(registry.forCapture("dtc", "browser").planning?.channel).toBe("dtc");
     expect(() => registry.forCapture("dtc", "http")).toThrow();

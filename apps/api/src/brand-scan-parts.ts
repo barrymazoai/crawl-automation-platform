@@ -16,6 +16,7 @@ import {
   type ListingStateService,
   type QueueService,
 } from "@crawl-automation/app";
+import { BROWSER_SCAN_PERMITS } from "./browser-scan-permit-settings.js";
 import { wholeFoodsSourceFromAmazon } from "./whole-foods-source-derivation.js";
 import { adapterBrowserScanners } from "./browser-scan-gateways.js";
 import { createListingPages } from "@crawl-automation/channels-core";
@@ -94,7 +95,7 @@ export function brandScanParts(parts: {
 function gatedListings(settings: BrandScanSettings, temporal: TemporalClient) {
   return Object.fromEntries(
     Object.entries(settings.permits)
-      .filter(([channel]) => channel !== "wholefoods")
+      .filter(([channel]) => !(channel in BROWSER_SCAN_PERMITS))
       .map(([channel, permit]) => [channel, new TemporalBrandListings(temporal.client, permit)]),
   );
 }

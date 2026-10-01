@@ -139,7 +139,14 @@ describe("worker composition root", () => {
   it("resolves Amazon HTTP capture alongside Swanson and GNC", async () => {
     const container = await buildContainer(await productionShapedConfig());
     const { registry } = container.cradle;
-    expect(registry.channels()).toEqual(["swanson", "gnc", "amazon", "wholefoods", "dtc"]);
+    expect(registry.channels()).toEqual([
+      "swanson",
+      "gnc",
+      "amazon",
+      "wholefoods",
+      "costco",
+      "dtc",
+    ]);
     expect(registry.forCapture("amazon", "http")).toBe(amazonAdapter);
     expect(registry.forCapture("dtc", "browser").planning?.channel).toBe("dtc");
     expect(() => registry.forCapture("dtc", "http")).toThrow();

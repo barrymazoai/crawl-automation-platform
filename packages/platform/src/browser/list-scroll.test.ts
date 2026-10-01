@@ -8,7 +8,13 @@ import type { ListScroll } from "./list-scroll.js";
 async function scrollList(
   states: string[][],
   options: Partial<ListScroll> = {},
-  scenario: { below?: boolean; noMore?: boolean; waitFailure?: Error } = {},
+  scenario: {
+    below?: boolean;
+    noMore?: boolean;
+    waitFailure?: Error;
+    aria?: string;
+    disabled?: boolean;
+  } = {},
 ) {
   let index = 0;
   let marked = false;
@@ -18,7 +24,9 @@ async function scrollList(
   const rect = { x: 10, y: 20, width: 100, height: 100, top: 20, bottom: 120 };
   const button = {
     offsetParent: {},
-    textContent: "Load More",
+    textContent: scenario.aria ? "" : "Load More",
+    disabled: scenario.disabled,
+    getAttribute: (name: string) => (name === "aria-label" ? scenario.aria : null),
     setAttribute: () => {
       marked = true;
     },
@@ -51,7 +59,7 @@ async function scrollList(
         if (selector === "a.items") {
           return links();
         }
-        if (selector === "button, a[role=button]") {
+        if (selector === (options.moreSelector ?? "button, a[role=button]")) {
           return !scenario.noMore && index < states.length - 1 ? [button] : [];
         }
         return marked ? [button] : [];
@@ -191,4 +199,28 @@ it.each(["none", "stable", "capped"])("decodes legacy %s records unchanged", (en
     scroll: { rounds: 1, ended },
   };
   expect(BrowserPageSchema.parse(page)).toEqual(page);
+});
+
+it("opts into accessible next-page controls without changing legacy selectors", async () => {
+  const { result, actions } = await scrollList(
+    [["/a"], ["/a", "/b"]],
+    {
+      moreSelector: "a[rel=next]",
+      moreTexts: ["Next page"],
+    },
+    { aria: "Next page" },
+  );
+  expect(actions).toContain("click");
+  expect(result).toMatchObject({ ended: "stable", seenCount: 2 });
+});
+it("does not press a disabled next-page control", async () => {
+  const { actions } = await scrollList(
+    [["/a"], ["/a", "/b"]],
+    {
+      moreSelector: "a[rel=next]",
+      moreTexts: ["Next page"],
+    },
+    { aria: "Next page", disabled: true },
+  );
+  expect(actions).not.toContain("click");
 });

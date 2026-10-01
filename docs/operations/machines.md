@@ -477,3 +477,70 @@ SHA256:G0nkbUe2En//nb9EO4/3L5fRxR6VgQKQ5Yck534UKqU
 - 这份包含内部地址的清单保留在本地工作记录；本次未授权把它发布到公开仓库。
 - [美国主 Mini 初始环境](../quality/2026-09-21-us-mac-mini-environment.md)是历史安装记录，其中“独立空库、未迁移”的描述已被后续迁移记录取代。
 - [迁移进展与局域网 OCR](../quality/2026-09-22-us-migration-progress.md) · [单商品恢复记录](../quality/2026-09-23-single-products-resumed.md) · [部署纠正约定](../quality/2026-09-22-migration-corrections.md)
+
+## Costco channel (R21; source only, pending Mini acceptance)
+
+Costco product capture uses the existing pipeline HTTP worker. Add `https://www.costco.com`
+to the private `capture.scraperApi.allowedOrigins` array (and the API evidence capture
+allowlist if that facility is enabled). Merge `capture.channels.costco: { "render": false }`;
+raw HTML is the default. Keep `capture.htmlReuseHours: 168` and
+`plan.factsPolicy: "text-facts-first/1"`. In the API, add Costco to `pipeline.channels` with
+the same HTTP capture task queue and `captureProduct` / `scraperapi-lane` gate as GNC.
+Product capture does not consume a browser permit.
+
+Costco brand scans use the **existing shared browser queue**, normally
+`v3.browser.wholefoods.v1`. That queue's name is historical. Both Minis must use the same
+Costco settings, and the existing manually started browser role serves the added capability.
+No second browser process or TaskSpace is necessary. Merge into API `brandScans`:
+
+```json
+{
+  "browserQueue": "v3.browser.wholefoods.v1",
+  "permits": {
+    "costco": {
+      "taskQueue": "v3.browser.wholefoods.v1",
+      "resourceQueue": "v3.resources.v1",
+      "resourceId": "costco-brand-scan",
+      "maxWaitSeconds": 900,
+      "gapAfterSeconds": 60,
+      "cooldownSeconds": 1800
+    }
+  }
+}
+```
+
+If only `browserQueue` is supplied, Costco and Whole Foods each get their own global permit
+on that queue. If a partial explicit `permits.costco` entry omits `taskQueue`, its fallback
+is `v3.browser.costco.v1`; set the shared queue explicitly as above to use existing pollers.
+Every machine shares the resource ID `costco-brand-scan`; custom local IDs are rejected.
+Migration `038_costco_brand_scan_capacity.sql` inserts capacity 1 without changing an
+existing row. All channel CHECK constraints already include Costco.
+
+Merge these sections into the worker config; preserve existing resource entries:
+
+```json
+{
+  "browser": {
+    "costco": { "storeId": "669", "label": "Southlake", "postalCode": "76051" },
+    "costcoScan": {
+      "canaryUrl": "https://www.costco.com/vitamins-herbals-dietary-supplements.html?refinement=brands%3DKirkland%20Signature",
+      "pressDelayMs": { "min": 4000, "max": 8000 }
+    }
+  },
+  "resourceKinds": { "costco-brand-scan": "browser" },
+  "resourceHealth": {
+    "resources": {
+      "costco-brand-scan": { "taskQueues": ["v3.browser.wholefoods.v1"] }
+    }
+  }
+}
+```
+
+These are **merge fragments**, not complete configs. Declare the same resource kind in the
+API config. Keep the existing health controller/TTL; establish health through the existing
+resource service/monitor before intake. The known-kind table includes Costco, but a kind
+declaration alone does not create capacity or certify a healthy worker.
+
+The warehouse check is verify-only. Set Southlake manually in the task's authorized Ego
+profile before testing; the channel never changes the warehouse or takes back user control.
+See [Costco operations](costco-brand-scans.md) for evidence, completeness and acceptance.

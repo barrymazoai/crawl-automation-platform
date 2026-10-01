@@ -175,3 +175,28 @@ it("captures configured DTC catalogs in Ego, without Whole Foods preparation", a
   expect(read).toHaveBeenCalledOnce();
   expect(round).not.toHaveBeenCalled();
 });
+
+it("routes Costco to Ego with pacing and no store switching", async () => {
+  const sourceUrl = "https://www.costco.com/protein.html?refinement=brands%3DExample";
+  const ego = new EgoPages({ cliPath: "/tmp/not-executed-ego", taskSpaceId: 1 });
+  const read = vi.spyOn(ego, "read").mockResolvedValue({
+    url: sourceUrl,
+    status: 200,
+    ready: true,
+    html: '<html><body><button data-testid="Button_locationselector_WarehouseSelector--submit">Southlake</button><main><div data-testid="ProductTile_123"><a href="/protein.product.123.html">Protein</a></div></main></body></html>',
+    scroll: { rounds: 3, ended: "stable" },
+  });
+  const round = vi.spyOn(ego, "round").mockRejectedValue(new Error("No store switching"));
+  const scanners = buildBrowserScanners({
+    ego,
+    rounds: new ManagedBrowserRounds(ego, async () => true),
+    publication: new RetainedPublication(memoryStore(), memoryStore()),
+    store: { storeId: "10259", label: "The Alameda", postalCode: "95126" },
+    costcoScan: { canaryUrl: sourceUrl, pressDelayMs: { min: 5000, max: 6000 } },
+  });
+  expect(
+    await scanners.scan({ scanId: "costco-wiring", sourceUrl }, new AbortController().signal),
+  ).toMatchObject({ complete: true, pages: [{ products: [{ listingId: "123" }] }] });
+  expect(read.mock.calls[0]?.[0].scroll?.pressDelayMs).toEqual({ min: 5000, max: 6000 });
+  expect(round).not.toHaveBeenCalled();
+});

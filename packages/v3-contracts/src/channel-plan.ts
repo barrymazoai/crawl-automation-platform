@@ -7,8 +7,8 @@ import { SavedProductWorkflowInputSchema } from "./product-evidence.js";
 import { ChannelProductEvidenceSchema } from "./channel-evidence.js";
 
 export const ChannelPlanInputSchema = z.strictObject({
-  operationId: ExecutionIdSchema, owner: ObservationSchema, channel: z.enum(["swanson", "amazon", "dtc", "gnc"]),
-  parserVersion: z.enum(["swanson-rendered/1", "amazon-rendered/1", "dtc-rendered/1", "gnc-rendered/1"]), expectedUrl: z.string().url().max(4096), source: ArtifactRefSchema,
+  operationId: ExecutionIdSchema, owner: ObservationSchema, channel: z.enum(["swanson", "amazon", "dtc", "gnc", "costco"]),
+  parserVersion: z.enum(["swanson-rendered/1", "amazon-rendered/1", "dtc-rendered/1", "gnc-rendered/1", "costco-rendered/1"]), expectedUrl: z.string().url().max(4096), source: ArtifactRefSchema,
   binding: SourceBindingSchema, text: TextCompatibilitySchema.refine(c => c.resultSchemaVersion === 2),
   ocr: ProcessingCompatibilitySchema.refine(c => c.resultSchemaVersion === 2), visionConfigFingerprint: Sha256Schema,
   // Omitted: page text plus every product image (download, OCR, vision), as before. text-facts-first/1: when the
@@ -19,7 +19,7 @@ export const ChannelPlanInputSchema = z.strictObject({
   try { assertArtifactBelongsTo(i.source, i.owner); } catch { ctx.addIssue({ code: "custom", message: "Source owner conflict" }); }
   // A projection comes from an owned browser page or, for Amazon, Swanson and GNC, from one archived static HTTP fetch
   // through a provider route (ScraperAPI).
-  if (i.source.kind !== "result-json" || ![`${i.channel}.browser-projection`, ...(i.channel === "amazon" || i.channel === "swanson" || i.channel === "gnc" ? [`${i.channel}.http-projection`] : [])].includes(i.source.producer.module) ||
+  if (i.source.kind !== "result-json" || ![`${i.channel}.browser-projection`, ...(i.channel === "amazon" || i.channel === "swanson" || i.channel === "gnc" || i.channel === "costco" ? [`${i.channel}.http-projection`] : [])].includes(i.source.producer.module) ||
     i.source.producer.implementationVersion !== i.parserVersion || i.parserVersion !== `${i.channel}-rendered/1` || i.source.producer.operationId === i.operationId || (i.channel === "swanson" ? i.owner.variantId === null : i.channel !== "dtc" && i.owner.variantId !== null))
     ctx.addIssue({ code: "custom", message: "Rendered source provenance required" });
 });

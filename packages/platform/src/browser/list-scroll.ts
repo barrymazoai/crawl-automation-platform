@@ -8,6 +8,8 @@ export const PressDelaySchema = z
 export interface ListScroll {
   itemSelector: string;
   moreTexts: readonly string[];
+  /** Opt-in controls with accessible labels, including next-page anchors; disabled controls are ignored. */
+  moreSelector?: string;
   maxRounds: number;
   stableRounds: number;
   settleMs: number;

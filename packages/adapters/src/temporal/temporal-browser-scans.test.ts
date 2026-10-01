@@ -3,63 +3,68 @@ import type { Client } from "@temporalio/client";
 import { expect, it, vi } from "vitest";
 import { TemporalBrowserScans } from "./temporal-browser-scans.js";
 
-it("routes the configured browser permit and preserves throttling as the Review reason", async () => {
-  const failure = Object.assign(new Error("workflow failed"), {
-    cause: { cause: { type: "WHOLEFOODS.SEARCH_THROTTLED" } },
-  });
-  const start = vi.fn(async () => ({
-    result: async () => {
-      throw failure;
-    },
-    cancel: vi.fn(),
-  }));
-  const client = { workflow: { start } } as unknown as Client;
-  const scans = new TemporalBrowserScans(client, "browser", {
-    wholefoods: {
-      taskQueue: "wholefoods-browser",
-      resourceQueue: "resources",
-      resourceId: "wholefoods-brand-scan",
-      gapAfterSeconds: 60,
-      cooldownSeconds: 1800,
-      maxWaitSeconds: 900,
-    },
-  });
-  const request = {
-    channel: "wholefoods" as const,
-    scanId: "scan-1",
-    sourceUrl: "https://example.com/brand",
-  };
-  await expect(scans.scan(request, new AbortController().signal)).rejects.toMatchObject({
-    code: "WHOLEFOODS.SEARCH_THROTTLED",
-  });
-  expect(start).toHaveBeenCalledExactlyOnceWith(
-    "BrowserScanWorkflow",
-    expect.objectContaining({
-      taskQueue: "wholefoods-browser",
-      args: [
-        {
-          ...request,
-          capture: "browser",
-          gapAfterSeconds: 60,
-          cooldownSeconds: 1800,
-          resources: {
-            queue: "resources",
-            maxWaitSeconds: 900,
-            activities: { scanBrandInBrowser: [{ resourceId: "wholefoods-brand-scan", units: 1 }] },
+it.each(["wholefoods", "costco"] as const)(
+  "routes %s permit and preserves throttling as the Review reason",
+  async (channel) => {
+    const failure = Object.assign(new Error("workflow failed"), {
+      cause: { cause: { type: `${channel.toUpperCase()}.SEARCH_THROTTLED` } },
+    });
+    const start = vi.fn(async () => ({
+      result: async () => {
+        throw failure;
+      },
+      cancel: vi.fn(),
+    }));
+    const client = { workflow: { start } } as unknown as Client;
+    const scans = new TemporalBrowserScans(client, "browser", {
+      [channel]: {
+        taskQueue: `${channel}-browser`,
+        resourceQueue: "resources",
+        resourceId: `${channel}-brand-scan`,
+        gapAfterSeconds: 60,
+        cooldownSeconds: 1800,
+        maxWaitSeconds: 900,
+      },
+    });
+    const request = {
+      channel,
+      scanId: "scan-1",
+      sourceUrl: "https://example.com/brand",
+    };
+    await expect(scans.scan(request, new AbortController().signal)).rejects.toMatchObject({
+      code: `${channel.toUpperCase()}.SEARCH_THROTTLED`,
+    });
+    expect(start).toHaveBeenCalledExactlyOnceWith(
+      "BrowserScanWorkflow",
+      expect.objectContaining({
+        taskQueue: `${channel}-browser`,
+        args: [
+          {
+            ...request,
+            capture: "browser",
+            gapAfterSeconds: 60,
+            cooldownSeconds: 1800,
+            resources: {
+              queue: "resources",
+              maxWaitSeconds: 900,
+              activities: {
+                scanBrandInBrowser: [{ resourceId: `${channel}-brand-scan`, units: 1 }],
+              },
+            },
           },
-        },
-      ],
-    }),
-  );
-  expect(start).not.toHaveBeenCalledWith(
-    expect.anything(),
-    expect.objectContaining({
-      workflowExecutionTimeout: expect.anything(),
-    }),
-  );
-});
+        ],
+      }),
+    );
+    expect(start).not.toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        workflowExecutionTimeout: expect.anything(),
+      }),
+    );
+  },
+);
 
-it.each(["wholefoods", "dtc", "amazon"] as const)(
+it.each(["wholefoods", "dtc", "amazon", "costco"] as const)(
   "starts a browser-capable scan for %s with an explicit capability",
   async (channel) => {
     const result = { pages: [], complete: true, soldHere: true, archiveKeys: [] };

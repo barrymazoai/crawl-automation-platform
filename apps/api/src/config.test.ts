@@ -220,9 +220,11 @@ describe("API capture gates at startup", () => {
     });
   });
 
-  it("refuses a configured channel without a registered adapter", async () => {
+  it("accepts Costco with the registered HTTP capture adapter", async () => {
     const settings = withChannels({ costco: captureGate("scraperapi-lane") });
-    await expect(loadSettings(settings)).rejects.toMatchObject({ code: "CHANNEL.UNKNOWN" });
+    await expect(loadSettings(settings)).resolves.toMatchObject({
+      pipeline: { channels: { costco: expect.anything() } },
+    });
   });
 
   it("rejects resource kinds outside the shared schema", async () => {

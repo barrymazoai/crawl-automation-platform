@@ -88,51 +88,65 @@ const gated = {
   },
 };
 
-it.each(["complete", "broken", "throttled", "failure"])(
-  "holds the exact permit through %s and its delay",
-  async (ending) => {
-    const result = { complete: ending === "complete", cooldownRequested: ending === "broken" };
-    const failure = {
-      cause: {
-        type: ending === "throttled" ? "WHOLEFOODS.SEARCH_THROTTLED" : "BROWSER.UNAVAILABLE",
-        details: [{ cooldownRequested: ending === "throttled" }],
-      },
-    };
-    const fails = ending === "throttled" || ending === "failure";
-    state.scan.mockImplementation(async () => {
-      if (fails) {
-        throw failure;
-      }
-      return result;
-    });
-    let finish: () => void = () => undefined;
-    state.sleep.mockReturnValueOnce(
-      new Promise<void>((resolve) => {
-        finish = resolve;
-      }),
-    );
-    const pending = BrowserScanWorkflow(gated);
-    const outcome = fails
-      ? expect(pending).rejects.toBe(failure)
-      : expect(pending).resolves.toBe(result);
-    await vi.waitFor(() =>
-      expect(state.sleep).toHaveBeenCalledExactlyOnceWith(
-        ending === "broken" || ending === "throttled" ? 1_800_000 : 60_000,
-      ),
-    );
-    expect(state.reserve).toHaveBeenCalledOnce();
-    expect(state.scan).toHaveBeenCalledExactlyOnceWith(input);
-    expect(state.release).not.toHaveBeenCalled();
-    expect(state.options.at(-1)).toMatchObject({
-      retry: { maximumAttempts: 1 },
-      cancellationType: "WAIT",
-      heartbeatTimeout: "30 seconds",
-    });
-    finish();
-    await outcome;
-    expect(state.release).toHaveBeenCalledExactlyOnceWith(state.reserve.mock.calls[0]?.[0]);
-  },
-);
+it.each(
+  ["wholefoods", "costco"].flatMap((channel) =>
+    ["complete", "broken", "throttled", "failure"].map((ending) => ({ channel, ending })),
+  ),
+)("holds the $channel permit through $ending and its delay", async ({ channel, ending }) => {
+  const result = { complete: ending === "complete", cooldownRequested: ending === "broken" };
+  const failure = {
+    cause: {
+      type:
+        ending === "throttled"
+          ? `${channel.toUpperCase()}.SEARCH_THROTTLED`
+          : "BROWSER.UNAVAILABLE",
+      details: [{ cooldownRequested: ending === "throttled" }],
+    },
+  };
+  const fails = ending === "throttled" || ending === "failure";
+  state.scan.mockImplementation(async () => {
+    if (fails) {
+      throw failure;
+    }
+    return result;
+  });
+  let finish: () => void = () => undefined;
+  state.sleep.mockReturnValueOnce(
+    new Promise<void>((resolve) => {
+      finish = resolve;
+    }),
+  );
+  const pending = BrowserScanWorkflow({
+    ...gated,
+    channel,
+    resources: {
+      ...gated.resources,
+      activities: { scanBrandInBrowser: [{ resourceId: `${channel}-brand-scan`, units: 1 }] },
+    },
+  });
+  const outcome = fails
+    ? expect(pending).rejects.toBe(failure)
+    : expect(pending).resolves.toBe(result);
+  await vi.waitFor(() =>
+    expect(state.sleep).toHaveBeenCalledExactlyOnceWith(
+      ending === "broken" || ending === "throttled" ? 1_800_000 : 60_000,
+    ),
+  );
+  expect(state.reserve).toHaveBeenCalledOnce();
+  expect(state.scan).toHaveBeenCalledExactlyOnceWith({ ...input, channel });
+  expect(state.reserve.mock.calls[0]?.[0].needs).toEqual([
+    { resourceId: `${channel}-brand-scan`, units: 1 },
+  ]);
+  expect(state.release).not.toHaveBeenCalled();
+  expect(state.options.at(-1)).toMatchObject({
+    retry: { maximumAttempts: 1 },
+    cancellationType: "WAIT",
+    heartbeatTimeout: "30 seconds",
+  });
+  finish();
+  await outcome;
+  expect(state.release).toHaveBeenCalledExactlyOnceWith(state.reserve.mock.calls[0]?.[0]);
+});
 
 it("does not scan while another machine holds capacity", async () => {
   state.reserve.mockResolvedValueOnce({

@@ -1,3 +1,4 @@
+import { costcoAdapter } from "@crawl-automation/channels-costco";
 import { wholeFoodsAdapter, WHOLE_FOODS_STORE } from "@crawl-automation/channels-wholefoods";
 import { amazonAdapter } from "@crawl-automation/channel-amazon";
 import { configuredDtcSites, createDtcAdapter } from "@crawl-automation/channel-dtc";
@@ -15,6 +16,7 @@ export function workerChannelRegistry(
     gncAdapter,
     amazonAdapter,
     wholeFoodsAdapter(WHOLE_FOODS_STORE),
+    costcoAdapter(),
     createDtcAdapter(configuredDtcSites(config.browser?.dtc)),
   ]);
 }

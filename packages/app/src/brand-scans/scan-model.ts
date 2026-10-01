@@ -4,8 +4,7 @@ import type { UnlistedReasonName } from "../listings/listing-model.js";
 import { QueueChannelSchema } from "../queue/queue-model.js";
 
 /**
- * Channels with a wired brand scan (migration 032 adds amazon; its products go to Amazon's product queue through a
- * bridge). Costco joins when its scan is wired.
+ * Channels with a wired brand scan. Amazon products enter its product queue through a bridge.
  */
 export const ScanChannelSchema = QueueChannelSchema.extract([
   "swanson",
@@ -13,6 +12,7 @@ export const ScanChannelSchema = QueueChannelSchema.extract([
   "amazon",
   "wholefoods",
   "dtc",
+  "costco",
 ]);
 export type ScanChannel = z.infer<typeof ScanChannelSchema>;
 

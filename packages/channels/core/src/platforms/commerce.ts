@@ -31,7 +31,7 @@ export function commerce(offer: JsonObject, product: JsonObject = {}): CommerceE
     currency: string(offer.priceCurrency),
     listPrice: amount(offer.compare_at_price),
     rating: amount(rating?.ratingValue),
-    reviewCount: amount(rating?.reviewCount),
+    reviewCount: amount(rating?.reviewCount ?? rating?.ratingCount),
     availability: state,
     context: [],
     priceStatus: price !== null ? "observed" : "not_observed",

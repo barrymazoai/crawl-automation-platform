@@ -149,6 +149,7 @@ describe("brand-scan API source routing", () => {
   it.each([
     ["amazon", storeUrl],
     ["wholefoods", wholeUrl],
+    ["costco", "https://www.costco.com/protein.html?refinement=brands%3DExample"],
   ])("runs %s browser sources through the browser workflow", async (channel, url) => {
     const test = setup([source(channel, url)]);
     await test.brandScans.request({ requestId, channel });
@@ -165,7 +166,7 @@ describe("brand-scan API source routing", () => {
             scanId: test.scans[0]?.scanId,
             sourceUrl: normalized,
             sourceId: test.scans[0]?.source.sourceId,
-            ...(channel === "wholefoods"
+            ...(["wholefoods", "costco"].includes(channel)
               ? {
                   gapAfterSeconds: 60,
                   cooldownSeconds: 1800,
@@ -173,7 +174,7 @@ describe("brand-scan API source routing", () => {
                     queue: "v3.resources.v1",
                     maxWaitSeconds: 900,
                     activities: {
-                      scanBrandInBrowser: [{ resourceId: "wholefoods-brand-scan", units: 1 }],
+                      scanBrandInBrowser: [{ resourceId: `${channel}-brand-scan`, units: 1 }],
                     },
                   },
                 }
@@ -245,6 +246,7 @@ describe("brand-scan API source routing", () => {
   it.each([
     ["amazon", storeUrl],
     ["wholefoods", wholeUrl],
+    ["costco", "https://www.costco.com/protein.html?refinement=brands%3DExample"],
   ])(
     "refuses %s browser sources before enqueueing when the browser queue is absent",
     async (channel, url) => {

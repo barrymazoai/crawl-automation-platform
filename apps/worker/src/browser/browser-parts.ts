@@ -40,6 +40,15 @@ function browserSettings(parts: CoreParts) {
   return settings;
 }
 
+function scanSettings(settings: ReturnType<typeof browserSettings>) {
+  return {
+    store: settings.wholefoods,
+    wholefoodsScan: settings.wholefoodsScan,
+    costcoStore: settings.costco,
+    costcoScan: settings.costcoScan,
+  };
+}
+
 export function buildBrowserParts(parts: CoreParts): BrowserParts {
   const settings = browserSettings(parts);
   const dtcSites = configuredDtcSites(settings.dtc);
@@ -50,10 +59,9 @@ export function buildBrowserParts(parts: CoreParts): BrowserParts {
     channels: { dtc: DTC_BROWSER_POLICY },
   });
   const registry = new ChannelRegistry([createDtcAdapter(dtcSites)]);
-  const http = new HttpCapture(pages);
   const capture = new BrowserProductCapture({
     registry,
-    http,
+    http: new HttpCapture(pages),
     publication: parts.publication,
     sourcePlans: new ProductSourcePlans(parts.publication, {
       ...requireRoleSection(parts.config, "plan", "browser"),
@@ -62,9 +70,8 @@ export function buildBrowserParts(parts: CoreParts): BrowserParts {
   });
   const scanner = buildBrowserScanners({
     ego,
-    store: settings.wholefoods,
     dtcSites,
-    wholefoodsScan: settings.wholefoodsScan,
+    ...scanSettings(settings),
     publication: parts.publication,
     rounds: new ManagedBrowserRounds(
       new StoreEgoRounds({ settings: settings.ego, pages: ego }),

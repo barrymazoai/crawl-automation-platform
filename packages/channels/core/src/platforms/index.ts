@@ -8,3 +8,4 @@ export { object, string, parsePageJson } from "./json.js";
 export * from "./catalog.js";
 export { canonicalUrl, samePage } from "./urls.js";
 export { completeFacts, sectionImages, imageUrls } from "./content.js";
+export { commerce as schemaCommerce } from "./commerce.js";

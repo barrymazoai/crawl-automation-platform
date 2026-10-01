@@ -185,18 +185,21 @@ it("a history recorded before the shared Label workflow keeps streaming to the e
   expect(env.signals.at(-1)?.[0]).toBe("channelStreamSealed");
 });
 
-it("a known formula still saves the metrics but reads no label", async () => {
-  const { pipeline, plan } = await setup();
-  pipeline.findKnownFormula.mockResolvedValue({ operationId: "formula-earlier" });
+it.each(["swanson", "costco"])(
+  "a known %s formula still saves metrics but reads no label",
+  async (channel) => {
+    const { pipeline, plan } = await setup();
+    pipeline.findKnownFormula.mockResolvedValue({ operationId: "formula-earlier" });
 
-  expect(await ProductPipelineWorkflow(input)).toMatchObject({
-    status: "collected",
-    reusedFormula: true,
-    operationId: "formula-earlier",
-  });
-  expect(plan.prepareChannelProduct).toHaveBeenCalledOnce();
-  expect(env.start).not.toHaveBeenCalled();
-});
+    expect(await ProductPipelineWorkflow({ ...input, channel })).toMatchObject({
+      status: "collected",
+      reusedFormula: true,
+      operationId: "formula-earlier",
+    });
+    expect(plan.prepareChannelProduct).toHaveBeenCalledOnce();
+    expect(env.start).not.toHaveBeenCalled();
+  },
+);
 
 it("a capture Review is returned as is, releases the lane and starts nothing else", async () => {
   const { pipeline, plan, resource } = await setup();

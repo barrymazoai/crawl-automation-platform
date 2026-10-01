@@ -1,4 +1,11 @@
-import { formulaFamilies, identifyListing, listingIdentityResolver } from "@crawl-automation/app";
+import { readFileSync } from "node:fs";
+import { costcoAdapter } from "@crawl-automation/channels-costco";
+import {
+  commerceMetrics,
+  formulaFamilies,
+  identifyListing,
+  listingIdentityResolver,
+} from "@crawl-automation/app";
 import { amazonAdapter } from "@crawl-automation/channel-amazon";
 import { swansonAdapter } from "@crawl-automation/channel-swanson";
 import { ChannelRegistry, type ChannelAdapter } from "@crawl-automation/channels-core";
@@ -7,7 +14,13 @@ import { wholeFoodsAdapter } from "@crawl-automation/channels-wholefoods";
 import { expect, it, vi } from "vitest";
 
 const wholefoods = wholeFoodsAdapter({ storeId: "10259", label: "Test", postalCode: "95126" });
-const registry = new ChannelRegistry([swansonAdapter, gncAdapter, amazonAdapter, wholefoods]);
+const registry = new ChannelRegistry([
+  swansonAdapter,
+  gncAdapter,
+  amazonAdapter,
+  wholefoods,
+  costcoAdapter(),
+]);
 const resolver = listingIdentityResolver(registry);
 const source = { sourceKey: "capture-1", dataset: "test" };
 
@@ -89,6 +102,7 @@ it("shares formulas by adapter declaration, in both directions", () => {
   expect(families.channels("amazon")).toEqual(["amazon", "wholefoods"]);
   expect(families.channels("wholefoods")).toEqual(["amazon", "wholefoods"]);
   expect(families.channels("swanson")).toEqual(["swanson"]);
+  expect(families.channels("costco")).toEqual(["costco"]);
   expect(families.channels("unregistered")).toEqual(["unregistered"]);
 });
 
@@ -104,4 +118,34 @@ it("changes formula families with the registry, including channels without a dec
   expect(families.channels("gnc")).toEqual(["gnc", "swanson"]);
   expect(families.channels("dtc")).toEqual(["dtc"]);
   expect(families.channels("costco")).toEqual(["costco"]);
+});
+
+it("keys Costco metrics by online ID rather than warehouse item number", () => {
+  expect(
+    resolver.resolve({
+      channel: "costco",
+      url: "https://www.costco.com/p/-/100029983",
+      listingId: "100029983",
+      externalId: null,
+    }),
+  ).toMatchObject({ site: "costco.com", externalId: "100029983" });
+});
+
+it("projects Costco's configured warehouse into the shared metrics store field", () => {
+  const html = readFileSync(
+    new URL("../../../packages/channels/costco/src/fixtures/product.html", import.meta.url),
+    "utf8",
+  );
+  const product = costcoAdapter().parseProduct({
+    html,
+    url: "https://www.costco.com/p/-/100029983",
+    capturedAt: "2026-10-01T00:00:00Z",
+  });
+  expect(commerceMetrics(product.commerce)).toMatchObject({
+    price: "26.99",
+    extras: {
+      store: { id: "669", label: "Southlake" },
+      commerce: { context: expect.arrayContaining(["costco-item:648220"]) },
+    },
+  });
 });

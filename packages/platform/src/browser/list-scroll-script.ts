@@ -11,18 +11,20 @@ const items = () =>
     read.scroll.itemSelector,
   );
 const markMore = () =>
-  page.evaluate((texts) => {
+  page.evaluate((controls) => {
     document
       .querySelectorAll("[data-crawlv3-more]")
       .forEach((item) => item.removeAttribute("data-crawlv3-more"));
-    const wanted = texts.map((text) => text.toLowerCase());
-    const button = [...document.querySelectorAll("button, a[role=button]")].find(
+    const wanted = controls.texts.map((text) => text.toLowerCase());
+    const button = [...document.querySelectorAll(controls.selector ?? "button, a[role=button]")].find(
       (element) =>
-        element.offsetParent !== null && wanted.includes(element.textContent.trim().toLowerCase()),
+        element.offsetParent !== null &&
+        (!controls.selector || (!element.disabled && element.getAttribute("aria-disabled") !== "true")) &&
+        wanted.includes((controls.selector ? element.getAttribute("aria-label") || element.textContent : element.textContent).trim().toLowerCase()),
     );
     if (button) button.setAttribute("data-crawlv3-more", "1");
     return Boolean(button);
-  }, read.scroll.moreTexts);
+  }, { texts: read.scroll.moreTexts, selector: read.scroll.moreSelector });
 const seen = new Map();
 let finalCount = 0;
 let itemCount = 0;

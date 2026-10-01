@@ -109,3 +109,30 @@ it("defaults Whole Foods pacing and accepts validated overrides without changing
     ).toBe(false);
   }
 });
+
+it("gives Costco its own global browser permit on the shared queue", () => {
+  const defaults = BrandScanSettingsSchema.parse(fixture.brandScans);
+  expect(defaults.permits.costco).toEqual({
+    taskQueue: "browser",
+    resourceQueue: "v3.resources.v1",
+    resourceId: "costco-brand-scan",
+    maxWaitSeconds: 900,
+    gapAfterSeconds: 60,
+    cooldownSeconds: 1800,
+  });
+  const configured = BrandScanSettingsSchema.parse({
+    ...fixture.brandScans,
+    permits: { costco: { taskQueue: "costco-browser", gapAfterSeconds: 90 } },
+  });
+  expect(configured.permits.costco).toMatchObject({
+    taskQueue: "costco-browser",
+    gapAfterSeconds: 90,
+  });
+  expect(configured.permits.wholefoods).toEqual(defaults.permits.wholefoods);
+  expect(
+    BrandScanSettingsSchema.safeParse({
+      ...fixture.brandScans,
+      permits: { costco: { resourceId: "local-costco" } },
+    }).success,
+  ).toBe(false);
+});

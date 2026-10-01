@@ -70,3 +70,22 @@ it("reads browser.dtc.sites without inferring any site or platform", () => {
     }).success,
   ).toBe(false);
 });
+
+it("validates Costco's verify-only warehouse, canary and pacing at startup", () => {
+  expect(BrowserSettingsSchema.parse(browser)).toMatchObject({
+    costco: { storeId: "669", label: "Southlake", postalCode: "76051" },
+    costcoScan: { pressDelayMs: { min: 4000, max: 8000 } },
+  });
+  expect(
+    BrowserSettingsSchema.safeParse({
+      ...browser,
+      costco: { storeId: "1", label: "Seattle", postalCode: "98101" },
+    }).success,
+  ).toBe(false);
+  expect(
+    BrowserSettingsSchema.safeParse({
+      ...browser,
+      costcoScan: { canaryUrl: "https://www.costco.com/p/-/123" },
+    }).success,
+  ).toBe(false);
+});

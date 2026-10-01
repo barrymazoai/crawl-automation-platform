@@ -27,7 +27,7 @@ describe("resource health settings", () => {
     });
   });
 
-  it.each(["mini-ego-space-1", "server2-ego-space-6"])(
+  it.each(["mini-ego-space-1", "server2-ego-space-6", "costco-brand-scan"])(
     "maps browser resource %s to the shared browser queue without OCR",
     (resourceId) => {
       const resources = { [resourceId]: { taskQueues: ["v3.browser.wholefoods.v1"] } };

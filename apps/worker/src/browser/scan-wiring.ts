@@ -1,4 +1,10 @@
 import {
+  CostcoBrandScan,
+  costcoBrandSourceUrl,
+  type CostcoStore,
+  type CostcoScanSettings,
+} from "@crawl-automation/channels-costco";
+import {
   createDtcAdapter,
   dtcBrandSourceUrl,
   DtcBrandScan,
@@ -65,11 +71,22 @@ export function buildBrowserScanners(deps: {
   store: WholeFoodsStore;
   dtcSites?: readonly DtcSitePolicy[];
   wholefoodsScan?: WholeFoodsScanSettings;
+  costcoStore?: CostcoStore;
+  costcoScan?: CostcoScanSettings;
 }): BrowserScanners {
   const { ego, store, publication } = deps;
   const sites = deps.dtcSites ?? [];
   return new BrowserScanners([
     dtcScanner({ ego, publication, sites }),
+    {
+      accepts: (url) => acceptsAddress([costcoBrandSourceUrl], url),
+      scanner: new CostcoBrandScan({
+        browser: ego,
+        remote: publication.remote,
+        ...(deps.costcoStore ? { store: deps.costcoStore } : {}),
+        ...(deps.costcoScan ? { settings: deps.costcoScan } : {}),
+      }),
+    },
     {
       accepts: (url) => acceptsAddress([amazonStoreSourceUrl], url),
       scanner: new AmazonStoreBrandScan({ pages: new AmazonStorePages(deps.rounds), publication }),
