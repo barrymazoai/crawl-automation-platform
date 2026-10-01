@@ -168,7 +168,11 @@ function registerServices(container: Parts): void {
 
 function captureService(parts: WorkerParts): ProductCapture {
   const { config, registry, publication, fileTransport } = parts;
-  const { route, scraperApi, channels } = requireRoleSection(config, "capture", "pipeline");
+  const { route, scraperApi, channels, htmlReuseHours } = requireRoleSection(
+    config,
+    "capture",
+    "pipeline",
+  );
   const pages = new ScraperApiPages(new ScraperApiClient(scraperApi), {
     routeId: route.routeId,
     egressId: route.egressId,
@@ -185,7 +189,7 @@ function captureService(parts: WorkerParts): ProductCapture {
   const settings = { ...plan, egressId: fileTransport.egressId };
   return new ProductCapture({
     registry,
-    http: recordedHttpCapture(pages, parts.database),
+    http: recordedHttpCapture(pages, parts.database, htmlReuseHours),
     publication,
     sourcePlans: new ProductSourcePlans(publication, settings),
   });

@@ -34,6 +34,7 @@ function setup(channel: ChannelId = "gnc") {
   const remote = new Memory();
   const publication = new RetainedPublication(new Memory(), remote);
   const records = {
+    reuseWindowMs: HTML_REUSE_WINDOW_MS,
     admit: vi.fn<HtmlCaptureRecords["admit"]>().mockResolvedValue({ status: "download" }),
     complete: vi.fn<HtmlCaptureRecords["complete"]>().mockResolvedValue(undefined),
     fail: vi.fn<HtmlCaptureRecords["fail"]>().mockResolvedValue(undefined),

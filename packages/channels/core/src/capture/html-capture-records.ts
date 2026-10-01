@@ -20,13 +20,15 @@ export type HtmlCaptureAdmission =
 
 /**
  * Shared recent-original index and in-flight markers, separate from processing permits.
- * Admission atomically checks the operation, then a saved original younger than HTML_REUSE_WINDOW_MS,
+ * Admission atomically checks the operation, then a saved original younger than `reuseWindowMs`,
  * then unfinished requests younger than 10 minutes, before recording intent to download.
  * A reuse binds the operation to the original reference without renewing its capture time.
  * A download reservation includes expired unfinished operations: inspect their archives before
  * paying, in case publication succeeded but recording completion did not.
  */
 export interface HtmlCaptureRecords {
+  /** How long a saved original is reused, from its capture time (configured; see HTML_REUSE_WINDOW_MS). */
+  readonly reuseWindowMs: number;
   admit(request: HtmlCaptureRequest): Promise<HtmlCaptureAdmission>;
   /** Called only after the original receipt and bytes have been read back and verified. */
   complete(request: HtmlCaptureRequest, original: SavedHtmlOriginal): Promise<void>;

@@ -67,6 +67,10 @@ export function captureRecords(parts: {
 }
 
 /** HTTP capture admission shared by every channel, using the same database on every worker. */
-export function recordedHttpCapture(pages: PageFetcher, database: Database): HttpCapture {
-  return new HttpCapture(pages, new PostgresHtmlCaptureRecords(database));
+export function recordedHttpCapture(
+  pages: PageFetcher,
+  database: Database,
+  reuseHours: number,
+): HttpCapture {
+  return new HttpCapture(pages, new PostgresHtmlCaptureRecords(database, reuseHours * 3_600_000));
 }

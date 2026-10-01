@@ -13,7 +13,7 @@ export async function recoverOriginal(
     if (original) {
       await deps.records?.complete(request, original);
       const age = Date.now() - Date.parse(original.capturedAt);
-      if (age >= 0 && age < HTML_REUSE_WINDOW_MS) {
+      if (age >= 0 && age < (deps.records?.reuseWindowMs ?? HTML_REUSE_WINDOW_MS)) {
         return original;
       }
     }

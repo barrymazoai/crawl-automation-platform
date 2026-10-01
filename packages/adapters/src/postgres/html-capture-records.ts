@@ -1,5 +1,6 @@
 import { isDeepStrictEqual } from "node:util";
 import {
+  HTML_REUSE_WINDOW_MS,
   HtmlCaptureRequestSchema,
   SavedHtmlOriginalSchema,
   htmlCaptureErrors,
@@ -21,7 +22,10 @@ const conflict = () => htmlCaptureErrors.create("CAPTURE.RECORD_CONFLICT");
 
 /** Atomic cross-worker admission; every terminal record and original reference stays immutable. */
 export class PostgresHtmlCaptureRecords implements HtmlCaptureRecords {
-  constructor(private readonly database: Database) {}
+  constructor(
+    private readonly database: Database,
+    readonly reuseWindowMs: number = HTML_REUSE_WINDOW_MS,
+  ) {}
 
   async admit(raw: HtmlCaptureRequest): Promise<HtmlCaptureAdmission> {
     const request = HtmlCaptureRequestSchema.parse(raw);
@@ -35,7 +39,7 @@ export class PostgresHtmlCaptureRecords implements HtmlCaptureRecords {
           ? { status: "reuse", original: SavedHtmlOriginalSchema.parse(prior.original) }
           : { status: "unresolved" };
       }
-      const original = await recentOriginal(transaction, request);
+      const original = await recentOriginal(transaction, request, this.reuseWindowMs);
       if (original) {
         await insertCapture(transaction, request, original);
         return { status: "reuse", original };

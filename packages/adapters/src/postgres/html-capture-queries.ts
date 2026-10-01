@@ -1,5 +1,4 @@
 import {
-  HTML_REUSE_WINDOW_MS,
   HtmlCaptureRequestSchema,
   SavedHtmlOriginalSchema,
   type HtmlCaptureRequest,
@@ -24,12 +23,16 @@ export async function readCapture(database: Queryable, operationId: string) {
   return rows[0];
 }
 
-export async function recentOriginal(database: Queryable, request: HtmlCaptureRequest) {
+export async function recentOriginal(
+  database: Queryable,
+  request: HtmlCaptureRequest,
+  windowMs: number,
+) {
   const rows = await database.query<{ original: unknown }>(
     `SELECT original FROM html_capture WHERE ${IDENTITY} AND state='done'
        AND captured_at > clock_timestamp() - $4::bigint * interval '1 millisecond'
        AND captured_at <= clock_timestamp() ORDER BY captured_at DESC LIMIT 1`,
-    [...identityValues(request), HTML_REUSE_WINDOW_MS],
+    [...identityValues(request), windowMs],
   );
   return rows[0] ? SavedHtmlOriginalSchema.parse(rows[0].original) : null;
 }

@@ -40,6 +40,14 @@ it("validates and wires the Swanson public key on the listing worker only", () =
   expect(schema.safeParse({ ...brandScans, swanson: { constructorKey: "" } }).success).toBe(false);
 });
 
+describe("saved page reuse window", () => {
+  it("defaults to seven days and takes a configured number of hours", () => {
+    expect(capture.parse({ route, scraperApi }).htmlReuseHours).toBe(168);
+    expect(capture.parse({ route, scraperApi, htmlReuseHours: 24 }).htmlReuseHours).toBe(24);
+    expect(capture.safeParse({ route, scraperApi, htmlReuseHours: 0 }).success).toBe(false);
+  });
+});
+
 describe("worker capture settings", () => {
   it("still reads the 2026-09-29 settings, with no channel options", () => {
     expect(capture.parse({ route, scraperApi })).toMatchObject({ channels: {} });

@@ -135,6 +135,14 @@ describe.skipIf(!hasPostgres || process.env.V3_TEST_SKIP_POSTGRES === "1")(
       expect(await records.admit(next(producer))).toEqual({ status: "download" });
     });
 
+    it("uses the configured reuse window", async () => {
+      const producer = request();
+      await seedOriginal(producer, 2 * hour);
+      const shortWindow = new PostgresHtmlCaptureRecords(postgres.database, hour);
+      expect(shortWindow.reuseWindowMs).toBe(hour);
+      expect(await shortWindow.admit(next(producer))).toEqual({ status: "download" });
+    });
+
     it("ignores request age for a recent original captured after a long request", async () => {
       const producer = request();
       await seedInFlight(producer, HTML_REUSE_WINDOW_MS + hour);

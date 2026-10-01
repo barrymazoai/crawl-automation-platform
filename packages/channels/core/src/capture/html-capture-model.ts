@@ -38,8 +38,8 @@ export interface ArchivedHtml {
 }
 
 /**
- * How long a saved original is reused instead of a new paid download, counted from its capture time
- * (owner 2026-10-01: seven days, was 24 hours). The one place this window is set.
+ * How long a saved original is reused instead of a new paid download, counted from its capture time, when the
+ * worker config sets no `capture.htmlReuseHours` (owner 2026-10-01: seven days, was 24 hours).
  */
 export const HTML_REUSE_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 

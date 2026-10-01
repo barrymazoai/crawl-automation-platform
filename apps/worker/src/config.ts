@@ -1,6 +1,10 @@
 import { isAbsolute } from "node:path";
 import type { LabelSettings } from "@crawl-automation/app";
-import { ListingFetchSettingsSchema, ResourceKindsSchema } from "@crawl-automation/channels-core";
+import {
+  HTML_REUSE_WINDOW_MS,
+  ListingFetchSettingsSchema,
+  ResourceKindsSchema,
+} from "@crawl-automation/channels-core";
 import {
   DatabaseConfigSchema,
   LogConfigSchema,
@@ -67,6 +71,13 @@ export const WorkerConfigSchema = z
         scraperApi: ScraperApiAccessSchema,
         /** A channel's own ScraperAPI options over the route's, e.g. `{ "gnc": { "premium": true } }`. */
         channels: CaptureChannelSettingsSchema,
+        /** How long a saved product page is reused instead of a new paid download (default 7 days). */
+        htmlReuseHours: z
+          .number()
+          .int()
+          .min(1)
+          .max(90 * 24)
+          .default(HTML_REUSE_WINDOW_MS / 3_600_000),
       })
       .optional(),
     /** How image hosts are resolved: pinned by this worker (`direct`) or by the system (`system`). */
