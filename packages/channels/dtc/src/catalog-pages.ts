@@ -6,7 +6,7 @@ import {
   channelErrors,
   type BrowserReader,
 } from "@crawl-automation/channels-core";
-import type { BrowserPage } from "@crawl-automation/platform";
+import { ListScrollResultSchema, type BrowserPage } from "@crawl-automation/platform";
 import type { RetainedPublication } from "@crawl-automation/platform";
 import { z } from "zod";
 import { DTC_PAGE_LIMITS, type DtcSitePolicy } from "./site-policy.js";
@@ -18,10 +18,7 @@ const Proof = z.object({
   url: z.string(),
   ready: z.literal(true),
   status: z.number().nullable(),
-  scroll: z.object({
-    rounds: z.number().int().nonnegative(),
-    ended: z.enum(["none", "stable", "capped"]),
-  }),
+  scroll: ListScrollResultSchema.pick({ rounds: true, ended: true }),
 });
 
 export interface DtcCatalogRead {

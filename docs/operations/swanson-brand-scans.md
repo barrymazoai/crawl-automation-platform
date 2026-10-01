@@ -122,6 +122,17 @@ do not inflate the card count. Missing, repeated, truncated or capped results ar
 they never trigger missing-listing revisits. Invalid responses and fetch/archive failures
 retain their Review reason instead of becoming empty successful scans.
 
+## Shared browser scan pacing
+
+Whole Foods now uses the same ResourceGate and scan-gap helper through `BrowserScanWorkflow`,
+with its own capacity-one `wholefoods-brand-scan` resource. Its defaults are a 60-second gap
+and a 1,800-second cool-down after a broken/throttled read; Swanson's settings and history
+remain unchanged. Worker canary/press pacing and API permit examples are in
+[the machine configuration guide](machines.md#whole-foods-品牌扫描节流待部署).
+The browser marker `browser-scan-permit-v1` retains the old activity-only replay path.
+The longer of gap and cool-down is held inside the permit; cancellation follows the existing
+Swanson policy. This is source-only work awaiting owner review and Mini verification.
+
 ## Verification
 
 Stored-name validation on 2026-09-30: `pnpm lint` and `pnpm check` passed (formatting, dependency

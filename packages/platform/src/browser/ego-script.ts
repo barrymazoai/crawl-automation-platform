@@ -3,6 +3,8 @@
  * SDK (TaskSpace and Page), so a round is a script; values reach it as JSON, never spliced as code. Every line the
  * crawler reads starts with the marker below; anything else the runtime prints is ignored.
  */
+import { LIST_SCROLL_BODY } from "./list-scroll-script.js";
+
 export const EGO_MARKER = "CRAWLV3_EGO:";
 
 /** Runs in the page before its own scripts: location requests fail as denied, so no browser prompt appears. */
@@ -90,44 +92,9 @@ const ready = await page.waitForSelector(read.readySelector, { timeout: read.tim
     readinessFailure = { name: String(error?.name ?? "Error"), code: typeof error?.code === "string" ? error.code : null, message: String(error?.message ?? error) };
     return false;
   });
-const count = () => page.evaluate((selector) => document.querySelectorAll(selector).length, read.scroll?.itemSelector ?? "a");
-const markMore = () => page.evaluate((texts) => {
-  const wanted = texts.map((text) => text.toLowerCase());
-  const button = [...document.querySelectorAll("button, a[role=button]")].find((element) =>
-    element.offsetParent !== null && wanted.includes(element.textContent.trim().toLowerCase()));
-  if (button) button.setAttribute("data-crawlv3-more", "1");
-  return Boolean(button);
-}, read.scroll?.moreTexts ?? []);
-let rounds = 0;
-let stable = 0;
-let ended = read.scroll ? "capped" : "none";
-while (read.scroll && rounds < read.scroll.maxRounds) {
-  rounds += 1;
-  const before = await count();
-  const more = await markMore();
-  if (more) {
-    // Pressed in the page: a pointer click scrolls a growing list and misses (2026-10-01, Whole Foods: 30 → 52 by DOM).
-    await page.evaluate(() => {
-      const button = document.querySelector('[data-crawlv3-more="1"]');
-      button?.removeAttribute("data-crawlv3-more");
-      button?.click();
-    });
-    // Wait for the list to grow: the next items can take longer than one settle, and the list can empty meanwhile.
-    await page.waitForFunction(
-      (wait) => document.querySelectorAll(wait.selector).length > wait.before,
-      { selector: read.scroll.itemSelector ?? "a", before },
-      { timeout: read.scroll.settleMs * 6 },
-    ).catch(() => {});
-  } else {
-    await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
-  }
-  await page.waitForTimeout(read.scroll.settleMs);
-  const after = await count();
-  stable = after > before || more ? 0 : stable + 1;
-  if (stable >= read.scroll.stableRounds) { ended = "stable"; break; }
-}
+${LIST_SCROLL_BODY}
 const snapshot = await page.evaluate(() => {
   const navigation = performance.getEntriesByType("navigation")[0];
   return { url: location.href, status: navigation?.responseStatus || null, html: document.documentElement.outerHTML };
 });
-return { ...snapshot, ready, readinessFailure, scroll: { rounds, ended } };`;
+return { ...snapshot, ready, readinessFailure, scroll };`;

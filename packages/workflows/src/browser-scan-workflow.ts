@@ -1,6 +1,8 @@
-import { ChannelIdSchema } from "@crawl-automation/v3-contracts";
-import { proxyActivities, workflowInfo } from "@temporalio/workflow";
+import { ChannelIdSchema, ResourceGateSchema } from "@crawl-automation/v3-contracts";
+import { patched, proxyActivities, workflowInfo } from "@temporalio/workflow";
 import { z } from "zod";
+import { resourceGate, type ResourceActivityBinding } from "./resources/resource-gate.js";
+import { readWithScanGap } from "./collection/scan-gap.js";
 
 export const BrowserScanInputSchema = z.strictObject({
   channel: ChannelIdSchema,
@@ -10,6 +12,9 @@ export const BrowserScanInputSchema = z.strictObject({
   sourceUrl: z.url().max(4096),
   /** Database brand source, distinct from the channel's evidence key; old histories omit it. */
   sourceId: z.uuid().optional(),
+  resources: ResourceGateSchema.optional(),
+  gapAfterSeconds: z.number().int().nonnegative().optional(),
+  cooldownSeconds: z.number().int().nonnegative().optional(),
 });
 export type BrowserScanInput = z.infer<typeof BrowserScanInputSchema>;
 
@@ -18,7 +23,20 @@ export type BrowserScanInput = z.infer<typeof BrowserScanInputSchema>;
  * starts this workflow and waits for its result. One attempt; a failure is the scan's Review.
  */
 export async function BrowserScanWorkflow(raw: unknown): Promise<unknown> {
-  const input = BrowserScanInputSchema.parse(raw);
+  const { resources, gapAfterSeconds, cooldownSeconds, ...input } =
+    BrowserScanInputSchema.parse(raw);
+  if (!patched("browser-scan-permit-v1")) {
+    return scan(input);
+  }
+  return resourceGate(resources)("scanBrandInBrowser", (binding) =>
+    readWithScanGap(() => scan(input, binding), {
+      gapAfterSeconds: binding ? (gapAfterSeconds ?? 0) : 0,
+      cooldownSeconds: binding ? (cooldownSeconds ?? 0) : 0,
+    }),
+  );
+}
+
+function scan(input: BrowserScanInput, binding?: ResourceActivityBinding) {
   const browser = proxyActivities<{
     scanBrandInBrowser(input: BrowserScanInput): Promise<unknown>;
   }>({
@@ -26,6 +44,7 @@ export async function BrowserScanWorkflow(raw: unknown): Promise<unknown> {
     startToCloseTimeout: "30 minutes",
     scheduleToCloseTimeout: "60 minutes",
     retry: { maximumAttempts: 1 },
+    ...binding,
   });
   return browser.scanBrandInBrowser(input);
 }

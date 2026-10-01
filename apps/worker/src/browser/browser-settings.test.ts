@@ -6,6 +6,20 @@ const browser = {
   wholefoods: { storeId: "10259", label: "The Alameda", postalCode: "95126" },
 };
 
+it("defaults and validates Whole Foods canary and press pacing at worker startup", () => {
+  expect(BrowserSettingsSchema.parse(browser).wholefoodsScan).toEqual({
+    canaryUrl: "https://www.wholefoodsmarket.com/grocery/search?k=365+by+Whole+Foods+Market",
+    pressDelayMs: { min: 4000, max: 8000 },
+  });
+  for (const wholefoodsScan of [
+    { canaryUrl: "https://example.com/grocery/search?k=365" },
+    { pressDelayMs: { min: 8000, max: 4000 } },
+    { pressDelayMs: { min: -1, max: 4000 } },
+  ]) {
+    expect(BrowserSettingsSchema.safeParse({ ...browser, wholefoodsScan }).success).toBe(false);
+  }
+});
+
 it("keeps existing browser config valid with an empty DTC site list", () => {
   expect(BrowserSettingsSchema.parse(browser).dtc.sites).toEqual([]);
 });

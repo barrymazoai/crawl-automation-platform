@@ -100,6 +100,26 @@ it("a failure without a code leaves as unresolved", async () => {
   });
 });
 
+it("carries the scan cool-down request in serializable Temporal failure details", async () => {
+  const { wholeFoodsErrors } = await import("@crawl-automation/channels-wholefoods");
+  const failure = wholeFoodsErrors.create("WHOLEFOODS.SEARCH_THROTTLED", {
+    details: { cooldownRequested: true, archiveKeys: ["canary.html"] },
+  });
+  await expect(
+    guarded(
+      "scanBrandInBrowser",
+      async () => {
+        throw failure;
+      },
+      log,
+    )({}),
+  ).rejects.toMatchObject({
+    type: "WHOLEFOODS.SEARCH_THROTTLED",
+    nonRetryable: true,
+    details: [{ cooldownRequested: true, archiveKeys: ["canary.html"] }],
+  });
+});
+
 it("logs start and end with the run, product, workflow and Temporal run IDs", async () => {
   const runId = "11111111-1111-4111-8111-111111111111";
   const input = { pipeline: { runId, operationId: "product-op-1" } };

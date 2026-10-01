@@ -107,7 +107,8 @@ export const ApiConfigSchema = z.strictObject({
     .strictObject({
       testPrefix: EvidenceTestPrefixSchema.optional(),
       /** Copy the normal product worker's capture settings; this does not enable a scan runner. */
-      capture: BrandScanSettingsSchema.pick({ route: true, scraperApi: true })
+      capture: BrandScanSettingsSchema.in
+        .pick({ route: true, scraperApi: true })
         .extend({
           channels: z.partialRecord(ChannelIdSchema, ScraperApiOptionChoicesSchema).default({}),
         })

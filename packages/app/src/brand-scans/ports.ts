@@ -45,9 +45,11 @@ export interface BrowserBrandScan {
   pages: ListingPage[];
   /** The list was scrolled to its end; a list stopped early is partial and never suggests a listing is gone. */
   complete: boolean;
-  /** False when the search has no results: the brand is not sold here. */
+  /** False only when the scanner has verified that the brand is not sold here. */
   soldHere: boolean;
   archiveKeys: string[];
+  /** Hold the channel permit for its configured cool-down before another scan starts. */
+  cooldownRequested?: boolean;
 }
 
 /**

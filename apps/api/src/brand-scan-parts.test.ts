@@ -165,6 +165,19 @@ describe("brand-scan API source routing", () => {
             scanId: test.scans[0]?.scanId,
             sourceUrl: normalized,
             sourceId: test.scans[0]?.source.sourceId,
+            ...(channel === "wholefoods"
+              ? {
+                  gapAfterSeconds: 60,
+                  cooldownSeconds: 1800,
+                  resources: {
+                    queue: "v3.resources.v1",
+                    maxWaitSeconds: 900,
+                    activities: {
+                      scanBrandInBrowser: [{ resourceId: "wholefoods-brand-scan", units: 1 }],
+                    },
+                  },
+                }
+              : {}),
           },
         ],
       }),

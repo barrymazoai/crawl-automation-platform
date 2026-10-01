@@ -17,7 +17,8 @@ export type PatchMarker =
   | (typeof pipelineMarkers)[number]
   | typeof labelNoSourceMarker
   | "formula-family-capture-v1"
-  | "brand-listing-gap-v1";
+  | "brand-listing-gap-v1"
+  | "browser-scan-permit-v1";
 export type ReplayBundle = { code: string };
 
 export function currentBundle() {

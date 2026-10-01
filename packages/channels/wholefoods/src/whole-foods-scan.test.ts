@@ -71,6 +71,13 @@ describe("Whole Foods brand scan", () => {
   it("reads an archived scan again without drawing the page again", async () => {
     const { browser, remote, scanner } = scanSetup(fixture("search-nordic-naturals.html"));
     await scanner.scan({ scanId: "scan-2", sourceUrl }, signal());
+    // Simulate an old record with only the original scroll proof.
+    const key = "v3/brand-scans/scan-2/search.record.json";
+    const record = JSON.parse(Buffer.from(remote.data.get(key) ?? []).toString());
+    delete record.ready;
+    delete record.status;
+    delete record.readinessFailure;
+    remote.data.set(key, Buffer.from(JSON.stringify(record)));
     const again = await new WholeFoodsBrandScan({ browser, remote, store }).scan(
       { scanId: "scan-2", sourceUrl },
       signal(),
@@ -86,10 +93,10 @@ describe("Whole Foods brand scan", () => {
     });
   });
 
-  it("is partial when the list holds fewer products than the page states", async () => {
+  it("is complete at a stable end regardless of the unreliable heading", async () => {
     const html = fixture("search-nordic-naturals.html").replace("3 results for", "58 results for");
     const scan = await scanSetup(html).scanner.scan({ scanId: "scan-5", sourceUrl }, signal());
-    expect(scan).toMatchObject({ complete: false, soldHere: true });
+    expect(scan).toMatchObject({ complete: true, soldHere: true });
     expect(scan.pages[0]).toMatchObject({ statedTotal: 58 });
   });
 
@@ -161,13 +168,122 @@ describe("Whole Foods store setup", () => {
 
 it("records a fully scrolled no-results brand as not sold at this store", async () => {
   const { scanner, browser } = scanSetup(fixture("search-no-results.html"));
+  browser.read
+    .mockResolvedValueOnce({
+      url: sourceUrl,
+      status: 200,
+      html: fixture("search-no-results.html"),
+      ready: true,
+      scroll: { rounds: 3, ended: "stable" },
+    })
+    .mockResolvedValueOnce({
+      url: "https://www.wholefoodsmarket.com/grocery/search?k=365+by+Whole+Foods+Market",
+      status: 200,
+      html: fixture("search-nordic-naturals.html"),
+      ready: true,
+      scroll: { rounds: 3, ended: "stable" },
+    });
   expect(await scanner.scan({ scanId: "empty-brand", sourceUrl }, signal())).toMatchObject({
     complete: true,
     soldHere: false,
     pages: [{ products: [], soldHere: false }],
+    archiveKeys: [
+      "v3/brand-scans/empty-brand/search.html",
+      "v3/brand-scans/empty-brand/canary.html",
+    ],
   });
   expect(browser.read).toHaveBeenCalledWith(
     expect.objectContaining({ readySelector: "main" }),
     expect.anything(),
   );
+});
+
+it("keeps a broken empty list partial with all previously seen products", async () => {
+  const { scanner, browser, remote } = scanSetup(fixture("search-no-results.html"), "broken");
+  const retained = '<a href="/grocery/product/omega-b0096m5pbw">Omega</a>';
+  browser.read.mockResolvedValueOnce({
+    url: sourceUrl,
+    status: 200,
+    html: fixture("search-no-results.html"),
+    ready: true,
+    scroll: {
+      rounds: 1,
+      ended: "broken",
+      seenCount: 1,
+      finalCount: 0,
+      missingCount: 1,
+      observedItems: [{ href: "/grocery/product/omega-b0096m5pbw", html: retained }],
+    },
+  });
+  const result = await scanner.scan({ scanId: "broken", sourceUrl }, signal());
+  expect(result).toMatchObject({ complete: false, soldHere: true, cooldownRequested: true });
+  expect(result.pages[0]?.products.map((product) => product.listingId)).toEqual(["B0096M5PBW"]);
+  expect(browser.read).toHaveBeenCalledOnce();
+  expect(Buffer.from(remote.data.get("v3/brand-scans/broken/search.html") ?? []).toString()).toBe(
+    fixture("search-no-results.html"),
+  );
+});
+
+it.each(["search-no-results.html", "search-empty.html"])(
+  "throttles when canary has no products: %s",
+  async (name) => {
+    const { scanner, browser, remote } = scanSetup(fixture("search-no-results.html"));
+    const drawn = {
+      url: sourceUrl,
+      status: 200,
+      ready: true,
+      scroll: { rounds: 3, ended: "stable" as const },
+    };
+    browser.read
+      .mockResolvedValueOnce({ ...drawn, html: fixture("search-no-results.html") })
+      .mockResolvedValueOnce({ ...drawn, html: fixture(name) });
+    await expect(scanner.scan({ scanId: "throttled", sourceUrl }, signal())).rejects.toMatchObject({
+      code: "WHOLEFOODS.SEARCH_THROTTLED",
+      category: "SOURCE",
+      details: { cooldownRequested: true },
+    });
+    expect(browser.read).toHaveBeenCalledTimes(2);
+    expect(remote.data.has("v3/brand-scans/throttled/canary.html")).toBe(true);
+    await expect(scanner.scan({ scanId: "throttled", sourceUrl }, signal())).rejects.toMatchObject({
+      code: "WHOLEFOODS.SEARCH_THROTTLED",
+    });
+    expect(browser.read).toHaveBeenCalledTimes(2);
+  },
+);
+
+it("rejects a broken canary even if it has products", async () => {
+  const { scanner, browser } = scanSetup(fixture("search-no-results.html"));
+  const drawn = { url: sourceUrl, status: 200, ready: true };
+  browser.read
+    .mockResolvedValueOnce({
+      ...drawn,
+      html: fixture("search-no-results.html"),
+      scroll: { rounds: 3, ended: "stable" },
+    })
+    .mockResolvedValueOnce({
+      ...drawn,
+      html: fixture("search-nordic-naturals.html"),
+      scroll: { rounds: 1, ended: "broken" },
+    });
+  await expect(
+    scanner.scan({ scanId: "broken-canary", sourceUrl }, signal()),
+  ).rejects.toMatchObject({
+    code: "WHOLEFOODS.SEARCH_THROTTLED",
+    details: { cooldownRequested: true },
+  });
+});
+
+it("does not certify completeness after readiness failed", async () => {
+  const { scanner, browser } = scanSetup(fixture("search-nordic-naturals.html"));
+  browser.read.mockResolvedValueOnce({
+    url: sourceUrl,
+    html: fixture("search-nordic-naturals.html"),
+    status: 200,
+    ready: false,
+    readinessFailure: { name: "TimeoutError", code: null },
+    scroll: { rounds: 3, ended: "stable" },
+  });
+  expect(await scanner.scan({ scanId: "not-ready", sourceUrl }, signal())).toMatchObject({
+    complete: false,
+  });
 });

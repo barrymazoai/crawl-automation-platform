@@ -1,6 +1,11 @@
 import { createHash } from "node:crypto";
 import { brandScanErrors } from "@crawl-automation/channels-core";
-import type { BrowserPage, ObjectStore } from "@crawl-automation/platform";
+import {
+  ListScrollResultSchema,
+  EgoFailureSchema,
+  type BrowserPage,
+  type ObjectStore,
+} from "@crawl-automation/platform";
 import { z } from "zod";
 
 const RecordSchema = z.object({
@@ -12,7 +17,10 @@ const RecordSchema = z.object({
   byteSize: z.number().int(),
   provider: z.string(),
   storeId: z.string(),
-  scroll: z.object({ rounds: z.number().int(), ended: z.enum(["none", "stable", "capped"]) }),
+  scroll: ListScrollResultSchema,
+  ready: z.boolean().optional(),
+  status: z.number().int().nullable().optional(),
+  readinessFailure: EgoFailureSchema.nullable().optional(),
 });
 /** How a browser-drawn listing page was read: where, for which store, and how its scrolling ended. */
 export type ListingRecord = z.infer<typeof RecordSchema>;
@@ -49,7 +57,7 @@ export class ListingArchive {
 
   /** The archived page when its record and bytes agree; null when nothing is archived; an error when they differ. */
   async inspect(signal: AbortSignal): Promise<ArchivedListing | null> {
-    const recordBytes = await this.remote.read(this.recordKey, 65_536, signal);
+    const recordBytes = await this.remote.read(this.recordKey, this.maxBytes, signal);
     const bytes = await this.remote.read(this.body, this.maxBytes, signal);
     if (!recordBytes) {
       // Bytes without a record are an archive that never finished: refused, never silently redone.
@@ -81,6 +89,9 @@ export class ListingArchive {
       provider: drawn.provider,
       storeId: drawn.storeId,
       scroll: drawn.page.scroll,
+      ready: drawn.page.ready,
+      status: drawn.page.status,
+      readinessFailure: drawn.page.readinessFailure,
     };
     await this.writeOnce(this.body, bytes, { mediaType: "text/html", signal });
     const recordBytes = Buffer.from(JSON.stringify(record));

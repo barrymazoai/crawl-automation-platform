@@ -12,7 +12,6 @@ import {
   ProductSourcePlans,
   type BrowserCaptureResult,
 } from "@crawl-automation/channels-core";
-import type { WholeFoodsStore } from "@crawl-automation/channels-wholefoods";
 import { EgoPages } from "@crawl-automation/platform";
 import { captureRecords } from "../capture-records.js";
 import type { CoreParts } from "../core-parts.js";
@@ -44,7 +43,6 @@ function browserSettings(parts: CoreParts) {
 export function buildBrowserParts(parts: CoreParts): BrowserParts {
   const settings = browserSettings(parts);
   const dtcSites = configuredDtcSites(settings.dtc);
-  const store: WholeFoodsStore = settings.wholefoods;
   const ego = new EgoPages(settings.ego);
   const pages = new BrowserPages(ego, {
     routeId: settings.routeId,
@@ -64,8 +62,9 @@ export function buildBrowserParts(parts: CoreParts): BrowserParts {
   });
   const scanner = buildBrowserScanners({
     ego,
-    store,
+    store: settings.wholefoods,
     dtcSites,
+    wholefoodsScan: settings.wholefoodsScan,
     publication: parts.publication,
     rounds: new ManagedBrowserRounds(
       new StoreEgoRounds({ settings: settings.ego, pages: ego }),

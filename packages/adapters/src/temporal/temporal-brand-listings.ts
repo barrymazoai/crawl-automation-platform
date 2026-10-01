@@ -1,10 +1,11 @@
+import { codedFailure } from "./coded-failure.js";
 import type {
   BrandListing,
   BrandScanPermit,
   GatedBrandListing,
   ListingScan,
 } from "@crawl-automation/app";
-import { recordRecovery, errorCodeOf } from "@crawl-automation/platform";
+import { recordRecovery } from "@crawl-automation/platform";
 import { WorkflowExecutionAlreadyStartedError, type Client } from "@temporalio/client";
 
 /** The listing workflow owns permits and cancellation; reattachment never repeats a paid scan. */
@@ -65,20 +66,4 @@ export class TemporalBrandListings implements GatedBrandListing {
       return this.client.workflow.getHandle(workflowId);
     }
   }
-}
-
-function codedFailure(error: unknown): unknown {
-  if (!error || typeof error !== "object") {
-    return error;
-  }
-  let reason: unknown = error;
-  for (let depth = 0; reason && depth < 8; depth++) {
-    const failure = reason as { type?: string; cause?: unknown };
-    const code = errorCodeOf(reason) ?? errorCodeOf({ code: failure.type });
-    if (code) {
-      return Object.assign(error, { code });
-    }
-    reason = failure.cause;
-  }
-  return error;
 }

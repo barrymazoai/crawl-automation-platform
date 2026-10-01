@@ -1,5 +1,6 @@
-import { BrandScanPermitSchema, BrandScanRunnerSettingsSchema } from "@crawl-automation/app";
-import { CHANNEL_IDS, ListingFetchSettingsSchema } from "@crawl-automation/channels-core";
+import { BrandScanRunnerSettingsSchema } from "@crawl-automation/app";
+import { ListingFetchSettingsSchema } from "@crawl-automation/channels-core";
+import { BrandScanPermitsSchema, withBrowserScanPermit } from "./browser-scan-permit-settings.js";
 import { R2ScopeSchema } from "@crawl-automation/platform";
 import { z } from "zod";
 import { SwansonBrandScanSettingsSchema } from "@crawl-automation/channel-swanson";
@@ -13,7 +14,7 @@ export const BrandScanSettingsSchema = ListingFetchSettingsSchema.extend({
     secretAccessKey: z.string().min(1),
   }),
   /** Channels with a listing permit run on a worker through the existing Temporal ResourceGate. */
-  permits: z.partialRecord(z.enum(CHANNEL_IDS), BrandScanPermitSchema).default({}),
+  permits: BrandScanPermitsSchema,
   runner: BrandScanRunnerSettingsSchema.default({
     intervalMs: 5_000,
     concurrent: 4,
@@ -24,5 +25,5 @@ export const BrandScanSettingsSchema = ListingFetchSettingsSchema.extend({
    * HTTP sources still work. Store selection and Ego settings live on the worker.
    */
   browserQueue: z.string().min(1).max(200).optional(),
-});
+}).transform(withBrowserScanPermit);
 export type BrandScanSettings = z.infer<typeof BrandScanSettingsSchema>;

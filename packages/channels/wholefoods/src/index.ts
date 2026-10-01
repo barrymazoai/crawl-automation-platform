@@ -2,6 +2,7 @@ export * from "./amazon-formula-gap.js";
 export * from "./whole-foods-adapter.js";
 export * from "./whole-foods-address.js";
 export * from "./whole-foods-brand-scan.js";
+export * from "./whole-foods-scan-settings.js";
 export * from "./whole-foods-errors.js";
 export * from "./whole-foods-listing.js";
 export * from "./whole-foods-listing-archive.js";

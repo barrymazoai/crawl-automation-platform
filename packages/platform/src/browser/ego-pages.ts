@@ -3,16 +3,8 @@ import { egoErrors } from "./ego-errors.js";
 import { EgoRunner, EgoFailureSchema, type EgoRoundFailure } from "./ego-runner.js";
 import { READ_PAGE_BODY, closeTargetScript, pageRoundScript } from "./ego-script.js";
 import { EgoSettingsSchema, type EgoSettings } from "./ego-settings.js";
-
-/** Scrolling a list page: which elements are its items, which buttons load more, and when it has ended. */
-export interface ListScroll {
-  itemSelector: string;
-  moreTexts: readonly string[];
-  maxRounds: number;
-  /** Rounds in a row that add nothing, with no "load more" button left, before the list counts as ended. */
-  stableRounds: number;
-  settleMs: number;
-}
+import { ListScrollResultSchema, type ListScroll } from "./list-scroll.js";
+export type { ListScroll } from "./list-scroll.js";
 
 export interface BrowserRead {
   url: string;
@@ -22,13 +14,13 @@ export interface BrowserRead {
   scroll?: ListScroll;
 }
 
-const BrowserPageSchema = z.object({
+export const BrowserPageSchema = z.object({
   url: z.string().min(1),
   status: z.number().int().nullable(),
   html: z.string(),
   ready: z.boolean(),
   readinessFailure: EgoFailureSchema.nullable().optional(),
-  scroll: z.object({ rounds: z.number().int(), ended: z.enum(["none", "stable", "capped"]) }),
+  scroll: ListScrollResultSchema,
 });
 
 /** A page as the browser drew it, where it ended up, and how its list scrolling ended. */

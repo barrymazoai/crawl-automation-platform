@@ -4,6 +4,9 @@ const source = (message: string) => ({ category: "SOURCE" as const, message });
 
 /** Errors of reading Whole Foods pages. */
 export const wholeFoodsErrors = defineErrors({
+  "WHOLEFOODS.SEARCH_THROTTLED": source(
+    "The brand search and canary could not establish a trustworthy result at this store.",
+  ),
   "WHOLEFOODS.URL": source("The address is not a Whole Foods product or brand search page."),
   "WHOLEFOODS.PRODUCT_UNVERIFIED": source("The page does not show one readable product."),
   "WHOLEFOODS.STORE_UNVERIFIED": source("The page does not show which store it is priced for."),

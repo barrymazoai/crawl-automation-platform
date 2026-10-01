@@ -32,7 +32,7 @@ export function browserScanners(
   if (!settings.browserQueue) {
     return {};
   }
-  const scans = new TemporalBrowserScans(temporal.client, settings.browserQueue);
+  const scans = new TemporalBrowserScans(temporal.client, settings.browserQueue, settings.permits);
   return {
     dtc: {
       sourceUrl: (url) => dtcBrandSourceUrl(url, dtcSites),
@@ -93,10 +93,9 @@ export function brandScanParts(parts: {
 
 function gatedListings(settings: BrandScanSettings, temporal: TemporalClient) {
   return Object.fromEntries(
-    Object.entries(settings.permits).map(([channel, permit]) => [
-      channel,
-      new TemporalBrandListings(temporal.client, permit),
-    ]),
+    Object.entries(settings.permits)
+      .filter(([channel]) => channel !== "wholefoods")
+      .map(([channel, permit]) => [channel, new TemporalBrandListings(temporal.client, permit)]),
   );
 }
 

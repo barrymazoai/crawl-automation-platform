@@ -97,3 +97,23 @@ it("validates the permit resource and bounded wait at config load", () => {
     expect(() => BrandScanPermitSchema.parse({ ...valid, ...invalid })).toThrow();
   }
 });
+
+it("records throttled browser scans as Review without a brand availability assertion", async () => {
+  const test = fixture("wholefoods");
+  vi.mocked(readListing).mockRejectedValueOnce(
+    Object.assign(new Error("unresolved"), {
+      code: "WHOLEFOODS.SEARCH_THROTTLED",
+    }),
+  );
+  await test.runner.tick(new AbortController().signal);
+  expect(test.finish).toHaveBeenCalledWith(
+    "scan-1",
+    expect.objectContaining({
+      state: "review",
+      code: "WHOLEFOODS.SEARCH_THROTTLED",
+      full: false,
+    }),
+  );
+  expect(test.finish.mock.calls[0]?.[1]).not.toHaveProperty("soldHere");
+  expect(readListing).toHaveBeenCalledOnce();
+});

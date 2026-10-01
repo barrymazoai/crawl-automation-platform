@@ -15,6 +15,7 @@ import {
   ensureWholeFoodsStore,
   wholeFoodsBrandSourceUrl,
   type WholeFoodsStore,
+  type WholeFoodsScanSettings,
 } from "@crawl-automation/channels-wholefoods";
 import type { EgoPages, RetainedPublication } from "@crawl-automation/platform";
 import { acceptsAddress, BrowserScanners, type BrowserScanCapability } from "./browser-scanners.js";
@@ -63,6 +64,7 @@ export function buildBrowserScanners(deps: {
   publication: RetainedPublication;
   store: WholeFoodsStore;
   dtcSites?: readonly DtcSitePolicy[];
+  wholefoodsScan?: WholeFoodsScanSettings;
 }): BrowserScanners {
   const { ego, store, publication } = deps;
   const sites = deps.dtcSites ?? [];
@@ -74,7 +76,12 @@ export function buildBrowserScanners(deps: {
     },
     {
       accepts: (url) => acceptsAddress([wholeFoodsBrandSourceUrl], url),
-      scanner: new WholeFoodsBrandScan({ browser: ego, remote: publication.remote, store }),
+      scanner: new WholeFoodsBrandScan({
+        browser: ego,
+        remote: publication.remote,
+        store,
+        ...(deps.wholefoodsScan ? { settings: deps.wholefoodsScan } : {}),
+      }),
       prepare: storePreparation(ego, store),
     },
   ]);

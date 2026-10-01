@@ -20,6 +20,46 @@ function memoryStore(): ObjectStore {
   };
 }
 
+it("prepares the Whole Foods store before brand/canary reads and passes worker pacing", async () => {
+  const sourceUrl = "https://www.wholefoodsmarket.com/grocery/search?k=Brand&rh=p_123%3A123";
+  const canaryUrl = "https://www.wholefoodsmarket.com/grocery/search?k=365";
+  const ego = new EgoPages({ cliPath: "/tmp/not-executed-ego", taskSpaceId: 1 });
+  const round = vi.spyOn(ego, "round").mockResolvedValue({ shown: "10259", changed: true });
+  const header =
+    '<header><script type="application/json">{"storePreference":{"buid":"10259","storeName":"The Alameda"}}</script></header>';
+  const page = {
+    url: sourceUrl,
+    status: 200,
+    ready: true,
+    scroll: { rounds: 3, ended: "stable" as const },
+  };
+  const read = vi
+    .spyOn(ego, "read")
+    .mockResolvedValueOnce({
+      ...page,
+      html: `<html><body>${header}<main>No results for Brand</main></body></html>`,
+    })
+    .mockResolvedValueOnce({
+      ...page,
+      html: `<html><body>${header}<main><a href="/grocery/product/food-b000000001">Food</a></main></body></html>`,
+    });
+  const scans = buildBrowserScanners({
+    ego,
+    rounds: new ManagedBrowserRounds(ego, async () => true),
+    publication: new RetainedPublication(memoryStore(), memoryStore()),
+    store: { storeId: "10259", label: "The Alameda", postalCode: "95126" },
+    wholefoodsScan: { canaryUrl, pressDelayMs: { min: 5000, max: 6000 } },
+  });
+  expect(
+    await scans.scan({ sourceUrl, scanId: "store-scan" }, new AbortController().signal),
+  ).toMatchObject({ complete: true, soldHere: false });
+  expect(round).toHaveBeenCalledOnce();
+  expect(round.mock.invocationCallOrder[0]).toBeLessThan(read.mock.invocationCallOrder[0] ?? 0);
+  expect(read).toHaveBeenCalledTimes(2);
+  expect(read.mock.calls[0]?.[0].scroll?.pressDelayMs).toEqual({ min: 5000, max: 6000 });
+  expect(read.mock.calls[1]?.[0]).toMatchObject({ url: canaryUrl, scroll: { moreTexts: [] } });
+});
+
 describe("browser scan capability wiring", () => {
   it("registers the Store scanner in the actual worker composition without Whole Foods setup", async () => {
     const sourceUrl = "https://www.amazon.com/stores/page/00000000-0000-0000-0000-000000000001";

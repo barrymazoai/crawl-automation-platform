@@ -1,4 +1,4 @@
-import { withCause } from "@crawl-automation/platform";
+import { withCause, isAppError } from "@crawl-automation/platform";
 import { pipelineErrors } from "@crawl-automation/platform";
 import { errorCodeOf, type Logger } from "@crawl-automation/platform";
 import { Context } from "@temporalio/activity";
@@ -41,7 +41,9 @@ export function guarded(name: string, handler: Handler, log: Logger) {
       context.cancellationSignal.throwIfAborted();
       const code = errorCodeOf(error) ?? pipelineErrors.code("PIPELINE.ACTIVITY_UNRESOLVED");
       activityLog.error({ code, durationMs, err: error }, "activity failed");
-      throw withCause(ApplicationFailure.nonRetryable(`${name} failed`, code), error);
+      const details =
+        isAppError(error) && error.details.cooldownRequested === true ? [error.details] : [];
+      throw withCause(ApplicationFailure.nonRetryable(`${name} failed`, code, ...details), error);
     } finally {
       clearInterval(timer);
     }

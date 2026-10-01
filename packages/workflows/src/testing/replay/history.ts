@@ -63,6 +63,7 @@ export function expectMarkers(history: History, expected: readonly PatchMarker[]
     labelNoSourceMarker,
     "formula-family-capture-v1",
     "brand-listing-gap-v1",
+    "browser-scan-permit-v1",
   ] as const;
   const recorded = (history.events ?? []).flatMap((event) =>
     Object.values(event.markerRecordedEventAttributes?.details ?? {}).flatMap(

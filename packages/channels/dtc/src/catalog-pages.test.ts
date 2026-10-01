@@ -77,6 +77,19 @@ describe("DTC catalog retained browser evidence", () => {
     await expect(pages.read(request, signal())).rejects.toThrow();
     expect(read).toHaveBeenCalledTimes(1);
   });
+  it("retains and reuses the shared broken end state without rejecting its proof", async () => {
+    const { pages, read } = setup();
+    read.mockResolvedValueOnce({
+      url: request.url,
+      html: '<main><div id="product-grid"></div></main>',
+      status: 200,
+      ready: true,
+      scroll: { rounds: 1, ended: "broken" },
+    });
+    expect((await pages.read(request, signal())).scroll.ended).toBe("broken");
+    expect((await pages.read(request, signal())).scroll.ended).toBe("broken");
+    expect(read).toHaveBeenCalledOnce();
+  });
   it("does not retry a failed browser read", async () => {
     const { pages, read } = setup();
     read.mockRejectedValueOnce(new Error("browser stopped"));

@@ -15,7 +15,7 @@ export const WHOLE_FOODS_PRODUCT_LINK = 'a[href*="/grocery/product/"]';
 /** A brand search as the browser drew it for the configured store. */
 export interface WholeFoodsListing {
   page: ListingPage;
-  /** False when the search says it has no results: the brand is not sold at this store. */
+  /** An empty search is provisional; the browser scan must verify it with its canary. */
   soldHere: boolean;
 }
 
@@ -35,10 +35,17 @@ function listedProduct(link: Element): ListedProduct {
  * Reads a drawn brand search page: one product per ASIN, in page order. The whole list is on one page once the
  * browser has scrolled it to its end; whether it did is the scroll's outcome, not the page's (see the scan).
  */
-export function parseWholeFoodsListing(html: string, store: WholeFoodsStore): WholeFoodsListing {
+export function parseWholeFoodsListing(
+  html: string,
+  store: WholeFoodsStore,
+  observedItems: readonly { html: string }[] = [],
+): WholeFoodsListing {
   const { document } = parseHTML(html);
   const products = new Map<string, ListedProduct>();
-  for (const link of document.querySelectorAll(WHOLE_FOODS_PRODUCT_LINK)) {
+  const retained = observedItems.flatMap((item) => [
+    ...parseHTML(item.html).document.querySelectorAll(WHOLE_FOODS_PRODUCT_LINK),
+  ]);
+  for (const link of [...retained, ...document.querySelectorAll(WHOLE_FOODS_PRODUCT_LINK)]) {
     const product = listedProduct(link);
     if (!products.has(product.listingId)) {
       products.set(product.listingId, product);

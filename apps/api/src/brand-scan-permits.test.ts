@@ -74,3 +74,38 @@ it("wires only the configured channel to a ResourceGate listing workflow", async
   expect(read).not.toHaveBeenCalled();
   expect(finish).toHaveBeenCalledWith(scanId, expect.objectContaining({ state: "complete" }));
 });
+
+it("defaults Whole Foods pacing and accepts validated overrides without changing Swanson", () => {
+  const defaults = BrandScanSettingsSchema.parse(fixture.brandScans);
+  expect(defaults.permits.wholefoods).toEqual({
+    taskQueue: "browser",
+    resourceQueue: "v3.resources.v1",
+    resourceId: "wholefoods-brand-scan",
+    maxWaitSeconds: 900,
+    gapAfterSeconds: 60,
+    cooldownSeconds: 1800,
+  });
+  const settings = BrandScanSettingsSchema.parse({
+    ...fixture.brandScans,
+    permits: {
+      wholefoods: { gapAfterSeconds: 90, cooldownSeconds: 3600 },
+      swanson: {
+        taskQueue: "pipeline",
+        resourceQueue: "resources",
+        resourceId: "swanson-brand-scan",
+      },
+    },
+  });
+  expect(settings.permits.wholefoods).toMatchObject({ gapAfterSeconds: 90, cooldownSeconds: 3600 });
+  expect(settings.permits.swanson?.gapAfterSeconds).toBe(0);
+  for (const invalid of [
+    { gapAfterSeconds: -1 },
+    { cooldownSeconds: 0.5 },
+    { resourceId: "other" },
+  ]) {
+    expect(
+      BrandScanSettingsSchema.safeParse({ ...fixture.brandScans, permits: { wholefoods: invalid } })
+        .success,
+    ).toBe(false);
+  }
+});

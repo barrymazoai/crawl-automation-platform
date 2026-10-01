@@ -10,7 +10,8 @@
 实际列表读取原来位于 API `BrandScanRunner`；`CollectionWorkflow` 只轮询扫描结果。
 API 为配置了 `brandScans.permits.<channel>` 的渠道启动新的 `BrandListingWorkflow`，由现有
 ResourceGate 在整个 listing read（分页和 family 展开）期间持有一个许可；获取许可前不发付费请求。
-没有 permit 配置的 GNC、Amazon 等继续原路径。Collection/Browser workflow 的命令序列不变。
+没有 permit 配置的 GNC、Amazon 等继续原路径。Collection workflow 的命令序列不变。
+Whole Foods 浏览器扫描的新许可与兼容标记见下节。
 BrandListingWorkflow 的扫描后间隔使用 `patched("brand-listing-gap-v1")`，保持旧的未打补丁
 历史可重放；Temporal replay 测试由主会话运行，使用 `createLocal()` 和 1 秒间隔。
 
@@ -80,6 +81,68 @@ Shopify `__shopify_bv_challenge`、Cloudflare `__cf_chl_*` 以及明确 challeng
 `BRAND_SCAN.ACCESS_CHALLENGE`，最终保留在扫描 Review。此路径不跟随挑战地址、不重试付费请求。
 同一扫描重复连接复用既有 `brand-listing-<scanId>` 工作流，包括已关闭的结果；无需新增执行锁。
 先在 Mini 验证一项扫描与许可释放，再由 owner 决定批量运行；历史 Review 不自动重排。
+
+## Whole Foods 品牌扫描节流（待部署）
+
+API 的 `brandScans.permits` 合并以下项；配置了 `browserQueue` 时，即使未显式填写该项，
+也会默认启用 Whole Foods 许可（执行队列沿用 `browserQueue`）。其他渠道默认行为保持原样。
+
+```json
+{
+  "wholefoods": {
+    "taskQueue": "v3.browser.wholefoods.v1",
+    "resourceQueue": "v3.resources.v1",
+    "resourceId": "wholefoods-brand-scan",
+    "maxWaitSeconds": 900,
+    "gapAfterSeconds": 60,
+    "cooldownSeconds": 1800
+  }
+}
+```
+
+Whole Foods 使用现有 `BrowserScanWorkflow` / `scanBrandInBrowser`，不会转给 HTTP
+`BrandListingWorkflow`。所有机器必须共享 `wholefoods-brand-scan`，新迁移
+`037_wholefoods_brand_scan_capacity.sql` 仿照 036 插入 capacity=1（保留已有容量与健康状态）。
+resources worker 的 `resourceHealth.resources` 合并：
+
+```json
+{
+  "wholefoods-brand-scan": { "taskQueues": ["v3.browser.wholefoods.v1"] }
+}
+```
+
+两台 browser worker 的 `browser` 配置合并下列项；省略时就是这些默认值。原有
+`browser.wholefoods` 店铺配置不变，读取前仍执行 `ensureWholeFoodsStore`。
+
+```json
+{
+  "wholefoodsScan": {
+    "canaryUrl": "https://www.wholefoodsmarket.com/grocery/search?k=365+by+Whole+Foods+Market",
+    "pressDelayMs": { "min": 4000, "max": 8000 }
+  }
+}
+```
+
+列表必须稳定且没有 Load More，并且读取无异常，才算完整；标题总数仅供查看。
+每轮核对去掉查询参数后的产品 href 集合；收缩、替换或清空立即停止，返回 partial、已见产品
+和冷却请求。最终 HTML 原样存入 `search.html`；消失前的链接原始片段及计数保留在同一记录中，
+不会拼接成伪造的完整 HTML。旧 none/stable/capped 记录仍可读取。
+
+品牌页无结果时只读一次同店 canary，独立归档为 `canary.html` / `canary.record.json`。
+canary 只检查初始列表，不按 Load More。健康 canary 有产品才接受 `soldHere=false`；
+canary 无产品或损坏则以 `WHOLEFOODS.SEARCH_THROTTLED` 留下 Review，不写品牌在售结论。
+重连同一扫描复用原存档，不重复下载。
+
+新工作流通过 `patched("browser-scan-permit-v1")` 保留旧历史的直接 Activity 路径。
+许可覆盖店铺准备、品牌页、canary、页面清理和扫描后等待：正常或普通失败默认等 60 秒；
+损坏或节流等 `max(gapAfterSeconds, cooldownSeconds)`，默认 30 分钟，然后释放。
+不自动重试。取消会跳过或打断等待并释放许可，沿用 Swanson 规则。新 gated workflow 不设置
+会绕过 finally 的总执行超时；Activity 时限和既有 permit 等待上限仍在。
+
+部署前排空旧浏览器扫描，因为旧历史不补领新许可。由 owner 审阅提交后通过 origin main
+部署、应用迁移和健康映射，再在 Mini 手工验证单品牌及释放；本次只改工作树，未部署。
+若大品牌的慢速读取超过现有 `browser.ego.roundTimeoutMs`，应按规模配置该既有时限；
+达到时限仍是失败，不会声明完整或自动重试。
 
 ## R39 Browser Worker：双 Mini 配置（2026-09-30）
 

@@ -1,11 +1,5 @@
-import {
-  CancellationScope,
-  isCancellation,
-  patched,
-  proxyActivities,
-  sleep,
-  workflowInfo,
-} from "@temporalio/workflow";
+import { patched, proxyActivities, workflowInfo } from "@temporalio/workflow";
+import { readWithScanGap } from "./scan-gap.js";
 import { resourceGate } from "../resources/resource-gate.js";
 import { BrandListingInputSchema, type BrandListingRequest } from "./brand-listing-model.js";
 
@@ -23,21 +17,8 @@ export async function BrandListingWorkflow(raw: unknown): Promise<unknown> {
       retry: { maximumAttempts: 1 },
       ...binding,
     });
-    return readWithGap(() => activities.readBrandListing(request), binding ? gap : 0);
+    return readWithScanGap(() => activities.readBrandListing(request), {
+      gapAfterSeconds: binding ? gap : 0,
+    });
   });
-}
-
-/** Remain inside the gate for every outcome; cancellation bypasses or interrupts the durable timer. */
-async function readWithGap(read: () => Promise<unknown>, gapAfterSeconds: number) {
-  let cancelled = false;
-  try {
-    return await read();
-  } catch (error) {
-    cancelled = isCancellation(error);
-    throw error;
-  } finally {
-    if (gapAfterSeconds > 0 && !cancelled && !CancellationScope.current().consideredCancelled) {
-      await sleep(gapAfterSeconds * 1000);
-    }
-  }
 }

@@ -1,5 +1,9 @@
 import { DtcSettingsSchema } from "@crawl-automation/channel-dtc";
-import { WholeFoodsStoreSchema, WHOLE_FOODS_STORE } from "@crawl-automation/channels-wholefoods";
+import {
+  WholeFoodsStoreSchema,
+  WHOLE_FOODS_STORE,
+  WholeFoodsScanSettingsSchema,
+} from "@crawl-automation/channels-wholefoods";
 import { EgoSettingsSchema } from "@crawl-automation/platform";
 import { z } from "zod";
 
@@ -10,6 +14,7 @@ import { z } from "zod";
 export const BrowserSettingsSchema = z.strictObject({
   ego: EgoSettingsSchema,
   dtc: DtcSettingsSchema.default({ sites: [] }),
+  wholefoodsScan: WholeFoodsScanSettingsSchema.prefault({}),
   wholefoods: WholeFoodsStoreSchema.refine(
     (store) => store.storeId === WHOLE_FOODS_STORE.storeId,
     "Whole Foods scans use store 10259",

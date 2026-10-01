@@ -3,6 +3,62 @@ import type { Client } from "@temporalio/client";
 import { expect, it, vi } from "vitest";
 import { TemporalBrowserScans } from "./temporal-browser-scans.js";
 
+it("routes the configured browser permit and preserves throttling as the Review reason", async () => {
+  const failure = Object.assign(new Error("workflow failed"), {
+    cause: { cause: { type: "WHOLEFOODS.SEARCH_THROTTLED" } },
+  });
+  const start = vi.fn(async () => ({
+    result: async () => {
+      throw failure;
+    },
+    cancel: vi.fn(),
+  }));
+  const client = { workflow: { start } } as unknown as Client;
+  const scans = new TemporalBrowserScans(client, "browser", {
+    wholefoods: {
+      taskQueue: "wholefoods-browser",
+      resourceQueue: "resources",
+      resourceId: "wholefoods-brand-scan",
+      gapAfterSeconds: 60,
+      cooldownSeconds: 1800,
+      maxWaitSeconds: 900,
+    },
+  });
+  const request = {
+    channel: "wholefoods" as const,
+    scanId: "scan-1",
+    sourceUrl: "https://example.com/brand",
+  };
+  await expect(scans.scan(request, new AbortController().signal)).rejects.toMatchObject({
+    code: "WHOLEFOODS.SEARCH_THROTTLED",
+  });
+  expect(start).toHaveBeenCalledExactlyOnceWith(
+    "BrowserScanWorkflow",
+    expect.objectContaining({
+      taskQueue: "wholefoods-browser",
+      args: [
+        {
+          ...request,
+          capture: "browser",
+          gapAfterSeconds: 60,
+          cooldownSeconds: 1800,
+          resources: {
+            queue: "resources",
+            maxWaitSeconds: 900,
+            activities: { scanBrandInBrowser: [{ resourceId: "wholefoods-brand-scan", units: 1 }] },
+          },
+        },
+      ],
+    }),
+  );
+  expect(start).not.toHaveBeenCalledWith(
+    expect.anything(),
+    expect.objectContaining({
+      workflowExecutionTimeout: expect.anything(),
+    }),
+  );
+});
+
 it.each(["wholefoods", "dtc", "amazon"] as const)(
   "starts a browser-capable scan for %s with an explicit capability",
   async (channel) => {

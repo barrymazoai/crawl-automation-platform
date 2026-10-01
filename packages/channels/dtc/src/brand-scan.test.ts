@@ -11,7 +11,7 @@ const site = dtcSitePolicy({
 const request = { scanId: "scan-test", sourceUrl: site.catalogUrl ?? "" };
 function drawn(
   position: number,
-  options: { next?: string; ended?: "stable" | "capped"; empty?: boolean } = {},
+  options: { next?: string; ended?: "stable" | "capped" | "broken"; empty?: boolean } = {},
 ) {
   return {
     url: request.sourceUrl + (position > 1 ? `?page=${position}` : ""),
@@ -51,16 +51,19 @@ describe("DTC browser catalog completion", () => {
     expect(result.archiveKeys).toEqual(["retained-1.html", "retained-2.html"]);
     expect(read.mock.calls[1]?.[0].url).toBe(`${request.sourceUrl}?page=2`);
   });
-  it("keeps a scrolling cap partial even without a next link", async () => {
-    const scan = new DtcBrandScan({
-      pages: { read: async () => drawn(1, { ended: "capped" }) },
-      sites: [site],
-    });
-    expect(await scan.scan(request, signal())).toMatchObject({
-      complete: false,
-      stopped: "scroll_limit",
-    });
-  });
+  it.each(["capped", "broken"] as const)(
+    "keeps %s scrolling partial even without a next link",
+    async (ended) => {
+      const scan = new DtcBrandScan({
+        pages: { read: async () => drawn(1, { ended }) },
+        sites: [site],
+      });
+      expect(await scan.scan(request, signal())).toMatchObject({
+        complete: false,
+        stopped: "scroll_limit",
+      });
+    },
+  );
   it("keeps a page cap partial", async () => {
     const scan = new DtcBrandScan({
       pages: { read: async () => drawn(1, { next: "?page=2" }) },
