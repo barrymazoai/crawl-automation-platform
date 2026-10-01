@@ -12,6 +12,7 @@ import { drugStructureCodes } from "./drug-label.js";
 import { coversEveryPrintedCharacter } from "./coverage.js";
 import { evidenceLines, type Quote } from "./evidence-lines.js";
 import { exclusionCodes } from "./label-exclusions.js";
+import { labelCoverage } from "./label-coverage.js";
 import { ingredientCodes, rowOrderCodes } from "./label-structure.js";
 import { labelLimitErrors } from "./label-limits.js";
 import { resolveAnchor, type Anchor, type AnchorContext } from "./resolve-anchor.js";
@@ -56,7 +57,8 @@ export function decodeLabelText(request: LabelTextRequest): DecodedLabel {
     ...ingredientCodes(candidate, text),
     ...exclusionCodes({ candidate, text, policyVersion }),
   ]);
-  if (!coversEveryPrintedCharacter(text, scope.range, quotes.placed)) {
+  const coverage = labelCoverage(candidate, { text, range: scope.range }, quotes.placed);
+  if (!coversEveryPrintedCharacter(text, scope.range, coverage)) {
     codes.add(labelValidationErrors.code("LABEL.EXTRACTION_INCOMPLETE"));
   }
   return { candidate, status: codes.size ? "review" : assessment.status, codes: [...codes] };

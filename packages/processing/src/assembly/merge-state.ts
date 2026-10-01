@@ -22,9 +22,15 @@ export interface MergeFailure {
   verifiedExecuted?: boolean;
   /** Formula presence in a schema-checked text coverage Review; absent means unverified. */
   hasFormula?: boolean;
+  /** Schema-checked original image answer; required before /6 can waive an incomplete image. */
+  candidate?: LabelImageCandidate;
 }
 
 export type Provenance = LabelCollectedProduct["provenance"][number];
+/** Candidate-only view for pure policy decisions; receipt verification remains at the merge boundary. */
+export type LabelEvidence =
+  | Pick<Extract<Provenance, { kind: "text" }>, "id" | "kind" | "candidate">
+  | Pick<Extract<Provenance, { kind: "image" }>, "id" | "kind" | "candidate">;
 export type Source = LabelProductManifest["sources"][number];
 
 /** Everything the merge accumulates while it goes through the sources. */

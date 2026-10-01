@@ -1,3 +1,4 @@
+import { ingredientEntryEdges } from "./ingredient-boundaries.js";
 import type { Span } from "./evidence-lines.js";
 
 const escapeToken = (token: string) => token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -37,9 +38,7 @@ export function isWholeWords(text: string, span: Span): boolean {
 
 /** Between list separators, or a line or heading edge, on both sides: `, Chicken,` but not `Chicken Fat`. */
 export function isWholeListEntry(text: string, span: Span): boolean {
-  const before = text.slice(0, span.start).replace(/[ \t]+$/u, "");
-  const after = text.slice(span.end).replace(/^[ \t]+/u, "");
-  return (!before || /[,;:(\n]$/u.test(before)) && (!after || /^[,;.)\n]/u.test(after));
+  return ingredientEntryEdges(text, span);
 }
 
 /** The two spans share at least one character. */

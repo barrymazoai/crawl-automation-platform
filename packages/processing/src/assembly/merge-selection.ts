@@ -1,7 +1,5 @@
-import { labelValidationErrors } from "../label/validation-errors.js";
 import { assemblyErrors, type AssemblyErrorCode } from "./assembly-errors.js";
 import {
-  assessLabelCandidate,
   isCompleteLabelImage,
   formulaAgreement,
   ingredientsAgreement,
@@ -11,17 +9,10 @@ import {
   type LabelAgreement,
 } from "@crawl-automation/v3-contracts";
 import type { MergePolicy } from "./merge-policy.js";
-import { byText, fail, words, type MergeState, type Provenance } from "./merge-state.js";
-import { applySourceReview } from "./source-without-label.js";
-type Candidate = Provenance["candidate"];
+import { byText, words, type MergeState, type LabelEvidence } from "./merge-state.js";
+import { reviewEntry } from "./merge-entry-review.js";
+type Candidate = LabelEvidence["candidate"];
 type Projected = ReturnType<typeof projectLabelProductCandidate>;
-const PARTIAL_LABEL: readonly string[] = [
-  labelValidationErrors.code("LABEL.INGREDIENTS_INCOMPLETE"),
-  labelValidationErrors.code("LABEL.FORMULA_INCOMPLETE"),
-  labelValidationErrors.code("LABEL.AMOUNT_UNREADABLE"),
-  labelValidationErrors.code("LABEL.CORE_MISSING"),
-  labelValidationErrors.code("LABEL.EVIDENCE_UNCERTAIN"),
-];
 
 /**
  * Picks the formula and the other ingredients: a complete image first, then images, then text when an image leads;
@@ -29,10 +20,10 @@ const PARTIAL_LABEL: readonly string[] = [
  */
 export function selectLabel(
   state: MergeState,
-  provenance: Provenance[],
+  provenance: LabelEvidence[],
   policy: MergePolicy,
 ): void {
-  const priority = (entry: Provenance) => {
+  const priority = (entry: LabelEvidence) => {
     if (!policy.imageFirst || isCompleteLabelImage(entry)) {
       return 0;
     }
@@ -46,39 +37,11 @@ export function selectLabel(
   }
 }
 
-function selectEntry(state: MergeState, entry: Provenance, policy: MergePolicy): void {
-  const integrityCodes = policy.integrity(entry);
-  if (integrityCodes.length) {
-    for (const code of integrityCodes) {
-      if (policy.textFallback) {
-        state.warnings.push({ id: entry.id, code });
-      } else {
-        fail(state, entry.id, code);
-      }
-    }
+function selectEntry(state: MergeState, entry: LabelEvidence, policy: MergePolicy): void {
+  if (reviewEntry(state, entry, policy)) {
     return;
   }
   const candidate = entry.candidate;
-  const assessed = assessLabelCandidate(candidate);
-  for (const code of new Set(assessed.warnings.map((warning) => warning.code))) {
-    state.warnings.push({ id: entry.id, code });
-  }
-  if (policy.textFallback && entry.kind === "image") {
-    // Keep the original partial evidence; never mix unreadable image rows into the complete text label.
-    if (assessed.codes.some((code) => !PARTIAL_LABEL.includes(code))) {
-      assessed.codes.forEach((code) => fail(state, entry.id, code));
-    } else {
-      state.warnings.push({
-        id: entry.id,
-        code: assemblyErrors.code("LABEL_PRODUCT.INCOMPLETE_IMAGE_NOT_SELECTED"),
-      });
-    }
-    return;
-  }
-  if (assessed.status === "review") {
-    applySourceReview(state, { id: entry.id, codes: assessed.codes }, policy.completeLabel);
-    return;
-  }
   const projected = projectLabelProductCandidate(entry.id, candidate);
   const secondaryText = policy.imageFirst && entry.kind === "text";
   const pick = { entry, candidate, projected, secondaryText, imageFirst: policy.imageFirst };
@@ -87,7 +50,7 @@ function selectEntry(state: MergeState, entry: Provenance, policy: MergePolicy):
 }
 
 interface Pick {
-  entry: Provenance;
+  entry: LabelEvidence;
   candidate: Candidate;
   projected: Projected;
   secondaryText: boolean;
@@ -182,15 +145,17 @@ function recordAgreement(
   },
 ): void {
   const { agreement, conflict, secondary } = comparison;
+  const secondaryText =
+    pick.secondaryText && state.manifest.evidencePolicy !== "label-image-first/6";
   if (agreement === "exact") {
     return;
   }
   const wording = agreement === "wording";
   const code = assemblyErrors.code(
-    wording ? "LABEL_PRODUCT.SOURCE_WORDING_DIFFERS" : pick.secondaryText ? secondary : conflict,
+    wording ? "LABEL_PRODUCT.SOURCE_WORDING_DIFFERS" : secondaryText ? secondary : conflict,
   );
   const id = pick.entry.id;
-  if (wording || pick.secondaryText) {
+  if (wording || secondaryText) {
     if (!state.warnings.some((warning) => warning.id === id && warning.code === code)) {
       state.warnings.push({ id, code });
     }

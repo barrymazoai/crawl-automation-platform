@@ -1,3 +1,6 @@
+import { STANDARD_FOOTNOTE } from "./label-footnotes.js";
+import { labelNoteAllowed } from "./label-notes.js";
+import { ingredientGap } from "./ingredient-boundaries.js";
 import { drugExclusionAllowed } from "./drug-label.js";
 import { labelHeadingAllowed } from "./label-headings.js";
 import { labelValidationErrors } from "../../label/validation-errors.js";
@@ -12,26 +15,6 @@ interface Judged {
   policyVersion: string;
 }
 
-const DV_BASIS = new RegExp(
-  String.raw`percent\s+daily\s+values?\s+(?:\(dv\)\s+)?(?:are\s+)?` +
-    String.raw`based\s+(?:on|upon)\s+(?:a\s+)?2,?000\s+calorie\s+diet`,
-  "i",
-);
-const DV_NOT_ESTABLISHED = new RegExp(
-  String.raw`(?:(?:percent|%)\s*)?daily\s+values?(?:\s*\(%?dv\))?\s+` +
-    String.raw`not\s+(?:established|determined)`,
-  "i",
-);
-// The long FDA form's second sentence.
-const DV_NEEDS =
-  /your\s+daily\s+values?\s+may\s+be\s+higher\s+or\s+lower\s+depending\s+on\s+your\s+calorie\s+needs/i;
-// The long Nutrition Facts footnote: "The % Daily Value (DV) tells you how much a nutrient in a serving of food
-// contributes to a daily diet. 2,000 calories a day is used for general nutrition advice."
-const DV_TELLS =
-  /the\s+%\s*daily\s+value\s+(?:\(dv\)\s+)?tells\s+you\s+how\s+much\s+a\s+nutrient\s+in\s+a\s+serving\s+of\s+food\s+contributes\s+to\s+a\s+daily\s+diet\.?\s*2,?000\s+calories\s+a\s+day\s+(?:is|are)\s+used\s+for\s+general\s+nutrition\s+advice/i;
-// Accept one to three complete DV sentences; a recognized prefix cannot hide other label text.
-const DV_SENTENCE = String.raw`[*+†‡§¶\s]*(?:${DV_BASIS.source}|${DV_NOT_ESTABLISHED.source}|${DV_NEEDS.source}|${DV_TELLS.source})\.?`;
-const STANDARD_FOOTNOTE = new RegExp(`^(?:${DV_SENTENCE}){1,3}$`, "i");
 const ESTABLISHED_FOOTNOTE =
   /^[*+†]+\s*(?:percent\s+daily\s+values?|daily\s+values?)(?:\s*\(DV\))?\s+(?:not established\.?|not determined\.?)$/i;
 const ALLERGEN = /^(?:contains\s*:|may\s+contain|manufactured\s+(?:in|on)|processed\s+(?:in|on))/i;
@@ -102,7 +85,10 @@ function allowedExclusion(exclusion: Exclusion, judged: Judged): boolean {
   const value = exclusion.quote.text.trim();
   if (
     ["heading", "metadata", "footnote", "noise"].includes(exclusion.reason) &&
-    (labelHeadingAllowed(value, judged.candidate) || STANDARD_FOOTNOTE.test(value))
+    (labelHeadingAllowed(value, judged.candidate) ||
+      STANDARD_FOOTNOTE.test(value) ||
+      labelNoteAllowed(exclusion, judged.candidate) ||
+      ingredientConnector(exclusion, judged))
   ) {
     return true;
   }
@@ -150,4 +136,14 @@ function allowedDirections(exclusion: Exclusion, judged: Judged): boolean {
     /^(?:suggested\s+use|directions)\s*:/i.test(exclusion.quote.text.trim()) &&
     !/supplement\s+facts|other\s+ingredients/i.test(exclusion.quote.text)
   );
+}
+
+/** Only the gap between two already anchored complete ingredients can excuse a connector. */
+function ingredientConnector(exclusion: Exclusion, judged: Judged): boolean {
+  const items = judged.candidate.otherIngredients?.items ?? [];
+  return items.some((item, index) => {
+    const previous = items[index - 1];
+    const gap = previous && ingredientGap(judged.text, previous, item);
+    return gap && exclusion.quote.start >= gap.start && exclusion.quote.end <= gap.end;
+  });
 }

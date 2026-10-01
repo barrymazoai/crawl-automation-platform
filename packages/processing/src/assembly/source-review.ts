@@ -1,6 +1,7 @@
 import { isDeepStrictEqual } from "node:util";
 import {
   ReviewRecordSchema,
+  LabelImageCandidateSchema,
   type LabelProductJoin,
   type ReviewRecord,
   type VisionTask,
@@ -43,10 +44,24 @@ export async function sourceReviewFailure(
     throw assemblyFailure("LABEL_PRODUCT.IDENTITY_CONFLICT");
   }
   const hasFormula = text ? textReviewHasFormula(review) : undefined;
+  const image = reviewedImage(source, review);
   return {
     id: source.id,
     code: failure.code,
     verifiedExecuted: failure.executionFact === "executed",
     ...(hasFormula === undefined ? {} : { hasFormula }),
+    ...(image?.success ? { candidate: image.data } : {}),
   };
+}
+
+/** Missing retained response references or invalid answers cannot excuse an image failure. */
+function reviewedImage(source: Source, review: ReviewRecord) {
+  if (
+    source.kind !== "image" ||
+    !review.failure.evidenceKey ||
+    review.candidate?.schema !== "label-extraction/1"
+  ) {
+    return null;
+  }
+  return LabelImageCandidateSchema.safeParse(review.candidate.value);
 }

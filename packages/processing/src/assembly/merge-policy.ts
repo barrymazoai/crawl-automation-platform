@@ -1,3 +1,4 @@
+import { isPartialLabel, partialLabelConflicts } from "./partial-label.js";
 import { assemblyErrors } from "./assembly-errors.js";
 import {
   isCompleteLabelImage,
@@ -5,7 +6,7 @@ import {
   labelImageIntegrityCodes,
   labelNumericSourceConflict,
 } from "@crawl-automation/v3-contracts";
-import type { MergeFailure, MergeState, Provenance } from "./merge-state.js";
+import type { MergeFailure, MergeState, LabelEvidence } from "./merge-state.js";
 import { applySourceReview } from "./source-without-label.js";
 
 /** What the manifest's evidence policy decides for this set of verified sources. */
@@ -18,7 +19,10 @@ export interface MergePolicy {
   textFallback: boolean;
   /** A complete, eligible label is available, independently of image-first policy. */
   completeLabel: boolean;
-  integrity(entry: Provenance): string[];
+  /** /6: compare incomplete siblings with every eligible complete label. */
+  sufficient: boolean;
+  complete: LabelEvidence[];
+  integrity(entry: LabelEvidence): string[];
 }
 
 const FROM_2 = [
@@ -27,17 +31,24 @@ const FROM_2 = [
   "label-image-first/4",
   "label-image-first/5",
 ];
-const FROM_3 = ["label-image-first/3", "label-image-first/4", "label-image-first/5"];
+const FROM_3 = [
+  "label-image-first/3",
+  "label-image-first/4",
+  "label-image-first/5",
+  "label-image-first/6",
+];
 const SECONDARY_TEXT =
   /^TEXT\.LABEL_(?:GROUP_EMPTY|GROUP_INVALID|ROW_ORDER_INVALID|COVERAGE_UNCERTAIN|EXTRACTION_INCOMPLETE|FORMULA_INCOMPLETE|INGREDIENTS_INCOMPLETE|INVALID_OUTPUT|INGREDIENT_BOUNDARY)$/;
 const PARTIAL_IMAGE =
   /^VISION\.LABEL_(?:INGREDIENTS_INCOMPLETE|FORMULA_INCOMPLETE|AMOUNT_UNREADABLE|CORE_MISSING|EVIDENCE_UNCERTAIN)$/;
 const QUALITY_IMAGE = /^VISION\.LABEL_(?:AMOUNT_EVIDENCE_CONFLICT|INGREDIENT_BOUNDARY)$/;
 
-export function mergePolicy(state: MergeState, provenance: Provenance[]): MergePolicy {
+export function mergePolicy(state: MergeState, provenance: LabelEvidence[]): MergePolicy {
   const policy = state.manifest.evidencePolicy ?? "";
-  const quality = ["label-image-first/4", "label-image-first/5"].includes(policy);
-  const integrity = (entry: Provenance) =>
+  const quality = ["label-image-first/4", "label-image-first/5", "label-image-first/6"].includes(
+    policy,
+  );
+  const integrity = (entry: LabelEvidence) =>
     quality && entry.kind === "image" ? labelImageIntegrityCodes(entry.candidate) : [];
   const eligible = provenance.filter((entry) => !integrity(entry).length);
   const completeLabel = eligible.some(isCompleteLabelImage) || eligible.some(isCompleteLabelText);
@@ -52,7 +63,18 @@ export function mergePolicy(state: MergeState, provenance: Provenance[]): MergeP
       code: assemblyErrors.code("LABEL_PRODUCT.COMPLETE_TEXT_FALLBACK"),
     });
   }
-  return { quality, imageFirst, textFallback, completeLabel, integrity };
+  const complete = eligible.filter(
+    (entry) => isCompleteLabelImage(entry) || isCompleteLabelText(entry),
+  );
+  return {
+    quality,
+    imageFirst,
+    textFallback,
+    completeLabel,
+    integrity,
+    complete,
+    sufficient: policy === "label-image-first/6",
+  };
 }
 
 /**
@@ -89,7 +111,7 @@ function excused(state: MergeState, failure: MergeFailure, policy: MergePolicy):
   if (kind === "text") {
     return secondaryTextExcused(state.manifest.evidencePolicy ?? "", failure.code, policy);
   }
-  return kind === "image" && partialImageExcused(failure.code, policy);
+  return kind === "image" && partialImageExcused(state, failure, policy);
 }
 
 /** From `/2`, a text quality failure beside a complete image (from `/5`, also a citation failure). */
@@ -100,10 +122,31 @@ function secondaryTextExcused(evidencePolicy: string, code: string, policy: Merg
   );
 }
 
-/** With a complete text fallback, a partial-image failure (under `/4`+, also an image-quality failure). */
-function partialImageExcused(code: string, policy: MergePolicy): boolean {
-  const quality = policy.quality && QUALITY_IMAGE.test(code);
-  return policy.textFallback && (PARTIAL_IMAGE.test(code) || quality);
+/** /6 requires a complete label plus a compatible saved answer; older fallback rules stay frozen. */
+function partialImageExcused(
+  state: MergeState,
+  failure: MergeFailure,
+  policy: MergePolicy,
+): boolean {
+  if (policy.sufficient) {
+    const candidate = failure.candidate;
+    if (
+      !policy.completeLabel ||
+      !candidate ||
+      !PARTIAL_IMAGE.test(failure.code) ||
+      !isPartialLabel(candidate) ||
+      labelImageIntegrityCodes(candidate).length > 0
+    ) {
+      return false;
+    }
+    const conflicts = policy.complete.flatMap((entry) =>
+      partialLabelConflicts(candidate, entry.candidate),
+    );
+    conflicts.forEach((code) => state.codes.add(code));
+    return conflicts.length === 0;
+  }
+  const quality = policy.quality && QUALITY_IMAGE.test(failure.code);
+  return policy.textFallback && (PARTIAL_IMAGE.test(failure.code) || quality);
 }
 
 /** Packaging problems only warn when a complete image carries the label. */

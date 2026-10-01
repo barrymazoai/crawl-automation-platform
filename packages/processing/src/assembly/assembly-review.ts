@@ -43,6 +43,7 @@ const STABLE = [
   "label-image-first/3",
   "label-image-first/4",
   "label-image-first/5",
+  "label-image-first/6",
 ];
 const unverified = () => assemblyFailure("LABEL_PRODUCT.REVIEW_UNVERIFIED");
 
