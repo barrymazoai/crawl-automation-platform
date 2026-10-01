@@ -25,8 +25,11 @@ export const EnrichmentCandidateSchema = z.strictObject({
   healthFunctions: z.array(z.string().trim().min(1).max(100)).max(12),
   confidence: z.number().min(0).max(1),
   notes: z.string().max(1000).nullable(),
+  /** Decoder diagnostics; absent on previously stored candidates. Never supplied by the model. */
+  warnings: z.array(z.string().min(1).max(500)).max(10).optional(),
 });
 export type EnrichmentCandidate = z.infer<typeof EnrichmentCandidateSchema>;
+export const EnrichmentModelOutputSchema = EnrichmentCandidateSchema.omit({ warnings: true });
 
 export const EnrichmentRecordSchema = z.strictObject({
   schemaVersion: z.literal(1), codec: z.literal("product-enrichment/1"),

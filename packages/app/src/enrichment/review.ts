@@ -1,13 +1,16 @@
 import { errorCodeOf, isAppError, recordRecovery } from "@crawl-automation/platform";
-import { enrichmentErrors, enrichmentHash } from "@crawl-automation/processing";
-import { ReviewRecordSchema, type EnrichmentSubject } from "@crawl-automation/v3-contracts";
+import { buildStepReview, enrichmentErrors, enrichmentHash } from "@crawl-automation/processing";
+import type { EnrichmentSubject, ReviewRecord } from "@crawl-automation/v3-contracts";
 import type { EnrichmentDependencies } from "./ports.js";
+import { enrichmentKey } from "./evidence.js";
 
 type Failure = {
   subject: EnrichmentSubject;
   inputHash: string;
   error: unknown;
   executionFact: "not_executed" | "executed" | "unknown";
+  candidate: ReviewRecord["candidate"];
+  inputKey: string | null;
 };
 
 export async function enrichmentReview(
@@ -38,34 +41,36 @@ export async function enrichmentReview(
   return { status: "review" as const, reviewId, code: record.failure.code };
 }
 
-function reviewRecord({ subject, inputHash, error, executionFact }: Failure) {
+function reviewRecord({ subject, inputHash, error, executionFact, candidate, inputKey }: Failure) {
   const code = errorCodeOf(error) ?? enrichmentErrors.code("ENRICH.UNCLASSIFIED");
-  return ReviewRecordSchema.parse({
-    schemaVersion: 1,
+  const record = buildStepReview({
     reviewId: `enrich-${inputHash}`,
-    occurredAt: new Date().toISOString(),
     observation: subject.observation,
-    failure: {
-      schemaVersion: 1,
+    task: {
       requestId: subject.observation.requestId,
       observationId: subject.observation.observationId,
       operationId: subject.collectionOperationId,
       inputFingerprint: inputHash,
-      stage: "product.enrich",
-      category: "PROCESSING",
-      code,
-      executionFact,
-      evidenceKey: `v3/product-enrichment/${inputHash}/review.json`,
-      blockedBy: null,
-      automaticRetry: false,
     },
-    rawError: {
+    stage: "product.enrich",
+    category: "PROCESSING",
+    code,
+    fact: executionFact,
+    evidenceKey: enrichmentKey(inputHash, "review.json"),
+    blockedBy: null,
+    error: {
       name: error instanceof Error ? error.name : "Error",
-      message: error instanceof Error ? error.message : String(error),
-      stack: null,
-      details: { subject, inputHash, cause: isAppError(error) ? error.details : null },
+      details: {
+        ...(isAppError(error) ? error.details : {}),
+        subject,
+        inputHash,
+        inputKey,
+        responseKey: candidate ? enrichmentKey(inputHash, "response.txt") : null,
+      },
     },
-    candidate: null,
+    candidate,
     inspection: { kind: "none" },
   });
+  record.rawError.message = error instanceof Error ? error.message : String(error);
+  return record;
 }

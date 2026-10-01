@@ -9,6 +9,7 @@ import {
   SHARED_ENRICHMENT_PROTOCOL,
 } from "@crawl-automation/v3-contracts";
 import type { EnrichmentSource } from "./ports.js";
+import { enrichmentKey } from "./evidence.js";
 
 export function enrichmentRecord(
   prepared: EnrichmentSource & EnrichmentContent,
@@ -28,6 +29,6 @@ export function enrichmentRecord(
     variantCode: enrichmentHash(candidate.variant),
     promptSha256: sha256(Buffer.from(call.prompt)),
     responseSha256: sha256(Buffer.from(call.response)),
-    evidenceKey: `v3/product-enrichment/${inputHash}/record.json`,
+    evidenceKey: enrichmentKey(inputHash, "record.json"),
   });
 }

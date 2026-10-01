@@ -8,6 +8,7 @@ import {
 } from "@crawl-automation/processing";
 import {
   EnrichmentRequestSchema,
+  type ReviewRecord,
   type EnrichmentRequest,
   type SharedEnrichmentOutcome,
   type SharedEnrichmentRecord,
@@ -15,9 +16,16 @@ import {
 import { enrichmentRecord } from "./record.js";
 import type { EnrichmentDependencies, EnrichmentSource } from "./ports.js";
 import { enrichmentReview } from "./review.js";
+import { enrichmentAnswer } from "./stored-answer.js";
+import { enrichmentKey } from "./evidence.js";
 
 type Prepared = EnrichmentSource & EnrichmentContent;
-type Attempt = { fact: "not_executed" | "executed" | "unknown" };
+type PublicationEntry = { inputHash: string; name: "input" | "prompt" | "record"; value: unknown };
+type Attempt = {
+  executionFact: "not_executed" | "executed" | "unknown";
+  candidate: ReviewRecord["candidate"];
+  inputKey: string | null;
+};
 
 /** Only enrichment changes: a Review never updates or removes a collected formula. */
 export class EnrichmentService {
@@ -32,7 +40,7 @@ export class EnrichmentService {
       ...enrichmentInput(source.collection, source.subject.title),
     };
     const { inputHash, subject } = prepared;
-    const attempt: Attempt = { fact: "not_executed" };
+    const attempt: Attempt = { executionFact: "not_executed", candidate: null, inputKey: null };
     try {
       const prior = await this.deps.repository.read(inputHash);
       if (prior) {
@@ -50,15 +58,11 @@ export class EnrichmentService {
         };
       }
       await this.publish({ inputHash, name: "input", value: prepared }, signal);
+      attempt.inputKey = enrichmentKey(inputHash, "input.json");
       signal.throwIfAborted();
       return await this.execute(prepared, signal, attempt);
     } catch (error) {
-      return enrichmentReview(this.deps, {
-        subject,
-        inputHash,
-        error,
-        executionFact: attempt.fact,
-      });
+      return enrichmentReview(this.deps, { subject, inputHash, error, ...attempt });
     }
   }
 
@@ -71,6 +75,8 @@ export class EnrichmentService {
       inputHash,
       error,
       executionFact: "unknown",
+      candidate: null,
+      inputKey: null,
     });
   }
 
@@ -86,17 +92,18 @@ export class EnrichmentService {
     const { inputHash, subject } = prepared;
     const request = enrichmentModelRequest(prepared);
     await this.publish({ inputHash, name: "prompt", value: request }, signal);
-    attempt.fact = "unknown";
+    attempt.executionFact = "unknown";
     const response = await this.deps.model.interpret(request, signal);
-    attempt.fact = "executed";
+    attempt.executionFact = "executed";
     // Even invalid output is retained byte-for-byte before decoding.
     const bytes = Buffer.from(response);
     await this.deps.publication.publish(
-      `v3/product-enrichment/${inputHash}/response.txt`,
+      enrichmentKey(inputHash, "response.txt"),
       bytes,
       "text/plain",
       signal,
     );
+    attempt.candidate = enrichmentAnswer(response);
     const record = enrichmentRecord(prepared, {
       provider: this.deps.model.provider,
       prompt: request.prompt,
@@ -132,10 +139,13 @@ export class EnrichmentService {
   }
 
   private async verifyResponse(record: SharedEnrichmentRecord, signal: AbortSignal) {
-    const prefix = `v3/product-enrichment/${record.inputHash}`;
     const [response, promptBytes] = await Promise.all([
-      this.deps.remote.read(`${prefix}/response.txt`, 65_536, signal),
-      this.deps.remote.read(`${prefix}/prompt.json`, 8 * 1024 * 1024, signal),
+      this.deps.remote.read(enrichmentKey(record.inputHash, "response.txt"), 65_536, signal),
+      this.deps.remote.read(
+        enrichmentKey(record.inputHash, "prompt.json"),
+        8 * 1024 * 1024,
+        signal,
+      ),
     ]);
     const prompt = promptBytes ? JSON.parse(Buffer.from(promptBytes).toString()).prompt : null;
     if (
@@ -148,9 +158,9 @@ export class EnrichmentService {
     }
   }
 
-  private publish(entry: { inputHash: string; name: string; value: unknown }, signal: AbortSignal) {
+  private publish(entry: PublicationEntry, signal: AbortSignal) {
     return this.deps.publication.publish(
-      `v3/product-enrichment/${entry.inputHash}/${entry.name}.json`,
+      enrichmentKey(entry.inputHash, `${entry.name}.json`),
       Buffer.from(JSON.stringify(entry.value)),
       "application/json",
       signal,

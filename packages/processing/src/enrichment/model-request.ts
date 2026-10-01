@@ -1,4 +1,4 @@
-import { EnrichmentCandidateSchema } from "@crawl-automation/v3-contracts";
+import { EnrichmentModelOutputSchema } from "@crawl-automation/v3-contracts";
 import { z } from "zod";
 import { enrichmentPrompt, type EnrichmentContent } from "./protocol.js";
 
@@ -7,6 +7,6 @@ export function enrichmentModelRequest(prepared: EnrichmentContent) {
   return {
     operationId: `enrich-${prepared.inputHash}`,
     prompt: enrichmentPrompt(prepared.input),
-    outputSchema: z.toJSONSchema(EnrichmentCandidateSchema),
+    outputSchema: z.toJSONSchema(EnrichmentModelOutputSchema),
   };
 }
