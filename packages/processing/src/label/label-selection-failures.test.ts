@@ -147,7 +147,7 @@ describe("LabelImageSelection.manifest dependency failures", () => {
     fake.request.input.admission = "label-packaging/1";
     await expect(
       fake.selection.manifest(fake.request, new AbortController().signal),
-    ).rejects.toMatchObject({ name: "ZodError" });
+    ).rejects.toMatchObject({ code: "CHANNEL.LABEL_SOURCE_UNVERIFIED" });
     expect(fake.publishManifest).toHaveBeenCalledWith(
       expect.objectContaining({ documents: [], skipped: ["page", "image-0"] }),
       expect.any(AbortSignal),

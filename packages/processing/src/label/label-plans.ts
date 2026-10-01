@@ -17,6 +17,7 @@ import {
   type SourceResolver,
 } from "./label-plan-model.js";
 import { labelSourceTask, type LabelCoreReader } from "./label-source-task.js";
+import { manifestAdmission } from "./label-manifest-admission.js";
 
 const MANIFEST_LIMIT = 2 * 1024 * 1024;
 
@@ -147,7 +148,7 @@ export class LabelPlans {
     if (!sources.length) {
       throw labelFailure("CHANNEL.LABEL_NO_SOURCE");
     }
-    const admission = { policy: input.admission, comparison: "label-typography/2", documents };
+    const admission = await manifestAdmission(this, { input, documents }, signal);
     const result = LabelManifestResultSchema.parse({
       input,
       manifest: {
@@ -155,7 +156,7 @@ export class LabelPlans {
         observation: input.owner,
         ...(input.evidencePolicy ? { evidencePolicy: input.evidencePolicy } : {}),
         sources,
-        ...(input.admission ? { admission } : {}),
+        ...(admission ? { admission } : {}),
       },
       skipped,
     });
