@@ -29,8 +29,9 @@ The page-data price warehouse `847` is an online pricing context, not a selected
 Prices retain their labels and source. Rendered prices take precedence; otherwise the
 page-data delivered price is used, falling back to JSON-LD. The supplied energy shot has
 online price 43.99 and delivered price 35.99 (8.00 discount); both are retained. No member
-price or local inventory is inferred. Ratings/review counts and availability are observed
-JSON-LD values; the raw pages both say `OutOfStock`.
+price or local inventory is inferred. Ratings and review counts are observed JSON-LD values.
+Availability is recorded as unknown: the raw page's JSON-LD always says `OutOfStock` while the
+brand page shows the same items in stock (real stock loads later in the browser).
 
 ## Formula and images
 
