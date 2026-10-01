@@ -20,7 +20,7 @@ export type HtmlCaptureAdmission =
 
 /**
  * Shared recent-original index and in-flight markers, separate from processing permits.
- * Admission atomically checks the operation, then a saved original younger than 24 hours,
+ * Admission atomically checks the operation, then a saved original younger than HTML_REUSE_WINDOW_MS,
  * then unfinished requests younger than 10 minutes, before recording intent to download.
  * A reuse binds the operation to the original reference without renewing its capture time.
  * A download reservation includes expired unfinished operations: inspect their archives before

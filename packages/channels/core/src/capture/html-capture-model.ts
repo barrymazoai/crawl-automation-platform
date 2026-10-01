@@ -37,6 +37,12 @@ export interface ArchivedHtml {
   finalUrl: string | null;
 }
 
+/**
+ * How long a saved original is reused instead of a new paid download, counted from its capture time
+ * (owner 2026-10-01: seven days, was 24 hours). The one place this window is set.
+ */
+export const HTML_REUSE_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
+
 export const HtmlCaptureRequestSchema = z.strictObject({
   channel: z.enum(CHANNEL_IDS),
   capture: HtmlCaptureSchema,

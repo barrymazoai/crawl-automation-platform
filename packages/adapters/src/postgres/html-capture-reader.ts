@@ -6,7 +6,7 @@ import {
 } from "@crawl-automation/app";
 import type { Queryable } from "@crawl-automation/platform";
 
-/** SELECT only; historical originals remain available after their 24-hour reuse window. */
+/** SELECT only; historical originals remain available after their reuse window (HTML_REUSE_WINDOW_MS). */
 export class PostgresHtmlCaptureReader implements OriginalCaptureReader {
   constructor(private readonly database: Queryable) {}
 

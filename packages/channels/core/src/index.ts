@@ -23,6 +23,7 @@ export * from "./planning/index.js";
 export * from "./platforms/index.js";
 export * from "./capture/html-capture-records.js";
 export {
+  HTML_REUSE_WINDOW_MS,
   HtmlCaptureRequestSchema,
   SavedHtmlOriginalSchema,
   type HtmlCaptureRequest,

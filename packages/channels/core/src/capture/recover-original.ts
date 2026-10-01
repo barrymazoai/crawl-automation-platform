@@ -1,4 +1,4 @@
-import type { HtmlCaptureRequest } from "./html-capture-model.js";
+import { HTML_REUSE_WINDOW_MS, type HtmlCaptureRequest } from "./html-capture-model.js";
 import type { HtmlCaptureRecords } from "./html-capture-records.js";
 import type { OriginalHtmlArchive } from "./original-html-archive.js";
 
@@ -13,7 +13,7 @@ export async function recoverOriginal(
     if (original) {
       await deps.records?.complete(request, original);
       const age = Date.now() - Date.parse(original.capturedAt);
-      if (age >= 0 && age < 24 * 60 * 60 * 1000) {
+      if (age >= 0 && age < HTML_REUSE_WINDOW_MS) {
         return original;
       }
     }

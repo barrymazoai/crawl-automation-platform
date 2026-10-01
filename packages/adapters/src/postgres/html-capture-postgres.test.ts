@@ -1,6 +1,10 @@
 import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import type { HtmlCaptureRequest, SavedHtmlOriginal } from "@crawl-automation/app";
+import {
+  HTML_REUSE_WINDOW_MS,
+  type HtmlCaptureRequest,
+  type SavedHtmlOriginal,
+} from "@crawl-automation/app";
 import type { Database } from "@crawl-automation/platform";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { PostgresHtmlCaptureRecords } from "./html-capture-records.js";
@@ -111,9 +115,9 @@ describe.skipIf(!hasPostgres || process.env.V3_TEST_SKIP_POSTGRES === "1")(
       );
     }
 
-    it("reuses a verified original within 24 hours across source IDs and operations", async () => {
+    it("reuses a verified original within the reuse window across source IDs and operations", async () => {
       const producer = request();
-      const saved = await seedOriginal(producer, 23 * hour);
+      const saved = await seedOriginal(producer, HTML_REUSE_WINDOW_MS - hour);
       const consumer = next(producer);
       consumer.capture.sourceId = "another-source";
       expect(await records.admit(consumer)).toEqual({ status: "reuse", original: saved });
@@ -125,15 +129,15 @@ describe.skipIf(!hasPostgres || process.env.V3_TEST_SKIP_POSTGRES === "1")(
       expect(rows[0]?.captured_at.toISOString()).toBe(saved.capturedAt);
     });
 
-    it("downloads when the original is at least 24 hours old", async () => {
+    it("downloads when the original is at least as old as the reuse window", async () => {
       const producer = request();
-      await seedOriginal(producer, 24 * hour);
+      await seedOriginal(producer, HTML_REUSE_WINDOW_MS);
       expect(await records.admit(next(producer))).toEqual({ status: "download" });
     });
 
     it("ignores request age for a recent original captured after a long request", async () => {
       const producer = request();
-      await seedInFlight(producer, 25 * hour);
+      await seedInFlight(producer, HTML_REUSE_WINDOW_MS + hour);
       const saved = original(producer);
       await records.complete(producer, saved);
       expect(await records.admit(next(producer))).toEqual({ status: "reuse", original: saved });
@@ -188,9 +192,9 @@ describe.skipIf(!hasPostgres || process.env.V3_TEST_SKIP_POSTGRES === "1")(
 
     it("does not renew the window when an operation recently reused older HTML", async () => {
       const producer = request();
-      const saved = await seedOriginal(producer, 25 * hour);
+      const saved = await seedOriginal(producer, HTML_REUSE_WINDOW_MS + hour);
       const consumer = next(producer);
-      // Model a reuse admitted yesterday; its recorded original has now expired.
+      // Model an earlier reuse; its recorded original has now expired.
       await postgres.database.query(
         `INSERT INTO html_capture
          (operation_id,channel,listing_id,variant_id,request,state,original,captured_at)
@@ -306,7 +310,7 @@ describe.skipIf(!hasPostgres || process.env.V3_TEST_SKIP_POSTGRES === "1")(
     it("reads historical done operations, preserving a reused original's provenance", async () => {
       const reader = new PostgresHtmlCaptureReader(postgres.database);
       const producer = request();
-      const saved = await seedOriginal(producer, 25 * hour);
+      const saved = await seedOriginal(producer, HTML_REUSE_WINDOW_MS + hour);
       const consumer = next(producer);
       await records.complete(consumer, saved);
       const found = await reader.find({ operationId: consumer.capture.operationId });
@@ -320,7 +324,7 @@ describe.skipIf(!hasPostgres || process.env.V3_TEST_SKIP_POSTGRES === "1")(
       const producer = request();
       const { channel, capture } = producer;
       const identity = { channel, listingId: capture.listingId };
-      const older = await seedOriginal(producer, 26 * hour);
+      const older = await seedOriginal(producer, HTML_REUSE_WINDOW_MS + 2 * hour);
       const newest = next(producer);
       const saved = await seedOriginal(newest, hour);
       await records.complete(next(producer), older); // Recently recorded reuse is still older HTML.

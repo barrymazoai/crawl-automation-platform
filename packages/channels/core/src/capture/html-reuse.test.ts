@@ -4,7 +4,7 @@ import type { ChannelAdapter, ChannelId, ParsedProduct } from "../adapter.js";
 import { channelErrors } from "../errors.js";
 import { HttpCapture } from "./http-capture.js";
 import type { HtmlCaptureRecords } from "./html-capture-records.js";
-import type { HtmlCapture, FetchedVia } from "./html-capture-model.js";
+import { HTML_REUSE_WINDOW_MS, type HtmlCapture, type FetchedVia } from "./html-capture-model.js";
 import { OriginalHtmlArchive } from "./original-html-archive.js";
 
 class Memory implements ObjectStore {
@@ -79,7 +79,7 @@ describe("shared original HTML reuse", () => {
       const saved = await producer.save(body, via, signal());
       const original = producer.reference(saved);
       const receipt = test.remote.data.get(`${producer.prefix}/original.json`);
-      vi.advanceTimersByTime(23 * hour);
+      vi.advanceTimersByTime(HTML_REUSE_WINDOW_MS - hour);
       test.records.admit.mockResolvedValue({ status: "reuse", original });
       test.remote.create.mockClear();
       const result = await test.capture(
@@ -111,12 +111,12 @@ describe("shared original HTML reuse", () => {
     },
   );
 
-  it("downloads after admission finds no original inside 24 hours", async () => {
+  it("downloads after admission finds no original inside the reuse window", async () => {
     vi.useFakeTimers();
     const test = setup();
     const producer = test.archive("expired");
     const old = await producer.save(body, via, signal());
-    vi.advanceTimersByTime(24 * hour);
+    vi.advanceTimersByTime(HTML_REUSE_WINDOW_MS);
     const next = test.archive("new");
     const result = await test.capture(next);
     expect(result).toMatchObject({ status: "page", archiveKey: `${next.prefix}/original.html` });
@@ -253,7 +253,7 @@ describe("shared original HTML reuse", () => {
       const producer = test.archive("unfinished");
       if (state === "expired") {
         await producer.save(body, via, signal());
-        vi.advanceTimersByTime(24 * hour);
+        vi.advanceTimersByTime(HTML_REUSE_WINDOW_MS);
       }
       test.records.admit.mockResolvedValue({
         status: "download",
