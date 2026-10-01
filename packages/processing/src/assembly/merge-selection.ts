@@ -11,6 +11,7 @@ import {
 import type { MergePolicy } from "./merge-policy.js";
 import { byText, words, type MergeState, type LabelEvidence } from "./merge-state.js";
 import { reviewEntry } from "./merge-entry-review.js";
+import { partialLabelConflicts } from "./partial-label.js";
 type Candidate = LabelEvidence["candidate"];
 type Projected = ReturnType<typeof projectLabelProductCandidate>;
 
@@ -38,9 +39,22 @@ export function selectLabel(
 }
 
 function selectEntry(state: MergeState, entry: LabelEvidence, policy: MergePolicy): void {
+  if (policy.split) {
+    const conflicts = partialLabelConflicts(entry.candidate, policy.split.complete.candidate);
+    conflicts.forEach((code) => state.codes.add(code));
+    const section = policy.split.sections.get(entry.id);
+    if (section) {
+      selectSections(state, section, policy);
+      return;
+    }
+  }
   if (reviewEntry(state, entry, policy)) {
     return;
   }
+  selectSections(state, entry, policy);
+}
+
+function selectSections(state: MergeState, entry: LabelEvidence, policy: MergePolicy): void {
   const candidate = entry.candidate;
   const projected = projectLabelProductCandidate(entry.id, candidate);
   const secondaryText = policy.imageFirst && entry.kind === "text";

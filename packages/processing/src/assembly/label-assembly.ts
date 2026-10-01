@@ -18,13 +18,14 @@ import {
   labelAssemblyKey,
 } from "./assembly-files.js";
 import { recordAssemblyReview, type AssemblyStores } from "./assembly-review.js";
-import { sourceReviewFailure } from "./source-review.js";
+import { sourceReviewFailure, type ReviewedImageReader } from "./source-review.js";
 import { mergeLabelProduct, type MergeFailure, type VerifiedLabelSource } from "./label-merge.js";
 
 type Source = LabelProductJoin["manifest"]["sources"][number];
 type State = LabelProductJoin["states"][number];
 
 export interface LabelAssemblyDeps extends AssemblyStores {
+  readReviewedImage?: ReviewedImageReader;
   /** Re-verifies a registered source's original evidence and returns its answer. */
   readSource(source: Source, signal: AbortSignal): Promise<VerifiedLabelSource>;
   readPackaging?(
@@ -169,7 +170,12 @@ export class LabelAssembly {
       throw assemblyFailure("LABEL_PRODUCT.RECEIPT_INVALID");
     }
     if (state.status === "review") {
-      const reviewed = { input: at.input, reviewId: state.reviewId };
+      const reviewed = {
+        input: at.input,
+        reviewId: state.reviewId,
+        readImage: this.deps.readReviewedImage,
+        signal,
+      };
       at.failures.push(await sourceReviewFailure(this.deps, source, reviewed));
       return;
     }

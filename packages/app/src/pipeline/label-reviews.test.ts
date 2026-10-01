@@ -2,6 +2,8 @@ import type { LabelPlanInput } from "@crawl-automation/processing";
 import type { ReviewRecord } from "@crawl-automation/v3-contracts";
 import { describe, expect, it, vi } from "vitest";
 import { LabelReviews } from "./label-reviews.js";
+import { orderedProgressKey } from "@crawl-automation/processing";
+import { ReviewEvidence } from "../reviews/review-evidence.js";
 
 const input: LabelPlanInput = {
   operationId: "label-operation",
@@ -39,7 +41,9 @@ function setup() {
       rows.set(record.reviewId, record);
     }),
   };
-  const evidence = { publish: vi.fn(async () => undefined) };
+  const evidence = {
+    publish: vi.fn(async (_key: string, _bytes: Uint8Array): Promise<void> => undefined),
+  };
   return { rows, reviews, evidence, service: new LabelReviews({ reviews, evidence }) };
 }
 
@@ -156,4 +160,90 @@ describe("LabelReviews.review durability and refusal cases", () => {
     expect(fake.reviews.read).not.toHaveBeenCalled();
     expect(fake.evidence.publish).not.toHaveBeenCalled();
   });
+});
+
+it("links every ordered source outcome and registered result through reviews.evidence", async () => {
+  const test = setup();
+  const ordered = {
+    ...input,
+    evidencePolicy: "label-image-first/6" as const,
+    sourcePolicy: { version: "label-sources/1" as const, order: "text-first" as const },
+  };
+  const states = [
+    { id: "page", status: "review", reviewId: "page-review" },
+    { id: "image", status: "registered" },
+  ];
+  const key = orderedProgressKey(ordered, states);
+  expect(
+    orderedProgressKey(ordered, [
+      { reviewId: "page-review", status: "review", id: "page" },
+      { status: "registered", id: "image" },
+    ]),
+  ).toBe(key);
+  const report = {
+    request: { input: ordered, states },
+    codes: ["VALIDATION.FORMULA_MISSING"],
+    outcomes: [
+      {
+        sourceId: "page",
+        status: "review",
+        code: "TEXT.LABEL_COVERAGE_UNCERTAIN",
+        codes: ["TEXT.LABEL_COVERAGE_UNCERTAIN"],
+        missing: [],
+        evidenceKeys: ["text-intents/page.json"],
+      },
+      {
+        sourceId: "image",
+        status: "registered",
+        code: "LABEL.FORMULA_INCOMPLETE",
+        codes: ["LABEL.FORMULA_INCOMPLETE"],
+        missing: ["LABEL.FORMULA_INCOMPLETE"],
+        evidenceKeys: ["v3/vision/image/response.json", "v3/vision/image/completion.json"],
+      },
+    ],
+  };
+  const files = new Map([[key, Buffer.from(JSON.stringify(report))]]);
+  const objects = { read: vi.fn(async (key: string) => files.get(key) ?? null) };
+  test.evidence.publish.mockImplementation(async (key, bytes) => {
+    files.set(key, Buffer.from(bytes));
+  });
+  const service = new LabelReviews({ ...test, diagnostics: objects });
+  const primaryFailure = {
+    sourceId: "image",
+    code: "LABEL.FORMULA_INCOMPLETE",
+    executionFact: "executed",
+  };
+  const result = await service.review(
+    {
+      ...request,
+      input: ordered,
+      states: [...states, { id: "unused", status: "not_started" }],
+      primaryFailure,
+    },
+    new AbortController().signal,
+  );
+  expect(result.code).toBe(primaryFailure.code);
+  const record = test.rows.get(result.reviewId);
+  expect(record?.rawError.details).toMatchObject({
+    progressEvidenceKey: key,
+    outcomes: [
+      ...report.outcomes,
+      expect.objectContaining({ sourceId: "unused", status: "not_started" }),
+    ],
+  });
+  if (!record) {
+    throw new Error("Review missing");
+  }
+  const evidence = await new ReviewEvidence({ objects }).files(
+    record,
+    new AbortController().signal,
+  );
+  expect(evidence.map((file) => file.key)).toEqual([
+    result.evidenceKey,
+    key,
+    "text-intents/page.json",
+    "v3/vision/image/response.json",
+    "v3/vision/image/completion.json",
+  ]);
+  expect(evidence.find((file) => file.key.endsWith("response.json"))?.status).toBe("missing");
 });

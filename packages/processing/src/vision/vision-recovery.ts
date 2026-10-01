@@ -4,12 +4,14 @@ import {
   VisionTaskSchema,
   type VisionRecord,
   type VisionTask,
+  type ReviewRecord,
 } from "@crawl-automation/v3-contracts";
 import { encodeJson } from "../results/result-record.js";
 import { writeOnce } from "../results/write-once.js";
 import { visionFailure } from "./vision-errors.js";
 import { prepareVisionRecord, visionKeys, visionLimits } from "./vision-files.js";
 import type { VisionFacts, VisionResults, VisionResultsDeps } from "./vision-results.js";
+import { readReviewedLabelImage } from "./reviewed-label-image.js";
 
 /**
  * Reading and finishing vision results: registering what a cloud worker left in R2, reading an accepted candidate for
@@ -68,6 +70,11 @@ export class VisionRecovery {
     }
     const { record, candidate } = await this.registeredCandidate(task, signal);
     return { record, candidate: LabelImageCandidateSchema.parse(candidate) };
+  }
+
+  /** Read-only partial evidence; the original failed operation remains a Review. */
+  readReviewedLabel(at: { task: VisionTask; review: ReviewRecord }, signal: AbortSignal) {
+    return readReviewedLabelImage(this.deps.evidence, at, signal);
   }
 
   /** What a recovery would find: a registered result, or an answer kept locally or in R2. */

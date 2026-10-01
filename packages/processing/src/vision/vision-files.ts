@@ -95,7 +95,7 @@ export function prepareVisionRecord(
   return { record, completion };
 }
 
-function visionRef(task: VisionTask, file: { name: string; data: Uint8Array }): ArtifactRef {
+export function visionRef(task: VisionTask, file: { name: string; data: Uint8Array }): ArtifactRef {
   const owner = task.input.selection.observation;
   const version = task.input.extractionProtocol ? 2 : 1;
   return {

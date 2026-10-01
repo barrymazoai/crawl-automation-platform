@@ -117,6 +117,7 @@ function assemblyStep(stores: LabelStores): LabelAssembly {
     remote,
     reviews,
     readSource: labelSourceReader(stores),
+    readReviewedImage: (at, signal) => stores.visionRecovery.readReviewedLabel(at, signal),
     readPackaging: (manifest, signal) =>
       packaging.inspect(manifest.observation, manifest.admission?.documents ?? [], signal),
     visionFingerprint: visionTaskFingerprint,
@@ -127,6 +128,7 @@ function assemblyStep(stores: LabelStores): LabelAssembly {
 function labelInspection(stores: LabelStores, saved: SavedSourceEvidence): LabelInspection {
   return {
     readSource: labelSourceReader(stores),
+    readReviewedImage: (at, signal) => stores.visionRecovery.readReviewedLabel(at, signal),
     file: async (source, signal) =>
       source.kind === "file-image" &&
       !!(await stores.downloads.inspect(source.plan.acquire, signal)),

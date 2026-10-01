@@ -26,6 +26,8 @@ export * from "./gnc-product.js";
 export * from "./label-extraction.js";
 export * from "./gnc-discovery.js";
 export * from "./label-product.js";
+export * from "./label-sections.js";
+export * from "./label-reviewed-image.js";
 export * from "./label-quality.js";
 export * from "./gnc-label.js";
 export * from "./packaging.js";

@@ -36,7 +36,11 @@ export function buildLabelTasks(parts: CoreParts): LabelTasks {
 
 /** A label product's own Review when it stops before its manifest. */
 export function buildLabelReviews(parts: CoreParts): LabelReviews {
-  return new LabelReviews({ evidence: parts.publication, reviews: parts.reviewLedger });
+  return new LabelReviews({
+    evidence: parts.publication,
+    reviews: parts.reviewLedger,
+    diagnostics: parts.publication.remote,
+  });
 }
 
 /** Resource permits: short ledger transactions for the permit gates in the workflows. */

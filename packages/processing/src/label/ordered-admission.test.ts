@@ -194,7 +194,8 @@ it("ends an exhausted incomplete walk with content reasons for every attempted s
   expect(check).toMatchObject({
     complete: false,
     terminal: false,
-    reason: { sourceId: "image-4", executionFact: "executed" },
+    // Equal information now keeps the latest source's outcome, not the first one's.
+    reason: { sourceId: "image-6", executionFact: "executed" },
     failures: expect.arrayContaining(
       states.map((state) =>
         expect.objectContaining({ sourceId: state.id, code: expect.any(String) }),

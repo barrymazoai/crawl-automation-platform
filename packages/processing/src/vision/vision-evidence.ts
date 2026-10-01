@@ -40,6 +40,15 @@ export class VisionEvidence {
     options: { allowLocal: boolean },
     signal: AbortSignal,
   ): Promise<VerifiedAnswer> {
+    const answer = await this.read(task, options, signal);
+    if (answer.status === "review") {
+      throw visionFailure("VISION.RESULT_NOT_ACCEPTED", "executed");
+    }
+    return { ...answer, status: answer.status };
+  }
+
+  /** Read a retained answer including a Review, without registering or changing its outcome. */
+  async read(task: VisionTask, options: { allowLocal: boolean }, signal: AbortSignal) {
     await this.deps.verifyOcr(task, signal);
     await this.assertImageDurable(task, signal);
     const intent = await this.deps.remote.read(
@@ -53,9 +62,6 @@ export class VisionEvidence {
     }
     const raw = this.assertOwnAnswer(task, { intent, answer: answer.bytes });
     const decoded = decodeAnswer(task, raw);
-    if (decoded.status === "review") {
-      throw visionFailure("VISION.RESULT_NOT_ACCEPTED", "executed");
-    }
     return { ...answer, status: decoded.status, candidate: decoded.candidate };
   }
 

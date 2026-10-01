@@ -74,9 +74,12 @@ export async function replayAssemblies(data: SavedEvidence, answers: Map<string,
 }
 
 function savedEntries(data: SavedEvidence, saved: SavedAssembly): VerifiedLabelSource[] {
-  return saved.result.provenance.map((entry) =>
-    entry.kind === "text" ? { ...entry, fullText: documentText(data, entry.record.input) } : entry,
-  );
+  return saved.result.provenance.flatMap((entry): VerifiedLabelSource[] => {
+    if (entry.kind === "text") {
+      return [{ ...entry, fullText: documentText(data, entry.record.input) }];
+    }
+    return entry.record.codec === "vision-reviewed/1" ? [] : [{ ...entry, record: entry.record }];
+  });
 }
 
 async function changedInputs(at: {
@@ -101,6 +104,7 @@ async function changedInputs(at: {
       input: saved.input,
       reviewId: status.reviewId,
     });
+    retainReviewed(saved, failure);
     const answer = answers.get(status.reviewId);
     const promotedText = promoteAnswer(source, answer, failure);
     if (promotedText) {
@@ -153,4 +157,11 @@ function promoteAnswer(
       schemaVersion: 3,
     }),
   };
+}
+
+function retainReviewed(saved: SavedAssembly, failure: MergeFailure) {
+  const reviewed = saved.result.provenance.find((entry) => entry.id === failure.id);
+  if (reviewed?.kind === "image" && reviewed.record.codec === "vision-reviewed/1") {
+    failure.reviewed = reviewed;
+  }
 }

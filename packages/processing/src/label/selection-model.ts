@@ -11,6 +11,7 @@ type ReviewState = Extract<SourceState, { status: "review" }>;
 
 /** What image-first selection needs to look at: retained files, image answers and Reviews. */
 export interface LabelInspection {
+  readReviewedImage?: import("../assembly/source-review.js").ReviewedImageReader;
   /** Ordered source flow: re-read the registered answer and original evidence, as assembly does. */
   readSource?: import("../assembly/label-assembly.js").LabelAssemblyDeps["readSource"];
   file(source: SavedEvidenceSource, signal: AbortSignal): Promise<boolean>;

@@ -1,16 +1,14 @@
-import { assessLabelCandidate, type LabelCandidate } from "@crawl-automation/v3-contracts";
+import {
+  assessLabelCandidate,
+  partialLabelValidationCodes,
+  type LabelCandidate,
+} from "@crawl-automation/v3-contracts";
 import { labelValidationErrors } from "../label/validation-errors.js";
 import { assemblyErrors } from "./assembly-errors.js";
 
-export const partialLabelCodes: readonly string[] = (
-  [
-    "LABEL.INGREDIENTS_INCOMPLETE",
-    "LABEL.FORMULA_INCOMPLETE",
-    "LABEL.AMOUNT_UNREADABLE",
-    "LABEL.CORE_MISSING",
-    "LABEL.EVIDENCE_UNCERTAIN",
-  ] as const
-).map((code) => labelValidationErrors.code(code));
+export const partialLabelCodes: readonly string[] = partialLabelValidationCodes.map((code) =>
+  labelValidationErrors.code(code),
+);
 
 const words = (field: { text: string } | null | undefined) =>
   field?.text.replace(/\s+/gu, " ").trim().toLowerCase();

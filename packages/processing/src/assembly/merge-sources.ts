@@ -6,6 +6,9 @@ import {
   TextCandidateV3Schema,
   TextRecordSchema,
   VisionRecordSchema,
+  LabelProductProvenanceSchema,
+  isCompleteLabelImage,
+  isCompleteLabelText,
   assertTextQuotes,
   type LabelProductManifest,
   type PackagingFacts,
@@ -65,13 +68,13 @@ export function verifiedProvenance(
   failures: MergeFailure[],
 ): { provenance: Provenance[]; seen: Set<string> } {
   const seen = new Set<string>();
+  const provenance: Provenance[] = [];
   for (const failure of failures) {
     if (!state.sources.has(failure.id) || seen.has(failure.id)) {
       throw conflict();
     }
     seen.add(failure.id);
   }
-  const provenance: Provenance[] = [];
   for (const entry of [...entries].sort((left, right) => byText(left.id, right.id))) {
     const source = state.sources.get(entry.id);
     if (!source || source.kind !== entry.kind || seen.has(entry.id)) {
@@ -80,7 +83,50 @@ export function verifiedProvenance(
     seen.add(entry.id);
     provenance.push(verifiedEntry(entry, source));
   }
-  return { provenance, seen };
+  if (needsReviewedSections(state, provenance)) {
+    for (const failure of failures.filter((failure) => failure.reviewed)) {
+      provenance.push(verifiedReview(state, failure));
+    }
+  }
+  return { provenance: provenance.sort((left, right) => byText(left.id, right.id)), seen };
+}
+
+function needsReviewedSections(state: MergeState, provenance: Provenance[]) {
+  return (
+    state.manifest.evidencePolicy === "label-image-first/6" &&
+    !provenance.some(isCompleteLabelImage) &&
+    !provenance.some(isCompleteLabelText)
+  );
+}
+
+function verifiedReview(state: MergeState, failure: MergeFailure): Provenance {
+  const entry = LabelProductProvenanceSchema.parse(failure.reviewed);
+  const source = state.sources.get(failure.id);
+  if (
+    entry.kind !== "image" ||
+    source?.kind !== "image" ||
+    entry.id !== failure.id ||
+    failure.verifiedExecuted !== true ||
+    entry.record.codec !== "vision-reviewed/1" ||
+    !isDeepStrictEqual(entry.candidate, failure.candidate) ||
+    !isDeepStrictEqual(
+      { input: entry.record.input, configFingerprint: entry.record.configFingerprint },
+      source.task,
+    )
+  ) {
+    throw conflict();
+  }
+  if (!reviewCandidateMatches(entry)) {
+    throw conflict();
+  }
+  return entry;
+}
+
+function reviewCandidateMatches(entry: Extract<Provenance, { kind: "image" }>) {
+  return (
+    entry.record.codec === "vision-reviewed/1" &&
+    isDeepStrictEqual(entry.candidate, entry.record.review.candidate?.value)
+  );
 }
 
 function verifiedEntry(

@@ -8,6 +8,7 @@ import {
 } from "@crawl-automation/v3-contracts";
 import type { MergeFailure, MergeState, LabelEvidence } from "./merge-state.js";
 import { applySourceReview } from "./source-without-label.js";
+import { splitLabel } from "./split-label.js";
 
 /** What the manifest's evidence policy decides for this set of verified sources. */
 export interface MergePolicy {
@@ -22,6 +23,8 @@ export interface MergePolicy {
   /** /6: compare incomplete siblings with every eligible complete label. */
   sufficient: boolean;
   complete: LabelEvidence[];
+  /** Whole printed sections establish coverage; selectLabel still selects and compares fields. */
+  split: ReturnType<typeof splitLabel>;
   integrity(entry: LabelEvidence): string[];
 }
 
@@ -51,10 +54,14 @@ export function mergePolicy(state: MergeState, provenance: LabelEvidence[]): Mer
   const integrity = (entry: LabelEvidence) =>
     quality && entry.kind === "image" ? labelImageIntegrityCodes(entry.candidate) : [];
   const eligible = provenance.filter((entry) => !integrity(entry).length);
-  const completeLabel = eligible.some(isCompleteLabelImage) || eligible.some(isCompleteLabelText);
-  const imageFirst = !!state.manifest.evidencePolicy && eligible.some(isCompleteLabelImage);
+  const complete = eligible.filter(
+    (entry) => isCompleteLabelImage(entry) || isCompleteLabelText(entry),
+  );
+  const split = policy === "label-image-first/6" && !complete.length ? splitLabel(eligible) : null;
+  const completeLabel = !!split || complete.length > 0;
+  const imageFirst = !!policy && eligible.some(isCompleteLabelImage);
   const textFallback = FROM_3.includes(policy) && !imageFirst && eligible.some(isCompleteLabelText);
-  if (policy === "label-image-first/4" && labelNumericSourceConflict(eligible)) {
+  if (numericConflict(policy, eligible)) {
     state.codes.add(assemblyErrors.code("LABEL_PRODUCT.SOURCE_NUMERIC_CONFLICT"));
   }
   if (textFallback) {
@@ -63,9 +70,6 @@ export function mergePolicy(state: MergeState, provenance: LabelEvidence[]): Mer
       code: assemblyErrors.code("LABEL_PRODUCT.COMPLETE_TEXT_FALLBACK"),
     });
   }
-  const complete = eligible.filter(
-    (entry) => isCompleteLabelImage(entry) || isCompleteLabelText(entry),
-  );
   return {
     quality,
     imageFirst,
@@ -73,8 +77,13 @@ export function mergePolicy(state: MergeState, provenance: LabelEvidence[]): Mer
     completeLabel,
     integrity,
     complete,
+    split,
     sufficient: policy === "label-image-first/6",
   };
+}
+
+function numericConflict(policy: string, eligible: LabelEvidence[]) {
+  return policy === "label-image-first/4" && labelNumericSourceConflict(eligible);
 }
 
 /**
@@ -88,9 +97,12 @@ export function applyFailures(
   policy: MergePolicy,
 ): void {
   for (const failure of failures) {
-    // Checked coverage Reviews use formula presence, including under image-first policies:
-    // an absent formula warns explicitly; a present formula keeps its coverage failure blocking.
-    if (failure.hasFormula === undefined && excused(state, failure, policy)) {
+    // /6 can replace a rejected, partial page reading with complete image panels. Its unverified
+    // text never contributes fields. Other formula-bearing coverage failures remain blocking.
+    if (
+      partialTextFallback(failure, policy) ||
+      (failure.hasFormula === undefined && excused(state, failure, policy))
+    ) {
       state.warnings.push({ id: failure.id, code: failure.code });
     } else {
       applySourceReview(
@@ -100,6 +112,12 @@ export function applyFailures(
       );
     }
   }
+}
+
+function partialTextFallback(failure: MergeFailure, policy: MergePolicy): boolean {
+  return (
+    !!policy.split?.images && failure.verifiedExecuted === true && failure.incompleteText === true
+  );
 }
 
 /** Whether a verified, executed failure only warns under this policy. */
@@ -129,24 +147,27 @@ function partialImageExcused(
   policy: MergePolicy,
 ): boolean {
   if (policy.sufficient) {
-    const candidate = failure.candidate;
-    if (
-      !policy.completeLabel ||
-      !candidate ||
-      !PARTIAL_IMAGE.test(failure.code) ||
-      !isPartialLabel(candidate) ||
-      labelImageIntegrityCodes(candidate).length > 0
-    ) {
-      return false;
-    }
-    const conflicts = policy.complete.flatMap((entry) =>
-      partialLabelConflicts(candidate, entry.candidate),
-    );
-    conflicts.forEach((code) => state.codes.add(code));
-    return conflicts.length === 0;
+    return compatiblePartial(state, failure, policy);
   }
   const quality = policy.quality && QUALITY_IMAGE.test(failure.code);
   return policy.textFallback && (PARTIAL_IMAGE.test(failure.code) || quality);
+}
+
+function compatiblePartial(state: MergeState, failure: MergeFailure, policy: MergePolicy) {
+  const candidate = failure.candidate;
+  if (
+    !policy.completeLabel ||
+    !candidate ||
+    !PARTIAL_IMAGE.test(failure.code) ||
+    !isPartialLabel(candidate) ||
+    labelImageIntegrityCodes(candidate).length > 0
+  ) {
+    return false;
+  }
+  const complete = policy.split ? [policy.split.complete] : policy.complete;
+  const conflicts = complete.flatMap((entry) => partialLabelConflicts(candidate, entry.candidate));
+  conflicts.forEach((code) => state.codes.add(code));
+  return conflicts.length === 0;
 }
 
 /** Packaging problems only warn when a complete image carries the label. */

@@ -130,7 +130,15 @@ async function preparationReview(
   }
   const { code, executionFact } = review.failure;
   evidence.terminal ||= blocksFallback(code, executionFact);
-  evidence.reasons.push({ progress: 1, failure: { sourceId: at.source.id, code, executionFact } });
+  evidence.reasons.push({
+    progress: 1,
+    failure: {
+      sourceId: at.source.id,
+      code,
+      executionFact,
+      evidenceKey: review.failure.evidenceKey,
+    },
+  });
   return true;
 }
 
@@ -142,13 +150,7 @@ function blocksFallback(code: string, executionFact: string) {
   );
 }
 
-async function modelReview(
-  reading: Reading,
-  at: {
-    source: OrderedEvidence["sources"][number];
-    state: Extract<OrderedState, { status: "review" }>;
-  },
-) {
+async function modelReview(reading: Reading, at: ReviewedSource) {
   const { deps, evidence, request } = reading;
   const reviews = {
     read: async (id: string) => {
@@ -167,6 +169,8 @@ async function modelReview(
     {
       input: { manifest, states: [at.state] },
       reviewId: at.state.reviewId,
+      readImage: deps.inspection.readReviewedImage,
+      signal: reading.signal,
     },
   );
   evidence.failures.push(failure);
@@ -177,6 +181,12 @@ async function modelReview(
       sourceId: at.source.id,
       code: failure.code,
       executionFact: failure.verifiedExecuted ? "executed" : "unknown",
+      evidenceKey: failure.evidenceKey,
     },
   });
+}
+
+interface ReviewedSource {
+  source: OrderedEvidence["sources"][number];
+  state: Extract<OrderedState, { status: "review" }>;
 }

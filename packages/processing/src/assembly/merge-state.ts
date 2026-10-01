@@ -24,6 +24,10 @@ export interface MergeFailure {
   hasFormula?: boolean;
   /** Schema-checked original image answer; required before /6 can waive an incomplete image. */
   candidate?: LabelImageCandidate;
+  /** Re-read original answer and source, with the original Review (never a success receipt). */
+  reviewed?: Extract<Provenance, { kind: "image" }>;
+  incompleteText?: boolean;
+  evidenceKey?: string;
 }
 
 export type Provenance = LabelCollectedProduct["provenance"][number];

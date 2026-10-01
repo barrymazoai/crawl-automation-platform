@@ -15,6 +15,7 @@ export interface SourceFailure {
   sourceId: string;
   code: string;
   executionFact: string;
+  evidenceKey?: string | undefined;
 }
 
 export interface OrderedEvidence {

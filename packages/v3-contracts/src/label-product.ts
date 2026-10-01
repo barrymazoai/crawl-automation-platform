@@ -9,6 +9,8 @@ import type { TextCandidateV3 } from "./text.js";
 import { ProductEvidenceJoinSchema } from "./product-evidence.js";
 import { collectedSourcesAgree } from "./label-product-agreement.js";
 import { labelImageIntegrityCodes, labelNumericSourceConflict } from "./label-quality.js";
+import { LabelReviewedImageRecordSchema } from "./label-reviewed-image.js";
+import { completeLabelSections } from "./label-sections.js";
 export const LabelEvidencePolicySchema = z.enum(["label-image-first/1", "label-image-first/2", "label-image-first/3", "label-image-first/4", "label-image-first/5", "label-image-first/6"]);
 /** Priority is earned by a complete, structurally valid image, never merely its media type. */
 export function isCompleteLabelImage(p: { kind: string; candidate: LabelImageCandidate | TextCandidateV3 }) {
@@ -57,7 +59,7 @@ export const LabelProductIngredientSchema = z.strictObject({ name: LabelProductF
   parentRowIndex: z.number().int().nonnegative().nullable() });
 export const LabelProductProvenanceSchema = z.discriminatedUnion("kind", [
   z.strictObject({ id: ExecutionIdSchema, kind: z.literal("text"), record: TextRecordSchema, candidate: TextCandidateV3Schema }),
-  z.strictObject({ id: ExecutionIdSchema, kind: z.literal("image"), record: VisionRecordSchema, candidate: LabelImageCandidateSchema }),
+  z.strictObject({ id: ExecutionIdSchema, kind: z.literal("image"), record: z.union([VisionRecordSchema, LabelReviewedImageRecordSchema]), candidate: LabelImageCandidateSchema }),
 ]);
 /** Lossless field projection shared by merge and persisted-record validation. */
 export function projectLabelProductCandidate(sourceId: string, c: LabelImageCandidate | TextCandidateV3) {
@@ -95,14 +97,21 @@ export const LabelCollectedProductSchema = z.discriminatedUnion("schemaVersion",
     ...(r.otherIngredients ? [r.otherIngredients.heading, ...r.otherIngredients.items] : []), ...r.ingredients.flatMap(i => [i.name, i.amount])];
   for (const f of fields) if (f && sources.get(f.sourceId)?.kind !== f.citation.kind) invalid();
   const quality = ["label-image-first/4", "label-image-first/5", "label-image-first/6"].includes(r.evidencePolicy??"");
-  const accepted = r.provenance.filter(p => assessLabelCandidate(p.candidate).status !== "review" && !(quality && p.kind === "image" && labelImageIntegrityCodes(p.candidate).length));
+  const split = r.evidencePolicy === "label-image-first/6" && !r.provenance.some(p =>
+    (isCompleteLabelImage(p) || isCompleteLabelText(p)) &&
+    !(p.kind === "image" && labelImageIntegrityCodes(p.candidate).length));
+  const accepted = r.provenance.filter(p =>
+    (assessLabelCandidate(p.candidate).status !== "review" ||
+      split && completeLabelSections(p.candidate)) &&
+    !(quality && p.kind === "image" && labelImageIntegrityCodes(p.candidate).length));
   if (r.evidencePolicy === "label-image-first/4" && labelNumericSourceConflict(accepted)) invalid();
   const imageFirst = !!r.evidencePolicy && accepted.some(isCompleteLabelImage);
   const textFallback = ["label-image-first/3","label-image-first/4", "label-image-first/5", "label-image-first/6"].includes(r.evidencePolicy??"") && !imageFirst && accepted.some(isCompleteLabelText);
   const authoritative = accepted.filter(p => imageFirst ? p.kind === "image" : !textFallback || p.kind === "text");
   if(textFallback && !r.warnings.some(w=>w.code==="LABEL_PRODUCT.COMPLETE_TEXT_FALLBACK"))invalid();
   if(r.evidencePolicy==="label-image-first/5" && imageFirst && authoritative.length!==1)invalid();
-  const projectedSources = authoritative.map(p => projectLabelProductCandidate(p.id, p.candidate));
+  const projectedSources = authoritative.map(p => projectLabelProductCandidate(p.id,
+    split ? (completeLabelSections(p.candidate) ?? p.candidate) : p.candidate));
   // A saved record cannot hide a real disagreement or omit the warning for normalized agreement.
   if (imageFirst && !collectedSourcesAgree(r, accepted)) invalid();
   if (r.schemaVersion === 4) {

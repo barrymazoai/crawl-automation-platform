@@ -7,6 +7,8 @@ import { z } from "zod";
 import { appErrors } from "../errors.js";
 import type { ProductReview } from "./product-reviews.js";
 import type { EvidencePublisher, ReviewLedger } from "./ports.js";
+import type { ObjectStore } from "@crawl-automation/platform";
+import { labelReviewDiagnostics } from "./label-review-diagnostics.js";
 
 /** A label product without usable sources, with unverified preparation, or held up by permits. */
 export const LabelReviewRequestSchema = z.strictObject({
@@ -31,7 +33,13 @@ export const LabelReviewRequestSchema = z.strictObject({
  * It records every source's state and what held each one up; it is never retried automatically.
  */
 export class LabelReviews {
-  constructor(private readonly deps: { evidence: EvidencePublisher; reviews: ReviewLedger }) {}
+  constructor(
+    private readonly deps: {
+      evidence: EvidencePublisher;
+      reviews: ReviewLedger;
+      diagnostics?: Pick<ObjectStore, "read">;
+    },
+  ) {}
 
   async review(raw: unknown, signal: AbortSignal): Promise<ProductReview> {
     const request = LabelReviewRequestSchema.parse(raw);
@@ -43,7 +51,12 @@ export class LabelReviews {
     if (prior) {
       return this.receipt({ input, reviewId, evidenceKey }, prior.failure.code);
     }
-    const record = labelReview({ input, request, fingerprint, reviewId, evidenceKey });
+    const diagnostics = await labelReviewDiagnostics(
+      this.deps.diagnostics,
+      { input, states: request.states },
+      signal,
+    );
+    const record = labelReview({ input, request, fingerprint, reviewId, evidenceKey, diagnostics });
     await this.deps.evidence.publish(
       evidenceKey,
       Buffer.from(JSON.stringify(record)),
@@ -79,18 +92,22 @@ export class LabelReviews {
   }
 }
 
-function labelReview(at: {
+interface LabelReviewContext {
   input: LabelPlanInput;
   request: z.infer<typeof LabelReviewRequestSchema>;
   fingerprint: string;
   reviewId: string;
   evidenceKey: string;
-}): ReviewRecord {
+  diagnostics: Awaited<ReturnType<typeof labelReviewDiagnostics>>;
+}
+
+function labelReview(at: LabelReviewContext): ReviewRecord {
   const { input, request } = at;
   const owner = input.owner;
   const details = {
     input,
     states: request.states,
+    ...at.diagnostics,
     ...(request.failures ? { failures: request.failures } : {}),
     ...(request.primaryFailure ? { primaryFailure: request.primaryFailure } : {}),
   };
@@ -113,8 +130,12 @@ function labelReview(at: {
       blockedBy: null,
       automaticRetry: false,
     },
-    rawError: { name: "ChannelLabelFailure", message: request.code, stack: null, details },
+    rawError: reviewError(request.code, details),
     candidate: null,
     inspection: { kind: "none" },
   });
+}
+
+function reviewError(code: string, details: unknown) {
+  return { name: "ChannelLabelFailure", message: code, stack: null, details };
 }

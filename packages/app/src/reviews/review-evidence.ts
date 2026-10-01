@@ -38,7 +38,10 @@ export class ReviewEvidence {
   async files(review: ReviewRecord, signal: AbortSignal): Promise<EvidenceFile[]> {
     const main = await this.file(review.failure.evidenceKey, signal);
     const results = await this.resultKeys(review, main);
-    return [main, ...(await Promise.all(results.map((key) => this.file(key, signal))))];
+    const keys = [...new Set([...results, ...labelSourceKeys(review)])].filter(
+      (key) => key !== main.key,
+    );
+    return [main, ...(await Promise.all(keys.map((key) => this.file(key, signal))))];
   }
 
   private async resultKeys(review: ReviewRecord, intent: EvidenceFile): Promise<string[]> {
@@ -72,6 +75,29 @@ export class ReviewEvidence {
     }
     return { key, status: "present", byteSize: bytes.length, content: readable(bytes), code: null };
   }
+}
+
+/** Registered partial readings have no individual Review; the ordered report names their results. */
+function labelSourceKeys(review: ReviewRecord): string[] {
+  if (review.failure.stage !== "channel.label-input") {
+    return [];
+  }
+  const parsed = z
+    .object({
+      progressEvidenceKey: z.string().optional(),
+      outcomes: z
+        .array(z.object({ evidenceKeys: z.array(z.string()).max(3) }))
+        .max(100)
+        .optional(),
+    })
+    .safeParse(review.rawError.details);
+  if (!parsed.success) {
+    return [];
+  }
+  return [
+    ...(parsed.data.progressEvidenceKey ? [parsed.data.progressEvidenceKey] : []),
+    ...(parsed.data.outcomes ?? []).flatMap((outcome) => outcome.evidenceKeys),
+  ];
 }
 
 /** JSON when it parses, otherwise the UTF-8 text; null for bytes that are not text. */

@@ -1,14 +1,10 @@
-import { mergeLabelProduct } from "../assembly/label-merge.js";
+import { orderedProgress } from "./ordered-progress.js";
+import { orderedProgressKey } from "./ordered-diagnostics.js";
 import { labelFailure } from "./label-errors.js";
 import { labelKeys } from "./label-plan-model.js";
 import type { LabelPlans, LoadedPlan } from "./label-plans.js";
 import { orderedEvidence, type OrderedDeps } from "./ordered-evidence.js";
-import {
-  OrderedProgressSchema,
-  OrderedSelectionSchema,
-  type OrderedEvidence,
-  type OrderedProgress,
-} from "./ordered-model.js";
+import { OrderedProgressSchema, OrderedSelectionSchema } from "./ordered-model.js";
 
 /** The configured source order; URL hints rank images, never establish their label contents. */
 export function orderedSources(loaded: LoadedPlan) {
@@ -39,7 +35,7 @@ function orderedPolicy(loaded: LoadedPlan) {
   return { policy, preparation };
 }
 
-/** Read-only completeness checks use the actual /6 merger, including split panels and conflicts. */
+/** Completeness checks reuse /6 and retain the checked source outcomes for the product Review. */
 export class LabelOrderedSelection {
   constructor(
     private readonly plans: LabelPlans,
@@ -54,7 +50,13 @@ export class LabelOrderedSelection {
       request.states.map((state) => state.id),
     );
     const evidence = await orderedEvidence(this.plans, this.deps, { request, signal });
-    return { input: request, ...progress(request, evidence) };
+    const { outcomes, codes, ...progress } = orderedProgress(request, evidence);
+    await this.plans.publish(
+      orderedProgressKey(request.input, request.states),
+      { request, outcomes, codes },
+      signal,
+    );
+    return { input: request, ...progress };
   }
 
   /** Omitted downloads are legal only after the attempted prefix proves a complete label. */
@@ -69,7 +71,7 @@ export class LabelOrderedSelection {
       attempted.map((state) => state.id),
     );
     const evidence = await orderedEvidence(this.plans, this.deps, { request, signal });
-    if (!progress(request, evidence).complete) {
+    if (!orderedProgress(request, evidence).complete) {
       throw labelFailure("CHANNEL.LABEL_SELECTION_UNVERIFIED");
     }
     const selected = new Set(evidence.sources.map((source) => source.id));
@@ -90,49 +92,6 @@ export class LabelOrderedSelection {
       signal,
     );
   }
-}
-
-function progress(request: OrderedProgress, evidence: OrderedEvidence) {
-  const base = { complete: false, terminal: evidence.terminal };
-  const reasons = [...evidence.reasons];
-  if (evidence.sources.length) {
-    const manifest = {
-      operationId: request.input.operationId,
-      observation: request.input.owner,
-      evidencePolicy: request.input.evidencePolicy,
-      sources: evidence.sources,
-    };
-    const merged = mergeLabelProduct(manifest, evidence);
-    const candidates = evidence.entries.map((entry) => entry.candidate);
-    base.complete =
-      !base.terminal &&
-      merged.status === "ready" &&
-      candidates.some((candidate) => candidate.formulaComplete) &&
-      candidates.some((candidate) => candidate.ingredientsComplete);
-    for (const entry of evidence.entries) {
-      const rank = candidateProgress(entry.candidate);
-      const code = merged.codes[0];
-      if (code) {
-        reasons.push({
-          progress: rank,
-          failure: {
-            sourceId: entry.id,
-            code,
-            executionFact: "executed",
-          },
-        });
-      }
-    }
-  }
-  const reason = [...reasons].sort((left, right) => right.progress - left.progress)[0]?.failure;
-  return {
-    ...base,
-    ...(reason ? { reason, failures: reasons.map((entry) => entry.failure) } : {}),
-  };
-}
-
-function candidateProgress(candidate: OrderedEvidence["entries"][number]["candidate"]) {
-  return candidate.formula ? 4 : candidate.otherIngredients ? 3 : 2;
 }
 
 function assertPrefix(order: string[], attempted: string[]) {

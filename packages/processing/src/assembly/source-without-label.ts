@@ -15,6 +15,23 @@ const RawTextResponseSchema = z.object({ rawResponse: z.string() });
 
 /** A verified Review keeps the raw answer even when decoding failed. Never infer from prose. */
 export function textReviewHasFormula(review: ReviewRecord): boolean | undefined {
+  const answer = textReviewAnswer(review);
+  return answer ? answer.formula !== null : undefined;
+}
+
+/** A rejected coverage answer can justify trying images, never contribute unverified text fields. */
+export function textReviewIsPartial(review: ReviewRecord): boolean {
+  const answer = textReviewAnswer(review);
+  return (
+    !!answer &&
+    answer.formulaComplete &&
+    !answer.ingredientsComplete &&
+    !answer.otherIngredients &&
+    answer.issues.every((issue) => issue.code === "INGREDIENTS_MISSING")
+  );
+}
+
+function textReviewAnswer(review: ReviewRecord) {
   if (
     review.failure.code !== COVERAGE_UNCERTAIN ||
     review.candidate?.schema !== "text-raw-response/1"
@@ -28,7 +45,7 @@ export function textReviewHasFormula(review: ReviewRecord): boolean | undefined 
   try {
     const parsed = LabelTextWireSchema.safeParse(JSON.parse(response.data.rawResponse));
     // FORMULA_MISSING corroborates absence; it cannot override an actually extracted formula.
-    return parsed.success ? parsed.data.formula !== null : undefined;
+    return parsed.success ? parsed.data : undefined;
   } catch (error) {
     if (error instanceof SyntaxError) {
       return undefined; // An unreadable answer is not proof of an absent label.

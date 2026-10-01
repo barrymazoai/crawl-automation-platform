@@ -7,3 +7,4 @@ export * from "./selection-checks.js";
 export * from "./label-source-task.js";
 export * from "./saved-source-tasks.js";
 export * from "./saved-sources.js";
+export * from "./ordered-diagnostics.js";
