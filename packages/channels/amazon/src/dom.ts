@@ -2,6 +2,7 @@ import { channelErrors, pageText } from "@crawl-automation/channels-core";
 import { parseHTML } from "linkedom";
 import { amazonErrors } from "./errors.js";
 import { isAsin } from "./address.js";
+import { fallbackAsins } from "./asin-fallback.js";
 
 export const AMAZON_MAX_BYTES = 6 * 1024 * 1024;
 export type AmazonDocument = ReturnType<typeof parseHTML>["document"];
@@ -40,13 +41,16 @@ export function productRoot(document: AmazonDocument): AmazonElement {
 }
 
 /**
- * Reads only the product's own hidden ASIN fields; recommendations and the request URL are not
- * identity.
+ * Hidden ASIN fields remain authoritative. Only their absence permits product-widget metadata;
+ * recommendations, variation options and the request URL are not identity.
  */
 export function pageAsin(root: AmazonElement): string {
   const values = [...root.querySelectorAll('input#ASIN, input[name="ASIN"]')].map(
     (element) => element.getAttribute("value") ?? "",
   );
+  if (!values.length) {
+    values.push(...fallbackAsins(root));
+  }
   if (!values.length || values.some((value) => !isAsin(value))) {
     throw amazonErrors.create("AMAZON.PRODUCT_UNVERIFIED");
   }

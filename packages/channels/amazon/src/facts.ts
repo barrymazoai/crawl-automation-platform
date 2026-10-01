@@ -4,6 +4,7 @@ import { textOf, type AmazonDocument, type AmazonElement } from "./dom.js";
 const FACTS_HEADING =
   /^(?:supplement facts|nutrition facts|ingredients?|other ingredients?)\s*:?[\s]*$/i;
 const HEADINGS = "h2, h3, h4, h5, h6";
+const SECTION_LABELS = `${HEADINGS}, span.a-text-bold`;
 
 /**
  * Amazon's heading-delimited information blocks end at the next heading, not at an arbitrary byte
@@ -12,7 +13,7 @@ const HEADINGS = "h2, h3, h4, h5, h6";
 function headingSection(heading: AmazonElement): string {
   const fragments = [heading.outerHTML];
   let sibling = heading.nextElementSibling;
-  while (sibling && !sibling.matches(HEADINGS)) {
+  while (sibling && !sibling.matches(SECTION_LABELS)) {
     fragments.push(sibling.outerHTML);
     sibling = sibling.nextElementSibling;
   }
@@ -26,7 +27,8 @@ function headingSection(heading: AmazonElement): string {
 export function amazonFactsHtml(document: AmazonDocument): string | null {
   const blocks = [
     ...document.querySelectorAll(
-      `#important-information ${HEADINGS.split(", ").join(", #important-information ")}`,
+      `#important-information ${HEADINGS.split(", ").join(", #important-information ")}, ` +
+        "#important-information > .content > span.a-text-bold",
     ),
   ]
     .filter((heading) => FACTS_HEADING.test(textOf(heading)))

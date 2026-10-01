@@ -41,7 +41,15 @@ function titleOf(root: AmazonElement): string {
 function brandOf(root: AmazonElement): string | null {
   const text = textOf(root.querySelector("#bylineInfo"));
   const brand = text.replace(/^Visit the (.+) Store$/i, "$1").replace(/^Brand\s*:\s*/i, "");
-  return brand || null;
+  if (brand) {
+    return brand;
+  }
+  const premium = textOf(
+    root.querySelector(
+      ":scope > #centerCol > #premiumBylineInfo_feature_div #visitStoreDesktopUrl",
+    ),
+  );
+  return premium.match(/^Visit the (.+) Store$/i)?.[1] ?? null;
 }
 
 function detailsHtml(document: AmazonDocument): string | null {

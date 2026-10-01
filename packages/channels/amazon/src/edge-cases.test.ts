@@ -43,6 +43,12 @@ describe.skipIf(!fixture.available)(
         document
           .querySelectorAll('#ppd input#ASIN, #ppd input[name="ASIN"]')
           .forEach((node) => node.remove());
+        document
+          .querySelectorAll("#ppd #title_feature_div, #ppd #twister_feature_div")
+          .forEach((node) => node.removeAttribute("data-csa-c-asin"));
+        document
+          .querySelectorAll("#ppd #all-offers-display-params")
+          .forEach((node) => node.removeAttribute("data-asin"));
       });
       expect(() => amazonAdapter.parseProduct(page)).toThrow(
         expect.objectContaining({ code: "AMAZON.PRODUCT_UNVERIFIED" }),

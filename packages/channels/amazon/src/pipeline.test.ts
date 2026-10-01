@@ -123,6 +123,29 @@ function withCompleteFacts() {
   return { ...page, html: document.toString() };
 }
 
+it("marks a different fallback ASIN as unlisted before product parsing", async () => {
+  const html =
+    '<div id="ppd"><div id="centerCol">' +
+    '<div id="title_feature_div" data-csa-c-asin="B002CQU532">' +
+    '<span id="productTitle">Another product</span></div></div></div>';
+  const setup = captureSetup({
+    url: request.url,
+    html,
+    capturedAt: "2026-10-01T00:00:00.000Z",
+  });
+  await expect(setup.capture.capture(request, AbortSignal.timeout(10_000))).resolves.toMatchObject({
+    status: "sighted",
+    sighting: {
+      state: "unlisted",
+      reason: "identity_conflict",
+      requestedListingId: "B0013LAQS6",
+      observedListingId: "B002CQU532",
+      archiveKey: expect.any(String),
+    },
+  });
+  expect(setup.client.get).toHaveBeenCalledTimes(1);
+});
+
 describe.skipIf(!fixture.available)(`${fixture.name}: shared capture and planning pipeline`, () => {
   it("archives bytes, forwards HTTP options and reuses the saved capture", async () => {
     const page = fixture.read();
