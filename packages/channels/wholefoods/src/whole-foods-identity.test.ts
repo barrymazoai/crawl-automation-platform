@@ -17,6 +17,15 @@ it.each([
       pageProps: { product: { asin: "B0096M5PBW" }, recommendations: [{ asin: "B002CQU54Q" }] },
     },
   },
+  // The real page shape: the selected product in aapiData, other sizes only in its variationsList.
+  {
+    props: {
+      pageProps: {
+        aapiData: { asin: "B0096M5PBW", variationsList: [{ asin: "B002CQU54Q" }] },
+        storeDetailsInitialData: { storeId: "10259" },
+      },
+    },
+  },
 ])("reads only explicit selected-product data: %j", (data) => {
   const html = `<script type="application/json">${JSON.stringify(data)}</script>`;
   expect(wholeFoodsPageIdentity(page(html))).toEqual({ listingId: "B0096M5PBW", variantId: null });

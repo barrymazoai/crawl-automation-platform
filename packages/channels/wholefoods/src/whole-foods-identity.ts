@@ -3,9 +3,13 @@ import { recordRecovery } from "@crawl-automation/platform";
 import { parseHTML } from "linkedom";
 import { wholeFoodsErrors } from "./whole-foods-errors.js";
 
+/**
+ * Real product pages (saved 2026-10-01) carry the selected product in `props.pageProps.aapiData`; other sizes
+ * appear only under its `variationsList`. `product` is kept for the older page shape.
+ */
 function selectedProduct(data: ReturnType<typeof object>) {
   const page = object(object(data?.props)?.pageProps) ?? object(data?.pageData) ?? data;
-  return object(page?.product);
+  return object(page?.aapiData) ?? object(page?.product);
 }
 
 /** Only explicit selected-product roots; never URL echoes, store IDs or recommendations. */
