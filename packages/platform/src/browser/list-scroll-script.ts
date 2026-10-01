@@ -29,16 +29,22 @@ const seen = new Map();
 let finalCount = 0;
 let itemCount = 0;
 let missingCount = 0;
+let shown = [];
+// A growing list may re-rank a few items away (2026-10-01, Whole Foods: 30 -> 58 with 3 of the first 30 gone);
+// every item seen is kept. The list is broken only when it shrinks or most of what was shown is replaced.
 const observe = async () => {
   const current = await items();
-  itemCount = current.length;
   const identities = new Set(current.map((item) => item.href));
+  const lost = shown.filter((href) => !identities.has(href)).length;
+  const intact = current.length >= itemCount && lost * 2 <= shown.length;
+  itemCount = current.length;
+  shown = [...identities];
   missingCount = [...seen.keys()].filter((href) => !identities.has(href)).length;
   current.forEach((item) => {
     if (!seen.has(item.href)) seen.set(item.href, item);
   });
   finalCount = identities.size;
-  return missingCount === 0;
+  return intact;
 };
 const wheel = async (more) => {
   const position = await page.evaluate((selector) => {
@@ -121,6 +127,6 @@ const scroll = {
   rounds,
   ended,
   ...(read.scroll ? { seenCount: seen.size, finalCount, missingCount } : {}),
-  ...(ended === "broken" ? { observedItems: [...seen.values()] } : {}),
+  ...(ended === "broken" || missingCount > 0 ? { observedItems: [...seen.values()] } : {}),
 };
 `;

@@ -114,7 +114,7 @@ async function scrollList(
 it.each([
   { name: "shrink", next: ["/a"], missing: 1 },
   { name: "replace at equal count", next: ["/c", "/d"], missing: 2 },
-  { name: "replace at larger count", next: ["/a", "/c", "/d"], missing: 1 },
+  { name: "mostly replaced at a larger count", next: ["/c", "/d", "/e"], missing: 2 },
   { name: "empty", next: [], missing: 2 },
 ])(
   "stops on $name and retains every seen identity and original fragment",
@@ -144,6 +144,17 @@ it("ends stable after normal growth; changing queries never looks like replaceme
     finalCount: 2,
     missingCount: 0,
   });
+});
+
+it("keeps every item a growing list re-ranks away and still ends stable", async () => {
+  // Seen on Whole Foods 2026-10-01: Load More took 30 tiles to 58, and 3 of the first 30 left the page.
+  const first = Array.from({ length: 30 }, (_, index) => `/p${index}`);
+  const grown = [...first.slice(3), ...Array.from({ length: 31 }, (_, index) => `/q${index}`)];
+  const { result } = await scrollList([first, grown]);
+  expect(result).toMatchObject({ ended: "stable", seenCount: 61, finalCount: 58, missingCount: 3 });
+  expect(result.observedItems?.map((item: { href: string }) => item.href)).toEqual(
+    expect.arrayContaining(["https://example.com/p0", "https://example.com/p2"]),
+  );
 });
 
 it("does not mark an initially empty list broken", async () => {
