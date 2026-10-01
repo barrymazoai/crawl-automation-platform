@@ -13,10 +13,23 @@ export function labelSourcePolicy(channel: string, order?: SourcePolicy["order"]
   };
 }
 
-/** A label heading admits partial text too; marketing prose alone never admits a model call. */
+/**
+ * A label heading admits partial text too; marketing prose alone never admits a model call.
+ * GNC prints its facts table without a "Facts" heading ("Serving Size: 3 Capsules", "Other Ingredients").
+ */
+const LABEL_HEADING = new RegExp(
+  [
+    String.raw`(?:Supplement|Nutrition|Drug)\s+Facts\b`,
+    String.raw`(?:(?:Other|Inactive)\s+)?Ingredients\s*:`,
+    String.raw`(?:Other|Inactive)\s+Ingredients\b`,
+    String.raw`Serving\s+Size\s*:?\s*\d`,
+    String.raw`Amount\s+Per\s+Serving\b`,
+  ]
+    .map((heading) => String.raw`(?:^|\n)\s*${heading}`)
+    .join("|"),
+  "im",
+);
+
 export function hasLabelSection(html: string): boolean {
-  const text = convert(html, { wordwrap: false });
-  return /(?:^|\n)\s*(?:(?:Supplement|Nutrition|Drug)\s+Facts\b|(?:(?:Other|Inactive)\s+)?Ingredients\s*:)/im.test(
-    text,
-  );
+  return LABEL_HEADING.test(convert(html, { wordwrap: false }));
 }

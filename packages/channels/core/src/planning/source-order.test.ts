@@ -22,7 +22,12 @@ it.each([
   ["<h2>Drug Facts</h2>", true],
   ["<p>Ingredients: water, salt</p>", true],
   ["<p>Inactive Ingredients: water</p>", true],
+  // GNC's facts table (2026-10-01, product 593764) has no "Facts" heading.
+  ["<h3>Ingredients</h3><p>View Nutrition Label</p><p>Serving Size: 3 Capsules</p>", true],
+  ["<p>Serving Size 3</p><p>Other Ingredients</p><p>Rice Flour, Silica</p>", true],
+  ["<p>Amount Per Serving</p><p>Vitamin C 500 mg</p>", true],
   ["<p>Our supplement supports your nutrition. Premium ingredients for life.</p>", false],
+  ["<p>Pick the serving size that suits you.</p>", false],
   ["<script>Ingredients: not visible</script><p>Great product</p>", false],
 ])("detects a label section without claiming completeness: %s", (html, expected) => {
   expect(hasLabelSection(html)).toBe(expected);

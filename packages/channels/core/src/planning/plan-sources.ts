@@ -165,7 +165,8 @@ function labelPreparation(input: ChannelPlanInput, at: { html: string; complete:
   return input.sourcePolicy
     ? {
         labelPreparation: {
-          pageHasLabelSection: hasLabelSection(at.html),
+          // The channel's own complete facts table is a label section even without a known heading.
+          pageHasLabelSection: at.complete || hasLabelSection(at.html),
           pageFactsComplete: at.complete,
         },
       }
