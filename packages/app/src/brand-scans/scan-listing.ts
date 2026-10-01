@@ -2,8 +2,6 @@ import {
   type ChannelRegistry,
   type ChannelId,
   type ListedProduct,
-  type ListingPage,
-  type ListingNameResolution,
 } from "@crawl-automation/channels-core";
 import type { BrowserBrandScanners, ListingPageReader } from "./ports.js";
 import type { ScanChannel } from "./scan-model.js";
@@ -16,6 +14,8 @@ import {
 } from "./http-listing-pages.js";
 import { assertScanReadable } from "./scan-availability.js";
 
+import { policyListing, readPolicyListing } from "./policy-listing.js";
+
 export type { ListingScan } from "./http-listing-pages.js";
 
 /** Everything that can read a brand listing: adapters' ScraperAPI readers, and the configured browser scanners. */
@@ -26,20 +26,8 @@ export interface ScanReaders {
   channels?: Partial<Record<ChannelId, { requestIntervalMs: number }>>;
 }
 
-/** Everything one brand's listing showed: its pages, its products (families expanded) and what it cost. */
-export interface BrandListing {
-  pages: ListingPage[];
-  products: ListedProduct[];
-  families: number;
-  unresolvedFamilies: number;
-  credits: number;
-  /** The reader proved every product was listed, and every family's members were read. */
-  full: boolean;
-  /** A reader explicitly reported a capped listing. */
-  capped?: boolean;
-  soldHere?: boolean;
-  nameResolution?: ListingNameResolution;
-}
+export type { BrandListing } from "./scan-listing-model.js";
+import type { BrandListing } from "./scan-listing-model.js";
 
 /** Select by source before normalisation: Amazon search and Store sources share a channel. */
 function sourceReader(
@@ -146,6 +134,11 @@ export async function readBrandListing(
   work: ListingWork,
   signal: AbortSignal,
 ): Promise<BrandListing> {
+  const observed = await readPolicyListing(work, signal);
+  return observed ? policyListing(observed) : readStandardListing(work, signal);
+}
+
+async function readStandardListing(work: ListingWork, signal: AbortSignal): Promise<BrandListing> {
   const { pages, credits: pageCredits, nameResolution } = await readPages(work, signal);
   const listed = pages.flatMap((page) => page.products);
   const families = listed.filter((product) => product.kind === "family");

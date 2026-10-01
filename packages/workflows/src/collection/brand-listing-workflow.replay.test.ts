@@ -95,7 +95,9 @@ it.each([
     const { gapAfterSeconds: _gap, ...oldRequest } = request;
     const { history, workflowId } = await recordHistory({
       environment,
-      bundle: legacy ? withoutPatches(bundle, ["brand-listing-gap-v1"]) : bundle,
+      bundle: legacy
+        ? withoutPatches(bundle, ["brand-listing-gap-v1", "brand-listing-cooldown-v1"])
+        : bundle,
       queue,
       workflow: "BrandListingWorkflow",
       input: legacy ? oldRequest : request,
@@ -110,7 +112,7 @@ it.each([
         ? ["reserveResources", "reserveResources"]
         : ["reserveResources", "readBrandListing", "releaseResources"],
     );
-    expectMarkers(history, legacy ? [] : ["brand-listing-gap-v1"]);
+    expectMarkers(history, legacy ? [] : ["brand-listing-gap-v1", "brand-listing-cooldown-v1"]);
     if (ending !== "wait-limit") {
       expectGap(history, gap);
     }
@@ -249,6 +251,36 @@ it.each(["activity", "gap"])(
       expect(history.events?.some((event) => event.timerFiredEventAttributes)).toBe(false);
       await Worker.runReplayHistory({ workflowBundle: bundle }, history, handle.workflowId);
     });
+  },
+  30_000,
+);
+
+it.each([true, false])(
+  "replays the cooldown boundary (pre-cooldown=%s)",
+  async (legacy) => {
+    const queue = `listing-cooldown-${randomUUID()}`;
+    const fixture = listingFixture("complete");
+    fixture.activities.readBrandListing.mockResolvedValue({
+      pages: [],
+      products: [],
+      full: false,
+      cooldownRequested: true,
+    } as Awaited<ReturnType<typeof fixture.activities.readBrandListing>>);
+    const request = { ...input(queue), cooldownSeconds: 1 };
+    const { history, workflowId } = await recordHistory({
+      environment,
+      bundle: legacy ? withoutPatches(bundle, ["brand-listing-cooldown-v1"]) : bundle,
+      queue,
+      workflow: "BrandListingWorkflow",
+      input: legacy ? input(queue) : request,
+      activities: fixture.activities,
+    });
+    expectMarkers(
+      history,
+      legacy ? ["brand-listing-gap-v1"] : ["brand-listing-gap-v1", "brand-listing-cooldown-v1"],
+    );
+    expectGap(history, legacy ? 0 : 1);
+    await Worker.runReplayHistory({ workflowBundle: bundle }, history, workflowId);
   },
   30_000,
 );

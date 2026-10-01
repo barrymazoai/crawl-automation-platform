@@ -1,5 +1,6 @@
 import {
   UnlistedReasonSchema,
+  ListingScanMetricsSchema,
   type ScanRecord,
   type ScanResult,
   type ScanRevisits,
@@ -31,6 +32,8 @@ const SourceRow = z.object({
 
 const ResultSchema = z.object({
   state: z.enum(["complete", "partial", "review"]),
+  metrics: ListingScanMetricsSchema.optional(),
+  cooldownRequested: z.boolean().optional(),
   pages: z.number(),
   products: z.number(),
   families: z.number(),

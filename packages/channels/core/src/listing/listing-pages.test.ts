@@ -150,3 +150,32 @@ describe("listing pages through ScraperAPI", () => {
     expect(remote.data.size).toBe(0);
   });
 });
+
+it("applies reader-required options and retains original costs when an observation is reused", async () => {
+  const test = setup();
+  const asked = {
+    ...request,
+    options: {
+      render: false,
+      premium: false,
+      headers: { cookie: "store=test", "content-type": "application/json", accept: "*/*" },
+    },
+  };
+  await test.pages.read(asked, signal());
+  expect(test.get.mock.calls[0]?.[0].options).toMatchObject(asked.options);
+  expect(await test.pages.read(asked, signal())).toMatchObject({
+    fromArchive: true,
+    creditCost: null,
+    originalCreditCost: 1,
+  });
+  expect(test.get).toHaveBeenCalledOnce();
+});
+
+it("preserves the billed cost of an HTTP failure without repeating it", async () => {
+  const test = setup({ status: 503, creditCost: 2 });
+  await expect(test.pages.read(request, signal())).rejects.toMatchObject({
+    code: "BRAND_SCAN.HTTP_STATUS",
+    details: { creditCost: 2 },
+  });
+  expect(test.get).toHaveBeenCalledOnce();
+});

@@ -9,76 +9,83 @@ import fixture from "./fixtures/api-config.json" with { type: "json" };
 
 afterEach(() => vi.restoreAllMocks());
 
-it("wires only the configured channel to a ResourceGate listing workflow", async () => {
-  const scanId = "11111111-1111-4111-8111-111111111111";
-  const source = {
-    sourceId: "22222222-2222-4222-8222-222222222222",
-    channel: "swanson",
-    url: "https://www.swansonvitamins.com/collections/brand-now-foods",
-  };
-  vi.spyOn(PostgresBrandScans.prototype, "claim").mockResolvedValue([
-    { scanId, source } as Awaited<ReturnType<PostgresBrandScans["claim"]>>[number],
-  ]);
-  vi.spyOn(PostgresBrandScans.prototype, "knownListings").mockResolvedValue([]);
-  const finish = vi.spyOn(PostgresBrandScans.prototype, "finish").mockResolvedValue();
-  const read = vi.spyOn(ListingPages.prototype, "read");
-  const start = vi.fn(async () => ({
-    result: async () => ({
-      pages: [],
-      products: [],
-      families: 0,
-      unresolvedFamilies: 0,
-      full: true,
-      credits: 0,
-    }),
-    cancel: vi.fn(),
-  }));
-  const settings = BrandScanSettingsSchema.parse({
-    ...fixture.brandScans,
-    permits: {
-      swanson: {
-        taskQueue: "pipeline",
-        resourceQueue: "resources",
-        resourceId: "swanson-brand-scan",
-        gapAfterSeconds: 30,
-      },
-    },
-  });
-  const { runner } = brandScanParts({
-    settings,
-    database: {} as Database,
-    queue: {} as QueueService,
-    listingStates: {} as ListingStateService,
-    temporal: { client: { workflow: { start } } } as unknown as TemporalClient,
-    log: createLogger({ name: "scan-permits", destination: { write: () => undefined } }),
-  });
-  await runner?.tick(new AbortController().signal);
-  expect(start).toHaveBeenCalledWith(
-    "BrandListingWorkflow",
-    expect.objectContaining({
-      taskQueue: "pipeline",
-      args: [
-        {
-          scanId,
-          source,
+it.each(["swanson", "wholefoods"])(
+  "wires %s to the HTTP ResourceGate listing workflow",
+  async (channel) => {
+    const scanId = "11111111-1111-4111-8111-111111111111";
+    const source = {
+      sourceId: "22222222-2222-4222-8222-222222222222",
+      channel,
+      url:
+        channel === "swanson"
+          ? "https://www.swansonvitamins.com/collections/brand-now-foods"
+          : "https://www.wholefoodsmarket.com/grocery/search?k=Nordic+Naturals&rh=p_123%3A234060",
+    };
+    vi.spyOn(PostgresBrandScans.prototype, "claim").mockResolvedValue([
+      { scanId, source } as Awaited<ReturnType<PostgresBrandScans["claim"]>>[number],
+    ]);
+    vi.spyOn(PostgresBrandScans.prototype, "knownListings").mockResolvedValue([]);
+    const finish = vi.spyOn(PostgresBrandScans.prototype, "finish").mockResolvedValue();
+    const read = vi.spyOn(ListingPages.prototype, "read");
+    const start = vi.fn(async () => ({
+      result: async () => ({
+        pages: [],
+        products: [],
+        families: 0,
+        unresolvedFamilies: 0,
+        full: true,
+        credits: 0,
+      }),
+      cancel: vi.fn(),
+    }));
+    const settings = BrandScanSettingsSchema.parse({
+      ...fixture.brandScans,
+      permits: {
+        [channel]: {
+          taskQueue: "pipeline",
+          resourceQueue: "resources",
+          resourceId: `${channel}-brand-scan`,
           gapAfterSeconds: 30,
-          resources: {
-            queue: "resources",
-            maxWaitSeconds: 900,
-            activities: { readBrandListing: [{ resourceId: "swanson-brand-scan", units: 1 }] },
-          },
         },
-      ],
-    }),
-  );
-  expect(read).not.toHaveBeenCalled();
-  expect(finish).toHaveBeenCalledWith(scanId, expect.objectContaining({ state: "complete" }));
-});
+      },
+    });
+    const { runner } = brandScanParts({
+      settings,
+      database: {} as Database,
+      queue: {} as QueueService,
+      listingStates: {} as ListingStateService,
+      temporal: { client: { workflow: { start } } } as unknown as TemporalClient,
+      log: createLogger({ name: "scan-permits", destination: { write: () => undefined } }),
+    });
+    await runner?.tick(new AbortController().signal);
+    expect(start).toHaveBeenCalledWith(
+      "BrandListingWorkflow",
+      expect.objectContaining({
+        taskQueue: "pipeline",
+        args: [
+          {
+            scanId,
+            source,
+            gapAfterSeconds: 30,
+            ...(channel === "wholefoods" ? { cooldownSeconds: 1800 } : {}),
+            resources: {
+              queue: "resources",
+              maxWaitSeconds: 900,
+              activities: { readBrandListing: [{ resourceId: `${channel}-brand-scan`, units: 1 }] },
+            },
+          },
+        ],
+      }),
+    );
+    expect(read).not.toHaveBeenCalled();
+    expect(finish).toHaveBeenCalledWith(scanId, expect.objectContaining({ state: "complete" }));
+  },
+);
 
 it("defaults Whole Foods pacing and accepts validated overrides without changing Swanson", () => {
   const defaults = BrandScanSettingsSchema.parse(fixture.brandScans);
   expect(defaults.permits.wholefoods).toEqual({
-    taskQueue: "browser",
+    taskQueue: "v3.pipeline.product.v1",
     resourceQueue: "v3.resources.v1",
     resourceId: "wholefoods-brand-scan",
     maxWaitSeconds: 900,
@@ -133,6 +140,28 @@ it("gives Costco its own global browser permit on the shared queue", () => {
     BrandScanSettingsSchema.safeParse({
       ...fixture.brandScans,
       permits: { costco: { resourceId: "local-costco" } },
+    }).success,
+  ).toBe(false);
+});
+
+it("chooses the mode's execution queue while retaining one global Whole Foods permit", () => {
+  const http = BrandScanSettingsSchema.parse({ ...fixture.brandScans, browserQueue: undefined });
+  expect(http.wholefoods.brandScanMode).toBe("http");
+  expect(http.permits.wholefoods?.taskQueue).toBe("v3.pipeline.product.v1");
+  const browser = BrandScanSettingsSchema.parse({
+    ...fixture.brandScans,
+    wholefoods: { brandScanMode: "browser" },
+  });
+  expect(browser.permits.wholefoods).toMatchObject({
+    taskQueue: "browser",
+    resourceId: "wholefoods-brand-scan",
+    gapAfterSeconds: 60,
+    cooldownSeconds: 1800,
+  });
+  expect(
+    BrandScanSettingsSchema.safeParse({
+      ...fixture.brandScans,
+      wholefoods: { brandScanMode: "other" },
     }).success,
   ).toBe(false);
 });

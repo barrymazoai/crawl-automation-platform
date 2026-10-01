@@ -20,7 +20,7 @@ export type ResourceKinds = z.infer<typeof ResourceKindsSchema>;
 export const KNOWN_RESOURCE_KINDS: ResourceKinds = {
   "scraperapi-lane": "http-lane",
   "swanson-brand-scan": "http-lane",
-  "wholefoods-brand-scan": "browser",
+  "wholefoods-brand-scan": "http-lane",
   "costco-brand-scan": "browser",
   "mini-model-account": "model",
   "mini-cpu": "cpu",

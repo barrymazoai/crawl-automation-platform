@@ -14,5 +14,6 @@ export const BrandListingRequestSchema = z.strictObject({
 export const BrandListingInputSchema = BrandListingRequestSchema.extend({
   resources: ResourceGateSchema,
   gapAfterSeconds: z.number().int().nonnegative().default(0),
+  cooldownSeconds: z.number().int().nonnegative().default(0),
 });
 export type BrandListingRequest = z.infer<typeof BrandListingRequestSchema>;

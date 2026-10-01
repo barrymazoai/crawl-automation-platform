@@ -5,8 +5,10 @@ import { BrandListingInputSchema, type BrandListingRequest } from "./brand-listi
 
 /** New workflow type: existing CollectionWorkflow and browser histories keep their commands. */
 export async function BrandListingWorkflow(raw: unknown): Promise<unknown> {
-  const { resources, gapAfterSeconds, ...request } = BrandListingInputSchema.parse(raw);
+  const { resources, gapAfterSeconds, cooldownSeconds, ...request } =
+    BrandListingInputSchema.parse(raw);
   const gap = patched("brand-listing-gap-v1") ? gapAfterSeconds : 0;
+  const cooldown = patched("brand-listing-cooldown-v1") ? cooldownSeconds : 0;
   return resourceGate(resources)("readBrandListing", (binding) => {
     const activities = proxyActivities<{
       readBrandListing(input: BrandListingRequest): Promise<unknown>;
@@ -19,6 +21,7 @@ export async function BrandListingWorkflow(raw: unknown): Promise<unknown> {
     });
     return readWithScanGap(() => activities.readBrandListing(request), {
       gapAfterSeconds: binding ? gap : 0,
+      cooldownSeconds: binding ? cooldown : 0,
     });
   });
 }

@@ -4,6 +4,7 @@ const state = vi.hoisted(() => ({
   held: true,
   now: 0,
   patched: true,
+  cooldownPatched: true,
   cancelled: false,
   reserve: vi.fn(),
   release: vi.fn(),
@@ -22,7 +23,8 @@ vi.mock("@temporalio/workflow", () => ({
     nonCancellable: (run: () => Promise<unknown>) => run(),
     current: () => ({ consideredCancelled: state.cancelled }),
   },
-  patched: () => state.patched,
+  patched: (marker: string) =>
+    marker === "brand-listing-cooldown-v1" ? state.cooldownPatched : state.patched,
   isCancellation: (error: unknown) => error instanceof Error && error.name === "CancelledFailure",
   workflowInfo: () => ({
     taskQueue: "pipeline",
@@ -62,6 +64,7 @@ beforeEach(() => {
   state.held = true;
   state.now = 0;
   state.patched = true;
+  state.cooldownPatched = true;
   state.cancelled = false;
   state.options = [];
   vi.spyOn(Date, "now").mockImplementation(() => state.now);
@@ -208,3 +211,26 @@ it.each(["activity", "scope", "gap"])(
     expect(state.release).toHaveBeenCalledOnce();
   },
 );
+
+it.each([true, false])(
+  "applies HTTP cooldown only on an explicit request (%s)",
+  async (requested) => {
+    state.held = false;
+    state.read.mockResolvedValue({ full: false, cooldownRequested: requested });
+    await BrandListingWorkflow({ ...input, gapAfterSeconds: 1, cooldownSeconds: 30 });
+    expect(state.sleep).toHaveBeenCalledExactlyOnceWith(requested ? 30000 : 1000);
+    expect(state.release).toHaveBeenCalledOnce();
+  },
+);
+
+it("keeps pre-cooldown histories on their original gap despite a cooling result", async () => {
+  state.held = false;
+  state.cooldownPatched = false;
+  state.read.mockResolvedValue({ cooldownRequested: true });
+  await BrandListingWorkflow({ ...input, gapAfterSeconds: 1, cooldownSeconds: 30 });
+  expect(state.sleep).toHaveBeenCalledExactlyOnceWith(1000);
+  expect(state.read).toHaveBeenCalledExactlyOnceWith({
+    scanId: input.scanId,
+    source: input.source,
+  });
+});

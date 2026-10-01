@@ -49,3 +49,46 @@ describe("brand scan result decoding", () => {
     expect(scanOf(row({ ...result, nameResolution })).result).toMatchObject({ nameResolution });
   });
 });
+
+it("round-trips HTTP observation accounting in partial and review JSON records", () => {
+  const metrics = {
+    storeId: "10259",
+    unionSize: 0,
+    attempts: [
+      {
+        read: "read-1",
+        page: 1,
+        attempt: 1,
+        url: "https://example.test/search",
+        archiveKey: "first.json",
+        creditCost: 1,
+        fromArchive: false,
+        empty: true,
+        code: null,
+      },
+    ],
+    reads: [
+      {
+        read: "read-1",
+        pages: 0,
+        cards: 0,
+        products: 0,
+        availableCounts: [],
+        succeeded: false,
+        code: "WHOLEFOODS.SEARCH_THROTTLED",
+      },
+    ],
+  };
+  for (const state of ["partial", "review"]) {
+    const saved = {
+      ...result,
+      state,
+      full: false,
+      metrics,
+      cooldownRequested: true,
+      credits: 1,
+      code: "WHOLEFOODS.SEARCH_THROTTLED",
+    };
+    expect(scanOf(row(saved)).result).toEqual(saved);
+  }
+});

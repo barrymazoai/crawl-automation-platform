@@ -18,6 +18,7 @@ export type PatchMarker =
   | typeof labelNoSourceMarker
   | "formula-family-capture-v1"
   | "brand-listing-gap-v1"
+  | "brand-listing-cooldown-v1"
   | "browser-scan-permit-v1";
 export type ReplayBundle = { code: string };
 

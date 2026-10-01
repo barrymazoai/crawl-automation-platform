@@ -61,3 +61,8 @@ export function wholeFoodsBrandSourceUrl(raw: string): string {
   }
   return wholeFoodsBrandSearchUrl({ name, amazonBrandId: filter[1] });
 }
+
+/** The API has no dependable slug: the product route identifies the trailing ASIN. */
+export function wholeFoodsProductUrl(asin: string): string {
+  return wholeFoodsProductAddress(`${WHOLE_FOODS_ORIGIN}/grocery/product/product-${asin}`).url;
+}

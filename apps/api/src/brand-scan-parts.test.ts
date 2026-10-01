@@ -9,7 +9,10 @@ import type {
 import { configuredDtcSites } from "@crawl-automation/channel-dtc";
 import { amazonBrandScan } from "@crawl-automation/channel-amazon";
 import { ListingPages, type ListingPage } from "@crawl-automation/channels-core";
-import { wholeFoodsAdapter } from "@crawl-automation/channels-wholefoods";
+import {
+  wholeFoodsAdapter,
+  WholeFoodsHttpScanSettingsSchema,
+} from "@crawl-automation/channels-wholefoods";
 import { createLogger, type Database, type TemporalClient } from "@crawl-automation/platform";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { BrandScanSettingsSchema } from "./brand-scan-config.js";
@@ -100,6 +103,7 @@ function setup(sources: ScanSource[], browserQueue: string | null = "browser", s
     listingStates: { requestRevisits: vi.fn() } as unknown as ListingStateService,
     settings: BrandScanSettingsSchema.parse({
       ...fixture.brandScans,
+      wholefoods: { brandScanMode: "browser" },
       browserQueue: browserQueue ?? undefined,
     }),
     temporal: { client: { workflow: { start } } } as unknown as TemporalClient,
@@ -261,11 +265,14 @@ describe("brand-scan API source routing", () => {
   );
 
   it("declares Whole Foods browser capture independently of product settings", () => {
-    const adapter = wholeFoodsAdapter({
-      storeId: "12345",
-      label: "Test store",
-      postalCode: "12345",
-    });
+    const adapter = wholeFoodsAdapter(
+      {
+        storeId: "12345",
+        label: "Test store",
+        postalCode: "12345",
+      },
+      WholeFoodsHttpScanSettingsSchema.parse({ brandScanMode: "browser" }),
+    );
     expect(adapter.scanCapture?.(wholeUrl)).toBe("browser");
   });
 

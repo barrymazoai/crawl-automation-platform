@@ -20,6 +20,7 @@ import {
   ScraperApiRouteSchema,
 } from "@crawl-automation/v3-contracts";
 import { z } from "zod";
+import { WholeFoodsHttpScanSettingsSchema } from "@crawl-automation/channels-wholefoods";
 import { SwansonBrandScanSettingsSchema } from "@crawl-automation/channel-swanson";
 import { CaptureChannelSettingsSchema } from "./capture-channel-settings.js";
 import { BrowserSettingsSchema } from "./browser/browser-settings.js";
@@ -119,7 +120,7 @@ export const WorkerConfigSchema = z
     processing: ProcessingSettingsSchema.optional(),
     /**
      * The browser worker on each Mac mini with Ego serves DTC and Amazon Store-page brands.
-     * Whole Foods waits on its fetch test; see `browser/browser-settings.ts` for local settings.
+     * Whole Foods can explicitly use this fallback; see `browser/browser-settings.ts`.
      */
     browser: BrowserSettingsSchema.optional(),
     /**
@@ -132,6 +133,7 @@ export const WorkerConfigSchema = z
     /** Listing-only route/options for permit-gated HTTP brand scans; uses storage.r2 for originals. */
     brandScans: ListingFetchSettingsSchema.extend({
       swanson: SwansonBrandScanSettingsSchema.optional(),
+      wholefoods: WholeFoodsHttpScanSettingsSchema.prefault({}),
     }).optional(),
   })
   .refine((config) => config.processes !== undefined || config.taskQueue !== undefined, {

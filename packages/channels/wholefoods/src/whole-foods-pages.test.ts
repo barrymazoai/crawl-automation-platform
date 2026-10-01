@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { WholeFoodsHttpScanSettingsSchema } from "./whole-foods-http-settings.js";
 import { wholeFoodsAdapter } from "./whole-foods-adapter.js";
 import {
   wholeFoodsBrandSearchUrl,
@@ -95,7 +96,7 @@ describe("Whole Foods product page", () => {
     const adapter = wholeFoodsAdapter(store);
     const parsed = adapter.parseProduct(page("product-b0096m5pbw.html"));
     expect(adapter.captureModes).toEqual(["http"]);
-    expect(adapter.scanCapture?.("unused")).toBe("browser");
+    expect(adapter.scanCapture?.("unused")).toBe("http");
     expect(parsed.identity).toEqual({ listingId: "B0096M5PBW", variantId: null });
     expect(parsed.commerce).toMatchObject({ price: "$24.21", priceStatus: "observed" });
     expect(parsed.commerce?.context).toContain("wholefoods-store:10259");
@@ -144,7 +145,10 @@ describe("Whole Foods brand search page", () => {
 });
 
 it("exposes a browser BrandScanReader without claiming HTML alone proves completeness", () => {
-  const reader = wholeFoodsAdapter(store).brandScan;
+  const reader = wholeFoodsAdapter(
+    store,
+    WholeFoodsHttpScanSettingsSchema.parse({ brandScanMode: "browser" }),
+  ).brandScan;
   const url = wholeFoodsBrandSearchUrl({ name: "Example", amazonBrandId: "123" });
   expect(reader?.sourceUrl(url)).toBe(url);
   expect(reader?.pageUrl(url, 1)).toBe(url);

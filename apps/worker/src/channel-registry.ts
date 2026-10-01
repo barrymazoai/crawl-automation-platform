@@ -15,7 +15,7 @@ export function workerChannelRegistry(
     createSwansonAdapter(config.brandScans?.swanson),
     gncAdapter,
     amazonAdapter,
-    wholeFoodsAdapter(WHOLE_FOODS_STORE),
+    wholeFoodsAdapter(WHOLE_FOODS_STORE, config.brandScans?.wholefoods),
     costcoAdapter(),
     createDtcAdapter(configuredDtcSites(config.browser?.dtc)),
   ]);

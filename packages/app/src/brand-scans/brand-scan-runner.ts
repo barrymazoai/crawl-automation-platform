@@ -1,3 +1,4 @@
+import { listingScanResult } from "./listing-scan-result.js";
 import { setTimeout as delay } from "node:timers/promises";
 import { errorCodeOf, type Logger } from "@crawl-automation/platform";
 import { z } from "zod";
@@ -102,22 +103,11 @@ export class BrandScanRunner {
     const counts = compare(listing, known);
     const missing = listing.full ? await this.revisitMissing(scan, counts.missing) : 0;
     return {
-      state: listing.full ? "complete" : "partial",
-      pages: listing.pages.length,
-      products: listing.products.length,
-      families: listing.families,
-      unresolvedFamilies: listing.unresolvedFamilies,
-      statedTotal: listing.pages.at(-1)?.statedTotal ?? null,
-      full: listing.full,
-      capped: listing.capped ?? false,
-      ...(listing.soldHere === undefined ? {} : { soldHere: listing.soldHere }),
-      ...(listing.nameResolution ? { nameResolution: listing.nameResolution } : {}),
+      ...listingScanResult(listing),
       newListings: counts.newListings,
       knownListings: counts.knownListings,
       missing,
       queued,
-      credits: listing.credits,
-      code: null,
     };
   }
 

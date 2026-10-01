@@ -1,3 +1,4 @@
+import type { ListingScanContext, ListingScanOutcome } from "./listing-scan-policy.js";
 import { defineErrors } from "@crawl-automation/platform";
 
 const source = (message: string) => ({ category: "SOURCE" as const, message });
@@ -22,58 +23,13 @@ export const brandScanErrors = defineErrors({
 });
 export type BrandScanErrorCode = keyof typeof brandScanErrors.codes;
 
-/** A fetched page's text (the same shape as a product page; kept here so this file needs nothing from the adapter). */
-export interface ListingPageContent {
-  url: string;
-  html: string;
-  capturedAt: string;
-}
-
-/** One product a brand listing shows: a product page, or a family whose members are on its own page. */
-export interface ListedProduct {
-  url: string;
-  listingId: string;
-  variantId: string | null;
-  title: string | null;
-  kind: "product" | "family";
-}
-
-/** What one listing page shows. */
-export interface ListingPage {
-  /** Present when the reader can establish whether the store sells this brand. */
-  soldHere?: boolean;
-  products: ListedProduct[];
-  /** Product tiles on this page (promotion tiles are not products). */
-  cards: number;
-  /** Stable card identities, separate from products when a card includes variations. */
-  cardIds?: string[];
-  /** Page position retained by readers that prove a consecutive pagination chain. */
-  pageNumber?: number;
-  nextPage: number | null;
-  /** The brand total the page states, when it states one. */
-  statedTotal: number | null;
-}
-
-/** The name selected for a listing and whether resolving it required the fallback. */
-export interface ListingNameResolution {
-  brandName: string;
-  usedFallback: boolean;
-}
-
-export interface ResolvedListing {
-  sourceUrl: string;
-  /** A successful lookup can supply page 1 without another request. */
-  firstPage?: ListingPage;
-  nameResolution?: ListingNameResolution;
-}
-
-/** A channel chooses each next request from retained evidence; labels must be unique per scan. */
-export interface ListingResolveRequest {
-  request: { url: string; label: string; answer: "html" | "json"; maxBytes: number };
-  parsePage(page: { body: string; url: string }): ListingResolveStep;
-}
-
-export type ListingResolveStep = ListingResolveRequest | ResolvedListing;
+export type * from "./listing-model.js";
+import type {
+  ListedProduct,
+  ListingPage,
+  ListingPageContent,
+  ListingResolveStep,
+} from "./listing-model.js";
 
 /**
  * How a channel reads retained HTTP or browser brand pages: site addresses and page shapes only.
@@ -81,6 +37,8 @@ export type ListingResolveStep = ListingResolveRequest | ResolvedListing;
 export interface BrandScanReader {
   /** Normalises a brand source URL; refuses anything that is not this channel's brand listing. */
   sourceUrl(url: string): string;
+  /** Optional source policy; all I/O still passes through the shared archive. */
+  readList?(context: ListingScanContext): Promise<ListingScanOutcome>;
   /** Optional sequence of archived requests resolving a source to an opaque listing base URL. */
   resolve?(source: { url: string; brandName?: string | undefined }): ListingResolveStep;
   /** Listing-only targets; product capture retains its own origin policy. */

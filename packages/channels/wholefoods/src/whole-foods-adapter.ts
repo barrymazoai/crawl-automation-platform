@@ -5,6 +5,11 @@ import type {
   ParsedProduct,
 } from "@crawl-automation/channels-core";
 import type { ChannelProductEvidence } from "@crawl-automation/v3-contracts";
+import { createWholeFoodsHttpReader } from "./whole-foods-http-reader.js";
+import {
+  WHOLE_FOODS_HTTP_SCAN_DEFAULTS,
+  type WholeFoodsHttpScanSettings,
+} from "./whole-foods-http-settings.js";
 import { WholeFoodsBrandReader } from "./whole-foods-brand-reader.js";
 import { wholeFoodsProductAddress } from "./whole-foods-address.js";
 import { wholeFoodsPageIdentity } from "./whole-foods-identity.js";
@@ -65,16 +70,22 @@ function evidenceOf(product: WholeFoodsProduct): ChannelProductEvidence {
 }
 
 /**
- * Product HTML comes through ScraperAPI with the store cookie; brand scans alone use the browser.
+ * Product and default brand captures use ScraperAPI; brand scans retain a configurable browser fallback.
  * The ASIN shares Amazon's formula. Page facts are retained as evidence, never planned as a new formula.
  */
-export function wholeFoodsAdapter(store: WholeFoodsStore): ChannelAdapter<WholeFoodsProduct> {
+export function wholeFoodsAdapter(
+  store: WholeFoodsStore,
+  settings: WholeFoodsHttpScanSettings = WHOLE_FOODS_HTTP_SCAN_DEFAULTS,
+): ChannelAdapter<WholeFoodsProduct> {
   return {
     id: "wholefoods",
     formulaFamily: "amazon-asin",
     captureModes: ["http"],
-    brandScan: new WholeFoodsBrandReader(store),
-    scanCapture: () => "browser",
+    brandScan:
+      settings.brandScanMode === "http"
+        ? createWholeFoodsHttpReader(settings)
+        : new WholeFoodsBrandReader(store),
+    scanCapture: () => settings.brandScanMode,
     httpPolicy: WHOLE_FOODS_PAGE_POLICY,
     productAddress: wholeFoodsProductAddress,
     pageIdentity: wholeFoodsPageIdentity,

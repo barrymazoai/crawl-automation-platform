@@ -94,3 +94,38 @@ describe("worker label settings", () => {
     },
   );
 });
+
+it.each(["http", "browser"])(
+  "wires Whole Foods %s mode and catalog config at startup",
+  (brandScanMode) => {
+    const schema = WorkerConfigSchema.shape.brandScans.unwrap();
+    const brandScans = schema.parse({
+      route,
+      scraperApi,
+      wholefoods: {
+        brandScanMode,
+        size: 30,
+        store: {
+          storeId: "10259",
+          label: "The Alameda",
+          postalCode: "95126",
+          offerListingDiscriminator: "TEST",
+          categoryId: "123",
+        },
+      },
+    });
+    const adapter = workerChannelRegistry({ brandScans }).get("wholefoods");
+    expect(adapter.scanCapture?.("unused")).toBe(brandScanMode);
+    if (brandScanMode === "http") {
+      const pageUrl = adapter.brandScan?.pageUrl(
+        "https://www.wholefoodsmarket.com/grocery/search?k=Test&rh=p_123%3A123",
+        2,
+      );
+      expect(pageUrl).toContain("old=TEST");
+      expect(pageUrl).toContain("categories=123&offset=30&size=30");
+    }
+    expect(
+      schema.safeParse({ route, scraperApi, wholefoods: { maxEmptyAttempts: 0 } }).success,
+    ).toBe(false);
+  },
+);

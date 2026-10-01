@@ -1,6 +1,10 @@
 import { costcoAdapter } from "@crawl-automation/channels-costco";
 import { createDtcAdapter, type DtcSitePolicy } from "@crawl-automation/channel-dtc";
-import { wholeFoodsAdapter, WHOLE_FOODS_STORE } from "@crawl-automation/channels-wholefoods";
+import {
+  wholeFoodsAdapter,
+  WHOLE_FOODS_STORE,
+  type WholeFoodsHttpScanSettings,
+} from "@crawl-automation/channels-wholefoods";
 import { amazonAdapter } from "@crawl-automation/channel-amazon";
 import {
   createSwansonAdapter,
@@ -13,12 +17,13 @@ import { gncAdapter } from "@crawl-automation/channels-gnc";
 export function channelRegistry(
   dtcSites: readonly DtcSitePolicy[] = [],
   swanson?: SwansonBrandScanSettings,
+  wholefoods?: WholeFoodsHttpScanSettings,
 ): ChannelRegistry {
   return new ChannelRegistry([
     createSwansonAdapter(swanson),
     gncAdapter,
     amazonAdapter,
-    wholeFoodsAdapter(WHOLE_FOODS_STORE),
+    wholeFoodsAdapter(WHOLE_FOODS_STORE, wholefoods),
     costcoAdapter(),
     createDtcAdapter(dtcSites),
   ]);

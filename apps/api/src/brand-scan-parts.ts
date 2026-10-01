@@ -39,7 +39,10 @@ export function browserScanners(
       sourceUrl: (url) => dtcBrandSourceUrl(url, dtcSites),
       scan: (request, signal) => scans.scan({ channel: "dtc", ...request }, signal),
     },
-    ...adapterBrowserScanners(channelRegistry(dtcSites), scans),
+    ...adapterBrowserScanners(
+      channelRegistry(dtcSites, settings.swanson, settings.wholefoods),
+      scans,
+    ),
   };
 }
 
@@ -65,7 +68,7 @@ export function brandScanParts(parts: {
 }): BrandScanParts {
   const { database, settings, log } = parts;
   const dtcSites = parts.dtcSites ?? [];
-  const registry = channelRegistry(dtcSites, settings?.swanson);
+  const registry = channelRegistry(dtcSites, settings?.swanson, settings?.wholefoods);
   const store = new PostgresBrandScans(database);
   const remote = settings ? createR2Objects(settings.r2, settings.r2Credentials).store : null;
   const browsers = settings ? browserScanners(settings, parts.temporal, dtcSites) : {};
@@ -95,7 +98,11 @@ export function brandScanParts(parts: {
 function gatedListings(settings: BrandScanSettings, temporal: TemporalClient) {
   return Object.fromEntries(
     Object.entries(settings.permits)
-      .filter(([channel]) => !(channel in BROWSER_SCAN_PERMITS))
+      .filter(([channel]) =>
+        channel === "wholefoods"
+          ? settings.wholefoods.brandScanMode === "http"
+          : !(channel in BROWSER_SCAN_PERMITS),
+      )
       .map(([channel, permit]) => [channel, new TemporalBrandListings(temporal.client, permit)]),
   );
 }

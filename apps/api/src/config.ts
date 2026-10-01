@@ -96,8 +96,8 @@ export const ApiConfigSchema = z.strictObject({
     .optional(),
   /**
    * Brand scans: listing pages through ScraperAPI, archived in R2. Without this section
-   * scan requests answer BRAND_SCAN.NOT_CONFIGURED; brand-source import works either way. `ego` and `wholefoods`
-   * together enable Whole Foods scans in the Ego browser (an owner-approved browser case).
+   * scan requests answer BRAND_SCAN.NOT_CONFIGURED; brand-source import works either way.
+   * Whole Foods defaults to HTTP; its mode and browserQueue select the retained browser fallback.
    */
   brandScans: BrandScanSettingsSchema.optional(),
   /** The same browser-verified site list configured on the pipeline and browser workers. */
@@ -107,7 +107,7 @@ export const ApiConfigSchema = z.strictObject({
     .strictObject({
       testPrefix: EvidenceTestPrefixSchema.optional(),
       /** Copy the normal product worker's capture settings; this does not enable a scan runner. */
-      capture: BrandScanSettingsSchema.in
+      capture: BrandScanSettingsSchema.out
         .pick({ route: true, scraperApi: true })
         .extend({
           channels: z.partialRecord(ChannelIdSchema, ScraperApiOptionChoicesSchema).default({}),

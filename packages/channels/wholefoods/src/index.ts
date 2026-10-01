@@ -12,3 +12,5 @@ export * from "./whole-foods-brand-reader.js";
 export * from "./whole-foods-product.js";
 export * from "./whole-foods-store.js";
 export * from "./whole-foods-store-setup.js";
+export * from "./whole-foods-http-settings.js";
+export * from "./whole-foods-http-reader.js";

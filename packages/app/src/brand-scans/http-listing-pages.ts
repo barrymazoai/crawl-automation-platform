@@ -5,7 +5,7 @@ import {
   type ChannelAdapter,
   type ChannelId,
   type ListingPage,
-  type ListingResolveRequest,
+  type ListingPolicyRequest,
   type ListingResolveStep,
 } from "@crawl-automation/channels-core";
 import type { ListingPageReader } from "./ports.js";
@@ -35,14 +35,14 @@ export function listingTarget(work: ListingWork) {
 }
 
 /** One pacing and credit counter for all resolution and listing reads, including archive reuse. */
-function pageReads(work: ListingWork, signal: AbortSignal) {
+export function pageReads(work: ListingWork, signal: AbortSignal) {
   let started = false;
   let credits = 0;
   return {
     get credits() {
       return credits;
     },
-    read: async (request: ListingResolveRequest["request"]) => {
+    read: async (request: ListingPolicyRequest) => {
       const interval = work.requestIntervalMs ?? 0;
       if (started && interval > 0) {
         await setTimeout(interval, undefined, { signal });

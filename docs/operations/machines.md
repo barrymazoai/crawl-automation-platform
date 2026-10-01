@@ -11,7 +11,7 @@
 API 为配置了 `brandScans.permits.<channel>` 的渠道启动新的 `BrandListingWorkflow`，由现有
 ResourceGate 在整个 listing read（分页和 family 展开）期间持有一个许可；获取许可前不发付费请求。
 没有 permit 配置的 GNC、Amazon 等继续原路径。Collection workflow 的命令序列不变。
-Whole Foods 浏览器扫描的新许可与兼容标记见下节。
+Whole Foods 默认 HTTP 和浏览器 fallback 的许可与兼容标记见下节。
 BrandListingWorkflow 的扫描后间隔使用 `patched("brand-listing-gap-v1")`，保持旧的未打补丁
 历史可重放；Temporal replay 测试由主会话运行，使用 `createLocal()` 和 1 秒间隔。
 
@@ -54,7 +54,7 @@ Server 一 API 私有配置，在已有 `brandScans` 下合并：
 加上每品牌约 3 秒的抓取和存档，约 6 分钟列完。额外分页每页再加 3 秒及请求耗时；这不是时限保证。
 
 Server 一 worker 私有配置新增顶层 `brandScans`，从 API 的 `brandScans` **仅复制**
-`route`、`scraperApi`、`channels` 和 `swanson`；`channels` 可省略，默认 `{}`。不要复制 runner、permits、
+`route`、`scraperApi`、`channels`、`swanson` 和 `wholefoods`；`channels` 可省略，默认 `{}`。不要复制 runner、permits、
 browserQueue 或 R2 字段。HTTP listing 使用这一独立设置，产品抓取的 `capture` 设置保持原用途。
 Worker `storage.r2` 的 bucket/prefix 和 `storage.r2Credentials` 必须能访问 API 原有
 `brandScans.r2` 的同一存档，保留历史原件的复用路径。私有配置不得进入 Git。
@@ -82,10 +82,91 @@ Shopify `__shopify_bv_challenge`、Cloudflare `__cf_chl_*` 以及明确 challeng
 同一扫描重复连接复用既有 `brand-listing-<scanId>` 工作流，包括已关闭的结果；无需新增执行锁。
 先在 Mini 验证一项扫描与许可释放，再由 owner 决定批量运行；历史 Review 不自动重排。
 
-## Whole Foods 品牌扫描节流（待部署）
+## Whole Foods HTTP 品牌扫描（2026-10-01，待 owner 提交与部署）
+
+默认 `brandScans.wholefoods.brandScanMode = "http"`，沿用 Swanson 的 `BrandListingWorkflow`
+和 pipeline role `readBrandListing`。下面片段**合并**到 Server 一 API 与 HTTP pipeline worker
+各自的 `brandScans`，保留所有既有渠道、ScraperAPI key、route 与 R2 配置：
+
+```json
+{
+  "wholefoods": {
+    "brandScanMode": "http",
+    "store": {
+      "storeId": "10259",
+      "label": "The Alameda",
+      "postalCode": "95126",
+      "offerListingDiscriminator": "A0GA",
+      "categoryId": "18473610011"
+    },
+    "size": 100,
+    "maxPages": 250,
+    "maxEmptyAttempts": 5,
+    "emptyPauseMs": 2000,
+    "readPauseMs": 60000,
+    "canaryText": "365 by Whole Foods Market"
+  }
+}
+```
+
+这些值也是省略 `wholefoods` 时的默认值。只重试 `searchResults=[]` 且 available count 为 0
+的有效 JSON；其余错误不重试。JSON 不回显店铺，`metrics.storeId` 记录的是请求 cookie 的配置，
+并非响应中的店铺证明。读取策略和结果解释见 [Whole Foods operations note](whole-foods-brand-scans.md)。
+
+**仅 API** 的 `brandScans.permits` 合并下列项。必须把先前 Whole Foods 的 browser taskQueue
+改为实际 HTTP pipeline role 队列；这是显式旧配置的替换，mode 不会重写显式的队列覆盖值：
+
+```json
+{
+  "wholefoods": {
+    "taskQueue": "v3.pipeline.product.v1",
+    "resourceQueue": "v3.resources.v1",
+    "resourceId": "wholefoods-brand-scan",
+    "maxWaitSeconds": 900,
+    "gapAfterSeconds": 60,
+    "cooldownSeconds": 1800
+  }
+}
+```
+
+HTTP 模式即使没有 `browserQueue` 也默认启用这份许可。现有迁移 037 的容量应为 1；不新增
+迁移、不覆盖已有容量或健康状态。resources role 的 `resourceHealth.resources` 合并：
+
+```json
+{
+  "wholefoods-brand-scan": { "taskQueues": ["v3.pipeline.product.v1"] }
+}
+```
+
+API/worker 的顶层 `resourceKinds` 若已配置此资源，改为 `"wholefoods-brand-scan": "http-lane"`
+（代码的默认种类也已改为 http-lane）。许可覆盖两个读取、空结果尝试、分页、canary 和扫描后
+间隔。普通结果只等 gap；只有某页耗尽所有空结果尝试才请求 cooldown。兼容标记
+`brand-listing-cooldown-v1` 保持历史工作流原有 timer 序列；旧 gap marker 不变。
+
+允许域名有两层：reader 声明 `https://www.wholefoodsmarket.com`，底层 ScraperAPI 校验
+API 和 pipeline worker 的 `brandScans.scraperApi.allowedOrigins`。owner 已确认 Server 一配置
+允许此 origin；部署时核对两份私有配置，若遗漏则向原数组**追加**该 origin，保留 GNC、Swanson、
+Constructor 等项。无需新 origin。reader 自动设置 cookie/content-type/accept，现有 ScraperAPI
+client 自动发 `keep_headers=true`；不新增 provider 参数。HTTP scan 强制非 render、非 premium、
+无固定 session，以保留每次独立请求。`brandScans.channels.wholefoods.requestIntervalMs` 是已有
+可选通用分页间隔，默认 0；策略的 2 秒/60 秒暂停独立生效。
+
+Worker 只合并 `brandScans.wholefoods` 和必要的 allowedOrigins；不要复制 API 的 permits、runner、
+browserQueue、r2 字段。HTTP worker 继续使用 `storage.r2` 对同一证据 bucket/prefix 归档。
+
+回退时在 API 与 pipeline worker 配置 `brandScans.wholefoods.brandScanMode = "browser"`，
+保留 `browserQueue`，把上面的 permit taskQueue 和 resourceHealth 映射改回 browser 队列，并将
+显式 resourceKinds 改为 browser。`BrowserScanWorkflow`、`WholeFoodsBrandScan`、共享 browser
+listing scan 和两台 browser worker 的店铺/滚动设置全部保留，详见下节。切换前排空当前扫描，
+避免 API/worker 的 mode 或健康映射不一致。任何模式都不自动回退到另一模式后再次付费。
+
+本次仅工作树修改，未提交、推送、连接服务器或部署。owner 提交后仍只经 origin main 部署，
+手工启动；先在 Mini 验证一个品牌和产品 URL、R2 回读、许可释放及旧历史 replay，再决定批量。
+
+## Whole Foods 浏览器 fallback 节流（仅显式 browser 模式，待部署）
 
 API 的 `brandScans.permits` 合并以下项；配置了 `browserQueue` 时，即使未显式填写该项，
-也会默认启用 Whole Foods 许可（执行队列沿用 `browserQueue`）。其他渠道默认行为保持原样。
+在显式 browser 模式会默认启用 Whole Foods 许可（执行队列沿用 `browserQueue`）。其他渠道默认行为保持原样。
 
 ```json
 {
@@ -100,7 +181,7 @@ API 的 `brandScans.permits` 合并以下项；配置了 `browserQueue` 时，�
 }
 ```
 
-Whole Foods 使用现有 `BrowserScanWorkflow` / `scanBrandInBrowser`，不会转给 HTTP
+该 fallback 使用现有 `BrowserScanWorkflow` / `scanBrandInBrowser`，不会转给 HTTP
 `BrandListingWorkflow`。所有机器必须共享 `wholefoods-brand-scan`，新迁移
 `037_wholefoods_brand_scan_capacity.sql` 仿照 036 插入 capacity=1（保留已有容量与健康状态）。
 resources worker 的 `resourceHealth.resources` 合并：

@@ -4,31 +4,14 @@ import {
   scraperApiErrors,
   type ObjectStore,
   type ScraperApiClient,
+  isAppError,
 } from "@crawl-automation/platform";
-import type { ChannelId } from "../adapter.js";
 import type { ScraperApiCaptureSettings } from "../capture/page-fetch.js";
 import { channelOptions } from "../capture/channel-options.js";
 import { brandScanErrors } from "./brand-scan.js";
 
-/** One listing page to read for a scan: where it is archived (`label`) and what it answers with. */
-export interface ListingPageRequest {
-  scanId: string;
-  channel: ChannelId;
-  url: string;
-  /** Unique within the scan, e.g. `page-2` or `family-GNCTotalLean`. */
-  label: string;
-  answer: "html" | "json";
-  origins: readonly string[];
-  maxBytes: number;
-}
-
-/** A listing page's text and where its original bytes are archived. */
-export interface ListingPageRead {
-  body: string;
-  archiveKey: string;
-  creditCost: number | null;
-  fromArchive: boolean;
-}
+export type { ListingPageRequest, ListingPageRead } from "./listing-fetch-model.js";
+import type { ListingPageRequest, ListingPageRead } from "./listing-fetch-model.js";
 
 const MEDIA = { html: "text/html", json: "application/json" } as const;
 const sha256 = (bytes: Uint8Array) => createHash("sha256").update(bytes).digest("hex");
@@ -85,17 +68,25 @@ export class ListingPages {
         archiveKey: keys.body,
         creditCost: null,
         fromArchive: true,
+        originalCreditCost: archived.creditCost,
       };
     }
     const page = await this.fetch(request, signal);
-    checkAnswer(page, request.answer);
-    await this.archive(keys, { request, page }, signal);
-    return {
-      body: decode(page.bytes),
-      archiveKey: keys.body,
-      creditCost: page.creditCost,
-      fromArchive: false,
-    };
+    try {
+      checkAnswer(page, request.answer);
+      await this.archive(keys, { request, page }, signal);
+      return {
+        body: decode(page.bytes),
+        archiveKey: keys.body,
+        creditCost: page.creditCost,
+        fromArchive: false,
+      };
+    } catch (error) {
+      if (isAppError(error)) {
+        error.details.creditCost = page.creditCost;
+      }
+      throw error;
+    }
   }
 
   private keys(request: ListingPageRequest) {
@@ -108,7 +99,7 @@ export class ListingPages {
     const tooLarge = () =>
       brandScanErrors.create("BRAND_SCAN.PAGE_LIMIT", { details: { maxBytes: request.maxBytes } });
     const { defaults, channels } = this.deps.settings;
-    const options = channelOptions(defaults, channels[request.channel]);
+    const options = { ...channelOptions(defaults, channels[request.channel]), ...request.options };
     try {
       return await this.deps.client.get(
         { target, options, maxBytes: request.maxBytes, tooLarge },
@@ -167,7 +158,7 @@ export class ListingPages {
     keys: { body: string; record: string },
     request: ListingPageRequest,
     signal: AbortSignal,
-  ): Promise<{ bytes: Uint8Array } | null> {
+  ): Promise<{ bytes: Uint8Array; creditCost: number | null } | null> {
     const recordBytes = await this.deps.remote.read(keys.record, 65_536, signal);
     if (!recordBytes) {
       // A body without its record is an earlier download whose archive never finished: stop, never pay again.
@@ -178,13 +169,16 @@ export class ListingPages {
       }
       return null;
     }
-    const record = JSON.parse(decode(recordBytes)) as { sha256?: string };
+    const record = JSON.parse(decode(recordBytes)) as {
+      sha256?: string;
+      creditCost?: number | null;
+    };
     const bytes = await this.deps.remote.read(keys.body, request.maxBytes, signal);
     if (!bytes || sha256(bytes) !== record.sha256) {
       throw brandScanErrors.create("BRAND_SCAN.ARCHIVE_UNVERIFIED", {
         details: { key: keys.body },
       });
     }
-    return { bytes };
+    return { bytes, creditCost: record.creditCost ?? null };
   }
 }

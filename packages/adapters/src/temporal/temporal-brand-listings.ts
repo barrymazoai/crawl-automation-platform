@@ -49,6 +49,9 @@ export class TemporalBrandListings implements GatedBrandListing {
             scanId: scan.scanId,
             source: { sourceId, channel, url, ...(brandName === undefined ? {} : { brandName }) },
             gapAfterSeconds,
+            ...(this.settings.cooldownSeconds === undefined
+              ? {}
+              : { cooldownSeconds: this.settings.cooldownSeconds }),
             resources: {
               queue: resourceQueue,
               maxWaitSeconds,
