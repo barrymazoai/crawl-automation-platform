@@ -42,3 +42,10 @@ it.each([
   "/protein.html?refinement=brands=A&refinement=brands=B",
   "/p/-/123?refinement=brands=A",
 ])("refuses invalid brand address %s", (url) => expect(() => costcoBrandSourceUrl(url)).toThrow());
+
+it("reads the address Costco redirects a product to as the same product", () => {
+  // ScraperAPI 2026-10-01: .product.100118306.html landed here (no Costco cookie yet).
+  const landed =
+    "https://www.costco.com/p/-/nature-made-coq10-200-mg-140-softgels/100118306?DM_PersistentCookieCreated=true&langId=-1";
+  expect(costcoProductAddress(landed)).toMatchObject({ listingId: "100118306" });
+});

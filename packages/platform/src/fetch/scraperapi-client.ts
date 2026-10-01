@@ -116,9 +116,14 @@ export class ScraperApiClient {
       await answer.body.dump();
       throw refusal;
     }
+    const landed = providerLanding(answer, { ...fetched, origins: this.#access.allowedOrigins });
+    if (!isUrl(landed)) {
+      await answer.body.dump();
+      throw landed;
+    }
     return {
       status: answer.statusCode,
-      url: target.href,
+      url: landed.href,
       contentType: header(answer, "content-type"),
       contentEncoding: header(answer, "content-encoding"),
       bytes: await readWithin(answer, page),
@@ -164,12 +169,27 @@ function refusalOf(answer: Answer, target: URL, privateHeaders: boolean): AppErr
   if (!PAGE_STATUSES.has(status)) {
     return scraperApiErrors.create("SCRAPERAPI.PROVIDER_FAILURE", { details: { status } });
   }
-  const finalUrl = header(answer, "sa-final-url");
-  if (finalUrl && new URL(finalUrl, target).href !== target.href) {
-    const facts = { status, target: target.href, finalUrl };
-    return redirectError(facts, privateHeaders);
-  }
   return null;
+}
+
+const isUrl = (value: URL | AppError): value is URL => value instanceof URL;
+
+/**
+ * Where the page finally came from when ScraperAPI followed a redirect itself (`sa-final-url`; seen on Costco
+ * 2026-10-01 despite follow_redirect=false). A same-site address is reported so the channel decides whether it
+ * is the requested product; another site or a challenge is refused.
+ */
+function providerLanding(
+  answer: Answer,
+  fetched: { target: URL; origins: readonly string[]; privateHeaders: boolean },
+): URL | AppError {
+  const { target, origins } = fetched;
+  const finalUrl = header(answer, "sa-final-url");
+  if (!finalUrl || new URL(finalUrl, target).href === target.href) {
+    return target;
+  }
+  const facts = { status: answer.statusCode, target: target.href, finalUrl };
+  return allowedHop(finalUrl, target, origins) ?? redirectError(facts, fetched.privateHeaders);
 }
 
 async function readWithin(answer: Answer, page: ScraperApiRequest): Promise<Buffer> {

@@ -188,8 +188,19 @@ describe("ScraperAPI client", () => {
     expect(JSON.stringify(error)).not.toContain(access.apiKey);
   });
 
-  it("refuses a page ScraperAPI says it finally fetched from another address", async () => {
+  it("reports a same-site address ScraperAPI finally fetched from; the channel decides if it is the product", async () => {
+    // Costco 2026-10-01: .product.<id>.html lands on /p/-/<slug>/<id>?DM_PersistentCookieCreated=true.
     const moved = `${ORIGIN}/products/other`;
+    const { client, calls } = provider({ status: 200, headers: { "sa-final-url": moved } });
+    await expect(client.get(request(), signal())).resolves.toMatchObject({
+      status: 200,
+      url: moved,
+    });
+    expect(calls).toHaveLength(1);
+  });
+
+  it("refuses a page ScraperAPI finally fetched from another site", async () => {
+    const moved = "https://elsewhere.example/products/other";
     const { client } = provider({ status: 200, headers: { "sa-final-url": moved } });
     await expect(client.get(request(), signal())).rejects.toMatchObject({
       code: "SCRAPERAPI.REDIRECT_UNVERIFIED",

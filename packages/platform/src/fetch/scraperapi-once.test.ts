@@ -97,9 +97,22 @@ describe("ScraperAPI getOnce", () => {
     expect(dispatch).toHaveBeenCalledTimes(1);
   });
 
-  it("records an unexpected provider-reported final address without refetching it", async () => {
+  it("reports a same-site provider-reported final address without refetching it", async () => {
     const { client, pool, dispatch } = provider();
     const finalUrl = "https://page.test/other";
+    pool.intercept({ path: () => true }).reply(200, "other page", {
+      headers: { "sa-final-url": finalUrl },
+    });
+    await expect(client.getOnce(request, new AbortController().signal)).resolves.toMatchObject({
+      status: 200,
+      url: finalUrl,
+    });
+    expect(dispatch).toHaveBeenCalledTimes(1);
+  });
+
+  it("refuses a provider-reported final address on another site without refetching it", async () => {
+    const { client, pool, dispatch } = provider();
+    const finalUrl = "https://elsewhere.test/other";
     pool.intercept({ path: () => true }).reply(200, "other page", {
       headers: { "sa-final-url": finalUrl },
     });
