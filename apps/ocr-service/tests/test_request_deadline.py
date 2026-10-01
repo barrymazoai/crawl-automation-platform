@@ -63,6 +63,7 @@ class WatchdogTests(unittest.TestCase):
             code = """
 import os, sys, time
 from pathlib import Path
+sys.path.insert(0, os.getcwd())  # embeddable Windows Python ignores the working folder
 from job_store import JobStore
 from process_ownership import live_identity
 from request_deadline import HardDeadline

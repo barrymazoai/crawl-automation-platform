@@ -13,7 +13,13 @@ import sys
 import threading
 import time
 
-from process_ownership import ProcessHandle
+# Run as a script by the watchdog child: the Windows embeddable Python (python312._pth) never adds the
+# script's own folder to sys.path, so put this service's folder first before importing its modules.
+SERVICE_DIR = str(Path(__file__).resolve().parent)
+if SERVICE_DIR not in sys.path:
+    sys.path.insert(0, SERVICE_DIR)
+
+from process_ownership import ProcessHandle  # noqa: E402
 
 
 class HardDeadline:
