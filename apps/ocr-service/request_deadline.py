@@ -38,7 +38,8 @@ class HardDeadline:
         reader = threading.Thread(target=lambda: ready.append(self.process.stdout.readline()), daemon=True)
         reader.start()
         reader.join(min(5, self.seconds))
-        if reader.is_alive() or ready != [b"armed\n"]:
+        # Windows text-mode stdout ends the line with \r\n.
+        if reader.is_alive() or [line.rstrip() for line in ready] != [b"armed"]:
             self._disarm()
             raise RuntimeError("Could not arm OCR request deadline")
         return self
