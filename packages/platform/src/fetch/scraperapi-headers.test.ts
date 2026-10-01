@@ -76,10 +76,7 @@ it.each([
   const { client, calls } = setup([{ status: 200 }]);
   await client.get({ target, options, maxBytes: 1024, tooLarge }, signal());
   expect(calls[0]?.path).toBe(
-    "/?api_key=test_only_canary&country_code=us&follow_redirect=false" +
-      suffix +
-      "&url=" +
-      encodeURIComponent(target),
+    "/?api_key=test_only_canary&country_code=us" + suffix + "&url=" + encodeURIComponent(target),
   );
   expect(calls[0]?.headers).not.toContain("cookie");
 });

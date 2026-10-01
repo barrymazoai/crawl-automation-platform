@@ -56,7 +56,6 @@ describe("ScraperAPI getOnce", () => {
       expect(Object.fromEntries(url.searchParams)).toEqual({
         api_key: access.apiKey,
         country_code: "gb",
-        follow_redirect: "false",
         session_number: "42",
         render: "true",
         premium: "true",

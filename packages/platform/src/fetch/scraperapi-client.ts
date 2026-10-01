@@ -66,7 +66,7 @@ export class ScraperApiClient {
     return this.fetch(page, outer, MAX_HOPS);
   }
 
-  /** One provider submission, with follow_redirect=false; any redirect is refused without another request. */
+  /** One provider submission; a redirect ScraperAPI did not follow itself is refused without another request. */
   getOnce(page: ScraperApiRequest, outer: AbortSignal): Promise<ScraperApiPage> {
     return this.fetch(page, outer, 0);
   }
@@ -137,7 +137,9 @@ function providerUrl(apiKey: string, target: URL, options: ScraperApiOptions): U
   const url = new URL(PROVIDER_URL);
   url.searchParams.set("api_key", apiKey);
   url.searchParams.set("country_code", options.countryCode);
-  url.searchParams.set("follow_redirect", "false");
+  // No follow_redirect=false: with it, a redirected page comes back as 200 with an EMPTY body and is still
+  // charged (Costco and Amazon, 2026-10-01). ScraperAPI follows the redirect and names the address in
+  // sa-final-url; providerLanding refuses another site or a challenge, and the channel decides the rest.
   if (options.sessionNumber !== null) {
     url.searchParams.set("session_number", String(options.sessionNumber));
   }
@@ -176,7 +178,7 @@ const isUrl = (value: URL | AppError): value is URL => value instanceof URL;
 
 /**
  * Where the page finally came from when ScraperAPI followed a redirect itself (`sa-final-url`; seen on Costco
- * 2026-10-01 despite follow_redirect=false). A same-site address is reported so the channel decides whether it
+ * 2026-10-01). A same-site address is reported so the channel decides whether it
  * is the requested product; another site or a challenge is refused.
  */
 function providerLanding(

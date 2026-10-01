@@ -86,7 +86,8 @@ describe("ScraperAPI client", () => {
     expect([...(call?.searchParams.keys() ?? [])].at(-1)).toBe("url");
     expect(call?.searchParams.get("country_code")).toBe("us");
     expect(call?.searchParams.get("session_number")).toBe("42");
-    expect(call?.searchParams.get("follow_redirect")).toBe("false");
+    // follow_redirect=false made ScraperAPI answer redirected pages with an empty, charged body.
+    expect(call?.searchParams.has("follow_redirect")).toBe(false);
     expect(call?.searchParams.has("premium")).toBe(false);
     expect(page).toMatchObject({
       status: 200,
