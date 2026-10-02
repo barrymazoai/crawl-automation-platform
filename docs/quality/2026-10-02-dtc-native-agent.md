@@ -79,3 +79,11 @@ Server 二于 08:40:19 经 origin/main fresh clone/build 部署 `7df2d24`，Work
 `dbb7944` 于 08:56:07 经 Git 新克隆构建部署 Server 二；39 项 Mini 回归全部通过。第四轮真实原件按生产 multi-brand source policy 只读重放，品牌补读得到 Solaray 并通过 matched 校验，网站规格和两张原图保留，未访问网站或改写旧业务结果。两张原图已实际查看：100 VegCaps Zinc Copper 正面、清晰的 Supplement Facts 图，后者为 Iodine 53 mcg / Zinc 50 mg / Copper 2 mg / Pumpkin 10 mg，另有四项 Other Ingredients。这只是验收对照，不是另行采集或健康建议。
 
 第五轮 run `4b088559-c505-4b09-af24-bd3e05f62457` 于 08:56:50 受理，尚在运行。模型先把长目录路径拼短导致 import 失败，自行纠正后又出现 `worker_product_not_discovered`：旧引擎默认从详情页枚举目录链接，得到推荐商品后被单品范围门过滤，反而找不到已派发商品。本地修复 Ego 单商品 runHarvest 的枚举入口，直接使用宿主已派发的精确 URL（包括明确 variant），不再调用该商品页的目录发现；后续提取、身份和原件校验保留，无 productUrl 的目录模式不变。新增两项回归，相关 harvest/native 共 45 项通过。提示直接提供完整 native import 命令，避免重新手抄任务目录。此修复尚未部署，也未中止正在进行的第五轮。
+
+## 第五轮取消与原件留存缺陷（09:12 UTC）
+
+第五轮采用的旧 imageProfile 只有 `.product__media-list` 的 galleryContainerHints；通用提取仍合并了推荐商品图。模型发现后删除了第一次 harvest 的 checkpoint、records、HTML 和 9 份图片，再 fresh 收割。该行为违反保留原件要求，于 09:06:03 通过 runs.cancel 停止本轮；最终 CANCELLED、heldPermits=[]，process.json 证明原 Codex 进程组不存在。R2 archive 保留取消时的 20 份文件（含第二次收割的 HTML、两张图片和 records）。第一版 HTML/图片已删，不能将第二次抓取或第四轮原件冒充第一版恢复。CRAWLV3-164 单独记录此缺陷，In Progress。
+
+`a39efab` 单品入口修复已提交并推送，但 Server 二仍运行 `dbb7944`。新增修复在原生 HTML、平台响应和图片取回时，立即在任务根目录 `native-originals` 写内容哈希命名的独立只读副本及每次捕获 receipt（URL、时间、大小、SHA-256）；每次 harvest 返回模型前同样保存 plan/result/records 快照。宿主既有 archive 会收齐这些副本。副本与 capture 工作目录分开，规范写入只追加，不覆盖同名内容；这不是对恶意模型的操作系统级不可删除保证。采集提示明确禁止删除或 fresh 重跑证据目录，发现采后错误须返回 Review。
+
+原生单品同时新增必填 observedGalleryUrls，由模型在收割前依据本次实际页面确认完整轮播及详情图集合；脚本仅保存这个集合，不采用旧通用图片提取器的关键词/推荐图片区启发式。旧目录发现不变。50 项 harvest/native 纯回归通过，涵盖新入口、保留不同捕获版本、清工作目录后原件仍存在、损坏副本拒绝，以及缺少已观察图库时不开始收割。服务器部署与下一次真实验收尚未完成。

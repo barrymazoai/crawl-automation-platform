@@ -278,6 +278,8 @@ export async function runHarvest(browser, tab, planInput, opts = {}) {
     || workerProduct.origin !== new URL(plan.site.origin).origin)) {
     throw new Error("harvest_worker_product_scope_invalid");
   }
+  const observedGallery = browser?.mode === "ego-native" && workerProduct
+    ? nativeGallery(opts.observedGalleryUrls) : null;
   const inWorkerScope = (value) => {
     if (!workerProduct) return true;
     try {
@@ -321,6 +323,7 @@ export async function runHarvest(browser, tab, planInput, opts = {}) {
     fetchImage: browser?.harvestHooks?.fetchImage || opts.hooks?.fetchImage || defaultFetchImage,
     fetchProductData: opts.hooks?.fetchProductData || browser?.harvestHooks?.fetchProductData || defaultFetchProductData,
     observedImagesOnly: browser?.mode === "ego-native",
+    observedGallery,
     /*
      * 商品页 HTML：独立站的成分表常在页面里、不在接口里，所以每个商品都"去页面看一眼"。
      * 不依赖调用方传 —— 调用方（Codex 写的脚本）可能忘了传，那样会静默退化成全靠 OCR。
@@ -443,6 +446,8 @@ export async function runHarvest(browser, tab, planInput, opts = {}) {
     await writeJsonAtomic(file("result"), result);
     await persistCheckpoint();
     await setState(status === "complete" ? "harvest_done" : status, { reasons });
+    // Preserve every finished attempt before handing control back to the model.
+    await browser?.harvestHooks?.retainAttempt?.({ plan, result, records: packages });
     log("harvest_finalized", { status, counts });
     // Live handle only — never serialized. Callers rebind globalThis.tab from
     // it after tainted-tab replacements inside the run.
@@ -783,7 +788,8 @@ function newPageHtmlStats() {
 
 async function buildEvidencePackage(record, url, outDir, hooks, log, pageHtmlStats) {
   const gallery = [];
-  const images = recordImages(record);
+  const images = hooks.observedGallery
+    ? hooks.observedGallery.map(url => ({ url })) : recordImages(record);
   const flags = buildFlags(record);
 
   // Platform variant expansion + SKU backfill (no browser involved).
@@ -844,6 +850,7 @@ async function buildEvidencePackage(record, url, outDir, hooks, log, pageHtmlSta
     productUrl: url,
     fields: {
       ...record.fields,
+      ...(hooks.observedGallery ? { images: hooks.observedGallery } : {}),
       ...(record.fields?.ingredients ? { ingredients_text: record.fields.ingredients } : {}),
       ...skuBackfill,
       ...priceBackfill,
@@ -863,4 +870,16 @@ async function buildEvidencePackage(record, url, outDir, hooks, log, pageHtmlSta
   if (variants.length > 0) pkg.variants = variants;
   if (pageHtml) pkg.pageHtml = pageHtml;
   return pkg;
+}
+
+function nativeGallery(urls) {
+  if (!Array.isArray(urls) || urls.length === 0 || urls.length > 100) {
+    throw new Error("native_observed_gallery_required");
+  }
+  const observed = urls.map(value => {
+    const url = new URL(value);
+    if (url.protocol !== "https:" || url.username || url.password) throw new Error("native_observed_gallery_invalid");
+    return url.href;
+  });
+  return [...new Set(observed)];
 }

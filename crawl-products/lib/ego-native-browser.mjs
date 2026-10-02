@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { readFile, unlink } from "node:fs/promises";
 import { join } from "node:path";
 import { egoLocator } from "./ego-native-locator.mjs";
+import { retainNativeOriginal } from "./ego-native-originals.mjs";
 
 /** Adapts the existing harvest primitives inside Ego's native Node runtime. No CDP server or Playwright. */
 export function createEgoBrowser({ task, page, targetId = page.targetId, listTaskSpaces, workDir, productUrl = null }) {
@@ -51,21 +52,26 @@ export function createEgoBrowser({ task, page, targetId = page.targetId, listTas
   const hooks = {
     fetchPageHtml: async url => {
       if (await tab.url() !== url) await tab.goto(url);
-      return tab.playwright.evaluate(() => document.documentElement.outerHTML);
+      const html = await tab.playwright.evaluate(() => document.documentElement.outerHTML);
+      await retainNativeOriginal(workDir, { url, kind: "html", bytes: html });
+      return html;
     },
     fetchProductData: async url => {
       const target = new URL(url);
       if (!/\/products\/[^/]+\/?$/.test(target.pathname)) return null;
       target.search = ""; target.pathname = target.pathname.replace(/\/$/, "") + ".json";
-      const body = await call("evaluate", async targetUrl => {
+      const response = await call("evaluate", async targetUrl => {
         const response = await fetch(targetUrl, { credentials: "include" });
-        if (response.status === 404 || !response.headers.get("content-type")?.includes("json")) return null;
-        if (!response.ok) throw new Error(`SOURCE.PRODUCT_DATA_HTTP:${response.status}`);
-        return response.json();
+        return { status: response.status, ok: response.ok, type: response.headers.get("content-type"), text: await response.text() };
       }, target.href);
+      if (response.text) await retainNativeOriginal(workDir, { url: target.href, kind: response.type?.includes("json") ? "json" : "http", bytes: response.text });
+      if (response.status === 404 || !response.type?.includes("json")) return null;
+      if (!response.ok) throw new Error(`SOURCE.PRODUCT_DATA_HTTP:${response.status}`);
+      const body = JSON.parse(response.text);
       return body?.product ?? body;
     },
     fetchImage: url => readImage({ page: scoped, guard, workDir }, url),
+    retainAttempt: value => retainNativeOriginal(workDir, { url: productUrl, kind: "harvest", bytes: JSON.stringify(value) }),
   };
   return { mode: "ego-native", productUrl, harvestHooks: hooks, tab, tabs: {
     new: async () => { await guard(); return tab; },
@@ -96,6 +102,7 @@ async function readImage({ page, guard, workDir }, url) {
   const response = await page.fetch(url, { saveAs: path, timeout: 30000 });
   if (!response || response.status < 200 || response.status >= 300) throw new Error(`SOURCE.IMAGE_HTTP:${response?.status}`);
   const bytes = await readFile(path);
+  await retainNativeOriginal(workDir, { url, kind: "image", bytes });
   await unlink(path);
   if (!bytes.length) throw new Error("SOURCE.IMAGE_EMPTY");
   const mime = bytes.subarray(0, 8).equals(Buffer.from([137,80,78,71,13,10,26,10])) ? "image/png"

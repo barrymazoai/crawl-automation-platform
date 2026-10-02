@@ -69,6 +69,8 @@ description: "用视觉优先的三步 preflight（站点判定 → 路径探索
 `targetId` 必须来自宿主并以 `task.tabs()` 核对；恢复的 Page 句柄可能没有 `.targetId` 属性。`taskSpace` 和 `listTaskSpaces` 是 Ego nodejs 注入的全局，不要导入猜测的 SDK 路径。
 `browser.tab` 是 harvest 的 tab，`browserMode="ego-native"`。站点判断、视觉路线、规格/图库检查仍由模型负责。
 `productUrl` 非空时强制单商品范围，原生 HTML/图片 hooks 由引擎自动采用，后续读取保存的原件。
+原生单商品将宿主派发 URL 直接作为待采项，不从详情页再次枚举目录。模型先确认完整实际图库，在 `runHarvest` 的 options 中传入 `observedGalleryUrls`；这是必填的已观察 URL 集合，不使用通用图片启发式替代。
+HTML、平台数据、图片和每轮收割结果同时保存在任务根目录 `native-originals/`，由宿主统一归档。禁止删除这些原始副本，或清空已取得证据后 fresh 重跑；采后发现错误保留产物并返回 Review。
 任务页由宿主关闭并验证不存在；遇用户接管立即停止。宿主的 capture-only 合约覆盖本 skill 的语义、导出、重试和多线程部分。
 
 浏览器有三种模式：手工会话默认 `"extension"`（本地 Chrome），公开站点可显式选择 `"iab"`；Browser Node 设置 `CRAWL_BROWSER_PROVIDER=worker_cdp` 时必须使用 `"worker_cdp"`。自动化模式先完整读取 [worker-cdp-browser.md](references/worker-cdp-browser.md)，不得调用 `agent.browsers`、`@Chrome` 或 IAB。用户或控制器明确选择的浏览器是硬约束，不得静默换成另一种模式；**同模式重建断掉的 binding 不算切换，是 incomplete 恢复的标准动作**。

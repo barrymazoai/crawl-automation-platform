@@ -4,6 +4,7 @@ Ego native runHarvest 直接使用宿主派发 URL 作为唯一待采商品，�
 规格来自网站实际规格选项、SKU、variant 数据和可售状态，不从图片推断。平台商品用原有商品数据路径保存完整 variants；平台数据不可用时按真实选择器逐项记录，不因图片不能绑定而丢弃规格。
 fields.title 和 fields.brand 必须来自实际商品页面/该商品的平台数据，品牌不能照抄任务来源名称；保留品牌出处。其他页面原文字段原样保存，缺失留空，不推断成分。pageHtml 必须指向实际保存的详情 HTML。
 采集实际产品轮播/图库全部原图，以及详情中实际展示的 Facts/背标图片。不要把整个 main 的所有 img 当图库；徽章、推荐商品、导航缩略图要区别开。
+收割前在实际页面核实所有图库项及详情图片，把已观察到的完整原图 URL 数组作为 runHarvest(...,{observedGalleryUrls:[...],...}) 必填参数；原生单品不会使用通用提取器按关键词猜测出来的图片集合。不要根据文件名筛选或编造未观察的原图地址。
 逐张查看已保存的图库，确认轮播所有项及后续图、折叠/延迟加载内容都已检查；不靠 alt/文件名关键词决定收哪张图。
 保存 capture-review.json：{productUrl,selectedVariantId:null或实际ID,galleryUrls:[全部已保存原图URL],galleryComplete:true或false,variantsComplete:true或false,detailComplete:true或false,method,surface:"local_file",evidence:[相对截图/图片路径],verifier:"codex",imageAssignments:[{url,variantId:null或ID,basis:"product-gallery"或"variant-featured"}]}。
 imageAssignments 只记录网站数据或实际切换证据支持的图片归属；未明确绑定的商品共用图保留 variantId:null，不因此返回 needs_review，不强行分配给当前规格。缺失原图或规格未采齐才属于采集不完整；后续处理负责判断图片内容及适用规格。

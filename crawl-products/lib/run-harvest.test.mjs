@@ -751,7 +751,7 @@ it("native Ego keeps observed variants and gallery without keyword-added images"
   const browser = { mode: "ego-native", productUrl: target, harvestHooks: { fetchImage,
     fetchProductData: async () => null,
     fetchPageHtml: async () => '<main><img src="https://cdn.test/supplement-facts-badge.png" alt="Supplement Facts"></main>' } };
-  const result = await runHarvest(browser, null, plan(), { outDir, hooks });
+  const result = await runHarvest(browser, null, plan(), { outDir, hooks, observedGalleryUrls: ["https://cdn.test/sleep.jpg"] });
   expect(result.counts.discovered).toBe(1);
   const records = JSON.parse(await fs.readFile(path.join(outDir, "evidence/records.json"), "utf8"));
   expect(records[0].variants).toEqual([{ variantId: "woo-12", url: `${target}?variation_id=woo-12`, sku: "W12" }]);
@@ -769,10 +769,32 @@ it.each(["", "?variant=42"])("captures the native dispatched product without re-
     fetchImage: hooks.fetchImage, fetchProductData: async () => null,
     fetchPageHtml: async () => "<main>Actual dispatched product</main>",
   } };
-  const result = await runHarvest(browser, null, plan(), { outDir, hooks: { ...hooks, extract } });
+  const result = await runHarvest(browser, null, plan(), { outDir, hooks: { ...hooks, extract }, observedGalleryUrls: ["https://cdn.test/p0.jpg"] });
   expect(result.status).toBe("complete");
   expect(result.counts).toMatchObject({ discovered: 1, complete: 1 });
   expect(hooks.enumerate).not.toHaveBeenCalled();
   expect(extract).toHaveBeenCalledExactlyOnceWith([target], expect.any(Object));
   expect(result.seedReports[0].endReason).toBe("host_dispatched_product");
+});
+
+it("requires observed native gallery URLs before acquisition and excludes heuristic recommendation images", async () => {
+  const target = "https://shop.test/products/zinc";
+  const hooks = baseHooks([target]);
+  const extract = vi.fn(hooks.extract);
+  const fetchImage = vi.fn(hooks.fetchImage);
+  const retainAttempt = vi.fn();
+  const browser = { mode: "ego-native", productUrl: target, harvestHooks: {
+    fetchImage, fetchProductData: async () => null, retainAttempt,
+    fetchPageHtml: async () => "<main>Product with recommendation</main>",
+  } };
+  const outDir = await makeOutDir();
+  await expect(runHarvest(browser, null, plan(), { outDir, hooks: { ...hooks, extract } })).rejects.toThrow("native_observed_gallery_required");
+  expect(extract).not.toHaveBeenCalled();
+  const observedGalleryUrls = ["https://cdn.test/actual-front.jpg", "https://cdn.test/actual-back.jpg"];
+  const result = await runHarvest(browser, null, plan(), { outDir, hooks, observedGalleryUrls });
+  expect(result.counts.complete).toBe(1);
+  expect(fetchImage.mock.calls.map(([url]) => url)).toEqual(observedGalleryUrls);
+  const kept = retainAttempt.mock.calls[0][0];
+  expect(kept.records[0].fields.images).toEqual(observedGalleryUrls);
+  expect(kept.records[0].gallery.map(image => image.url)).toEqual(observedGalleryUrls);
 });

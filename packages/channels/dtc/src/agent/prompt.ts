@@ -41,10 +41,11 @@ export function capturePrompt(input: PromptInput): string {
    机械 harvest 在 Ego nodejs 内 import ${input.skillRoot}/lib/ego-native-browser.mjs：
    const browser = createEgoBrowser({task, page, targetId:${JSON.stringify(input.targetId)}, listTaskSpaces, workDir:${JSON.stringify(input.cwd)}, productUrl:${JSON.stringify(input.mode === "product" ? input.url : null)}});
    const tab = browser.tab; browserMode="ego-native"。该适配仅复用旧 harvest 方法，不启动服务。
-   runHarvest(browser, tab, plan, {outDir:${JSON.stringify(input.outDir)},log:(event,details)=>console.log(JSON.stringify({event,details}))}) 会强制任务商品范围及原生浏览器取 HTML/图片，并保留失败原因为日志。
+   runHarvest(browser, tab, plan, {outDir:${JSON.stringify(input.outDir)},${input.mode === "product" ? "observedGalleryUrls," : ""}log:(event,details)=>console.log(JSON.stringify({event,details}))}) 会强制任务商品范围及原生浏览器取 HTML/图片，并保留失败原因为日志。
 6. 主脚本放任务根目录 run-capture.mjs；先 node --check 再由 ego-browser nodejs -e 'await import("file://绝对脚本路径")' 执行。截图和采集文件都保存到 outDir，所有证据路径相对 outDir。
    校验脚本后直接使用这条完整命令，不缩写目录哈希：${captureCommand(input)}
    不改引擎源码或手改 harvest-result/checkpoint/evidence。可以在 hooks 中按真实观察补充字段、图库和规格。非 Shopify 的规格用 extract 记录 variants 或 fetchProductData hook 提供实际观测数据。
+   禁止删除、清空或覆盖已取得的 HTML/图片/证据记录，禁止触碰 native-originals 原始副本；采集后若发现混入其他商品、资料缺失或需要 fresh 重抓，保留当前产物并返回 needs_review，不能清 checkpoint 重启任务。修正路线必须在收割前完成。
 7. 缺权限、用户接管、挑战、不可确认的写入/浏览器失败：保留已取得证据并返回 needs_review。禁止重启整个任务、绕过限制或静默重试失败业务操作。
 8. 每个结论保存 method/surface/evidence/verifier；截图和图库原件必须通过 view_image 工具实际查看，记录逐张观察，不能只凭文件存在、尺寸、DOM 或文件名声称检查过。
    视觉 preflight 的截图无法取得或查看时立即保留原因并返回 needs_review；不能用 DOM snapshot 代替视觉检查或填写 verifiedVisually=true。
