@@ -52,6 +52,31 @@ describe.each([
     expect(product.images.at(-1)).toBe("https://shop.example/closed-label.jpg");
   });
 
+  it("reads a product gallery with its cart form when the theme omits its product root marker", () => {
+    const html = sectionPage({
+      root: `<ul class="product__media-list">
+      <li><img data-src="/facts.jpg"></li></ul>
+      <form action="/cart/add"><button>Add to cart</button></form>
+      <product-recommendations><img src="/another.jpg"></product-recommendations>`,
+    })
+      .replace(/<product-info[^>]*>/, '<div class="product">')
+      .replace("</product-info>", "</div>");
+    const product = read(dtcDocument(html), sectionContext);
+    expect(product.images).toContain("https://shop.example/facts.jpg");
+    expect(product.images).not.toContain("https://shop.example/another.jpg");
+  });
+
+  it.each([
+    '<div class="product"><ul class="product__media-list"><img src="/unowned.jpg"></ul></div>',
+    '<div class="product"><form action="/cart/add"></form><img src="/unowned.jpg"></div>',
+  ])("does not treat an incomplete product layout as an owned gallery: %s", (root) => {
+    const html = sectionPage({ root })
+      .replace(/<product-info[^>]*>/, "<div>")
+      .replace("</product-info>", "</div>");
+    const product = read(dtcDocument(html), sectionContext);
+    expect(product.images).not.toContain("https://shop.example/unowned.jpg");
+  });
+
   it.each(['data-product-id="123"', 'data-product-handle="magnesium"'])(
     "accepts exact product ownership %s without a label heading",
     (identity) => {

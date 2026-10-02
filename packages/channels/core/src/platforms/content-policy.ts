@@ -1,6 +1,8 @@
 /** Shared by retained-page readers and the bounded browser preparation. */
 export const PRODUCT_CONTENT = {
-  root: 'product-info, [id^="MainProduct-"], .product.type-product, [itemscope][itemtype$="/Product"]',
+  root:
+    'product-info, [id^="MainProduct-"], .product.type-product, [itemscope][itemtype$="/Product"], ' +
+    'main .product:has(.product__media-list):has(form[action*="/cart/add"])',
   main: 'main, #MainContent, #main-content, .site-main, [role="main"]',
   section: 'section, article, details, .shopify-section, [role="region"]',
   heading: 'h1, h2, h3, h4, h5, h6, summary, [role="heading"], button[aria-controls]',
