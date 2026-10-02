@@ -1,5 +1,11 @@
+import { PostgresSiteAnalyses } from "@crawl-automation/adapters";
+import type { Database } from "@crawl-automation/platform";
 import { costcoAdapter } from "@crawl-automation/channels-costco";
-import { createDtcAdapter, type DtcSitePolicy } from "@crawl-automation/channel-dtc";
+import {
+  createDtcAdapter,
+  storedDtcSites,
+  type DtcSitePolicy,
+} from "@crawl-automation/channel-dtc";
 import {
   wholeFoodsAdapter,
   WHOLE_FOODS_STORE,
@@ -26,5 +32,17 @@ export function channelRegistry(
     wholeFoodsAdapter(WHOLE_FOODS_STORE, wholefoods),
     costcoAdapter(),
     createDtcAdapter(dtcSites),
+  ]);
+}
+
+/** Sources discovered through the API become visible without editing config or restarting. */
+export function persistedRegistry(
+  database: Database,
+  sites: readonly DtcSitePolicy[],
+  registry = channelRegistry(sites),
+) {
+  const store = new PostgresSiteAnalyses(database);
+  return registry.withRefresh(async () => [
+    createDtcAdapter(storedDtcSites(sites, await store.settings())),
   ]);
 }

@@ -63,42 +63,51 @@ function dtcScanner(deps: {
 }
 
 /** Both Minis use this composition; routing asks URL capabilities, never switches on channel IDs. */
-export function buildBrowserScanners(deps: {
+interface BrowserScannerDependencies {
   ego: EgoPages;
   rounds: Pick<EgoPages, "round">;
+  beforeRead?: () => Promise<void>;
   publication: RetainedPublication;
   store: WholeFoodsStore;
   dtcSites?: readonly DtcSitePolicy[];
   wholefoodsScan?: WholeFoodsScanSettings;
   costcoStore?: CostcoStore;
   costcoScan?: CostcoScanSettings;
-}): BrowserScanners {
+}
+
+export function buildBrowserScanners(deps: BrowserScannerDependencies): BrowserScanners {
   const { ego, store, publication } = deps;
   const sites = deps.dtcSites ?? [];
-  return new BrowserScanners([
-    dtcScanner({ ego, publication, sites }),
-    {
-      accepts: (url) => acceptsAddress([costcoBrandSourceUrl], url),
-      scanner: new CostcoBrandScan({
-        browser: ego,
-        remote: publication.remote,
-        ...(deps.costcoStore ? { store: deps.costcoStore } : {}),
-        ...(deps.costcoScan ? { settings: deps.costcoScan } : {}),
-      }),
-    },
-    {
-      accepts: (url) => acceptsAddress([amazonStoreSourceUrl], url),
-      scanner: new AmazonStoreBrandScan({ pages: new AmazonStorePages(deps.rounds), publication }),
-    },
-    {
-      accepts: (url) => acceptsAddress([wholeFoodsBrandSourceUrl], url),
-      scanner: new WholeFoodsBrandScan({
-        browser: ego,
-        remote: publication.remote,
-        store,
-        ...(deps.wholefoodsScan ? { settings: deps.wholefoodsScan } : {}),
-      }),
-      prepare: storePreparation(ego, store),
-    },
-  ]);
+  return new BrowserScanners(
+    [
+      dtcScanner({ ego, publication, sites }),
+      {
+        accepts: (url) => acceptsAddress([costcoBrandSourceUrl], url),
+        scanner: new CostcoBrandScan({
+          browser: ego,
+          remote: publication.remote,
+          ...(deps.costcoStore ? { store: deps.costcoStore } : {}),
+          ...(deps.costcoScan ? { settings: deps.costcoScan } : {}),
+        }),
+      },
+      {
+        accepts: (url) => acceptsAddress([amazonStoreSourceUrl], url),
+        scanner: new AmazonStoreBrandScan({
+          pages: new AmazonStorePages(deps.rounds),
+          publication,
+        }),
+      },
+      {
+        accepts: (url) => acceptsAddress([wholeFoodsBrandSourceUrl], url),
+        scanner: new WholeFoodsBrandScan({
+          browser: ego,
+          remote: publication.remote,
+          store,
+          ...(deps.wholefoodsScan ? { settings: deps.wholefoodsScan } : {}),
+        }),
+        prepare: storePreparation(ego, store),
+      },
+    ],
+    deps.beforeRead,
+  );
 }

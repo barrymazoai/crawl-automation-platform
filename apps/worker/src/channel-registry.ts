@@ -1,7 +1,13 @@
+import { PostgresSiteAnalyses } from "@crawl-automation/adapters";
+import type { Database } from "@crawl-automation/platform";
 import { costcoAdapter } from "@crawl-automation/channels-costco";
 import { wholeFoodsAdapter, WHOLE_FOODS_STORE } from "@crawl-automation/channels-wholefoods";
 import { amazonAdapter } from "@crawl-automation/channel-amazon";
-import { configuredDtcSites, createDtcAdapter } from "@crawl-automation/channel-dtc";
+import {
+  configuredDtcSites,
+  storedDtcSites,
+  createDtcAdapter,
+} from "@crawl-automation/channel-dtc";
 import { createSwansonAdapter } from "@crawl-automation/channel-swanson";
 import { ChannelRegistry } from "@crawl-automation/channels-core";
 import { gncAdapter } from "@crawl-automation/channels-gnc";
@@ -18,5 +24,16 @@ export function workerChannelRegistry(
     wholeFoodsAdapter(WHOLE_FOODS_STORE, config.brandScans?.wholefoods),
     costcoAdapter(),
     createDtcAdapter(configuredDtcSites(config.browser?.dtc)),
+  ]);
+}
+
+export function persistedWorkerRegistry(
+  config: Pick<WorkerConfig, "browser" | "brandScans">,
+  database: Database,
+): ChannelRegistry {
+  const sites = configuredDtcSites(config.browser?.dtc);
+  const store = new PostgresSiteAnalyses(database);
+  return workerChannelRegistry(config).withRefresh(async () => [
+    createDtcAdapter(storedDtcSites(sites, await store.settings())),
   ]);
 }

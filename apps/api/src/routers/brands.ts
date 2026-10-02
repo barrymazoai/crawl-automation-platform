@@ -1,5 +1,8 @@
 import {
   CreateBrandSchema,
+  AnalyzeSiteSchema,
+  ApplySiteAnalysisSchema,
+  siteAnalysisErrors,
   CancelScansSchema,
   DerivedSourcesSchema,
   CreateSourceSchema,
@@ -14,7 +17,7 @@ import {
 } from "@crawl-automation/app";
 import { Id, ListQuery } from "@crawl-automation/v3-contracts";
 import { z } from "zod";
-import { procedure, router } from "../trpc.js";
+import { procedure, router, type ApiContext } from "../trpc.js";
 
 /** Scans a request names; `sourceIds` or a `channel` (all its enabled sources). */
 const ScanRequestInput = z.strictObject({
@@ -31,7 +34,23 @@ const ScanListInput = z
   })
   .optional();
 
+function analyses(ctx: Pick<ApiContext, "siteAnalyses">) {
+  if (!ctx.siteAnalyses) {
+    throw siteAnalysisErrors.create("SITE_ANALYSIS.NOT_CONFIGURED");
+  }
+  return ctx.siteAnalyses;
+}
+
 export const brandsRouter = router({
+  analyzeSite: procedure
+    .input(AnalyzeSiteSchema)
+    .mutation(({ ctx, input }) => analyses(ctx).analyze(input)),
+  siteAnalysis: procedure
+    .input(z.strictObject({ analysisId: z.uuid() }))
+    .query(({ ctx, input }) => analyses(ctx).get(input.analysisId)),
+  applySiteAnalysis: procedure
+    .input(ApplySiteAnalysisSchema)
+    .mutation(({ ctx, input }) => analyses(ctx).apply(input)),
   list: procedure
     .input(ListQuery.optional())
     .query(({ ctx, input }) => ctx.brands.list(ListQuery.parse(input ?? {}))),

@@ -1,5 +1,5 @@
 import { Writable } from "node:stream";
-import { PostgresBrandScans } from "@crawl-automation/adapters";
+import { PostgresBrandScans, PostgresSiteAnalyses } from "@crawl-automation/adapters";
 import type {
   ListingStateService,
   QueueService,
@@ -20,6 +20,7 @@ import { brandScanParts, browserScanners } from "./brand-scan-parts.js";
 import fixture from "./fixtures/api-config.json" with { type: "json" };
 
 beforeEach(() => {
+  vi.spyOn(PostgresSiteAnalyses.prototype, "settings").mockResolvedValue([]);
   vi.spyOn(PostgresBrandScans.prototype, "isCancellationRequested").mockResolvedValue(false);
 });
 

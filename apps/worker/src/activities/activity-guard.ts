@@ -1,3 +1,4 @@
+import { refreshActivityPolicies } from "./activity-policies.js";
 import { withCause, isAppError } from "@crawl-automation/platform";
 import { pipelineErrors } from "@crawl-automation/platform";
 import { resourceGateErrors } from "@crawl-automation/platform/errors/resource-gate";
@@ -51,6 +52,10 @@ async function executeActivity(
   const timer = setInterval(() => context.heartbeat(), HEARTBEAT_MS);
   try {
     context.heartbeat();
+    const preparing = refreshActivityPolicies(log, raw);
+    if (preparing) {
+      await preparing;
+    }
     const result = await executeHandler(handler, raw);
     const facts = activityOutcome(name, result);
     activityLog.info({ ...facts, durationMs: Date.now() - started }, "activity finished");

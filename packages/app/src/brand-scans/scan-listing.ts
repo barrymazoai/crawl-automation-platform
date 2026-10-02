@@ -73,6 +73,9 @@ export async function readListing(
   scan: ListingScan,
   signal: AbortSignal,
 ): Promise<BrandListing> {
+  if (scan.source.channel === "dtc") {
+    await readers.registry.refresh();
+  }
   assertSourcePolicy(readers.registry, scan.source);
   const selected = sourceReader(readers, scan.source.channel as ScanChannel, scan.source.url);
   if (selected.capture === "http") {

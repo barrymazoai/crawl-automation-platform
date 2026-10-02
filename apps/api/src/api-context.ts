@@ -11,6 +11,7 @@ export function apiContext(parts: ApiParts): ApiContext {
     runs: parts.runs,
     queue: parts.queue,
     brands: parts.brands,
+    siteAnalyses: parts.siteAnalyses,
     reviews: parts.reviews,
     products: parts.products,
     history: parts.history,

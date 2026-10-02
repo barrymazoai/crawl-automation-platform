@@ -18,6 +18,7 @@ import {
   loadConfig,
 } from "@crawl-automation/platform";
 import {
+  SiteAnalysisLimitsSchema,
   ChannelIdSchema,
   DeliveryTarget,
   ResourceGateSchema,
@@ -101,6 +102,7 @@ export const ApiConfigSchema = z.strictObject({
    * Whole Foods defaults to HTTP; its mode and browserQueue select the retained browser fallback.
    */
   brandScans: BrandScanSettingsSchema.optional(),
+  siteAnalysis: SiteAnalysisLimitsSchema.optional(),
   /** The same browser-verified site list configured on the pipeline and browser workers. */
   browser: z.strictObject({ dtc: DtcSettingsSchema.default({ sites: [] }) }).optional(),
   /** Manual test captures use their own bucket-level tests/ prefix, never storage.r2.prefix. */

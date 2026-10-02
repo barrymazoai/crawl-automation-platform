@@ -80,3 +80,9 @@ export function catalogUrl(
   url.hash = "";
   return url.href;
 }
+
+/** Existing single-brand sources keep their exact parsing and identity policy after discovery. */
+export function siteForBrandUrl(raw: string, sites: readonly DtcSitePolicy[]): DtcSitePolicy {
+  const site = siteForUrl(raw, sites);
+  return site.legacySite?.catalogUrl === raw ? site.legacySite : site;
+}

@@ -1,3 +1,4 @@
+import { persistedRegistry } from "./resources/channel-registry.js";
 import { configuredDtcSites } from "@crawl-automation/channel-dtc";
 import type {
   PostgresResourceStore,
@@ -8,7 +9,7 @@ import { ListRuns, RunService, type QueueService } from "@crawl-automation/app";
 import type { Database, Logger, TemporalClient } from "@crawl-automation/platform";
 import type { BrandScanParts } from "./brand-scan-parts.js";
 import type { ApiConfig } from "./config.js";
-import { channelRegistry, productRuns } from "./queue-parts.js";
+import { productRuns } from "./queue-parts.js";
 
 /** What the run service is built from (named, so the container's cradle is never spread). */
 export interface RunParts {
@@ -34,7 +35,7 @@ export function runService(parts: RunParts): RunService {
     permits: parts.resourceStore,
     productRuns: productRuns(parts),
     listRuns: new ListRuns({
-      registry: channelRegistry(configuredDtcSites(parts.config.browser?.dtc)),
+      registry: persistedRegistry(parts.database, configuredDtcSites(parts.config.browser?.dtc)),
       queue: parts.queue,
     }),
     brandScans: parts.brandScanParts.brandScans,

@@ -1,4 +1,6 @@
-import { workerChannelRegistry } from "./channel-registry.js";
+import { siblingReuseService } from "./sibling-reuse-parts.js";
+import { registerActivityPolicies } from "./activities/activity-policies.js";
+import { persistedWorkerRegistry } from "./channel-registry.js";
 import { activityContextParts } from "./activities/activity-context-parts.js";
 import { PostgresPermitExecutions } from "@crawl-automation/adapters";
 import { configurePermitActivityLedger } from "@crawl-automation/app";
@@ -7,7 +9,6 @@ import {
   PostgresChannelQueueStore,
   PostgresExecutionRegistry,
   PostgresFormulaIndex,
-  PostgresFormulaLinks,
   PostgresReviewLedger,
 } from "@crawl-automation/adapters";
 import {
@@ -18,7 +19,6 @@ import {
   type LabelReviews,
   type LabelTasks,
   ProductReviews,
-  SiblingFormulaReuse,
 } from "@crawl-automation/app";
 import { amazonFormulaProduct } from "./amazon-formula-product.js";
 import {
@@ -88,11 +88,14 @@ export async function buildContainer(config: WorkerConfig): Promise<Parts> {
     local: asValue(await LocalObjectStore.open(storage.journalRoot)),
     copies: asValue(await FileCopies.open(storage.cacheRoot)),
     // Channels this worker can collect. A new channel is one adapter added here.
-    registry: asValue(workerChannelRegistry(config)),
+    registry: asFunction(({ database }: WorkerParts) =>
+      persistedWorkerRegistry(config, database),
+    ).singleton(),
     fileTransport: asValue(
       config.files.resolve === "system" ? new SystemHttpsTransport() : new DirectHttpsTransport(),
     ),
   });
+  registerActivityPolicies(log, () => container.cradle.registry.refresh());
   activityContextParts(log, container.cradle.database);
   registerStores(container);
   configurePermitActivityLedger(new PostgresPermitExecutions(container.cradle.database));
@@ -204,17 +207,4 @@ function filesService(parts: WorkerParts): ProductFiles {
   const { registry, channelPlans, local, r2, copies, reviewLedger, fileTransport } = parts;
   const files = new FileEvidence({ local, remote: r2.store, copies, reviews: reviewLedger });
   return new ProductFiles({ registry, plans: channelPlans, files, transport: fileTransport });
-}
-
-/** Sibling formula reuse; a page without facts text is checked with its facts image's OCR text (OCR ledger). */
-function siblingReuseService(parts: WorkerParts): SiblingFormulaReuse {
-  return new SiblingFormulaReuse({
-    index: parts.formulaIndex,
-    families: formulaFamilies(parts.registry),
-    links: new PostgresFormulaLinks(parts.database),
-    labelImages: {
-      verifiedText: (selection, signal) =>
-        parts.label.stores.ocrText.verifiedText(selection, signal),
-    },
-  });
 }

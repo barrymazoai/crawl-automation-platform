@@ -17,6 +17,9 @@ export class ListRuns {
   constructor(private readonly deps: ListRunDeps) {}
 
   async submit(run: ListRun): Promise<ListRunSummary> {
+    if (run.channel === "dtc") {
+      await this.deps.registry.refresh();
+    }
     const adapter = this.deps.registry.get(run.channel);
     const products = run.products.map((product): QueuedProduct => {
       const address = adapter.productAddress(product.url);

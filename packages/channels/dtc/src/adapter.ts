@@ -5,7 +5,7 @@ import {
   type FetchedPage,
   type ParsedProduct,
 } from "@crawl-automation/channels-core";
-import { dtcBrandSourceUrl, dtcProductAddress, siteForUrl } from "./address.js";
+import { dtcBrandSourceUrl, dtcProductAddress, siteForUrl, siteForBrandUrl } from "./address.js";
 import { dtcEvidence, type DtcRendered } from "./evidence.js";
 import { dtcPageIdentity, readDtcProduct } from "./product.js";
 import { DTC_PAGE_LIMITS, DTC_SITES, type DtcSitePolicy } from "./site-policy.js";
@@ -66,7 +66,7 @@ export function createDtcAdapter(
   sourceUrl?: string,
 ): DtcAdapter {
   const source = sourceUrl ? dtcBrandSource(sourceUrl, sites) : null;
-  const scopedSites = source ? [siteForUrl(source.catalogUrl, sites)] : sites;
+  const scopedSites = source ? [siteForBrandUrl(source.catalogUrl, sites)] : sites;
   // Single-brand parsing keeps its original evidence/projection, even with a task-bound address policy.
   const productSource = scopedSites[0]?.kind === "multi-brand" ? source : null;
   const scope = { sites: scopedSites, source: productSource };

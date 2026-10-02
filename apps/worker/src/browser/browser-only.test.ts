@@ -207,6 +207,7 @@ describe("browser-only worker startup", () => {
             maxConcurrentActivities: 1,
             workflowBundlePath: expect.stringContaining("workflows.cjs"),
             activities: {
+              analyzeSiteInBrowser: expect.any(Function),
               captureBrowserProduct: expect.any(Function),
               scanBrandInBrowser: expect.any(Function),
               readBrandListing: expect.any(Function),

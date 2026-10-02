@@ -1,4 +1,8 @@
-import { PostgresProductRunStore, PostgresBrandScans } from "@crawl-automation/adapters";
+import {
+  PostgresProductRunStore,
+  PostgresBrandScans,
+  PostgresSiteAnalyses,
+} from "@crawl-automation/adapters";
 import type { AcceptedProductRun } from "@crawl-automation/app";
 import type { Database, TemporalClient } from "@crawl-automation/platform";
 import { afterEach, expect, it, vi } from "vitest";
@@ -9,6 +13,7 @@ import fixture from "./fixtures/api-config.json" with { type: "json" };
 afterEach(() => vi.restoreAllMocks());
 
 function setup(kind: "single-brand" | "multi-brand" = "single-brand") {
+  vi.spyOn(PostgresSiteAnalyses.prototype, "settings").mockResolvedValue([]);
   const catalogUrl = `https://shop.example/collections/${kind === "single-brand" ? "all" : "alpha"}`;
   const run: AcceptedProductRun = {
     runId: "11111111-1111-4111-8111-111111111111",

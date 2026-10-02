@@ -1,5 +1,5 @@
 import { dtcBrandSourceUrl, type DtcSitePolicy } from "@crawl-automation/channel-dtc";
-import { channelRegistry } from "./resources/channel-registry.js";
+import { channelRegistry, persistedRegistry } from "./resources/channel-registry.js";
 import {
   PostgresBrandScans,
   PostgresBrandSourceImport,
@@ -77,16 +77,19 @@ interface BrandScanDependencies {
 export function brandScanParts(parts: BrandScanDependencies): BrandScanParts {
   const { database, settings, log } = parts;
   const dtcSites = parts.dtcSites ?? [];
-  const registry = channelRegistry(dtcSites, settings?.swanson, settings?.wholefoods);
+  const registry = persistedRegistry(
+    database,
+    dtcSites,
+    channelRegistry(dtcSites, settings?.swanson, settings?.wholefoods),
+  );
   const store = new PostgresBrandScans(database);
   const remote = settings ? createR2Objects(settings.r2, settings.r2Credentials).store : null;
   const browsers = settings ? browserScanners(settings, parts.temporal, dtcSites) : {};
+  bindDtcBrowser(browsers, registry);
   const brandSources = sourceImports({ database, registry, browsers, log, store });
   const brandScans = new BrandScanService({
     store,
-    registry,
-    browsers,
-    log,
+    ...{ registry, browsers, log },
     enabled: !!settings,
     objects: parts.evidenceObjects,
   });
@@ -144,4 +147,16 @@ function sourceImports(parts: {
     browsers,
     log,
   });
+}
+
+function bindDtcBrowser(
+  browsers: BrowserBrandScanners,
+  registry: ReturnType<typeof channelRegistry>,
+) {
+  if (browsers.dtc) {
+    browsers.dtc.sourceUrl = (url) => {
+      registry.forBrandSource("dtc", url).scanCapture?.(url);
+      return url;
+    };
+  }
 }

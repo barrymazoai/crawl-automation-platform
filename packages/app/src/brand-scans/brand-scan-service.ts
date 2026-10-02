@@ -41,6 +41,9 @@ export class BrandScanService {
     const sources = request.sourceIds
       ? await this.namedSources(request.sourceIds)
       : await this.deps.store.enabledSources(request.channel as ScanChannel);
+    if (sources.some((source) => source.channel === "dtc")) {
+      await this.deps.registry.refresh();
+    }
     const scannable = sources.map((source) => this.scannable(source));
     if (scannable.length === 0) {
       throw appErrors.create("BRAND_SCAN.NO_SOURCES", { details: { channel: request.channel } });

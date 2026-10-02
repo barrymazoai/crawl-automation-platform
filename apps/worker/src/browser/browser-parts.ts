@@ -1,13 +1,14 @@
+import { PostgresSiteAnalyses } from "@crawl-automation/adapters";
+import { siteAnalysisRunner } from "./site-analysis-parts.js";
 import {
   configuredDtcSites,
-  createDtcAdapter,
+  storedDtcSites,
   DTC_BROWSER_POLICY,
 } from "@crawl-automation/channel-dtc";
 import { PipelineCapture } from "@crawl-automation/app";
 import {
   BrowserPages,
   BrowserProductCapture,
-  ChannelRegistry,
   HttpCapture,
   ProductSourcePlans,
   type BrowserCaptureResult,
@@ -24,6 +25,7 @@ import { buildBrowserScanners } from "./scan-wiring.js";
 export interface BrowserParts {
   capture: PipelineCapture<BrowserCaptureResult>;
   scanner: BrowserScanners;
+  analysis: ReturnType<typeof siteAnalysisRunner>;
   /** Sets the store in the browser profile once, before the first page this process reads. */
   ensureStore(productUrl: string, signal: AbortSignal): Promise<void>;
 }
@@ -56,7 +58,7 @@ export function buildBrowserParts(parts: CoreParts): BrowserParts {
     egressId: settings.egressId,
     channels: { dtc: DTC_BROWSER_POLICY },
   });
-  const registry = new ChannelRegistry([createDtcAdapter(dtcSites)]);
+  const registry = parts.registry;
   const capture = new BrowserProductCapture({
     registry,
     http: new HttpCapture(pages),
@@ -72,6 +74,7 @@ export function buildBrowserParts(parts: CoreParts): BrowserParts {
     ...scanSettings(settings),
     publication: parts.publication,
     rounds: ego,
+    beforeRead: refreshStoredSites({ parts, settings, dtcSites }),
   });
   return {
     capture: new PipelineCapture<BrowserCaptureResult>({
@@ -79,6 +82,19 @@ export function buildBrowserParts(parts: CoreParts): BrowserParts {
       ...captureRecords({ database: parts.database, log: parts.log, registry }),
     }),
     scanner,
+    analysis: siteAnalysisRunner(parts, ego),
     ensureStore: (url, signal) => scanner.prepare(url, signal),
+  };
+}
+
+function refreshStoredSites(input: {
+  parts: CoreParts;
+  settings: ReturnType<typeof browserSettings>;
+  dtcSites: ReturnType<typeof configuredDtcSites>;
+}) {
+  return async () => {
+    const stored = await new PostgresSiteAnalyses(input.parts.database).settings();
+    const sites = storedDtcSites(configuredDtcSites(input.settings.dtc), stored);
+    input.dtcSites.splice(0, input.dtcSites.length, ...sites);
   };
 }

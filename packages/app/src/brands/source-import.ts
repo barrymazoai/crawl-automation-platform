@@ -66,6 +66,9 @@ export class BrandSourceImport {
 
   async import(raw: unknown): Promise<SourceImportResult> {
     const { channel, entries } = ImportSourcesSchema.parse(raw);
+    if (channel === "dtc") {
+      await this.deps.registry.refresh();
+    }
     const sourceUrl = sourceUrlOf(this.deps, channel);
     const normalise = (entry: Entry) => {
       assertSourcePolicy(this.deps.registry, { channel, url: entry.url, brandName: entry.name });

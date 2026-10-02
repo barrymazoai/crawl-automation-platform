@@ -1,4 +1,4 @@
-import { PostgresBrandScans } from "@crawl-automation/adapters";
+import { PostgresBrandScans, PostgresSiteAnalyses } from "@crawl-automation/adapters";
 import { beforeEach, afterEach, expect, it, vi } from "vitest";
 
 // Routing admission is exercised with the real guard in activities/browser-routing.test.ts.
@@ -45,6 +45,7 @@ import { buildBrowserParts } from "./browser-parts.js";
 import { BrowserSettingsSchema } from "./browser-settings.js";
 
 beforeEach(() => {
+  vi.spyOn(PostgresSiteAnalyses.prototype, "settings").mockResolvedValue([]);
   vi.spyOn(PostgresBrandScans.prototype, "isCancellationRequested").mockResolvedValue(false);
 });
 

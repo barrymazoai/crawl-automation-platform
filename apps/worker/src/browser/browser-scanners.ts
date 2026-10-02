@@ -21,14 +21,19 @@ export function acceptsAddress(readers: readonly ((url: string) => unknown)[], u
 }
 
 export class BrowserScanners {
-  constructor(private readonly capabilities: readonly BrowserScanCapability[]) {}
+  constructor(
+    private readonly capabilities: readonly BrowserScanCapability[],
+    private readonly refresh?: () => Promise<void>,
+  ) {}
 
   async prepare(url: string, signal: AbortSignal): Promise<void> {
+    await this.refresh?.();
     await this.select(url).prepare?.(url, signal);
   }
 
   async scan(request: Parameters<BrowserBrandScanner["scan"]>[0], signal: AbortSignal) {
     await request.checkpoint?.();
+    await this.refresh?.();
     const capability = this.select(request.sourceUrl);
     await capability.prepare?.(request.sourceUrl, signal);
     return capability.scanner.scan(request, signal);

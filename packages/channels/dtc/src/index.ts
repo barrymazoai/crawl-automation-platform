@@ -9,3 +9,6 @@ export * from "./identity.js";
 export * from "./settings.js";
 export * from "./brand-source.js";
 export * from "./brand-evidence.js";
+export * from "./analysis/analyzer.js";
+export * from "./analysis/pages.js";
+export * from "./stored-settings.js";

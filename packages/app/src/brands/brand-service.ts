@@ -99,6 +99,7 @@ export class BrandService {
 
   private async checkSource(input: { channel: string; brandId: string; url: string }) {
     if (input.channel === "dtc") {
+      await this.deps.registry?.refresh();
       const brand = await this.get(input.brandId);
       assertSourcePolicy(this.deps.registry, { ...input, brandName: brand.name });
     }

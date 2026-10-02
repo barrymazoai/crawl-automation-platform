@@ -52,3 +52,6 @@ export * from "./history/history-errors.js";
 export * from "./enrichment/index.js";
 export * from "./usage/index.js";
 export * from "./resources/browser-recovery.js";
+export * from "./site-analysis/site-analysis-service.js";
+export * from "./site-analysis/site-analysis-runner.js";
+export * from "./site-analysis/errors.js";

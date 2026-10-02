@@ -15,6 +15,21 @@ export class ChannelRegistry {
     }
   }
 
+  private reload: (() => Promise<readonly ChannelAdapter[]>) | undefined;
+
+  /** Install a repository-backed policy loader at the composition root. */
+  withRefresh(load: () => Promise<readonly ChannelAdapter[]>): this {
+    this.reload = load;
+    return this;
+  }
+
+  async refresh(): Promise<void> {
+    const adapters = await this.reload?.();
+    for (const adapter of adapters ?? []) {
+      this.adapters.set(adapter.id, adapter);
+    }
+  }
+
   get(channel: ChannelId): ChannelAdapter {
     const adapter = this.adapters.get(channel);
     if (!adapter) {

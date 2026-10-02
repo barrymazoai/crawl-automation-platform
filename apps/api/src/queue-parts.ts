@@ -18,7 +18,7 @@ import {
 } from "@crawl-automation/app";
 import type { Database, Logger, TemporalClient } from "@crawl-automation/platform";
 import type { ApiConfig } from "./config.js";
-import { channelRegistry } from "./resources/channel-registry.js";
+import { persistedRegistry } from "./resources/channel-registry.js";
 
 export { channelRegistry } from "./resources/channel-registry.js";
 
@@ -32,7 +32,7 @@ export function productRuns(parts: {
     store: new PostgresProductRunStore(parts.database),
     sources: new PostgresBrandScans(parts.database),
     starter: new TemporalPipelineStarter(parts.temporal.client),
-    registry: channelRegistry(configuredDtcSites(parts.config.browser?.dtc)),
+    registry: persistedRegistry(parts.database, configuredDtcSites(parts.config.browser?.dtc)),
     targets: parts.config.pipeline,
   });
 }

@@ -3,6 +3,7 @@ import type {
   EnrichmentBackfill,
   BrandScanService,
   BrandService,
+  SiteAnalysisService,
   BrandSourceImport,
   FleetService,
   HistoryService,
@@ -18,6 +19,7 @@ import { isAppError, type AppError } from "@crawl-automation/platform";
 import { initTRPC, TRPCError } from "@trpc/server";
 
 export interface ApiContext {
+  siteAnalyses?: SiteAnalysisService | undefined;
   usage?: UsageService | undefined;
   enrichment?: EnrichmentBackfill;
   runs: RunService;

@@ -34,7 +34,7 @@ const multiBrand = z.strictObject({
   brands: z.array(brandCatalog).min(1),
 });
 
-/** Only explicitly configured sites/brands are enabled; catalogs are never inferred. */
+/** Shared validation for private settings and browser-verified, persisted source settings. */
 export const DtcSiteSettingsSchema = z.union([singleBrand, multiBrand]).superRefine((site, ctx) => {
   const catalogs = site.kind === "multi-brand" ? site.brands : [site];
   if (catalogs.some((entry) => !ownCatalog(site.siteKey, entry.catalogUrl))) {

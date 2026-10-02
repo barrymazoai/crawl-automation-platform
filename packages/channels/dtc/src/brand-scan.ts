@@ -7,7 +7,7 @@ import {
   type ListedProduct,
   type PlatformCatalog,
 } from "@crawl-automation/channels-core";
-import { catalogUrl, dtcProductAddress, siteForUrl } from "./address.js";
+import { catalogUrl, dtcProductAddress, siteForBrandUrl } from "./address.js";
 import type { DtcCatalogPages } from "./catalog-pages.js";
 import { dtcDocument } from "./product.js";
 import { DTC_SITES, type DtcSitePolicy } from "./site-policy.js";
@@ -80,7 +80,7 @@ export class DtcBrandScan {
   ) {}
 
   async scan(request: BrowserScanRequest, signal: AbortSignal): Promise<DtcBrandScanResult> {
-    const site = siteForUrl(request.sourceUrl, this.deps.sites ?? DTC_SITES);
+    const site = siteForBrandUrl(request.sourceUrl, this.deps.sites ?? DTC_SITES);
     if (site.platform === "unverified") {
       throw platformPageErrors.create("DTC.PLATFORM_UNVERIFIED");
     }

@@ -1,3 +1,4 @@
+import { siteAnalysisService } from "./site-analysis-parts.js";
 import type { UsageService, EvidenceService } from "@crawl-automation/app";
 import { configuredDtcSites } from "@crawl-automation/channel-dtc";
 import { brandService } from "./brand-parts.js";
@@ -50,6 +51,7 @@ import { fleetService } from "./routers/fleet-parts.js";
 
 /** Everything the API is built from. Adapters are created once and shared. */
 export interface ApiParts {
+  siteAnalyses: ReturnType<typeof siteAnalysisService>;
   usage: UsageService;
   enrichment: EnrichmentBackfill;
   config: ApiConfig;
@@ -126,6 +128,7 @@ function registerServices(container: Parts): void {
     runs: asFunction(runService).singleton(),
     queue: asFunction(queueService).singleton(),
     brands: asFunction(brandService).singleton(),
+    siteAnalyses: asFunction(siteAnalysisService).singleton(),
     reviews: asFunction(reviewService).singleton(),
     products: asFunction(productService).singleton(),
     history: asFunction(historyService).singleton(),

@@ -9,6 +9,8 @@ import { dtcPreparationScript } from "./page-preparation.js";
 
 export interface DtcSitePolicy {
   siteKey: string;
+  /** Retain a pre-existing single-brand policy when discovered catalogs share its domain. */
+  legacySite?: DtcSitePolicy;
   kind: "single-brand" | "multi-brand";
   platform: StorePlatform | "unverified";
   origins: readonly string[];
@@ -82,5 +84,5 @@ export function dtcSitePolicy(site: SiteInput): DtcSitePolicy {
   };
 }
 
-/** Sites are enabled only through config after a browser check, including the requested first site. */
+/** Private configured sites; API-discovered sources are loaded from their persisted policies. */
 export const DTC_SITES: readonly DtcSitePolicy[] = [];

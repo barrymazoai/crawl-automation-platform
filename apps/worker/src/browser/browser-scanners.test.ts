@@ -218,3 +218,19 @@ it("checks cancellation before store preparation or opening a browser page", asy
   expect(prepare).not.toHaveBeenCalled();
   expect(scan).not.toHaveBeenCalled();
 });
+it("loads persisted policies before selecting a newly discovered source for either browser entry point", async () => {
+  let loaded = false;
+  const refresh = vi.fn(async () => {
+    loaded = true;
+  });
+  const scan = vi.fn(async () => ({ pages: [], archiveKeys: [], complete: true, soldHere: true }));
+  const scanner = new BrowserScanners([{ accepts: () => loaded, scanner: { scan } }], refresh);
+  await scanner.prepare("https://new.example/collections/all", new AbortController().signal);
+  loaded = false;
+  await scanner.scan(
+    { scanId: "scan", sourceUrl: "https://new.example/collections/all" },
+    new AbortController().signal,
+  );
+  expect(refresh).toHaveBeenCalledTimes(2);
+  expect(scan).toHaveBeenCalledOnce();
+});

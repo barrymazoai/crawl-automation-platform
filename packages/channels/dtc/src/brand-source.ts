@@ -45,6 +45,9 @@ export function assertDtcBrandSource(
 ): void {
   const source = dtcBrandSource(entry.url, sites);
   const site = sites.find((candidate) => candidate.siteKey === source.siteKey);
+  if (site?.legacySite?.catalogUrl === entry.url) {
+    return;
+  }
   if (site?.kind === "multi-brand" && !sameDtcBrand(source.brand, entry.brandName)) {
     throw dtcEvidenceErrors.create("DTC.BRAND_SOURCE_MISMATCH", {
       details: { configuredBrand: source.brand, brandName: entry.brandName, url: entry.url },

@@ -61,6 +61,9 @@ export class ProductRuns {
     if (!source) {
       throw appErrors.create("RUN.SOURCE_NOT_FOUND", { details: { sourceId: run.sourceId } });
     }
+    if (source.channel === "dtc") {
+      await this.deps.registry.refresh();
+    }
     const target = this.deps.targets.channels[source.channel];
     if (!target) {
       throw appErrors.create("RUN.CHANNEL_UNSUPPORTED", { details: { channel: source.channel } });

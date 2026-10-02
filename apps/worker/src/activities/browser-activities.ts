@@ -1,3 +1,4 @@
+import { SiteAnalysisSchema } from "@crawl-automation/v3-contracts";
 import { PostgresBrandScans } from "@crawl-automation/adapters";
 import { checkScanCancellation } from "@crawl-automation/app";
 import { BrowserScanInputSchema, ProductPipelineInputSchema } from "@crawl-automation/workflows";
@@ -12,6 +13,8 @@ import { checkBrowserPermit } from "./browser-permit.js";
  */
 export function browserActivities(parts: WorkerParts) {
   const handlers = {
+    analyzeSiteInBrowser: (raw: unknown, signal: AbortSignal) =>
+      parts.browser.analysis.run(SiteAnalysisSchema.parse(raw), signal),
     captureBrowserProduct: async (raw: unknown, signal: AbortSignal) => {
       const input = ProductPipelineInputSchema.parse(raw);
       await parts.browser.ensureStore(input.url, signal);
@@ -26,8 +29,6 @@ export function browserActivities(parts: WorkerParts) {
       const checkpoint = () =>
         checkScanCancellation(new PostgresBrandScans(parts.database), request.scanId);
       await checkpoint();
-      const { sourceUrl } = request;
-      await parts.browser.ensureStore(sourceUrl, signal);
       return parts.browser.scanner.scan({ ...request, checkpoint }, signal);
     },
   };
