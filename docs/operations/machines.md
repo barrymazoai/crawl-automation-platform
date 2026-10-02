@@ -680,3 +680,16 @@ See [Costco operations](costco-brand-scans.md) for evidence, completeness and ac
 | `processing.codex.vision.visualProtocol` + `ingredientPresencePolicy` | worker | `label-visual-wire/3`, `allowNoOtherIngredientsSection: true` | The image reader reports whether an other-ingredients section is printed. **Changes the vision fingerprint**: `plan.visionConfigFingerprint` and `label.visionConfigFingerprint` must both be set to the value the vision settings compute (`c43f482d…` for the current settings; was `b6251a82…`). |
 
 Whole Foods brand search returns a different subset per call; a brand's products saturate after about 3–4 scans (Nordic Naturals 70, MegaFood 71, Ancient Nutrition 46 on 2026-10-01). Scan a brand several times; repeated SKUs are skipped by `recentScanSkipHours`.
+
+## Server 二 browser worker (R72, deployed 2026-10-02)
+
+- Root `/Users/server2/apps/crawler-v3`; private files in `private/` (`worker.json`, `machine.json`, mode 600) and
+  Temporal client certificates in `temporal-server2/credentials/`, written from Server 一's live config by
+  `server2-config.sh` (database host `192.168.68.70:55432`, no tunnel).
+- One PM2 job `browser-worker` (`PM2_HOME=<root>/pm2`), process `browser` with roles
+  `browser@v3.browser.server2-ego-space-6` and `resources@v3.resources.server2-health` (the resources role only
+  runs the local health monitor for `server2-ego-space-6` and `dtc-brand-scan`; nothing schedules on that queue).
+- Ego space 6 (`crawler-browser-worker`); space 1 (`dtc-bridge`) is off limits. The old DTC bridge process was
+  stopped on 2026-10-02 (owner decision).
+- Deploy: `git clone` into `<root>/tools/deploy`, check out the commit, `pnpm install --frozen-lockfile`, then
+  `pnpm --filter @crawl-automation/ops-deploy run deploy <root>/private/machine.json <commit>` (no `--migrate`).
