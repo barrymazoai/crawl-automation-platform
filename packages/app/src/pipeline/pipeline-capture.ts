@@ -102,10 +102,18 @@ export class PipelineCapture<
     request: CaptureRequest,
     captured: Result,
   ): Promise<WithoutPage<Result>> {
-    const { page, ...rest } = captured as Result & { page?: CapturedPage };
+    const { page, variantPages, ...rest } = captured as Result & {
+      page?: CapturedPage;
+      variantPages?: { operationId: string; page: CapturedPage }[];
+    };
     if (page) {
       await this.recordLive(request, page);
       await this.recordMetrics(request, page);
+    }
+    for (const variant of variantPages ?? []) {
+      const member = { ...request, operationId: variant.operationId, url: variant.page.url };
+      await this.recordLive(member, variant.page);
+      await this.recordMetrics(member, variant.page);
     }
     return rest as WithoutPage<Result>;
   }
@@ -133,7 +141,7 @@ export class PipelineCapture<
   }
 }
 
-type WithoutPage<Result> = Omit<Result, "page">;
+type WithoutPage<Result> = Omit<Result, "page" | "variantPages">;
 
 function isSighted(captured: { status: string }): captured is Sighted {
   return captured.status === "sighted";

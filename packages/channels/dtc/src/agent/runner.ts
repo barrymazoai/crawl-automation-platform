@@ -13,6 +13,7 @@ import { captureOutputFiles, retainCaptureDirectory, type CaptureFile } from "./
 import { dtcAgentErrors } from "./errors.js";
 import { capturePrompt } from "./prompt.js";
 import { CaptureReviewSchema } from "./product-review.js";
+import { VariantContextSchema } from "./variant-review.js";
 import type { AgentCaptureRequest } from "./request.js";
 
 const ResultSchema = z.strictObject({
@@ -68,6 +69,11 @@ export class DtcCaptureAgent {
       await writeFile(
         join(cwd, "capture-review.schema.json"),
         JSON.stringify(z.toJSONSchema(CaptureReviewSchema)),
+        { flag: "wx" },
+      );
+      await writeFile(
+        join(cwd, "variant-context.schema.json"),
+        JSON.stringify(z.toJSONSchema(VariantContextSchema)),
         { flag: "wx" },
       );
     }

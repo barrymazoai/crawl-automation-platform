@@ -2,6 +2,25 @@
 
 此文只适用于宿主 `captureMode=product`。沿用旧采集的站点判断、观察、收割和证据包；后续 OCR、规格处理及业务入库由宿主负责。
 
+## 多规格交接
+
+基础商品仍只收割一次，`records.json` 只有一条，保留完整网站规格清单和所有实际观察的图片。逐规格处理使用这份原件，不重新抓取基础商品。缺货规格同样保留。
+
+有多个规格时，为每个规格在 `capture-review.json.variantContexts` 保存一项（实际 schema 在任务根 `variant-context.schema.json`）：
+
+```json
+{"variantId":"实际网站ID","status":"observed","methodPath":"methods/variant-ID.json","galleryUrls":["该规格实际适用且已保存的原图URL"],"basis":"variant-state","reason":"本次实际操作和适用范围依据","evidence":["该状态的截图或原件路径"]}
+```
+
+- `methodPath` 指向单独保存的 `observed-product/1` 方法；先用同一 `readObservedProduct` 预览核实。规格身份仍由网站提供，不能从图片判断。该方法返回完整的原始网站 variants 清单，不手工删减或修改。
+- `variant-state`：明确操作网站选项，确认规格、价格方案/地区，展开所需内容并另存当前 DOM 和截图。method.productUrl 和 DOM 来源 URL 带该真实 variant；只映射此状态适用的字段。每次保存新文件，不能覆盖原件。galleryUrls 是确认适用的完整图库范围，不按文件名或关键词挑 Facts 图片。
+- `website-shared`：仅当网站明确说明这些内容适用于该规格/全部这些规格时使用，可以引用基础商品方法；reason 必须说明网站的实际依据并留证。仅看到图库未变化、商品名相同或图片没绑定，不能证明文字/配方共用。基础商品共用的方法也不能带默认规格 SKU/价格。
+- 不同配方/口味/剂量的内容按网站选项和对应区块分别指定；不得复制兄弟规格的原料、用法或 Facts。网站明确的尺寸/包装数量关系可加 `difference:{"kind":"size"或"pack-count","group":"网站实际选项组名"}`；其他关系可用 flavour/strength/form/unknown。不凭关键词自动分类；该声明仅允许后续尝试现有的标签一致性检查，不直接复用配方。
+- 各状态观察到的新图库原图加入基础收割的 `observedGalleryUrls` 并全部保存，再在每项中引用已保存子集；不可用其他规格明确绑定的图片。
+- 无法确认某规格的适用范围、选项不可访问或出现状态冲突，保存 `{"variantId":"真实ID","status":"unresolved","reason":"具体未确认内容","evidence":["实际证据路径"]}`。不要猜测，也不丢掉该规格。宿主会单独记 Review，继续处理其他规格。缺少上下文的旧原件也会这样保留，不能把旧基础商品成功冒充每个规格都成功。
+
+这些都是资料采集及交接，不在浏览器阶段执行 OCR、语义提取或入库；完成原件和复核后释放页面。
+
 ## 先观察，再指定读取位置
 
 1. 用 Ego skill 核对宿主派发的页面、商品身份、实际品牌、平台、规格选择器及当前选项。截图必须实际查看。展开描述、用法、配料、警示等实际区块，查看轮播每一项及延迟加载内容。

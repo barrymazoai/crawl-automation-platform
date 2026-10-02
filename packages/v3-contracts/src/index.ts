@@ -21,6 +21,7 @@ export * from "./gnc.js";
 export * from "./network.js";
 export * from "./scraperapi.js";
 export * from "./channel-evidence.js";
+export * from "./dtc-variants.js";
 export * from "./gnc-acquisition.js";
 export * from "./gnc-product.js";
 export * from "./label-extraction.js";

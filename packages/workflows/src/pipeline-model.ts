@@ -1,5 +1,6 @@
 import {
   AcquisitionReviewSchema,
+  DtcVariantHandoffsSchema,
   ChannelPlanInputSchema,
   ExecutionIdSchema,
   FileAcquireInputSchema,
@@ -207,6 +208,7 @@ export const BrowserCaptureResultSchema = z.discriminatedUnion("status", [
     archiveKey: z.string().min(1).max(1024),
     /** Browser adapters with their own formulas use the shared planning and Label path. */
     planned: CaptureResultSchema.options[0].optional(),
+    variants: DtcVariantHandoffsSchema.optional(),
   }),
   AcquisitionReviewSchema,
   ListingResultSchema,

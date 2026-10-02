@@ -74,7 +74,10 @@ async function readRecordAndReview(root: string, url: string) {
   return { record, review };
 }
 
-async function verifyMethod(input: { root: string; files: CaptureFile[] }, record: HarvestRecord) {
+export async function verifyMethod(
+  input: { root: string; files: CaptureFile[] },
+  record: HarvestRecord,
+) {
   try {
     const sources = await verifyObservedProduct(input.root, record);
     if (

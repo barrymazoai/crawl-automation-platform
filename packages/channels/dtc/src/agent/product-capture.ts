@@ -14,6 +14,8 @@ import { readCapturedProduct } from "./product-record.js";
 import { capturedProductProjection } from "./product-projection.js";
 import { dtcAgentErrors } from "./errors.js";
 import { capturedBrandSighting } from "./product-sighting.js";
+import { DtcVariantHandoffs } from "./variant-handoffs.js";
+import { nativeCaptureResult } from "./product-result.js";
 
 export class DtcAgentProductCapture {
   constructor(
@@ -28,15 +30,10 @@ export class DtcAgentProductCapture {
   ) {}
 
   async capture(request: CaptureRequest, signal: AbortSignal): Promise<BrowserCaptureResult> {
-    const planning = this.planning(request);
+    const planning = { ...this.planning(request), parserVersion: "dtc-agent/1" as const };
     const { captured, retained, original } = await this.harvest(request, signal);
     const site = siteForUrl(request.url, this.deps.sites);
-    const sighting = capturedBrandSighting({
-      request,
-      site,
-      ...retained,
-      archiveKey: original.source.objectKey,
-    });
+    const sighting = this.sighting(request, { site, retained, original });
     if (sighting) {
       return sighting;
     }
@@ -50,15 +47,49 @@ export class DtcAgentProductCapture {
       url: request.url,
       sourceUrl: request.sourceUrl,
     });
-    const sourcePlan = await this.deps.sourcePlans.publish(
-      request,
+    const sourcePlan = await this.deps.sourcePlans.publish(request, { parsed, planning }, signal);
+    const expanded = await this.expand(
       {
+        ...captured,
+        ...retained,
+        request,
+        site,
         parsed,
-        planning: { ...planning, parserVersion: "dtc-agent/1" },
+        planning,
       },
       signal,
     );
-    return captureResult({ request, parsed, sourcePlan, original });
+    return nativeCaptureResult({
+      request,
+      parsed,
+      sourcePlan,
+      original,
+      variants: expanded.variants,
+      currency: retained.record.fields.currency,
+    });
+  }
+
+  private sighting(
+    request: CaptureRequest,
+    input: {
+      site: DtcSitePolicy;
+      retained: Awaited<ReturnType<typeof readCapturedProduct>>;
+      original: ArchivedHtml;
+    },
+  ) {
+    return capturedBrandSighting({
+      request,
+      site: input.site,
+      ...input.retained,
+      archiveKey: input.original.source.objectKey,
+    });
+  }
+
+  private async expand(input: Parameters<DtcVariantHandoffs["publish"]>[0], signal: AbortSignal) {
+    if (input.record.variants.length < 2) {
+      return {};
+    }
+    return { variants: await new DtcVariantHandoffs(this.deps).publish(input, signal) };
   }
 
   private async harvest(request: CaptureRequest, signal: AbortSignal) {
@@ -140,35 +171,4 @@ export class DtcAgentProductCapture {
       signal,
     );
   }
-}
-
-function captureResult(input: {
-  request: CaptureRequest;
-  parsed: ReturnType<typeof capturedProductProjection>;
-  sourcePlan: Awaited<ReturnType<ProductSourcePlans["publish"]>>;
-  original: ArchivedHtml;
-}): BrowserCaptureResult {
-  const { request, parsed, sourcePlan, original } = input;
-  const page = {
-    channel: "dtc" as const,
-    url: request.url,
-    ...parsed.identity,
-    externalId: parsed.identity.listingId,
-    capturedAt: original.capturedAt,
-    commerce: parsed.commerce,
-    archive: { objectKey: original.source.objectKey, sha256: original.source.sha256 },
-  };
-  return {
-    status: "captured",
-    ...parsed.identity,
-    archiveKey: page.archive.objectKey,
-    page,
-    planned: {
-      status: "captured",
-      sourcePlan,
-      factsComplete: parsed.facts.complete,
-      labelText: parsed.facts.text,
-      family: null,
-    },
-  };
 }

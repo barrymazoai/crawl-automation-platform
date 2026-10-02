@@ -12,6 +12,8 @@ export const CaptureReviewSchema = z.object({
   surface: z.literal("local_file"),
   verifier: z.literal("codex"),
   evidence: z.array(z.string()).min(1),
+  // Validate independently: one bad variant must not discard the other retained variants.
+  variantContexts: z.array(z.unknown()).max(200).optional(),
   imageAssignments: z
     .array(
       z.object({

@@ -1,4 +1,5 @@
 import type { RetainedPublication } from "@crawl-automation/platform";
+import type { DtcVariantHandoff } from "@crawl-automation/v3-contracts";
 import type { HttpCapture } from "../capture/http-capture.js";
 import { OriginalHtmlArchive } from "../capture/original-html-archive.js";
 import type { ChannelRegistry } from "../registry.js";
@@ -18,6 +19,9 @@ export type BrowserCaptureResult =
       archiveKey: string;
       /** Present when the adapter plans its own formula; absent for formula-family-only channels. */
       planned?: Omit<Extract<ProductCaptureResult, { status: "captured" }>, "page">;
+      variants?: DtcVariantHandoff[];
+      /** Independently identified website offers, including unavailable variants. */
+      variantPages?: { operationId: string; page: CapturedPage }[];
       /** What the page showed, for the metrics history (recorded by the pipeline, not passed to the workflow). */
       page: CapturedPage;
     }

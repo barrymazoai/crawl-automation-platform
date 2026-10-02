@@ -2,6 +2,11 @@ import { defineErrors } from "./define-errors.js";
 
 /** Registered reasons retained in Reviews and source observations. */
 export const pipelineErrors = defineErrors({
+  "DTC.VARIANT_EVIDENCE": { category: "SOURCE", message: "Variant evidence scope is unverified." },
+  "DTC.VARIANTS_INCOMPLETE": {
+    category: "PROCESSING",
+    message: "Some website variants remain unresolved.",
+  },
   "BRAND_SCAN.UNRESOLVED": { category: "SOURCE", message: "Unresolved." },
   "CHANNEL.DEPENDENCY_UNAVAILABLE": { category: "PROCESSING", message: "Dependency unavailable." },
   "FORMULA.FAMILY_UNREADABLE": { category: "PROCESSING", message: "Family unreadable." },

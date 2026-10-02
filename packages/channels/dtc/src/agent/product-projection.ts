@@ -16,6 +16,8 @@ interface ProjectionInput {
   url: string;
   sourceUrl?: string | undefined;
   html?: Uint8Array;
+  /** Host verified a separate model-observed context for this exact website variant. */
+  variantContextVerified?: boolean;
 }
 
 export function capturedProductProjection(input: ProjectionInput): ParsedProduct<DtcRendered> {
@@ -28,7 +30,7 @@ export function capturedProductProjection(input: ProjectionInput): ParsedProduct
   const variantId = captureVariant(input);
   const identity = { listingId: address.listingId, variantId };
   const factsHtml = stringField(record, "supplement_facts") ?? stringField(record, "facts_table");
-  const facts = completeFacts(record.variants.length > 1 ? null : factsHtml);
+  const facts = completeFacts(unassigned(input) ? null : factsHtml);
   const evidence = productEvidence(input, brandEvidence.observedBrand);
   return {
     channel: "dtc",
@@ -81,13 +83,17 @@ function productEvidence(input: ProjectionInput, observedBrand: string | null) {
           {
             field: "supplement-facts",
             html: factsHtml,
-            scope: record.variants.length > 1 ? "product-unassigned-variant" : "selected-product",
+            scope: unassigned(input) ? "product-unassigned-variant" : "selected-product",
           },
         ]
       : [],
     imageCandidates: capturedImages(input),
     warnings: record.flags,
   });
+}
+
+function unassigned(input: ProjectionInput) {
+  return input.record.variants.length > 1 && !input.variantContextVerified;
 }
 
 function capturedVariantOptions(input: ProjectionInput): string[] {

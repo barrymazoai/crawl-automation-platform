@@ -33,6 +33,44 @@ const sighted = (sighting: ListingSighting): ProductCaptureResult => ({
 });
 
 describe("PipelineCapture", () => {
+  it("records each website variant under its own history and listing identity", async () => {
+    const page = {
+      channel: "dtc" as const,
+      url: "https://shop.example/products/item",
+      listingId: "item",
+      variantId: null,
+      externalId: "item",
+      capturedAt: "2026-10-02T12:00:00.000Z",
+      commerce: null,
+      archive: { objectKey: "base/projection.json", sha256: "a".repeat(64) },
+    };
+    const variantPages = ["one", "two"].map((variantId) => ({
+      operationId: `variant-${variantId}`,
+      page: { ...page, variantId, url: `${page.url}?variant=${variantId}` },
+    }));
+    const history = { record: vi.fn() };
+    const listings = { record: vi.fn() };
+    const pipeline = new PipelineCapture({
+      capture: { capture: async () => ({ status: "captured", page, variantPages }) },
+      history,
+      listings,
+    });
+    expect(await pipeline.capture({ ...request, channel: "dtc", url: page.url }, signal())).toEqual(
+      { status: "captured" },
+    );
+    expect(
+      history.record.mock.calls.map(([shown, run]) => [shown.variantId, run.operationId]),
+    ).toEqual([
+      [null, request.operationId],
+      ["one", "variant-one"],
+      ["two", "variant-two"],
+    ]);
+    expect(listings.record.mock.calls.map(([shown]) => shown.source)).toEqual([
+      `crawler-v3:product-run:${request.operationId}`,
+      "crawler-v3:product-run:variant-one",
+      "crawler-v3:product-run:variant-two",
+    ]);
+  });
   it("ends a missing page as an unlisted sighting (not found), not a Review", async () => {
     const { recorded, pipeline } = captureAnswering(
       sighted({
