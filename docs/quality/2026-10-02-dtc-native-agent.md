@@ -73,3 +73,9 @@ Server 二于 08:40:19 经 origin/main fresh clone/build 部署 `7df2d24`，Work
 另核对旧 V3 `archive/packages/v3-channels/src/dtc-rendered.ts`：旧交接使用基础商品 variantId=null；完整 variants 原件留存，但不等于自动逐规格提交已实现。修复新 capture 对多规格基础 URL 的默认规格误绑定：基础商品任务按商品级交接全图库，原始规格及图片对应关系仍在不可变 records/review 中；显式规格 URL 保留严格隔离。未将共用成分表无证据复制到不同配方。33 项纯回归通过；Mini 下游交接及真实多规格仍待验收，CRAWLV3-155 已设 In Progress。
 
 补充日志审计：Codex 官方 exec JSONL emitter 只输出已映射事件，缺少独立 view_image 事件不能证明模型没有看图。当前证据是原生截图、图库切换、实际保存原图和模型逐图记录；不得把缺失日志事件当成失败断言。仍需核验具体原图内容。
+
+## 品牌补读部署与单品入口缺陷（09:05 UTC）
+
+`dbb7944` 于 08:56:07 经 Git 新克隆构建部署 Server 二；39 项 Mini 回归全部通过。第四轮真实原件按生产 multi-brand source policy 只读重放，品牌补读得到 Solaray 并通过 matched 校验，网站规格和两张原图保留，未访问网站或改写旧业务结果。两张原图已实际查看：100 VegCaps Zinc Copper 正面、清晰的 Supplement Facts 图，后者为 Iodine 53 mcg / Zinc 50 mg / Copper 2 mg / Pumpkin 10 mg，另有四项 Other Ingredients。这只是验收对照，不是另行采集或健康建议。
+
+第五轮 run `4b088559-c505-4b09-af24-bd3e05f62457` 于 08:56:50 受理，尚在运行。模型先把长目录路径拼短导致 import 失败，自行纠正后又出现 `worker_product_not_discovered`：旧引擎默认从详情页枚举目录链接，得到推荐商品后被单品范围门过滤，反而找不到已派发商品。本地修复 Ego 单商品 runHarvest 的枚举入口，直接使用宿主已派发的精确 URL（包括明确 variant），不再调用该商品页的目录发现；后续提取、身份和原件校验保留，无 productUrl 的目录模式不变。新增两项回归，相关 harvest/native 共 45 项通过。提示直接提供完整 native import 命令，避免重新手抄任务目录。此修复尚未部署，也未中止正在进行的第五轮。

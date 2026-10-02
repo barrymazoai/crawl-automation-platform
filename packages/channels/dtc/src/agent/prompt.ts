@@ -1,4 +1,5 @@
 import type { AgentCaptureRequest } from "./request.js";
+import { pathToFileURL } from "node:url";
 import {
   productInstructions,
   catalogInstructions,
@@ -42,6 +43,7 @@ export function capturePrompt(input: PromptInput): string {
    const tab = browser.tab; browserMode="ego-native"。该适配仅复用旧 harvest 方法，不启动服务。
    runHarvest(browser, tab, plan, {outDir:${JSON.stringify(input.outDir)},log:(event,details)=>console.log(JSON.stringify({event,details}))}) 会强制任务商品范围及原生浏览器取 HTML/图片，并保留失败原因为日志。
 6. 主脚本放任务根目录 run-capture.mjs；先 node --check 再由 ego-browser nodejs -e 'await import("file://绝对脚本路径")' 执行。截图和采集文件都保存到 outDir，所有证据路径相对 outDir。
+   校验脚本后直接使用这条完整命令，不缩写目录哈希：${captureCommand(input)}
    不改引擎源码或手改 harvest-result/checkpoint/evidence。可以在 hooks 中按真实观察补充字段、图库和规格。非 Shopify 的规格用 extract 记录 variants 或 fetchProductData hook 提供实际观测数据。
 7. 缺权限、用户接管、挑战、不可确认的写入/浏览器失败：保留已取得证据并返回 needs_review。禁止重启整个任务、绕过限制或静默重试失败业务操作。
 8. 每个结论保存 method/surface/evidence/verifier；截图和图库原件必须通过 view_image 工具实际查看，记录逐张观察，不能只凭文件存在、尺寸、DOM 或文件名声称检查过。
@@ -49,4 +51,10 @@ export function capturePrompt(input: PromptInput): string {
 入口 ${input.url}；任务范围 ${JSON.stringify(input.scope)}；outDir=${input.outDir}。
 ${instructions[input.mode]}
 最后等待所有脚本结束，再返回给定 JSON schema。complete 仅表示本次采集齐备；原件、产物、目录耗尽与身份均由宿主继续校验。`;
+}
+
+function captureCommand(input: PromptInput) {
+  const script = pathToFileURL(`${input.cwd}/run-capture.mjs`).href;
+  const quote = (value: string) => `'${value.replaceAll("'", "'\\''")}'`;
+  return `${quote(input.cliPath)} nodejs -e ${quote(`await import(${JSON.stringify(script)})`)}`;
 }

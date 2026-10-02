@@ -294,8 +294,17 @@ export async function runHarvest(browser, tab, planInput, opts = {}) {
   const tabRef = { tab };
   const pageHtmlStats = newPageHtmlStats();
   const hooks = {
-    enumerate: opts.hooks?.enumerate
-      || ((seeds, enumerateOpts) => collectProductUrls(tabRef.tab, seeds, enumerateOpts)),
+    // Native product jobs already receive an observed/explicit product URL from the host.
+    // Looking for listing links on its detail page discovers recommendations, not this task.
+    enumerate: browser?.mode === "ego-native" && workerProduct
+      ? async () => ({
+        productUrls: [workerProduct.href],
+        coverage: { status: "complete", seedReports: [{
+          seedUrl: workerProduct.href, status: "complete", endReason: "host_dispatched_product",
+        }] },
+      })
+      : opts.hooks?.enumerate
+        || ((seeds, enumerateOpts) => collectProductUrls(tabRef.tab, seeds, enumerateOpts)),
     extract: opts.hooks?.extract
       || (async (urls, extractOpts) => {
         if (typeof browser?.tabs?.content === "function") {

@@ -1,4 +1,5 @@
 export const productInstructions = `只采集派发的一个基础商品，保留全部真实规格；不要枚举整个商店再采集其他商品。
+Ego native runHarvest 直接使用宿主派发 URL 作为唯一待采商品，不要对详情页调用 collectProductUrls 或重做目录发现。
 使用旧 runHarvest 和按站点验证过的 hooks，最终 outDir/evidence/records.json 必须只有该商品一条，保留 fields、variants、gallery、pageHtml、coverage、flags。
 规格来自网站实际规格选项、SKU、variant 数据和可售状态，不从图片推断。平台商品用原有商品数据路径保存完整 variants；平台数据不可用时按真实选择器逐项记录，不因图片不能绑定而丢弃规格。
 fields.title 和 fields.brand 必须来自实际商品页面/该商品的平台数据，品牌不能照抄任务来源名称；保留品牌出处。其他页面原文字段原样保存，缺失留空，不推断成分。pageHtml 必须指向实际保存的详情 HTML。

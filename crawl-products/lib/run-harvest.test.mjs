@@ -758,3 +758,21 @@ it("native Ego keeps observed variants and gallery without keyword-added images"
   expect(records[0].gallery.map(image => image.url)).toEqual(["https://cdn.test/sleep.jpg"]);
   expect(fetchImage).toHaveBeenCalledTimes(1);
 });
+
+it.each(["", "?variant=42"])("captures the native dispatched product without re-enumerating its detail page (%s)", async query => {
+  const target = `https://shop.test/products/sleep${query}`;
+  const outDir = await makeOutDir();
+  const hooks = baseHooks(["https://shop.test/products/recommendation"]);
+  hooks.enumerate = vi.fn(async () => { throw new Error("product tasks must not enumerate listings"); });
+  const extract = vi.fn(hooks.extract);
+  const browser = { mode: "ego-native", productUrl: target, harvestHooks: {
+    fetchImage: hooks.fetchImage, fetchProductData: async () => null,
+    fetchPageHtml: async () => "<main>Actual dispatched product</main>",
+  } };
+  const result = await runHarvest(browser, null, plan(), { outDir, hooks: { ...hooks, extract } });
+  expect(result.status).toBe("complete");
+  expect(result.counts).toMatchObject({ discovered: 1, complete: 1 });
+  expect(hooks.enumerate).not.toHaveBeenCalled();
+  expect(extract).toHaveBeenCalledExactlyOnceWith([target], expect.any(Object));
+  expect(result.seedReports[0].endReason).toBe("host_dispatched_product");
+});
