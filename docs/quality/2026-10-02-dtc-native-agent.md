@@ -147,3 +147,13 @@ Server 二 Codex login status 仍已登录 ChatGPT。等待后的一次独立 30
 字段预览本次确实执行 applyDetailExtractionProfile，不是手写期望值；正式记录 Ingredients/Directions/Warnings 分开，Facts 文本缺失时留空且两张图库完整。CRAWLV3-166 进入 Review。但网站 variants 中 `100 ct` 未进入后续 enrichment（candidate.variant.count=null，notes 说未提供包装数），单列 CRAWLV3-167 In Progress。标签配方结果与网站包装元数据是不同来源；不能改用每份量或图片猜规格，也不能因 collected 就宣称全部数据完整。
 
 10:30:02.482 发起 HMW 原生目录 scan `454aaa75-59fb-45d4-88af-8750a7ef1938`。10:30:36.441 以 Review `DTC.AGENT_REQUIRED/capture_model_permit_required` 结束，0页/0产品/0入队，未执行原生浏览器采集。账本实际 workflow 是 `brand-listing-*`，只申请 dtc-brand-scan 与 server2-ego-space-6；私有 API 配置 additionalResources 已有 mini-model-account。根因 gatedListings 依据 BROWSER_SCAN_PERMITS 排除浏览器渠道，该集合遗漏 DTC；TemporalBrandListings 因此抢先接走 DTC，未走已有正确保留 additionalResources 的 TemporalBrowserScans。CRAWLV3-168 In Progress。修复纳入 DTC 浏览器渠道，实际 brandScanParts/runner/Temporal 接线等33项回归通过；尚待 main 部署 Server 一和新受控目录验证。旧 Review 保留，DTC 批量仍 paused。
+
+## 网站规格传递修复与目录阶段冲突（10:48 UTC）
+
+`9c14f79` 已经 main 推送、Server 一 fresh clone/locked install/build 部署，10:40:07 七个服务 ready；Server 二的33项路由回归也通过。新 scan `853b613c-cae2-4b37-a617-b2f5e9302368` 10:40:35 提交、10:40:37 开始，实际走 browser-scan Workflow，许可包含 dtc-brand-scan、mini-model-account、server2-ego-space-6，Codex PID69003 和任务页 p106 均登记。DTC 批量仍暂停。
+
+目录任务随后暴露通用提示混入 runHarvest 和图库/规格收割要求，生成脚本在目录发现后调用完整商品 harvest，与 catalog 专用仅发现指令冲突。10:45:51 精确请求取消该扫描，随后 Temporal 正常取消；10:46:14 Codex 进程组 absent、任务页 3FFA3AA3FB83A1471DC61506E4C21534 absent，round 结束。归档、许可和扫描终态待复核。CRAWLV3-169 单独立案；本轮不能称目录扫描完整通过。
+
+CRAWLV3-167 修复将经过 owner/hash 校验的 DTC 网站唯一或明确选定规格，作为 website-variant/1 元数据传入 enrichment；原始 title、配方及旧 enrichment 保持原样。多规格基础商品不套用默认规格，其他渠道行为保持不变。选定规格的原始 options 也由后续采集投影保留。新增内容参与 inputHash，来源地址不参与内容去重；无规格上下文的旧输入和 prompt 保持一致。数量校验仍排除 servings 和含糊/冲突数量。83项纯回归通过，另加 Mini 留存投影离线重放测试，尚待执行和生产部署。
+
+已从 R2 回读第十轮 enrichment input 和原投影，投影2840字节、SHA256 `6946469ffdd7418632ae4ddd39155e6aa13d14c9805a5fbcaf52075f70f26324` 与原 artifactRef 一致。缓存目录 Server 一 `manual-releases/dtc-native-20261002/solaray-website-variant-replay`，不会重新抓网页或修改旧原件。

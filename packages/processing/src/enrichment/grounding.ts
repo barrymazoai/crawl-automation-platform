@@ -10,7 +10,14 @@ export function groundedCandidate(
   candidate: EnrichmentCandidate,
   input: EnrichmentContent["input"],
 ) {
-  const printed = printedStrings({ title: input.title, label: input.label });
+  const printed = printedStrings({
+    title: input.title,
+    label: input.label,
+    websiteVariant: input.websiteVariant && {
+      title: input.websiteVariant.title,
+      options: input.websiteVariant.options,
+    },
+  });
   const source = new Set(words(printed.join(" ")));
   for (const field of ["unifiedName", "baseName"] as const) {
     const word = unsupportedWord(candidate[field], source);
@@ -22,7 +29,15 @@ export function groundedCandidate(
   }
   requireHealthFunctions(candidate, { printed, source });
   const warnings = groundOptionalText(candidate, source);
-  warnings.push(...groundQuantities(candidate, input.title), ...groundForm(candidate, source));
+  const quantities = input.websiteVariant
+    ? [input.title, input.websiteVariant.title, ...input.websiteVariant.options]
+        .filter(Boolean)
+        .join("\n")
+    : input.title;
+  warnings.push(
+    ...groundQuantities(candidate, quantities, Boolean(input.websiteVariant)),
+    ...groundForm(candidate, source),
+  );
   if (warnings.length) {
     candidate.warnings = warnings;
   }

@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import type { LabelCollectedProduct } from "@crawl-automation/v3-contracts";
+import type {
+  EnrichmentWebsiteVariant,
+  LabelCollectedProduct,
+} from "@crawl-automation/v3-contracts";
 import { enrichmentContent, enrichmentHash, enrichmentInput } from "./protocol.js";
 import { enrichmentModelRequest } from "./model-request.js";
 
@@ -31,5 +34,39 @@ describe("enrichment protocol", () => {
     Object.assign(other, { operationId: "another", observation: { listingId: "other" } });
     expect(enrichmentInput(other, input.title).inputHash).toBe(first.inputHash);
     expect(enrichmentInput(other, "Vitamin D 120 capsules").inputHash).not.toBe(first.inputHash);
+  });
+  it("separates website variant content from old inputs without hashing evidence locations", () => {
+    const collection = {
+      formula: {},
+      ingredients: [],
+      otherIngredients: null,
+    } as unknown as LabelCollectedProduct;
+    const variant: EnrichmentWebsiteVariant = {
+      protocol: "website-variant/1",
+      variantId: "one",
+      title: "100 ct",
+      options: ["VegCaps: 100 ct"],
+      evidence: { sourceId: "first", sha256: "a".repeat(64) },
+    };
+    const old = enrichmentInput(collection, "Zinc Copper");
+    const current = enrichmentInput(collection, "Zinc Copper", variant);
+    expect(current.inputHash).not.toBe(old.inputHash);
+    expect(current.formulaHash).toBe(old.formulaHash);
+    expect(
+      enrichmentInput(collection, "Zinc Copper", {
+        ...variant,
+        variantId: "other",
+        evidence: { sourceId: "second", sha256: "b".repeat(64) },
+      }).inputHash,
+    ).toBe(current.inputHash);
+    expect(
+      enrichmentInput(collection, "Zinc Copper", { ...variant, title: "200 ct", options: [] })
+        .inputHash,
+    ).not.toBe(current.inputHash);
+    expect(old.input).toEqual({
+      protocol: "product-enrichment/2",
+      title: "Zinc Copper",
+      label: { formula: {}, ingredients: [], otherIngredients: null },
+    });
   });
 });

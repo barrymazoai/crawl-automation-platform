@@ -105,6 +105,54 @@ describe("optional enrichment grounding", () => {
 });
 
 describe("package quantities", () => {
+  it("uses an identified website variant count without deriving it from label servings", () => {
+    const value = {
+      ...candidate,
+      unifiedName: "Vitamin D",
+      variant: { ...candidate.variant, count: 100, strength: null },
+    };
+    const evidence = {
+      ...input,
+      title: "Vitamin D",
+      websiteVariant: {
+        protocol: "website-variant/1" as const,
+        title: "100 ct",
+        options: ["VegCaps: 100 ct"],
+      },
+    };
+    expect(decode(value, evidence).variant.count).toBe(100);
+    expect(
+      decode(value, {
+        ...evidence,
+        websiteVariant: { ...evidence.websiteVariant, title: "31 servings", options: [] },
+      }).variant.count,
+    ).toBeNull();
+    expect(decode(value, { ...evidence, title: "Vitamin D 60 capsules" }).variant.count).toBeNull();
+    expect(
+      decode(value, {
+        ...evidence,
+        websiteVariant: { ...evidence.websiteVariant, title: "100 ct / 200 ct", options: [] },
+      }).variant.count,
+    ).toBeNull();
+  });
+  it("uses explicit website package size but never the label's serving size", () => {
+    const value = {
+      ...candidate,
+      variant: { ...candidate.variant, size: { value: 500, unit: "mL" } },
+    };
+    const evidence = {
+      ...input,
+      websiteVariant: { protocol: "website-variant/1" as const, title: "500mL", options: [] },
+    };
+    expect(decode(value, evidence).variant.size).toEqual(value.variant.size);
+    expect(
+      decode(value, {
+        ...evidence,
+        websiteVariant: { ...evidence.websiteVariant, title: null },
+        label: "500mL per serving; 1 capsule",
+      }).variant.size,
+    ).toBeNull();
+  });
   it.each(["Vitamin D (31 Servings)", "Vitamin D 31 servings"])(
     "does not conflate servings with a package unit count: %s",
     (title) => {

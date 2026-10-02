@@ -62,7 +62,7 @@ function productEvidence(input: ProjectionInput, observedBrand: string | null) {
     url: input.url,
     title: stringField(record, "title"),
     brandRaw: site.kind === "single-brand" ? site.siteKey : observedBrand,
-    variantOptions: [],
+    variantOptions: capturedVariantOptions(input),
     variants: record.variants.map((variant) => ({
       listingId: address.listingId,
       variantId: variant.variantId ?? null,
@@ -82,6 +82,20 @@ function productEvidence(input: ProjectionInput, observedBrand: string | null) {
     imageCandidates: capturedImages(input),
     warnings: record.flags,
   });
+}
+
+function capturedVariantOptions(input: ProjectionInput): string[] {
+  const variantId = captureVariant(input);
+  const variants = input.record.variants;
+  const selected =
+    variantId === null ? variants : variants.filter((variant) => variant.variantId === variantId);
+  const options = selected.length === 1 ? selected[0]?.["options"] : null;
+  if (!options || typeof options !== "object" || Array.isArray(options)) {
+    return [];
+  }
+  return Object.entries(options).flatMap(([name, value]) =>
+    typeof value === "string" && value.trim() ? [`${name}: ${value}`] : [],
+  );
 }
 
 function captureVariant(input: ProjectionInput) {

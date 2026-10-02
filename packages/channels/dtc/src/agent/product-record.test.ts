@@ -172,6 +172,7 @@ it.each([1, 2])(
         }),
       });
     expect(result.record.variants).toEqual(variants);
+    expect(project().evidence.variantOptions).toEqual(count === 1 ? ["Size: 30 capsules"] : []);
     expect(project().evidence.variants.map((variant) => variant.variantId)).toEqual(
       variants.map((variant) => variant.variantId),
     );
@@ -205,6 +206,7 @@ it.each([1, 2])(
       });
       expect(project().identity.variantId).toBeNull();
       expect(explicit.identity.variantId).toBe("one");
+      expect(explicit.evidence.variantOptions).toEqual(["Size: 30 capsules"]);
       expect(explicit.evidence.imageCandidates.at(-1)?.variantId).toBe("two");
     }
   },

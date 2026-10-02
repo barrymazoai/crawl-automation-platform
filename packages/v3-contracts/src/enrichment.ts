@@ -74,6 +74,16 @@ export const EnrichmentRequestSchema = z.strictObject({
 });
 export type EnrichmentRequest = z.infer<typeof EnrichmentRequestSchema>;
 
+/** Website metadata for exactly one identified variant, independently of label/formula evidence. */
+export const EnrichmentWebsiteVariantSchema = z.strictObject({
+  protocol: z.literal("website-variant/1"),
+  variantId: z.string().min(1).max(200).nullable(),
+  title: z.string().max(4000).nullable(),
+  options: z.array(z.string().max(500)).max(10),
+  evidence: z.strictObject({ sourceId: z.string(), sha256: Sha256Schema }),
+});
+export type EnrichmentWebsiteVariant = z.infer<typeof EnrichmentWebsiteVariantSchema>;
+
 export const EnrichmentSubjectSchema = z.strictObject({
   channel: ChannelIdSchema,
   listingId: z.string().min(1).max(200),
@@ -82,6 +92,7 @@ export const EnrichmentSubjectSchema = z.strictObject({
   observation: ObservationSchema,
   title: z.string().max(4000).nullable(),
   titleEvidence: z.strictObject({ sourceId: z.string(), sha256: Sha256Schema }).nullable(),
+  websiteVariant: EnrichmentWebsiteVariantSchema.optional(),
 });
 export type EnrichmentSubject = z.infer<typeof EnrichmentSubjectSchema>;
 

@@ -91,6 +91,40 @@ function setup() {
 }
 const signal = () => AbortSignal.timeout(5000);
 
+it("keeps a prior enrichment immutable when verified website variant content arrives", async () => {
+  const state = setup();
+  state.source.subject.channel = "dtc";
+  state.source.subject.title = "Vitamin D";
+  vi.mocked(state.deps.model.interpret).mockResolvedValueOnce(
+    JSON.stringify({ ...answer, variant: { ...answer.variant, count: null } }),
+  );
+  const first = await state.service.run({ ...request, channel: "dtc" }, signal());
+  expect(first).toMatchObject({ status: "registered", candidate: { variant: { count: null } } });
+  const original = structuredClone([...state.records.values()][0]);
+  state.source.subject.websiteVariant = {
+    protocol: "website-variant/1",
+    variantId: "sixty",
+    title: "60 capsules",
+    options: [],
+    evidence: { sourceId: "retained-projection", sha256: "a".repeat(64) },
+  };
+  const second = await state.service.run({ ...request, channel: "dtc" }, signal());
+  expect(second).toMatchObject({
+    status: "registered",
+    reused: false,
+    candidate: { variant: { count: 60 } },
+  });
+  expect(state.records.size).toBe(2);
+  expect([...state.records.values()][0]).toEqual(original);
+  expect([...state.records.values()][1]?.subject.websiteVariant).toEqual(
+    state.source.subject.websiteVariant,
+  );
+  expect(state.deps.model.interpret).toHaveBeenLastCalledWith(
+    expect.objectContaining({ prompt: expect.stringContaining('"title":"60 capsules"') }),
+    expect.any(AbortSignal),
+  );
+});
+
 it("stores immutable evidence and returns the candidate; a second observation reuses by content hash", async () => {
   const state = setup();
   const first = await state.service.run(request, signal());

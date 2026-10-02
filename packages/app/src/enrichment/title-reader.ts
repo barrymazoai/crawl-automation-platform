@@ -1,7 +1,11 @@
 import type { ChannelRegistry } from "@crawl-automation/channels-core";
 import type { ArtifactResolver } from "@crawl-automation/platform";
 import { enrichmentErrors } from "@crawl-automation/processing";
-import type { EnrichmentRequest, EnrichmentSubject } from "@crawl-automation/v3-contracts";
+import type {
+  ChannelProductEvidence,
+  EnrichmentRequest,
+  EnrichmentSubject,
+} from "@crawl-automation/v3-contracts";
 
 /** Reads the title through the channel's existing projection decoder, with verified artifact ownership. */
 export class EnrichmentTitleReader {
@@ -34,10 +38,33 @@ export class EnrichmentTitleReader {
       plan.expectedUrl,
       plan.owner,
     );
+    const evidence = { sourceId: plan.source.objectKey, sha256: plan.source.sha256 };
+    const variant = websiteVariant(product.evidence, subject);
     return {
       ...subject,
       title: product.evidence.title,
-      titleEvidence: { sourceId: plan.source.objectKey, sha256: plan.source.sha256 },
+      titleEvidence: evidence,
+      websiteVariant: variant ? { ...variant, evidence } : undefined,
     };
   }
+}
+
+function websiteVariant(product: ChannelProductEvidence, subject: EnrichmentSubject) {
+  if (subject.channel !== "dtc") {
+    return null;
+  }
+  const variants =
+    subject.variantId === null
+      ? product.variants
+      : product.variants.filter((entry) => entry.variantId === subject.variantId);
+  const variant = variants.length === 1 ? variants[0] : null;
+  if (!variant || variant.listingId !== subject.listingId) {
+    return null;
+  }
+  return {
+    protocol: "website-variant/1" as const,
+    variantId: variant.variantId,
+    title: variant.title,
+    options: product.variantOptions,
+  };
 }

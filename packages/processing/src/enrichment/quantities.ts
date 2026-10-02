@@ -2,9 +2,14 @@ import type { EnrichmentCandidate } from "@crawl-automation/v3-contracts";
 
 const countUnits = "count|ct|capsules?|softgels?|tablets?|gummies|chewables?|bars?|lozenges?";
 
-/** Counts and package sizes must come from the title, never a label serving quantity. */
-export function groundQuantities(candidate: EnrichmentCandidate, title: string | null): string[] {
+/** Counts and package sizes require title/identified website variant evidence, never label servings. */
+export function groundQuantities(
+  candidate: EnrichmentCandidate,
+  title: string | null,
+  hasWebsiteVariant = false,
+): string[] {
   const warnings: string[] = [];
+  const context = hasWebsiteVariant ? "title-or-website-variant" : "title";
   const rawTitle = title?.toLowerCase() ?? "";
   const { count, size } = candidate.variant;
   const amounts = rawTitle.matchAll(
@@ -13,11 +18,11 @@ export function groundQuantities(candidate: EnrichmentCandidate, title: string |
   const counts = new Set([...amounts].map((match) => Number(match[1])));
   if (count !== null && (counts.size !== 1 || !counts.has(count))) {
     candidate.variant.count = null;
-    warnings.push("count-not-in-title");
+    warnings.push(`count-not-in-${context}`);
   }
   if (size !== null && !printedSize(size, rawTitle)) {
     candidate.variant.size = null;
-    warnings.push("size-not-in-title");
+    warnings.push(`size-not-in-${context}`);
   }
   return warnings;
 }
