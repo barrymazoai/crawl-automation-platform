@@ -59,7 +59,7 @@ function mechanicalInstructions(input: PromptInput) {
     return `runHarvest(browser, tab, plan, {outDir:${JSON.stringify(input.outDir)},observedGalleryUrls,log:(event,details)=>console.log(JSON.stringify({event,details}))}) 仅收割派发商品，保留完整网站规格和图库原图。`;
   }
   if (input.mode === "catalog") {
-    return "本次只做目录发现：使用 crawl.collectProductUrls 或根据真实观察编写的目录遍历脚本。禁止调用 runHarvest、extractProducts、upgradeProducts 或逐个商品收割。保存每页/加载阶段的链接、HTML、截图及实际零增长复核记录；不要用商品 harvest 的结果当目录耗尽证明。";
+    return `本次只做目录发现：从 ${input.skillRoot}/lib/catalog-discovery.mjs 导入 discoverCatalog，调用 discoverCatalog(tab, seedUrls, {outDir:${JSON.stringify(input.outDir)}, ...listingOptions})。seedUrls/listingOptions 来自本轮实际观察。该函数复用旧 collectProductUrls 并执行额外零增长复核，逐页保存HTML/截图和catalog-discovery.json；即使单页无翻页，也必须等额外一轮无新增。不要直接用单轮collectProductUrls结果判完成。禁止调用 runHarvest、extractProducts、upgradeProducts 或逐个商品收割。catalog.pages按discovery.pages中各页真实URL逐页提取标题，不把最终页代替前面页面。complete和zeroGrowthRounds使用discoverCatalog实际结果，禁止手改catalog-discovery.json或伪造实际零增长复核记录。`;
   }
   return "本次只做站点分析与代表页验证；禁止调用 runHarvest 或批量商品采集，不执行商品图库完整性收割。";
 }

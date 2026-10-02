@@ -985,6 +985,7 @@ export async function collectProductUrls(tab, seedUrls, opts = {}) {
       }
 
       const before = found.size;
+      const pageProductUrls = [];
       const hasMappedProductSelector = (opts.productLinkSelectors || []).length > 0;
       const deterministicUrls = hasMappedProductSelector
         ? []
@@ -996,6 +997,7 @@ export async function collectProductUrls(tab, seedUrls, opts = {}) {
           && isSafeCatalogUrl(listing.url, url, opts);
         if (!sameSite && !verifiedExternal) continue;
         const normalizedUrl = normalizeProductUrl(url);
+        pageProductUrls.push(normalizedUrl);
         const isNew = !found.has(normalizedUrl);
         found.add(normalizedUrl);
         if (verifiedExternal && isNew) {
@@ -1028,6 +1030,7 @@ export async function collectProductUrls(tab, seedUrls, opts = {}) {
         added += inlineRecords.size - beforeInline;
         added += found.size - before;
       }
+      await opts.onListingPage?.({ url: listing.url, seedUrl: seed, productUrls: dedupe(pageProductUrls) });
       log("listing_page", {
         url: pageUrl,
         added,

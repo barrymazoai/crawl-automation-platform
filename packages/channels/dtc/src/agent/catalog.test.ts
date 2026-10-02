@@ -32,6 +32,26 @@ it.each(["single-brand", "multi-brand", "foreign-domain"] as const)(
       }));
       await writeFile(join(root, "page.html"), '<main><a href="/products/zinc">Zinc</a></main>');
       await writeFile(
+        join(root, "catalog-discovery.json"),
+        JSON.stringify({
+          codec: "catalog-discovery/1",
+          complete: true,
+          zeroGrowthRounds: 1,
+          productUrls: ["https://shop.example/products/zinc"],
+          pages: [1, 2].map((round) => ({
+            round,
+            htmlPath: "page.html",
+            screenshotPath: "page.png",
+          })),
+          rounds: [1, 2].map((round) => ({
+            round,
+            growth: round === 1 ? 1 : 0,
+            coverageComplete: true,
+            productUrls: ["https://shop.example/products/zinc"],
+          })),
+        }),
+      );
+      await writeFile(
         join(root, "catalog.json"),
         JSON.stringify({
           pages,
@@ -55,6 +75,13 @@ it.each(["single-brand", "multi-brand", "foreign-domain"] as const)(
             manifestKey: "test/capture.json",
             evidenceFiles: [],
             files: [
+              ...["catalog-discovery.json", "page.html"].map((path) => ({
+                path,
+                objectKey: path,
+                mediaType: "application/json",
+                byteSize: 1,
+                sha256: "a".repeat(64),
+              })),
               {
                 path: "page.png",
                 objectKey: "image",

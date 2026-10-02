@@ -9,6 +9,7 @@ import { dtcDocument } from "../product.js";
 import { captureFile, type CaptureFile } from "./archive.js";
 import type { DtcCaptureAgent } from "./runner.js";
 import { dtcAgentErrors } from "./errors.js";
+import { verifyCatalogDiscovery } from "./catalog-discovery.js";
 
 const Page = z.object({
   url: z.url(),
@@ -76,7 +77,7 @@ export class DtcAgentBrandScan {
         .filter((product) => firstSeen(seen, product.listingId));
       pages.push({ products, cards: products.length, nextPage: null, statedTotal: null });
     }
-    verifyTermination(catalog, seen.size, saved.files);
+    await verifyCompletion(catalog, saved, { listingIds: seen, site });
     return {
       sourceUrl: request.sourceUrl,
       source,
@@ -87,6 +88,19 @@ export class DtcAgentBrandScan {
       stopped: catalog.complete ? "end" : "page_limit",
     };
   }
+}
+
+async function verifyCompletion(
+  catalog: z.infer<typeof Catalog>,
+  saved: Awaited<ReturnType<DtcCaptureAgent["capture"]>>,
+  scope: { listingIds: Set<string>; site: DtcSitePolicy },
+) {
+  verifyTermination(catalog, scope.listingIds.size, saved.files);
+  await verifyCatalogDiscovery(saved, {
+    complete: catalog.complete,
+    zeroGrowthRounds: catalog.termination.zeroGrowthRounds,
+    ...scope,
+  });
 }
 
 function verifyCatalogScope(url: string, site: DtcSitePolicy, source: string) {

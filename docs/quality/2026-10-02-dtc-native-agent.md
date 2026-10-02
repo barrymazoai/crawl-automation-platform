@@ -163,3 +163,11 @@ HMW 第二次原生目录扫描于10:47:23.600终态 cancelled，0产品入队�
 169修复按product/catalog/analysis分别给机械步骤，目录不再收到runHarvest调用样例，并要求真实零增长复核记录。宿主把captureMode传入独立Codex环境及原生工具，runHarvest在目录/分析模式下于任何读取/写入前拒绝；保留原商品模式行为。58项纯测试通过，新增宿主模式环境传递由Mini的执行器集成检查验证，尚未部署。
 
 167的83项测试在Server一fresh clone通过；首次真实投影回放因测试错误使用single-brand配置而被严格品牌校验拒绝。原投影实际是按品牌来源matched配置保存，测试改成相同品牌来源政策，未放松生产校验。`a9b4040`同时禁止跨独立元数据字段拼接数字与单位。真实重放和生产验证仍未结束。
+
+## 规格真实验收通过；目录缺少稳定轮次被拦截（11:04 UTC）
+
+`bb8bb14` 已于10:54:54/55分别在Server二/一经Git fresh clone/build部署，所有相关进程ready。Server一84项检查通过，包括R2原投影严格品牌/owner/hash校验的离线重放；Server二62项目录模式/执行器/旧harvest检查通过。Solaray仅用既有sourcePlan启动标准化工作流 `product-enrichment-2131e1276ee3ea286f76131c82151224e77cea59cd9889c1a1d562bb1f977d6e`，10:55:32.279成功记录 `3b7a8b064bb4adfa554fc34e3ae0913f17e42d970a55f55ea9a489d9d90cb266`，count=100、notes=null、明确websiteVariant标题100ct。新input/prompt/response/record全部从R2回读，prompt/response hash一致；旧5a8e318a记录仍count=null，formulaHash相同。未重抓网页、未重跑OCR；CRAWLV3-167转Review。
+
+HMW第三次原生目录scan `6e6a71fe-fca7-4bcc-8f72-5e470b7667e7`（10:55:18提交）已只执行目录发现，不再runHarvest。实际发现6个产品，保存了目录HTML/截图、标题及路线；但只有一次collectProductUrls，events只有added=6，zeroGrowthRounds=0。Codex错误声称complete，宿主正确拦截catalog_completion_unverified，11:00:16.332 Review DTC.CAPTURE_EVIDENCE，0入队、heldPermits=[]。R2 archive21文件、4,107,716字节全部大小/hash回读一致。169阶段隔离已在实际任务生效，但目录完成仍失败；新增CRAWLV3-170 In Progress。
+
+170根因是拆目录阶段时只调用了底层单轮collector，漏掉旧runHarvest ENUMERATE-to-fixpoint循环。补充discoverCatalog仅做该机械阶段，保留逐页原始HTML/截图，至少两轮且额外一轮无增长才报告complete，预算/覆盖缺失/异常保持不完整且不自动业务重试；新增宿主按实际轮次/增长/产品集与留存页面校验。69项目录收集和旧collector纯测试通过，另有12项宿主校验/指令测试正在核验。修复尚未部署。
