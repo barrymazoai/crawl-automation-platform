@@ -31,6 +31,10 @@ export class WholeFoodsSearchObservations {
       if (page.cards !== 0 || page.statedTotal !== 0) {
         return page;
       }
+      // Later empty offsets end this read, after the same bounded empty-only retries.
+      if (target.page > 1 && attempt === this.settings.maxEmptyAttempts) {
+        return page;
+      }
     }
     this.cooldownRequested = true;
     throw wholeFoodsErrors.create("WHOLEFOODS.EMPTY_EXHAUSTED", {

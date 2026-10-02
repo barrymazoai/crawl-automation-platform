@@ -15,7 +15,7 @@ export const WholeFoodsHttpScanSettingsSchema = z.strictObject({
     offerListingDiscriminator: "A0GA",
     categoryId: "18473610011",
   }),
-  size: z.literal(100).default(100),
+  size: z.number().int().min(1).max(100).default(100),
   maxPages: z.number().int().min(1).max(250).default(250),
   maxEmptyAttempts: z.number().int().min(1).max(5).default(5),
   emptyPauseMs: z.number().int().min(0).max(60_000).default(2_000),

@@ -7,6 +7,7 @@ import {
   ListSourcesSchema,
   ScanChannelSchema,
   ScanStateSchema,
+  ScanEvidenceInputSchema,
   ToggleSourceSchema,
   UpdateBrandSchema,
   UpdateSourceSchema,
@@ -70,6 +71,11 @@ export const brandsRouter = router({
   scanGet: procedure
     .input(z.strictObject({ scanId: z.uuid() }))
     .query(({ ctx, input }) => ctx.brandScans.get(input.scanId)),
+
+  /** Saved answer inventory, or the full parsed JSON for one recorded archive key. */
+  scanEvidence: procedure
+    .input(ScanEvidenceInputSchema)
+    .query(({ ctx, input }) => ctx.brandScans.evidence(input)),
 
   /** Adds a channel's brand directory as disabled sources; loose and missing name matches come back for review. */
   importSources: procedure

@@ -2,7 +2,8 @@ import { CancelScansSchema, type CancelScanCounts } from "./scan-cancellation.js
 import type { ChannelRegistry } from "@crawl-automation/channels-core";
 import type { BrowserBrandScanners } from "./ports.js";
 import { sourceUrlOf } from "./scan-listing.js";
-import type { Logger } from "@crawl-automation/platform";
+import type { Logger, ObjectStore } from "@crawl-automation/platform";
+import { ScanEvidenceService } from "./scan-evidence.js";
 import { appErrors } from "../errors.js";
 import type { BrandScanStore } from "./ports.js";
 import {
@@ -27,6 +28,7 @@ export class BrandScanService {
       log: Logger;
       /** False when this process has no scan settings (R2 and ScraperAPI): requests are refused, never parked. */
       enabled: boolean;
+      objects?: Pick<ObjectStore, "read"> | undefined;
     },
   ) {}
 
@@ -52,6 +54,10 @@ export class BrandScanService {
 
   cancel(raw: unknown): Promise<CancelScanCounts> {
     return this.deps.store.cancel(CancelScansSchema.parse(raw));
+  }
+
+  evidence(raw: unknown) {
+    return new ScanEvidenceService(this.deps).inspect(raw);
   }
 
   list(raw: unknown): Promise<ScanRecord[]> {

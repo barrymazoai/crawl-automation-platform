@@ -4,6 +4,7 @@ import type { WholeFoodsHttpScanSettings } from "./whole-foods-http-settings.js"
 import { wholeFoodsErrors } from "./whole-foods-errors.js";
 import { WholeFoodsSearchObservations } from "./whole-foods-search-observations.js";
 import { readWholeFoodsSearch, type WholeFoodsSearchRead } from "./whole-foods-search-read.js";
+import { wholeFoodsSearchComplete, wholeFoodsSearchTotal } from "./whole-foods-search-page.js";
 
 /** Two independent observations; failures retain products and their real error codes. */
 export async function scanWholeFoodsSearch(
@@ -41,13 +42,13 @@ function outcome(
   const readsFinished = reads.length === 2 && reads.every((read) => read.summary.code === null);
   const agreement = readsFinished && catalogueAgreement(reads);
   const stable = agreement && new Set(reads.map((read) => read.summary.products)).size === 1;
-  const complete = stable;
+  const complete = readsFinished && wholeFoodsSearchComplete(pages);
   const code = reads.find((read) => read.summary.code)?.summary.code ?? null;
   return {
     pages,
     credits: run.observations.credits,
     complete,
-    statedTotal: reads[0]?.pages[0]?.statedTotal ?? null,
+    statedTotal: wholeFoodsSearchTotal(pages),
     ...(pages.some((page) => page.cards > 0) ? { soldHere: true } : {}),
     cooldownRequested: run.observations.cooldownRequested,
     code: scanCode(code, complete),
@@ -63,12 +64,8 @@ function outcome(
   };
 }
 
-/** Subsets are compatible observations, but a changing set never authorizes absence work.
- * Relevance-ranked size-100 answers can expose different subsets; keep their union, not heading totals. */
+/** Agreement is diagnostic only: completeness is proved by the deduplicated union and API total. */
 function catalogueAgreement(reads: WholeFoodsSearchRead[]): boolean {
-  if (!reads.every((read) => read.summary.succeeded)) {
-    return false;
-  }
   const sets = reads.map((read) => new Set(read.pages.flatMap((page) => page.cardIds ?? [])));
   const first = sets[0];
   const second = sets[1];

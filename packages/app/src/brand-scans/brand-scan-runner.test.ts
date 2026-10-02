@@ -142,9 +142,9 @@ function setup(input: {
   return { runner, finished, queue, lists, listings, pages, store, amazonQueue, deps };
 }
 const signal = () => new AbortController().signal;
-it.each([undefined, false, true, "compatible"] as const)(
-  "gates WF missing-listing revisits on explicit agreement %s",
-  async (agreement) => {
+it.each([undefined, 0, 1, 2] as const)(
+  "gates WF missing-listing revisits on API total proof %s, even when reads disagree",
+  async (total) => {
     const fixture = setup({ bodies: {}, channel: "wholefoods", known: ["missing"] });
     const runner = new BrandScanRunner({
       ...fixture.deps,
@@ -157,18 +157,23 @@ it.each([undefined, false, true, "compatible"] as const)(
             unresolvedFamilies: 0,
             credits: 2,
             full: true,
+            statedTotal: total ?? null,
             metrics: {
               storeId: "10259",
               attempts: [],
-              reads: [],
+              reads: ["read-1", "read-2"].map((read) => ({
+                read,
+                pages: 1,
+                cards: 1,
+                products: 1,
+                availableCounts: [1],
+                succeeded: false,
+                code: null,
+              })),
               unionSize: 1,
-              ...(agreement === undefined
-                ? {}
-                : {
-                    readsFinished: true,
-                    catalogueAgreement: agreement === "compatible" || agreement,
-                    catalogueStable: agreement !== "compatible",
-                  }),
+              readsFinished: true,
+              catalogueAgreement: false,
+              catalogueStable: false,
             },
           }),
         },
@@ -176,8 +181,8 @@ it.each([undefined, false, true, "compatible"] as const)(
     });
     await runner.tick(signal());
     expect(fixture.lists[0]?.products).toHaveLength(1);
-    expect(fixture.finished[0]?.full).toBe(agreement === true);
-    expect(fixture.listings.requestRevisits).toHaveBeenCalledTimes(agreement === true ? 1 : 0);
+    expect(fixture.finished[0]?.full).toBe(total === 1);
+    expect(fixture.listings.requestRevisits).toHaveBeenCalledTimes(total === 1 ? 1 : 0);
   },
 );
 

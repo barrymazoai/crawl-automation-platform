@@ -20,7 +20,12 @@ import { BROWSER_SCAN_PERMITS } from "./browser-scan-permit-settings.js";
 import { wholeFoodsSourceFromAmazon } from "./whole-foods-source-derivation.js";
 import { adapterBrowserScanners } from "./browser-scan-gateways.js";
 import { createListingPages } from "@crawl-automation/channels-core";
-import { type TemporalClient, type Database, type Logger } from "@crawl-automation/platform";
+import {
+  type TemporalClient,
+  type Database,
+  type Logger,
+  type ObjectStore,
+} from "@crawl-automation/platform";
 import { createR2Objects } from "@crawl-automation/platform";
 import type { BrandScanSettings } from "./brand-scan-config.js";
 
@@ -53,11 +58,7 @@ export interface BrandScanParts {
   runner: BrandScanRunner | null;
 }
 
-/**
- * Brand scans and brand-source import. Scans run in the API process like the queue dispatcher; without their
- * settings, scan requests are refused (BRAND_SCAN.NOT_CONFIGURED) and no runner starts.
- */
-export function brandScanParts(parts: {
+interface BrandScanDependencies {
   database: Database;
   queue: QueueService;
   listingStates: ListingStateService;
@@ -65,7 +66,14 @@ export function brandScanParts(parts: {
   dtcSites?: readonly DtcSitePolicy[];
   temporal: TemporalClient;
   log: Logger;
-}): BrandScanParts {
+  evidenceObjects?: Pick<ObjectStore, "read"> | undefined;
+}
+
+/**
+ * Brand scans and brand-source import. Scans run in the API process like the queue dispatcher; without their
+ * settings, scan requests are refused (BRAND_SCAN.NOT_CONFIGURED) and no runner starts.
+ */
+export function brandScanParts(parts: BrandScanDependencies): BrandScanParts {
   const { database, settings, log } = parts;
   const dtcSites = parts.dtcSites ?? [];
   const registry = channelRegistry(dtcSites, settings?.swanson, settings?.wholefoods);
@@ -73,7 +81,14 @@ export function brandScanParts(parts: {
   const remote = settings ? createR2Objects(settings.r2, settings.r2Credentials).store : null;
   const browsers = settings ? browserScanners(settings, parts.temporal, dtcSites) : {};
   const brandSources = sourceImports({ database, registry, browsers, log, store });
-  const brandScans = new BrandScanService({ store, registry, browsers, log, enabled: !!settings });
+  const brandScans = new BrandScanService({
+    store,
+    registry,
+    browsers,
+    log,
+    enabled: !!settings,
+    objects: parts.evidenceObjects,
+  });
   if (!settings || !remote) {
     return { brandScans, brandSources, runner: null };
   }

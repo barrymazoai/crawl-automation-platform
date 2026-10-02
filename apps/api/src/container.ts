@@ -1,5 +1,5 @@
+import type { UsageService, EvidenceService } from "@crawl-automation/app";
 import { configuredDtcSites } from "@crawl-automation/channel-dtc";
-import type { UsageService } from "@crawl-automation/app";
 import { usageService } from "./usage-parts.js";
 import { pathAccessible } from "@crawl-automation/platform";
 import {
@@ -20,7 +20,6 @@ import {
   DeliveryCoordinator,
   DeliveryRunner,
   type FleetService,
-  type EvidenceService,
   type OriginalEvidenceService,
   type HistoryService,
   type ProductService,
@@ -160,6 +159,7 @@ function registerLoops(container: Parts): void {
         queue: parts.queue,
         listingStates: parts.listingStates,
         settings: parts.config.brandScans,
+        evidenceObjects: parts.storageReaders?.objects,
         dtcSites: configuredDtcSites(parts.config.browser?.dtc),
         temporal: parts.temporal,
         log: parts.log,

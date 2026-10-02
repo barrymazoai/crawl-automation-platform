@@ -1,53 +1,10 @@
-import { expect, it, vi } from "vitest";
-import { brandScanErrors, type ListingPolicyRequest } from "@crawl-automation/channels-core";
+import { expect, it } from "vitest";
+import { brandScanErrors } from "@crawl-automation/channels-core";
 import { scraperApiErrors } from "@crawl-automation/platform";
-import { createWholeFoodsHttpReader } from "./whole-foods-http-reader.js";
+import { answer, setup } from "./whole-foods-search-test-support.js";
 import { WholeFoodsHttpScanSettingsSchema } from "./whole-foods-http-settings.js";
-import { wholeFoodsProductAddress, wholeFoodsBrandSearchUrl } from "./whole-foods-address.js";
+import { wholeFoodsProductAddress } from "./whole-foods-address.js";
 import { wholeFoodsStoreCookie } from "./whole-foods-store.js";
-
-const sourceUrl = wholeFoodsBrandSearchUrl({ name: "Nordic Naturals", amazonBrandId: "234060" });
-const asin = (number: number) => `B0${String(number).padStart(8, "0")}`;
-const answer = (ids: number[], total = ids.length) =>
-  JSON.stringify({
-    mainResultSet: {
-      searchResults: ids.map((number) => ({ asin: asin(number), parentAsin: asin(999) })),
-      availableTotalResultCount: total,
-      approximateTotalResultCount: 9999,
-    },
-    deliveryTargets: [],
-    searchRobotSignals: {},
-  });
-
-function setup(answers: (string | Error)[], config: Record<string, unknown> = {}) {
-  const settings = WholeFoodsHttpScanSettingsSchema.parse(config);
-  const reader = createWholeFoodsHttpReader(settings);
-  const readList = reader.readList;
-  if (!readList) {
-    throw new Error("HTTP reader must provide its policy");
-  }
-  let index = 0;
-  const read = vi.fn(async (request: ListingPolicyRequest) => {
-    const body = answers[index++];
-    if (body instanceof Error) {
-      throw body;
-    }
-    if (body === undefined) {
-      throw new Error("Unexpected extra paid request");
-    }
-    return { body, archiveKey: `${request.label}.json`, creditCost: 1, fromArchive: false };
-  });
-  const pause = vi.fn(async (_milliseconds: number): Promise<void> => undefined);
-  const controller = new AbortController();
-  return {
-    reader,
-    settings,
-    read,
-    pause,
-    controller,
-    run: () => readList({ sourceUrl, read, pause, signal: controller.signal }),
-  };
-}
 
 it("defaults to two size-100 JSON reads, configured store headers and API counts", async () => {
   const test = setup([answer([1, 2]), answer([1, 2])]);
@@ -95,7 +52,7 @@ it("defaults to two size-100 JSON reads, configured store headers and API counts
   });
   for (const product of result.pages.flatMap((page) => page.products)) {
     expect(wholeFoodsProductAddress(product.url).listingId).toBe(product.listingId);
-    expect(product.listingId).not.toBe(asin(999));
+    expect(product.listingId).not.toBe("B000000999");
   }
 });
 
@@ -188,7 +145,7 @@ it("counts the union even when different successful reads have different totals"
   const test = setup([answer([2, 1]), answer([3, 2, 4])]);
   expect(await test.run()).toMatchObject({
     complete: false,
-    statedTotal: 2,
+    statedTotal: null,
     metrics: {
       readsFinished: true,
       catalogueAgreement: false,
@@ -266,13 +223,16 @@ it("does not retry empty cards with a positive total or canary a later empty pag
   const sparse = setup([answer([], 2), answer([], 2)]);
   expect(await sparse.run()).toMatchObject({ complete: false, cooldownRequested: false });
   expect(sparse.read).toHaveBeenCalledTimes(2);
-  const later = setup([answer([1], 101), answer([])], { maxEmptyAttempts: 1 });
-  expect(await later.run()).toMatchObject({ complete: false, metrics: { unionSize: 1 } });
-  expect(later.read).toHaveBeenCalledTimes(2);
+  const later = setup([answer([1, 2], 101), answer([]), answer([1], 101)], {
+    maxEmptyAttempts: 1,
+    size: 2,
+  });
+  expect(await later.run()).toMatchObject({ complete: false, metrics: { unionSize: 2 } });
+  expect(later.read).toHaveBeenCalledTimes(3);
 });
 
 it("bounds paging and respects cancellation without another paid attempt", async () => {
-  const capped = setup([answer([1], 101)], { maxPages: 1 });
+  const capped = setup([answer([1], 101)], { maxPages: 1, size: 1 });
   expect(await capped.run()).toMatchObject({ code: "BRAND_SCAN.PAGE_LIMIT", complete: false });
   const cancelled = setup([answer([])]);
   cancelled.pause.mockImplementation(async () => cancelled.controller.abort());
@@ -349,7 +309,7 @@ it.each([
   },
 );
 
-it("applies bounded timing overrides without widening paid retries or changing size", async () => {
+it("applies bounded timing overrides without widening paid retries", async () => {
   const test = setup([answer([]), answer([1]), answer([1])], {
     emptyPauseMs: 17,
     readPauseMs: 23,
@@ -359,7 +319,8 @@ it("applies bounded timing overrides without widening paid retries or changing s
   expect(test.pause.mock.calls).toEqual([[17], [23]]);
   expect(test.read.mock.calls.every(([request]) => request.timeoutMs === 12000)).toBe(true);
   for (const invalid of [
-    { size: 99 },
+    { size: 101 },
+    { size: 0 },
     { maxEmptyAttempts: 6 },
     { requestTimeoutMs: 0 },
     { requestTimeoutMs: 70001 },

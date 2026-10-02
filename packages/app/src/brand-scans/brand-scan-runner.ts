@@ -12,6 +12,7 @@ import type { ListingStateService } from "../listings/listing-state-service.js";
 import type { QueueService } from "../queue/queue-service.js";
 import type { QueuedProduct } from "../queue/queue-model.js";
 import type { BrandScanStore } from "./ports.js";
+import { hasScanTotalProof } from "./scan-completeness.js";
 import { readListing, type BrandListing } from "./scan-listing.js";
 import type { ScanReaders } from "./scan-listing.js";
 import type { ScanChannel, ScanRecord, ScanResult } from "./scan-model.js";
@@ -104,12 +105,8 @@ export class BrandScanRunner {
   private async scan(scan: ScanRecord, signal: AbortSignal): Promise<ScanResult> {
     const amazon = scan.source.channel === "amazon" ? this.amazonQueue() : null;
     const listing = await this.read(scan, signal);
-    // Older WF results called two changing reads full. Only the stronger policy may authorize absence work.
-    if (
-      scan.source.channel === "wholefoods" &&
-      (listing.metrics?.catalogueAgreement !== true || listing.metrics.catalogueStable === false)
-    ) {
-      listing.full = false;
+    if (scan.source.channel === "wholefoods") {
+      listing.full = hasScanTotalProof(listing);
     }
     const result: ScanResult = {
       ...listingScanResult(listing),
