@@ -6,6 +6,8 @@ import { platformPageErrors } from "./errors.js";
 import type { PlatformContext } from "./types.js";
 import { allowedContent, PRODUCT_CONTENT, type ContentIdentity } from "./content-policy.js";
 import { ownContentHtml, type ProductContentScope } from "./content-scope.js";
+import { parseSrcset } from "srcset";
+import { observedImageSizes } from "./observed-images.js";
 
 const SECTIONS =
   'table, details, [id*="facts"], [class*="facts"], [id*="ingredients"], [class*="accordion"], [class*="description"]';
@@ -71,7 +73,7 @@ export function imageUrls(values: readonly string[], context: PlatformContext): 
         context.imageOrigins.includes(url.origin),
     )
     .map((url) => url.href);
-  const result = [...new Set(urls)];
+  const result = observedImageSizes(urls);
   if (result.length > 100) {
     throw platformPageErrors.create("DTC.PAGE_LIMIT");
   }
@@ -83,10 +85,10 @@ export function sectionImages(root: Element | null, identity?: ContentIdentity):
     .filter((node) => allowedContent(node, identity))
     .flatMap((node) => {
       const sources = ["src", "data-src", "data-original"].map((key) => node.getAttribute(key));
-      const srcset = node.getAttribute("srcset") ?? node.getAttribute("data-srcset") ?? "";
-      return [...sources, ...srcset.split(",").map((entry) => entry.trim().split(/\s+/)[0])].filter(
-        (value): value is string => Boolean(value),
+      const responsive = ["srcset", "data-srcset"].flatMap((key) =>
+        parseSrcset(node.getAttribute(key) ?? "").map((entry) => entry.url),
       );
+      return [...sources, ...responsive].filter((value): value is string => Boolean(value));
     });
 }
 
