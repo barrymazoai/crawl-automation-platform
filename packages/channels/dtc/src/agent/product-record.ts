@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { captureFile, type CaptureFile } from "./archive.js";
 import { dtcAgentErrors } from "./errors.js";
+import { verifyObservedProduct } from "../../../../../crawl-products/lib/observed-product.mjs";
 
 const VariantSchema = z
   .object({
@@ -52,27 +53,17 @@ export async function readCapturedProduct(input: {
   files: CaptureFile[];
   evidenceFiles?: CaptureFile[];
   url: string;
+  requireObservedMethod?: boolean;
 }) {
-  const records = z
-    .array(RecordSchema)
-    .length(1)
-    .parse(JSON.parse((await captureFile(input.root, "evidence/records.json")).toString()));
-  const record = records[0];
-  const review = ReviewSchema.parse(
-    JSON.parse((await captureFile(input.root, "capture-review.json")).toString()),
-  );
-  if (
-    !record ||
-    !sameProduct(record.productUrl, input.url) ||
-    !sameProduct(review.productUrl, input.url)
-  ) {
-    throw dtcAgentErrors.create("DTC.CAPTURE_EVIDENCE");
-  }
+  const { record, review } = await readRecordAndReview(input.root, input.url);
   verifyGallery(record, review, {
     files: input.files,
     evidenceFiles: input.evidenceFiles ?? input.files,
   });
   verifyVariant(record, review, input.url);
+  if (input.requireObservedMethod) {
+    await verifyMethod(input, record);
+  }
   const htmlPath =
     typeof record.pageHtml === "string" ? record.pageHtml : record.pageHtml.localPath;
   const html = await captureFile(input.root, htmlPath);
@@ -86,6 +77,39 @@ export async function readCapturedProduct(input: {
       mediaType: image.mime,
     })),
   };
+}
+
+async function readRecordAndReview(root: string, url: string) {
+  const records = z
+    .array(RecordSchema)
+    .length(1)
+    .parse(JSON.parse((await captureFile(root, "evidence/records.json")).toString()));
+  const record = records[0];
+  const review = ReviewSchema.parse(
+    JSON.parse((await captureFile(root, "capture-review.json")).toString()),
+  );
+  if (!record || !sameProduct(record.productUrl, url) || !sameProduct(review.productUrl, url)) {
+    throw dtcAgentErrors.create("DTC.CAPTURE_EVIDENCE");
+  }
+  return { record, review };
+}
+
+async function verifyMethod(input: { root: string; files: CaptureFile[] }, record: HarvestRecord) {
+  try {
+    const sources = await verifyObservedProduct(input.root, record);
+    if (
+      sources.some(
+        (source) =>
+          !input.files.some((file) => file.path === source.path && file.sha256 === source.sha256),
+      )
+    ) {
+      throw new Error("observed_source_not_archived");
+    }
+  } catch (cause) {
+    throw dtcAgentErrors.create("DTC.CAPTURE_EVIDENCE", {
+      details: { reason: "observed_method_unverified", message: String(cause) },
+    });
+  }
 }
 
 function verifyVariant(record: HarvestRecord, review: CaptureReview, url: string) {

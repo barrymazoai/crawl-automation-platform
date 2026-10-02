@@ -61,13 +61,19 @@ function productEvidence(input: ProjectionInput, observedBrand: string | null) {
     variantId: captureVariant(input),
     url: input.url,
     title: stringField(record, "title"),
-    brandRaw: site.kind === "single-brand" ? site.siteKey : observedBrand,
+    brandRaw: observedBrand,
     variantOptions: capturedVariantOptions(input),
     variants: record.variants.map((variant) => ({
       listingId: address.listingId,
       variantId: variant.variantId ?? null,
       title: variant.title ?? null,
       url: variant.url ?? input.url,
+      sku: variant.sku,
+      options: variant.options,
+      price: variant.price,
+      availability: variant.availability,
+      available: variant.available,
+      imageUrl: variant.imageUrl,
     })),
     detailsHtml: details(record),
     factsCandidates: factsHtml
@@ -108,17 +114,14 @@ function captureVariant(input: ProjectionInput) {
 
 function capturedImages(input: ProjectionInput) {
   const { review, record } = input;
-  const baseProduct = record.variants.length > 1 && captureVariant(input) === null;
-  // Website bindings remain byte-exact in archived capture-review.json and records.json.
-  // Match the legacy base-product handoff; explicit variant tasks retain strict source isolation.
+  // Preserve known website bindings in the actual handoff, as well as the originals.
+  // Mixed-variant processing remains subject to the downstream planner's isolation checks.
   return review.imageAssignments.map((image) => ({
     ...image,
-    variantId: baseProduct
-      ? null
-      : record.variants.length === 1 && image.variantId === null
+    variantId:
+      record.variants.length === 1 && image.variantId === null
         ? review.selectedVariantId
         : image.variantId,
-    basis: baseProduct ? ("product-gallery" as const) : image.basis,
     verifiedOriginal: false as const,
   }));
 }

@@ -73,7 +73,11 @@ export class DtcAgentProductCapture {
       },
       signal,
     );
-    const retained = await readCapturedProduct({ ...captured, url: request.url });
+    const retained = await readCapturedProduct({
+      ...captured,
+      url: request.url,
+      requireObservedMethod: true,
+    });
     const original = await this.saveOriginal(archive, retained, signal);
     return { captured, retained, original };
   }

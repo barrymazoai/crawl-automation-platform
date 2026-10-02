@@ -2,6 +2,7 @@ import { afterEach, beforeEach, expect, it } from "vitest";
 import { mkdtemp, mkdir, rm, writeFile, symlink, realpath } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { createHash } from "node:crypto";
 import { captureFile, captureOutputFiles, type CaptureFile } from "./archive.js";
 import { readCapturedProduct } from "./product-record.js";
 import { capturedProductProjection } from "./product-projection.js";
@@ -132,6 +133,10 @@ it.each([1, 2])(
       variantId,
       sku: `website-sku-${variantId}`,
       options: { Size: variantId === "one" ? "30 capsules" : "60 capsules" },
+      price: variantId === "one" ? "9.99" : "34.99",
+      available: variantId !== "one",
+      availability: variantId === "one" ? "OutOfStock" : "InStock",
+      imageUrl: image,
       url: `${url}?variant=${variantId}`,
     }));
     await writeFile(
@@ -176,10 +181,11 @@ it.each([1, 2])(
     expect(project().evidence.variants.map((variant) => variant.variantId)).toEqual(
       variants.map((variant) => variant.variantId),
     );
+    expect(project().evidence.variants).toMatchObject(variants);
     expect(
       project().evidence.imageCandidates.map((candidate) => [candidate.url, candidate.variantId]),
     ).toEqual([
-      [image, count === 1 ? "one" : null],
+      [image, "one"],
       [facts, count === 1 ? "one" : null],
     ]);
     if (count === 2) {
@@ -191,8 +197,8 @@ it.each([1, 2])(
       });
       expect(project().evidence.imageCandidates.at(-1)).toMatchObject({
         url: other,
-        variantId: null,
-        basis: "product-gallery",
+        variantId: "two",
+        basis: "variant-featured",
       });
       expect(result.review.imageAssignments.at(-1)?.variantId).toBe("two");
       const explicit = capturedProductProjection({
@@ -208,6 +214,60 @@ it.each([1, 2])(
       expect(explicit.identity.variantId).toBe("one");
       expect(explicit.evidence.variantOptions).toEqual(["Size: 30 capsules"]);
       expect(explicit.evidence.imageCandidates.at(-1)?.variantId).toBe("two");
+    }
+  },
+);
+
+it.each(["valid", "missing-method", "changed-field", "unarchived", "changed-original"])(
+  "verifies the observed field method against archived originals: %s",
+  async (scenario) => {
+    const html =
+      "<main><h1>Zinc</h1><p class='brand'>Actual Brand</p><p class='description'>Original product description</p></main>";
+    await writeFile(join(root, "product.html"), html);
+    const sha256 = createHash("sha256").update(html).digest("hex");
+    const fieldEvidence = {
+      codec: "observed-product/1",
+      productUrl: url,
+      sources: [{ path: "product.html", kind: "dom", url, sha256 }],
+      fields: {
+        title: { source: 0, selector: "main h1" },
+        brand: { source: 0, selector: "main .brand" },
+        description: { source: 0, selector: "main .description" },
+      },
+    };
+    await writeFile(
+      join(root, "evidence/records.json"),
+      JSON.stringify([
+        {
+          ...record,
+          fields: {
+            ...record.fields,
+            brand: "Actual Brand",
+            ...(scenario === "changed-field" ? { price: "$49.98" } : {}),
+          },
+          ...(scenario === "missing-method" ? {} : { fieldEvidence }),
+        },
+      ]),
+    );
+    if (scenario === "changed-original") {
+      await writeFile(join(root, "product.html"), "different page");
+    }
+    const promise = readCapturedProduct({
+      root,
+      url,
+      requireObservedMethod: true,
+      files: files.map((file) =>
+        file.path === "product.html" && scenario !== "unarchived"
+          ? { ...file, sha256, byteSize: Buffer.byteLength(html) }
+          : file,
+      ),
+    });
+    if (scenario === "valid") {
+      await expect(promise).resolves.toMatchObject({
+        record: { fields: { brand: "Actual Brand" } },
+      });
+    } else {
+      await expect(promise).rejects.toMatchObject({ code: "DTC.CAPTURE_EVIDENCE" });
     }
   },
 );

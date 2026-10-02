@@ -770,11 +770,11 @@ it("native Ego keeps observed variants and gallery without keyword-added images"
 });
 
 it.each([
-  { handle: "zinc", vendor: "Solaray", existing: null, expected: "Solaray" },
+  { handle: "zinc", vendor: "Solaray", existing: null, expected: undefined },
   { handle: "other", vendor: "Other Brand", existing: null, expected: undefined },
   { handle: "zinc", vendor: "", existing: null, expected: undefined },
   { handle: "zinc", vendor: "Store Vendor", existing: "Observed Brand", expected: "Observed Brand" },
-])("retains only the matching product's missing platform brand (%j)", async sample => {
+])("does not silently backfill native fields outside the observed method (%j)", async sample => {
   const target = "https://shop.test/products/zinc?variant=42";
   const outDir = await makeOutDir();
   const hooks = baseHooks([target]);
@@ -792,12 +792,7 @@ it.each([
   await runHarvest(browser, null, plan(), { outDir, hooks, observedGalleryUrls: ["https://cdn.test/zinc.jpg"] });
   const [saved] = JSON.parse(await fs.readFile(path.join(outDir, "evidence/records.json"), "utf8"));
   expect(saved.fields.brand).toBe(sample.expected);
-  if (sample.expected === "Solaray") {
-    expect(saved.fields.brandSource).toBe("product-json-vendor");
-    expect(saved.fields.brandSourceUrl).toBe("https://shop.test/products/zinc.json");
-  } else {
-    expect(saved.fields.brandSource).toBeUndefined();
-  }
+  expect(saved.fields.brandSource).toBeUndefined();
 });
 
 it.each(["", "?variant=42"])("captures the native dispatched product without re-enumerating its detail page (%s)", async query => {
@@ -864,4 +859,13 @@ it.each(["travel-pack", "vitamin"])("retains raw native product evidence before 
   expect(saved.variants.map(variant => variant.sku)).toEqual(["012", "022"]);
   expect(saved.gallery).toHaveLength(2);
   expect(saved.pageHtml).toBeTruthy();
+  expect(saved.fields.sku).toBeUndefined();
+  expect(saved.fields.price).toBeUndefined();
+});
+
+it("refuses a missing native method before starting acquisition", async () => {
+  const hooks = baseHooks([]); delete hooks.extract;
+  const browser = { mode: "ego-native", productUrl: "https://shop.test/products/one" };
+  await expect(runHarvest(browser, null, plan(), { outDir: await makeOutDir(), hooks,
+    observedGalleryUrls: ["https://cdn.test/one.jpg"] })).rejects.toThrow("DTC.NATIVE_METHOD_REQUIRED");
 });

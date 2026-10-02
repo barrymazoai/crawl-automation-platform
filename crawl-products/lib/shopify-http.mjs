@@ -11,6 +11,7 @@
  */
 
 import { htmlToText } from "./engine.mjs";
+import { assertGenericExtractionAllowed } from "./native-extraction-boundary.mjs";
 
 const DEFAULT_PAGE_SIZE = 250;   // Shopify hard max per page
 const DEFAULT_MAX_PAGES = 40;    // 40 * 250 = 10k products safety ceiling
@@ -148,6 +149,7 @@ function productDetailUrl(base, handle) {
 const INGREDIENT_HEADING = /(supplement\s+facts|nutrition\s+facts|drug\s+facts|ingredients?|ingredienti|zutaten|ingr[ée]dients?|composition|amount\s+per\s+serving|tenore\s+per)/i;
 
 export function extractIngredientsFromBody(bodyHtml) {
+  assertGenericExtractionAllowed();
   const text = htmlToText(String(bodyHtml || "")).replace(/\s+/g, " ").trim();
   if (!text) return "";
   const m = INGREDIENT_HEADING.exec(text);
@@ -158,7 +160,7 @@ export function extractIngredientsFromBody(bodyHtml) {
   return (cut > 40 ? slice.slice(0, cut) : slice).trim().slice(0, 4000);
 }
 
-export function shopifyProductToRecord(product, base) {
+export function shopifyProductToRecord(product, base, opts = {}) {
   const handle = String(product?.handle || "").trim();
   const url = productDetailUrl(base, handle);
   const images = (Array.isArray(product?.images) ? product.images : [])
@@ -172,7 +174,7 @@ export function shopifyProductToRecord(product, base) {
     fields: {
       title: String(product?.title || "").trim(),
       description: htmlToText(product?.body_html || "").trim(),
-      ...(extractIngredientsFromBody(product?.body_html)
+      ...(!opts.rawOnly && extractIngredientsFromBody(product?.body_html)
         ? { ingredients_text: extractIngredientsFromBody(product?.body_html) }
         : {}),
       images,

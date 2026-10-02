@@ -10,7 +10,11 @@ export const ChannelCatalogEvidenceSchema = z.strictObject({ codec: z.literal("c
   warnings: z.array(z.string().max(100)).max(20) });
 export const ChannelProductEvidenceSchema = z.strictObject({ codec: z.literal("channel-product/1"), channel: ChannelNameSchema,
   listingId: ExecutionIdSchema, variantId: ExecutionIdSchema.nullable(), url, title: z.string().min(1).max(4000), brandRaw: z.string().max(1000).nullable(),
-  variantOptions: z.array(z.string().max(500)).max(10), variants: z.array(ChannelEntrySchema).max(200),
+  variantOptions: z.array(z.string().max(500)).max(10), variants: z.array(ChannelEntrySchema.extend({
+    sku: z.string().max(1000).optional(), options: z.record(z.string(), z.string()).optional(),
+    price: z.string().max(100).optional(), availability: z.string().max(100).optional(),
+    available: z.boolean().optional(), imageUrl: url.optional(),
+  })).max(200),
   detailsHtml: z.string().max(2000000).nullable(),
   factsCandidates: z.array(z.strictObject({ field: z.string().max(100), html: z.string().max(500000),
     scope: z.enum(["selected-product", "product-unassigned-variant"]) })).max(8),

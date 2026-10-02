@@ -1,4 +1,5 @@
 import { detailSections, factsHeading } from "./detail-sections.mjs";
+import { assertGenericExtractionAllowed } from "./native-extraction-boundary.mjs";
 
 //#region src/utils/url-site.ts
 const TWO_PART_PUBLIC_SUFFIXES = new Set([
@@ -1356,6 +1357,7 @@ function collectMatches(input, re, onMatch) {
 //#endregion
 //#region src/pipeline/detail-dom-extract.ts
 function extractDetailDomRecord(url, html, requestedFields = [], opts = {}) {
+	assertGenericExtractionAllowed();
 	const detailHtml = stripNonRenderedDetailBlocks(html);
 	const title = extractTitle(detailHtml);
 	if (isLikelySiteErrorPage(detailHtml, title)) return null;
@@ -1596,6 +1598,7 @@ function decodeTemplatePlaceholderValue(value) {
 //#region src/pipeline/profiles/detail-extraction/apply-profile.ts
 const MAX_REGEX_LENGTH$1 = 800;
 function applyDetailExtractionProfile(input) {
+	assertGenericExtractionAllowed();
 	const { profile, evidence } = input;
 	if (isLikelySiteErrorPage(evidence.html)) return {
 		record: null,

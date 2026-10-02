@@ -44,7 +44,7 @@ export function capturePrompt(input: PromptInput): string {
    ${mechanicalInstructions(input)}
 6. 主脚本放任务根目录 run-capture.mjs；先 node --check 再由 ego-browser nodejs -e 'await import("file://绝对脚本路径")' 执行。截图和采集文件都保存到 outDir，所有证据路径相对 outDir。
    校验脚本后直接使用这条完整命令，不缩写目录哈希：${captureCommand(input)}
-   不改引擎源码或手改 harvest-result/checkpoint/evidence。仅 product 模式可在 hooks 中按真实观察补充字段、图库和规格；非 Shopify 规格用 extract 记录 variants 或 fetchProductData hook 提供实际观测数据。
+   不改引擎源码或手改 harvest-result/checkpoint/evidence。仅 product 模式可按 native-product-method.md 提供明确的 hooks.extract；所有字段和规格通过保存原件上的实际位置读取，保留 fieldEvidence，不能在收割后补值。
    禁止删除、清空或覆盖已取得的 HTML/图片/证据记录，禁止触碰 native-originals 原始副本；采集后若发现混入其他商品、资料缺失或需要 fresh 重抓，保留当前产物并返回 needs_review，不能清 checkpoint 重启任务。修正路线必须在收割前完成。
 7. 缺权限、用户接管、挑战、不可确认的写入/浏览器失败：保留已取得证据并返回 needs_review。禁止重启整个任务、绕过限制或静默重试失败业务操作。
 8. 每个结论保存 method/surface/evidence/verifier；截图和图库原件必须通过 view_image 工具实际查看，记录逐张观察，不能只凭文件存在、尺寸、DOM 或文件名声称检查过。
@@ -56,7 +56,7 @@ ${instructions[input.mode]}
 
 function mechanicalInstructions(input: PromptInput) {
   if (input.mode === "product") {
-    return `runHarvest(browser, tab, plan, {outDir:${JSON.stringify(input.outDir)},observedGalleryUrls,log:(event,details)=>console.log(JSON.stringify({event,details}))}) 仅收割派发商品，保留完整网站规格和图库原图。`;
+    return `先读 ${input.skillRoot}/references/native-product-method.md。runHarvest(browser, tab, plan, {outDir:${JSON.stringify(input.outDir)},observedGalleryUrls,hooks:{extract:async()=>({records:[await readObservedProduct(${JSON.stringify(input.outDir)},method)],needsUpgrade:[],failed:[]})},log:(event,details)=>console.log(JSON.stringify({event,details}))}) 仅收割派发商品。method 来自本轮观察并绑定已保存原件；没有明确 extract 会停止，不提供通用默认提取或字段回填。`;
   }
   if (input.mode === "catalog") {
     return `本次只做目录发现：从 ${input.skillRoot}/lib/catalog-discovery.mjs 导入 discoverCatalog，调用 discoverCatalog(tab, seedUrls, {...listingOptions,outDir:${JSON.stringify(input.outDir)},completionProof})。seedUrls/listingOptions来自本轮实际观察，包含listingCoverage、分页方式、已验证的listingProfile；extraRoundsAfterConverge沿用终止契约，默认1。该入口与旧runHarvest共用ENUMERATE阶段，逐页保存HTML/截图和catalog-discovery.json。开采前选择证明：普通路线completionProof="enumeration"，完整覆盖后按契约做实际零增长复核；已确认Shopify、单个/collections/<名称>目录、预计不超过100项且页面可完整展示时，可选completionProof="shopify"并传本轮实际目录容器selector为catalogRoot。Shopify使用旧页面/结果/对应接口集合一致且接口空终页的有界证明（最多两页），成功时不额外重走目录。超过范围走普通路线；已取证出现冲突立即保留并needs_review，不改证明类型掩盖失败。接口只用于对账，不把接口独有商品当目录发现。禁止调用 runHarvest、extractProducts、upgradeProducts 或逐个商品收割。catalog.pages按discovery.pages中各页原件逐页提取标题，不把最终页代替前面页面。complete、zeroGrowthRounds、termination.proof分别使用discovery.complete、discovery.zeroGrowthRounds、discovery.completionProof；禁止手改机械证据或伪造实际零增长复核记录。`;

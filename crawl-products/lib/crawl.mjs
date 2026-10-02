@@ -27,6 +27,7 @@
  * a rendered product page.
  */
 
+import { assertGenericExtractionAllowed } from "./native-extraction-boundary.mjs";
 import {
   applyDetailExtractionProfile,
   collectDetailUrls,
@@ -1184,6 +1185,7 @@ function extractOne(url, html, profile, requestedFields, imageProfile) {
  * comes back missing and is handed to `upgradeProducts`.
  */
 export async function extractProductsBatch(browser, urls, opts = {}) {
+  assertGenericExtractionAllowed();
   const log = opts.log || (() => {});
   const requestedFields = opts.fields || DEFAULT_FIELDS;
   const profile = opts.profile || null;
@@ -1487,6 +1489,7 @@ export async function collectRenderedDetailEvidence(tab, opts = {}) {
  * model-review item rather than being treated as a successful partial record.
  */
 export async function upgradeProducts(tab, urls, opts = {}) {
+  assertGenericExtractionAllowed();
   const log = opts.log || (() => {});
   const requestedFields = opts.fields || DEFAULT_FIELDS;
   const profile = opts.profile || null;

@@ -3,7 +3,7 @@ import { mkdir, writeFile, readFile, lstat } from "node:fs/promises";
 import { join } from "node:path";
 
 /** Append-only engine receipts outside the model's working capture output. The host archives both. */
-export async function retainNativeOriginal(workDir, { url, kind, bytes }) {
+export async function retainNativeOriginal(workDir, { url, kind, bytes, observation }) {
   const body = Buffer.from(bytes);
   if (!body.length || body.length > 64 * 1024 * 1024) throw new Error("SOURCE.ORIGINAL_SIZE");
   const extension = { html: "html", json: "json", image: "bin", http: "bin", harvest: "json" }[kind];
@@ -22,7 +22,7 @@ export async function retainNativeOriginal(workDir, { url, kind, bytes }) {
     }
   }
   const receipt = { codec: "ego-native-original/1", kind, url, capturedAt: new Date().toISOString(),
-    path: relativePath, byteSize: body.length, sha256 };
+    path: relativePath, byteSize: body.length, sha256, ...(observation ? { observation } : {}) };
   await writeFile(join(workDir, "native-originals", `${randomUUID()}.receipt.json`), JSON.stringify(receipt), { flag: "wx", mode: 0o400 });
   return receipt;
 }

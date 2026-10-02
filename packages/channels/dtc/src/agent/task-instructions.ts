@@ -1,11 +1,13 @@
 export const productInstructions = `只采集派发的一个基础商品，保留全部真实规格；不要枚举整个商店再采集其他商品。
 Ego native runHarvest 直接使用宿主派发 URL 作为唯一待采商品，不要对详情页调用 collectProductUrls 或重做目录发现。
-使用旧 runHarvest 和按站点验证过的 hooks，最终 outDir/evidence/records.json 必须只有该商品一条，保留 fields、variants、gallery、pageHtml、coverage、flags。
+先完整读取 crawl-products/references/native-product-method.md（相对于本次 skillRoot）。使用旧 runHarvest 和模型按实际观察确定的 hooks.extract，最终 outDir/evidence/records.json 必须只有该商品一条，保留 fields、variants、gallery、pageHtml、coverage、flags、fieldEvidence。
 本模式只保存宿主派发商品的原始资料；不要因URL或标题含pack/bundle/kit等词在采集前排除。是否为多产品组合或营养单品由后续现有处理流程依据原件判断，不在本次执行旧语义范围筛选。
 缓存 profile 的 lastValidatedAt=null 或 successCount=0 不能当成已验证方法。收割前必须用本轮已保存的页面/展开区块做字段提取预览，并逐项与页面原文核对；不要在收割结束后才首次检查字段。
-预览中若用法/配料/FAQ 串位、促销价/推荐商品混入或不存在的字段被猜出，先修正本次 profile 或使用 hooks.extract 从本轮实际观察的节点读取原文字段。不要沿用错误的通用 fallback；图片里的 Facts 留给后续处理，不把 Directions/FAQ 冒充 Facts。
-保存 field-preview.json（实际提取函数返回的字段、逐项实际来源、对照结论）和 profile-validation.json（本次方法、证据、通过/不通过）；预览必须执行将用于 runHarvest 的同一 extract/upgrade 方法或对本轮保存 HTML 调用 applyDetailExtractionProfile，不能手写期望值代替实际提取结果。未通过就保留原因返回 needs_review。不要为通过而编造字段或只把 validation 计数改成成功。
-规格来自网站实际规格选项、SKU、variant 数据和可售状态，不从图片推断。平台商品用原有商品数据路径保存完整 variants；平台数据不可用时按真实选择器逐项记录，不因图片不能绑定而丢弃规格。
+预览中若用法/配料/FAQ 串位、促销价/推荐商品混入或不存在的字段被猜出，先修正本次实际观察方法。禁止使用 extractDetailDomRecord、applyDetailExtractionProfile、extractProductsBatch、upgradeProducts 等通用提取器，包括从自定义 hooks 内间接调用；禁止整页猜字段、关键词抓成分和静默 fallback。图片里的 Facts 留给后续处理，不把 Directions/FAQ 冒充 Facts。
+用 readObservedProduct(outDir,method) 执行模型选定的确切 DOM selector / JSON pointer；方法与原件散列随 fieldEvidence 保存，宿主会从原件重放核对。selector 必须唯一，缺失或歧义就停止，不允许改用整页文字。保存 field-preview.json（真实返回字段、逐项原文位置、语义核对、缺项原因）和 profile-validation.json（本次方法、证据、通过/不通过）；预览和 hooks.extract 必须调用同一方法，不能手写期望值代替结果。非空不等于正确，必须逐项确认属于该商品及该字段。未通过就保留原因返回 needs_review。
+一次单品通过只证明当前任务；方法副本标记 candidate，不能把该次结果直接晋升为全站已验证 profile，也不能只改 successCount/lastValidatedAt 伪造验证。缓存中的旧通用 detailProfile 不可直接执行。
+规格来自网站实际规格选项、SKU、variant 数据和可售状态，不从图片推断。确认 Shopify 后可显式调用 browser.harvestHooks.fetchProductSource 取得原始商品响应，再使用 observed method 的 platform 映射复用旧规格规范化；引擎不会自动请求平台接口。非平台规格用 variantMappings 指向实际保存的结构数据或节点。不因缺货、图片不能绑定而丢弃规格。
+基础商品有多个规格时，价格和 SKU 留在对应 variants，不把默认/第一个/首个有货规格的值回填到 fields。明确派发 variant URL 时才允许对应规格值进入 fields。保存 HTML 用 fetchPageSource，仅保存当前渲染状态，不导航重置选项；先展开需要的区块。页面身份、规格、币种、地区或一次性/订阅价存在冲突时保留冲突并 needs_review，不从推荐区补值。
 fields.title 和 fields.brand 必须来自实际商品页面/该商品的平台数据，品牌不能照抄任务来源名称；保留品牌出处。其他页面原文字段原样保存，缺失留空，不推断成分。pageHtml 必须指向实际保存的详情 HTML。
 采集实际产品轮播/图库全部原图，以及详情中实际展示的 Facts/背标图片。不要把整个 main 的所有 img 当图库；徽章、推荐商品、导航缩略图要区别开。
 收割前在实际页面核实所有图库项及详情图片，把已观察到的完整原图 URL 数组作为 runHarvest(...,{observedGalleryUrls:[...],...}) 必填参数；原生单品不会使用通用提取器按关键词猜测出来的图片集合。不要根据文件名筛选或编造未观察的原图地址。

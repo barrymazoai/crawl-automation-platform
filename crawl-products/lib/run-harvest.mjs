@@ -29,7 +29,7 @@ import {
 } from "./crawl.mjs";
 import { isHeadingOnlyDetailValue } from "./engine.mjs";
 import { createBrowserHtmlFetcher } from "./worker-cdp-browser.mjs";
-import { nativeAvailability } from "./native-availability.mjs";
+import { withNativeExtractionBoundary } from "./native-extraction-boundary.mjs";
 import { enumerateCatalog } from "./catalog-enumeration.mjs";
 import { classifyFactsImageCandidate } from "./product-semantics.mjs";
 import {
@@ -152,7 +152,7 @@ async function defaultFetchProductData(productUrl) {
   }
 }
 
-function normalizePlatformVariants(product, productUrl) {
+export function normalizePlatformVariants(product, productUrl) {
   const variants = Array.isArray(product?.variants) ? product.variants : [];
   const optionNames = (Array.isArray(product?.options) ? product.options : [])
     .map((option) => (typeof option === "string" ? option : option?.name))
@@ -252,6 +252,11 @@ function factsRank(image, index) {
  *   injectable for tests; defaults wire to the real crawl/scope functions.
  */
 export async function runHarvest(browser, tab, planInput, opts = {}) {
+  return withNativeExtractionBoundary(browser?.mode === "ego-native",
+    () => runHarvestImpl(browser, tab, planInput, opts));
+}
+
+async function runHarvestImpl(browser, tab, planInput, opts) {
   if ([browser?.captureMode, process.env.CRAWL_DTC_CAPTURE_MODE]
     .some(mode => mode === "catalog" || mode === "analysis")) {
     throw new Error("harvest_not_allowed_in_discovery_task");
@@ -287,6 +292,9 @@ export async function runHarvest(browser, tab, planInput, opts = {}) {
   const captureOnly = browser?.mode === "ego-native" && workerProduct !== null;
   const observedGallery = browser?.mode === "ego-native" && workerProduct
     ? nativeGallery(opts.observedGalleryUrls) : null;
+  if (captureOnly && typeof opts.hooks?.extract !== "function") {
+    throw new Error("DTC.NATIVE_METHOD_REQUIRED");
+  }
   const inWorkerScope = (value) => {
     if (!workerProduct) return true;
     try {
@@ -326,9 +334,11 @@ export async function runHarvest(browser, tab, planInput, opts = {}) {
         return { records: [], needsUpgrade: [...urls], failed: [], batchUnavailable: true };
       }),
     upgrade: opts.hooks?.upgrade
-      || ((urls, upgradeOpts) => upgradeProducts(tabRef.tab, urls, { ...upgradeOpts, browser })),
+      || (captureOnly ? async () => { throw new Error("DTC.NATIVE_METHOD_REQUIRED"); }
+        : ((urls, upgradeOpts) => upgradeProducts(tabRef.tab, urls, { ...upgradeOpts, browser }))),
     fetchImage: browser?.harvestHooks?.fetchImage || opts.hooks?.fetchImage || defaultFetchImage,
-    fetchProductData: opts.hooks?.fetchProductData || browser?.harvestHooks?.fetchProductData || defaultFetchProductData,
+    fetchProductData: opts.hooks?.fetchProductData
+      || (captureOnly ? async () => null : browser?.harvestHooks?.fetchProductData || defaultFetchProductData),
     observedImagesOnly: browser?.mode === "ego-native",
     observedGallery,
     /*
@@ -799,7 +809,7 @@ async function buildEvidencePackage(record, url, outDir, hooks, log, pageHtmlSta
   } catch (error) {
     log("platform_data_failed", { url, error: String(error) });
   }
-  const defaultVariant = variants.find((v) => v.available !== false) ?? variants[0];
+  const defaultVariant = hooks.observedImagesOnly ? null : variants.find((v) => v.available !== false) ?? variants[0];
   const skuBackfill = !record.fields?.sku && defaultVariant?.sku
     ? { sku: defaultVariant.sku }
     : {};
@@ -811,8 +821,6 @@ async function buildEvidencePackage(record, url, outDir, hooks, log, pageHtmlSta
   }
   // 先取页面 HTML：成分表可能只在页面里（文字或图），接口给的图库不一定包含那张图
   const { pageHtml, html: pageHtmlText } = await capturePageHtml(url, outDir, hooks, log, pageHtmlStats);
-  const availability = hooks.observedImagesOnly ? nativeAvailability(pageHtmlText, url, variants) : null;
-  if (availability) { variants = availability.variants; flags.push(...availability.flags); }
   if (pageHtmlText && !hooks.observedImagesOnly) {
     const known = new Set(images.flatMap((item) => { const u = item.url || ""; return [u, u.split("?")[0]]; }));
     const extra = factsImagesFromHtml(pageHtmlText, url, known);
@@ -829,7 +837,7 @@ async function buildEvidencePackage(record, url, outDir, hooks, log, pageHtmlSta
       localPath: "",
       mime: "",
     };
-    const rank = factsRank(image, index);
+    const rank = hooks.observedImagesOnly ? null : factsRank(image, index);
     if (rank != null) entry.factsCandidateRank = rank;
     try {
       const fetched = await hooks.fetchImage(image.url);
@@ -851,19 +859,17 @@ async function buildEvidencePackage(record, url, outDir, hooks, log, pageHtmlSta
     productUrl: url,
     fields: {
       ...record.fields,
-      ...(hooks.observedImagesOnly ? nativePlatformBrand(record, platformProduct, url) : {}),
-      ...(availability?.fields || {}),
       ...(hooks.observedGallery ? { images: hooks.observedGallery } : {}),
-      ...(record.fields?.ingredients ? { ingredients_text: record.fields.ingredients } : {}),
+      ...(!hooks.observedImagesOnly && record.fields?.ingredients ? { ingredients_text: record.fields.ingredients } : {}),
       ...skuBackfill,
       ...priceBackfill,
     },
     gallery,
     coverage: {
       gallerySaved: `${saved}/${images.length}`,
-      domSectionsExpanded: ["main_content"],
-      pageTextSearched: [...PAGE_TEXT_SEARCH_TERMS],
-      jsonLdCaptured: true,
+      domSectionsExpanded: hooks.observedImagesOnly ? [] : ["main_content"],
+      pageTextSearched: hooks.observedImagesOnly ? [] : [...PAGE_TEXT_SEARCH_TERMS],
+      jsonLdCaptured: !hooks.observedImagesOnly,
     },
     flags,
   });
@@ -871,22 +877,9 @@ async function buildEvidencePackage(record, url, outDir, hooks, log, pageHtmlSta
   // every sellable state (id/SKU/options/price/variant URL) reaches
   // crawl-records and downstream enrich without a semantic round per variant.
   if (variants.length > 0) pkg.variants = variants;
+  if (record.fieldEvidence) pkg.fieldEvidence = record.fieldEvidence;
   if (pageHtml) pkg.pageHtml = pageHtml;
   return pkg;
-}
-
-// Preserve the actual product vendor, not the configured source/expected brand.
-// Only the matching Shopify product handle may supply this missing field.
-function nativePlatformBrand(record, product, url) {
-  if (typeof record.fields?.brand === "string" && record.fields.brand.trim()) return {};
-  if (typeof product?.vendor !== "string" || !product.vendor.trim()) return {};
-  const source = new URL(url);
-  const handle = source.pathname.match(/\/products\/([^/]+)\/?$/)?.[1];
-  if (!handle || decodeURIComponent(handle) !== product.handle) return {};
-  source.search = "";
-  source.hash = "";
-  source.pathname = source.pathname.replace(/\/$/, "") + ".json";
-  return { brand: product.vendor.trim(), brandSource: "product-json-vendor", brandSourceUrl: source.href };
 }
 
 function nativeGallery(urls) {

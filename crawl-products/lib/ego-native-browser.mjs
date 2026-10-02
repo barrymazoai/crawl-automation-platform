@@ -50,33 +50,58 @@ export function createEgoBrowser({ task, page, targetId = page.targetId, listTas
     } : null },
   };
   const hooks = {
-    fetchPageHtml: async url => {
-      if (await tab.url() !== url) await tab.goto(url);
+    fetchPageSource: async url => {
+      const actual = await tab.url();
+      assertPageState(actual, url);
       const html = await tab.playwright.evaluate(() => document.documentElement.outerHTML);
-      await retainNativeOriginal(workDir, { url, kind: "html", bytes: html });
-      return html;
+      const after = await tab.url();
+      const receipt = await retainNativeOriginal(workDir, { url: actual, kind: "html", bytes: html,
+        observation: { kind: "rendered-dom", requestedUrl: url, actualUrl: actual, afterUrl: after, targetId } });
+      if (actual !== after) throw new Error("SOURCE.PAGE_STATE_CHANGED");
+      return { text: html, url: actual, receipt };
     },
-    fetchProductData: async url => {
+    fetchProductSource: async url => {
       const target = new URL(url);
       if (!/\/products\/[^/]+\/?$/.test(target.pathname)) return null;
       target.search = ""; target.pathname = target.pathname.replace(/\/$/, "") + ".json";
+      assertPageState(await tab.url(), url);
       const response = await call("evaluate", async targetUrl => {
-        const response = await fetch(targetUrl, { credentials: "include" });
-        return { status: response.status, ok: response.ok, type: response.headers.get("content-type"), text: await response.text() };
+        const response = await fetch(targetUrl, { credentials: "include", redirect: "error", signal: AbortSignal.timeout(10000) });
+        return { status: response.status, ok: response.ok, url: response.url, type: response.headers.get("content-type"), text: await response.text() };
       }, target.href);
-      if (response.text) await retainNativeOriginal(workDir, { url: target.href, kind: response.type?.includes("json") ? "json" : "http", bytes: response.text });
+      const receipt = response.text ? await retainNativeOriginal(workDir, { url: target.href, kind: response.type?.includes("json") ? "json" : "http", bytes: response.text,
+        observation: { kind: "http-response", status: response.status, finalUrl: response.url, targetId } }) : null;
       if (response.status === 404 || !response.type?.includes("json")) return null;
       if (!response.ok) throw new Error(`SOURCE.PRODUCT_DATA_HTTP:${response.status}`);
       const body = JSON.parse(response.text);
-      return body?.product ?? body;
+      const product = body?.product ?? body;
+      if (product?.handle !== new URL(url).pathname.replace(/\/$/, "").split("/").at(-1)
+        || !Array.isArray(product?.variants) || (response.url && response.url !== target.href)) {
+        throw new Error("SOURCE.PRODUCT_DATA_IDENTITY");
+      }
+      return { product, text: response.text, url: response.url || target.href, receipt };
     },
     fetchImage: url => readImage({ page: scoped, guard, workDir }, url),
     retainAttempt: value => retainNativeOriginal(workDir, { url: productUrl, kind: "harvest", bytes: JSON.stringify(value) }),
   };
+  hooks.fetchPageHtml = async url => (await hooks.fetchPageSource(url)).text;
+  hooks.fetchProductData = async url => (await hooks.fetchProductSource(url))?.product ?? null;
   return { mode: "ego-native", captureMode, productUrl, harvestHooks: hooks, tab, tabs: {
     new: async () => { await guard(); return tab; },
     list: async () => { await guard(); return [tab]; },
   }, disconnect: async () => { await guard(); } };
+}
+
+function assertPageState(actual, expected) {
+  const current = new URL(actual), requested = new URL(expected);
+  if (current.origin !== requested.origin || current.pathname.replace(/\/$/, "") !== requested.pathname.replace(/\/$/, "")) {
+    throw new Error("SOURCE.PAGE_IDENTITY");
+  }
+  for (const name of ["variant", "variation_id"]) {
+    if (requested.searchParams.has(name) && current.searchParams.get(name) !== requested.searchParams.get(name)) {
+      throw new Error("SOURCE.PAGE_VARIANT");
+    }
+  }
 }
 
 function createEventReader(page, guard) {
