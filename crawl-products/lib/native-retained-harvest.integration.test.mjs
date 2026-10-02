@@ -40,7 +40,9 @@ it.skipIf(!source)("replays verified native originals into a separate directory 
     expect(result.status).toBe("complete");
     const [saved] = JSON.parse(await readFile(join(outDir, "evidence/records.json"), "utf8"));
     expect(saved.fields.brand).toBe(record.fields.brand || product.vendor);
-    expect(saved.variants).toEqual(record.variants);
+    expect(saved.variants).toMatchObject(record.variants);
+    expect(saved.fields.availability).toBe("InStock");
+    expect(saved.variants[0].available).toBe(true);
     expect(saved.gallery.map(item => item.url)).toEqual(record.gallery.map(item => item.url));
     for (const item of saved.gallery) {
       expect(await readFile(join(outDir, item.localPath))).toEqual(originals.find(original => original.url === item.url).bytes);

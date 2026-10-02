@@ -107,3 +107,11 @@ CRAWLV3-150 补查发现自动恢复候选 SQL 只认 `ego-single-page/1`，遗�
 `0084ef9` 已于 09:29:49 经 fresh Git clone/build 部署 Server 二，browser-worker 健康确认，包含 `2023c22`。Mini 真实第六轮原件只读重放通过（所有原件 hash 校验、禁止网络、独立临时目录），49 项 harvest/原件留存与五项恢复检查全部通过；全仓 pnpm check 通过。第七轮 Solaray `009abc74-6df3-4451-9e53-51f4bd822d3b` 于 09:30:20 开始，目前仍在页面/图库/下方折叠区检查。DTC 批量 paused，其他原本 running 的无待处理渠道已恢复原状态。CRAWLV3-164 原件留存修复进入 Review；父票 151、原生链路 163、多规格 155 和恢复 150 仍 In Progress。
 
 补充尚缺的采集执行器超时测试：原用例只覆盖正常结束和取消，现加入一秒受控超时、子进程忽略 SIGTERM，要求结束后实际子 PID 不存在、持久化 process.json 和 ledger 停止证明均具备，错误仍为 TEXT.CODEX_TIMEOUT。仅在 Mini 以独立假 provider 进程运行，不触碰当前业务、真实 Codex 或浏览器；尚待 Mini 验证，不代表 Worker SIGKILL 演练。
+
+## 第七轮可售状态冲突（09:44 UTC）
+
+第七轮 Codex 于 09:38:06 停止并返回 needs_review/availability_conflict：完整取得一个商品、一个规格、两张原图，品牌已正确保存 Solaray；旧提取字段 availability=OutOfStock 与本商品实际可用购物按钮及 JSON-LD Offer 的 InStock 冲突。R2 `v3/dtc-agent/product-009abc74-6df3-4451-9e53-51f4bd822d3b/archive.json` 全部 36 文件、7,418,751 字节回读大小/SHA-256 一致，Workflow 已结束，heldPermits=[]。CRAWLV3-165 单独立案 In Progress。
+
+根因：旧 engine.extractAvailability 对所读页面片段做全局文字匹配，并不能证明本商品/规格的状态。原生修复改为从本轮留存 HTML 中读取 URL 精确匹配的 Product/ProductGroup Offer，并按网站 variantId 保存各规格状态；显式规格 URL 只使用该规格，基础商品的多规格状态不一致时不强塞一个值。缺失证据不再沿用全页猜测值，结构化证据冲突保留 availability_conflict 标记，不覆盖为成功。原机械图库采集及网站规格枚举不变。64 项纯回归通过，Mini 第七轮原件重放待执行。
+
+独立执行器测试 `2a51b03` 已推送并在 Server 二 fresh Git clone 执行，四项全部通过：正常结束、取消、超时（含拒绝 SIGTERM 子进程）、执行登记失败时不发 prompt。测试验证了子 PID 实际不存在和 process.json/ledger 停止证明；没有调用真实模型或浏览器，没有切换生产，不能替代 Worker SIGKILL 恢复验收。

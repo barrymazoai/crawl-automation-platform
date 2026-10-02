@@ -29,6 +29,7 @@ import {
 } from "./crawl.mjs";
 import { isHeadingOnlyDetailValue } from "./engine.mjs";
 import { createBrowserHtmlFetcher } from "./worker-cdp-browser.mjs";
+import { nativeAvailability } from "./native-availability.mjs";
 import { classifyFactsImageCandidate } from "./product-semantics.mjs";
 import {
   classifyNutritionProductUrl,
@@ -813,6 +814,8 @@ async function buildEvidencePackage(record, url, outDir, hooks, log, pageHtmlSta
   }
   // 先取页面 HTML：成分表可能只在页面里（文字或图），接口给的图库不一定包含那张图
   const { pageHtml, html: pageHtmlText } = await capturePageHtml(url, outDir, hooks, log, pageHtmlStats);
+  const availability = hooks.observedImagesOnly ? nativeAvailability(pageHtmlText, url, variants) : null;
+  if (availability) { variants = availability.variants; flags.push(...availability.flags); }
   if (pageHtmlText && !hooks.observedImagesOnly) {
     const known = new Set(images.flatMap((item) => { const u = item.url || ""; return [u, u.split("?")[0]]; }));
     const extra = factsImagesFromHtml(pageHtmlText, url, known);
@@ -852,6 +855,7 @@ async function buildEvidencePackage(record, url, outDir, hooks, log, pageHtmlSta
     fields: {
       ...record.fields,
       ...(hooks.observedImagesOnly ? nativePlatformBrand(record, platformProduct, url) : {}),
+      ...(availability?.fields || {}),
       ...(hooks.observedGallery ? { images: hooks.observedGallery } : {}),
       ...(record.fields?.ingredients ? { ingredients_text: record.fields.ingredients } : {}),
       ...skuBackfill,
