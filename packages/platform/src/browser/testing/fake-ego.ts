@@ -52,7 +52,7 @@ const fail = code => { throw Object.assign(new Error(code), { code }); };
 const listTaskSpaces = async () => {
   if (state.mode === "down") fail("ECONNREFUSED");
   if (state.mode === "missing") return [];
-  return [{spaceId: 6, ownership: state.mode === "user" ? "user" : "agent"}];
+  return [{id: 6, ownership: state.mode === "user" ? "user" : "agent"}];
 };
 const page = tab => ({
   ...tab, cdp: async () => ({}),
