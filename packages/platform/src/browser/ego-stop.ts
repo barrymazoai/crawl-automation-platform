@@ -31,11 +31,10 @@ export async function stopEgoRound(settings: EgoSettings, work: EgoStoppedRound)
         : await closeAndVerifyTarget(settings, identity.executionId);
     await provePermitExecutionStopped(identity, proof);
   }
-  // A CLI exit cannot rule out a late newPage RPC whose target was never reported.
+  // With no reported page, the baseline decides after a short settle: the CLI has exited, so any page it
+  // opened is a new tab here; no new tab means nothing is left to close. A late unknown tab stays pending.
   if (work.targets.length === 0) {
-    throw egoErrors.create("BROWSER.PAGE_CLEANUP_PENDING", {
-      details: { round: work.round, reason: "unreported-page" },
-    });
+    await new Promise((resolve) => setTimeout(resolve, settings.noPageSettleMs ?? 3_000));
   }
   const current = await requireEgo(settings, AbortSignal.timeout(10_000));
   const baseline = work.round.metadata?.baseline;

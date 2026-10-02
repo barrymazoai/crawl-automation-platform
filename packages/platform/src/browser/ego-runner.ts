@@ -74,6 +74,7 @@ export class EgoRunner {
           opened: work.targets.map((target) => target.executionId),
           failure: result?.failure,
           interrupted: roundFailure(answer).code,
+          interruptedDetails: roundFailure(answer).details,
         },
       });
     }
@@ -92,7 +93,12 @@ export class EgoRunner {
 
 /** Interrupted browser operations are infrastructure failures, never page/content verdicts. */
 function roundFailure(answer: Execution["answer"]) {
-  const details = { exitCode: answer.exitCode ?? null, executionUnknown: true };
+  // The CLI's own error text is the only clue to why a round could not run; keep its tail.
+  const details = {
+    exitCode: answer.exitCode ?? null,
+    executionUnknown: true,
+    stderr: String(answer.stderr ?? "").slice(-2000),
+  };
   if (answer.isCanceled) {
     return egoErrors.create("BROWSER.CANCELLED", { details });
   }

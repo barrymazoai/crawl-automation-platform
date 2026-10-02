@@ -97,11 +97,11 @@ describe("Ego task pages", () => {
     });
   });
 
-  it("retains cleanup pending when a runtime answered nothing", async () => {
+  it("reports an unavailable runtime, with its exit code, when it answered nothing and left no tab", async () => {
     const ego = await fakeEgo([], 3);
     await expect(ego.pages.round("return 1;", {}, signal())).rejects.toMatchObject({
-      code: "BROWSER.PAGE_CLEANUP_PENDING",
-      details: { interrupted: "BROWSER.UNAVAILABLE" },
+      code: "BROWSER.UNAVAILABLE",
+      details: { exitCode: 3, executionUnknown: true },
     });
   });
 

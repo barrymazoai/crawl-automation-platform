@@ -61,7 +61,13 @@ process.stdin.on('end', () => {
 });`;
   await writeFile(cliPath, source);
   await chmod(cliPath, 0o755);
-  const settings = { cliPath, taskSpaceId: 7, roundTimeoutMs: 5_000, maxHtmlBytes: 1_024 };
+  const settings = {
+    cliPath,
+    taskSpaceId: 7,
+    roundTimeoutMs: 5_000,
+    maxHtmlBytes: 1_024,
+    noPageSettleMs: 0,
+  };
   return {
     settings,
     recorded,
@@ -224,18 +230,14 @@ describe("Ego permit stop evidence", () => {
     expect(journal.prove).toHaveBeenCalledTimes(1);
   });
 
-  it("retains a round with no reported page even after CLI exit: a late newPage cannot be ruled out", async () => {
+  it("ends a round with no reported page when no new tab appeared after the CLI exit", async () => {
     const test = await fixture([{ messages: [] }]);
     const journal = ledger();
-    await expect(run(test, journal)).rejects.toMatchObject({
-      code: "BROWSER.PAGE_CLEANUP_PENDING",
-    });
-    expect(journal.record).toHaveBeenCalledTimes(2);
+    await expect(run(test, journal)).rejects.toMatchObject({ code: "BROWSER.UNAVAILABLE" });
     expect(journal.record).toHaveBeenCalledWith(
       owner,
       expect.objectContaining({ kind: "browser-round" }),
     );
-    expect(journal.prove).toHaveBeenCalledTimes(1);
   });
 
   it("leaves an opened page pending without cleanup when the round reports user control", async () => {

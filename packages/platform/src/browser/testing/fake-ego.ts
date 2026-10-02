@@ -27,6 +27,7 @@ export async function fakeEgoRuntime() {
       taskSpaceId: 6,
       probeTimeoutMs: 300,
       cleanupTimeoutMs: 300,
+      noPageSettleMs: 0,
       killGraceMs: 50,
     }),
     read: async (): Promise<FakeEgoState> => JSON.parse(await readFile(statePath, "utf8")),
