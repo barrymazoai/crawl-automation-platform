@@ -12,6 +12,7 @@ import type { DtcAgentSettings } from "./settings.js";
 import { captureOutputFiles, retainCaptureDirectory, type CaptureFile } from "./archive.js";
 import { dtcAgentErrors } from "./errors.js";
 import { capturePrompt } from "./prompt.js";
+import { CaptureReviewSchema } from "./product-review.js";
 import type { AgentCaptureRequest } from "./request.js";
 
 const ResultSchema = z.strictObject({
@@ -32,7 +33,7 @@ export class DtcCaptureAgent {
 
   async capture(request: AgentCaptureRequest, signal: AbortSignal) {
     const { ego, publication } = this.deps;
-    const { cwd, outDir, prefix } = await this.prepare(request.operationId);
+    const { cwd, outDir, prefix } = await this.prepare(request);
     let page: EgoAgentPage | undefined;
     let files: CaptureFile[] = [];
     try {
@@ -52,7 +53,8 @@ export class DtcCaptureAgent {
     return { root: outDir, prefix, ...retained, manifestKey };
   }
 
-  private async prepare(operationId: string) {
+  private async prepare(request: AgentCaptureRequest) {
+    const { operationId } = request;
     const { settings } = this.deps;
     const root = join(settings.codex.workRoot, "dtc-native");
     await mkdir(root, { recursive: true, mode: 0o700 });
@@ -62,6 +64,13 @@ export class DtcCaptureAgent {
     await mkdir(outDir, { mode: 0o700 });
     await mkdir(join(settings.codex.workRoot, "site-profiles"), { recursive: true, mode: 0o700 });
     const prefix = `v3/dtc-agent/${operationId}`;
+    if (request.mode === "product") {
+      await writeFile(
+        join(cwd, "capture-review.schema.json"),
+        JSON.stringify(z.toJSONSchema(CaptureReviewSchema)),
+        { flag: "wx" },
+      );
+    }
     await this.skills(cwd);
     return { cwd, outDir, prefix };
   }

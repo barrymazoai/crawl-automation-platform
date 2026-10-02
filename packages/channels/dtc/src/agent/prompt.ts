@@ -35,7 +35,7 @@ export function capturePrompt(input: PromptInput): string {
 3. 只使用 Ego 原生 CLI ${input.cliPath} nodejs。禁止 Chrome、Playwright connectOverCDP、CDP 桥或另建浏览器。
 4. 宿主已创建唯一任务页：TaskSpace ${input.taskSpaceId}、label ${JSON.stringify(input.label)}、targetId ${JSON.stringify(input.targetId)}。
    taskSpace/listTaskSpaces 是 Ego nodejs 注入的全局，直接使用，不导入猜测的 SDK 路径。
-   用 taskSpace(${input.taskSpaceId}) 和 task.page(${JSON.stringify(input.label)})；恢复的 Page 可能没有 targetId 属性，每次以 task.tabs() 中该 label 的 targetId 和 listTaskSpaces() 中该空间 ownership=agent 核对。
+   用 await taskSpace(${input.taskSpaceId}) 和 task.page(${JSON.stringify(input.label)})；恢复的 Page 可能没有 targetId 属性，每次以 task.tabs() 中该 label 的 targetId 和 listTaskSpaces() 中该空间 ownership=agent 核对。
    不 newPage、不接管空间、不操作或关闭其他页。所有图片、HTML、截图保存完后由宿主关闭并验证本页消失。
 5. 按 Ego skill 直接观察、点击和截图。Ego 每次 nodejs 调用是新进程，显式重建句柄，不能依赖上一轮 JS 变量。
    复用旧机械工具时，在 Ego nodejs 内 import ${input.skillRoot}/lib/ego-native-browser.mjs：
@@ -56,7 +56,7 @@ ${instructions[input.mode]}
 
 function mechanicalInstructions(input: PromptInput) {
   if (input.mode === "product") {
-    return `先读 ${input.skillRoot}/references/native-product-method.md。runHarvest(browser, tab, plan, {outDir:${JSON.stringify(input.outDir)},observedGalleryUrls,hooks:{extract:async()=>({records:[await readObservedProduct(${JSON.stringify(input.outDir)},method)],needsUpgrade:[],failed:[]})},log:(event,details)=>console.log(JSON.stringify({event,details}))}) 仅收割派发商品。method 来自本轮观察并绑定已保存原件；没有明确 extract 会停止，不提供通用默认提取或字段回填。`;
+    return `先读 ${input.skillRoot}/references/native-product-method.md。runHarvest(browser, tab, plan, {outDir:${JSON.stringify(input.outDir)},observedGalleryUrls,hooks:{extract:async()=>({records:[await readObservedProduct(${JSON.stringify(input.outDir)},observedMethod)],needsUpgrade:[],failed:[]})},log:(event,details)=>console.log(JSON.stringify({event,details}))}) 仅收割派发商品。observedMethod 来自本轮观察并绑定已保存原件；没有明确 extract 会停止，不提供通用默认提取或字段回填。`;
   }
   if (input.mode === "catalog") {
     return `本次只做目录发现：从 ${input.skillRoot}/lib/catalog-discovery.mjs 导入 discoverCatalog，调用 discoverCatalog(tab, seedUrls, {...listingOptions,outDir:${JSON.stringify(input.outDir)},completionProof})。seedUrls/listingOptions来自本轮实际观察，包含listingCoverage、分页方式、已验证的listingProfile；extraRoundsAfterConverge沿用终止契约，默认1。该入口与旧runHarvest共用ENUMERATE阶段，逐页保存HTML/截图和catalog-discovery.json。开采前选择证明：普通路线completionProof="enumeration"，完整覆盖后按契约做实际零增长复核；已确认Shopify、单个/collections/<名称>目录、预计不超过100项且页面可完整展示时，可选completionProof="shopify"并传本轮实际目录容器selector为catalogRoot。Shopify使用旧页面/结果/对应接口集合一致且接口空终页的有界证明（最多两页），成功时不额外重走目录。超过范围走普通路线；已取证出现冲突立即保留并needs_review，不改证明类型掩盖失败。接口只用于对账，不把接口独有商品当目录发现。禁止调用 runHarvest、extractProducts、upgradeProducts 或逐个商品收割。catalog.pages按discovery.pages中各页原件逐页提取标题，不把最终页代替前面页面。complete、zeroGrowthRounds、termination.proof分别使用discovery.complete、discovery.zeroGrowthRounds、discovery.completionProof；禁止手改机械证据或伪造实际零增长复核记录。`;

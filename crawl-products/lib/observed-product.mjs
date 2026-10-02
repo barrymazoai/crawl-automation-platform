@@ -89,7 +89,10 @@ function readShopify(method, sources) {
   let variants = normalizePlatformVariants(product, method.productUrl);
   if (variants.length !== product.variants.length || variants.some(v => !v.variantId)
     || new Set(variants.map(v => v.variantId)).size !== variants.length) fail("platform_variants");
-  if (spec.offerSource === undefined) return { variants, flags: [] };
+  if (spec.offerSource === undefined) {
+    if (variants.some(variant => typeof variant.available !== "boolean")) fail("availability_source_required");
+    return { variants, flags: [] };
+  }
   const offers = sources[spec.offerSource];
   if (offers?.kind !== "dom") fail("offer_source");
   const availability = nativeAvailability(offers.text, method.productUrl, variants);

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { parseCaptureReview, type CaptureReview } from "./product-review.js";
 import { captureFile, type CaptureFile } from "./archive.js";
 import { dtcAgentErrors } from "./errors.js";
 import { verifyObservedProduct } from "../../../../../crawl-products/lib/observed-product.mjs";
@@ -24,29 +25,8 @@ const RecordSchema = z
     flags: z.array(z.string()).default([]),
   })
   .passthrough();
-const ReviewSchema = z.object({
-  productUrl: z.url(),
-  selectedVariantId: z.string().nullable(),
-  galleryUrls: z.array(z.url()).min(1),
-  galleryComplete: z.literal(true),
-  variantsComplete: z.literal(true),
-  detailComplete: z.literal(true),
-  method: z.string().min(1),
-  surface: z.literal("local_file"),
-  verifier: z.literal("codex"),
-  evidence: z.array(z.string()).min(1),
-  imageAssignments: z
-    .array(
-      z.object({
-        url: z.url(),
-        variantId: z.string().nullable(),
-        basis: z.enum(["product-gallery", "variant-featured"]),
-      }),
-    )
-    .min(1),
-});
 export type HarvestRecord = z.infer<typeof RecordSchema>;
-export type CaptureReview = z.infer<typeof ReviewSchema>;
+export type { CaptureReview } from "./product-review.js";
 
 export async function readCapturedProduct(input: {
   root: string;
@@ -85,7 +65,7 @@ async function readRecordAndReview(root: string, url: string) {
     .length(1)
     .parse(JSON.parse((await captureFile(root, "evidence/records.json")).toString()));
   const record = records[0];
-  const review = ReviewSchema.parse(
+  const review = parseCaptureReview(
     JSON.parse((await captureFile(root, "capture-review.json")).toString()),
   );
   if (!record || !sameProduct(record.productUrl, url) || !sameProduct(review.productUrl, url)) {

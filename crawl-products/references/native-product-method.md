@@ -15,7 +15,7 @@
 从 `${SKILL}/lib/observed-product.mjs` 导入 `readObservedProduct`。输入方法只包含模型已经观察确认的来源和位置，不包含猜测字段值：
 
 ```js
-const method = {
+const observedMethod = {
   codec: "observed-product/1",
   productUrl, // 宿主派发 URL，保留显式 variant
   sources: [
@@ -34,7 +34,7 @@ const method = {
 };
 ```
 
-上例只有在真实响应存在 `/product`、品牌/vendor 一致、body_html 确实是该商品完整描述时适用；不是所有站点的预设模板。描述也可指向模型实际看到的唯一 DOM 区块。`offerSource` 可选，使用已保存详情的同商品 JSON-LD offers 补足规格可售状态；出现身份或库存冲突会停止。
+上例只有在真实响应存在 `/product`、品牌/vendor 一致、body_html 确实是该商品完整描述时适用；不是所有站点的预设模板。描述也可指向模型实际看到的唯一 DOM 区块。`offerSource` 指定已保存详情的同商品 JSON-LD offers 来源。平台 JSON 没有全部规格 available 布尔值时，此项必填，不能静默丢失网站已有的库存状态；出现身份或库存冲突会停止。
 
 - `source` 是 sources 下标。DOM selector 使用完整 CSS 语法，必须匹配且仅匹配一个节点。默认返回该节点 HTML 的旧 `htmlToText` 转换结果；`attribute` 可读取明确的属性，如 `content`。不自动查其他 selector。
 - JSON `pointer` 使用 JSON Pointer；默认保存原值，明确 HTML 字段可指定 `format:"html-text"`。不存在的路径报错。品牌不能从任务名称补齐。
@@ -45,7 +45,9 @@ const method = {
 
 ## 预览与收割执行同一个方法
 
-以下接在本轮 Ego 初始化及实际观察之后，变量来自本轮真实结果：
+先用 `validateHarvestPlan(plan)` 验证计划，在获取 HTML/JSON/图片之前修正 schema 错误；该函数从 `lib/harvest-plan.mjs` 导入，返回 `{valid,errors,plan}`。单品 `single_page_confirmed` 只属于 perSeed.exhaustionSignal，不是 oracle 类型；无目录总数断言时使用 `oracles:[]`。采前修正计划/方法时读取已保存原件，不再次调用抓取函数、不覆盖或清空旧文件。字段与校验结论的修订另存版本。
+
+以下接在本轮 Ego 初始化、实际观察与计划验证之后，变量来自本轮真实结果：
 
 ```js
 await mkdir(`${outDir}/sources`, { recursive: true });
@@ -54,21 +56,23 @@ await writeFile(`${outDir}/sources/details.html`, dom.text, { flag: "wx" });
 const platform = await browser.harvestHooks.fetchProductSource(productUrl); // 已确认 Shopify
 if (!platform) throw new Error("observed platform source unavailable");
 await writeFile(`${outDir}/sources/product.json`, platform.text, { flag: "wx" });
-// 按上节构建本轮 method。
-const preview = await readObservedProduct(outDir, method);
+// 按上节构建本轮 observedMethod。
+const preview = await readObservedProduct(outDir, observedMethod);
 // 保存真实 preview，并逐项对照已查看的页面，记录字段位置及语义核对结论。
 // 不得只检查非空或排除几个关键词；没有通过则停止，不进入收割。
 const result = await runHarvest(browser, browser.tab, plan, {
   outDir,
   observedGalleryUrls, // 本轮逐项观察确认的完整原图，不按文件名筛选
   hooks: {
-    extract: async () => ({ records: [await readObservedProduct(outDir, method)], needsUpgrade: [], failed: [] }),
+    extract: async () => ({ records: [await readObservedProduct(outDir, observedMethod)], needsUpgrade: [], failed: [] }),
     fetchPageHtml: async () => dom.text, // 沿用同一已保存状态，不重新访问页面
   },
 });
 ```
 
 `readObservedProduct` 返回的 fieldEvidence 必须随记录保留。宿主按原件散列和确切字段位置重放核对；不可在 helper 返回后补写字段或 variants。通用 `extractDetailDomRecord` / `applyDetailExtractionProfile` / `extractProductsBatch` / `upgradeProducts` 在原生任务内禁止，嵌套在 hooks 也不例外。没有 hooks.extract 就停止，没有隐藏 fallback。
+
+任务根目录的 `capture-review.schema.json` 是宿主实际 schema，先读再写复核文件。`capture-review.json.method` 必须是字符串（例如“逐项查看轮播及落盘原图，并对照商品平台字段”）；字段读取方法对象是 `observedMethod`，保存在 method-candidate.json 与记录的 fieldEvidence 中，不能把它赋给复核文件的 method。返回 complete 前检查复核文件所有字段类型与该 schema 一致。
 
 保存 `field-preview.json`、`profile-validation.json`、方法 candidate 副本、截图、`capture-review.json`；逐张查看落盘原图。只凭一次单品成功不能更新为全站已验证 profile。方法错误只能在收割前基于已保存原件修正并保留预览版本；收割后发现问题保持本次结果并返回 needs_review，不清空重抓。
 

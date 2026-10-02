@@ -97,6 +97,20 @@ it("rejects path traversal and symlink evidence", async () => {
   });
 });
 
+it("classifies a field-mapping object in review.method as invalid capture evidence", async () => {
+  await writeFile(
+    join(root, "capture-review.json"),
+    JSON.stringify({
+      ...review,
+      method: { codec: "observed-product/1" },
+    }),
+  );
+  await expect(readCapturedProduct({ root, files, url })).rejects.toMatchObject({
+    code: "DTC.CAPTURE_EVIDENCE",
+    details: { reason: "invalid_capture_review" },
+  });
+});
+
 it("accepts an archived workspace screenshot without admitting it as a product asset", async () => {
   const retained = captureOutputFiles([
     ...files.map((file) => ({ ...file, path: `capture/${file.path}` })),

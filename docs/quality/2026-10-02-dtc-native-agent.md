@@ -231,3 +231,21 @@ CRAWLV3-172已创建。用户质疑是否偏成机械提取后，暂停继续改
 旧 HMW run `78cb3b78-f65f-41c0-9171-fdfee1dbeb0c` 的R2 manifest 36个文件、9,611,147字节全部回读，大小/SHA256一致。数据库查询 `product-run-78cb3b78-f65f-41c0-9171-fdfee1dbeb0c` 核实4项stop proof：Codex进程组11:52:21.579 absent、browser CLI退出、round结束、确切目标 `EAEC75AEB040B6EFA7C4052165E9DB07` 于11:52:21.984 absent；许可11:52:55.950释放。此前待核验事项已补齐。原Review及原件保持，DTC批量保持暂停。
 
 `8bcd861` 已main推送。Server二 fresh Git checkout 的94项采集/原件重放及420项DTC/契约/label-plan检查通过（6项无外部fixture的检查跳过）。HMW重放正确读取描述且保持两个规格全部值；Solaray保持配料/用法/品牌/库存与两张原图，并保留描述后续完整段落。Worker构建失败：宿主校验模块为复用规格规范化导入整个run-harvest，间接将浏览器工具的fsevents原生依赖带入bundle。生产未切换。现将原有规格规范化原封不动提取为纯模块，由harvest与离线校验共享，继续Mini构建验证。
+
+## 172 双 Mini 部署及新受控验收（12:36 UTC）
+
+依赖隔离修复 `883ad5ccb78a64672224322b8655fb5829499deb` main推送后，Server二隔离checkout通过Git pull取得，94项采集/留存原件重放再次通过，Worker及workflow bundle构建成功。全仓检查和推送钩子通过。Server二12:33:36.192Z、Server一12:34:11.941Z正式部署完成：均fresh clone、locked install、在本机构建，配置job全部ready。Server一7个job与Server二browser-worker同步新版，以接收扩充的规格元数据契约；无数据库迁移或Temporal命令序列改动。
+
+部署前保存 `manual-releases/dtc-native-20261002/before-dtc-observed-883ad5c-deploy.json`。其他渠道暂停请求初始返回draining但无ready/running和held permit，随后确认全部paused；DTC本来就paused，queued=6。部署后12:34:42各job ready、OCR4/4，12:35:04.272按快照恢复五个原running空渠道，保留 `after-dtc-observed-883ad5c-restored.json`，DTC仍暂停。
+
+12:35:25.084手动受理一个新HMW基础商品验收，run/request `16ceca8b-35cc-473d-8377-fc1296d4d964`，workflow `product-run-16ceca8b-35cc-473d-8377-fc1296d4d964`。派发URL仍为Travel Pack，source `743aae55-33ee-4233-ba73-037c1b534af5`。Codex PID27353、p110/target `06E555D7291FCDC6EE9D99F0C32498F5`、round `524b0cbd-d74b-4859-bab8-a6b69fe62217`；workspace `c4ef3e955351b193e27122a1a0889f39eeb330e5a41d35856a2e832563c01a64`。12:36只读检查仍在原生Ego页面preflight，无业务终态。保持旧Review及原件，未开始6项批量。
+
+## 172 首次真实新方法验收：字段正确，复核结构与库存交接仍失败
+
+`16ceca8b-35cc-473d-8377-fc1296d4d964` 的模型12:40:50.242退出并报告complete，原生方法实际读取 `/product/title`、`vendor`、`body_html`，描述已是本商品完整原文，没有购物车内容；SKU012/9.99与SKU022/34.99完整保留在variants，基础商品未填价格/SKU；两张原图hash仍与历史原件一致。但 `capture-review.method` 错写为字段方法对象，宿主实际要求字符串，因此12:41:34.337工作流终态为业务Review：`PIPELINE.ACTIVITY_UNRESOLVED`，原因Zod `method expected string, received object`。不能将模型complete/Workflow COMPLETED算成通过。reviewId `pipeline-review-c4ef3e955351b193e27122a1a0889f39eeb330e5a41d35856a2e832563c01a64`。
+
+另一个独立遗漏：Shopify `.json` 的variants未提供available，模型没有选择显式`offerSource`，所以本次两规格都缺少历史和网页已有的库存状态。本次提示把offerSource写为可选、不强制核查，是实现/说明缺口。继续172：由宿主实际Zod schema生成任务内capture-review.schema.json；明确字段方法对象与复核说明字符串分开；复核结构错误归类DTC.CAPTURE_EVIDENCE而非未解析Activity；平台库存缺失时强制指定状态来源，禁止静默丢失。
+
+实际过程还包括采前计划误填oracle type=single_page_confirmed，校验拒绝后改为oracles=[]；首次修正重新读取了平台JSON，其时间性字段改变导致新hash与未覆盖的旧source文件不符，再次被source_hash拒绝。随后改为读取既有原件完成唯一一次正式harvest。所有版本原件保留；没有清空checkpoint或覆盖历史资料。后续指令将计划校验前移到获取原件之前，计划/方法修正复用原件，避免此类多余请求。
+
+本轮39个R2文件共9,713,915字节全部回读大小/SHA256一致；四项stop proof齐备，精确p110目标12:40:50.729 absent、round12:40:50.949结束，API最终held=[]。旧Review保持，后续不自动重试；DTC6项批量仍暂停。

@@ -69,3 +69,27 @@ it("binds variant-specific fields to the requested website variant", async () =>
   method.fields.price.pointer = "/product/variants/0/price";
   await expect(readObservedProduct(root, method)).rejects.toThrow("selected_variant_field");
 });
+
+it("requires an explicit availability source when platform JSON omits stock state", async () => {
+  const { root, method } = await fixture();
+  const { readFile } = await import("node:fs/promises");
+  const product = JSON.parse(await readFile(join(root, "product.json"), "utf8"));
+  for (const variant of product.product.variants) delete variant.available;
+  const json = JSON.stringify(product);
+  await writeFile(join(root, "product.json"), json);
+  method.sources[1].sha256 = createHash("sha256").update(json).digest("hex");
+  await expect(readObservedProduct(root, method)).rejects.toThrow("availability_source_required");
+  const html = await readFile(join(root, "page.html"), "utf8") + '<script type="application/ld+json">' + JSON.stringify({
+    "@type": "Product", url, offers: [
+      { "@type": "Offer", url: url + "?variant=12", availability: "https://schema.org/OutOfStock" },
+      { "@type": "Offer", url: url + "?variant=22", availability: "https://schema.org/InStock" },
+    ],
+  }) + '</script>';
+  await writeFile(join(root, "page.html"), html);
+  method.sources[0].sha256 = createHash("sha256").update(html).digest("hex");
+  method.platform.offerSource = 0;
+  expect((await readObservedProduct(root, method)).variants).toMatchObject([
+    { variantId: "12", available: false, availability: "OutOfStock" },
+    { variantId: "22", available: true, availability: "InStock" },
+  ]);
+});
