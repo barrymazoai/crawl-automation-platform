@@ -1,29 +1,35 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { collectProductUrls } from "./crawl.mjs";
+import { enumerateCatalog } from "./catalog-enumeration.mjs";
+import { captureShopifyCatalogCoverage } from "./catalog-shopify.mjs";
+import { dtcCatalogCoverageTarget } from "./catalog-coverage.mjs";
 
 /** The old ENUMERATE-to-fixpoint phase alone. Never extracts products or interprets pictures. */
 export async function discoverCatalog(tab, seedUrls, options = {}) {
   if (!options.outDir) throw new Error("catalog_out_dir_required");
   const maxRounds = options.maxRounds ?? 10;
   if (!Number.isInteger(maxRounds) || maxRounds < 2 || maxRounds > 100) throw new Error("catalog_round_limit_invalid");
+  const completionProof = options.completionProof ?? "enumeration";
+  if (!["enumeration", "shopify"].includes(completionProof)) throw new Error("catalog_proof_invalid");
+  if (completionProof === "shopify" && (seedUrls.length !== 1 || !dtcCatalogCoverageTarget(seedUrls[0]) || !options.catalogRoot)) {
+    throw new Error("catalog_shopify_scope_invalid");
+  }
+  const requiredZeroGrowthRounds = options.extraRoundsAfterConverge ?? 1;
+  if (!Number.isInteger(requiredZeroGrowthRounds) || requiredZeroGrowthRounds < 1 || requiredZeroGrowthRounds > 100) throw new Error("catalog_fixpoint_invalid");
   await mkdir(options.outDir, { recursive: true });
   const enumerate = options.enumerate ?? collectProductUrls;
   const found = new Set();
-  const result = { codec: "catalog-discovery/1", seedUrls, pages: [], rounds: [],
+  const result = { codec: "catalog-discovery/1", completionProof, requiredZeroGrowthRounds, seedUrls, pages: [], rounds: [],
     productUrls: [], zeroGrowthRounds: 0, complete: false, reason: "round_limit" };
   const startedAt = Date.now();
   try {
-    for (let round = 1; round <= maxRounds; round++) {
-      if (Date.now() - startedAt > (options.wallClockMinutes ?? 10) * 60_000) {
-        result.reason = "wall_clock_budget";
-        break;
-      }
-      const before = found.size;
-      const observed = await enumerate(tab, seedUrls, {
-        // Each verification round must walk the catalog again. Passing prior URLs to
-        // the legacy collector can stop after two already-known pagination pages.
-        ...options, known: [], knownInlineRecords: [],
+    const enumeration = await enumerateCatalog(seedUrls, {
+      found, maxRounds, extraRoundsAfterConverge: requiredZeroGrowthRounds,
+      enumerateOptions: options,
+      budgetBreach: () => Date.now() - startedAt > (options.wallClockMinutes ?? 10) * 60_000 ? "wall_clock_budget" : null,
+      enumerate: (seeds, enumerateOptions, round) => enumerate(tab, seeds, {
+        ...enumerateOptions,
         onListingPage: async page => {
           const prefix = `catalog-round-${round}-page-${result.pages.length + 1}`;
           const htmlPath = `${prefix}.html`, screenshotPath = `${prefix}.png`;
@@ -32,25 +38,22 @@ export async function discoverCatalog(tab, seedUrls, options = {}) {
           await tab.screenshot({ path: join(options.outDir, screenshotPath) });
           result.pages.push({ ...page, round, htmlPath, screenshotPath });
         },
-      });
-      for (const url of observed.productUrls ?? []) found.add(url);
-      const growth = found.size - before;
-      const coverageComplete = observed.coverage?.status === "complete";
-      result.rounds.push({ round, growth, productUrls: [...found], coverageComplete,
-        seedReports: observed.coverage?.seedReports ?? [] });
-      result.productUrls = [...found];
-      options.log?.("enumerate_round", { round, growth, discovered: found.size, coverageComplete });
-      if (!coverageComplete) {
-        result.reason = "coverage_incomplete";
-        break;
-      }
-      result.zeroGrowthRounds = growth === 0 ? result.zeroGrowthRounds + 1 : 0;
-      if (round >= 2 && result.zeroGrowthRounds >= 1) {
-        result.complete = true;
-        result.reason = "verified_zero_growth";
-        break;
-      }
-    }
+      }),
+      onRound: report => {
+        result.rounds.push(report);
+        result.productUrls = report.productUrls;
+        result.zeroGrowthRounds = report.coverageComplete && report.growth === 0 ? result.zeroGrowthRounds + 1 : 0;
+        options.log?.("enumerate_round", { ...report, discovered: found.size });
+      },
+      verifyCompleteRound: completionProof === "shopify" ? async report => {
+        await captureShopifyCatalogCoverage(tab, seedUrls[0], options, report.productUrls.map(url => ({ url })));
+        return true;
+      } : undefined,
+    });
+    result.complete = enumeration.complete;
+    result.reason = enumeration.complete
+      ? completionProof === "shopify" ? "verified_shopify_catalog" : "verified_zero_growth"
+      : enumeration.reason;
     return result;
   } catch (error) {
     result.reason = `discovery_failed:${String(error)}`;

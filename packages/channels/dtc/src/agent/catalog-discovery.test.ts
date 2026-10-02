@@ -13,6 +13,7 @@ it.each([
   "false-stable",
   "missing-round-page",
   "wrong-products",
+  "missing-required-round",
 ])("checks retained discovery rounds: %s", async (scenario) => {
   const root = await realpath(await mkdtemp(join(tmpdir(), "dtc-round-proof-")));
   const url = "https://shop.example/products/zinc";
@@ -25,6 +26,7 @@ it.each([
     codec: "catalog-discovery/1",
     complete: true,
     zeroGrowthRounds: 1,
+    requiredZeroGrowthRounds: scenario === "missing-required-round" ? 2 : 1,
     productUrls: [url],
     rounds: [1, 2].map((round) => ({
       round,

@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
+import { enumerateCatalog } from "./catalog-enumeration.mjs";
 
 import {
   annotateRecordsFromVisualRoute,
@@ -429,6 +430,27 @@ describe("visual-first learning", () => {
 });
 
 describe("collectProductUrls", () => {
+  it("revisits every page in the shared fixpoint phase, including new products beyond known pages", async () => {
+    const seed = "https://shop.test/collections/all";
+    const pages = {
+      [seed]: listingHtml(["/products/a"], "/collections/all?page=2"),
+      [seed + "?page=2"]: listingHtml(["/products/b"], "/collections/all?page=3"),
+      [seed + "?page=3"]: listingHtml(["/products/c"], null),
+    };
+    let pass = 0;
+    const tab = fakeTab(pages, { onGoto: url => {
+      if (url === seed && ++pass === 2) pages[seed + "?page=3"] = listingHtml(["/products/c", "/products/d"], null);
+    } });
+    const result = await enumerateCatalog([seed], {
+      enumerate: (seeds, opts) => collectProductUrls(tab, seeds, opts),
+      maxRounds: 4,
+      enumerateOptions: { maxItems: 50, listingCoverage: [{ url: seed, paginationMode: "link", verifiedVisually: true }] },
+    });
+    expect(result.complete).toBe(true);
+    expect(result.rounds.map(round => round.growth)).toEqual([3, 1, 0]);
+    expect(tab.visited).toEqual(Array.from({ length: 3 }, () => [seed, seed + "?page=2", seed + "?page=3"]).flat());
+  });
+
   it("follows pagination and stops when it runs out of next pages", async () => {
     const pages = {
       "https://shop.test/collections/all": listingHtml(

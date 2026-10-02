@@ -3,9 +3,13 @@ import { captureFile, type CaptureFile } from "./archive.js";
 import { dtcAgentErrors } from "./errors.js";
 import { dtcProductAddress } from "../address.js";
 import type { DtcSitePolicy } from "../site-policy.js";
+import { verifyShopifyCatalog } from "./catalog-shopify.js";
 
 const Discovery = z.object({
   codec: z.literal("catalog-discovery/1"),
+  completionProof: z.enum(["enumeration", "shopify"]).default("enumeration"),
+  requiredZeroGrowthRounds: z.number().int().min(1).max(100).default(1),
+  seedUrls: z.array(z.url()).optional(),
   complete: z.boolean(),
   zeroGrowthRounds: z.number().int().nonnegative(),
   productUrls: z.array(z.url()),
@@ -13,6 +17,7 @@ const Discovery = z.object({
     .array(
       z.object({
         round: z.number().int().positive(),
+        url: z.url().optional(),
         htmlPath: z.string(),
         screenshotPath: z.string(),
       }),
@@ -36,6 +41,9 @@ type Expected = {
   zeroGrowthRounds: number;
   listingIds: Set<string>;
   site: DtcSitePolicy;
+  completionProof?: "enumeration" | "shopify";
+  sourceUrl?: string;
+  pageUrls?: string[];
 };
 
 /** Verify the retained mechanical round trace, not an agent-written stable-round count. */
@@ -50,10 +58,9 @@ export async function verifyCatalogDiscovery(
   const { consistent, stable, seen } = measuredRounds(proof);
   if (
     !known.has("catalog-discovery.json") ||
+    !matchingDeclaration(proof, expected, stable) ||
     !consistent ||
     !sameProducts(proof, { seen, expected }) ||
-    proof.zeroGrowthRounds !== stable ||
-    expected.zeroGrowthRounds !== stable ||
     !retainedPages(proof, known) ||
     (expected.complete && !completeRounds(proof, stable))
   ) {
@@ -61,6 +68,18 @@ export async function verifyCatalogDiscovery(
       details: { reason: "catalog_rounds_unverified" },
     });
   }
+  if (expected.complete && proof.completionProof === "shopify") {
+    await verifyShopifyProof(saved, proof, expected);
+  }
+}
+
+function matchingDeclaration(proof: DiscoveryProof, expected: Expected, stable: number) {
+  return (
+    proof.complete === expected.complete &&
+    proof.completionProof === (expected.completionProof ?? "enumeration") &&
+    proof.zeroGrowthRounds === stable &&
+    expected.zeroGrowthRounds === stable
+  );
 }
 
 function measuredRounds(proof: DiscoveryProof) {
@@ -99,10 +118,31 @@ function retainedPages(proof: DiscoveryProof, known: Set<string>) {
 function completeRounds(proof: DiscoveryProof, stable: number) {
   return (
     proof.complete &&
-    proof.rounds.length >= 2 &&
-    stable >= 1 &&
+    (proof.completionProof === "shopify" || stable >= proof.requiredZeroGrowthRounds) &&
     proof.rounds.every(
       (round) => round.coverageComplete && proof.pages.some((page) => page.round === round.round),
     )
   );
+}
+
+async function verifyShopifyProof(
+  saved: { root: string; files: CaptureFile[] },
+  proof: DiscoveryProof,
+  expected: Expected,
+) {
+  const sourceUrl = expected.sourceUrl;
+  if (
+    !sourceUrl ||
+    expected.site.platform !== "shopify" ||
+    proof.seedUrls?.length !== 1 ||
+    proof.seedUrls[0] !== sourceUrl ||
+    !expected.pageUrls?.length ||
+    !expected.pageUrls.every((url) => url === sourceUrl) ||
+    !proof.pages.every((page) => page.url === sourceUrl)
+  ) {
+    throw dtcAgentErrors.create("DTC.CAPTURE_EVIDENCE", {
+      details: { reason: "catalog_shopify_scope_unverified" },
+    });
+  }
+  await verifyShopifyCatalog(saved, { sourceUrl, productUrls: proof.productUrls });
 }

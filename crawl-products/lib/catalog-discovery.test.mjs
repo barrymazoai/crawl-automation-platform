@@ -35,7 +35,7 @@ it("continues when a late product appears, until a subsequent whole round adds n
 });
 it("does not silently retry incomplete discovery", async () => {
   const f = await fixture([null]);
-  expect(await discoverCatalog(f.tab, ["seed"], f)).toMatchObject({ complete: false, reason: "coverage_incomplete" });
+  expect(await discoverCatalog(f.tab, ["seed"], f)).toMatchObject({ complete: false, reason: "enumeration_incomplete" });
   expect(f.enumerate).toHaveBeenCalledTimes(1);
 });
 it("retains a failure without running another round", async () => {
@@ -47,4 +47,35 @@ it("retains a failure without running another round", async () => {
 it("keeps a round budget incomplete when the catalog continues growing", async () => {
   const f = await fixture([["one"], ["one", "two"]]);
   expect(await discoverCatalog(f.tab, ["seed"], { ...f, maxRounds: 2 })).toMatchObject({ complete: false, reason: "round_limit" });
+});
+
+it("honors the old contract's requested stable rounds", async () => {
+  const f = await fixture([["one"], ["one"], ["one"]]);
+  const result = await discoverCatalog(f.tab, ["seed"], { ...f, extraRoundsAfterConverge: 2 });
+  expect(result).toMatchObject({ complete: true, zeroGrowthRounds: 2, requiredZeroGrowthRounds: 2 });
+  expect(f.enumerate).toHaveBeenCalledTimes(3);
+});
+
+it.each(["success", "api-only", "invalid-json"])("retains the bounded Shopify oracle: %s", async scenario => {
+  const seed = "https://shop.example/collections/all", url = "https://shop.example/products/zinc";
+  const f = await fixture([[url]]);
+  let responseCalls = 0;
+  f.tab.playwright.evaluate = async (_fn, arg) => {
+    if (!arg) return '<main><a href="/products/zinc">Zinc</a></main>';
+    if (arg === "main") return { url: seed, links: [url], html: '<main><a href="/products/zinc">Zinc</a></main>' };
+    responseCalls++;
+    const products = responseCalls === 1 ? [{ id: 1, handle: "zinc" }, ...(scenario === "api-only" ? [{ id: 2, handle: "other" }] : [])] : [];
+    return { url: arg, status: 200, contentType: "application/json", body: scenario === "invalid-json" ? "broken JSON" : JSON.stringify({ products }) };
+  };
+  const run = discoverCatalog(f.tab, [seed], { ...f, completionProof: "shopify", catalogRoot: "main" });
+  if (scenario === "success") {
+    expect(await run).toMatchObject({ complete: true, completionProof: "shopify", zeroGrowthRounds: 0 });
+    expect(responseCalls).toBe(2);
+  } else {
+    await expect(run).rejects.toThrow();
+    expect(JSON.parse(await readFile(join(f.outDir, "catalog-discovery.json"), "utf8"))).toMatchObject({ complete: false });
+  }
+  expect(f.enumerate).toHaveBeenCalledTimes(1);
+  expect(JSON.parse(await readFile(join(f.outDir, "catalog-shopify-response-1.json"), "utf8"))).toHaveProperty("body");
+  expect(JSON.parse(await readFile(join(f.outDir, "catalog-coverage.json"), "utf8"))).toHaveProperty("responses");
 });

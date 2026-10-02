@@ -30,6 +30,7 @@ import {
 import { isHeadingOnlyDetailValue } from "./engine.mjs";
 import { createBrowserHtmlFetcher } from "./worker-cdp-browser.mjs";
 import { nativeAvailability } from "./native-availability.mjs";
+import { enumerateCatalog } from "./catalog-enumeration.mjs";
 import { classifyFactsImageCandidate } from "./product-semantics.mjs";
 import {
   classifyNutritionProductUrl,
@@ -469,50 +470,37 @@ export async function runHarvest(browser, tab, planInput, opts = {}) {
     paginationMode: seed.paginationMode,
     verifiedVisually: true,
   }));
-  let zeroGrowthRounds = 0;
-  let enumerationIncompleteReason = null;
-  while (zeroGrowthRounds < plan.termination.fixpoint.extraRoundsAfterConverge) {
-    const breach = budgetBreach();
-    if (breach) return finalize("incomplete", [breach]);
-    const before = discovered.size;
-    const round = await hooks.enumerate(seedUrls, {
+  const enumeration = await enumerateCatalog(seedUrls, {
+    found: discovered,
+    enumerate: hooks.enumerate,
+    extraRoundsAfterConverge: plan.termination.fixpoint.extraRoundsAfterConverge,
+    budgetBreach,
+    acceptProductLimit: acceptLimit,
+    enumerateOptions: {
       maxItems: budgets.maxItems,
       maxPagesPerSeed: budgets.maxPagesPerSeed,
       listingCoverage,
-      known: [...discovered],
       listingProfile: plan.route.listingProfile || undefined,
       log,
-    });
-    seedReports = round.coverage?.seedReports || [];
-    if (workerProduct) {
-      const candidates = (round.productUrls || []).filter(inWorkerScope);
+    },
+    selectUrls: urls => {
+      if (!workerProduct) return urls;
+      const candidates = urls.filter(inWorkerScope);
       const selected = candidates.find((url) => new URL(url).href === workerProduct.href)
         ?? candidates[0];
-      if (selected && discovered.size === 0) discovered.add(selected);
-    } else {
-      for (const url of round.productUrls || []) discovered.add(url);
-    }
-    const growth = discovered.size - before;
-    if (growth > 0) progressed();
-    log("enumerate_round", { discovered: discovered.size, growth });
-    await persistCheckpoint();
-    if (round.coverage?.status !== "complete") {
-      const incompleteSeeds = seedReports.filter((report) => report.status !== "complete");
-      const onlyMaxItems = incompleteSeeds.length > 0 && incompleteSeeds
-        .every((report) => String(report.endReason || "").includes("max_items"));
-      if (acceptLimit && onlyMaxItems) {
-        // The caller explicitly capped this run: hitting maxItems is the
-        // sanctioned finish line, not incompleteness to resume or fudge.
-        log("product_limit_accepted", { maxItems: budgets.maxItems });
-        break;
-      }
-      enumerationIncompleteReason = incompleteSeeds
-        .map((report) => `seed_${report.endReason || "incomplete"}:${report.seedUrl}`)
-        .join(",") || "enumeration_incomplete";
-      break;
-    }
-    if (growth === 0) zeroGrowthRounds += 1;
-    else zeroGrowthRounds = 0;
+      return selected && discovered.size === 0 ? [selected] : [];
+    },
+    onRound: async report => {
+      seedReports = report.seedReports;
+      if (report.growth > 0) progressed();
+      log("enumerate_round", { discovered: discovered.size, growth: report.growth });
+      await persistCheckpoint();
+    },
+  });
+  if (enumeration.budgetExceeded) return finalize("incomplete", [enumeration.reason]);
+  const enumerationIncompleteReason = enumeration.complete ? null : enumeration.reason;
+  if (enumeration.acceptedLimit) {
+    log("product_limit_accepted", { maxItems: budgets.maxItems });
   }
 
   if (workerProduct && discovered.size === 0) {

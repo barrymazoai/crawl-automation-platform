@@ -181,3 +181,11 @@ HMW第三次原生目录scan `6e6a71fe-fca7-4bcc-8f72-5e470b7667e7`（10:55:18�
 用户确认“确实复用旧机制比较好”。确定方向：共享旧 ENUMERATE 阶段和原契约，保留当前逐页证据与防提前结束修复；恢复旧 Shopify 有界集合对账校验，通过 Ego 原生操作取得原件；宿主按明确的证明类型核验，不维护两套枚举算法，不接回 CDP。详细设计为 `docs/spark/2026-10-02-dtc-legacy-catalog-reuse-design.md`。此方向尚未实施；CRAWLV3-170 保持 In Progress，旧 Review 和原件不改。
 
 上一轮部署的五个其他渠道仍临时 paused。核验它们均无 queued/ready/running、无 held permit 后，于 11:20:05.881 UTC 按部署前快照恢复 Amazon/GNC/Swanson/Whole Foods/Costco 原 running 状态；DTC 保持 paused。Server 一保留 `after-dtc-catalog-fixpoint-deploy-restored.json`，没有投送新 DTC、重新入队或改写历史业务结果。
+
+## 复用旧目录机制的实现（待 Mini 与真实验收）
+
+用户明确要求开始处理后，将 runHarvest 的 ENUMERATE 阶段提取为 `catalog-enumeration.mjs`，旧 harvest 和 discoverCatalog 共用；原合同的稳定轮次、coverage、产品限制、预算回调及检查点保留，复核每轮重新完整遍历。新增真实旧 collector 的三页回归：第二轮前两页无变化、第三页出现新品，增长必须为 `[3,1,0]`，不能提前判稳。
+
+旧 Shopify 对账算法提取到 `catalog-coverage.mjs`，供采集与宿主共用。Ego 原生 `captureShopifyCatalogCoverage` 按旧上限取得目录容器实际 DOM、HTML、截图及最多两页对应接口响应；每份响应先落盘后解析，失败也留存。只有页面集合、提交集合与接口完整集合相同且有空终页才通过，接口独有商品不纳入发现。宿主还核对保留 HTML 的目录链接、独立响应原件、source/seed 范围及平台身份；不接受手写计数。新目录证明类型区分 enumeration/shopify，旧普通目录证据默认 enumeration，不修改历史 Review。
+
+首轮本地 132 项旧 collector/harvest 与新目录测试、19 项宿主/模式测试通过；补充原合同要求多个稳定轮次的拒绝检查。类型检查通过，全仓检查已修正复杂度、函数长度和非空断言问题后通过。尚未以该实现切换 Worker、启动新 HMW 目录或多规格任务；Mini 留存原件重放、构建和真实验收继续执行。

@@ -13,11 +13,11 @@ fields.title 和 fields.brand 必须来自实际商品页面/该商品的平台�
 imageAssignments 只记录网站数据或实际切换证据支持的图片归属；未明确绑定的商品共用图保留 variantId:null，不因此返回 needs_review，不强行分配给当前规格。缺失原图或规格未采齐才属于采集不完整；后续处理负责判断图片内容及适用规格。
 禁止执行 semantic queue、enrich 或旧 API-ready 导出；后续系统用本次原件处理。`;
 
-export const catalogInstructions = `按旧采集流程先视觉确认站点身份和完整目录族，制定路线与终止契约，再用 discoverCatalog 包装旧 collectProductUrls 按观察到的路线遍历至零增长。单页目录也需额外复核，不能省掉旧 ENUMERATE 阶段的固定点检查。
+export const catalogInstructions = `按旧采集流程先视觉确认站点身份和完整目录族，制定路线与终止契约，再用 discoverCatalog 复用旧 ENUMERATE 阶段及 Shopify 目录对账。普通目录按契约遍历至零增长；符合旧有界规则的 Shopify 单目录可用页面/目录结果/对应接口完整集合相同及空终页证明，不强制重复遍历。证明选择在采前完成。
 只发现产品，不进入逐个产品采集和 OCR。商品必须来自实际目录/导航；平台 API 库存不能直接代替目录产品集。
-保存 catalog.json：{pages:[{url,htmlPath,screenshotPath,entries:[{url,title,brand:null或页面品牌}]}],complete:boolean,termination:{exhausted:boolean,reason:string,method:string,evidence:[相对路径],zeroGrowthRounds:number,oracle:{expected:number|null,observed:number,comparable:boolean}}}。
+保存 catalog.json：{pages:[{url,htmlPath,screenshotPath,entries:[{url,title,brand:null或页面品牌}]}],complete:boolean,termination:{proof:"enumeration"或"shopify",exhausted:boolean,reason:string,method:string,evidence:[相对路径],zeroGrowthRounds:number,oracle:{expected:number|null,observed:number,comparable:boolean}}}。
 每页/每个加载阶段保留原始渲染 HTML；每个 seed 留截图，最后耗尽状态留截图。entries 只能列出该页实际出现的产品详情链接。
-所有目录族遍历且翻页/加载已耗尽、零增长复核通过，且可比 oracle 无缺口时才能 complete=true。达到预算、发现循环、漏页或差额时 complete=false 并说明原因，不伪造全品牌完成。
+所有目标目录覆盖完整且选定的完成证明通过、可比 oracle 无缺口时才能 complete=true。Shopify的catalog-coverage.json和逐份原始响应由机械工具保存，不能手写对账成功；子目录不能用全店接口背书。达到预算、发现循环、漏页或差额时 complete=false 并说明原因，不伪造全品牌完成。
 标题和品牌按页面原文保存；去重按真实规范产品 URL。保存 entry-decision.json、route-plan.json、termination-contract.json、验证查漏痕迹。
 用户给的是一个已配置品牌来源，范围只限该来源；多品牌卖场不得把其他品牌放进来。`;
 

@@ -33,6 +33,7 @@ const Catalog = z.object({
     reason: z.string().min(1),
     method: z.string().min(1),
     evidence: z.array(z.string()).min(1),
+    proof: z.enum(["enumeration", "shopify"]).default("enumeration"),
     zeroGrowthRounds: z.number().int().nonnegative(),
     oracle: z.object({
       expected: z.number().int().nonnegative().nullable(),
@@ -77,7 +78,8 @@ export class DtcAgentBrandScan {
         .filter((product) => firstSeen(seen, product.listingId));
       pages.push({ products, cards: products.length, nextPage: null, statedTotal: null });
     }
-    await verifyCompletion(catalog, saved, { listingIds: seen, site });
+    const completionScope = { listingIds: seen, site, sourceUrl: request.sourceUrl };
+    await verifyCompletion(catalog, saved, completionScope);
     return {
       sourceUrl: request.sourceUrl,
       source,
@@ -93,12 +95,14 @@ export class DtcAgentBrandScan {
 async function verifyCompletion(
   catalog: z.infer<typeof Catalog>,
   saved: Awaited<ReturnType<DtcCaptureAgent["capture"]>>,
-  scope: { listingIds: Set<string>; site: DtcSitePolicy },
+  scope: { listingIds: Set<string>; site: DtcSitePolicy; sourceUrl: string },
 ) {
   verifyTermination(catalog, scope.listingIds.size, saved.files);
   await verifyCatalogDiscovery(saved, {
     complete: catalog.complete,
     zeroGrowthRounds: catalog.termination.zeroGrowthRounds,
+    completionProof: catalog.termination.proof,
+    pageUrls: catalog.pages.map((page) => page.url),
     ...scope,
   });
 }
@@ -183,7 +187,9 @@ function verifyTermination(catalog: z.infer<typeof Catalog>, count: number, file
     oracle.observed !== count ||
     termination.evidence.some((path) => !evidence.has(path)) ||
     (catalog.complete &&
-      (!termination.exhausted || termination.zeroGrowthRounds < 1 || !consistent))
+      (!termination.exhausted ||
+        (termination.proof === "enumeration" && termination.zeroGrowthRounds < 1) ||
+        !consistent))
   ) {
     throw dtcAgentErrors.create("DTC.CAPTURE_EVIDENCE", {
       details: { reason: "catalog_completion_unverified" },
