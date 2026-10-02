@@ -4,20 +4,23 @@ import { join } from "node:path";
 import { egoLocator } from "./ego-native-locator.mjs";
 
 /** Adapts the existing harvest primitives inside Ego's native Node runtime. No CDP server or Playwright. */
-export function createEgoBrowser({ task, page, listTaskSpaces, workDir, productUrl = null }) {
+export function createEgoBrowser({ task, page, targetId = page.targetId, listTaskSpaces, workDir, productUrl = null }) {
+  if (typeof targetId !== "string" || !targetId) throw new Error("SOURCE.TARGET_MISSING");
   const guard = async () => {
     const space = (await listTaskSpaces()).find(item => (item.id ?? item.spaceId) === task.spaceId);
     if (!space || space.ownership !== "agent") throw new Error("SOURCE.BROWSER_USER_CONTROL");
-    const owned = (await task.tabs()).find(item => item.targetId === page.targetId);
+    const owned = (await task.tabs()).find(item => item.targetId === targetId);
     if (!owned || owned.openedBy !== "agent") throw new Error("SOURCE.TARGET_MISSING");
+    return owned.page ?? page;
   };
-  const call = async (method, ...args) => { await guard(); return page[method](...args); };
+  const call = async (method, ...args) => { const owned = await guard(); return owned[method](...args); };
+  const scoped = Object.fromEntries(["evaluate", "click", "press", "events", "fetch"].map(method => [method, (...args) => call(method, ...args)]));
   const tab = {
-    id: page.targetId,
+    id: targetId,
     playwright: {
       evaluate: (fn, arg) => call("evaluate", fn, arg),
-      locator: selector => egoLocator(page, guard, { css: selector }),
-      getByText: (text, options = {}) => egoLocator(page, guard, { text, exact: options.exact }),
+      locator: selector => egoLocator(scoped, guard, { css: selector }),
+      getByText: (text, options = {}) => egoLocator(scoped, guard, { text, exact: options.exact }),
       domSnapshot: () => call("snapshot", { scope: "full_page" }),
       waitForTimeout: ms => call("waitForTimeout", ms),
       waitForLoadState: (options = {}) => call("waitForLoadState", options.state ?? "load", { timeout: options.timeoutMs }),
@@ -41,7 +44,7 @@ export function createEgoBrowser({ task, page, listTaskSpaces, workDir, productU
         if (/^(Target|Browser)\./.test(method)) throw new Error("SOURCE.TARGET_SCOPE");
         return call("cdp", method, params);
       },
-      readEvents: createEventReader(page, guard),
+      readEvents: createEventReader(scoped, guard),
     } : null },
   };
   const hooks = {
@@ -61,7 +64,7 @@ export function createEgoBrowser({ task, page, listTaskSpaces, workDir, productU
       }, target.href);
       return body?.product ?? body;
     },
-    fetchImage: url => readImage({ page, guard, workDir }, url),
+    fetchImage: url => readImage({ page: scoped, guard, workDir }, url),
   };
   return { mode: "ego-native", productUrl, harvestHooks: hooks, tab, tabs: {
     new: async () => { await guard(); return tab; },

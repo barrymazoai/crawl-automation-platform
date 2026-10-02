@@ -36,6 +36,8 @@ export async function runCodexCapture(
   const identity = captureIdentity(child.pid);
   try {
     await recordPermitExecution(identity);
+    signal.throwIfAborted();
+    child.stdin?.end(input.prompt);
   } catch (error) {
     child.kill("SIGTERM");
     await child;
@@ -82,7 +84,6 @@ function startCapture(
     cwd: input.cwd,
     env: { ...connection.env, CRAWL_SITE_PROFILE_DIR: input.profileDir },
     extendEnv: false,
-    input: input.prompt,
     cancelSignal: signal,
     timeout: settings.timeoutMs,
     killDescendants: true,

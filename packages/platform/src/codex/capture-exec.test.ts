@@ -1,4 +1,4 @@
-import { mkdtemp, writeFile, rm, readFile, realpath } from "node:fs/promises";
+import { mkdtemp, writeFile, rm, readFile, realpath, access } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, expect, it } from "vitest";
@@ -21,9 +21,12 @@ async function fixture(mode: "complete" | "cancel") {
     `#!${process.execPath}
 const fs = require("node:fs");
 const {spawn} = require("node:child_process");
+process.stdin.resume();
+process.stdin.on("end", () => {
 const child = spawn(process.execPath, ["-e", "setInterval(()=>{},1000)"], {stdio:"ignore"});
 fs.writeFileSync("descendant.pid", String(child.pid));
 ${mode === "complete" ? 'fs.writeFileSync(process.argv[process.argv.indexOf("--output-last-message")+1], JSON.stringify({status:"complete"})); child.unref(); process.exit(0);' : "setInterval(()=>{},1000);"}
+});
 `,
     { mode: 0o700 },
   );
@@ -78,3 +81,26 @@ it.each(["complete", "cancel"] as const)(
     expect(proofs).toEqual([expect.objectContaining({ kind: "capture-process-group-absent" })]);
   },
 );
+
+it("does not send the capture prompt when durable execution registration fails", async () => {
+  const { root, settings } = await fixture("complete");
+  const work = withPermitExecution(
+    {
+      owner: { permitId: "one", workflowId: "capture", runId: "run" },
+      ledger: {
+        record: async () => {
+          throw new Error("ledger unavailable");
+        },
+        prove: async () => undefined,
+      },
+    },
+    () =>
+      runCodexCapture(
+        settings,
+        { cwd: root, prompt: "test", outputSchema: {}, environment: process.env },
+        new AbortController().signal,
+      ),
+  );
+  await expect(work).rejects.toThrow("ledger unavailable");
+  await expect(access(join(root, "descendant.pid"))).rejects.toMatchObject({ code: "ENOENT" });
+});

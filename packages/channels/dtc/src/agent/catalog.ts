@@ -1,7 +1,7 @@
 import { z } from "zod";
 import type { BrowserScanRequest } from "@crawl-automation/channels-core";
 import { dtcBrandSource } from "../brand-source.js";
-import { catalogUrl, dtcProductAddress, siteForBrandUrl } from "../address.js";
+import { catalogUrl, dtcProductAddress, siteForBrandUrl, siteForUrl } from "../address.js";
 import { assertDtcBrandVerified, dtcBrandEvidence } from "../brand-evidence.js";
 import type { DtcSitePolicy } from "../site-policy.js";
 import type { DtcBrandScanResult, DtcListingPage } from "../brand-scan.js";
@@ -69,7 +69,7 @@ export class DtcAgentBrandScan {
     const pages: DtcListingPage[] = [];
     const seen = new Set<string>();
     for (const page of catalog.pages) {
-      catalogUrl(page.url, site, request.sourceUrl);
+      verifyCatalogScope(page.url, site, request.sourceUrl);
       await verifyCatalogPage(page, { ...saved, site });
       const products = page.entries
         .map((entry) => listedProduct(entry, { site, source }))
@@ -86,6 +86,15 @@ export class DtcAgentBrandScan {
       archiveKeys: [saved.manifestKey],
       stopped: catalog.complete ? "end" : "page_limit",
     };
+  }
+}
+
+function verifyCatalogScope(url: string, site: DtcSitePolicy, source: string) {
+  // A single-brand store may require several observed category seeds for its complete catalog.
+  if (site.kind === "single-brand") {
+    siteForUrl(url, [site]);
+  } else {
+    catalogUrl(url, site, source);
   }
 }
 

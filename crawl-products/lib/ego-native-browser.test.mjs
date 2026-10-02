@@ -13,6 +13,16 @@ function fixture() {
 }
 
 describe("native Ego harvest adapter", () => {
+  it("resolves a resumed Page through the host target ID and fresh tab inventory", async () => {
+    const { page, task } = fixture();
+    task.tabs.mockResolvedValue([{ targetId: "owned", openedBy: "agent", page }]);
+    const wrongPage = { goto: vi.fn() };
+    const browser = createEgoBrowser({ task, page: wrongPage, targetId: "owned", workDir: "/tmp/unused",
+      listTaskSpaces: async () => [{ id: 6, ownership: "agent" }] });
+    await browser.tab.goto("https://shop.example/products/one");
+    expect(page.goto).toHaveBeenCalledOnce();
+    expect(wrongPage.goto).not.toHaveBeenCalled();
+  });
   it("preserves the native browser mode and host-selected product", () => {
     const { browser } = fixture();
     expect(normalizeHarvestPlan({ site: { browserMode: "ego-native" } }).site.browserMode).toBe("ego-native");

@@ -65,7 +65,8 @@ description: "用视觉优先的三步 preflight（站点判定 → 路径探索
 
 宿主明确选择 `ego-native` 时，先读 Ego 自带 `ego-browser` skill；跳过下方 Chrome/IAB/worker_cdp 的绑定代码。
 由 Codex 通过 `ego-browser nodejs` 原生 TaskSpace/Page API 操作宿主派发的确切页面，不运行 CDP 桥或 Playwright。
-旧 `runHarvest` 的机械接口通过 `lib/ego-native-browser.mjs` 的 `createEgoBrowser({task,page,listTaskSpaces,workDir,productUrl})` 复用：
+旧 `runHarvest` 的机械接口通过 `lib/ego-native-browser.mjs` 的 `createEgoBrowser({task,page,targetId,listTaskSpaces,workDir,productUrl})` 复用：
+`targetId` 必须来自宿主并以 `task.tabs()` 核对；恢复的 Page 句柄可能没有 `.targetId` 属性。`taskSpace` 和 `listTaskSpaces` 是 Ego nodejs 注入的全局，不要导入猜测的 SDK 路径。
 `browser.tab` 是 harvest 的 tab，`browserMode="ego-native"`。站点判断、视觉路线、规格/图库检查仍由模型负责。
 `productUrl` 非空时强制单商品范围，原生 HTML/图片 hooks 由引擎自动采用，后续读取保存的原件。
 任务页由宿主关闭并验证不存在；遇用户接管立即停止。宿主的 capture-only 合约覆盖本 skill 的语义、导出、重试和多线程部分。

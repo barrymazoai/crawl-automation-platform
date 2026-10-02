@@ -33,11 +33,12 @@ export function capturePrompt(input: PromptInput): string {
    profileDir=${input.profileDir}，沿用旧 loadSiteProfile/createSiteProfile/saveSiteProfile 与失效校验；profile 只保存方法，不存商品数据。将本次采用的方法 profile 副本存到 outDir 以供追溯。
 3. 只使用 Ego 原生 CLI ${input.cliPath} nodejs。禁止 Chrome、Playwright connectOverCDP、CDP 桥或另建浏览器。
 4. 宿主已创建唯一任务页：TaskSpace ${input.taskSpaceId}、label ${JSON.stringify(input.label)}、targetId ${JSON.stringify(input.targetId)}。
-   用 taskSpace(${input.taskSpaceId}) 和 task.page(${JSON.stringify(input.label)})，每次核对 targetId 和 listTaskSpaces() 中该空间 ownership=agent。
+   taskSpace/listTaskSpaces 是 Ego nodejs 注入的全局，直接使用，不导入猜测的 SDK 路径。
+   用 taskSpace(${input.taskSpaceId}) 和 task.page(${JSON.stringify(input.label)})；恢复的 Page 可能没有 targetId 属性，每次以 task.tabs() 中该 label 的 targetId 和 listTaskSpaces() 中该空间 ownership=agent 核对。
    不 newPage、不接管空间、不操作或关闭其他页。所有图片、HTML、截图保存完后由宿主关闭并验证本页消失。
 5. 按 Ego skill 直接观察、点击和截图。Ego 每次 nodejs 调用是新进程，显式重建句柄，不能依赖上一轮 JS 变量。
    机械 harvest 在 Ego nodejs 内 import ${input.skillRoot}/lib/ego-native-browser.mjs：
-   const browser = createEgoBrowser({task, page, listTaskSpaces, workDir:${JSON.stringify(input.cwd)}, productUrl:${JSON.stringify(input.mode === "product" ? input.url : null)}});
+   const browser = createEgoBrowser({task, page, targetId:${JSON.stringify(input.targetId)}, listTaskSpaces, workDir:${JSON.stringify(input.cwd)}, productUrl:${JSON.stringify(input.mode === "product" ? input.url : null)}});
    const tab = browser.tab; browserMode="ego-native"。该适配仅复用旧 harvest 方法，不启动服务。
    runHarvest(browser, tab, plan, {outDir:${JSON.stringify(input.outDir)}}) 会强制任务商品范围及原生浏览器取 HTML/图片。
 6. 主脚本放任务根目录 run-capture.mjs；先 node --check 再由 ego-browser nodejs 执行。所有证据路径相对 outDir。
