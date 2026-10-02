@@ -273,3 +273,7 @@ R2 archive41份文件、9,375,010字节全部回读大小/SHA256通过。SQL核�
 173修复只在来源处省略缺失属性，并清除可能遗留的旧规格字段，不放松JSON规则或任填默认规格。本地20项title-reader/service检查通过，新增Mini真实留存输入/投影/模型回答重放，验证JSONB往返hash及成功登记路径；不访问网站、不重新调用模型、不改旧workflow终态。当前未宣称该修复已部署。
 
 另已向148补记原生内容完整性缺口：field-preview以capture-only为由未提取文本ingredients，缺少逐项存在/缺失/未检查证明；DOM明确节点的raw格式目前仍转纯文本，可能损失Facts表格结构（代码审计，尚未实站复现）。本轮172通过不替代148下方内容/展开/懒加载验收。
+
+173补丁`b059470afd3c4b0949391e18124ff343a5e727d3`已main推送。Server一fresh Git clone的81项标准化/title-reader/真实HMW留存结果重放全部通过，Worker与workflow bundle构建成功。真实输入、回答、投影及原record保存在`manual-releases/dtc-native-20261002/hmw-173-retained/`，重放测试仅使用文件和内存数据库替身，核验JSON序列化前后hash相同；没有重新调用模型或生产登记。普通无规格、多规格基础商品和唯一规格回归同时通过。
+
+Server一13:10:17.410Z经fresh Git clone/锁定安装/本机构建正式部署b059470，7个job全部ready，OCR4/4，held=[]；Server二仍885b96c，本次只改Server一标准化来源字段，没有浏览器或跨机契约变更。部署前确认无在途、全部暂停并保存快照`before-dtc-enrichment-b059470-deploy.json`；恢复其他五个空渠道的结果保存在`after-dtc-enrichment-b059470-restored.json`。DTC6项仍暂停。171/172已交付Review；173旧失败workflow与未登记的留存record保持，未将旧业务终态改写为成功。
