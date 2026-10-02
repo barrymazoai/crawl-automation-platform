@@ -11,6 +11,7 @@ import { collectedSourcesAgree } from "./label-product-agreement.js";
 import { labelImageIntegrityCodes, labelNumericSourceConflict } from "./label-quality.js";
 import { LabelReviewedImageRecordSchema } from "./label-reviewed-image.js";
 import { completeLabelSections } from "./label-sections.js";
+import { hasConfirmedNoOtherIngredients } from "./label-ingredient-declaration.js";
 export const LabelEvidencePolicySchema = z.enum(["label-image-first/1", "label-image-first/2", "label-image-first/3", "label-image-first/4", "label-image-first/5", "label-image-first/6"]);
 /** Priority is earned by a complete, structurally valid image, never merely its media type. */
 export function isCompleteLabelImage(p: { kind: string; candidate: LabelImageCandidate | TextCandidateV3 }) {
@@ -76,7 +77,7 @@ const collectedFields = {
   operationId: ExecutionIdSchema, observation: ObservationSchema,
   assembly: z.strictObject({ objectKey: ObjectKeySchema, sha256: Sha256Schema, byteSize: z.number().int().positive().max(8388608) }),
   formula: LabelProductFormulaSchema, otherIngredients: LabelProductOtherSchema,
-  ingredients: z.array(LabelProductIngredientSchema).min(1).max(1900),
+  ingredients: z.array(LabelProductIngredientSchema).max(1900),
   warnings: z.array(z.strictObject({ id: ExecutionIdSchema, code: z.string().min(1).max(160) })).max(1000),
   provenance: z.array(LabelProductProvenanceSchema).min(1).max(100),
 };
@@ -112,6 +113,9 @@ export const LabelCollectedProductSchema = z.discriminatedUnion("schemaVersion",
   if(r.evidencePolicy==="label-image-first/5" && imageFirst && authoritative.length!==1)invalid();
   const projectedSources = authoritative.map(p => projectLabelProductCandidate(p.id,
     split ? (completeLabelSections(p.candidate) ?? p.candidate) : p.candidate));
+  if (!r.ingredients.length && !authoritative.some(p => isCompleteLabelImage(p) &&
+    hasConfirmedNoOtherIngredients(p.candidate) &&
+    p.id === r.formula.columns[0]?.rows[0]?.name.sourceId)) invalid();
   // A saved record cannot hide a real disagreement or omit the warning for normalized agreement.
   if (imageFirst && !collectedSourcesAgree(r, accepted)) invalid();
   if (r.schemaVersion === 4) {

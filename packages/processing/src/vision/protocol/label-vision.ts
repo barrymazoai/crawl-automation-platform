@@ -94,6 +94,8 @@ export function decodeLabelImage(response: string) {
   if (Buffer.byteLength(response) > MAX_VISION_ANSWER_BYTES) {
     throw visionFailure("VISION.OUTPUT_LIMIT", "executed");
   }
-  const candidate = retainDailyValueHeading(LabelImageCandidateSchema.parse(JSON.parse(response)));
+  const candidate = retainDailyValueHeading(
+    LabelImageCandidateSchema.omit({ ingredientDeclaration: true }).parse(JSON.parse(response)),
+  );
   return { candidate, ...assessLabelCandidate(candidate) };
 }

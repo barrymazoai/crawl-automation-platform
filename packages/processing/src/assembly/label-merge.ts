@@ -1,6 +1,8 @@
 import { assemblyErrors } from "./assembly-errors.js";
 import {
   LabelProductProvenanceSchema,
+  hasConfirmedNoOtherIngredients,
+  isCompleteLabelImage,
   type LabelCollectedProduct,
   type LabelProductManifest,
   type PackagingFacts,
@@ -43,7 +45,7 @@ export function mergeLabelProduct(
 function mergedLabel(state: MergeState, provenance: Provenance[]) {
   const { manifest, packaging, formula } = state;
   const ingredients = labelIngredients(state);
-  finalChecks(state, ingredients.length);
+  finalChecks(state, ingredients.length > 0 || selectedAbsence(state, provenance));
   const comparison = manifest.admission?.comparison;
   const admission = {
     admissionPolicy: "label-packaging/1" as const,
@@ -71,12 +73,12 @@ function mergedLabel(state: MergeState, provenance: Provenance[]) {
 }
 
 /** A label needs a formula and ingredients; packaging counts that disagree leave the count out, with a warning. */
-function finalChecks(state: MergeState, ingredientCount: number): void {
+function finalChecks(state: MergeState, ingredientsComplete: boolean): void {
   const { formula } = state;
   if (!formula) {
     state.codes.add(assemblyErrors.code("VALIDATION.FORMULA_MISSING"));
   }
-  if (!ingredientCount) {
+  if (!ingredientsComplete) {
     state.codes.add(assemblyErrors.code("VALIDATION.INGREDIENTS_MISSING"));
   }
   if (!state.packaging || state.counts.size <= 1) {
@@ -89,6 +91,17 @@ function finalChecks(state: MergeState, ingredientCount: number): void {
   if (!state.warnings.some((warning) => warning.code === code)) {
     state.warnings.push({ id: state.manifest.operationId, code });
   }
+}
+
+/** Empty ingredients are justified by the same complete image that supplied the selected formula. */
+function selectedAbsence(state: MergeState, provenance: Provenance[]): boolean {
+  const sourceId = state.formula?.columns[0]?.rows[0]?.name.sourceId;
+  return provenance.some(
+    (entry) =>
+      entry.id === sourceId &&
+      isCompleteLabelImage(entry) &&
+      hasConfirmedNoOtherIngredients(entry.candidate),
+  );
 }
 
 /** Blend components from the formula, then the other ingredients, in printed order. */

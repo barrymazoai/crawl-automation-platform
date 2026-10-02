@@ -1,6 +1,9 @@
 import { z } from "zod";
 import { drugFactsHeading, drugActiveHeading, drugInactiveHeading } from "./label-drug.js";
-import { assessLabelGroups } from "./label-groups.js";
+import { LabelIngredientDeclarationSchema } from "./label-ingredient-declaration.js";
+import { hasConfirmedNoOtherIngredients, ingredientDeclarationIncomplete } from "./label-ingredient-declaration.js";
+import { assessLabelRows } from "./label-row-assessment.js";
+export { hasConfirmedNoOtherIngredients } from "./label-ingredient-declaration.js";
 
 /** New opt-in extraction protocol; never reinterpret a legacy candidate as this codec. */
 export const labelExtractionVersion = "label-extraction/1" as const;
@@ -35,7 +38,9 @@ export function labelExtractionSchema<F extends z.ZodType>(field: F) {
 }
 export const LabelTextWireSchema = labelExtractionSchema(LabelAnchorSchema);
 export const LabelTextCandidateSchema = labelExtractionSchema(LabelQuoteSchema);
-export const LabelImageCandidateSchema = labelExtractionSchema(LabelImageFieldSchema);
+export const LabelImageCandidateSchema = labelExtractionSchema(LabelImageFieldSchema).extend({
+  ingredientDeclaration: LabelIngredientDeclarationSchema.optional(),
+});
 export type LabelTextCandidate = z.infer<typeof LabelTextCandidateSchema>;
 export type LabelImageCandidate = z.infer<typeof LabelImageCandidateSchema>;
 export type LabelCandidate = LabelTextCandidate | LabelImageCandidate;
@@ -57,30 +62,15 @@ export function assessLabelCandidate(candidate: LabelCandidate) {
   const warnings: LabelFinding[] = [];
   // Every code keeps the first place that raised it, so a Review can say which row broke which rule.
   const flag = (code: string, detail: string) => { if (!codes.has(code)) findings.push({ code, detail }); codes.add(code); };
-  const rowText = (row: { name: { text: string }; amount: { text: string } | null }, index: number) =>
-    `row ${index} "${row.name.text.slice(0, 80)}"${row.amount ? ` amount "${row.amount.text.slice(0, 30)}"` : ""}`;
   let componentCount = 0;
   for (const column of candidate.formula?.columns ?? []) {
-    const groups = assessLabelGroups(column.rows);
-    groups.findings.forEach(finding => flag(finding.code, finding.detail));
-    warnings.push(...groups.warnings);
-    column.rows.forEach((row, index) => {
-      if ((row.amountStatus === "printed") !== (row.amount !== null)) flag("LABEL.AMOUNT_STATE_CONFLICT", `${rowText(row, index)}: status ${row.amountStatus} but amount ${row.amount ? "present" : "missing"}`);
-      if (row.kind === "group_header") {
-        if (row.amountStatus !== "not_applicable" || row.amount !== null || row.dailyValue !== null) flag("LABEL.HEADER_VALUE_CONFLICT", `${rowText(row, index)}: a group header carries a value`);
-      } else if (row.amountStatus === "not_applicable") flag("LABEL.AMOUNT_STATE_CONFLICT", `${rowText(row, index)}: ${row.kind} marked not_applicable${row.dailyValue ? ` (label prints only %DV "${row.dailyValue.text}")` : ""}`);
-      if (row.amountStatus === "unreadable") flag("LABEL.AMOUNT_UNREADABLE", `${rowText(row, index)}: amount unreadable`);
-      if (row.kind === "blend_component") {
-        componentCount++;
-        const parent = row.parentRowIndex === null ? undefined : column.rows[row.parentRowIndex];
-        // A declared blend total may legitimately omit individual component amounts.
-        if (row.amountStatus === "not_declared" && parent?.kind !== "blend_total") flag("LABEL.AMOUNT_MISSING", `${rowText(row, index)}: component without amount outside a blend total`);
-      } else {
-        if (row.kind !== "group_header" && row.amountStatus === "not_declared") flag("LABEL.AMOUNT_MISSING", `${rowText(row, index)}: no amount${row.dailyValue ? ` (label prints only %DV "${row.dailyValue.text}")` : ""}`);
-      }
-    });
+    const rows = assessLabelRows(column.rows);
+    rows.findings.forEach(finding => flag(finding.code, finding.detail));
+    warnings.push(...rows.warnings);
+    componentCount += column.rows.filter(row => row.kind === "blend_component").length;
   }
-  const hasIngredients = componentCount > 0 || !!candidate.otherIngredients;
+  const hasIngredients = componentCount > 0 || !!candidate.otherIngredients || hasConfirmedNoOtherIngredients(candidate);
+  if (ingredientDeclarationIncomplete(candidate)) flag("LABEL.INGREDIENTS_INCOMPLETE", "no complete printed list or enabled whole-label absence declaration");
   if (candidate.otherIngredients) {
     if (!isIngredientHeading(candidate.otherIngredients.heading.text)) flag("LABEL.INGREDIENT_HEADING_INVALID", `ingredient heading "${candidate.otherIngredients.heading.text.slice(0, 80)}" is not an ingredients heading`);
     if (candidate.otherIngredients.items.some(i => /\b(?:contains\s*:|may\s+contain|manufactured\s+(?:in|on)|shared\s+equipment)/i.test(i.text))) flag("LABEL.INGREDIENT_ROLE_INVALID", "an ingredient item is an allergen/manufacturing statement");

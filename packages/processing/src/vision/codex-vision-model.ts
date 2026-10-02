@@ -1,35 +1,20 @@
-import { z } from "zod";
 import { verifyBytes } from "@crawl-automation/platform";
-import {
-  ImageEvidenceSchema,
-  labelExtractionVersion,
-  labelValidationVersion,
-  type ArtifactRef,
-} from "@crawl-automation/v3-contracts";
+import { ImageEvidenceSchema, type ArtifactRef } from "@crawl-automation/v3-contracts";
 import type { CodexConnectionFactory } from "@crawl-automation/platform";
 import { CodexClient } from "../codex/codex-client.js";
 import { asVisionCodexError } from "../codex/codex-errors.js";
 import type { CodexModelProfile } from "../codex/codex-profile.js";
-import { CodexClientSettingsSchema } from "../codex/codex-settings.js";
-import { hashString } from "../results/result-record.js";
-import {
-  labelVisionPolicyVersion,
-  labelVisionOutputSchema,
-  labelVisionPrompt,
-} from "./protocol/label-vision.js";
-import { labelVisionOutputV2Schema, labelVisionPromptV2 } from "./protocol/label-vision-v2.js";
-import {
-  visionOutputSchema,
-  visionPrompt,
-  visionValidationVersion,
-} from "./protocol/legacy-vision.js";
 import { visionRequest, type VisionProtocol } from "./protocol/vision-protocol.js";
+import { visionFingerprint } from "./vision-fingerprint.js";
 import { visionFailure } from "./vision-errors.js";
+import {
+  labelIngredientPresencePrompt,
+  labelIngredientPresenceOutputSchema,
+  retainIngredientPresenceAnswer,
+} from "./protocol/label-ingredient-presence.js";
 
-export const CodexVisionConfigSchema = CodexClientSettingsSchema.extend({
-  extractionProtocol: z.enum(["label-extraction/1", "label-extraction/2"]).optional(),
-});
-export type CodexVisionConfig = z.infer<typeof CodexVisionConfigSchema>;
+import { CodexVisionConfigSchema, type CodexVisionConfig } from "./codex-vision-config.js";
+export { CodexVisionConfigSchema, type CodexVisionConfig };
 
 /** The largest image sent to the model, in bytes. */
 const MAX_IMAGE_BYTES = 16 * 1024 * 1024;
@@ -55,56 +40,13 @@ export interface VisionModel {
   interpret(image: ArtifactRef, bytes: Uint8Array, signal: AbortSignal): Promise<string>;
 }
 
-/**
- * The fingerprint of a vision setup. It covers the model settings, the prompt and the answer format, so any change is
- * a new setup that old tasks do not match. The same formulas the previous vision client used.
- */
-function visionFingerprint(config: CodexVisionConfig): string {
-  const { settings, runtimeProfileVersion, timeoutMs, extractionProtocol } = config;
-  const common = [settings, runtimeProfileVersion, timeoutMs, "original"];
-  if (extractionProtocol === "label-extraction/2") {
-    const quality = "label-visual-quality/1";
-    return hashString(
-      JSON.stringify([
-        "codex-vision/3",
-        ...common,
-        extractionProtocol,
-        quality,
-        labelVisionPromptV2,
-        labelVisionOutputV2Schema,
-      ]),
-    );
-  }
-  if (extractionProtocol) {
-    const versions = [labelExtractionVersion, labelVisionPolicyVersion, labelValidationVersion];
-    return hashString(
-      JSON.stringify([
-        "codex-vision/2",
-        ...common,
-        ...versions,
-        labelVisionPrompt,
-        labelVisionOutputSchema,
-      ]),
-    );
-  }
-  return hashString(
-    JSON.stringify([
-      "codex-vision/1",
-      ...common,
-      visionPrompt,
-      visionOutputSchema,
-      visionValidationVersion,
-    ]),
-  );
-}
-
 /** The vision model through Codex: the original image and the protocol's prompt, one call per task. */
 export class CodexVisionModel implements VisionModel {
   readonly fingerprint: string;
   readonly extractionProtocol: VisionProtocol;
 
   private constructor(
-    config: CodexVisionConfig,
+    private readonly config: CodexVisionConfig,
     private readonly client: CodexClient | null,
   ) {
     this.fingerprint = visionFingerprint(config);
@@ -128,6 +70,8 @@ export class CodexVisionModel implements VisionModel {
     }
     const settings: Partial<CodexVisionConfig> = { ...parsed.data };
     delete settings.extractionProtocol;
+    delete settings.visualProtocol;
+    delete settings.ingredientPresencePolicy;
     const client = await CodexClient.open(settings, {
       environment,
       profile: visionProfile,
@@ -148,8 +92,13 @@ export class CodexVisionModel implements VisionModel {
     const image = ImageEvidenceSchema.parse(rawImage);
     verifyBytes(image, bytes, MAX_IMAGE_BYTES);
     const name = `source.${EXTENSIONS[image.mediaType] ?? "bin"}`;
-    const call = { ...visionRequest(this.extractionProtocol), image: { name, bytes } };
-    return this.opened().run(call, signal);
+    const request = this.config.visualProtocol
+      ? { prompt: labelIngredientPresencePrompt, outputSchema: labelIngredientPresenceOutputSchema }
+      : visionRequest(this.extractionProtocol);
+    const raw = await this.opened().run({ ...request, image: { name, bytes } }, signal);
+    return this.config.visualProtocol
+      ? retainIngredientPresenceAnswer(raw, this.config.ingredientPresencePolicy)
+      : raw;
   }
 
   async close(): Promise<void> {

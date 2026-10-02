@@ -1,6 +1,7 @@
 export * from "./codex-vision-model.js";
 export * from "./protocol/label-vision.js";
 export * from "./protocol/label-vision-v2.js";
+export * from "./protocol/label-ingredient-presence.js";
 export * from "./protocol/legacy-vision.js";
 export * from "./protocol/vision-limits.js";
 export * from "./protocol/vision-protocol.js";

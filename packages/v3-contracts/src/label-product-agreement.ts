@@ -1,4 +1,5 @@
 import type { LabelCandidate } from "./label-extraction.js";
+import { hasConfirmedNoOtherIngredients } from "./label-ingredient-declaration.js";
 import {
   formulaAgreement,
   ingredientsAgreement,
@@ -61,6 +62,8 @@ function packagingAgrees(record: CollectedAgreement, source: Source): boolean {
 /** Recheck each image/text against the actual selected source, retaining every required warning. */
 export function collectedSourcesAgree(record: CollectedAgreement, accepted: Source[]): boolean {
   const images = accepted.filter((source) => source.kind === "image");
+  if (images.some(source => hasConfirmedNoOtherIngredients(source.candidate)) &&
+    accepted.some(source => source.candidate.otherIngredients)) return false;
   const formulaId = record.formula.columns[0]?.rows[0]?.name.sourceId;
   const otherId = record.otherIngredients?.heading.sourceId;
   const formula = formulaShape(

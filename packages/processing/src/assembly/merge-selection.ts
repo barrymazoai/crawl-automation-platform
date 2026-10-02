@@ -131,7 +131,7 @@ function checkAgainstPackaging(state: MergeState, shape: Shape, pick: Pick): voi
 
 function selectOtherIngredients(state: MergeState, pick: Pick): void {
   const { candidate, projected, secondaryText } = pick;
-  if (!candidate.otherIngredients) {
+  if (!candidate.otherIngredients && !labelAgreementIngredients(candidate)) {
     return;
   }
   const comparison = state.manifest.admission?.comparison;
@@ -143,7 +143,7 @@ function selectOtherIngredients(state: MergeState, pick: Pick): void {
       secondary: "LABEL_PRODUCT.SECONDARY_TEXT_INGREDIENTS_CONFLICT",
     });
   }
-  if (!state.otherIngredients && !secondaryText) {
+  if (state.otherShape === null && !secondaryText) {
     state.otherShape = shape;
     state.otherIngredients = projected.otherIngredients;
   }

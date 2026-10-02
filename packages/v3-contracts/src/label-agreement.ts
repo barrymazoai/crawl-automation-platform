@@ -1,5 +1,6 @@
 import { dequal } from "dequal";
 import type { labelFormulaStructure, LabelCandidate } from "./label-extraction.js";
+import { hasConfirmedNoOtherIngredients } from "./label-ingredient-declaration.js";
 import { labelNameForComparison, labelTypographyStructure } from "./label-typography.js";
 type Formula = NonNullable<ReturnType<typeof labelFormulaStructure>> & {
   wording?: (string | null)[];
@@ -32,7 +33,8 @@ function formulaText(formula: FormulaInput): Formula {
 }
 
 export const labelAgreementIngredients = (candidate: LabelCandidate) =>
-  candidate.otherIngredients?.items.map((item) => item.text) ?? null;
+  candidate.otherIngredients?.items.map((item) => item.text) ??
+  (hasConfirmedNoOtherIngredients(candidate) ? [] : null);
 
 /** Retain original wording for warnings without rewriting source values. */
 export const labelAgreementFormula = (candidate: LabelCandidate, comparison?: Comparison) => {
