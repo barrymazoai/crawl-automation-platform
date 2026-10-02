@@ -160,6 +160,31 @@ it("parent brand page follows each child domain once, excludes retailers and sto
     read.mock.calls.filter(([url]) => new URL(url).href === "https://alpha.example/"),
   ).toHaveLength(1);
 });
+it("a product page's ProductGroup states the brand once for all its variants (shop.hmwmethod.com)", async () => {
+  const map = shopify("https://store.example", ["Alpha"]);
+  map.set(
+    "https://store.example/collections/all",
+    document('<main><div id="product-grid"><a href="/products/pack">Pack</a></div></main>'),
+  );
+  const variant = (id: number) => ({
+    "@type": "Product",
+    name: `Pack ${id}`,
+    url: `https://store.example/products/pack?variant=${id}`,
+  });
+  const group = {
+    "@type": "ProductGroup",
+    brand: { "@type": "Brand", name: "Alpha" },
+    url: "https://store.example/products/pack",
+    hasVariant: [variant(1), variant(2)],
+  };
+  map.set(
+    "https://store.example/products/pack",
+    document(`<script type="application/ld+json">${JSON.stringify(group)}</script>`),
+  );
+  const result = await setup(map).analyze("https://store.example/");
+  expect(result.state).toBe("completed");
+  expect(result.brands[0]).toMatchObject({ name: "Alpha", status: "verified" });
+});
 it("cap exceeded returns needs-review before catalog verification", async () => {
   const { analyze, read } = setup(shopify("https://store.example", ["Alpha", "Beta"]), {
     ...limits,

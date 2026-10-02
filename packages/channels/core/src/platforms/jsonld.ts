@@ -17,10 +17,17 @@ import { canonicalUrl, pageUrl, samePage } from "./urls.js";
 export function jsonLdProducts(document: Document): JsonObject[] {
   return jsonScripts(document, "application/ld+json")
     .flatMap(graphRecords)
-    .flatMap((record) =>
-      schemaType(record, "ProductGroup") ? records(record.hasVariant) : [record],
-    )
+    .flatMap((record) => (schemaType(record, "ProductGroup") ? variantsOf(record) : [record]))
     .filter((record) => schemaType(record, "Product"));
+}
+
+/** schema.org variants inherit the group's properties; Shopify states the brand once, on the group. */
+function variantsOf(group: JsonObject): JsonObject[] {
+  return records(group.hasVariant).map((variant) =>
+    variant.brand === undefined && group.brand !== undefined
+      ? { ...variant, brand: group.brand }
+      : variant,
+  );
 }
 
 export function schemaUrl(product: JsonObject, base: string): string | null {

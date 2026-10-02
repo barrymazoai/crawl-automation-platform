@@ -100,8 +100,10 @@ export function ownProductBrand(page: AnalysisPage, url: string): string | null 
   const own = embeddedProducts(page).filter(
     (product) => product.url && sameProductUrl(product.url, url),
   );
-  if (own.length === 1 && own[0]?.name) {
-    return own[0].name;
+  // Variants of one product page each repeat the page's brand; any disagreement or gap is no answer.
+  const named = [...new Set(own.map((product) => product.name))];
+  if (named.length === 1 && named[0]) {
+    return named[0];
   }
   const document = dtcDocument(page.html);
   const canonical = document.querySelector('link[rel="canonical"]')?.getAttribute("href");
