@@ -1,4 +1,4 @@
-import { ScraperApiOptionsSchema } from "@crawl-automation/platform";
+import { PagePreparationSchema, ScraperApiOptionsSchema } from "@crawl-automation/platform";
 import { ArtifactRefSchema, CHANNEL_IDS, type ArtifactRef } from "@crawl-automation/v3-contracts";
 import { z } from "zod";
 
@@ -26,6 +26,7 @@ export const FetchedViaSchema = z.strictObject({
   options: ScraperApiOptionsSchema.omit({ headers: true }).optional(),
   creditCost: z.number().nonnegative().nullable().optional(),
   finalUrl: z.url().max(4096).optional(),
+  preparation: PagePreparationSchema.optional(),
 });
 export type FetchedVia = z.infer<typeof FetchedViaSchema>;
 

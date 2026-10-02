@@ -1,11 +1,6 @@
 import { commerce } from "./commerce.js";
-import {
-  descriptionImages,
-  factsSection,
-  imageUrls,
-  productRoot,
-  sectionImages,
-} from "./content.js";
+import { productRoot } from "./content.js";
+import { readProductContent } from "./read-content.js";
 import { platformPageErrors } from "./errors.js";
 import { object, records, string } from "./json.js";
 import { jsonLdBrand, jsonLdProducts, readJsonLdProduct, selectedVariant } from "./jsonld.js";
@@ -66,10 +61,13 @@ export function readShopifyProduct(document: Document, context: PlatformContext)
     url,
     selectedVariantId: selected,
     commerce: commerce({ ...offer, sku }),
-    ...factsSection(root, string(details?.supplement_facts) ?? data.detailsHtml),
-    images: imageUrls(
-      [...data.images, ...sectionImages(root), ...descriptionImages(document, data.detailsHtml)],
-      context,
+    ...readProductContent(
+      document,
+      { ...context, url, productId: data.productId },
+      {
+        ...data,
+        factsHtml: string(details?.supplement_facts),
+      },
     ),
   };
 }

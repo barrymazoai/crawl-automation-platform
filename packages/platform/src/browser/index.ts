@@ -6,3 +6,4 @@ export * from "./ego-settings.js";
 export * from "./list-scroll.js";
 export * from "./ego-health.js";
 export * from "./ego-stop.js";
+export * from "./page-preparation.js";

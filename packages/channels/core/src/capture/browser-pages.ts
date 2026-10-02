@@ -10,6 +10,7 @@ export interface BrowserChannelPolicy {
   readySelector: string;
   /** Recorded with every page of a channel priced by store (Whole Foods). */
   storeId?: string;
+  preparationScript?: string;
 }
 
 /** Where browser reads run, and the only channels allowed to use them. */
@@ -47,7 +48,12 @@ export class BrowserPages implements PageFetcher {
     const { policy } = request;
     const target = allowedTarget(request.url, policy.origins).href;
     const signal = AbortSignal.any([abort, AbortSignal.timeout(policy.timeoutMs)]);
-    const read = { url: target, readySelector: own.readySelector, timeoutMs: policy.timeoutMs };
+    const read = {
+      url: target,
+      readySelector: own.readySelector,
+      timeoutMs: policy.timeoutMs,
+      ...(own.preparationScript ? { preparationScript: own.preparationScript } : {}),
+    };
     const page = await this.browser.read(read, signal);
     const bytes = Buffer.from(page.html);
     if (bytes.byteLength > policy.maxBytes) {
@@ -68,6 +74,15 @@ export class BrowserPages implements PageFetcher {
     const store = read.storeId === undefined ? {} : { storeId: read.storeId };
     const moved = page.url === read.target ? {} : { finalUrl: page.url };
     const provider = this.browser.provider;
-    return { mode: "browser" as const, routeId, egressId, provider, ...store, ...moved };
+    const preparation = page.preparation ? { preparation: page.preparation } : {};
+    return {
+      mode: "browser" as const,
+      routeId,
+      egressId,
+      provider,
+      ...store,
+      ...moved,
+      ...preparation,
+    };
   }
 }

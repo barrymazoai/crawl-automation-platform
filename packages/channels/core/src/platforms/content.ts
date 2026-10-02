@@ -4,29 +4,45 @@ import { pageText } from "../page-text.js";
 import type { FactsText } from "../adapter.js";
 import { platformPageErrors } from "./errors.js";
 import type { PlatformContext } from "./types.js";
+import { allowedContent, PRODUCT_CONTENT, type ContentIdentity } from "./content-policy.js";
+import { ownContentHtml, type ProductContentScope } from "./content-scope.js";
 
-const RECOMMENDATIONS =
-  'product-recommendations, [class*="recommend"], [id*="recommend"], .related, .upsells';
 const SECTIONS =
   'table, details, [id*="facts"], [class*="facts"], [id*="ingredients"], [class*="accordion"], [class*="description"]';
 
 export function productRoot(document: Document, context: PlatformContext): Element | null {
-  return document.querySelector(
-    context.productSelector ??
-      'product-info, [id^="MainProduct-"], .product.type-product, [itemscope][itemtype$="/Product"]',
-  );
+  return document.querySelector(context.productSelector ?? PRODUCT_CONTENT.root);
 }
 
-export function factsSection(root: Element | null, description: string | null) {
-  const sections = [...(root?.querySelectorAll(SECTIONS) ?? [])]
-    .filter((node) => !node.closest(RECOMMENDATIONS))
-    .map((node) => node.outerHTML);
-  const candidates = [...sections, description ?? ""].filter((html) =>
+export function factsSection(scope: ProductContentScope, description: string | null) {
+  const sections = [...(scope.root?.querySelectorAll(SECTIONS) ?? [])]
+    .filter((node) => allowedContent(node, scope.identity))
+    .map((node) => ownContentHtml(node, scope.identity));
+  const extra = scope.sections.map((node) => ownContentHtml(node, scope.identity));
+  const candidates = [...sections, description ?? "", ...extra].filter((html) =>
     /supplement facts|nutrition facts|serving size/i.test(pageText(html)),
   );
+  const joined = joinedFacts(candidates, extra);
   const html =
-    candidates.find((candidate) => completeFacts(candidate).complete) ?? candidates[0] ?? null;
+    candidates.find((candidate) => completeFacts(candidate).complete) ??
+    joined ??
+    candidates[0] ??
+    null;
   return { factsHtml: html, facts: completeFacts(html) };
+}
+
+/** Join only one facts panel and one separate ingredients section; ambiguous panels stay on the image path. */
+function joinedFacts(candidates: string[], extra: string[]): string | null {
+  if (!extra.length) {
+    return null;
+  }
+  const panels = [...new Set(candidates.map((html) => pageText(html)))];
+  const ingredients = extra.filter((html) => /^other ingredients\b/i.test(pageText(html).trim()));
+  if (panels.length !== 1 || ingredients.length !== 1 || !candidates[0]) {
+    return null;
+  }
+  const html = `${candidates[0]}\n${ingredients[0]}`;
+  return completeFacts(html).complete ? html : null;
 }
 
 /** Require a serving quantity and real amounts, not just the three headings. */
@@ -62,9 +78,9 @@ export function imageUrls(values: readonly string[], context: PlatformContext): 
   return result;
 }
 
-export function sectionImages(root: Element | null): string[] {
+export function sectionImages(root: Element | null, identity?: ContentIdentity): string[] {
   return [...(root?.querySelectorAll("img") ?? [])]
-    .filter((node) => !node.closest(RECOMMENDATIONS))
+    .filter((node) => allowedContent(node, identity))
     .flatMap((node) => {
       const sources = ["src", "data-src", "data-original"].map((key) => node.getAttribute(key));
       const srcset = node.getAttribute("srcset") ?? node.getAttribute("data-srcset") ?? "";

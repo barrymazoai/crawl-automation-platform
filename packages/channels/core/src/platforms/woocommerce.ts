@@ -39,16 +39,22 @@ function wooVariants(form: Element, url: string): PlatformVariant[] {
   });
 }
 
+function wooProductId(document: Document, form: Element | null): string | undefined {
+  return (
+    form?.getAttribute("data-product_id") ??
+    document.querySelector('[name="add-to-cart"]')?.getAttribute("value") ??
+    undefined
+  );
+}
+
 export function readWooCommerceProduct(
   document: Document,
   context: PlatformContext,
 ): PlatformProduct {
-  const product = readJsonLdProduct(document, context);
   const form = document.querySelector("form.variations_form");
-  const productId =
-    form?.getAttribute("data-product_id") ??
-    document.querySelector('[name="add-to-cart"]')?.getAttribute("value") ??
-    product.productId;
+  const observedId = wooProductId(document, form);
+  const product = readJsonLdProduct(document, context, observedId);
+  const productId = observedId ?? product.productId;
   const variants = form ? wooVariants(form, product.url) : [];
   const selected = selectedVariant(document, variants, form);
   if (form && !selected) {

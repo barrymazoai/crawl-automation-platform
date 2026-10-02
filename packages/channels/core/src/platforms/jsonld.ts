@@ -1,11 +1,6 @@
 import { commerce } from "./commerce.js";
-import {
-  descriptionImages,
-  factsSection,
-  imageUrls,
-  productRoot,
-  sectionImages,
-} from "./content.js";
+import { productRoot } from "./content.js";
+import { readProductContent } from "./read-content.js";
 import { platformPageErrors } from "./errors.js";
 import {
   graphRecords,
@@ -132,13 +127,22 @@ export function selectedVariant(
   return unique[0] ?? (variants.length === 1 ? (variants[0]?.id ?? null) : null);
 }
 
-export function readJsonLdProduct(document: Document, context: PlatformContext): PlatformProduct {
-  const product = ownJsonLd(document, context);
+function productHeading(product: JsonObject, document: Document, context: PlatformContext) {
   const url = schemaUrl(product, context.url) ?? canonicalUrl(document, context.url);
   const title = string(product.name);
   if (!url || !title) {
     throw platformPageErrors.create("DTC.PRODUCT_MISSING");
   }
+  return { url, title };
+}
+
+export function readJsonLdProduct(
+  document: Document,
+  context: PlatformContext,
+  contentProductId?: string,
+): PlatformProduct {
+  const product = ownJsonLd(document, context);
+  const { url, title } = productHeading(product, document, context);
   const variants = variantOffers(product, url);
   const root = productRoot(document, context);
   const selected = variants.length ? selectedVariant(document, variants, root) : null;
@@ -148,9 +152,10 @@ export function readJsonLdProduct(document: Document, context: PlatformContext):
     (offers.length === 1 ? offers[0] : undefined) ??
     {};
   const detailsHtml = string(product.description);
+  const productId = identifier(product.productID ?? product.sku) ?? new URL(url).pathname;
   return {
     platform: "jsonld",
-    productId: identifier(product.productID ?? product.sku) ?? new URL(url).pathname,
+    productId,
     url,
     title,
     brandRaw: schemaBrand(product.brand),
@@ -158,14 +163,13 @@ export function readJsonLdProduct(document: Document, context: PlatformContext):
     variants,
     commerce: commerce(offer, product),
     detailsHtml,
-    ...factsSection(root, detailsHtml),
-    images: imageUrls(
-      [
-        ...schemaImages(product.image),
-        ...sectionImages(root),
-        ...descriptionImages(document, detailsHtml),
-      ],
-      context,
+    ...readProductContent(
+      document,
+      { ...context, url, productId: contentProductId ?? productId },
+      {
+        images: schemaImages(product.image),
+        detailsHtml,
+      },
     ),
   };
 }

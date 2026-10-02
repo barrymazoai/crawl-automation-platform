@@ -116,8 +116,14 @@ const ready = await page.waitForSelector(read.readySelector, { timeout: read.tim
     return false;
   });
 ${LIST_SCROLL_BODY}
+let preparation;
+/* PREPARE_PAGE */
 const snapshot = await page.evaluate(() => {
   const navigation = performance.getEntriesByType("navigation")[0];
   return { url: location.href, status: navigation?.responseStatus || null, html: document.documentElement.outerHTML };
 });
-return { ...snapshot, ready, readinessFailure, scroll };`;
+return { ...snapshot, ready, readinessFailure, scroll, ...(preparation ? { preparation } : {}) };`;
+
+export function readPageBody(preparationScript = ""): string {
+  return READ_PAGE_BODY.replace("/* PREPARE_PAGE */", () => preparationScript);
+}

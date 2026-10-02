@@ -5,6 +5,7 @@ import type {
   StorePlatform,
 } from "@crawl-automation/channels-core";
 import type { ListScroll } from "@crawl-automation/platform";
+import { dtcPreparationScript } from "./page-preparation.js";
 
 export interface DtcSitePolicy {
   siteKey: string;
@@ -35,7 +36,10 @@ type SiteInput = Pick<DtcSitePolicy, "siteKey" | "platform"> &
   );
 
 export const DTC_PAGE_LIMITS = { maxBytes: 6 * 1024 * 1024, timeoutMs: 75_000 };
-export const DTC_BROWSER_POLICY = { readySelector: "main, #MainContent, .site-main" };
+export const DTC_BROWSER_POLICY = {
+  readySelector: "main, #MainContent, .site-main",
+  preparationScript: dtcPreparationScript(),
+};
 
 const catalog = {
   catalogSelector: "#product-grid, .collection .grid, ul.products, [data-product-grid]",

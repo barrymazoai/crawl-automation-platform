@@ -1,7 +1,8 @@
 import { z } from "zod";
 import { egoErrors } from "./ego-errors.js";
 import { EgoRunner, EgoFailureSchema, type EgoRoundFailure } from "./ego-runner.js";
-import { READ_PAGE_BODY, closeTargetScript, pageRoundScript } from "./ego-script.js";
+import { readPageBody, closeTargetScript, pageRoundScript } from "./ego-script.js";
+import { PagePreparationSchema } from "./page-preparation.js";
 import { EgoSettingsSchema, type ResolvedEgoSettings } from "./ego-settings.js";
 import { ListScrollResultSchema, type ListScroll } from "./list-scroll.js";
 export type { ListScroll } from "./list-scroll.js";
@@ -12,6 +13,8 @@ export interface BrowserRead {
   readySelector: string;
   timeoutMs: number;
   scroll?: ListScroll;
+  /** Trusted channel code, run in this same managed page before taking the HTML snapshot. */
+  preparationScript?: string;
 }
 
 export const BrowserPageSchema = z.object({
@@ -21,6 +24,7 @@ export const BrowserPageSchema = z.object({
   ready: z.boolean(),
   readinessFailure: EgoFailureSchema.nullable().optional(),
   scroll: ListScrollResultSchema,
+  preparation: PagePreparationSchema.optional(),
 });
 
 /** A page as the browser drew it, where it ended up, and how its list scrolling ended. */
@@ -46,7 +50,11 @@ export class EgoPages {
 
   /** One page read in a fresh task page, which is closed before this returns. */
   async read(request: BrowserRead, signal: AbortSignal): Promise<BrowserPage> {
-    const value = await this.round(READ_PAGE_BODY, { read: request }, signal);
+    const value = await this.round(
+      readPageBody(request.preparationScript),
+      { read: request },
+      signal,
+    );
     const page = BrowserPageSchema.parse(value);
     // Ego also reports some transport/target failures as plain readiness errors. Do not let
     // a recovered connection turn that partial capture into a content or empty-page verdict.

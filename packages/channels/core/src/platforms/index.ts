@@ -9,3 +9,5 @@ export * from "./catalog.js";
 export { canonicalUrl, samePage } from "./urls.js";
 export { completeFacts, sectionImages, imageUrls } from "./content.js";
 export { commerce as schemaCommerce } from "./commerce.js";
+export { productContentScope, productContentScopeScript } from "./content-scope.js";
+export { allowedContent } from "./content-policy.js";
