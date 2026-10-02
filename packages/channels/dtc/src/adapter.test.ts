@@ -195,4 +195,30 @@ describe("DTC adapter contracts (small synthetic boundary cases, not saved-page 
     expect(listing.products).toHaveLength(1);
     expect(listing.nextUrl).toBe("https://shop.example/collections/all?page=2");
   });
+
+  it("reads custom product-section rows and deduplicates image/button links", () => {
+    const document = dtcDocument(`<header><a href="/products/navigation">Menu</a></header>
+      <main><div class="product-sec"><div class="prod-row">
+      <div><a href="/products/sleep"><img src="/sleep.jpg"></a>
+      <a href="/products/sleep">Buy Now</a></div>
+      <div><a href="/products/magnesium">Magnesium</a></div></div></div>
+      <aside><a href="/products/related">Recommended</a></aside></main>
+      <footer><a href="/products/footer">Footer</a></footer>
+      <a rel="next" href="?page=2">Next</a>`);
+    const listing = readPlatformCatalog(document, { ...site.catalog, url: site.catalogUrl ?? "" });
+    expect(listing.products.map((product) => product.url)).toEqual([
+      "https://shop.example/products/sleep",
+      "https://shop.example/products/magnesium",
+    ]);
+    expect(listing.nextUrl).toBe("https://shop.example/collections/all?page=2");
+  });
+
+  it("does not treat an unscoped row or product section as a verified catalog", () => {
+    const document = dtcDocument(`<main><div class="prod-row">
+      <a href="/products/sleep">Sleep</a></div>
+      <div class="product-sec"><a href="/products/magnesium">Magnesium</a></div></main>`);
+    expect(() =>
+      readPlatformCatalog(document, { ...site.catalog, url: site.catalogUrl ?? "" }),
+    ).toThrowError(expect.objectContaining({ code: "DTC.LISTING_UNVERIFIED" }));
+  });
 });
