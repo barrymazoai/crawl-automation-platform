@@ -12,7 +12,7 @@ afterEach(async () => {
   await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
 });
 
-async function fixture(mode: "complete" | "cancel") {
+async function fixture(mode: "complete" | "cancel" | "timeout") {
   const root = await realpath(await mkdtemp(join(tmpdir(), "dtc-exec-test-")));
   roots.push(root);
   const executable = join(root, "fake-codex");
@@ -23,7 +23,7 @@ const fs = require("node:fs");
 const {spawn} = require("node:child_process");
 process.stdin.resume();
 process.stdin.on("end", () => {
-const child = spawn(process.execPath, ["-e", "setInterval(()=>{},1000)"], {stdio:"ignore"});
+const child = spawn(process.execPath, ["-e", ${JSON.stringify('process.on("SIGTERM",()=>{}); setInterval(()=>{},1000)')}], {stdio:"ignore"});
 fs.writeFileSync("descendant.pid", String(child.pid));
 ${mode === "complete" ? 'fs.writeFileSync(process.argv[process.argv.indexOf("--output-last-message")+1], JSON.stringify({status:"complete"})); child.unref(); process.exit(0);' : "setInterval(()=>{},1000);"}
 });
@@ -35,13 +35,13 @@ ${mode === "complete" ? 'fs.writeFileSync(process.argv[process.argv.indexOf("--o
     codexHome: root,
     workRoot: root,
     runtimeProfileVersion: "test/1",
-    timeoutMs: 10000,
+    timeoutMs: mode === "timeout" ? 1000 : 10000,
     settings: { provider: "openai", model: "gpt-5.6-luna", reasoningEffort: "medium" },
   });
   return { root, settings };
 }
 
-it.each(["complete", "cancel"] as const)(
+it.each(["complete", "cancel", "timeout"] as const)(
   "proves capture and its children stopped after %s",
   async (mode) => {
     const { root, settings } = await fixture(mode);
@@ -72,6 +72,8 @@ it.each(["complete", "cancel"] as const)(
       await new Promise((resolve) => setTimeout(resolve, 300));
       controller.abort();
       await rejected;
+    } else if (mode === "timeout") {
+      await expect(work).rejects.toMatchObject({ code: "TEXT.CODEX_TIMEOUT" });
     } else {
       await expect(work).resolves.toEqual({ status: "complete" });
     }
@@ -79,6 +81,9 @@ it.each(["complete", "cancel"] as const)(
     expect(() => process.kill(pid, 0)).toThrow();
     expect(started).toHaveLength(1);
     expect(proofs).toEqual([expect.objectContaining({ kind: "capture-process-group-absent" })]);
+    expect(JSON.parse(await readFile(join(root, "process.json"), "utf8"))).toMatchObject({
+      kind: "capture-process-group-absent",
+    });
   },
 );
 

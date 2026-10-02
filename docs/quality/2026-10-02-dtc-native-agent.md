@@ -103,3 +103,7 @@ CRAWLV3-150 补查发现自动恢复候选 SQL 只认 `ego-single-page/1`，遗�
 前一版的宿主 HTML 品牌补读没有机会运行，因为模型看到 records.fields.brand 缺失就在更前面返回 Review。原始商品 JSON 自身明确 `handle=zinc-copper`、`vendor=Solaray`，引擎此前只取 variants，没有保留 vendor。修复原生 harvest 在字段缺失时从 handle 精确匹配的实际平台商品 vendor 保存 brand，并保存其 product-json-vendor 来源和 JSON URL；不覆盖已有品牌，不从配置期望值补写，异商品或空 vendor 不采用。54 项纯回归通过；新增 Mini 原件重放测试只读第六轮原件，在新临时目录重放，禁止网络，验证品牌、全部网站规格、完整图库及图片字节。原任务和 Review 保持原样。
 
 恢复候选修复 `2023c22` 已推送，Server 二 fresh Git clone 的真实 PostgreSQL 临时表集成与四项恢复回归共五项通过；尚未切换生产。CRAWLV3-150/163/164 分别跟踪恢复、采集交接和独立原件留存。
+
+`0084ef9` 已于 09:29:49 经 fresh Git clone/build 部署 Server 二，browser-worker 健康确认，包含 `2023c22`。Mini 真实第六轮原件只读重放通过（所有原件 hash 校验、禁止网络、独立临时目录），49 项 harvest/原件留存与五项恢复检查全部通过；全仓 pnpm check 通过。第七轮 Solaray `009abc74-6df3-4451-9e53-51f4bd822d3b` 于 09:30:20 开始，目前仍在页面/图库/下方折叠区检查。DTC 批量 paused，其他原本 running 的无待处理渠道已恢复原状态。CRAWLV3-164 原件留存修复进入 Review；父票 151、原生链路 163、多规格 155 和恢复 150 仍 In Progress。
+
+补充尚缺的采集执行器超时测试：原用例只覆盖正常结束和取消，现加入一秒受控超时、子进程忽略 SIGTERM，要求结束后实际子 PID 不存在、持久化 process.json 和 ledger 停止证明均具备，错误仍为 TEXT.CODEX_TIMEOUT。仅在 Mini 以独立假 provider 进程运行，不触碰当前业务、真实 Codex 或浏览器；尚待 Mini 验证，不代表 Worker SIGKILL 演练。
