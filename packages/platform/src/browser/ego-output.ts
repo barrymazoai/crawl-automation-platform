@@ -40,11 +40,20 @@ interface CommandOptions {
   opened?: (targetId: string) => Promise<void>;
 }
 
+/**
+ * Ego 0.5.0 runs a script inside an async function; 0.5.1 runs it as a module, where a top-level `return` is a
+ * syntax error (seen on Server 二, 2026-10-02). Our scripts return early, so each runs as one named async function.
+ * A leading `await (…)` would not do: plain-script parsing reads it as a call to a function named `await`.
+ */
+export function egoProgram(script: string): string {
+  return `async function crawlerRound() {\n${script}\n}\nawait crawlerRound();\n`;
+}
+
 /** Reads opened targets while the runtime is still running, so worker loss retains ownership. */
 export async function executeEgoScript(settings: EgoSettings, options: CommandOptions) {
   const config = EgoSettingsSchema.parse(settings);
   const subprocess = execa(config.cliPath, ["nodejs"], {
-    input: options.script,
+    input: egoProgram(options.script),
     cancelSignal: options.signal,
     timeout: options.timeoutMs ?? config.roundTimeoutMs,
     all: true,

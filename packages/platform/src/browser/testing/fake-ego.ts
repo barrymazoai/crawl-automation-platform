@@ -43,6 +43,12 @@ const HANG_PROCESS = `  if (state.mode === "hang") {
   }
 `;
 
+/** Ego 0.5.1 runs scripts as modules: whatever is not valid module code fails before anything runs. */
+const MODULE_CHECK = `    const checked = require("node:path").join(require("node:path").dirname(path), "round-" + process.pid + ".mjs");
+    fs.writeFileSync(checked, source);
+    const syntax = require("node:child_process").spawnSync(process.execPath, ["--check", checked], { encoding: "utf8" });
+    if (syntax.status !== 0) throw new SyntaxError(syntax.stderr);`;
+
 function runtimeSource(statePath: string): string {
   return `const fs = require("node:fs");
 const path = ${JSON.stringify(statePath)};
@@ -76,8 +82,10 @@ process.stdin.on("data", chunk => chunks.push(chunk));
 process.stdin.on("end", async () => {
 ${HANG_PROCESS}
   try {
+    const source = Buffer.concat(chunks).toString();
+${MODULE_CHECK}
     const AsyncFunction = Object.getPrototypeOf(async () => {}).constructor;
-    await new AsyncFunction("listTaskSpaces", "taskSpace", Buffer.concat(chunks).toString())(listTaskSpaces, taskSpace);
+    await new AsyncFunction("listTaskSpaces", "taskSpace", source)(listTaskSpaces, taskSpace);
   } catch (error) { console.error(error); process.exitCode = 1; }
 });`;
 }
