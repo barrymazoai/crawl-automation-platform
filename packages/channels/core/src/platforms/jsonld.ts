@@ -13,6 +13,9 @@ import {
 } from "./json.js";
 import type { JsonObject, PlatformContext, PlatformProduct, PlatformVariant } from "./types.js";
 import { canonicalUrl, pageUrl, samePage } from "./urls.js";
+import { groupSelection } from "./jsonld-group.js";
+import { selectedVariant } from "./selected-variant.js";
+export { selectedVariant } from "./selected-variant.js";
 
 export function jsonLdProducts(document: Document): JsonObject[] {
   return jsonScripts(document, "application/ld+json")
@@ -42,9 +45,12 @@ export function schemaUrl(product: JsonObject, base: string): string | null {
   return value ? pageUrl(value, base) : null;
 }
 
-function ownJsonLdCandidates(document: Document, context: PlatformContext): JsonObject[] {
+function ownJsonLdCandidates(
+  document: Document,
+  context: PlatformContext,
+  products = jsonLdProducts(document),
+): JsonObject[] {
   const canonical = canonicalUrl(document, context.url);
-  const products = jsonLdProducts(document);
   const matches = canonical
     ? products.filter((product) => {
         const url = schemaUrl(product, context.url);
@@ -61,7 +67,11 @@ function ownJsonLdCandidates(document: Document, context: PlatformContext): Json
 }
 
 export function ownJsonLd(document: Document, context: PlatformContext): JsonObject {
-  const candidates = ownJsonLdCandidates(document, context);
+  // A group is one product with selectable variants, not several competing products.
+  const products = jsonScripts(document, "application/ld+json")
+    .flatMap(graphRecords)
+    .filter((record) => schemaType(record, "Product") || schemaType(record, "ProductGroup"));
+  const candidates = ownJsonLdCandidates(document, context, products);
   if (candidates.length !== 1 || !candidates[0]) {
     throw platformPageErrors.create("DTC.IDENTITY_UNVERIFIED");
   }
@@ -113,31 +123,6 @@ function variantOffers(product: JsonObject, url: string): PlatformVariant[] {
   });
 }
 
-/** Selection must be in the rendered form, not assumed from the requested query. */
-export function selectedVariant(
-  document: Document,
-  variants: readonly PlatformVariant[],
-  root: Element | null = null,
-): string | null {
-  const scope = root ?? document;
-  const inputs = [
-    ...scope.querySelectorAll(
-      'form[action*="/cart/add"] input[name="id"], form[action*="/cart/add"] select[name="id"] option[selected], input[name="variation_id"]',
-    ),
-  ]
-    .filter(
-      (input) =>
-        !input.closest('product-recommendations, [class*="recommend"], .related, .upsells'),
-    )
-    .map((input) => input.getAttribute("value"))
-    .filter((value) => value && value !== "0");
-  const unique = [...new Set(inputs)];
-  if (unique.length > 1 || (unique[0] && !variants.some((variant) => variant.id === unique[0]))) {
-    throw platformPageErrors.create("DTC.IDENTITY_UNVERIFIED");
-  }
-  return unique[0] ?? (variants.length === 1 ? (variants[0]?.id ?? null) : null);
-}
-
 function productHeading(product: JsonObject, document: Document, context: PlatformContext) {
   const url = schemaUrl(product, context.url) ?? canonicalUrl(document, context.url);
   const title = string(product.name);
@@ -147,16 +132,26 @@ function productHeading(product: JsonObject, document: Document, context: Platfo
   return { url, title };
 }
 
+function productSelection(document: Document, context: PlatformContext) {
+  const product = ownJsonLd(document, context);
+  if (schemaType(product, "ProductGroup")) {
+    return groupSelection(document, context, product);
+  }
+  const { url } = productHeading(product, document, context);
+  const variants = variantOffers(product, url);
+  const selected = variants.length
+    ? selectedVariant(document, variants, productRoot(document, context))
+    : null;
+  return { product, variants, selected };
+}
+
 export function readJsonLdProduct(
   document: Document,
   context: PlatformContext,
   contentProductId?: string,
 ): PlatformProduct {
-  const product = ownJsonLd(document, context);
+  const { product, variants, selected } = productSelection(document, context);
   const { url, title } = productHeading(product, document, context);
-  const variants = variantOffers(product, url);
-  const root = productRoot(document, context);
-  const selected = variants.length ? selectedVariant(document, variants, root) : null;
   const offers = records(product.offers);
   const offer =
     offers.find((entry) => offerVariant(entry, url) === selected && selected !== null) ??
