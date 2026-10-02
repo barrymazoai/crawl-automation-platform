@@ -40,7 +40,13 @@ function captureOverrides(settings: CodexExecutionConfig) {
     settings.settings.provider,
     settings.disabledMcpServers ?? [],
   ).slice(2);
-  const enabled = new Set(["shell_tool", "unified_exec", "view_image"]);
+  const enabled = new Set([
+    "shell_tool",
+    "unified_exec",
+    "view_image",
+    "code_mode",
+    "code_mode_host",
+  ]);
   const filtered = inherited.filter(
     (entry, index) =>
       !(entry === "--disable" && enabled.has(inherited[index + 1] ?? "")) &&
@@ -58,6 +64,10 @@ function captureOverrides(settings: CodexExecutionConfig) {
     "features.shell_tool=true",
     "-c",
     "features.unified_exec=true",
+    "-c",
+    "features.code_mode=true",
+    "-c",
+    "features.code_mode_host=true",
     "-c",
     "sandbox_workspace_write.network_access=true",
   ];

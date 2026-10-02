@@ -22,8 +22,11 @@ it("enables capture tools while retaining explicit model, no-retry provider and 
   expect(args).not.toContain("--dangerously-bypass-approvals-and-sandbox");
   expect(args).toContain("features.shell_tool=true");
   expect(args).toContain("tools.view_image=true");
+  expect(args).toContain("features.code_mode=true");
+  expect(args).toContain("features.code_mode_host=true");
   expect(args).toContain("mcp_servers.node_repl.enabled=false");
   expect(args.join(" ")).toContain("request_max_retries=0");
   expect(args.join(" ")).not.toContain("--disable shell_tool");
   expect(args.join(" ")).not.toContain("--disable view_image");
+  expect(args.join(" ")).not.toContain("--disable code_mode");
 });

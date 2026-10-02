@@ -17,13 +17,15 @@ Server 二 `/Users/server2/apps/crawler-dtc/source` HEAD `b891f0da436d0c35e466d0
 
 ## 配置迁移（部署时填写并核对，不包含密钥）
 
-Server 二 `browser.dtcAgent`：旧 Codex 配置、Ego skill 绝对路径、共享 modelResourceId。持久 profile 在新 codex.workRoot/site-profiles；只按实际需要迁移方法文件，不搬历史证据缓存。
+Server 二 `browser.dtcAgent` 使用旧 Codex 模型配置、`/Users/server2/.agents/skills/ego-browser/SKILL.md` 和 `mini-model-account`。codex.workRoot 沿用 `/Users/server2/apps/crawler-dtc/browser-model`，方法 profile 原地复用；新任务写其 `dtc-native/` 子目录，没有搬迁历史缓存。
 Server 一 API `brandScans.permits.dtc.additionalResources` 增加同一模型资源一单位；`pipeline.channels.dtc.resources.activities.captureProduct` 也同时需要浏览器和模型许可。所有开始操作必须由现有 API/ResourceGate 发起。
 
 ## 验证状态
 
-本记录初稿：代码尚未部署。纯测试：22 项 worker 路由/品牌/采集检查，41 项 harvest/原生方法检查，7 项 R2/恢复检查通过。全仓 lint、依赖与重复代码检查已通过，类型检查进行中。
+2026-10-02 07:22 UTC：两台 Mini 经 fresh Git clone/build 部署 main `92d4cb3911c56665b4dd77be4482a8b504c379b3`，所有改动进程通过健康确认。完整 pnpm check 通过；纯测试 22 项 worker/采集、41 项 harvest、4 项 R2、4 项 recovery 通过。Server 二进程/浏览器适配/Temporal replay 共 57 项通过，扩大回归 327 项通过、6 项跳过，构建成功。隔离 HOME 下 Ego CLI 连接验证通过。
 
-待 Mini 验证：进程成功/取消时子进程停止、Ego 真实原生调用、Codex 读取两个 skill、完整产品原图归档和下游读取、目录发现/耗尽、分析、页面与模型许可释放。Worker 被强杀后的 Codex 进程自动停止尚未实现；没有停止证明时不释放许可、不关闭仍可能使用中的页。
+Solaray 原生单品测试于 07:23:04 UTC 受理：run `ffc58ad5-451c-49d0-a7cd-b08f9d82ddcf`，source `e9b8bcd7-7fc6-4605-969c-c8cd6d776f3e`，`https://solaray.com/products/zinc-copper`。该次 Review：Codex 报 `code-mode host is disabled`，没有访问商品页。直接原因是 capture profile 从纯文本/视觉 profile 继承了 code_mode_host=false；修复启用 capture 专用 code_mode/code_mode_host，保留文本/视觉原限制。进程组停止证明已写出，heldPermits=[]；失败产物保留。待新任务验证：Codex 读取两个 skill、Ego 原生调用、完整产品原图归档和下游读取、目录发现/耗尽、分析、页面与模型许可释放。Worker 被强杀后的 Codex 进程自动停止尚未实现；没有停止证明时不释放许可、不关闭仍可能使用中的页。
 
 父验收 CRAWLV3-151；本次修改 CRAWLV3-163。服务器代码只能经 origin/main 的 fresh clone/build 部署，DTC 队列保持手动控制。
+
+部署前所有队列自然暂停且无 held permit；部署后恢复原本 running 的 Amazon/GNC/Swanson/Whole Foods/Costco，DTC 批量队列保持 paused。配置和队列快照在两台机器各自的 `manual-releases/dtc-native-20261002/`，旧 PM2 配置由部署器留存。
