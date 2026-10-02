@@ -33,3 +33,28 @@ it("refuses an ambiguous browser resource without scheduling a workflow", async 
   ).rejects.toMatchObject({ code: "RESOURCE.BROWSER_PERMIT_MISMATCH" });
   expect(start).not.toHaveBeenCalled();
 });
+
+it("sends only the owner's identity when given a whole held-permit row (strict workflow input)", async () => {
+  const start = vi.fn(async () => ({ result: async () => undefined }));
+  const gateway = new TemporalBrowserStop({ workflow: { start } } as unknown as Client);
+  const held = {
+    permitId: "permit-one",
+    workflowId: "browser-scan-1",
+    runId: "run-1",
+    resources: ["costco-brand-scan", "mini-ego-space-1"],
+    grantedAt: "2026-10-02T03:28:43.703Z",
+    cleanup: { state: "CLEANUP_UNVERIFIED" },
+  };
+  await gateway.verify(held, held.resources);
+  expect(start).toHaveBeenCalledWith(
+    "VerifyBrowserStopWorkflow",
+    expect.objectContaining({
+      args: [
+        {
+          owner: { permitId: "permit-one", workflowId: "browser-scan-1", runId: "run-1" },
+          resourceId: "mini-ego-space-1",
+        },
+      ],
+    }),
+  );
+});

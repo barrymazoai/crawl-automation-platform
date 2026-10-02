@@ -14,10 +14,13 @@ export class TemporalBrowserStop implements BrowserStopGateway {
     if (hosts.length !== 1 || !hosts[0]) {
       throw resourceGateErrors.create("RESOURCE.BROWSER_PERMIT_MISMATCH", { details: { owner } });
     }
+    // The workflow input is strict: send the owner's identity only, never the whole held-permit row
+    // (its resources/grantedAt/cleanup made every verification fail its first workflow task, 2026-10-02).
+    const exact = { permitId: owner.permitId, workflowId: owner.workflowId, runId: owner.runId };
     const handle = await this.client.workflow.start("VerifyBrowserStopWorkflow", {
       workflowId: `verify-stop-${owner.permitId}`,
       taskQueue: browserTaskQueue(hosts[0]),
-      args: [{ owner, resourceId: hosts[0] }],
+      args: [{ owner: exact, resourceId: hosts[0] }],
       workflowIdReusePolicy: "ALLOW_DUPLICATE",
       workflowIdConflictPolicy: "USE_EXISTING",
       workflowExecutionTimeout: "3 minutes",
