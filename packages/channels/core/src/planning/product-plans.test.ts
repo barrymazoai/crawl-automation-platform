@@ -114,12 +114,14 @@ async function setup(input: {
   complete: boolean;
   channel?: CaptureRequest["channel"];
   sourceOrder?: PlanSettings["sourceOrder"];
+  images?: ReturnType<typeof image>[];
 }) {
   const publication = new MemoryPublication();
   const hooks = planning(input.complete);
   const adapter = { id: "gnc", planning: hooks } as unknown as ChannelAdapter;
   const registry = new ChannelRegistry([adapter]);
   const product = evidence(input.facts);
+  product.imageCandidates = input.images ?? product.imageCandidates;
   const parsed = { rendered: product, identity: { listingId: "877080", variantId: null } };
   const sourcePlans = new ProductSourcePlans(publication as never, {
     ...settings,
@@ -218,6 +220,29 @@ describe("formula planner (text facts first)", () => {
     // The PDF at position 1 is not planned, and the image after it keeps its own position.
     expect(ids).toEqual(["page", "image-0", "image-2"]);
   });
+
+  it.each(["badge.svg", "badge.SVG?v=1"])(
+    "skips unsupported %s without blocking the next label or changing its operation ID",
+    async (badge) => {
+      const images = [image("front.jpg"), image(badge), image("facts.png"), image("image?id=4")];
+      const { plans, plan } = await setup({ facts: null, complete: false, images });
+      const outcome = await plans.run(plan, signal());
+      expect(outcome.status).toBe("prepared");
+      const saved = await plans.inspect(plan, signal());
+      expect(saved?.product.imageCandidates).toEqual(images);
+      expect(saved?.manifest.sources.map((source) => source.id)).toEqual([
+        "image-0",
+        "image-2",
+        "image-3",
+      ]);
+      expect(saved?.files.map((file) => file.url)).toEqual([
+        images[0]?.url,
+        images[2]?.url,
+        images[3]?.url,
+      ]);
+      expect(await plans.run(plan, signal())).toEqual(outcome);
+    },
+  );
 
   it("answers the same saved plan again and gives each planned image its URL", async () => {
     const { plans, plan } = await setup({ facts: null, complete: false });

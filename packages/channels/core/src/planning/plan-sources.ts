@@ -79,10 +79,10 @@ function imageSource(input: ChannelPlanInput, index: number) {
   } as const;
 }
 
-/** PDFs are not read (owner, 2026-09-30): they are left out of the plan instead of being downloaded and skipped. */
-const isPdf = (image: ImageCandidate) => /\.pdf$/i.test(new URL(image.url).pathname);
+/** PDFs are excluded by policy; SVG is unsupported by the raster OCR/vision pipeline. */
+const excludedFile = (image: ImageCandidate) => /\.(?:pdf|svg)$/i.test(new URL(image.url).pathname);
 
-/** Every product image except PDFs, each at its position on the page (so task IDs never shift). */
+/** Keep excluded candidates in the evidence, and preserve later images' positions and task IDs. */
 function imageSources(input: ChannelPlanInput, evidence: ChannelProductEvidence) {
   const sources: Sources = [];
   const files: Files = [];
@@ -90,7 +90,7 @@ function imageSources(input: ChannelPlanInput, evidence: ChannelProductEvidence)
     if (image.variantId !== input.owner.variantId) {
       throw planErrors.create("CHANNEL.VARIANT_CONFLICT");
     }
-    if (isPdf(image)) {
+    if (excludedFile(image)) {
       continue;
     }
     const source = imageSource(input, index);
