@@ -92,7 +92,7 @@ const ENTRY_DECISION_KINDS = new Set([
   "portfolio",
 ]);
 
-const BROWSER_MODES = new Set(["extension", "iab", "worker_cdp"]);
+const BROWSER_MODES = new Set(["extension", "iab", "worker_cdp", "ego-native"]);
 
 /**
  * Exhaustion signals a listing seed may declare. Parameterized signals encode

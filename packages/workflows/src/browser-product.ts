@@ -39,6 +39,9 @@ export async function collectInBrowser(
       proxyActivities<BrowserActivities>({
         taskQueue: route.queue,
         ...once,
+        ...(input.channel === "dtc" && patched("dtc-native-capture-timeout-v1")
+          ? { startToCloseTimeout: "30 minutes", scheduleToCloseTimeout: "60 minutes" }
+          : {}),
         ...binding,
       }).captureBrowserProduct(input),
     ),

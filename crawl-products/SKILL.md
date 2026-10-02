@@ -61,6 +61,15 @@ description: "用视觉优先的三步 preflight（站点判定 → 路径探索
 
 ## 浏览器
 
+### Ego 原生采集任务
+
+宿主明确选择 `ego-native` 时，先读 Ego 自带 `ego-browser` skill；跳过下方 Chrome/IAB/worker_cdp 的绑定代码。
+由 Codex 通过 `ego-browser nodejs` 原生 TaskSpace/Page API 操作宿主派发的确切页面，不运行 CDP 桥或 Playwright。
+旧 `runHarvest` 的机械接口通过 `lib/ego-native-browser.mjs` 的 `createEgoBrowser({task,page,listTaskSpaces,workDir,productUrl})` 复用：
+`browser.tab` 是 harvest 的 tab，`browserMode="ego-native"`。站点判断、视觉路线、规格/图库检查仍由模型负责。
+`productUrl` 非空时强制单商品范围，原生 HTML/图片 hooks 由引擎自动采用，后续读取保存的原件。
+任务页由宿主关闭并验证不存在；遇用户接管立即停止。宿主的 capture-only 合约覆盖本 skill 的语义、导出、重试和多线程部分。
+
 浏览器有三种模式：手工会话默认 `"extension"`（本地 Chrome），公开站点可显式选择 `"iab"`；Browser Node 设置 `CRAWL_BROWSER_PROVIDER=worker_cdp` 时必须使用 `"worker_cdp"`。自动化模式先完整读取 [worker-cdp-browser.md](references/worker-cdp-browser.md)，不得调用 `agent.browsers`、`@Chrome` 或 IAB。用户或控制器明确选择的浏览器是硬约束，不得静默换成另一种模式；**同模式重建断掉的 binding 不算切换，是 incomplete 恢复的标准动作**。
 
 唯一的例外（用户长期授权）：**IAB 平台层拒绝访问站点**（如 `iab_site_safety_policy_rejected_navigation`）时，降级为 `extension` 继续，降级原因写入 worker-notes 并在汇报中说明。此例外只覆盖 IAB 自身的访问策略拒绝；站点侧的 challenge、登录墙、TLS 错误不适用，仍按原分类处理。extension 是单租约：批次中多个站点需要它时，只能排队顺序执行，禁止并发。

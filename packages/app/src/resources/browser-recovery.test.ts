@@ -86,6 +86,32 @@ function fixture() {
 }
 
 describe("browser R59 recovery", () => {
+  it("keeps the native capture page until the Codex process group has a stop receipt", async () => {
+    const test = fixture();
+    const round = test.entry.executions[0];
+    if (!round) {
+      throw new Error("missing round");
+    }
+    round.identity.metadata = { ...round.identity.metadata, protocol: "ego-native-capture/1" };
+    const codex = {
+      identity: {
+        kind: "codex" as const,
+        executionId: "agent",
+        pid: 100,
+        host: "host",
+        startedAt: new Date().toISOString(),
+      },
+      stopped: false,
+    };
+    test.entry.executions.push(codex);
+    await test.recovery.tick("host", 6);
+    expect(test.stop).not.toHaveBeenCalled();
+    expect(test.release).not.toHaveBeenCalled();
+    codex.stopped = true;
+    await test.recovery.tick("host", 6);
+    expect(test.stop).toHaveBeenCalledOnce();
+    expect(test.release).toHaveBeenCalledOnce();
+  });
   it("keeps an infrastructure failure pending, then releases only after durable proofs and a terminal owner", async () => {
     const test = fixture();
     test.stop.mockRejectedValueOnce(egoErrors.create("BROWSER.PAGE_CLEANUP_PENDING"));

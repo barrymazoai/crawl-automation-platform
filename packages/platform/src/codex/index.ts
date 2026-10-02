@@ -6,3 +6,4 @@ export * from "./codex-turn.js";
 export * from "./connection.js";
 export * from "./connection-settings.js";
 export * from "./workspace.js";
+export * from "./capture-exec.js";

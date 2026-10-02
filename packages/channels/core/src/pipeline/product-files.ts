@@ -23,6 +23,7 @@ export interface ProductFilesDeps {
   files: FileEvidence;
   /** A direct HTTPS GET of the image; images are public and need no browser or provider. */
   transport: FileTransport;
+  transportFor?: (request: FileRequest) => FileTransport;
 }
 
 export interface FileRequest {
@@ -42,7 +43,12 @@ export class ProductFiles {
     const url = await this.deps.plans.fileSource(request.sourcePlan, request.acquire, signal);
     const adapter = this.deps.registry.get(request.channel);
     const origins = adapter.fileOrigins ?? adapter.httpPolicy?.origins ?? [];
-    const access = this.access({ expected: request.acquire, url, origins });
+    const access = this.access({
+      expected: request.acquire,
+      url,
+      origins,
+      transport: this.deps.transportFor?.(request) ?? this.deps.transport,
+    });
     return new AcquireFileModule(this.deps.files, { access, dns: systemDns }).run(
       request.acquire,
       signal,
@@ -53,8 +59,9 @@ export class ProductFiles {
     expected: FileAcquireInput;
     url: string;
     origins: readonly string[];
+    transport: FileTransport;
   }): SourceAccess {
-    const transport = this.deps.transport;
+    const transport = target.transport;
     return {
       acquire: async (input) => {
         if (!isDeepStrictEqual(input, target.expected)) {

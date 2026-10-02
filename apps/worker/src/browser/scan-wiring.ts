@@ -7,8 +7,7 @@ import {
 import {
   createDtcAdapter,
   dtcBrandSourceUrl,
-  DtcBrandScan,
-  DtcCatalogPages,
+  dtcAgentErrors,
   type DtcSitePolicy,
 } from "@crawl-automation/channel-dtc";
 import {
@@ -43,20 +42,20 @@ function dtcScanner(deps: {
   ego: EgoPages;
   publication: RetainedPublication;
   sites: readonly DtcSitePolicy[];
+  scanner?: BrowserScanCapability["scanner"] | undefined;
 }): BrowserScanCapability {
-  const { sites, publication, ego } = deps;
+  const { sites } = deps;
   const adapter = createDtcAdapter(sites);
-  const scanner = new DtcBrandScan({
-    pages: new DtcCatalogPages({ browser: ego, publication }),
-    sites,
-  });
   return {
     accepts: (url) =>
       acceptsAddress([(source) => dtcBrandSourceUrl(source, sites), adapter.productAddress], url),
     scanner: {
       scan: (request, signal) => {
         adapter.forBrandSource(request.sourceUrl).scanCapture?.(request.sourceUrl);
-        return scanner.scan(request, signal);
+        if (!deps.scanner) {
+          throw dtcAgentErrors.create("DTC.AGENT_REQUIRED");
+        }
+        return deps.scanner.scan(request, signal);
       },
     },
   };
@@ -70,6 +69,7 @@ interface BrowserScannerDependencies {
   publication: RetainedPublication;
   store: WholeFoodsStore;
   dtcSites?: readonly DtcSitePolicy[];
+  dtcScanner?: BrowserScanCapability["scanner"];
   wholefoodsScan?: WholeFoodsScanSettings;
   costcoStore?: CostcoStore;
   costcoScan?: CostcoScanSettings;
@@ -80,7 +80,7 @@ export function buildBrowserScanners(deps: BrowserScannerDependencies): BrowserS
   const sites = deps.dtcSites ?? [];
   return new BrowserScanners(
     [
-      dtcScanner({ ego, publication, sites }),
+      dtcScanner({ ego, publication, sites, scanner: deps.dtcScanner }),
       {
         accepts: (url) => acceptsAddress([costcoBrandSourceUrl], url),
         scanner: new CostcoBrandScan({

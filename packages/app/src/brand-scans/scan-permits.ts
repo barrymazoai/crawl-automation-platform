@@ -11,6 +11,7 @@ export const BrandScanPermitSchema = z.strictObject({
   maxWaitSeconds: ResourceGateSchema.shape.maxWaitSeconds,
   gapAfterSeconds: BrandListingInputSchema.shape.gapAfterSeconds,
   cooldownSeconds: z.number().int().nonnegative().optional(),
+  additionalResources: z.array(ResourceNeedSchema).max(6).optional(),
 });
 export type BrandScanPermit = z.infer<typeof BrandScanPermitSchema>;
 

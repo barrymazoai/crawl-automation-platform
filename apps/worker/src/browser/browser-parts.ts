@@ -1,5 +1,5 @@
 import { PostgresSiteAnalyses } from "@crawl-automation/adapters";
-import { siteAnalysisRunner } from "./site-analysis-parts.js";
+import { dtcAgentParts } from "./dtc-agent-parts.js";
 import {
   configuredDtcSites,
   storedDtcSites,
@@ -25,7 +25,7 @@ import { buildBrowserScanners } from "./scan-wiring.js";
 export interface BrowserParts {
   capture: PipelineCapture<BrowserCaptureResult>;
   scanner: BrowserScanners;
-  analysis: ReturnType<typeof siteAnalysisRunner>;
+  analysis: ReturnType<typeof dtcAgentParts>["analysis"];
   /** Sets the store in the browser profile once, before the first page this process reads. */
   ensureStore(productUrl: string, signal: AbortSignal): Promise<void>;
 }
@@ -59,18 +59,18 @@ export function buildBrowserParts(parts: CoreParts): BrowserParts {
     channels: { dtc: DTC_BROWSER_POLICY },
   });
   const registry = parts.registry;
+  const sourcePlans = browserSourcePlans(parts);
+  const dtc = dtcAgentParts(parts, dtcSites, sourcePlans);
   const capture = new BrowserProductCapture({
     registry,
     http: new HttpCapture(pages),
     publication: parts.publication,
-    sourcePlans: new ProductSourcePlans(parts.publication, {
-      ...requireRoleSection(parts.config, "plan", "browser"),
-      egressId: parts.fileTransport.egressId,
-    }),
+    sourcePlans,
   });
   const scanner = buildBrowserScanners({
     ego,
     dtcSites,
+    dtcScanner: dtc.scanner,
     ...scanSettings(settings),
     publication: parts.publication,
     rounds: ego,
@@ -78,13 +78,30 @@ export function buildBrowserParts(parts: CoreParts): BrowserParts {
   });
   return {
     capture: new PipelineCapture<BrowserCaptureResult>({
-      capture,
+      capture: selectCapture(dtc.product, capture),
       ...captureRecords({ database: parts.database, log: parts.log, registry }),
     }),
     scanner,
-    analysis: siteAnalysisRunner(parts, ego),
+    analysis: dtc.analysis,
     ensureStore: (url, signal) => scanner.prepare(url, signal),
   };
+}
+
+function selectCapture(
+  dtc: Pick<BrowserProductCapture, "capture">,
+  browser: BrowserProductCapture,
+) {
+  return {
+    capture: (request: Parameters<BrowserProductCapture["capture"]>[0], signal: AbortSignal) =>
+      (request.channel === "dtc" ? dtc : browser).capture(request, signal),
+  };
+}
+
+function browserSourcePlans(parts: CoreParts) {
+  return new ProductSourcePlans(parts.publication, {
+    ...requireRoleSection(parts.config, "plan", "browser"),
+    egressId: parts.fileTransport.egressId,
+  });
 }
 
 function refreshStoredSites(input: {

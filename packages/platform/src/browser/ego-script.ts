@@ -9,7 +9,7 @@ import { LIST_SCROLL_BODY } from "./list-scroll-script.js";
 export const EGO_MARKER = "CRAWLV3_EGO:";
 
 /** Runs in the page before its own scripts: location requests fail as denied, so no browser prompt appears. */
-const DENY_LOCATION = `(() => {
+export const DENY_LOCATION = `(() => {
   const denied = { code: 1, PERMISSION_DENIED: 1, message: "denied" };
   const fail = (_ok, error) => { if (typeof error === "function") setTimeout(() => error(denied), 0); return 0; };
   try {

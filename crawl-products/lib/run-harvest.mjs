@@ -269,7 +269,8 @@ export async function runHarvest(browser, tab, planInput, opts = {}) {
   // V3 dispatches one observed product per task. Shopify hooks can enumerate the
   // whole store, so enforce the host scope before any detail/image acquisition.
   // Standalone legacy harvests retain their existing full-catalog behavior.
-  const workerProduct = process.env.CRAWL_BROWSER_PROVIDER === "worker_cdp"
+  const workerProduct = browser?.mode === "ego-native" && browser.productUrl
+    ? new URL(browser.productUrl) : process.env.CRAWL_BROWSER_PROVIDER === "worker_cdp"
     && process.env.CRAWL_WORKER_PRODUCT_URL
     ? new URL(process.env.CRAWL_WORKER_PRODUCT_URL) : null;
   if (workerProduct && (workerProduct.protocol !== "https:"
@@ -308,14 +309,16 @@ export async function runHarvest(browser, tab, planInput, opts = {}) {
       }),
     upgrade: opts.hooks?.upgrade
       || ((urls, upgradeOpts) => upgradeProducts(tabRef.tab, urls, { ...upgradeOpts, browser })),
-    fetchImage: opts.hooks?.fetchImage || defaultFetchImage,
-    fetchProductData: opts.hooks?.fetchProductData || defaultFetchProductData,
+    fetchImage: browser?.harvestHooks?.fetchImage || opts.hooks?.fetchImage || defaultFetchImage,
+    fetchProductData: opts.hooks?.fetchProductData || browser?.harvestHooks?.fetchProductData || defaultFetchProductData,
+    observedImagesOnly: browser?.mode === "ego-native",
     /*
      * 商品页 HTML：独立站的成分表常在页面里、不在接口里，所以每个商品都"去页面看一眼"。
      * 不依赖调用方传 —— 调用方（Codex 写的脚本）可能忘了传，那样会静默退化成全靠 OCR。
      * Worker 固定使用任务 tab，不能被 Shopify 默认的主机 fetch 钩子覆盖。
      */
-    fetchPageHtml: (process.env.CRAWL_BROWSER_PROVIDER === "worker_cdp" ? (url => createBrowserHtmlFetcher(tabRef.tab)(url)) : null)
+    fetchPageHtml: browser?.harvestHooks?.fetchPageHtml
+      || (process.env.CRAWL_BROWSER_PROVIDER === "worker_cdp" ? (url => createBrowserHtmlFetcher(tabRef.tab)(url)) : null)
       || opts.hooks?.fetchPageHtml
       || (tabRef.tab?.playwright?.evaluate ? (url => createBrowserHtmlFetcher(tabRef.tab)(url)) : null)
       || (async (url) => {
@@ -775,10 +778,10 @@ async function buildEvidencePackage(record, url, outDir, hooks, log, pageHtmlSta
   const flags = buildFlags(record);
 
   // Platform variant expansion + SKU backfill (no browser involved).
-  let variants = [];
+  let variants = Array.isArray(record.variants) ? record.variants : [];
   try {
     const platformProduct = await hooks.fetchProductData(url);
-    if (platformProduct) variants = normalizePlatformVariants(platformProduct, url);
+    if (platformProduct && !variants.length) variants = normalizePlatformVariants(platformProduct, url);
   } catch (error) {
     log("platform_data_failed", { url, error: String(error) });
   }
@@ -794,7 +797,7 @@ async function buildEvidencePackage(record, url, outDir, hooks, log, pageHtmlSta
   }
   // 先取页面 HTML：成分表可能只在页面里（文字或图），接口给的图库不一定包含那张图
   const { pageHtml, html: pageHtmlText } = await capturePageHtml(url, outDir, hooks, log, pageHtmlStats);
-  if (pageHtmlText) {
+  if (pageHtmlText && !hooks.observedImagesOnly) {
     const known = new Set(images.flatMap((item) => { const u = item.url || ""; return [u, u.split("?")[0]]; }));
     const extra = factsImagesFromHtml(pageHtmlText, url, known);
     for (const extraUrl of extra) images.push({ url: extraUrl, alt: "supplement facts (from page)" });

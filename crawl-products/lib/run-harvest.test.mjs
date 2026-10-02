@@ -739,3 +739,22 @@ describe("defaultFetchImage (browser-dressed HTTP with retry)", () => {
     expect(calls).toBe(1);
   });
 });
+
+
+it("native Ego keeps observed variants and gallery without keyword-added images", async () => {
+  const target = "https://shop.test/products/sleep";
+  const outDir = await makeOutDir();
+  const hooks = baseHooks([target, "https://shop.test/products/foreign"]);
+  hooks.extract = async urls => ({ records: urls.map(url => ({ ...record(url, "Sleep"),
+    variants: [{ variantId: "woo-12", url: `${url}?variation_id=woo-12`, sku: "W12" }] })), needsUpgrade: [], failed: [] });
+  const fetchImage = vi.fn(hooks.fetchImage);
+  const browser = { mode: "ego-native", productUrl: target, harvestHooks: { fetchImage,
+    fetchProductData: async () => null,
+    fetchPageHtml: async () => '<main><img src="https://cdn.test/supplement-facts-badge.png" alt="Supplement Facts"></main>' } };
+  const result = await runHarvest(browser, null, plan(), { outDir, hooks });
+  expect(result.counts.discovered).toBe(1);
+  const records = JSON.parse(await fs.readFile(path.join(outDir, "evidence/records.json"), "utf8"));
+  expect(records[0].variants).toEqual([{ variantId: "woo-12", url: `${target}?variation_id=woo-12`, sku: "W12" }]);
+  expect(records[0].gallery.map(image => image.url)).toEqual(["https://cdn.test/sleep.jpg"]);
+  expect(fetchImage).toHaveBeenCalledTimes(1);
+});

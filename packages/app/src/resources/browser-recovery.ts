@@ -52,7 +52,7 @@ export class BrowserRecovery {
   ): Promise<void> {
     for (const execution of entry.executions) {
       const round = execution.identity;
-      if (!localRound(execution, scope)) {
+      if (!localRound(execution, scope) || nativeAgentRunning(round, entry)) {
         continue;
       }
       const cli = entry.executions.find(
@@ -83,6 +83,13 @@ export class BrowserRecovery {
   }
 }
 
+function nativeAgentRunning(round: PermitExecutionIdentity, entry: BrowserRecoveryEntry): boolean {
+  return (
+    round.metadata?.protocol === "ego-native-capture/1" &&
+    entry.executions.some((item) => item.identity.kind === "codex" && !item.stopped)
+  );
+}
+
 function localRound(
   execution: BrowserRecoveryEntry["executions"][number],
   scope: { host: string; taskSpaceId: number },
@@ -93,6 +100,6 @@ function localRound(
     identity.kind === "browser-round" &&
     identity.taskSpaceId === scope.taskSpaceId &&
     identity.metadata?.host === scope.host &&
-    identity.metadata?.protocol === "ego-single-page/1"
+    ["ego-single-page/1", "ego-native-capture/1"].includes(String(identity.metadata?.protocol))
   );
 }

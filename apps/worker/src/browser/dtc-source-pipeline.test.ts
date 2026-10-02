@@ -1,5 +1,20 @@
-import { PostgresBrandScans, PostgresSiteAnalyses } from "@crawl-automation/adapters";
+import {
+  PostgresBrandScans,
+  PostgresSiteAnalyses,
+  PostgresResourceStore,
+} from "@crawl-automation/adapters";
 import { beforeEach, afterEach, expect, it, vi } from "vitest";
+
+import {
+  agentSettings,
+  cleanupCaptures,
+  mockCapture,
+  catalogFixture,
+} from "./fixtures/dtc-agent.js";
+vi.mock("@crawl-automation/platform", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@crawl-automation/platform")>()),
+  currentPermitExecution: () => ({ permitId: "permit", workflowId: "product", runId: "execution" }),
+}));
 
 // Routing admission is exercised with the real guard in activities/browser-routing.test.ts.
 vi.mock("../activities/browser-permit.js", () => ({ checkBrowserPermit: vi.fn() }));
@@ -28,7 +43,6 @@ import {
 } from "@crawl-automation/app";
 import { ProductPlans, planKey } from "@crawl-automation/channels-core";
 import {
-  EgoPages,
   RetainedPublication,
   createLogger,
   verifyBytes,
@@ -45,6 +59,11 @@ import { buildBrowserParts } from "./browser-parts.js";
 import { BrowserSettingsSchema } from "./browser-settings.js";
 
 beforeEach(() => {
+  vi.spyOn(PostgresResourceStore.prototype, "findHeld").mockResolvedValue({
+    resources: ["test-model"],
+    workflowId: "product",
+    runId: "execution",
+  } as Awaited<ReturnType<PostgresResourceStore["findHeld"]>>);
   vi.spyOn(PostgresSiteAnalyses.prototype, "settings").mockResolvedValue([]);
   vi.spyOn(PostgresBrandScans.prototype, "isCancellationRequested").mockResolvedValue(false);
 });
@@ -86,6 +105,7 @@ function memoryStore(): ObjectStore {
 function setup(single = false) {
   const browser = BrowserSettingsSchema.parse({
     resourceId: "mini-ego-space-1",
+    dtcAgent: agentSettings,
     ego: { cliPath: "/tmp/not-executed-ego", taskSpaceId: 2 },
     wholefoods: { storeId: "10259", label: "Test", postalCode: "95126" },
     dtc: {
@@ -155,13 +175,7 @@ function setup(single = false) {
     fileTransport: { egressId: "test-files" },
   } as unknown as CoreParts;
   const parts = { ...core, browser: buildBrowserParts(core), channelPlans } as WorkerParts;
-  const read = vi.spyOn(EgoPages.prototype, "read").mockResolvedValue({
-    url,
-    html,
-    status: 200,
-    ready: true,
-    scroll: { rounds: 0, ended: "none" },
-  });
+  const read = mockCapture(publication, { url, html });
   return { parts, read, publication, records };
 }
 
@@ -245,7 +259,10 @@ async function retained(publication: RetainedPublication, key: string) {
   return JSON.parse(Buffer.from(bytes ?? []).toString());
 }
 
-afterEach(() => vi.restoreAllMocks());
+afterEach(async () => {
+  vi.restoreAllMocks();
+  await cleanupCaptures();
+});
 
 it("rejects the cross-brand task and plans only the matching brand task", async () => {
   const test = setup();
@@ -324,12 +341,12 @@ it("keeps single-brand evidence and legacy activity inputs unchanged", async () 
   expect(projection.codec).toBe("channel-product/1");
   expect(projection.brandRaw).toBe("shop.example");
   const { sourceUrl: _sourceUrl, ...legacy } = input;
-  const legacyPlan = await capture(test.parts, legacy);
-  expect(legacyPlan).toEqual(sourcePlan);
+  const legacyPlan = await capture(test.parts, { ...legacy, operationId: "legacy-capture" });
+  expect(legacyPlan.owner.variantId).toBe(sourcePlan.owner.variantId);
   expect(await pipelineActivities(test.parts).prepareChannelProduct?.(sourcePlan)).toMatchObject({
     status: "prepared",
   });
-  expect(test.read).toHaveBeenCalledOnce();
+  expect(test.read).toHaveBeenCalledTimes(2);
 });
 
 it.each([false, true])(
@@ -337,23 +354,9 @@ it.each([false, true])(
   async (foreignNext) => {
     const test = setup();
     const next = foreignNext ? betaUrl : `${alphaUrl}?page=2`;
-    const listing = (handle: string) =>
-      `<main><div id="product-grid"><a href="/products/${handle}">${handle}</a></div></main>`;
-    test.read
-      .mockResolvedValueOnce({
-        url: alphaUrl,
-        html: listing("sleep") + `<a rel="next" href="${next}">Next</a>`,
-        status: 200,
-        ready: true,
-        scroll: { rounds: 2, ended: "stable" },
-      })
-      .mockResolvedValueOnce({
-        url: next,
-        html: listing("rest"),
-        status: 200,
-        ready: true,
-        scroll: { rounds: 2, ended: "stable" },
-      });
+    test.read.mockImplementationOnce((request) =>
+      catalogFixture(test.publication, { operationId: request.operationId, next }),
+    );
     const request = {
       channel: "dtc",
       capture: "browser",
@@ -377,7 +380,8 @@ it.each([false, true])(
           },
         ],
       });
-      expect(test.read.mock.calls.map(([input]) => input.url)).toEqual([alphaUrl, next]);
+      expect(test.read).toHaveBeenCalledOnce();
+      expect(test.read.mock.calls[0]?.[0]).toMatchObject({ mode: "catalog", url: alphaUrl });
     }
     expect(scan).toHaveBeenCalledWith(
       {

@@ -29,7 +29,12 @@ export class TemporalSiteAnalyses implements SiteAnalysisGateway {
             resources: {
               queue: permit.resourceQueue,
               maxWaitSeconds: permit.maxWaitSeconds,
-              activities: { analyzeSiteInBrowser: [{ resourceId: permit.resourceId, units: 1 }] },
+              activities: {
+                analyzeSiteInBrowser: [
+                  { resourceId: permit.resourceId, units: 1 },
+                  ...(permit.additionalResources ?? []),
+                ],
+              },
             },
           },
         ],

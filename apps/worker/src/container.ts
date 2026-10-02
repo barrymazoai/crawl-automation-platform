@@ -1,4 +1,5 @@
 import { siblingReuseService } from "./sibling-reuse-parts.js";
+import { filesService } from "./product-files-parts.js";
 import { registerActivityPolicies } from "./activities/activity-policies.js";
 import { persistedWorkerRegistry } from "./channel-registry.js";
 import { activityContextParts } from "./activities/activity-context-parts.js";
@@ -23,12 +24,10 @@ import {
 import { amazonFormulaProduct } from "./amazon-formula-product.js";
 import {
   ProductCapture,
-  ProductFiles,
   ProductPlans,
   ProductSourcePlans,
   ScraperApiPages,
   DirectHttpsTransport,
-  FileEvidence,
   SystemHttpsTransport,
 } from "@crawl-automation/channels-core";
 import { createDatabase, createLogger, ScraperApiClient } from "@crawl-automation/platform";
@@ -201,10 +200,4 @@ function captureService(parts: WorkerParts): ProductCapture {
     publication,
     sourcePlans: new ProductSourcePlans(publication, settings),
   });
-}
-
-function filesService(parts: WorkerParts): ProductFiles {
-  const { registry, channelPlans, local, r2, copies, reviewLedger, fileTransport } = parts;
-  const files = new FileEvidence({ local, remote: r2.store, copies, reviews: reviewLedger });
-  return new ProductFiles({ registry, plans: channelPlans, files, transport: fileTransport });
 }

@@ -64,7 +64,12 @@ export class TemporalBrowserScans {
       resources: {
         queue: permit.resourceQueue,
         maxWaitSeconds: permit.maxWaitSeconds,
-        activities: { scanBrandInBrowser: [{ resourceId: permit.resourceId, units: 1 }] },
+        activities: {
+          scanBrandInBrowser: [
+            { resourceId: permit.resourceId, units: 1 },
+            ...(permit.additionalResources ?? []),
+          ],
+        },
       },
     };
   }

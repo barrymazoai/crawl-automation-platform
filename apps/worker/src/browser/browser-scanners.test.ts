@@ -151,19 +151,37 @@ describe("browser scan capability wiring", () => {
 it("captures configured DTC catalogs in Ego, without Whole Foods preparation", async () => {
   const sourceUrl = "https://shop.example/collections/all";
   const ego = new EgoPages({ cliPath: "/tmp/not-executed-ego", taskSpaceId: 1 });
-  const read = vi.spyOn(ego, "read").mockResolvedValue({
-    url: sourceUrl,
-    status: 200,
-    ready: true,
-    html: '<main><div id="product-grid"><a href="/products/sleep">Sleep</a></div></main>',
-    scroll: { rounds: 3, ended: "stable" },
-  });
+  const scan = vi.fn(async () => ({
+    complete: true,
+    soldHere: true,
+    archiveKeys: [],
+    pages: [
+      {
+        cards: 1,
+        nextPage: null,
+        statedTotal: null,
+        products: [
+          {
+            url: "https://shop.example/products/sleep",
+            listingId: "sleep",
+            variantId: null,
+            title: "Sleep",
+            kind: "product" as const,
+            brand: null,
+            seller: null,
+            brandBasis: "source" as const,
+          },
+        ],
+      },
+    ],
+  }));
   const round = vi.spyOn(ego, "round").mockRejectedValue(new Error("Unexpected store preparation"));
   const scans = buildBrowserScanners({
     ego,
     publication: new RetainedPublication(memoryStore(), memoryStore()),
     rounds: new ManagedBrowserRounds(ego, async () => true),
     store: { storeId: "10259", label: "The Alameda", postalCode: "95126" },
+    dtcScanner: { scan },
     dtcSites: configuredDtcSites({
       sites: [{ siteKey: "shop.example", platform: "shopify", catalogUrl: sourceUrl }],
     }),
@@ -173,7 +191,7 @@ it("captures configured DTC catalogs in Ego, without Whole Foods preparation", a
   const result = await scans.scan({ scanId: "dtc-scan", sourceUrl }, signal);
   expect(result).toMatchObject({ complete: true, soldHere: true });
   expect(result.pages[0]?.products[0]?.url).toBe("https://shop.example/products/sleep");
-  expect(read).toHaveBeenCalledOnce();
+  expect(scan).toHaveBeenCalledOnce();
   expect(round).not.toHaveBeenCalled();
 });
 
