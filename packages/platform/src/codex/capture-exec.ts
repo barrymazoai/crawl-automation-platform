@@ -18,6 +18,7 @@ export interface CodexCaptureInput {
   prompt: string;
   outputSchema: object;
   environment: NodeJS.ProcessEnv;
+  captureMode?: "product" | "catalog" | "analysis";
   writableDirectories?: string[];
   profileDir?: string;
 }
@@ -82,7 +83,11 @@ function startCapture(
   const connection = codexConnection(settings, input.cwd, input.environment);
   return execa(settings.executable, captureArguments(settings, input), {
     cwd: input.cwd,
-    env: { ...connection.env, CRAWL_SITE_PROFILE_DIR: input.profileDir },
+    env: {
+      ...connection.env,
+      CRAWL_SITE_PROFILE_DIR: input.profileDir,
+      CRAWL_DTC_CAPTURE_MODE: input.captureMode,
+    },
     extendEnv: false,
     cancelSignal: signal,
     timeout: settings.timeoutMs,

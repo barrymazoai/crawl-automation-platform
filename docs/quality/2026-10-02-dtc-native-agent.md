@@ -157,3 +157,9 @@ Server 二 Codex login status 仍已登录 ChatGPT。等待后的一次独立 30
 CRAWLV3-167 修复将经过 owner/hash 校验的 DTC 网站唯一或明确选定规格，作为 website-variant/1 元数据传入 enrichment；原始 title、配方及旧 enrichment 保持原样。多规格基础商品不套用默认规格，其他渠道行为保持不变。选定规格的原始 options 也由后续采集投影保留。新增内容参与 inputHash，来源地址不参与内容去重；无规格上下文的旧输入和 prompt 保持一致。数量校验仍排除 servings 和含糊/冲突数量。83项纯回归通过，另加 Mini 留存投影离线重放测试，尚待执行和生产部署。
 
 已从 R2 回读第十轮 enrichment input 和原投影，投影2840字节、SHA256 `6946469ffdd7418632ae4ddd39155e6aa13d14c9805a5fbcaf52075f70f26324` 与原 artifactRef 一致。缓存目录 Server 一 `manual-releases/dtc-native-20261002/solaray-website-variant-replay`，不会重新抓网页或修改旧原件。
+
+HMW 第二次原生目录扫描于10:47:23.600终态 cancelled，0产品入队，heldPermits=[]。R2 archive71文件、24,703,223字节全部回读大小/hash一致，原始目录及误入商品阶段的产物均保留，不能作为新目录验收结果。CRAWLV3-168的真实路由已验证；CRAWLV3-169继续处理阶段隔离。
+
+169修复按product/catalog/analysis分别给机械步骤，目录不再收到runHarvest调用样例，并要求真实零增长复核记录。宿主把captureMode传入独立Codex环境及原生工具，runHarvest在目录/分析模式下于任何读取/写入前拒绝；保留原商品模式行为。58项纯测试通过，新增宿主模式环境传递由Mini的执行器集成检查验证，尚未部署。
+
+167的83项测试在Server一fresh clone通过；首次真实投影回放因测试错误使用single-brand配置而被严格品牌校验拒绝。原投影实际是按品牌来源matched配置保存，测试改成相同品牌来源政策，未放松生产校验。`a9b4040`同时禁止跨独立元数据字段拼接数字与单位。真实重放和生产验证仍未结束。

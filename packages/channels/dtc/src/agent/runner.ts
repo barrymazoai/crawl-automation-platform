@@ -93,6 +93,7 @@ export class DtcCaptureAgent {
           prompt,
           outputSchema: z.toJSONSchema(ResultSchema),
           environment: this.deps.environment,
+          captureMode: request.mode,
           profileDir: join(settings.codex.workRoot, "site-profiles"),
           writableDirectories: [join(settings.codex.workRoot, "site-profiles")],
         },

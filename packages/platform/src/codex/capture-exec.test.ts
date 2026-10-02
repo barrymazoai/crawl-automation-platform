@@ -25,7 +25,7 @@ process.stdin.resume();
 process.stdin.on("end", () => {
 const child = spawn(process.execPath, ["-e", ${JSON.stringify('process.on("SIGTERM",()=>{}); setInterval(()=>{},1000)')}], {stdio:"ignore"});
 fs.writeFileSync("descendant.pid", String(child.pid));
-${mode === "complete" ? 'fs.writeFileSync(process.argv[process.argv.indexOf("--output-last-message")+1], JSON.stringify({status:"complete"})); child.unref(); process.exit(0);' : "setInterval(()=>{},1000);"}
+${mode === "complete" ? 'fs.writeFileSync(process.argv[process.argv.indexOf("--output-last-message")+1], JSON.stringify({status:"complete",mode:process.env.CRAWL_DTC_CAPTURE_MODE})); child.unref(); process.exit(0);' : "setInterval(()=>{},1000);"}
 });
 `,
     { mode: 0o700 },
@@ -63,7 +63,13 @@ it.each(["complete", "cancel", "timeout"] as const)(
       () =>
         runCodexCapture(
           settings,
-          { cwd: root, prompt: "test", outputSchema: {}, environment: process.env },
+          {
+            cwd: root,
+            prompt: "test",
+            outputSchema: {},
+            environment: process.env,
+            captureMode: "catalog",
+          },
           controller.signal,
         ),
     );
@@ -75,7 +81,7 @@ it.each(["complete", "cancel", "timeout"] as const)(
     } else if (mode === "timeout") {
       await expect(work).rejects.toMatchObject({ code: "TEXT.CODEX_TIMEOUT" });
     } else {
-      await expect(work).resolves.toEqual({ status: "complete" });
+      await expect(work).resolves.toEqual({ status: "complete", mode: "catalog" });
     }
     const pid = Number(await readFile(join(root, "descendant.pid"), "utf8"));
     expect(() => process.kill(pid, 0)).toThrow();

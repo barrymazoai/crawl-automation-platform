@@ -5,7 +5,7 @@ import { egoLocator } from "./ego-native-locator.mjs";
 import { retainNativeOriginal } from "./ego-native-originals.mjs";
 
 /** Adapts the existing harvest primitives inside Ego's native Node runtime. No CDP server or Playwright. */
-export function createEgoBrowser({ task, page, targetId = page.targetId, listTaskSpaces, workDir, productUrl = null }) {
+export function createEgoBrowser({ task, page, targetId = page.targetId, listTaskSpaces, workDir, productUrl = null, captureMode = process.env.CRAWL_DTC_CAPTURE_MODE }) {
   if (typeof targetId !== "string" || !targetId) throw new Error("SOURCE.TARGET_MISSING");
   const guard = async () => {
     const space = (await listTaskSpaces()).find(item => (item.id ?? item.spaceId) === task.spaceId);
@@ -73,7 +73,7 @@ export function createEgoBrowser({ task, page, targetId = page.targetId, listTas
     fetchImage: url => readImage({ page: scoped, guard, workDir }, url),
     retainAttempt: value => retainNativeOriginal(workDir, { url: productUrl, kind: "harvest", bytes: JSON.stringify(value) }),
   };
-  return { mode: "ego-native", productUrl, harvestHooks: hooks, tab, tabs: {
+  return { mode: "ego-native", captureMode, productUrl, harvestHooks: hooks, tab, tabs: {
     new: async () => { await guard(); return tab; },
     list: async () => { await guard(); return [tab]; },
   }, disconnect: async () => { await guard(); } };

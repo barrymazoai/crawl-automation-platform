@@ -84,6 +84,16 @@ function baseHooks(urls) {
 }
 
 describe("runHarvest lifecycle engine", () => {
+  it.each(["catalog", "analysis"])("refuses %s harvest before reading or writing anything", async (mode) => {
+    const hooks = { enumerate: vi.fn(), extract: vi.fn() };
+    await expect(runHarvest({ captureMode: mode }, null, plan(), { hooks }))
+      .rejects.toThrow("harvest_not_allowed_in_discovery_task");
+    vi.stubEnv("CRAWL_DTC_CAPTURE_MODE", mode);
+    await expect(runHarvest(null, null, plan(), { hooks }))
+      .rejects.toThrow("harvest_not_allowed_in_discovery_task");
+    expect(hooks.enumerate).not.toHaveBeenCalled();
+    expect(hooks.extract).not.toHaveBeenCalled();
+  });
   it.each([true, false])("confines whole-store enumeration (exact variant observed: %s)", async (exactVariant) => {
     const target = "https://shop.test/products/sleep?variant=2";
     vi.stubEnv("CRAWL_BROWSER_PROVIDER", "worker_cdp");

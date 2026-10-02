@@ -251,6 +251,10 @@ function factsRank(image, index) {
  *   injectable for tests; defaults wire to the real crawl/scope functions.
  */
 export async function runHarvest(browser, tab, planInput, opts = {}) {
+  if ([browser?.captureMode, process.env.CRAWL_DTC_CAPTURE_MODE]
+    .some(mode => mode === "catalog" || mode === "analysis")) {
+    throw new Error("harvest_not_allowed_in_discovery_task");
+  }
   const { valid, errors, plan } = validateHarvestPlan(planInput);
   if (!valid) {
     const error = new Error(`harvest_plan_invalid:${errors.join(",")}`);
