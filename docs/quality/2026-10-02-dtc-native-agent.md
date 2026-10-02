@@ -61,3 +61,5 @@ Server 一 Docker/Postgres 已恢复。第二轮真实 Workflow ID 为 `product-
 模型声称逐图视觉验证，但 exec JSON 记录中没有独立看图事件，尚未确认该日志是否完整记录此工具，不据此认定视觉验收通过。prompt 已明确要求使用 view_image 并记录逐图观察。旧版变体文档已复读：平台商品先保存全部 variants 和图库，基础商品语义处理后再展开规格；无法确定的规格图片不得混用。Solaray 只有一个规格，本次不是多规格内容歧义。多规格、HMW 目录/分析及 R2 到后续处理的端到端验收仍待完成。CRAWLV3-163 已补充精简状态评论。
 
 用户进一步纠正：规格来自网站自身，而非图片。已移除新 capture projection 中 `variant_gallery_unassigned` 的前置拒绝及按默认规格筛掉其余图片的行为；交接保留全部网站 variants 和全部图库候选，单规格共享图片可归属唯一规格，多规格未明确绑定的图片维持 null、已知其他规格图片保持其原 ID。prompt 明确 SKU/选项/平台数据才是规格来源，共用图片未绑定本身不构成采集失败。没有放松后续 planner 的规格隔离，当前后续处理对多规格共享素材仍可能产生 CHANNEL.VARIANT_CONFLICT；CRAWLV3-155 继续跟踪旧版按基础商品处理后展开规格与现行处理链的差异，不能把本次修复称为多规格端到端通过。
+
+`fa7bd351e52af7f9d250aabd618dcc4b247407da` 已提交 main 并推送（完整 pre-push check 通过）。Server 二通过 origin/main fresh clone 到 `manual-releases/dtc-native-handoff-fa7bd35/source`，安装锁定依赖；40 项采集/下游交接回归通过。用第三轮原件只读重放新交接：76 个文件、13,138,224 字节全部大小/hash 一致，根目录截图引用通过，新 projection 保留网站唯一规格（SKU 076280471052、100 ct、价格11.89）及两张原图。该验证仅使用内存 publication，没有访问网站、写 R2、启动新业务或更改旧 Review；它验证原件交接和归档遍历，不代表真实 R2 上传超时已验收。生产 Worker 仍为 Server 二 `3cf56e9`、Server 一 `92d4cb3`，本次修复尚未切换生产。
