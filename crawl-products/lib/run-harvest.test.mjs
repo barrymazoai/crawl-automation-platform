@@ -759,6 +759,37 @@ it("native Ego keeps observed variants and gallery without keyword-added images"
   expect(fetchImage).toHaveBeenCalledTimes(1);
 });
 
+it.each([
+  { handle: "zinc", vendor: "Solaray", existing: null, expected: "Solaray" },
+  { handle: "other", vendor: "Other Brand", existing: null, expected: undefined },
+  { handle: "zinc", vendor: "", existing: null, expected: undefined },
+  { handle: "zinc", vendor: "Store Vendor", existing: "Observed Brand", expected: "Observed Brand" },
+])("retains only the matching product's missing platform brand (%j)", async sample => {
+  const target = "https://shop.test/products/zinc?variant=42";
+  const outDir = await makeOutDir();
+  const hooks = baseHooks([target]);
+  hooks.extract = async () => {
+    const captured = record(target, "Zinc");
+    if (sample.existing) captured.fields.brand = sample.existing;
+    return { records: [captured], needsUpgrade: [], failed: [] };
+  };
+  delete hooks.fetchProductData;
+  const browser = { mode: "ego-native", productUrl: target, harvestHooks: {
+    fetchImage: hooks.fetchImage,
+    fetchProductData: async () => ({ handle: sample.handle, vendor: sample.vendor }),
+    fetchPageHtml: async () => "<main>Retained product</main>",
+  } };
+  await runHarvest(browser, null, plan(), { outDir, hooks, observedGalleryUrls: ["https://cdn.test/zinc.jpg"] });
+  const [saved] = JSON.parse(await fs.readFile(path.join(outDir, "evidence/records.json"), "utf8"));
+  expect(saved.fields.brand).toBe(sample.expected);
+  if (sample.expected === "Solaray") {
+    expect(saved.fields.brandSource).toBe("product-json-vendor");
+    expect(saved.fields.brandSourceUrl).toBe("https://shop.test/products/zinc.json");
+  } else {
+    expect(saved.fields.brandSource).toBeUndefined();
+  }
+});
+
 it.each(["", "?variant=42"])("captures the native dispatched product without re-enumerating its detail page (%s)", async query => {
   const target = `https://shop.test/products/sleep${query}`;
   const outDir = await makeOutDir();

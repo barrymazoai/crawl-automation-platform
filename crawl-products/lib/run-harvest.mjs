@@ -794,8 +794,9 @@ async function buildEvidencePackage(record, url, outDir, hooks, log, pageHtmlSta
 
   // Platform variant expansion + SKU backfill (no browser involved).
   let variants = Array.isArray(record.variants) ? record.variants : [];
+  let platformProduct = null;
   try {
-    const platformProduct = await hooks.fetchProductData(url);
+    platformProduct = await hooks.fetchProductData(url);
     if (platformProduct && !variants.length) variants = normalizePlatformVariants(platformProduct, url);
   } catch (error) {
     log("platform_data_failed", { url, error: String(error) });
@@ -850,6 +851,7 @@ async function buildEvidencePackage(record, url, outDir, hooks, log, pageHtmlSta
     productUrl: url,
     fields: {
       ...record.fields,
+      ...(hooks.observedImagesOnly ? nativePlatformBrand(record, platformProduct, url) : {}),
       ...(hooks.observedGallery ? { images: hooks.observedGallery } : {}),
       ...(record.fields?.ingredients ? { ingredients_text: record.fields.ingredients } : {}),
       ...skuBackfill,
@@ -870,6 +872,20 @@ async function buildEvidencePackage(record, url, outDir, hooks, log, pageHtmlSta
   if (variants.length > 0) pkg.variants = variants;
   if (pageHtml) pkg.pageHtml = pageHtml;
   return pkg;
+}
+
+// Preserve the actual product vendor, not the configured source/expected brand.
+// Only the matching Shopify product handle may supply this missing field.
+function nativePlatformBrand(record, product, url) {
+  if (typeof record.fields?.brand === "string" && record.fields.brand.trim()) return {};
+  if (typeof product?.vendor !== "string" || !product.vendor.trim()) return {};
+  const source = new URL(url);
+  const handle = source.pathname.match(/\/products\/([^/]+)\/?$/)?.[1];
+  if (!handle || decodeURIComponent(handle) !== product.handle) return {};
+  source.search = "";
+  source.hash = "";
+  source.pathname = source.pathname.replace(/\/$/, "") + ".json";
+  return { brand: product.vendor.trim(), brandSource: "product-json-vendor", brandSourceUrl: source.href };
 }
 
 function nativeGallery(urls) {

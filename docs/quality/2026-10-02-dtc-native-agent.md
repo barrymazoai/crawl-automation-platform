@@ -95,3 +95,11 @@ Server 二于 09:14:34 经 origin/main fresh clone/build 部署 `6d5b9a1`，Mini
 第五轮取消的四项停止证明全部齐全：Codex 进程组不存在、CLI 已退出、精确任务页 absent、round 已结束，09:06:23 许可自然释放。该正常取消验证不等于 Worker 被强杀后的 orphan Codex 自动清理已实现。
 
 CRAWLV3-150 补查发现自动恢复候选 SQL 只认 `ego-single-page/1`，遗漏新 `ego-native-capture/1`。修复只加入新协议，保留活动已结束、本机、本空间、许可未释放的筛选；恢复执行器仍要求 Codex 停止证明后才关闭任务页和释放资源。新增 PostgreSQL 集成测试使用独立连接的临时表并回滚，验证 native/legacy 命中，运行中、已释放、异机器、异空间及未知协议排除。类型/lint 和七项纯恢复/准入回归已通过；数据库集成测试待 Mini 执行，此修复尚未部署。当前正常采集不会为此重启。
+
+## 第六轮原件留存通过，品牌缺字段的前置 Review（09:28 UTC）
+
+第六轮于 09:23:20 结束 Codex，09:24:03 业务结果为 Review `DTC.CAPTURE_REVIEW`（模型 reasonCode=`brand_field_missing_in_records`）；没有进入后续处理。1 条原始商品、1 个网站规格、2 张实际图库原图均取得；两个图像内容哈希与第四轮一致。新增原件副本包含 HTML、商品 JSON、两张图片、harvest plan/result/records 快照，各有 receipt；R2 `v3/dtc-agent/product-9b94c240-7541-41d5-b720-629fd598fad7/archive.json` 全部 38 文件、7,890,721 字节回读大小和 SHA-256 一致。最终 heldPermits=[]。原件留存验证通过不等于整条产品业务通过。
+
+前一版的宿主 HTML 品牌补读没有机会运行，因为模型看到 records.fields.brand 缺失就在更前面返回 Review。原始商品 JSON 自身明确 `handle=zinc-copper`、`vendor=Solaray`，引擎此前只取 variants，没有保留 vendor。修复原生 harvest 在字段缺失时从 handle 精确匹配的实际平台商品 vendor 保存 brand，并保存其 product-json-vendor 来源和 JSON URL；不覆盖已有品牌，不从配置期望值补写，异商品或空 vendor 不采用。54 项纯回归通过；新增 Mini 原件重放测试只读第六轮原件，在新临时目录重放，禁止网络，验证品牌、全部网站规格、完整图库及图片字节。原任务和 Review 保持原样。
+
+恢复候选修复 `2023c22` 已推送，Server 二 fresh Git clone 的真实 PostgreSQL 临时表集成与四项恢复回归共五项通过；尚未切换生产。CRAWLV3-150/163/164 分别跟踪恢复、采集交接和独立原件留存。
