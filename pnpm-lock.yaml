@@ -271,6 +271,9 @@ importers:
 
   crawl-products:
     dependencies:
+      linkedom:
+        specifier: 0.18.13
+        version: 0.18.13
       playwright-core:
         specifier: ^1.62.1
         version: 1.62.1

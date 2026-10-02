@@ -1,3 +1,5 @@
+import { detailSections, factsHeading } from "./detail-sections.mjs";
+
 //#region src/utils/url-site.ts
 const TWO_PART_PUBLIC_SUFFIXES = new Set([
 	"co.uk",
@@ -1479,30 +1481,7 @@ function extractAvailability(html) {
 	return "";
 }
 function extractProductTraits(html) {
-	const traits = [];
-	const traitsSection = firstHtml([/<section\b[^>]*(?:id|class)=["'][^"']*(?:producttraits|traits|accordion|tabs|details)[^"']*["'][^>]*>([\s\S]*?)<\/section>/i], html) || html;
-	const traitBlockRe = /<div\b[^>]*class=["'][^"']*(?:traits__item|accordion|tab-pane|collapse|product__accordion)[^"']*["'][^>]*>([\s\S]*?)(?=<div\b[^>]*class=["'][^"']*(?:traits__item|accordion|tab-pane|collapse|product__accordion)|<\/section>|$)/gi;
-	let match;
-	while ((match = traitBlockRe.exec(traitsSection)) !== null) {
-		const block = match[1] ?? "";
-		const label = firstText([/<[^>]+class=["'][^"']*(?:traits__label|accordion|label|title|heading)[^"']*["'][^>]*>([\s\S]*?)<\/[^>]+>/i, /<(?:button|summary|h2|h3|h4)\b[^>]*>([\s\S]*?)<\/(?:button|summary|h2|h3|h4)>/i], block);
-		const value = firstText([/<[^>]+class=["'][^"']*(?:traits__values|panel|content|body|value)[^"']*["'][^>]*>([\s\S]*?)<\/[^>]+>/i], block) || htmlToText(block).replace(label, "").trim();
-		if (label && value) traits.push({
-			label,
-			value
-		});
-	}
-	const detailsRe = /<details\b[^>]*>([\s\S]*?)<\/details>/gi;
-	while ((match = detailsRe.exec(html)) !== null) {
-		const block = match[1] ?? "";
-		const label = firstText([/<summary\b[^>]*>([\s\S]*?)<\/summary>/i], block);
-		const value = htmlToText(block.replace(/<summary\b[^>]*>[\s\S]*?<\/summary>/i, " "));
-		if (label && value) traits.push({
-			label,
-			value
-		});
-	}
-	return dedupeTraits(traits);
+	return dedupeTraits(detailSections(html, htmlToText));
 }
 function extractSupplementTables(html) {
 	const tables = [];
@@ -1521,7 +1500,7 @@ function buildSupplementFacts(traits, tableFacts) {
 	const sections = [];
 	for (const table of tableFacts) sections.push(`Active ingredients: ${table}`);
 	for (const trait of traits) {
-		if (!/(?:recommended daily intake|directions?|suggested use|notes?|nutrition|supplement|storage)/i.test(trait.label)) continue;
+		if (!factsHeading(trait.label)) continue;
 		sections.push(`${trait.label}: ${trait.value}`);
 	}
 	return uniqueStrings$1(sections).join("\n").slice(0, 6e3);
@@ -1743,6 +1722,11 @@ function firstTextFromHtml(pattern, html) {
 	return match?.[1] ? htmlToText(match[1]).trim() : "";
 }
 function firstLabelFollowingText(labels, html) {
+	const sections = extractProductTraits(html);
+	for (const label of labels) {
+		const section = sections.find(item => item.label.toLowerCase().replace(/:$/, "") === label.trim().toLowerCase().replace(/:$/, ""));
+		if (section) return section.value;
+	}
 	const text = htmlToText(html);
 	const cleanLabels = labels.map((label) => label.trim()).filter(Boolean).slice(0, 20);
 	if (cleanLabels.length === 0) return "";
@@ -1761,20 +1745,14 @@ function extractProfileImages(profile, html, url, imageProfile) {
 	})]);
 }
 function extractProfileFacts(profile, html, url) {
+	const mapped = firstProfileFieldText(profile, "supplement_facts", html);
+	if (mapped) return mapped;
 	const facts = stringField(extractDetailDomRecord(url, html, ["supplement_facts"])?.fields.supplement_facts);
 	if (facts) return facts;
-	const labels = profile.factLabels?.length ? profile.factLabels : [
-		"Active ingredients",
-		"Supplement Facts",
-		"Nutrition Facts",
-		"Nutritional Information"
-	];
-	const text = htmlToText(html);
-	return uniqueStrings(labels.map((label) => {
-		const escaped = escapeRegex(label);
-		const match = text.match(new RegExp(`${escaped}\\s*[:\\-]?\\s+([\\s\\S]{1,1200}?)(?=${labels.map(escapeRegex).join("|")}|$)`, "i"));
-		return match?.[1] ? `${label}: ${match[1].trim()}` : "";
-	}).filter(Boolean)).join("\n").slice(0, 6e3);
+	const labels = new Set((profile.factLabels ?? []).map(label => label.trim().toLowerCase().replace(/:$/, "")));
+	return uniqueStrings(extractProductTraits(html)
+		.filter(trait => labels.has(trait.label.toLowerCase().replace(/:$/, "")))
+		.map(trait => `${trait.label}: ${trait.value}`)).join("\n").slice(0, 6e3);
 }
 function firstRegexText(patterns, html) {
 	for (const pattern of patterns ?? []) {

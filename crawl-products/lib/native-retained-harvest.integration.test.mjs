@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, it, vi } from "vitest";
 import { runHarvest } from "./run-harvest.mjs";
+import { applyDetailExtractionProfile } from "./engine.mjs";
 
 // Mini-only replay of an existing capture. Originals and business state are never modified.
 const source = process.env.CRAWL_RETAINED_NATIVE_CAPTURE;
@@ -20,6 +21,17 @@ it.skipIf(!source)("replays verified native originals into a separate directory 
   const attempt = JSON.parse(originals.find(item => item.kind === "harvest").bytes);
   expect(attempt.records).toHaveLength(1);
   const record = attempt.records[0];
+  const html = originals.find(item => item.kind === "html" && item.url === record.productUrl).bytes.toString();
+  const extracted = applyDetailExtractionProfile({
+    profile: attempt.plan.route.detailProfile,
+    evidence: { url: record.productUrl, html,
+      requestedFields: ["title", "ingredients", "recommended_daily_intake", "supplement_facts"] },
+  }).record;
+  expect(extracted.fields.ingredients).toContain("Zinc (from Zinc Bisglycinate)");
+  expect(extracted.fields.recommended_daily_intake).toBe("Use only as directed. Take 1 VegCap daily with a meal or glass of water. Store in a cool, dry place.");
+  expect(extracted.fields.notes || "").not.toContain("Take 1 VegCap");
+  expect(extracted.fields.supplement_facts).toBeUndefined();
+  expect(extracted.fields.supplementFacts).toBeUndefined();
   const product = JSON.parse(originals.find(item => item.kind === "json").bytes).product;
   const outDir = await mkdtemp(join(tmpdir(), "native-retained-replay-"));
   vi.stubGlobal("fetch", () => { throw new Error("replay must not access network"); });
@@ -33,7 +45,7 @@ it.skipIf(!source)("replays verified native originals into a separate directory 
     const result = await runHarvest(browser, null, attempt.plan, {
       outDir, observedGalleryUrls: record.gallery.map(item => item.url),
       hooks: {
-        extract: async () => ({ records: [{ sourceUrl: record.productUrl, fields: record.fields, variants: record.variants }], needsUpgrade: [], failed: [] }),
+        extract: async () => ({ records: [{ ...extracted, variants: record.variants }], needsUpgrade: [], failed: [] }),
         filterScope: records => ({ included: records, excluded: [] }),
       },
     });

@@ -115,3 +115,23 @@ CRAWLV3-150 补查发现自动恢复候选 SQL 只认 `ego-single-page/1`，遗�
 根因：旧 engine.extractAvailability 对所读页面片段做全局文字匹配，并不能证明本商品/规格的状态。原生修复改为从本轮留存 HTML 中读取 URL 精确匹配的 Product/ProductGroup Offer，并按网站 variantId 保存各规格状态；显式规格 URL 只使用该规格，基础商品的多规格状态不一致时不强塞一个值。缺失证据不再沿用全页猜测值，结构化证据冲突保留 availability_conflict 标记，不覆盖为成功。原机械图库采集及网站规格枚举不变。64 项纯回归通过，Mini 第七轮原件重放待执行。
 
 独立执行器测试 `2a51b03` 已推送并在 Server 二 fresh Git clone 执行，四项全部通过：正常结束、取消、超时（含拒绝 SIGTERM 子进程）、执行登记失败时不发 prompt。测试验证了子 PID 实际不存在和 process.json/ledger 停止证明；没有调用真实模型或浏览器，没有切换生产，不能替代 Worker SIGKILL 恢复验收。
+
+## 字段预览约定与模型 503（09:58 UTC）
+
+`25f0271` 可售状态修复在 Mini 第七轮真实原件只读重放通过：InStock、唯一规格 available=true，品牌、全部规格、图库及图片字节核验一致；59 项 Mini 检查通过。09:47:48 经 Git fresh clone/build 部署。随后原件复核另见 recommended_daily_intake/notes 与实际 Ingredients/Directions 串位、Facts 混入 FAQ，所复用方法 profile lastValidatedAt=null、successCount=0，记录 CRAWLV3-166 In Progress。单商品 prompt 要求收割前逐项核对 profile 字段预览，先修正方法或使用实际观察节点的 extract hook，保存 field-preview.json/profile-validation.json；不能只改计数称验证通过。该约定只适用于商品采集，不用于目录发现/站点分析。`31f5d39` 于 09:51:30 经 Git fresh clone/build 部署 Server 二，Server 一仍 `92d4cb3`。
+
+第八轮 `619dec03-06f8-45f3-af12-fdc2322348b7` 于 09:51:58 受理，但 Codex 09:52:25 在读取 skill 后即上游 503：`Unable to verify Daybreak Blue access`，request `1f24778d-646d-417d-b749-114442a8f2c3`。没有导航/采集产品，没有原件；PID 44491 进程组停止、heldPermits=[]。R2 archive 的五份错误/过程文件、167,924 字节全部回读大小/hash一致。它不能作为库存或 profile 修复失败/成功的证据。
+
+Server 二 Codex login status 仍已登录 ChatGPT。等待后的一次独立 30 秒连接测试（不使用工具、不访问网站，目录 `manual-releases/dtc-native-20261002/provider-probe-GW580C`）返回 complete/OK。确认当时服务恢复后，手动启动新的第九轮验收 `169c3416-fad4-4e11-8c47-a3e5e4b98fae`，09:57:57 受理；旧失败 Workflow/Review 保持原样。09:52:23 fleet 检查 Server 一七进程 ready、OCR 4/4 healthy。DTC 批量继续 paused；当前仍无新原生路径端到端通过。
+
+补充停止账本只读核验：第六、七轮各四项停止证明齐全，精确任务页分别于 09:23:20.785 / 09:38:06.476 验证 absent，许可分别于 09:23:59.638 / 09:38:39.699 自然释放。不是只删了许可账目。
+
+## 第九轮字段污染复现与结构解析修复（10:11 UTC）
+
+第九轮 `169c3416-fad4-4e11-8c47-a3e5e4b98fae` 于 10:05:32 结束 Codex、10:06:15 业务 Review `DTC.CAPTURE_REVIEW`，reasonCode=`field_contamination_supplement_facts`。品牌 Solaray、网站唯一规格、两张完整图库均保存，真实记录 availability=InStock、唯一规格 available=true，库存修复已在真实页面采集中生效。R2 archive 的 38 份文件、7,254,667 字节全部回读大小/SHA-256一致；heldPermits=[]。全部旧原件和 Review 保留。
+
+预览文件手写了正确的页面字段，但正式 upgradeProducts 沿用通用 fallback，保存结果仍把 Ingredients 配给 Directions、把用法配给 notes，并把 Directions 和含 supplement 的 FAQ 拼入 Facts。模型采后将 profile-validation 标记失败，没有删除/重抓或篡改 records。CRAWLV3-166 继续 In Progress，不能把提示词要求等同于实现。
+
+根因已从留存 HTML 对照：旧 traitBlockRe 把嵌套 accordion__content 当成新区块边界，前一正文与后一 summary 配对；buildSupplementFacts 又把 Directions/notes/storage 及任何含 supplement 的标题当 Facts。修复以已有版本 linkedom 解析区块结构，按同一 details/summary、ARIA controls、同一 accordion 行或有界 heading/body 配对，不跨相邻区块；Facts 只接受真实 Facts/营养/活性成分表标题和表格，图片形式无文本时留空，图像仍按完整图库保留给下游。显式模型字段映射保留。采前预览要求调用实际提取方法，不能手写期望值代替。
+
+87 项本地纯回归通过；新增 Mini 真实原件回放使用原 HTML 实际重新提取字段，而非复用错误 records.fields，检查 Directions、Ingredients、空文本 Facts，再在独立临时目录校验品牌、规格、图库、字节及库存。Mini 原件回放、部署与新端到端任务尚待完成。目录耗尽、HMW 多规格和 Worker SIGKILL 异常恢复仍未验收。
