@@ -20,7 +20,8 @@ export interface DtcRendered {
 function productImages(product: PlatformProduct, site: DtcSitePolicy) {
   const galleries = product.images.map((url) => ({
     url,
-    variantId: null,
+    // A sole verified variant owns this product's gallery; shared multi-variant images stay unassigned.
+    variantId: product.variants.length <= 1 ? product.selectedVariantId : null,
     basis: "product-gallery" as const,
     verifiedOriginal: false as const,
   }));

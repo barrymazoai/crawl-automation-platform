@@ -64,9 +64,10 @@ const html = `<link rel="canonical" href="${url}"><main><h1>Sleep</h1>
   sku: "123",
   url,
   brand: { name: "Beta" },
+  image: `${origin}/label.jpg`,
   description: "Serving Size: 2 capsules. Magnesium 100 mg. Other Ingredients: cellulose.",
-  offers: { price: "12.50", priceCurrency: "USD" },
-})}</script></main>`;
+  offers: { url: `${url}?variant=11`, price: "12.50", priceCurrency: "USD" },
+})}</script><form action="/cart/add"><input name="id" value="11"></form></main>`;
 
 function memoryStore(): ObjectStore {
   const data = new Map<string, Uint8Array>();
@@ -282,6 +283,11 @@ it("rejects the cross-brand task and plans only the matching brand task", async 
       );
       expect(plan.input.owner.sourceId).toBe(input.sourceId);
       expect(plan.product.brandRaw).toBe("Beta");
+      expect(plan.input.owner.variantId).toBe("11");
+      expect(plan.product.imageCandidates).toEqual([
+        expect.objectContaining({ url: `${origin}/label.jpg`, variantId: "11" }),
+      ]);
+      expect(plan.files).toHaveLength(1);
       expect(plan.product.warnings).not.toContain("DTC.BRAND_MISMATCH");
     }),
   );

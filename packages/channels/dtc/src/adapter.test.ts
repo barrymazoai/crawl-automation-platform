@@ -72,8 +72,10 @@ describe("DTC adapter contracts (small synthetic boundary cases, not saved-page 
     expect(parsed.variants[0]?.variantId).toBe("11");
   });
   it("takes gallery and accordion images without recommendations", () => {
-    const urls = adapter.parseProduct(page()).evidence.imageCandidates.map((image) => image.url);
+    const images = adapter.parseProduct(page()).evidence.imageCandidates;
+    const urls = images.map((image) => image.url);
     expect(urls).toEqual(["https://shop.example/front.jpg", "https://shop.example/label.jpg"]);
+    expect(images.every((image) => image.variantId === "11")).toBe(true);
   });
   it.each([
     [true, "InStock"],
@@ -131,6 +133,7 @@ describe("DTC adapter contracts (small synthetic boundary cases, not saved-page 
     );
     expect(parsed.facts.complete).toBe(false);
     expect(parsed.evidence.factsCandidates[0]?.scope).toBe("product-unassigned-variant");
+    expect(parsed.evidence.imageCandidates.every((image) => image.variantId === null)).toBe(true);
   });
   it("reports a canonical identity conflict before requiring product content", () => {
     const wrong = {
