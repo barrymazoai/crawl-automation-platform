@@ -149,7 +149,11 @@ it("uses an explicit website-shared scope only when retained and does not infer 
   for (const context of contexts) {
     context.methodPath = "base-method.json";
     context.basis = "website-shared";
-    context.reason = "Website says these details apply to both package sizes";
+    context.reason = "Website explicitly names both options for these details";
+    context.sharedScope = {
+      rule: { source: 0, pointer: "/product/shared_scope" },
+      text: "These product details and the shared gallery apply to Orange and Berry.",
+    };
     context.difference = { kind: "size", group: "Size" };
   }
   test.input.review.imageAssignments.forEach((image) => {
@@ -159,6 +163,35 @@ it("uses an explicit website-shared scope only when retained and does not infer 
   expect(members.map((member) => member.status)).toEqual(["ready", "ready"]);
   expect(members[1]).toMatchObject({ planned: { family: { differsBy: "size" } } });
 });
+
+it.each(["missing", "quote", "location", "source"])(
+  "rejects a %s that does not prove the saved shared-scope statement",
+  async (changed) => {
+    const context = (test.input.review.variantContexts as Record<string, unknown>[])[0];
+    if (!context) {
+      throw new Error("Fixture context missing");
+    }
+    Object.assign(context, {
+      methodPath: "base-method.json",
+      basis: "website-shared",
+      reason: "The same product carousel is displayed for both website variants",
+      sharedScope:
+        changed === "missing"
+          ? undefined
+          : {
+              rule: {
+                source: changed === "source" ? 1 : 0,
+                pointer: changed === "location" ? "/product/missing" : "/product/shared_scope",
+              },
+              text:
+                changed === "quote"
+                  ? "Invented same-formula claim"
+                  : "These product details and the shared gallery apply to Orange and Berry.",
+            },
+    });
+    expect((await test.publish()).map((member) => member.status)).toEqual(["review", "ready"]);
+  },
+);
 
 it("does not relabel an R2 publication failure as variant ambiguity", async () => {
   vi.spyOn(test.publication, "publish").mockRejectedValue(new Error("R2 unavailable"));
@@ -215,6 +248,7 @@ async function variantCaptureFixture() {
         title: "Zinc",
         vendor: "Actual Brand",
         body_html: "Website base description",
+        shared_scope: "These product details and the shared gallery apply to Orange and Berry.",
         options: ["Flavour"],
         variants: [
           {

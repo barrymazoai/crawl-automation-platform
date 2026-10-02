@@ -12,10 +12,21 @@ const hash = bytes => createHash("sha256").update(bytes).digest("hex");
 
 /** Execute only the exact sources/locations chosen by the model. No discovery or fallback. */
 export async function readObservedProduct(root, method) {
+  const sources = await readSources(root, method);
+  const requested = new URL(method.productUrl);
+  return productFromSources(method, requested, sources);
+}
+
+/** Replay one model-observed proof location using the same immutable source checks. */
+export async function readObservedField(root, method, rule) {
+  return readField(rule, await readSources(root, method));
+}
+
+async function readSources(root, method) {
   if (method?.codec !== "observed-product/1" || !Array.isArray(method.sources)
     || !method.sources.length || !method.fields || typeof method.fields !== "object") fail("method_required");
   const requested = new URL(method.productUrl);
-  const sources = await Promise.all(method.sources.map(async source => {
+  return Promise.all(method.sources.map(async source => {
     const url = new URL(source.url);
     const expectedPath = requested.pathname.replace(/\/$/, "");
     if (url.origin !== requested.origin || ![expectedPath, `${expectedPath}.json`].includes(url.pathname.replace(/\/$/, ""))) fail("source_identity");
@@ -28,6 +39,9 @@ export async function readObservedProduct(root, method) {
     if (!["dom", "json"].includes(source.kind)) fail("source_kind");
     return { ...source, text: bytes.toString(), value: source.kind === "json" ? JSON.parse(bytes) : parseHTML(bytes.toString()).document };
   }));
+}
+
+function productFromSources(method, requested, sources) {
   const fields = Object.fromEntries(Object.entries(method.fields).map(([name, rule]) => [name, readField(rule, sources)]));
   const platform = method.platform ? readShopify(method, sources) : null;
   if (!fields.title || !fields.brand) fail("title_or_brand_missing");

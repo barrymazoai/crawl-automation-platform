@@ -16,6 +16,7 @@ fields.title 和 fields.brand 必须来自实际商品页面/该商品的平台�
 selectedVariantId 记录页面实际选中的规格ID，即使派发的是基础商品URL；这不改变基础商品任务身份，无法确认才填null。
 imageAssignments 只记录网站数据或实际切换证据支持的图片归属；未明确绑定的商品共用图保留 variantId:null，不因此返回 needs_review，不强行分配给当前规格。缺失原图或规格未采齐才属于采集不完整；后续处理负责判断图片内容及适用规格。
 多规格商品还要读取任务根目录 variant-context.schema.json，在 capture-review.json.variantContexts 为每个网站规格保存一项；显式派发某一规格时至少记录该规格。不要执行后续语义处理或逐规格复制字段值。按 native-product-method.md 的逐规格交接规则保存本次实际观察的方法和适用资料范围。无法确认某一规格的资料范围时记录 status:unresolved 及原因，其他规格继续；这不使已完成的基础商品采集返回 needs_review。
+website-shared 不能仅凭共用轮播或默认选项：必须提供 sharedScope 的网站明确声明原文及确切来源位置。缺少声明就实际操作规格并保存 variant-state；仍无法确认则 unresolved，不能用自由文本 reason 代替网站依据。
 禁止执行 semantic queue、enrich 或旧 API-ready 导出；后续系统用本次原件处理。`;
 
 export const catalogInstructions = `按旧采集流程先视觉确认站点身份和完整目录族，制定路线与终止契约，再用 discoverCatalog 复用旧 ENUMERATE 阶段及 Shopify 目录对账。普通目录按契约遍历至零增长；符合旧有界规则的 Shopify 单目录可用页面/目录结果/对应接口完整集合相同及空终页证明，不强制重复遍历。证明选择在采前完成。

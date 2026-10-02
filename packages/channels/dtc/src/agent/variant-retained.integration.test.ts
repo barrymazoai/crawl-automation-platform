@@ -64,6 +64,30 @@ it.skipIf(!process.env["CRAWL_RETAINED_DTC_SINGLE_CAPTURE"])(
   },
 );
 
+it.skipIf(!process.env["CRAWL_RETAINED_DTC_UNPROVEN_SHARED_CAPTURE"])(
+  "rejects HMW's real unsupported website-shared assertion without changing its retained originals",
+  async () => {
+    const { result, data } = await retained(
+      process.env["CRAWL_RETAINED_DTC_UNPROVEN_SHARED_CAPTURE"] ?? "",
+    );
+    if (result.status !== "captured") {
+      throw new Error("Expected archived product");
+    }
+    expect(
+      result.variants?.map((member) => ({ status: member.status, sku: member.variant.sku })),
+    ).toEqual([
+      { status: "review", sku: "012" },
+      { status: "review", sku: "022" },
+    ]);
+    expect(
+      [...data.keys()].filter(
+        (key) => key.includes("dtc-variant-") && key.endsWith("projection.json"),
+      ),
+    ).toHaveLength(0);
+    expect(result.variantPages?.map((entry) => entry.page.commerce?.sku)).toEqual(["012", "022"]);
+  },
+);
+
 async function retained(workspace: string) {
   const root = join(workspace, "capture");
   const records = JSON.parse(await readFile(join(root, "evidence/records.json"), "utf8"));

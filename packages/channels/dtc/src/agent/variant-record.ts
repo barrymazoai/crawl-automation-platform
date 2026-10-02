@@ -1,5 +1,8 @@
 import { isDeepStrictEqual } from "node:util";
-import { readObservedProduct } from "../../../../../crawl-products/lib/observed-product.mjs";
+import {
+  readObservedProduct,
+  readObservedField,
+} from "../../../../../crawl-products/lib/observed-product.mjs";
 import { captureFile, type CaptureFile } from "./archive.js";
 import { verifyMethod, type HarvestRecord, type CaptureReview } from "./product-record.js";
 import { VariantContextSchema, type ObservedVariantContext } from "./variant-review.js";
@@ -25,7 +28,9 @@ export async function readVariantRecord(input: VariantRecordInput, variantId: st
   ) {
     throw new Error("variant_method_not_archived");
   }
-  const observed = await readObservedProduct(input.root, JSON.parse(method.toString()));
+  const sourceMethod = JSON.parse(method.toString());
+  const observed = await readObservedProduct(input.root, sourceMethod);
+  await verifySharedScope(input.root, sourceMethod, context);
   verifyIdentity(input, { context, observed, variantId });
   const record: HarvestRecord = {
     ...input.record,
@@ -48,6 +53,15 @@ export async function readVariantRecord(input: VariantRecordInput, variantId: st
     })),
   };
   return { record, review, context };
+}
+
+async function verifySharedScope(root: string, method: unknown, context: ObservedVariantContext) {
+  if (context.basis === "website-shared") {
+    const statement = await readObservedField(root, method, context.sharedScope.rule);
+    if (typeof statement !== "string" || statement !== context.sharedScope.text) {
+      throw new Error("variant_shared_scope_statement_mismatch");
+    }
+  }
 }
 
 function readContext(input: VariantRecordInput, variantId: string) {

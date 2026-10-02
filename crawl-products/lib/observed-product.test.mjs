@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createHash } from "node:crypto";
 import { afterEach, expect, it } from "vitest";
-import { readObservedProduct, verifyObservedProduct } from "./observed-product.mjs";
+import { readObservedProduct, readObservedField, verifyObservedProduct } from "./observed-product.mjs";
 
 const roots = [], url = "https://shop.test/products/travel-pack";
 afterEach(async () => { await Promise.all(roots.splice(0).map(root => rm(root, { recursive: true, force: true }))); });
@@ -32,6 +32,15 @@ it("executes the observed full CSS location without fallback, retaining full tex
   expect(record.variants).toMatchObject([{ sku: "012", price: "9.99", available: false }, { sku: "022", price: "34.99", available: true }]);
   expect(record.fields.price).toBeUndefined();
   await verifyObservedProduct(root, record);
+});
+
+it("replays a proof location using the same source identity and hash checks", async () => {
+  const { root, method } = await fixture();
+  const rule = { source: 0, selector: "main h1" };
+  expect(await readObservedField(root, method, rule)).toBe("Travel Pack");
+  await expect(readObservedField(root, method, { ...rule, selector: ".absent" })).rejects.toThrow("selector_not_unique");
+  await writeFile(join(root, "page.html"), "changed website statement");
+  await expect(readObservedField(root, method, rule)).rejects.toThrow("source_hash");
 });
 
 it.each(["missing", "ambiguous", "invalid"])("rejects a %s observed node without consulting whole-page text", async kind => {

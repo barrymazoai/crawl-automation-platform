@@ -6,16 +6,30 @@ const proof = {
   reason: z.string().min(1).max(4000),
   evidence: z.array(z.string()).min(1).max(200),
 };
-export const VariantContextSchema = z.discriminatedUnion("status", [
+const observed = z.strictObject({
+  ...proof,
+  status: z.literal("observed"),
+  methodPath: z.string().min(1),
+  galleryUrls: z.array(z.url()).min(1).max(100),
+  difference: z.strictObject({ kind: FamilyDifferenceSchema, group: z.string().min(1) }).optional(),
+});
+const location = {
+  source: z.number().int().nonnegative(),
+  format: z.enum(["raw", "html-text"]).optional(),
+};
+const scopeRule = z.union([
   z.strictObject({
-    ...proof,
-    status: z.literal("observed"),
-    methodPath: z.string().min(1),
-    galleryUrls: z.array(z.url()).min(1).max(100),
-    basis: z.enum(["variant-state", "website-shared"]),
-    difference: z
-      .strictObject({ kind: FamilyDifferenceSchema, group: z.string().min(1) })
-      .optional(),
+    ...location,
+    selector: z.string().min(1),
+    attribute: z.string().min(1).optional(),
+  }),
+  z.strictObject({ ...location, pointer: z.string().startsWith("/") }),
+]);
+export const VariantContextSchema = z.union([
+  observed.extend({ basis: z.literal("variant-state") }),
+  observed.extend({
+    basis: z.literal("website-shared"),
+    sharedScope: z.strictObject({ rule: scopeRule, text: z.string().min(1).max(16000) }),
   }),
   z.strictObject({ ...proof, status: z.literal("unresolved") }),
 ]);
