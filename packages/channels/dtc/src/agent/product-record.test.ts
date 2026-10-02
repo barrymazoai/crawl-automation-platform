@@ -178,7 +178,7 @@ it.each([1, 2])(
     expect(
       project().evidence.imageCandidates.map((candidate) => [candidate.url, candidate.variantId]),
     ).toEqual([
-      [image, "one"],
+      [image, count === 1 ? "one" : null],
       [facts, count === 1 ? "one" : null],
     ]);
     if (count === 2) {
@@ -190,8 +190,22 @@ it.each([1, 2])(
       });
       expect(project().evidence.imageCandidates.at(-1)).toMatchObject({
         url: other,
-        variantId: "two",
+        variantId: null,
+        basis: "product-gallery",
       });
+      expect(result.review.imageAssignments.at(-1)?.variantId).toBe("two");
+      const explicit = capturedProductProjection({
+        ...result,
+        url: `${url}?variant=one`,
+        site: dtcSitePolicy({
+          siteKey: "shop.example",
+          platform: "shopify",
+          catalogUrl: "https://shop.example/collections/all",
+        }),
+      });
+      expect(project().identity.variantId).toBeNull();
+      expect(explicit.identity.variantId).toBe("one");
+      expect(explicit.evidence.imageCandidates.at(-1)?.variantId).toBe("two");
     }
   },
 );

@@ -4,6 +4,7 @@ import { dtcBrandEvidence } from "../brand-evidence.js";
 import { dtcBrandSource } from "../brand-source.js";
 import type { DtcSitePolicy } from "../site-policy.js";
 import type { HarvestRecord, CaptureReview } from "./product-record.js";
+import { capturedProductBrand } from "./product-brand.js";
 
 /** An observed different brand retains the existing source-specific unlisted outcome. */
 export function capturedBrandSighting(input: {
@@ -12,10 +13,11 @@ export function capturedBrandSighting(input: {
   record: HarvestRecord;
   review: CaptureReview;
   archiveKey: string;
+  html?: Uint8Array;
 }): Extract<BrowserCaptureResult, { status: "sighted" }> | null {
-  const { request, site, record, review, archiveKey } = input;
+  const { request, site, review, archiveKey } = input;
   const source = request.sourceUrl ? dtcBrandSource(request.sourceUrl, [site]) : null;
-  const brand = typeof record.fields.brand === "string" ? record.fields.brand : null;
+  const brand = capturedProductBrand({ ...input, url: request.url });
   if (dtcBrandEvidence(site, brand, source).status !== "mismatch") {
     return null;
   }

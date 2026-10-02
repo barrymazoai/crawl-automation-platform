@@ -63,3 +63,13 @@ Server 一 Docker/Postgres 已恢复。第二轮真实 Workflow ID 为 `product-
 用户进一步纠正：规格来自网站自身，而非图片。已移除新 capture projection 中 `variant_gallery_unassigned` 的前置拒绝及按默认规格筛掉其余图片的行为；交接保留全部网站 variants 和全部图库候选，单规格共享图片可归属唯一规格，多规格未明确绑定的图片维持 null、已知其他规格图片保持其原 ID。prompt 明确 SKU/选项/平台数据才是规格来源，共用图片未绑定本身不构成采集失败。没有放松后续 planner 的规格隔离，当前后续处理对多规格共享素材仍可能产生 CHANNEL.VARIANT_CONFLICT；CRAWLV3-155 继续跟踪旧版按基础商品处理后展开规格与现行处理链的差异，不能把本次修复称为多规格端到端通过。
 
 `fa7bd351e52af7f9d250aabd618dcc4b247407da` 已提交 main 并推送（完整 pre-push check 通过）。Server 二通过 origin/main fresh clone 到 `manual-releases/dtc-native-handoff-fa7bd35/source`，安装锁定依赖；40 项采集/下游交接回归通过。用第三轮原件只读重放新交接：76 个文件、13,138,224 字节全部大小/hash 一致，根目录截图引用通过，新 projection 保留网站唯一规格（SKU 076280471052、100 ct、价格11.89）及两张原图。该验证仅使用内存 publication，没有访问网站、写 R2、启动新业务或更改旧 Review；它验证原件交接和归档遍历，不代表真实 R2 上传超时已验收。生产 Worker 仍为 Server 二 `3cf56e9`、Server 一 `92d4cb3`，本次修复尚未切换生产。
+
+## 第四轮归档通过，品牌交接修复（08:54 UTC）
+
+Server 二于 08:40:19 经 origin/main fresh clone/build 部署 `7df2d24`，Worker 健康确认；Server 一保持 `92d4cb3`。第四轮 Solaray run `51c8c9d7-f31e-4005-8575-35a645e558fe` 于 08:40:45 受理。Codex 原生 Ego 采集保存 1 条商品、1 个网站规格和 2 张实际图库原图，08:49:41 退出；p99 / `6D352C4FF1AA874407CEBC98E96713A9` 于 08:49:42 关闭并核验不存在。R2 archive.json 的 30 份文件共 5,268,756 字节全部回读核验大小和 SHA-256，归档约 52 秒内完成。heldPermits=[]，旧失败没有重试或覆盖。
+
+最终业务结果仍为 Review `DTC.BRAND_UNVERIFIED`（08:50:34）。records.fields 未保存 brand，而原始 HTML 中本商品 URL 匹配的 Product schema 明确写有 Solaray。修复交接从已留存的本商品 schema 补读缺失品牌，拒绝异商品/重定向/歧义 schema，不用任务来源名称猜品牌，也不覆盖已采集的异品牌；prompt 同时明确采集品牌及其出处。这不改变 Codex 视觉决定路线、图库与旧 runHarvest 保存原件的分工。
+
+另核对旧 V3 `archive/packages/v3-channels/src/dtc-rendered.ts`：旧交接使用基础商品 variantId=null；完整 variants 原件留存，但不等于自动逐规格提交已实现。修复新 capture 对多规格基础 URL 的默认规格误绑定：基础商品任务按商品级交接全图库，原始规格及图片对应关系仍在不可变 records/review 中；显式规格 URL 保留严格隔离。未将共用成分表无证据复制到不同配方。33 项纯回归通过；Mini 下游交接及真实多规格仍待验收，CRAWLV3-155 已设 In Progress。
+
+补充日志审计：Codex 官方 exec JSONL emitter 只输出已映射事件，缺少独立 view_image 事件不能证明模型没有看图。当前证据是原生截图、图库切换、实际保存原图和模型逐图记录；不得把缺失日志事件当成失败断言。仍需核验具体原图内容。

@@ -29,7 +29,7 @@ export async function cleanupCaptures() {
 
 export function mockCapture(
   publication: RetainedPublication,
-  input: { url: string; html: string },
+  input: { url: string; html: string; variantCount?: number },
 ) {
   return vi.spyOn(DtcCaptureAgent.prototype, "capture").mockImplementation(async (request) => {
     const image = `${new URL(input.url).origin}/label.jpg`;
@@ -40,28 +40,41 @@ export function mockCapture(
         {
           productUrl: input.url,
           fields: { title: "Sleep", brand: "Beta", price: "12.50", currency: "USD" },
-          variants: [{ variantId: "11", url: `${input.url}?variant=11` }],
+          variants: websiteVariants(input),
           pageHtml: "product.html",
           gallery: [{ url: image, localPath: "front.png", mime: "image/png" }],
           flags: [],
         },
       ]),
-      "capture-review.json": JSON.stringify({
-        productUrl: input.url,
-        selectedVariantId: "11",
-        galleryUrls: [image],
-        galleryComplete: true,
-        variantsComplete: true,
-        detailComplete: true,
-        method: "fixture visual review",
-        surface: "local_file",
-        verifier: "codex",
-        evidence: ["front.png"],
-        imageAssignments: [{ url: image, variantId: "11", basis: "variant-featured" }],
-      }),
+      "capture-review.json": JSON.stringify(reviewFixture(input, image)),
     };
     return retainedFixture(publication, { operationId: request.operationId, files });
   });
+}
+
+function reviewFixture(input: { url: string; variantCount?: number }, image: string) {
+  return {
+    productUrl: input.url,
+    selectedVariantId: "11",
+    galleryUrls: [image],
+    galleryComplete: true,
+    variantsComplete: true,
+    detailComplete: true,
+    method: "fixture visual review",
+    surface: "local_file",
+    verifier: "codex",
+    evidence: ["front.png"],
+    imageAssignments: [
+      { url: image, variantId: input.variantCount === 2 ? null : "11", basis: "product-gallery" },
+    ],
+  };
+}
+
+function websiteVariants(input: { url: string; variantCount?: number }) {
+  return ["11", "22"].slice(0, input.variantCount ?? 1).map((variantId) => ({
+    variantId,
+    url: `${input.url}?variant=${variantId}`,
+  }));
 }
 
 export async function catalogFixture(

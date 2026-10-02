@@ -102,7 +102,7 @@ function memoryStore(): ObjectStore {
   };
 }
 
-function setup(single = false) {
+function setup(single = false, variantCount = 1) {
   const browser = BrowserSettingsSchema.parse({
     resourceId: "mini-ego-space-1",
     dtcAgent: agentSettings,
@@ -175,7 +175,7 @@ function setup(single = false) {
     fileTransport: { egressId: "test-files" },
   } as unknown as CoreParts;
   const parts = { ...core, browser: buildBrowserParts(core), channelPlans } as WorkerParts;
-  const read = mockCapture(publication, { url, html });
+  const read = mockCapture(publication, { url, html, variantCount });
   return { parts, read, publication, records };
 }
 
@@ -330,24 +330,28 @@ it("refuses planning a capture under another brand's catalog", async () => {
   expect(test.records.size).toBe(1);
 });
 
-it("keeps single-brand evidence and legacy activity inputs unchanged", async () => {
-  const test = setup(true);
-  const [input] = await queuedInputs(test.parts, [alphaUrl]);
-  if (!input) {
-    throw new Error("Expected queued input");
-  }
-  const sourcePlan = await capture(test.parts, input);
-  const projection = await retained(test.publication, sourcePlan.source.objectKey);
-  expect(projection.codec).toBe("channel-product/1");
-  expect(projection.brandRaw).toBe("shop.example");
-  const { sourceUrl: _sourceUrl, ...legacy } = input;
-  const legacyPlan = await capture(test.parts, { ...legacy, operationId: "legacy-capture" });
-  expect(legacyPlan.owner.variantId).toBe(sourcePlan.owner.variantId);
-  expect(await pipelineActivities(test.parts).prepareChannelProduct?.(sourcePlan)).toMatchObject({
-    status: "prepared",
-  });
-  expect(test.read).toHaveBeenCalledTimes(2);
-});
+it.each([1, 2])(
+  "plans a single-brand capture and legacy input with %i website variants",
+  async (variantCount) => {
+    const test = setup(true, variantCount);
+    const [input] = await queuedInputs(test.parts, [alphaUrl]);
+    if (!input) {
+      throw new Error("Expected queued input");
+    }
+    const sourcePlan = await capture(test.parts, input);
+    const projection = await retained(test.publication, sourcePlan.source.objectKey);
+    expect(projection.codec).toBe("channel-product/1");
+    expect(sourcePlan.owner.variantId).toBe(variantCount === 1 ? "11" : null);
+    expect(projection.variants).toHaveLength(variantCount);
+    const { sourceUrl: _sourceUrl, ...legacy } = input;
+    const legacyPlan = await capture(test.parts, { ...legacy, operationId: "legacy-capture" });
+    expect(legacyPlan.owner.variantId).toBe(sourcePlan.owner.variantId);
+    expect(await pipelineActivities(test.parts).prepareChannelProduct?.(sourcePlan)).toMatchObject({
+      status: "prepared",
+    });
+    expect(test.read).toHaveBeenCalledTimes(2);
+  },
+);
 
 it.each([false, true])(
   "scans only the requested brand collection (foreign next: %s)",

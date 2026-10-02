@@ -6,6 +6,7 @@ import { dtcBrandSource } from "../brand-source.js";
 import type { DtcSitePolicy } from "../site-policy.js";
 import type { DtcRendered } from "../evidence.js";
 import type { HarvestRecord, CaptureReview } from "./product-record.js";
+import { capturedProductBrand } from "./product-brand.js";
 
 /** Converts retained harvest evidence only; no fixed DOM/gallery selector or new website fetch. */
 interface ProjectionInput {
@@ -14,16 +15,18 @@ interface ProjectionInput {
   site: DtcSitePolicy;
   url: string;
   sourceUrl?: string | undefined;
+  html?: Uint8Array;
 }
 
 export function capturedProductProjection(input: ProjectionInput): ParsedProduct<DtcRendered> {
-  const { record, review, site } = input;
+  const { record, site } = input;
   const address = dtcProductAddress(input.url, [site]);
   const source =
     input.sourceUrl && site.kind === "multi-brand" ? dtcBrandSource(input.sourceUrl, [site]) : null;
-  const brandEvidence = dtcBrandEvidence(site, stringField(record, "brand"), source);
+  const brandEvidence = dtcBrandEvidence(site, capturedProductBrand(input), source);
   assertDtcBrandVerified(brandEvidence);
-  const identity = { listingId: address.listingId, variantId: review.selectedVariantId };
+  const variantId = captureVariant(input);
+  const identity = { listingId: address.listingId, variantId };
   const factsHtml = stringField(record, "supplement_facts") ?? stringField(record, "facts_table");
   const facts = completeFacts(record.variants.length > 1 ? null : factsHtml);
   const evidence = productEvidence(input, brandEvidence.observedBrand);
@@ -48,14 +51,14 @@ export function capturedProductProjection(input: ProjectionInput): ParsedProduct
 }
 
 function productEvidence(input: ProjectionInput, observedBrand: string | null) {
-  const { record, review, site } = input;
+  const { record, site } = input;
   const address = dtcProductAddress(input.url, [site]);
   const factsHtml = stringField(record, "supplement_facts") ?? stringField(record, "facts_table");
   return ChannelProductEvidenceSchema.parse({
     codec: "channel-product/1",
     channel: "dtc",
     listingId: address.listingId,
-    variantId: review.selectedVariantId,
+    variantId: captureVariant(input),
     url: input.url,
     title: stringField(record, "title"),
     brandRaw: site.kind === "single-brand" ? site.siteKey : observedBrand,
@@ -76,17 +79,32 @@ function productEvidence(input: ProjectionInput, observedBrand: string | null) {
           },
         ]
       : [],
-    imageCandidates: capturedImages(review, record.variants.length),
+    imageCandidates: capturedImages(input),
     warnings: record.flags,
   });
 }
 
-function capturedImages(review: CaptureReview, variantCount: number) {
-  // Capture retains every image. Only the downstream planner decides variant-scoped use.
+function captureVariant(input: ProjectionInput) {
+  const address = dtcProductAddress(input.url, [input.site]);
+  // A base-product task must not become a variant task merely because the page selected a default.
+  return (
+    address.variantId ?? (input.record.variants.length > 1 ? null : input.review.selectedVariantId)
+  );
+}
+
+function capturedImages(input: ProjectionInput) {
+  const { review, record } = input;
+  const baseProduct = record.variants.length > 1 && captureVariant(input) === null;
+  // Website bindings remain byte-exact in archived capture-review.json and records.json.
+  // Match the legacy base-product handoff; explicit variant tasks retain strict source isolation.
   return review.imageAssignments.map((image) => ({
     ...image,
-    variantId:
-      variantCount === 1 && image.variantId === null ? review.selectedVariantId : image.variantId,
+    variantId: baseProduct
+      ? null
+      : record.variants.length === 1 && image.variantId === null
+        ? review.selectedVariantId
+        : image.variantId,
+    basis: baseProduct ? ("product-gallery" as const) : image.basis,
     verifiedOriginal: false as const,
   }));
 }
