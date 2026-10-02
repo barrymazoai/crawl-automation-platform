@@ -15,7 +15,7 @@ export async function pendingBrowserExecutions(
      WHERE p.released_at IS NULL AND s.activity_ended_at IS NOT NULL AND EXISTS (
        SELECT 1 FROM resource_permit_execution e WHERE e.permit_id = p.permit_id
        AND e.identity->>'kind' = 'browser-round' AND e.identity->'metadata'->>'host' = $1
-       AND e.identity->'metadata'->>'protocol' = 'ego-single-page/1'
+       AND e.identity->'metadata'->>'protocol' IN ('ego-single-page/1', 'ego-native-capture/1')
        AND e.identity->>'taskSpaceId' = $2
      ) ORDER BY s.checked_at NULLS FIRST, p.granted_at LIMIT 20`,
     [scope.host, String(scope.taskSpaceId)],

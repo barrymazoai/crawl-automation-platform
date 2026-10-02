@@ -87,3 +87,11 @@ Server 二于 08:40:19 经 origin/main fresh clone/build 部署 `7df2d24`，Work
 `a39efab` 单品入口修复已提交并推送，但 Server 二仍运行 `dbb7944`。新增修复在原生 HTML、平台响应和图片取回时，立即在任务根目录 `native-originals` 写内容哈希命名的独立只读副本及每次捕获 receipt（URL、时间、大小、SHA-256）；每次 harvest 返回模型前同样保存 plan/result/records 快照。宿主既有 archive 会收齐这些副本。副本与 capture 工作目录分开，规范写入只追加，不覆盖同名内容；这不是对恶意模型的操作系统级不可删除保证。采集提示明确禁止删除或 fresh 重跑证据目录，发现采后错误须返回 Review。
 
 原生单品同时新增必填 observedGalleryUrls，由模型在收割前依据本次实际页面确认完整轮播及详情图集合；脚本仅保存这个集合，不采用旧通用图片提取器的关键词/推荐图片区启发式。旧目录发现不变。50 项 harvest/native 纯回归通过，涵盖新入口、保留不同捕获版本、清工作目录后原件仍存在、损坏副本拒绝，以及缺少已观察图库时不开始收割。服务器部署与下一次真实验收尚未完成。
+
+## 第六轮进行中与恢复候选补测（09:21 UTC）
+
+Server 二于 09:14:34 经 origin/main fresh clone/build 部署 `6d5b9a1`，Mini 上 50 项 harvest/native 和 12 项交接/恢复检查通过。第六轮 Solaray `9b94c240-7541-41d5-b720-629fd598fad7` 于 09:15:49 受理；09:20 仍由 Codex 在原生 Ego 中观察两张图库及页面，尚未开始 harvest，不算采集通过。Space 6 的任务页为 p101 / `B5A8A4679B3953FC7B79ABCC96A7FE58`，基线页保持不动。Server 一保持 `92d4cb3`，DTC 批量队列 paused。
+
+第五轮取消的四项停止证明全部齐全：Codex 进程组不存在、CLI 已退出、精确任务页 absent、round 已结束，09:06:23 许可自然释放。该正常取消验证不等于 Worker 被强杀后的 orphan Codex 自动清理已实现。
+
+CRAWLV3-150 补查发现自动恢复候选 SQL 只认 `ego-single-page/1`，遗漏新 `ego-native-capture/1`。修复只加入新协议，保留活动已结束、本机、本空间、许可未释放的筛选；恢复执行器仍要求 Codex 停止证明后才关闭任务页和释放资源。新增 PostgreSQL 集成测试使用独立连接的临时表并回滚，验证 native/legacy 命中，运行中、已释放、异机器、异空间及未知协议排除。类型/lint 和七项纯恢复/准入回归已通过；数据库集成测试待 Mini 执行，此修复尚未部署。当前正常采集不会为此重启。
