@@ -4,7 +4,6 @@ import {
   PostgresResourceStore,
 } from "@crawl-automation/adapters";
 import { beforeEach, afterEach, expect, it, vi } from "vitest";
-
 import {
   agentSettings,
   cleanupCaptures,
@@ -340,9 +339,10 @@ it.each([1, 2])(
     }
     const sourcePlan = await capture(test.parts, input);
     const projection = await retained(test.publication, sourcePlan.source.objectKey);
-    expect(projection.codec).toBe("channel-product/1");
+    expect(projection.codec).toBe("dtc-product/2");
+    expect(projection.brandEvidence).toMatchObject({ status: "site-brand", observedBrand: "Beta" });
     expect(sourcePlan.owner.variantId).toBe(variantCount === 1 ? "11" : null);
-    expect(projection.variants).toHaveLength(variantCount);
+    expect(projection.evidence.variants).toHaveLength(variantCount);
     const { sourceUrl: _sourceUrl, ...legacy } = input;
     const legacyPlan = await capture(test.parts, { ...legacy, operationId: "legacy-capture" });
     expect(legacyPlan.owner.variantId).toBe(sourcePlan.owner.variantId);

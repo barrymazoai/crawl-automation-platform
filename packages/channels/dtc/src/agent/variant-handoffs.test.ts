@@ -38,8 +38,10 @@ it("isolates mixed flavour text/images and preserves every website variant inclu
       throw new Error(member.reason);
     }
     const plan = member.planned.sourcePlan;
-    const projection = JSON.parse(
-      Buffer.from(test.data.get(plan.source.objectKey) ?? []).toString(),
+    const saved = JSON.parse(Buffer.from(test.data.get(plan.source.objectKey) ?? []).toString());
+    const projection = saved.evidence;
+    expect(test.input.planning.read(saved, member.variant.url, plan.owner).evidence.brandRaw).toBe(
+      "Actual Brand",
     );
     expect(projection.variantId).toBe(member.variant.variantId);
     expect(projection.variants).toEqual(test.input.parsed.evidence.variants);
@@ -77,6 +79,22 @@ it("isolates mixed flavour text/images and preserves every website variant inclu
   }
   expect(test.input.record.fields).not.toHaveProperty("sku");
   expect(test.input.record.gallery).toHaveLength(2);
+});
+
+it("reads legacy single-brand projections while rejecting a mismatched native brand proof", async () => {
+  const legacy = { ...test.input.parsed.evidence, brandRaw: test.input.site.siteKey };
+  expect(
+    test.input.planning.read(legacy, test.input.request.url, test.input.parsed.identity).evidence
+      .brandRaw,
+  ).toBe(test.input.site.siteKey);
+  const [member] = await test.publish();
+  if (!member || member.status !== "ready") {
+    throw new Error("fixture");
+  }
+  const plan = member.planned.sourcePlan;
+  const saved = JSON.parse(Buffer.from(test.data.get(plan.source.objectKey) ?? []).toString());
+  saved.evidence.brandRaw = "Other Brand";
+  expect(() => test.input.planning.read(saved, member.variant.url, plan.owner)).toThrow();
 });
 
 it.each([

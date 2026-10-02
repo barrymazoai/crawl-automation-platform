@@ -24,7 +24,11 @@ const Projection = z.strictObject({
 });
 
 export function dtcProjection(rendered: DtcRendered) {
-  if (rendered.brandEvidence.status === "site-brand" && rendered.brandEvidence.source === null) {
+  if (
+    rendered.brandEvidence.status === "site-brand" &&
+    rendered.brandEvidence.source === null &&
+    rendered.evidence.brandRaw === rendered.siteKey
+  ) {
     return rendered.evidence;
   }
   return Projection.parse({
@@ -39,7 +43,7 @@ function validateBrand(read: z.infer<typeof Projection>, site: DtcSitePolicy) {
   const source = brandEvidence.source;
   const configured = source ? dtcBrandSource(source.catalogUrl, [site]) : null;
   const expected = dtcBrandEvidence(site, brandEvidence.observedBrand, configured);
-  const brand = site.kind === "single-brand" ? site.siteKey : expected.observedBrand;
+  const brand = expected.observedBrand;
   if (
     !isDeepStrictEqual(brandEvidence, expected) ||
     evidence.brandRaw !== brand ||

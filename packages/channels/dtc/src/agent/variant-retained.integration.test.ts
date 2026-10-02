@@ -8,6 +8,20 @@ import { retainCaptureDirectory, captureOutputFiles } from "./archive.js";
 import { dtcSitePolicy } from "../site-policy.js";
 
 // Mini-only, read-only originals. All derived publications stay in memory; no provider or DB work.
+it.skipIf(!process.env["CRAWL_RETAINED_DTC_LEGACY_CAPTURE"])(
+  "rejects a legacy Solaray record without field provenance rather than fabricating a current proof",
+  async () => {
+    await expect(
+      retained(process.env["CRAWL_RETAINED_DTC_LEGACY_CAPTURE"] ?? ""),
+    ).rejects.toMatchObject({
+      code: "DTC.CAPTURE_EVIDENCE",
+      details: {
+        reason: "observed_method_unverified",
+        message: "Error: DTC.OBSERVED_METHOD:method_required",
+      },
+    });
+  },
+);
 it.skipIf(!process.env["CRAWL_RETAINED_DTC_MULTI_CAPTURE"])(
   "keeps HMW's two old unscoped variants independently unresolved",
   async () => {
