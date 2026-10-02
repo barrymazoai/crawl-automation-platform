@@ -52,8 +52,10 @@ const catalog = {
     ".product-sec .prod-row",
     ".product-list--collection",
   ].join(", "),
-  productLinkSelector: 'a[href*="/products/"], a.woocommerce-LoopProduct-link',
-  nextSelector: 'a[rel="next"], .pagination a.next, a.next.page-numbers',
+  productLinkSelector:
+    'a[href*="/products/"]:not(.trust-score-badge), a.woocommerce-LoopProduct-link',
+  nextSelector:
+    'a[rel="next"], .pagination a.next, a.next.page-numbers, .pagination a[aria-label="Next page" i]',
   emptySelector:
     '.collection--empty, .woocommerce-info[data-empty="true"], [data-catalog-empty="true"]',
 };
