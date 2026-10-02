@@ -12,6 +12,7 @@ vi.mock("@temporalio/activity", () => ({
 
 it("registers the complete permit protocol together for every resource-serving role", async () => {
   const parts = {
+    config: { browser: { resourceId: "mini-ego-space-1", pollLegacyQueue: false } },
     database: {},
     log: createLogger({ name: "test", level: "fatal" }),
   } as WorkerParts;

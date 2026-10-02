@@ -3,6 +3,7 @@ import { checkScanCancellation } from "@crawl-automation/app";
 import { BrowserScanInputSchema, ProductPipelineInputSchema } from "@crawl-automation/workflows";
 import type { WorkerParts } from "../container.js";
 import { guarded } from "./activity-guard.js";
+import { checkBrowserPermit } from "./browser-permit.js";
 
 /**
  * The browser worker's activities (it runs on each Mac mini that has Ego): a browser-captured product page for the
@@ -31,6 +32,16 @@ export function browserActivities(parts: WorkerParts) {
     },
   };
   return Object.fromEntries(
-    Object.entries(handlers).map(([name, handler]) => [name, guarded(name, handler, parts.log)]),
+    Object.entries(handlers).map(([name, run]) => [
+      name,
+      guarded(
+        name,
+        {
+          run,
+          beforePermit: () => checkBrowserPermit(parts),
+        },
+        parts.log,
+      ),
+    ]),
   );
 }

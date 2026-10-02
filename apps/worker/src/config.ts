@@ -25,6 +25,7 @@ import { WholeFoodsHttpScanSettingsSchema } from "@crawl-automation/channels-who
 import { SwansonBrandScanSettingsSchema } from "@crawl-automation/channel-swanson";
 import { CaptureChannelSettingsSchema } from "./capture-channel-settings.js";
 import { BrowserSettingsSchema } from "./browser/browser-settings.js";
+import { validateBrowserWorker } from "./browser/browser-worker-config.js";
 import { ProcessingSettingsSchema } from "./label/processing-settings.js";
 import { WorkerProcessesSchema } from "./processes/process-config.js";
 import { ResourceHealthConfigSchema } from "./resources/resource-health-config.js";
@@ -146,5 +147,6 @@ export const WorkerConfigSchema = z
   })
   .refine((config) => config.processes !== undefined || config.taskQueue !== undefined, {
     message: "Name the processes, or the pipeline's task queue",
-  });
+  })
+  .superRefine(validateBrowserWorker);
 export type WorkerConfig = z.infer<typeof WorkerConfigSchema>;

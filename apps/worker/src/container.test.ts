@@ -121,8 +121,10 @@ async function productionShapedConfig() {
       nodeId: "server-one",
       ocrApi: { baseUrl: "https://ocr.example.test", provider: "paddle-ocr/1", minScore: 0.3 },
     },
+    resourceKinds: { "mini-ego-space-1": "browser" },
     browser: {
-      ego: { cliPath: "/usr/local/bin/ego-browser", taskSpaceId: 1 },
+      resourceId: "mini-ego-space-1",
+      ego: { cliPath: "/usr/local/bin/ego-browser", taskSpaceId: 2 },
       wholefoods: { storeId: "10259", label: "The Alameda", postalCode: "95126" },
     },
   });

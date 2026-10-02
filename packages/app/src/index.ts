@@ -16,6 +16,7 @@ export * from "./runs/run-service.js";
 export * from "./runs/product-runs.js";
 export * from "./runs/list-runs.js";
 export * from "./resources/resource-service.js";
+export * from "./resources/browser-permit.js";
 export * from "./resources/health-ports.js";
 export * from "./resources/resource-health.js";
 export * from "./fleet/fleet-service.js";

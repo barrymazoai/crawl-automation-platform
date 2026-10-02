@@ -4,6 +4,10 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./browser-routing": {
+      "types": "./src/browser/browser-routing.ts",
+      "import": "./src/browser/browser-routing.ts"
+    },
     ".": {
       "types": "./src/index.ts",
       "import": "./src/index.ts"

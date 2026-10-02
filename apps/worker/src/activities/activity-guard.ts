@@ -9,7 +9,13 @@ import { runWithPermitActivity } from "@crawl-automation/app";
 import { inActivityContext } from "./activity-context.js";
 import { activityOutcome, measureActivity } from "./activity-outcome.js";
 
-type Handler = (raw: unknown, signal: AbortSignal) => Promise<unknown>;
+type ActivityHandler = (raw: unknown, signal: AbortSignal) => Promise<unknown>;
+type Handler =
+  | ActivityHandler
+  | {
+      run: ActivityHandler;
+      beforePermit(raw: unknown): Promise<void>;
+    };
 
 const HEARTBEAT_MS = 2_000;
 
@@ -58,14 +64,18 @@ async function executeActivity(
 }
 
 /** Pipeline work must have an exact workflow owner before it can use provider capacity. */
-function executeHandler(handler: Handler, raw: unknown): Promise<unknown> {
+async function executeHandler(handler: Handler, raw: unknown): Promise<unknown> {
   const context = Context.current();
   const { activityId, workflowExecution } = context.info;
   if (!workflowExecution) {
     throw resourceGateErrors.create("RESOURCE.IDENTITY_CONFLICT");
   }
+  if (typeof handler !== "function") {
+    await handler.beforePermit(raw);
+  }
+  const run = typeof handler === "function" ? handler : handler.run;
   return runWithPermitActivity({ activityId, workflowExecution }, () =>
-    handler(raw, context.cancellationSignal),
+    run(raw, context.cancellationSignal),
   );
 }
 

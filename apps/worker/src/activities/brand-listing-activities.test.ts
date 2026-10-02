@@ -19,9 +19,9 @@ beforeEach(() => {
 
 vi.mock("./activity-guard.js", () => ({
   guarded:
-    (_name: string, handler: (raw: unknown, signal: AbortSignal) => Promise<unknown>) =>
+    (_name: string, handler: { run(raw: unknown, signal: AbortSignal): Promise<unknown> }) =>
     (raw: unknown) =>
-      handler(raw, new AbortController().signal),
+      handler.run(raw, new AbortController().signal),
 }));
 afterEach(() => vi.restoreAllMocks());
 

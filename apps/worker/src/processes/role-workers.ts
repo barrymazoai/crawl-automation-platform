@@ -1,4 +1,5 @@
 import type { WorkerSpec } from "@crawl-automation/platform/temporal-worker";
+import { browserTaskQueue, LEGACY_BROWSER_QUEUE } from "@crawl-automation/platform/browser-routing";
 import { browserActivities } from "../activities/browser-activities.js";
 import { collectionActivities } from "../activities/collection-activities.js";
 import { brandListingActivities } from "../activities/brand-listing-activities.js";
@@ -45,13 +46,29 @@ const roleWork: Record<WorkerRole, (parts: WorkerParts) => RoleWork> = {
 
 /** One Temporal worker per role of the process, each on its own task queue with its own limits. */
 export function roleWorkers(roles: readonly ProcessRole[], parts: WorkerParts): WorkerSpec[] {
-  return roles.map((entry) => ({
-    ...roleWork[entry.role](parts),
-    taskQueue: entry.taskQueue,
-    maxConcurrentActivities: entry.maxConcurrentActivities,
-    ...(entry.maxConcurrentWorkflowTasks
-      ? { maxConcurrentWorkflowTasks: entry.maxConcurrentWorkflowTasks }
-      : {}),
-    log: parts.log,
-  }));
+  return roles.flatMap((entry) =>
+    roleQueues(entry, parts).map((taskQueue) => ({
+      ...roleWork[entry.role](parts),
+      taskQueue,
+      maxConcurrentActivities: entry.maxConcurrentActivities,
+      ...(entry.maxConcurrentWorkflowTasks
+        ? { maxConcurrentWorkflowTasks: entry.maxConcurrentWorkflowTasks }
+        : {}),
+      log: parts.log,
+    })),
+  );
+}
+
+function roleQueues(entry: ProcessRole, parts: WorkerParts): string[] {
+  if (entry.role !== "browser") {
+    return [entry.taskQueue];
+  }
+  const browser = parts.config.browser;
+  if (!browser) {
+    return [entry.taskQueue];
+  }
+  return [
+    browserTaskQueue(browser.resourceId),
+    ...(browser.pollLegacyQueue ? [LEGACY_BROWSER_QUEUE] : []),
+  ];
 }

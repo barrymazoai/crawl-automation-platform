@@ -47,7 +47,7 @@ const cases = [
 
 beforeAll(async () => {
   [current, children] = await Promise.all([currentBundle(), childBundle()]);
-  preEnrichment = withoutPatches(current, ["product-enrichment-v1"]);
+  preEnrichment = withoutPatches(current, ["product-enrichment-v1", "browser-resource-routing-v1"]);
   for (const scenario of cases) {
     recordingBundles.set(scenario.name, withoutPatches(preEnrichment, scenario.missing));
   }

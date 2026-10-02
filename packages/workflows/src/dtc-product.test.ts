@@ -78,14 +78,14 @@ async function setup() {
       planned,
     })),
   };
-  env.activities = { pipeline, browser };
+  env.activities = { pipeline, "v3.browser.server2-ego-space-6": browser };
   env.start.mockResolvedValue({ signal: vi.fn(), result: async () => ({ status: "collected" }) });
   const input = {
     ...fixture.input,
     channel: "dtc",
     capture: "browser",
     url: sourcePlan.expectedUrl,
-    queues: { ...fixture.input.queues, browser: "browser" },
+    queues: { ...fixture.input.queues, browser: "v3.browser.server2-ego-space-6" },
   };
   return { pipeline, browser, input, sourcePlan };
 }

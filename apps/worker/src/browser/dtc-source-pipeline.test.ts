@@ -1,6 +1,9 @@
 import { PostgresBrandScans } from "@crawl-automation/adapters";
 import { beforeEach, afterEach, expect, it, vi } from "vitest";
 
+// Routing admission is exercised with the real guard in activities/browser-routing.test.ts.
+vi.mock("../activities/browser-permit.js", () => ({ checkBrowserPermit: vi.fn() }));
+
 vi.mock("@temporalio/activity", () => ({
   Context: {
     current: () => ({
@@ -80,7 +83,8 @@ function memoryStore(): ObjectStore {
 
 function setup(single = false) {
   const browser = BrowserSettingsSchema.parse({
-    ego: { cliPath: "/tmp/not-executed-ego", taskSpaceId: 1 },
+    resourceId: "mini-ego-space-1",
+    ego: { cliPath: "/tmp/not-executed-ego", taskSpaceId: 2 },
     wholefoods: { storeId: "10259", label: "Test", postalCode: "95126" },
     dtc: {
       sites: [

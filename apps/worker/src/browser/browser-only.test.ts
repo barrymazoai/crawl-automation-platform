@@ -9,6 +9,8 @@ import { loadWorkerConfig } from "../load-config.js";
 import { runProcess } from "../processes/run-process.js";
 import { selectProcess } from "../processes/select-process.js";
 import { workerResourceKinds } from "../resources/resource-check.js";
+import { roleWorkers } from "../processes/role-workers.js";
+import type { WorkerParts } from "../container.js";
 
 vi.mock("./browser-recovery-parts.js", () => ({
   runBrowserRecovery: vi.fn(async () => undefined),
@@ -48,7 +50,11 @@ function browserConfig(root: string) {
     processes: {
       browser: {
         roles: [
-          { role: "browser", taskQueue: "v3.browser.wholefoods.v1", maxConcurrentActivities: 1 },
+          {
+            role: "browser",
+            taskQueue: "v3.browser.server2-ego-space-6",
+            maxConcurrentActivities: 1,
+          },
         ],
       },
     },
@@ -82,6 +88,7 @@ function browserConfig(root: string) {
       visionConfigFingerprint: fingerprint,
     },
     browser: {
+      resourceId: "server2-ego-space-6",
       ego: { cliPath: "/test/bin/ego-browser", taskSpaceId: 6 },
       wholefoods: { storeId: "10259", label: "The Alameda", postalCode: "95126" },
     },
@@ -98,6 +105,66 @@ async function load(changes: Record<string, unknown> = {}) {
 }
 
 describe("browser-only worker startup", () => {
+  it("Server 一 polls its own queue and the explicitly enabled legacy queue", () => {
+    const raw = browserConfig("/test");
+    const config = WorkerConfigSchema.parse({
+      ...raw,
+      browser: {
+        ...raw.browser,
+        resourceId: "mini-ego-space-1",
+        pollLegacyQueue: true,
+        ego: { ...raw.browser.ego, taskSpaceId: 2 },
+      },
+      resourceKinds: { "mini-ego-space-1": "browser" },
+      processes: {
+        browser: { roles: [{ role: "browser", taskQueue: "v3.browser.mini-ego-space-1" }] },
+      },
+    });
+    const parts = { config } as WorkerParts;
+    const queues = roleWorkers(selectProcess(config, "browser").roles, parts).map(
+      (worker) => worker.taskQueue,
+    );
+    expect(queues).toEqual(["v3.browser.mini-ego-space-1", "v3.browser.wholefoods.v1"]);
+  });
+
+  it.each(["v3.browser.wholefoods.v1", "v3.browser.mini-ego-space-1", "pipeline"])(
+    "refuses Server 二's role configured for %s",
+    (taskQueue) => {
+      expect(
+        WorkerConfigSchema.safeParse({
+          ...browserConfig("/test"),
+          processes: { browser: { roles: [{ role: "browser", taskQueue }] } },
+        }).success,
+      ).toBe(false);
+    },
+  );
+
+  it.each([{}, { "server2-ego-space-6": "http-lane" }])(
+    "refuses an undeclared or non-browser local resource kind: %j",
+    (resourceKinds) => {
+      expect(
+        WorkerConfigSchema.safeParse({ ...browserConfig("/test"), resourceKinds }).success,
+      ).toBe(false);
+    },
+  );
+
+  it.each([
+    { "mini-ego-space-1": { taskQueues: ["v3.browser.mini-ego-space-1"] } },
+    { "server2-ego-space-6": { taskQueues: ["v3.browser.wholefoods.v1"] } },
+  ])("refuses foreign or shared-queue browser health targets: %j", (resources) => {
+    expect(
+      WorkerConfigSchema.safeParse({
+        ...browserConfig("/test"),
+        resourceHealth: {
+          controller: "local",
+          minFreeBytes: 0,
+          diskPath: "/tmp",
+          resources,
+        },
+      }).success,
+    ).toBe(false);
+  });
+
   it.each([
     [2, "mini-ego-space-1"],
     [6, "server2-ego-space-6"],
@@ -107,9 +174,21 @@ describe("browser-only worker startup", () => {
       const config = await load({
         browser: {
           ...browserConfig("/test").browser,
+          resourceId,
           ego: { cliPath: "/test/bin/ego-browser", taskSpaceId },
         },
         resourceKinds: { [resourceId]: "browser" },
+        processes: {
+          browser: {
+            roles: [
+              {
+                role: "browser",
+                taskQueue: `v3.browser.${resourceId}`,
+                maxConcurrentActivities: 1,
+              },
+            ],
+          },
+        },
       });
       expect(config.capture).toBeUndefined();
       expect(config.label).toBeUndefined();
@@ -124,7 +203,7 @@ describe("browser-only worker startup", () => {
         await runProcess(selectProcess(config, "browser"), container.cradle);
         expect(runWorkers).toHaveBeenCalledWith(config.temporal, [
           expect.objectContaining({
-            taskQueue: "v3.browser.wholefoods.v1",
+            taskQueue: `v3.browser.${resourceId}`,
             maxConcurrentActivities: 1,
             workflowBundlePath: expect.stringContaining("workflows.cjs"),
             activities: {

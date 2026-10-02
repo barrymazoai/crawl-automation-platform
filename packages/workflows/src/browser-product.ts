@@ -10,6 +10,7 @@ import {
 import { collectFamilyProduct } from "./family-product.js";
 import { once } from "./activity-options.js";
 import { collectCapturedProduct } from "./collect-captured-product.js";
+import { browserRoute } from "./resources/browser-route.js";
 
 /**
  * A browser capture with a plan enters the shared formula pipeline; otherwise it reuses a family formula.
@@ -26,11 +27,17 @@ export async function collectInBrowser(
       pipelineErrors.code("PIPELINE.BROWSER_QUEUE_MISSING"),
     );
   }
-  const gate = versionedResourceGate(input.resources, { ignoreLegacyBinding: true });
+  const route = browserRoute({
+    resources: input.resources,
+    activity: "captureProduct",
+    queue,
+    required: true,
+  });
+  const gate = versionedResourceGate(route.resources, { ignoreLegacyBinding: true });
   const captured = BrowserCaptureResultSchema.parse(
     await gate("captureProduct", (binding) =>
       proxyActivities<BrowserActivities>({
-        taskQueue: queue,
+        taskQueue: route.queue,
         ...once,
         ...binding,
       }).captureBrowserProduct(input),

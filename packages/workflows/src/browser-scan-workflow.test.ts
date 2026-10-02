@@ -31,7 +31,7 @@ vi.mock("@temporalio/workflow", async () => ({
     workflowId: "scan",
     runId: "11111111-1111-4111-8111-111111111111",
   }),
-  patched: () => state.patched,
+  patched: (marker: string) => marker !== "browser-resource-routing-v1" && state.patched,
   ActivityCancellationType: { WAIT_CANCELLATION_COMPLETED: "WAIT" },
   CancellationScope: {
     nonCancellable: (run: () => Promise<unknown>) => run(),

@@ -3,6 +3,7 @@ import { patched, proxyActivities, workflowInfo } from "@temporalio/workflow";
 import { z } from "zod";
 import { resourceGate, type ResourceActivityBinding } from "./resources/resource-gate.js";
 import { readWithScanGap } from "./collection/scan-gap.js";
+import { browserRoute } from "./resources/browser-route.js";
 
 export const BrowserScanInputSchema = z.strictObject({
   channel: ChannelIdSchema,
@@ -28,19 +29,25 @@ export async function BrowserScanWorkflow(raw: unknown): Promise<unknown> {
   if (!patched("browser-scan-permit-v1")) {
     return scan(input);
   }
-  return resourceGate(resources)("scanBrandInBrowser", (binding) =>
-    readWithScanGap(() => scan(input, binding), {
+  const route = browserRoute({
+    resources,
+    activity: "scanBrandInBrowser",
+    queue: workflowInfo().taskQueue,
+    required: true,
+  });
+  return resourceGate(route.resources)("scanBrandInBrowser", (binding) =>
+    readWithScanGap(() => scan(input, binding, route.queue), {
       gapAfterSeconds: binding ? (gapAfterSeconds ?? 0) : 0,
       cooldownSeconds: binding ? (cooldownSeconds ?? 0) : 0,
     }),
   );
 }
 
-function scan(input: BrowserScanInput, binding?: ResourceActivityBinding) {
+function scan(input: BrowserScanInput, binding?: ResourceActivityBinding, queue?: string) {
   const browser = proxyActivities<{
     scanBrandInBrowser(input: BrowserScanInput): Promise<unknown>;
   }>({
-    taskQueue: workflowInfo().taskQueue,
+    taskQueue: queue ?? workflowInfo().taskQueue,
     startToCloseTimeout: "30 minutes",
     scheduleToCloseTimeout: "60 minutes",
     retry: { maximumAttempts: 1 },

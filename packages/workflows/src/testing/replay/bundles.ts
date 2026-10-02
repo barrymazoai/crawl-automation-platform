@@ -16,6 +16,7 @@ export const labelPageVerdictMarker = "label-page-verdict-fallback-v1";
 export const labelNoSourceMarker = "label-no-source-review-v1";
 export const stopProofMarker = "resource-execution-stop-proof-v1";
 export type PatchMarker =
+  | "browser-resource-routing-v1"
   | "browser-resource-outage-wait-v1"
   | "ocr-verified-failure-v1"
   | "product-enrichment-v1"

@@ -1,6 +1,8 @@
 import { defineErrors } from "./define-errors.js";
 
 export const resourceGateCodes = {
+  browserRouteInvalid: "RESOURCE.BROWSER_ROUTE_INVALID",
+  browserPermitMismatch: "RESOURCE.BROWSER_PERMIT_MISMATCH",
   waitLimit: "RESOURCE.WAIT_LIMIT",
   identityConflict: "RESOURCE.IDENTITY_CONFLICT",
   releaseUnknown: "RESOURCE.RELEASE_UNKNOWN",
@@ -11,6 +13,14 @@ export const resourceGateCodes = {
 
 /** Workflow-safe registry: this module and its imports contain no Node dependencies. */
 export const resourceGateErrors = defineErrors({
+  [resourceGateCodes.browserRouteInvalid]: {
+    category: "SCHEDULER",
+    message: "Browser work requires exactly one registered host browser resource and its queue.",
+  },
+  [resourceGateCodes.browserPermitMismatch]: {
+    category: "SCHEDULER",
+    message: "The held browser permit or its owner does not match this worker's browser resource.",
+  },
   [resourceGateCodes.cleanupUnverified]: {
     category: "SCHEDULER",
     message: "Executor or task-page shutdown is unverified; the permit remains quarantined.",

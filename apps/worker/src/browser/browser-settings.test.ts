@@ -2,9 +2,37 @@ import { expect, it } from "vitest";
 import { BrowserSettingsSchema } from "./browser-settings.js";
 
 const browser = {
-  ego: { cliPath: "/tmp/unused-ego", taskSpaceId: 1 },
+  resourceId: "mini-ego-space-1",
+  ego: { cliPath: "/tmp/unused-ego", taskSpaceId: 2 },
   wholefoods: { storeId: "10259", label: "The Alameda", postalCode: "95126" },
 };
+
+it.each([
+  { resourceId: undefined },
+  { resourceId: "unknown-browser" },
+  { resourceId: "server2-ego-space-6" },
+  { ego: { ...browser.ego, taskSpaceId: 1 } },
+  {
+    resourceId: "server2-ego-space-6",
+    ego: { ...browser.ego, taskSpaceId: 6 },
+    pollLegacyQueue: true,
+  },
+])("rejects an unbound, mismatched or foreign legacy browser configuration: %j", (changes) => {
+  expect(BrowserSettingsSchema.safeParse({ ...browser, ...changes }).success).toBe(false);
+});
+
+it.each([
+  ["mini-ego-space-1", 2],
+  ["server2-ego-space-6", 6],
+] as const)("binds %s to exactly Ego space %i", (resourceId, taskSpaceId) => {
+  expect(
+    BrowserSettingsSchema.parse({
+      ...browser,
+      resourceId,
+      ego: { ...browser.ego, taskSpaceId },
+    }),
+  ).toMatchObject({ resourceId, pollLegacyQueue: false });
+});
 
 it("defaults and validates Whole Foods canary and press pacing at worker startup", () => {
   expect(BrowserSettingsSchema.parse(browser).wholefoodsScan).toEqual({

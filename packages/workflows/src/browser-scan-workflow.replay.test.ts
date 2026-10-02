@@ -16,10 +16,12 @@ import { expectMarkers, recordHistory, scheduledActivities } from "./testing/rep
 let environment: TestWorkflowEnvironment;
 let current: ReplayBundle;
 let preProof: ReplayBundle;
+let preRoute: ReplayBundle;
 
 beforeAll(async () => {
   current = await currentBundle();
-  preProof = withoutPatches(current, [stopProofMarker]);
+  preRoute = withoutPatches(current, ["browser-resource-routing-v1"]);
+  preProof = withoutPatches(preRoute, [stopProofMarker]);
   environment = await TestWorkflowEnvironment.createTimeSkipping();
 }, 60_000);
 
@@ -123,7 +125,7 @@ it.each(
     const { history, workflowId } = await recordHistory({
       environment,
       // Record the retained old branch as well as current commands, then replay both unchanged.
-      bundle: proof ? current : preProof,
+      bundle: proof ? preRoute : preProof,
       queue,
       workflow: "BrowserScanWorkflow",
       input,
