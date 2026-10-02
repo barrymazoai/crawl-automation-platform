@@ -40,11 +40,12 @@ export function capturePrompt(input: PromptInput): string {
    机械 harvest 在 Ego nodejs 内 import ${input.skillRoot}/lib/ego-native-browser.mjs：
    const browser = createEgoBrowser({task, page, targetId:${JSON.stringify(input.targetId)}, listTaskSpaces, workDir:${JSON.stringify(input.cwd)}, productUrl:${JSON.stringify(input.mode === "product" ? input.url : null)}});
    const tab = browser.tab; browserMode="ego-native"。该适配仅复用旧 harvest 方法，不启动服务。
-   runHarvest(browser, tab, plan, {outDir:${JSON.stringify(input.outDir)}}) 会强制任务商品范围及原生浏览器取 HTML/图片。
+   runHarvest(browser, tab, plan, {outDir:${JSON.stringify(input.outDir)},log:(event,details)=>console.log(JSON.stringify({event,details}))}) 会强制任务商品范围及原生浏览器取 HTML/图片，并保留失败原因为日志。
 6. 主脚本放任务根目录 run-capture.mjs；先 node --check 再由 ego-browser nodejs 执行。所有证据路径相对 outDir。
    不改引擎源码或手改 harvest-result/checkpoint/evidence。可以在 hooks 中按真实观察补充字段、图库和规格。非 Shopify 的规格用 extract 记录 variants 或 fetchProductData hook 提供实际观测数据。
 7. 缺权限、用户接管、挑战、不可确认的写入/浏览器失败：保留已取得证据并返回 needs_review。禁止重启整个任务、绕过限制或静默重试失败业务操作。
 8. 每个结论保存 method/surface/evidence/verifier；截图必须实际查看，不能只凭文件存在声称检查过。
+   视觉 preflight 的截图无法取得或查看时立即保留原因并返回 needs_review；不能用 DOM snapshot 代替视觉检查或填写 verifiedVisually=true。
 入口 ${input.url}；任务范围 ${JSON.stringify(input.scope)}；outDir=${input.outDir}。
 ${instructions[input.mode]}
 最后等待所有脚本结束，再返回给定 JSON schema。complete 仅表示本次采集齐备；原件、产物、目录耗尽与身份均由宿主继续校验。`;

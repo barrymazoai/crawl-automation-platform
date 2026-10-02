@@ -28,4 +28,14 @@ Solaray 原生单品测试于 07:23:04 UTC 受理：run `ffc58ad5-451c-49d0-a7cd
 
 父验收 CRAWLV3-151；本次修改 CRAWLV3-163。服务器代码只能经 origin/main 的 fresh clone/build 部署，DTC 队列保持手动控制。
 
+## 第二轮与底层诊断（07:45 UTC）
+
+Server 二已部署 `49bf609`，第二轮 Solaray run `2ca43098-fc07-4be9-9acb-1ae72592b782` 于 07:28:26 UTC 受理，07:36:59 Codex 停止。模型读取两个 skill 并直接调用 Ego，页面 DOM 可读取，但原生 `Page.screenshot` 超时；runHarvest 返回 `worker_product_not_discovered`，0 records。该次没有产品原件，没有通过视觉验收。R2 `v3/dtc-agent/product-2ca43098-fc07-4be9-9acb-1ae72592b782/archive.json` 中 20 个失败证据文件已全部读回核对大小和 SHA-256。
+
+`13fc82b` 修复恢复 Page 无 targetId 的兼容：传入宿主精确 ID，每次从 task.tabs 验证；单品牌允许多个同站目录 seed；Codex 先登记执行身份再接收 prompt。Mini 6 项新增/相关测试全部通过。该版本尚未切换生产 Worker。
+
+独立 Mini 原生诊断进一步复现旧 harvest 调用 `evaluate(fn, undefined)` 被 Ego 拒绝：`page.evaluate argument must be JSON-serializable`。适配器现改为省略未提供的第二参数，保留 null/对象参数；新增回归。采集 prompt 增加 harvest 原因日志和视觉 preflight 失败立即 Review，禁止 DOM 冒充视觉验证。
+
+环境阻塞：Server 二 IOConsoleUsers 报 `CGSSessionScreenIsLocked=Yes`；原生 screenshot 超时，页面级 captureScreenshot(fromSurface=false) 返回 Unable to capture screenshot。锁屏是候选原因，尚需解锁后对照验证。独立诊断的 p91/p92/p93 均已精确关闭并核验不存在，保留基线 p1。Server 一 Docker 日志于 07:36:53–54 UTC 正常退出，Docker socket 不存在，数据库 127.0.0.1:55432 拒绝连接。Tailscale SSH 同时不可达，可经 Server 二跳转 LAN 并沿用已验证主机密钥访问。未擅自恢复可能由用户停止的服务；已请求说明和 Server 二解锁。第二轮精确页已关闭且本地 Codex 进程组不存在，但因数据库停止，账本停止/许可释放尚不能确认。不得宣称端到端验收成功或启动下一商品任务。
+
 部署前所有队列自然暂停且无 held permit；部署后恢复原本 running 的 Amazon/GNC/Swanson/Whole Foods/Costco，DTC 批量队列保持 paused。配置和队列快照在两台机器各自的 `manual-releases/dtc-native-20261002/`，旧 PM2 配置由部署器留存。

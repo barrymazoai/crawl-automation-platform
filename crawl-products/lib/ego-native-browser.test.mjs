@@ -13,6 +13,16 @@ function fixture() {
 }
 
 describe("native Ego harvest adapter", () => {
+  it("omits an absent evaluate argument while preserving JSON values", async () => {
+    const { browser, page } = fixture();
+    const fn = () => document.title;
+    await browser.tab.playwright.evaluate(fn, undefined, { timeoutMs: 1000 });
+    expect(page.evaluate).toHaveBeenLastCalledWith(fn);
+    await browser.tab.playwright.evaluate(fn, null);
+    expect(page.evaluate).toHaveBeenLastCalledWith(fn, null);
+    await browser.tab.playwright.evaluate(fn, { selected: 0 });
+    expect(page.evaluate).toHaveBeenLastCalledWith(fn, { selected: 0 });
+  });
   it("resolves a resumed Page through the host target ID and fresh tab inventory", async () => {
     const { page, task } = fixture();
     task.tabs.mockResolvedValue([{ targetId: "owned", openedBy: "agent", page }]);

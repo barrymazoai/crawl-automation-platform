@@ -18,7 +18,8 @@ export function createEgoBrowser({ task, page, targetId = page.targetId, listTas
   const tab = {
     id: targetId,
     playwright: {
-      evaluate: (fn, arg) => call("evaluate", fn, arg),
+      // Ego rejects explicit undefined; the legacy harvest API uses it for an omitted argument.
+      evaluate: (fn, arg) => arg === undefined ? call("evaluate", fn) : call("evaluate", fn, arg),
       locator: selector => egoLocator(scoped, guard, { css: selector }),
       getByText: (text, options = {}) => egoLocator(scoped, guard, { text, exact: options.exact }),
       domSnapshot: () => call("snapshot", { scope: "full_page" }),
