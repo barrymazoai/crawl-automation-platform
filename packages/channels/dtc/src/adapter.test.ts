@@ -196,13 +196,16 @@ describe("DTC adapter contracts (small synthetic boundary cases, not saved-page 
     expect(listing.nextUrl).toBe("https://shop.example/collections/all?page=2");
   });
 
-  it("reads custom product-section rows and deduplicates image/button links", () => {
+  it.each([
+    '<div class="product-sec"><div class="prod-row">',
+    '<div><div class="product-list product-list--collection">',
+  ])("reads scoped custom catalogs %s and deduplicates image/button links", (opening) => {
     const document = dtcDocument(`<header><a href="/products/navigation">Menu</a></header>
-      <main><div class="product-sec"><div class="prod-row">
+      <main>${opening}
       <div><a href="/products/sleep"><img src="/sleep.jpg"></a>
       <a href="/products/sleep">Buy Now</a></div>
       <div><a href="/products/magnesium">Magnesium</a></div></div></div>
-      <aside><a href="/products/related">Recommended</a></aside></main>
+      <aside class="product-list"><a href="/products/related">Recommended</a></aside></main>
       <footer><a href="/products/footer">Footer</a></footer>
       <a rel="next" href="?page=2">Next</a>`);
     const listing = readPlatformCatalog(document, { ...site.catalog, url: site.catalogUrl ?? "" });

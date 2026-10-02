@@ -44,8 +44,14 @@ export const DTC_BROWSER_POLICY = {
 };
 
 const catalog = {
-  catalogSelector:
-    "#product-grid, .collection .grid, ul.products, [data-product-grid], .product-sec .prod-row",
+  catalogSelector: [
+    "#product-grid",
+    ".collection .grid",
+    "ul.products",
+    "[data-product-grid]",
+    ".product-sec .prod-row",
+    ".product-list--collection",
+  ].join(", "),
   productLinkSelector: 'a[href*="/products/"], a.woocommerce-LoopProduct-link',
   nextSelector: 'a[rel="next"], .pagination a.next, a.next.page-numbers',
   emptySelector:
