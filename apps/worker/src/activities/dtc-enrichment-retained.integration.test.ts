@@ -37,7 +37,8 @@ it.skipIf(!directory)(
         dtcSitePolicy({
           siteKey: "solaray.com",
           platform: "shopify",
-          catalogUrl: "https://solaray.com/collections/all",
+          kind: "multi-brand",
+          brands: [{ brand: "Solaray", catalogUrl: "https://solaray.com/collections/all" }],
         }),
       ]),
     ]);

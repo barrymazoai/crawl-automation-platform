@@ -32,7 +32,7 @@ export function groundedCandidate(
   const quantities = input.websiteVariant
     ? [input.title, input.websiteVariant.title, ...input.websiteVariant.options]
         .filter(Boolean)
-        .join("\n")
+        .join(" | ")
     : input.title;
   warnings.push(
     ...groundQuantities(candidate, quantities, Boolean(input.websiteVariant)),

@@ -124,6 +124,12 @@ describe("package quantities", () => {
     expect(
       decode(value, {
         ...evidence,
+        websiteVariant: { ...evidence.websiteVariant, title: "100", options: ["ct"] },
+      }).variant.count,
+    ).toBeNull();
+    expect(
+      decode(value, {
+        ...evidence,
         websiteVariant: { ...evidence.websiteVariant, title: "31 servings", options: [] },
       }).variant.count,
     ).toBeNull();
