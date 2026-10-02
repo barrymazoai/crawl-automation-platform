@@ -38,11 +38,20 @@ export function productRuns(parts: {
 }
 
 /** Every channel uses the shared queue; Amazon's legacy store only supplies a migration preview. */
-export function queueService(database: Database, log: Logger): QueueService {
+export function queueService({
+  database,
+  log,
+  config,
+}: {
+  database: Database;
+  log: Logger;
+  config: Pick<ApiConfig, "queue">;
+}): QueueService {
   return new QueueService({
     amazonHistory: new PostgresQueueStore(database),
     channels: new PostgresChannelQueueStore(database),
     log,
+    scanAdmission: { recentScanSkipHours: config.queue.recentScanSkipHours },
   });
 }
 

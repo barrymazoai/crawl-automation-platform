@@ -5,6 +5,7 @@ import {
   DeliveryRunnerOptionsSchema,
   EvidenceTestPrefixSchema,
   QueueDispatcherOptionsSchema,
+  ScanAdmissionSettingsSchema,
 } from "@crawl-automation/app";
 import { ResourceKindsSchema } from "@crawl-automation/channels-core";
 import { OcrApiSettingsSchema } from "@crawl-automation/processing";
@@ -115,10 +116,10 @@ export const ApiConfigSchema = z.strictObject({
         .optional(),
     })
     .optional(),
-  /** The product queue of every channel but Amazon: how often its dispatcher runs a round. */
-  queue: z
-    .strictObject({ dispatcher: QueueDispatcherOptionsSchema.default({ intervalMs: 5_000 }) })
-    .default({ dispatcher: { intervalMs: 5_000 } }),
+  /** Shared queue dispatch and the recent-terminal window for brand discoveries on every channel. */
+  queue: ScanAdmissionSettingsSchema.extend({
+    dispatcher: QueueDispatcherOptionsSchema.default({ intervalMs: 5_000 }),
+  }).prefault({}),
   /** How often ended work is checked: permits of stopped owners released, ended runs settled. */
   cleanup: z.strictObject({ intervalMs: z.number().int().min(10_000).max(3_600_000) }).default({
     intervalMs: 60_000,

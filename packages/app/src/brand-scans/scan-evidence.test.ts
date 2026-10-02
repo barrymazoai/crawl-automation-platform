@@ -168,7 +168,7 @@ it.each(["different.json", "v3/secrets.json", `v3/brand-scans/${scanId}/../secre
 it("refuses a key from another scan even if corrupted metrics reference it", async () => {
   const test = fixture();
   const key = archiveKey.replace(scanId, "22222222-2222-4222-8222-222222222222");
-  const attempt = test.scan.result?.metrics?.attempts[0];
+  const attempt = test.scan.result?.metrics?.attempts?.[0];
   if (attempt) {
     attempt.archiveKey = key;
   }

@@ -5,12 +5,13 @@ import {
   emptyScanResult,
 } from "./scan-cancellation.js";
 import { listingScanResult } from "./listing-scan-result.js";
+import { scanQueueMetrics } from "./scan-queue-metrics.js";
 import { setTimeout as delay } from "node:timers/promises";
 import { pipelineErrors, errorCodeOf, type Logger } from "@crawl-automation/platform";
 import { z } from "zod";
 import type { ListingStateService } from "../listings/listing-state-service.js";
 import type { QueueService } from "../queue/queue-service.js";
-import type { QueuedProduct } from "../queue/queue-model.js";
+import type { QueuedProduct, QueueAddResult } from "../queue/queue-model.js";
 import type { BrandScanStore } from "./ports.js";
 import { hasScanTotalProof } from "./scan-completeness.js";
 import { readListing, type BrandListing } from "./scan-listing.js";
@@ -33,6 +34,7 @@ export interface BrandScanRunnerDeps extends ScanReaders {
   gatedListings?: Partial<Record<ScanChannel, GatedBrandListing>>;
   amazonQueue?: AmazonScanQueue;
   store: BrandScanStore;
+  /** Discovery-only port: the composition root binds add to QueueService.addScanDiscovery. */
   queue: Pick<QueueService, "add">;
   listings: Pick<ListingStateService, "requestRevisits">;
   log: Logger;
@@ -48,8 +50,8 @@ const toQueued =
   });
 
 /**
- * Runs requested brand scans: reads each source with its declared capture, puts ALL its products into its
- * queue (formula-once decides what is new), and after a full scan queues a direct revisit of every known listing
+ * Runs requested brand scans: reads each source with its declared capture, admits discoveries through the
+ * queue's SKU window, and after a full scan queues a direct revisit of every known listing
  * the brand no longer lists. Absence alone is never recorded as a sighting.
  */
 export class BrandScanRunner {
@@ -81,12 +83,13 @@ export class BrandScanRunner {
 
   /** One scan to its end: a result, or a Review-state record with the failure's own code. */
   private async scanOne(scan: ScanRecord, signal: AbortSignal): Promise<void> {
+    const progress = emptyScanResult();
     let result: ScanResult;
     try {
-      result = await this.scan(scan, signal);
+      result = await this.scan(scan, signal, progress);
     } catch (error) {
       result = {
-        ...emptyScanResult(),
+        ...progress,
         state: "review",
         code: errorCodeOf(error) ?? pipelineErrors.code("BRAND_SCAN.UNRESOLVED"),
       };
@@ -102,19 +105,19 @@ export class BrandScanRunner {
     this.deps.log.info({ scanId: scan.scanId }, "brand scan finished");
   }
 
-  private async scan(scan: ScanRecord, signal: AbortSignal): Promise<ScanResult> {
+  private async scan(
+    scan: ScanRecord,
+    signal: AbortSignal,
+    result: ScanResult,
+  ): Promise<ScanResult> {
     const amazon = scan.source.channel === "amazon" ? this.amazonQueue() : null;
     const listing = await this.read(scan, signal);
     if (scan.source.channel === "wholefoods") {
       listing.full = hasScanTotalProof(listing);
     }
-    const result: ScanResult = {
-      ...listingScanResult(listing),
-      newListings: null,
-      knownListings: null,
-      missing: 0,
-      queued: 0,
-    };
+    Object.assign(result, listingScanResult(listing), {
+      metrics: scanQueueMetrics({ added: 0 }, listing.metrics),
+    });
     // Known: queued by an earlier list of this source (the scan's own list is excluded).
     const known = amazon
       ? await amazon.knownListings(scan)
@@ -122,18 +125,21 @@ export class BrandScanRunner {
     if (await this.deps.store.isCancellationRequested(scan.scanId)) {
       return cancelledScanResult(result);
     }
-    const queued = await this.queueAll(scan, listing);
+    const admission = await this.queueAll(scan, listing);
     const counts = compareScanListings(listing, known);
+    Object.assign(result, {
+      newListings: counts.newListings,
+      knownListings: counts.knownListings,
+      queued: admission.added,
+      metrics: scanQueueMetrics(admission, listing.metrics),
+    });
     if (await this.deps.store.isCancellationRequested(scan.scanId)) {
-      return cancelledScanResult({ ...result, ...counts, missing: 0, queued });
+      return cancelledScanResult(result);
     }
     const missing = listing.full ? await this.revisitMissing(scan, counts.missing) : 0;
     return {
-      ...listingScanResult(listing),
-      newListings: counts.newListings,
-      knownListings: counts.knownListings,
+      ...result,
       missing,
-      queued,
     };
   }
 
@@ -151,19 +157,18 @@ export class BrandScanRunner {
         );
   }
 
-  /** Every listed product goes into its queue; the scan's ID makes a rerun add nothing. */
-  private async queueAll(scan: ScanRecord, listing: BrandListing): Promise<number> {
+  /** The scan's ID makes replay return its admission receipt without inserting again. */
+  private async queueAll(scan: ScanRecord, listing: BrandListing): Promise<QueueAddResult> {
     if (listing.products.length === 0) {
-      return 0;
+      return { added: 0 };
     }
     const channel = scan.source.channel as ScanChannel;
     if (channel === "amazon") {
-      return (await this.amazonQueue().add(scan, listing.products, scan.scanId)).added;
+      return this.amazonQueue().add(scan, listing.products, scan.scanId);
     }
     const products = listing.products.map(toQueued(scan));
     const label = `brand scan: ${scan.source.brandName}`.slice(0, 200);
-    const { added } = await this.deps.queue.add({ channel, batchId: scan.scanId, label, products });
-    return added;
+    return this.deps.queue.add({ channel, batchId: scan.scanId, label, products });
   }
 
   /** Known listings a full scan no longer shows: each queued once for a direct revisit, which decides. */

@@ -32,6 +32,7 @@ export function emptyScanResult(): ScanResult {
     knownListings: null,
     missing: 0,
     queued: 0,
+    metrics: { added: 0, following: 0, recent: 0 },
     credits: 0,
     code: null,
   };

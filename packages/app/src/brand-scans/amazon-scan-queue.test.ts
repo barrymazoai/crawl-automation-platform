@@ -26,7 +26,14 @@ const products = Array.from({ length: 24 }, (_, index) => {
   return { listingId, variantId: null, url: `https://www.amazon.com/dp/${listingId}` };
 });
 function fixture() {
-  const queue = { add: vi.fn(async (_input: AddToQueue) => ({ added: products.length })) };
+  const queue = {
+    add: vi.fn(async (_input: AddToQueue) => ({ added: products.length })),
+    addScanDiscovery: vi.fn(async (_input: AddToQueue) => ({
+      added: products.length,
+      following: 0,
+      recent: 0,
+    })),
+  };
   const knownListings = vi.fn(async () => []);
   const bridge = new AmazonBrandScanQueue({ queue, knownListings });
   return { bridge, queue, knownListings };
@@ -35,10 +42,14 @@ function fixture() {
 describe("Amazon scan queue bridge", () => {
   it("queues all scan URLs under a stable shared batch and the scan source", async () => {
     const { bridge, queue } = fixture();
-    expect(await bridge.add(scan, products, scan.scanId)).toEqual({ added: 24 });
+    expect(await bridge.add(scan, products, scan.scanId)).toEqual({
+      added: 24,
+      following: 0,
+      recent: 0,
+    });
     await bridge.add(scan, products, scan.scanId);
-    expect(queue.add.mock.calls[0]).toEqual(queue.add.mock.calls[1]);
-    const input = AddToQueueSchema.parse(queue.add.mock.calls[0]?.[0]);
+    expect(queue.addScanDiscovery.mock.calls[0]).toEqual(queue.addScanDiscovery.mock.calls[1]);
+    const input = AddToQueueSchema.parse(queue.addScanDiscovery.mock.calls[0]?.[0]);
     expect(input).toEqual({
       channel: "amazon",
       batchId: scan.scanId,
@@ -52,6 +63,7 @@ describe("Amazon scan queue bridge", () => {
     expect(await bridge.knownListings(scan)).toEqual([]);
     expect(knownListings).toHaveBeenCalledWith(scan);
     await bridge.add(scan, products.slice(0, 1), scan.revisitBatchId);
+    expect(queue.addScanDiscovery).not.toHaveBeenCalled();
     expect(queue.add).toHaveBeenCalledWith(
       expect.objectContaining({ batchId: scan.revisitBatchId }),
     );
@@ -61,6 +73,7 @@ describe("Amazon scan queue bridge", () => {
     const { bridge, queue } = fixture();
     expect(await bridge.add(scan, [], scan.scanId)).toEqual({ added: 0 });
     expect(queue.add).not.toHaveBeenCalled();
+    expect(queue.addScanDiscovery).not.toHaveBeenCalled();
   });
 
   it("accepts retained revisit products and assigns the scan source to the new shared batch", async () => {
@@ -90,6 +103,7 @@ describe("Amazon scan queue bridge", () => {
       bridge.add(scan, [{ ...product, variantId: null }], scan.scanId),
     ).rejects.toMatchObject({ name: "ZodError" });
     expect(queue.add).not.toHaveBeenCalled();
+    expect(queue.addScanDiscovery).not.toHaveBeenCalled();
   });
 
   it("refuses duplicate ASINs within a batch and non-null variants", async () => {
@@ -102,6 +116,7 @@ describe("Amazon scan queue bridge", () => {
       bridge.add(scan, [{ ...product, variantId: "variant" }], scan.scanId),
     ).rejects.toMatchObject({ name: "ZodError" });
     expect(queue.add).not.toHaveBeenCalled();
+    expect(queue.addScanDiscovery).not.toHaveBeenCalled();
   });
 
   it("refuses a foreign scan channel", async () => {
@@ -111,5 +126,6 @@ describe("Amazon scan queue bridge", () => {
       code: "QUEUE.SOURCE_CHANNEL_MISMATCH",
     });
     expect(queue.add).not.toHaveBeenCalled();
+    expect(queue.addScanDiscovery).not.toHaveBeenCalled();
   });
 });

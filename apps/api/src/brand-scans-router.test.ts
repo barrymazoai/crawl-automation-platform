@@ -71,7 +71,11 @@ describe("brand scan procedures", () => {
 
   it("answers one scan with its revisit outcomes", async () => {
     const scanId = "22222222-2222-4222-8222-222222222222";
-    const detail = { scanId, revisits: { requested: 2, live: 1, unlisted: {}, pending: 1 } };
+    const detail = {
+      scanId,
+      result: { metrics: { added: 1, following: 2, recent: 70 } },
+      revisits: { requested: 2, live: 1, unlisted: {}, pending: 1 },
+    };
     const get = vi.fn(async () => detail);
     const query = encodeURIComponent(JSON.stringify({ scanId }));
     const response = await appWith({ brandScans: { get } as never }).request(
@@ -93,5 +97,15 @@ describe("brand scan procedures", () => {
       `/trpc/brands.scanGet?input=${query}`,
     );
     expect(response.status).toBe(404);
+  });
+
+  it("returns discovery admission counts through brands.scans", async () => {
+    const scans = [
+      { scanId: "scan", result: { queued: 1, metrics: { added: 1, following: 2, recent: 70 } } },
+    ];
+    const list = vi.fn(async () => scans);
+    const response = await appWith({ brandScans: { list } as never }).request("/trpc/brands.scans");
+    expect(response.status).toBe(200);
+    expect((await response.json()).result.data).toEqual(scans);
   });
 });

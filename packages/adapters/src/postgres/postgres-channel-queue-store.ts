@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import {
   appErrors,
   type AddProducts,
@@ -10,6 +9,7 @@ import {
   type QueueStore,
   type Requeue,
   type QueueSummaryQuery,
+  type ScanAdmissionSettings,
 } from "@crawl-automation/app";
 import type { Database, Queryable } from "@crawl-automation/platform";
 import type { FamilyFormulaOutcome, FamilyFormulaQuery } from "@crawl-automation/app";
@@ -21,7 +21,7 @@ import { PostgresQueueReader } from "./postgres-queue-reader.js";
 import { PostgresQueueRequeue } from "./postgres-queue-requeue.js";
 import { PostgresQueueSummary } from "./postgres-queue-summary.js";
 
-const sha256 = (value: unknown) => createHash("sha256").update(JSON.stringify(value)).digest("hex");
+import { PostgresQueueAdd } from "./postgres-queue-add.js";
 
 /** The shared queue tables (queue_control, link_batch, queue_item, queue_attempt) of every channel. */
 export class PostgresChannelQueueStore implements QueueStore {
@@ -51,8 +51,8 @@ export class PostgresChannelQueueStore implements QueueStore {
     return new PostgresQueueSummary(this.database).summary(query);
   }
 
-  add(input: AddToQueue): Promise<{ added: number; following?: number }> {
-    return this.addList(input);
+  add(input: AddToQueue, discovery?: ScanAdmissionSettings) {
+    return this.locked(input.channel, (tx) => new PostgresQueueAdd(tx).add(input, discovery));
   }
 
   /** Formula requests from Whole Foods use the same Amazon queue and dispatcher as direct product lists. */
@@ -68,16 +68,6 @@ export class PostgresChannelQueueStore implements QueueStore {
       [brandId],
     );
     return rows[0]?.id ?? null;
-  }
-
-  private addList(input: ProductList): Promise<{ added: number; following?: number }> {
-    return this.locked(input.channel, async (tx) => {
-      await assertSourcesOnChannel(tx, input);
-      if (!(await insertBatch(tx, input))) {
-        return { added: 0 };
-      }
-      return insertItems(tx, input);
-    });
   }
 
   setLimits(limits: QueueLimits): Promise<void> {
@@ -144,66 +134,4 @@ export class PostgresChannelQueueStore implements QueueStore {
       return work(tx);
     });
   }
-}
-
-/** A product list of any channel, as the shared tables hold it. */
-type ProductList = Omit<AddProducts, "channel"> & { channel: QueueChannel };
-
-/** Every product's brand source exists and belongs to this channel, or nothing is added. */
-async function assertSourcesOnChannel(tx: Queryable, input: ProductList): Promise<void> {
-  const sourceIds = [...new Set(input.products.map((product) => product.sourceId))];
-  const rows = await tx.query<{ found: number }>(
-    "SELECT count(*)::int AS found FROM brand_source WHERE id = ANY($1::uuid[]) AND channel = $2",
-    [sourceIds, input.channel],
-  );
-  if (rows[0]?.found !== sourceIds.length) {
-    throw appErrors.create("QUEUE.SOURCE_CHANNEL_MISMATCH", {
-      details: { channel: input.channel },
-    });
-  }
-}
-
-/** True for a new list; false for the same list added again; a different list under the same ID is refused. */
-async function insertBatch(tx: Queryable, input: ProductList): Promise<boolean> {
-  const hash = sha256(input);
-  const inserted = await tx.query(
-    `INSERT INTO link_batch (batch_id, channel, label, item_count, record_hash) VALUES ($1, $2, $3, $4, $5)
-     ON CONFLICT DO NOTHING RETURNING batch_id`,
-    [input.batchId, input.channel, input.label, input.products.length, hash],
-  );
-  if (inserted.length === 1) {
-    return true;
-  }
-  const saved = await tx.query<{ record_hash: string }>(
-    "SELECT record_hash FROM link_batch WHERE batch_id = $1",
-    [input.batchId],
-  );
-  if (saved[0]?.record_hash !== hash) {
-    throw appErrors.create("QUEUE.IMPORT_CONFLICT", { details: { batchId: input.batchId } });
-  }
-  return false;
-}
-
-/** One item per product of the list; the same product twice in one list is one item. */
-async function insertItems(tx: Queryable, input: ProductList) {
-  const rows = input.products.map((product) => ({
-    item_id: sha256([input.channel, input.batchId, product.listingId, product.variantId]),
-    source_id: product.sourceId,
-    url: product.url,
-    listing_id: product.listingId,
-    variant_id: product.variantId,
-  }));
-  const inserted = await tx.query<{ state: string }>(
-    `INSERT INTO queue_item (item_id, channel, batch_id, source_id, url, listing_id, variant_id)
-     SELECT r.item_id, $1, $2, r.source_id, r.url, r.listing_id, r.variant_id
-     FROM jsonb_to_recordset($3::jsonb)
-       AS r(item_id text, source_id uuid, url text, listing_id text, variant_id text)
-     ON CONFLICT DO NOTHING RETURNING item_id, state`,
-    [input.channel, input.batchId, JSON.stringify(rows)],
-  );
-  const following = inserted.filter((item) => item.state === "following").length;
-  return {
-    added: inserted.filter((item) => item.state === "queued").length,
-    ...(following ? { following } : {}),
-  };
 }

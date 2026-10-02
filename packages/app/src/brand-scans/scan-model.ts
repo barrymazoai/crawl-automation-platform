@@ -1,5 +1,7 @@
 import { z } from "zod";
-import type { ListingNameResolution, ListingScanMetrics } from "@crawl-automation/channels-core";
+import type { ListingNameResolution } from "@crawl-automation/channels-core";
+import type { ScanMetrics } from "./scan-queue-metrics.js";
+export { ScanMetricsSchema } from "./scan-queue-metrics.js";
 import type { UnlistedReasonName } from "../listings/listing-model.js";
 import { QueueChannelSchema } from "../queue/queue-model.js";
 
@@ -61,7 +63,7 @@ export interface ScanSource {
 /** What a finished scan found. `full` means the pages proved every product of the brand was listed. */
 export interface ScanResult {
   state: Exclude<ScanState, "queued" | "running">;
-  metrics?: ListingScanMetrics | undefined;
+  metrics?: ScanMetrics | undefined;
   cooldownRequested?: boolean | undefined;
   pages: number;
   products: number;

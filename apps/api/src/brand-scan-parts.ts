@@ -8,6 +8,7 @@ import {
 } from "@crawl-automation/adapters";
 import {
   BrandScanRunner,
+  type BrandScanRunnerDeps,
   BrandScanService,
   AmazonBrandScanQueue,
   BrandSourceImport,
@@ -97,11 +98,11 @@ export function brandScanParts(parts: BrandScanDependencies): BrandScanParts {
     queue: parts.queue,
     knownListings: (scan) => store.knownListings(scan.source, scan.scanId),
   });
-  const deps = {
+  const deps: BrandScanRunnerDeps = {
     ...readers,
     channels: settings.channels,
     store,
-    queue: parts.queue,
+    queue: { add: (input) => parts.queue.addScanDiscovery(input) },
     listings: parts.listingStates,
     log,
     amazonQueue,

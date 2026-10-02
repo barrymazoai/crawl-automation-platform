@@ -2,6 +2,7 @@ import type { Logger } from "@crawl-automation/platform";
 import { appErrors } from "../errors.js";
 import type { FamilyFormulaQuery } from "./family-formula-outcome.js";
 import { reconcileFamilyFormulas } from "./reconcile-family-formulas.js";
+import { ScanAdmissionSettingsSchema, type ScanAdmissionSettings } from "./scan-admission.js";
 import type {
   AddToQueue,
   AmazonMigrationPreview,
@@ -23,6 +24,7 @@ export interface QueueServiceDeps {
   /** The shared queue tables every channel uses. */
   channels: QueueStore;
   log: Logger;
+  scanAdmission?: ScanAdmissionSettings;
 }
 
 /**
@@ -30,7 +32,11 @@ export interface QueueServiceDeps {
  * finished products again. The queue dispatcher starts the work; nothing here starts a workflow directly.
  */
 export class QueueService {
-  constructor(private readonly deps: QueueServiceDeps) {}
+  private readonly scanAdmission: ScanAdmissionSettings;
+
+  constructor(private readonly deps: QueueServiceDeps) {
+    this.scanAdmission = ScanAdmissionSettingsSchema.parse(deps.scanAdmission ?? {});
+  }
 
   status(channel: QueueChannel): Promise<QueueStatus> {
     return this.deps.channels.status(channel);
@@ -49,6 +55,21 @@ export class QueueService {
     const list = input.batchId;
     this.deps.log.info({ channel: input.channel, list, ...result }, "products queued");
     return result;
+  }
+
+  /** Only brand discoveries opt into the recent-terminal window. Counts survive batch replay. */
+  async addScanDiscovery(input: AddToQueue) {
+    const result = await this.deps.channels.add(input, this.scanAdmission);
+    const counts = {
+      added: result.added,
+      following: result.following ?? 0,
+      recent: result.recent ?? 0,
+    };
+    this.deps.log.info(
+      { channel: input.channel, list: input.batchId, ...counts },
+      "scan products queued",
+    );
+    return counts;
   }
 
   async setLimits(limits: QueueLimits): Promise<QueueStatus> {

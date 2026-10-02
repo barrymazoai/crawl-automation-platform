@@ -44,7 +44,8 @@ export class ScanEvidenceService {
       answers.push(await this.describe(scan, attempt));
     }
     // Metrics are persisted when a scan settles; an in-progress inventory is not exhaustive.
-    return { scanId: scan.scanId, state: scan.state, recorded: !!scan.result?.metrics, answers };
+    const recorded = scan.result?.metrics?.attempts !== undefined;
+    return { scanId: scan.scanId, state: scan.state, recorded, answers };
   }
 
   private async describe(scan: ScanRecord, attempt: SavedAttempt) {

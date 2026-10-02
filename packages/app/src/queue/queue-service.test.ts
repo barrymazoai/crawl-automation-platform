@@ -52,6 +52,42 @@ function fixture() {
 
 describe("QueueService", () => {
   it.each(QueueChannelSchema.options)(
+    "opts only %s discoveries into the default window",
+    async (channel) => {
+      const { service, channels } = fixture();
+      const input = AddToQueueSchema.parse({
+        channel,
+        batchId: "33333333-3333-4333-8333-333333333333",
+        label: "scan",
+        products: [product],
+      });
+      vi.mocked(channels.add).mockResolvedValueOnce({ added: 1, following: 2, recent: 3 });
+      expect(await service.addScanDiscovery(input)).toEqual({ added: 1, following: 2, recent: 3 });
+      expect(channels.add).toHaveBeenLastCalledWith(input, { recentScanSkipHours: 24 });
+      await service.add(input);
+      expect(channels.add).toHaveBeenLastCalledWith(input);
+    },
+  );
+
+  it.each([0, 48])("passes the configured %i-hour window", async (recentScanSkipHours) => {
+    const channels = fakeStore();
+    const service = new QueueService({
+      channels,
+      amazonHistory: fixture().amazonHistory,
+      log: silent,
+      scanAdmission: { recentScanSkipHours },
+    });
+    const input = AddToQueueSchema.parse({
+      channel: "wholefoods",
+      batchId: "33333333-3333-4333-8333-333333333333",
+      label: "scan",
+      products: [product],
+    });
+    expect(await service.addScanDiscovery(input)).toEqual({ added: 1, following: 0, recent: 0 });
+    expect(channels.add).toHaveBeenCalledExactlyOnceWith(input, { recentScanSkipHours });
+  });
+
+  it.each(QueueChannelSchema.options)(
     "routes every %s operation to the shared store",
     async (channel) => {
       const { service, channels, amazonHistory } = fixture();

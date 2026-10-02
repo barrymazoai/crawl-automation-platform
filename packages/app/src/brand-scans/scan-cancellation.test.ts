@@ -65,7 +65,7 @@ function fixture() {
     registry: new ChannelRegistry([adapter]),
     pages: { read },
     browsers: {},
-    queue: { add: vi.fn(async () => ({ added: 1 })) },
+    queue: { add: vi.fn(async () => ({ added: 1, following: 0, recent: 0 })) },
     listings: { requestRevisits: vi.fn(async () => ({ queued: 1 })) },
     log: createLogger({ name: "cancel-test", destination: { write: () => undefined } }),
   };
@@ -123,7 +123,7 @@ it("keeps the count of a committed queue batch when cancellation arrives during 
   const test = fixture();
   test.deps.queue.add.mockImplementation(async () => {
     test.cancel();
-    return { added: 1 };
+    return { added: 1, following: 2, recent: 3 };
   });
   const runner = new BrandScanRunner({
     ...test.deps,
@@ -136,6 +136,7 @@ it("keeps the count of a committed queue batch when cancellation arrives during 
       state: "cancelled",
       products: 1,
       queued: 1,
+      metrics: { added: 1, following: 2, recent: 3 },
       missing: 0,
       full: false,
     }),

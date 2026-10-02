@@ -118,7 +118,7 @@ function setup(input: {
   const queue = {
     add: vi.fn(async (list: AddToQueue) => {
       lists.push(list as AddProducts);
-      return { added: 1 };
+      return { added: 1, following: 0, recent: 0 };
     }),
   };
   const listings = { requestRevisits: vi.fn(async () => ({ queued: 1 })) };

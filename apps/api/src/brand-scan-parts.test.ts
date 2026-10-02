@@ -99,7 +99,7 @@ function setup(sources: ScanSource[], browserQueue: string | null = "browser", s
     }),
     cancel: vi.fn(),
   }));
-  const queue = { add: vi.fn(async () => ({ added: 1 })) };
+  const queue = { addScanDiscovery: vi.fn(async () => ({ added: 1 })) };
   const parts = brandScanParts({
     database: {} as Database,
     dtcSites: sites,
@@ -202,7 +202,7 @@ describe("brand-scan API source routing", () => {
         credits: 0,
       }),
     );
-    expect(test.queue.add).toHaveBeenCalledWith(expect.objectContaining({ channel }));
+    expect(test.queue.addScanDiscovery).toHaveBeenCalledWith(expect.objectContaining({ channel }));
   });
 
   it.each([searchUrl, searchUrl + "&srs=123456"])(
@@ -349,7 +349,9 @@ it("routes a named DTC source by scanCapture through the API runner, never HTTP"
     }),
   );
   expect(test.read).not.toHaveBeenCalled();
-  expect(test.queue.add).toHaveBeenCalledWith(expect.objectContaining({ channel: "dtc" }));
+  expect(test.queue.addScanDiscovery).toHaveBeenCalledWith(
+    expect.objectContaining({ channel: "dtc" }),
+  );
 });
 
 it("routes one collection of a multi-brand site and queues its database source ID", async () => {
@@ -385,7 +387,7 @@ it("routes one collection of a multi-brand site and queues its database source I
       ],
     }),
   );
-  expect(test.queue.add).toHaveBeenCalledExactlyOnceWith(
+  expect(test.queue.addScanDiscovery).toHaveBeenCalledExactlyOnceWith(
     expect.objectContaining({
       channel: "dtc",
       products: [expect.objectContaining({ sourceId: row.sourceId })],

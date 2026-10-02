@@ -124,7 +124,7 @@ function registerServices(container: Parts): void {
     usage: asFunction(usageService).singleton(),
     enrichment: asFunction(enrichmentService).singleton(),
     runs: asFunction(runService).singleton(),
-    queue: asFunction((parts: ApiParts) => queueService(parts.database, parts.log)).singleton(),
+    queue: asFunction(queueService).singleton(),
     brands: asFunction(
       (parts: ApiParts) =>
         new BrandService({ brands: new PostgresBrandStore(parts.database), log: parts.log }),

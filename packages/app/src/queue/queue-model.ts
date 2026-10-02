@@ -4,6 +4,8 @@ import type { FamilyFormulaOutcomes } from "./family-formula-outcome.js";
 import { QueueFilterFields } from "./queue-filters.js";
 import type { QueueSourceSummary, QueueSummaryQuery } from "./queue-summary.js";
 import { QueueStateSchema, type QueueState } from "./queue-state.js";
+import type { QueueAddResult, ScanAdmissionSettings } from "./scan-admission.js";
+export * from "./scan-admission.js";
 export * from "./family-formula-outcome.js";
 export * from "./queue-summary.js";
 export * from "./queue-state.js";
@@ -126,7 +128,7 @@ export interface QueueStore extends Partial<FamilyFormulaOutcomes> {
   status(channel: QueueChannel): Promise<QueueStatus>;
   items(query: QueueItemsQuery): Promise<QueueItemView[]>;
   summary(query: QueueSummaryQuery): Promise<QueueSourceSummary[]>;
-  add(input: AddToQueue): Promise<{ added: number; following?: number }>;
+  add(input: AddToQueue, discovery?: ScanAdmissionSettings): Promise<QueueAddResult>;
   setLimits(limits: QueueLimits): Promise<void>;
   pause(options: PauseQueue): Promise<void>;
   resume(channel: QueueChannel): Promise<void>;

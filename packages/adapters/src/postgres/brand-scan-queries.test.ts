@@ -35,6 +35,11 @@ const row = (scanResult: Record<string, unknown>) => ({
 });
 
 describe("brand scan result decoding", () => {
+  it("retains queue counts on channels without observation metrics and leaves historical metrics absent", () => {
+    const metrics = { added: 3, following: 2, recent: 70 };
+    expect(scanOf(row({ ...result, metrics })).result?.metrics).toEqual(metrics);
+    expect(scanOf(row(result)).result?.metrics).toBeUndefined();
+  });
   it.each([true, false])("keeps soldHere=%s from a browser scan", (soldHere) => {
     expect(scanOf(row({ ...result, soldHere })).result).toMatchObject({ soldHere });
   });
@@ -52,6 +57,9 @@ describe("brand scan result decoding", () => {
 
 it("round-trips HTTP observation accounting in partial and review JSON records", () => {
   const metrics = {
+    added: 1,
+    following: 2,
+    recent: 70,
     storeId: "10259",
     unionSize: 0,
     attempts: [

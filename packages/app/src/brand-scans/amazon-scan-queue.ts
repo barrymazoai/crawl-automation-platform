@@ -1,6 +1,11 @@
 import { z } from "zod";
 import { appErrors } from "../errors.js";
-import { AddToQueueSchema, QueuedProductSchema, type QueuedProduct } from "../queue/queue-model.js";
+import {
+  AddToQueueSchema,
+  QueuedProductSchema,
+  type QueuedProduct,
+  type QueueAddResult,
+} from "../queue/queue-model.js";
 import type { QueueService } from "../queue/queue-service.js";
 import type { ScanRecord } from "./scan-model.js";
 
@@ -23,15 +28,11 @@ const scanProducts = z
 
 export interface AmazonScanQueue {
   knownListings(scan: ScanRecord): Promise<QueuedProduct[]>;
-  add(
-    scan: ScanRecord,
-    products: readonly ScanProduct[],
-    batchId: string,
-  ): Promise<{ added: number }>;
+  add(scan: ScanRecord, products: readonly ScanProduct[], batchId: string): Promise<QueueAddResult>;
 }
 
 export interface AmazonScanQueueDeps {
-  queue: Pick<QueueService, "add">;
+  queue: Pick<QueueService, "add" | "addScanDiscovery">;
   /** Read retained listings, excluding this scan's own batch. */
   knownListings(scan: ScanRecord): Promise<QueuedProduct[]>;
 }
@@ -57,16 +58,17 @@ export class AmazonBrandScanQueue implements AmazonScanQueue {
       listingId,
       variantId,
     }));
-    return this.deps.queue.add(
-      AddToQueueSchema.parse({
-        channel: "amazon",
-        batchId,
-        label: `brand scan: ${scan.source.brandName}`.slice(0, 200),
-        products: scanProducts.parse(candidates).map((product) => ({
-          ...product,
-          sourceId: scan.source.sourceId,
-        })),
-      }),
-    );
+    const input = AddToQueueSchema.parse({
+      channel: "amazon",
+      batchId,
+      label: `brand scan: ${scan.source.brandName}`.slice(0, 200),
+      products: scanProducts.parse(candidates).map((product) => ({
+        ...product,
+        sourceId: scan.source.sourceId,
+      })),
+    });
+    return batchId === scan.scanId
+      ? this.deps.queue.addScanDiscovery(input)
+      : this.deps.queue.add(input);
   }
 }
