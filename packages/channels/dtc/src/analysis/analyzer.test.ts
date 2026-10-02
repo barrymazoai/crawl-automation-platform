@@ -166,10 +166,11 @@ it("a product page's ProductGroup states the brand once for all its variants (sh
     "https://store.example/collections/all",
     document('<main><div id="product-grid"><a href="/products/pack">Pack</a></div></main>'),
   );
+  // As on the live page: variants carry neither brand nor url, only an offer @id with ?variant=.
   const variant = (id: number) => ({
     "@type": "Product",
     name: `Pack ${id}`,
-    url: `https://store.example/products/pack?variant=${id}`,
+    offers: { "@id": `/products/pack?variant=${id}#offer` },
   });
   const group = {
     "@type": "ProductGroup",

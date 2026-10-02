@@ -21,13 +21,17 @@ export function jsonLdProducts(document: Document): JsonObject[] {
     .filter((record) => schemaType(record, "Product"));
 }
 
-/** schema.org variants inherit the group's properties; Shopify states the brand once, on the group. */
+/**
+ * schema.org variants inherit the group's properties: Shopify states the brand, and often the page address, once on
+ * the group (shop.hmwmethod.com, 2026-10-02). A variant's own value always wins.
+ */
 function variantsOf(group: JsonObject): JsonObject[] {
-  return records(group.hasVariant).map((variant) =>
-    variant.brand === undefined && group.brand !== undefined
-      ? { ...variant, brand: group.brand }
-      : variant,
+  const inherited = Object.fromEntries(
+    (["brand", "url"] as const).flatMap((key) =>
+      group[key] === undefined ? [] : [[key, group[key]]],
+    ),
   );
+  return records(group.hasVariant).map((variant) => ({ ...inherited, ...variant }));
 }
 
 export function schemaUrl(product: JsonObject, base: string): string | null {
