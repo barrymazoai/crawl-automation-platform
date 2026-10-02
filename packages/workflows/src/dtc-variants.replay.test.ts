@@ -95,8 +95,11 @@ it.each(["expanded", "partial", "before-patch"])(
       capture: "browser",
       url: sourcePlan.expectedUrl,
     };
-    const recording =
-      scenario === "before-patch" ? withoutPatches(bundle, ["dtc-variant-handoff-v1"]) : bundle;
+    // Isolated test queue keeps the recorded pre-host-routing protocol; replay uses the untouched bundle.
+    const recording = withoutPatches(bundle, [
+      "browser-resource-routing-v1",
+      ...(scenario === "before-patch" ? ["dtc-variant-handoff-v1" as const] : []),
+    ]);
     const { history, result, workflowId } = await recordHistory({
       environment,
       bundle: recording,
@@ -105,6 +108,7 @@ it.each(["expanded", "partial", "before-patch"])(
       input,
       activities: {
         ...fixture.activities,
+        reviewProduct: async (request: unknown) => ({ status: "review", request }),
         captureBrowserProduct,
         findKnownFormula: async () => ({ operationId: "known-formula" }),
         prepareProductEnrichment: async () => ({

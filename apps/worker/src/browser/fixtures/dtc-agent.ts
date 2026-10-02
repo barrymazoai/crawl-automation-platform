@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { DtcCaptureAgent } from "@crawl-automation/channel-dtc";
 import { RetainedPublication, sha256 } from "@crawl-automation/platform";
 import { vi } from "vitest";
+import { observedProductFixture, catalogDiscoveryFixture } from "./dtc-observed.js";
 
 const roots: string[] = [];
 export const agentSettings = {
@@ -36,16 +37,7 @@ export function mockCapture(
     const files = {
       "product.html": input.html,
       "front.png": png,
-      "evidence/records.json": JSON.stringify([
-        {
-          productUrl: input.url,
-          fields: { title: "Sleep", brand: "Beta", price: "12.50", currency: "USD" },
-          variants: websiteVariants(input),
-          pageHtml: "product.html",
-          gallery: [{ url: image, localPath: "front.png", mime: "image/png" }],
-          flags: [],
-        },
-      ]),
+      ...observedProductFixture({ ...input, image, variants: websiteVariants(input) }),
       "capture-review.json": JSON.stringify(reviewFixture(input, image)),
     };
     return retainedFixture(publication, { operationId: request.operationId, files });
@@ -109,6 +101,7 @@ export async function catalogFixture(
           oracle: { expected: 2, observed: 2, comparable: true },
         },
       }),
+      "catalog-discovery.json": JSON.stringify(catalogDiscoveryFixture(pages)),
     },
   });
 }
