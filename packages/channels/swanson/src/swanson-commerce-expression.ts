@@ -1,5 +1,6 @@
 const stockExpression = `(() => {
-  const selected = [...root.querySelectorAll('variant-picker input[role="radio"]')]
+  const selected = productElements('variant-picker input[role="radio"]')
+    .filter(input => root.contains(input))
     .filter(input => input.checked || input.getAttribute('aria-checked') === 'true');
   if (selected.length !== 1) {
     return null;
@@ -10,12 +11,14 @@ const stockExpression = `(() => {
 
 /** Whitelisted Swanson commerce fields. Distinct conflicting values remain unknown. */
 export const swansonCommerceExpression = `(() => {
-  const root = document.querySelector('main');
+  const root = productElements('main [data-cnstrc-product-detail]')[0] ||
+    document.querySelector('main');
   const value = (selector, scope = root) => {
     if (!scope) {
       return null;
     }
-    const values = [...scope.querySelectorAll(selector)].map(element => (
+    const values = productElements(selector).filter(element => scope.contains(element))
+    .map(element => (
       element.getAttribute('content') || element.getAttribute('data-product-sku') ||
       element.getAttribute('value') || element.innerText || ''
     ).trim()).filter(Boolean);
@@ -29,6 +32,7 @@ export const swansonCommerceExpression = `(() => {
     return matches.length === 1 ? matches[0][1] : null;
   };
   const context = () => [...root.querySelectorAll('.product-form-plan-option')]
+    .filter(element => productElements('.product-form-plan-option').includes(element))
     .slice(0, 20).map(element => (
       (element.classList.contains('selected') ? 'selected: ' : 'unselected: ') +
       element.innerText.slice(0, 3900)

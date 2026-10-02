@@ -57,12 +57,13 @@ export const swansonProductExpression = `(() => {
   if (headings.length !== 1) {
     throw productTemplateError;
   }
+  const identity = ${swansonIdentityExpression};
   return {
     url: location.href,
     capturedAt: new Date().toISOString(),
-    ...${swansonIdentityExpression},
+    ...identity,
     title: headings[0].innerText.trim(),
-    commerce: ${swansonCommerceExpression},
+    commerce: productCommerce(identity, ${swansonCommerceExpression}),
     gallery: ${galleryExpression},
     variantPicker: ${pickerExpression},
     sections: ${sectionsExpression}

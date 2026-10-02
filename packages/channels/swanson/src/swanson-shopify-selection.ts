@@ -4,12 +4,13 @@ import { swansonErrors } from "./swanson-errors.js";
 type JsonRecord = Record<string, unknown>;
 const isRecord = (value: unknown): value is JsonRecord =>
   value !== null && typeof value === "object" && !Array.isArray(value);
+export const SWANSON_RECOMMENDATIONS =
+  "constructor-recommendations, product-recommendations, product-card";
 
 /** Product cards can carry their own forms and pickers, including inside the sold-out detail. */
 export function swansonProductElements(document: Document, selector: string): Element[] {
   return [...document.querySelectorAll(selector)].filter(
-    (element) =>
-      !element.closest("constructor-recommendations, product-recommendations, product-card"),
+    (element) => !element.closest(SWANSON_RECOMMENDATIONS),
   );
 }
 
@@ -22,10 +23,13 @@ function identifier(value: unknown): string {
 }
 
 /** Shopify emits a JSON object on its own assignment line. Read data, never evaluate page code. */
-function metaProduct(document: Document): JsonRecord {
-  const declarations = [...document.querySelectorAll("script")].flatMap((script) => [
+export function swansonMetaProduct(document: Document): JsonRecord | null {
+  const declarations = swansonProductElements(document, "script").flatMap((script) => [
     ...(script.textContent ?? "").matchAll(/^\s*var\s+meta\s*=\s*(\{[^\r\n]*\});\s*$/gm),
   ]);
+  if (declarations.length === 0) {
+    return null;
+  }
   if (declarations.length !== 1) {
     throw swansonErrors.create("SWANSON.IDENTITY_UNVERIFIED");
   }
@@ -39,6 +43,14 @@ function metaProduct(document: Document): JsonRecord {
     throw swansonErrors.create("SWANSON.IDENTITY_UNVERIFIED");
   }
   return meta.product;
+}
+
+function metaProduct(document: Document): JsonRecord {
+  const product = swansonMetaProduct(document);
+  if (!product) {
+    throw swansonErrors.create("SWANSON.IDENTITY_UNVERIFIED");
+  }
+  return product;
 }
 
 /** Selection must be explicit on exactly one radio; a sole meta variant alone is not selection. */
@@ -88,7 +100,7 @@ function productDetail(document: Document): Element {
   return detail;
 }
 
-/** Single-variant sold-out pages omit the picker but explicitly name their selection on the detail. */
+/** Single-variant sold-out pages omit the picker but name their selection on the detail. */
 function detailSelection(document: Document, canonicalUrl: string) {
   const detail = productDetail(document);
   const ownUrl = detail.getAttribute("data-url");
@@ -108,7 +120,7 @@ function detailSelection(document: Document, canonicalUrl: string) {
   return [{ productId, variantIds: [variantId] }];
 }
 
-/** Sold-out pages replace the cart form, but still name the product and explicitly select its size. */
+/** Sold-out pages replace the cart form but still name the product and select its size. */
 export function swansonShopifySelection(document: Document, canonicalUrl: string) {
   const pickers = swansonProductElements(document, "main variant-picker");
   if (pickers.length === 0) {

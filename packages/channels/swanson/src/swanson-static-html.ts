@@ -11,6 +11,7 @@ import {
 } from "./swanson-product-expression.js";
 import { swansonStaticDocument } from "./swanson-static-dom.js";
 import { swansonProductElements, swansonShopifySelection } from "./swanson-shopify-selection.js";
+import { swansonCommerce } from "./swanson-commerce.js";
 
 // The challenge itself, not the precursor script present on normal product pages.
 const CHALLENGE =
@@ -38,6 +39,10 @@ function readProjection(
         productTemplateError: swansonErrors.create("SWANSON.PRODUCT_TEMPLATE"),
         productElements: (selector: string) => swansonProductElements(document, selector),
         shopifySelection: (canonicalUrl: string) => swansonShopifySelection(document, canonicalUrl),
+        productCommerce: (
+          identity: Parameters<typeof swansonCommerce>[1],
+          commerce: Parameters<typeof swansonCommerce>[2],
+        ) => swansonCommerce(document, identity, commerce),
       },
       { timeout: 10_000 },
     ) as Record<string, unknown>;
@@ -53,7 +58,7 @@ function readProjection(
   }
 }
 
-/** Read only the page's canonical handle and selected Shopify form before full product validation. */
+/** Read the page's canonical handle and selected Shopify form before full product validation. */
 export function parseSwansonStaticIdentity(html: string, pageUrl: string) {
   const raw = readProjection(html, pageUrl, swansonIdentityExpression);
   try {
