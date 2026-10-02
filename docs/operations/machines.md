@@ -668,3 +668,15 @@ declaration alone does not create capacity or certify a healthy worker.
 The warehouse check is verify-only. Set Southlake manually in the task's authorized Ego
 profile before testing; the channel never changes the warehouse or takes back user control.
 See [Costco operations](costco-brand-scans.md) for evidence, completeness and acceptance.
+
+## Settings added 2026-10-01/02 (Server 一, `manual-releases/deploy-r46`)
+
+| Setting | Where | Value on Server 一 | Meaning |
+|---|---|---|---|
+| `processing.ocrApi.jobControl` | worker | `true` | OCR jobs carry an ID; a timed-out job proven stopped counts as a known failure (next image is tried). |
+| `brandScans.wholefoods.readPauseMs` / `requestTimeoutMs` | api, worker | `2000` / `60000` | HTTP scans no longer use the browser-era 60 s pause. |
+| `brandScans.permits.wholefoods` `maxWaitSeconds` / `gapAfterSeconds` / `cooldownSeconds` | api | `120` / `2` / `60` | Was 900 / 60 / 1800 (browser era, shared IP). |
+| `queue.recentScanSkipHours` | api, worker | default `24` | A brand scan skips SKUs settled (completed or Review) in this window; `0` turns it off. Requeue and explicit runs are unaffected. |
+| `processing.codex.vision.visualProtocol` + `ingredientPresencePolicy` | worker | `label-visual-wire/3`, `allowNoOtherIngredientsSection: true` | The image reader reports whether an other-ingredients section is printed. **Changes the vision fingerprint**: `plan.visionConfigFingerprint` and `label.visionConfigFingerprint` must both be set to the value the vision settings compute (`c43f482d…` for the current settings; was `b6251a82…`). |
+
+Whole Foods brand search returns a different subset per call; a brand's products saturate after about 3–4 scans (Nordic Naturals 70, MegaFood 71, Ancient Nutrition 46 on 2026-10-01). Scan a brand several times; repeated SKUs are skipped by `recentScanSkipHours`.
