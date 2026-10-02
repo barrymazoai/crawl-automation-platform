@@ -38,4 +38,8 @@ Server 二已部署 `49bf609`，第二轮 Solaray run `2ca43098-fc07-4be9-9acb-1
 
 环境阻塞：Server 二 IOConsoleUsers 报 `CGSSessionScreenIsLocked=Yes`；原生 screenshot 超时，页面级 captureScreenshot(fromSurface=false) 返回 Unable to capture screenshot。锁屏是候选原因，尚需解锁后对照验证。独立诊断的 p91/p92/p93 均已精确关闭并核验不存在，保留基线 p1。Server 一 Docker 日志于 07:36:53–54 UTC 正常退出，Docker socket 不存在，数据库 127.0.0.1:55432 拒绝连接。Tailscale SSH 同时不可达，可经 Server 二跳转 LAN 并沿用已验证主机密钥访问。未擅自恢复可能由用户停止的服务；已请求说明和 Server 二解锁。第二轮精确页已关闭且本地 Codex 进程组不存在，但因数据库停止，账本停止/许可释放尚不能确认。不得宣称端到端验收成功或启动下一商品任务。
 
+`ccfb0d8` 已推送 main，43 项 harvest/native 纯回归及完整 pnpm check 通过。Server 二从 origin/main fresh clone 到 `manual-releases/dtc-native-ccfb0d8/source`，仅用于隔离接口测试。真实旧 openPage 成功读取 Solaray 的 793,182 字符 HTML；同源商品数据返回 1 个规格、2 项图片元数据；原生文件下载返回 22,147 字节 SVG。该下载样本实际为 Best Seller 徽章，只验证文件传输，**不计作商品图库或视觉验收**，未写入业务产品。诊断页 p94 / `560B64FDB7BCD5F6A324B0A7A6D3B232` 已关闭并核验 absent=true。完整报告保留在 Server 二 `manual-releases/dtc-native-20261002/native-evaluate-smoke.json`。
+
+待验收：环境恢复后的精确账本停止/许可释放；部署新修复；新 Solaray 任务完整轮播逐图检查、HTML/原图 R2 和下游处理；HMW 全目录发现/耗尽与站点分析；后续多规格、其他截图品牌和异常恢复。Server 一生产仍为 `92d4cb3`，Server 二生产仍为 `49bf609`，不能把 main 最新修复当成已上线。
+
 部署前所有队列自然暂停且无 held permit；部署后恢复原本 running 的 Amazon/GNC/Swanson/Whole Foods/Costco，DTC 批量队列保持 paused。配置和队列快照在两台机器各自的 `manual-releases/dtc-native-20261002/`，旧 PM2 配置由部署器留存。
