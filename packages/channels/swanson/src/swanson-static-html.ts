@@ -10,7 +10,7 @@ import {
   swansonProductExpression,
 } from "./swanson-product-expression.js";
 import { swansonStaticDocument } from "./swanson-static-dom.js";
-import { swansonShopifySelection } from "./swanson-shopify-selection.js";
+import { swansonProductElements, swansonShopifySelection } from "./swanson-shopify-selection.js";
 
 // The challenge itself, not the precursor script present on normal product pages.
 const CHALLENGE =
@@ -36,6 +36,7 @@ function readProjection(
         location: { href: pageUrl, origin: SWANSON_ORIGIN },
         getComputedStyle: () => ({ visibility: "visible", display: "block" }),
         productTemplateError: swansonErrors.create("SWANSON.PRODUCT_TEMPLATE"),
+        productElements: (selector: string) => swansonProductElements(document, selector),
         shopifySelection: (canonicalUrl: string) => swansonShopifySelection(document, canonicalUrl),
       },
       { timeout: 10_000 },

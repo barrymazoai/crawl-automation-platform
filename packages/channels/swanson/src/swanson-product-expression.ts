@@ -9,9 +9,9 @@ const canonicalExpression = `(
 )`;
 
 const formsExpression = `(() => {
-  const forms = [...document.querySelectorAll(
+  const forms = productElements(
     'product-form-component[data-product-id]'
-  )].map(form => ({
+  ).map(form => ({
     productId: form.getAttribute('data-product-id'),
     variantIds: [...form.querySelectorAll('input[name="id"]')].map(input => input.value)
   }));
@@ -29,12 +29,12 @@ const galleryExpression = `[...document.querySelectorAll(
 )].map(image => ({ url: image.currentSrc || image.src, alt: image.alt || '' }))`;
 
 const pickerExpression = `({
-  unmapped: [...document.querySelectorAll('input[role="radio"]')].filter(input =>
+  unmapped: productElements('input[role="radio"]').filter(input =>
     !input.hasAttribute('data-connected-product-url') || !input.hasAttribute('data-variant-id')
   ).length,
-  options: [...document.querySelectorAll(
+  options: productElements(
     'input[role="radio"][data-connected-product-url][data-variant-id]'
-  )].map(input => ({
+  ).map(input => ({
     group: input.name,
     label: input.value,
     url: new URL(input.getAttribute('data-connected-product-url'), location.href).href,
