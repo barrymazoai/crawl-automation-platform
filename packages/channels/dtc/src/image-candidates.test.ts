@@ -75,6 +75,32 @@ describe("observed product image renditions", () => {
     expect(imageUrls([`${hero}&width=400`, winner], context)).toEqual([absolute(winner)]);
   });
 
+  it("uses observed originals for legacy Shopify width paths while preserving square crops", () => {
+    const urls = [
+      "/cdn/shop/files/hero_2400x.png?v=1",
+      "/cdn/shop/files/hero_493x.png?v=1",
+      "/cdn/shop/files/hero.png?v=1",
+      "/cdn/shop/files/facts_713x.png?v=2",
+      "/cdn/shop/files/facts.png?v=2",
+      "/cdn/shop/files/hero_84x84.png?v=1",
+    ];
+    expect(imageUrls(urls, context)).toEqual([
+      absolute(urls[2] ?? ""),
+      absolute(urls[4] ?? ""),
+      absolute(urls[5] ?? ""),
+    ]);
+  });
+
+  it("never invents a legacy original or joins different versions", () => {
+    const urls = [
+      "/cdn/shop/files/hero_2400x.png?v=1",
+      "/cdn/shop/files/hero_493x.png?v=1",
+      "/cdn/shop/files/hero.png?v=2",
+      "/cdn/shop/files/hero_2400x.png?v=2&crop=top",
+    ];
+    expect(imageUrls(urls, context)).toEqual(urls.map(absolute));
+  });
+
   it("supports the external Shopify CDN without merging it with another origin", () => {
     const cdn = "https://cdn.shopify.com/s/files/1/123/files/facts.jpg?v=1";
     expect(imageUrls([`${cdn}&width=400`, `${cdn}&width=1600`, hero], context)).toEqual([

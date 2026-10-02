@@ -1,8 +1,9 @@
 /** Collapse only Shopify's width-only renditions; keep the exact observed winning URL. */
 export function observedImageSizes(urls: readonly string[]): string[] {
   const images = new Map<string, { url: string; width: number }>();
+  const observed = new Set(urls);
   for (const url of urls) {
-    const rendition = shopifyRendition(new URL(url));
+    const rendition = shopifyRendition(new URL(url), observed);
     const key = rendition?.key ?? url;
     const width = rendition?.width ?? 0;
     const previous = images.get(key);
@@ -20,7 +21,7 @@ function shopifyImage(url: URL): boolean {
   );
 }
 
-function shopifyRendition(url: URL): { key: string; width: number } | null {
+function shopifyRendition(url: URL, observed: Set<string>): { key: string; width: number } | null {
   // Height, crop, format and unknown transforms may change the label's content or legibility.
   if (
     !shopifyImage(url) ||
@@ -36,7 +37,21 @@ function shopifyRendition(url: URL): { key: string; width: number } | null {
   if (widths.length && !Number.isSafeInteger(width)) {
     return null;
   }
+  const original = observedOriginal(url, observed);
+  if (original) {
+    return { key: original, width: 0 };
+  }
   url.searchParams.delete("width");
   url.searchParams.sort();
   return { key: url.href, width };
+}
+
+/** Legacy width-only paths are aliases only when the unsized original was also observed. */
+function observedOriginal(url: URL, observed: Set<string>): string | null {
+  if (url.searchParams.has("width")) {
+    return null;
+  }
+  const original = new URL(url);
+  original.pathname = original.pathname.replace(/_[1-9]\d*x(\.[a-z0-9]+)$/i, "$1");
+  return original.href !== url.href && observed.has(original.href) ? original.href : null;
 }
