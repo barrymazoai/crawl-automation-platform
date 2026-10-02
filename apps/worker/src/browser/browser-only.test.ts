@@ -211,6 +211,7 @@ describe("browser-only worker startup", () => {
               captureBrowserProduct: expect.any(Function),
               scanBrandInBrowser: expect.any(Function),
               readBrandListing: expect.any(Function),
+              verifyBrowserStop: expect.any(Function),
             },
           }),
         ]);

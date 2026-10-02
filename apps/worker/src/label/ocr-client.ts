@@ -1,13 +1,25 @@
 import { OcrApi, OcrHttpJobControl, type OcrApiSettings } from "@crawl-automation/processing";
 
-/** OCR and its exact-job controls must use the same endpoint and HTTP transport. */
+interface OcrTransports {
+  fetch?: (request: Request) => Promise<Response>;
+  jobControlFetch?: (request: Request) => Promise<Response>;
+}
+
+/** Same configured endpoint; stop queries use an independent, fresh control connection. */
 export function ocrClient(
   settings: OcrApiSettings,
-  fetch: (request: Request) => Promise<Response> = globalThis.fetch,
+  transport: OcrTransports = {},
   verifiedFailures = true,
 ) {
   const jobControl = settings.jobControl
-    ? new OcrHttpJobControl({ baseUrl: settings.baseUrl, fetch })
+    ? new OcrHttpJobControl({
+        baseUrl: settings.baseUrl,
+        ...(transport.jobControlFetch ? { fetch: transport.jobControlFetch } : {}),
+      })
     : undefined;
-  return new OcrApi(settings, { fetch, verifiedFailures, ...(jobControl ? { jobControl } : {}) });
+  return new OcrApi(settings, {
+    ...(transport.fetch ? { fetch: transport.fetch } : {}),
+    verifiedFailures,
+    ...(jobControl ? { jobControl } : {}),
+  });
 }

@@ -35,3 +35,5 @@ export * from "./fetch/index.js";
 export * from "./browser/index.js";
 export * from "./errors/resource-health-errors.js";
 export * from "./execution/permit-execution.js";
+
+export * from "./fetch/job-control-fetch.js";

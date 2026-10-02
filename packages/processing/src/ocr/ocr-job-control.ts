@@ -1,3 +1,4 @@
+import { jobControlFetch } from "@crawl-automation/platform";
 import { z } from "zod";
 import type { OcrJobControl } from "./ocr-api.js";
 
@@ -13,7 +14,7 @@ const jobStatus = z.object({
 
 export interface OcrHttpJobControlOptions {
   baseUrl: string;
-  /** Use the same transport as OcrApi so routing and authentication match. */
+  /** Independent job-control transport; never capture an OCR upload signal or dispatcher. */
   fetch?: (request: Request) => Promise<Response>;
 }
 
@@ -24,7 +25,7 @@ export class OcrHttpJobControl implements OcrJobControl {
 
   constructor(options: OcrHttpJobControlOptions) {
     this.baseUrl = options.baseUrl.replace(/\/+$/, "");
-    this.fetch = options.fetch ?? globalThis.fetch;
+    this.fetch = options.fetch ?? jobControlFetch;
   }
 
   requestHeaders(jobId: string): Record<string, string> {

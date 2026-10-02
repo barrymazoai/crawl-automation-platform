@@ -129,6 +129,10 @@ export const appErrors = defineErrors({
     category: "RUNTIME",
     message: "Sending listing states to the product database is not enabled.",
   },
+  "PERMIT.VERIFICATION_NOT_CONFIGURED": {
+    category: "RUNTIME",
+    message: "Permit stop verification is not configured.",
+  },
   "PERMIT.NOT_FOUND": { category: "VALIDATION", message: "Permit not found or already released." },
   "PERMIT.OWNER_RUNNING": {
     category: "VALIDATION",
@@ -137,7 +141,7 @@ export const appErrors = defineErrors({
   "PERMIT.STOP_NOT_PROVEN": {
     category: "VALIDATION",
     message:
-      "The workflow holding this permit has not provably stopped (an Activity is pending, it closed under 5 minutes ago, or Temporal cannot find it).",
+      "The permit requires a closed exact owner, no pending Activities and stop proof for every executor.",
   },
   "DELIVERY.CHANNEL_NOT_CONFIGURED": {
     category: "RUNTIME",

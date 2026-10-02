@@ -48,7 +48,9 @@ export const ApiConfigSchema = z.strictObject({
     port: z.number().int().min(1024).max(65535),
   }),
   log: LogConfigSchema.default({ level: "info" }),
-  database: DatabaseConfigSchema,
+  database: DatabaseConfigSchema.refine((config) => config.maxConnections >= 2, {
+    message: "Stop verification needs one lock connection and one journal connection",
+  }),
   temporal: TemporalConfigSchema,
   delivery: z.strictObject({
     clusterId: z.string().min(1),

@@ -1,3 +1,5 @@
+import { verifyBrowserStop } from "../browser/verify-browser-stop.js";
+import { contextualActivity } from "./activity-context-handler.js";
 import { SiteAnalysisSchema } from "@crawl-automation/v3-contracts";
 import { PostgresBrandScans } from "@crawl-automation/adapters";
 import { checkScanCancellation } from "@crawl-automation/app";
@@ -32,7 +34,7 @@ export function browserActivities(parts: WorkerParts) {
       return parts.browser.scanner.scan({ ...request, checkpoint }, signal);
     },
   };
-  return Object.fromEntries(
+  const activities = Object.fromEntries(
     Object.entries(handlers).map(([name, run]) => [
       name,
       guarded(
@@ -45,4 +47,9 @@ export function browserActivities(parts: WorkerParts) {
       ),
     ]),
   );
+  return Object.assign(activities, { verifyBrowserStop: browserStopActivity(parts) });
+}
+
+function browserStopActivity(parts: WorkerParts) {
+  return contextualActivity("verifyBrowserStop", (raw) => verifyBrowserStop(parts, raw), parts.log);
 }

@@ -5,3 +5,4 @@ export * from "./collection/collection-model.js";
 export * from "./collection/brand-listing-model.js";
 export { BrowserScanInputSchema, type BrowserScanInput } from "./browser-scan-workflow.js";
 export * from "./site-analysis-workflow.js";
+export { BrowserStopInputSchema } from "./verify-browser-stop-workflow.js";

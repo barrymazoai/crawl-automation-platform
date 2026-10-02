@@ -80,11 +80,12 @@ function hold(resourceId: string) {
 }
 
 function activities(parts: WorkerParts): Record<string, (raw: unknown) => Promise<unknown>> {
-  return { ...browserActivities(parts), ...brandListingActivities(parts) };
+  const { verifyBrowserStop: _control, ...business } = browserActivities(parts);
+  return { ...business, ...brandListingActivities(parts) };
 }
 
 it.each(hosts)(
-  "%s refuses every browser entry point for the other host before beginning execution",
+  "%s refuses every browser business entry point for the other host before beginning execution",
   async (host) => {
     const test = fixture(host);
     hold(host === hosts[0] ? hosts[1] : hosts[0]);

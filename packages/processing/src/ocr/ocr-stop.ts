@@ -1,5 +1,5 @@
+import { ocrStopCause } from "./ocr-stop-cause.js";
 import {
-  isAppError,
   provePermitExecutionStopped,
   type PermitExecutionIdentity,
 } from "@crawl-automation/platform";
@@ -26,13 +26,18 @@ export async function verifyOcrStop(at: {
   identity: OcrExecutionIdentity;
   control: OcrJobControl | undefined;
   settings: OcrApiSettings;
+  /** Recovery checks the exact job once, without cancellation or polling. */
+  queryOnly?: boolean;
 }): Promise<OcrStopResult> {
   const { identity, control, settings } = at;
-  const supported = identity.metadata?.["jobControlSupported"] === true;
-  if (identity.endpoint !== settings.baseUrl || !control || !supported) {
+  if (!control || !supportsControl(identity, settings)) {
     return { stopped: false, attempts: 0, reason: "job_control_unavailable" };
   }
-  const signal = AbortSignal.timeout(settings.stopVerificationTimeoutMs);
+  const signal = AbortSignal.timeout(
+    at.queryOnly
+      ? Math.min(10_000, settings.stopVerificationTimeoutMs)
+      : settings.stopVerificationTimeoutMs,
+  );
   let attempts = 0;
   try {
     while (!signal.aborted) {
@@ -43,6 +48,9 @@ export async function verifyOcrStop(at: {
         await boundedControl(() => provePermitExecutionStopped(identity, proof), signal);
         return { stopped: true, attempts };
       }
+      if (at.queryOnly) {
+        return { stopped: false, attempts, reason: `job_${state}` };
+      }
       if (attempts === 1) {
         await boundedControl(() => control.cancel(identity.executionId, signal), signal);
       } else {
@@ -51,12 +59,7 @@ export async function verifyOcrStop(at: {
     }
     return { stopped: false, attempts, reason: "job_not_confirmed_stopped" };
   } catch (error) {
-    return {
-      stopped: false,
-      attempts,
-      reason: "job_control_failed",
-      cause: isAppError(error) ? error.code : String(error),
-    };
+    return { stopped: false, attempts, reason: "job_control_failed", cause: ocrStopCause(error) };
   }
 }
 
@@ -88,4 +91,8 @@ async function boundedControl<T>(operation: () => Promise<T>, signal: AbortSigna
   } finally {
     signal.removeEventListener("abort", onAbort);
   }
+}
+
+function supportsControl(identity: OcrExecutionIdentity, settings: OcrApiSettings): boolean {
+  return identity.endpoint === settings.baseUrl && identity.metadata?.jobControlSupported === true;
 }

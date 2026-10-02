@@ -1,27 +1,11 @@
+import type { StopVerification } from "../stops/stop-verification.js";
 import type { Logger } from "@crawl-automation/platform";
 import { appErrors } from "../errors.js";
 import type { HeldPermit } from "../runs/run-model.js";
 import { judgePermits, type StopEvidenceReader } from "../stops/judge-permits.js";
 
-export interface ResourceState {
-  resourceId: string;
-  capacity: number;
-  held: number;
-  healthy: boolean;
-  reason: string;
-}
-
-export interface ResourceStore {
-  list(): Promise<ResourceState[]>;
-  held(): Promise<HeldPermit[]>;
-  findHeld(permitId: string): Promise<HeldPermit | null>;
-  release(permitId: string): Promise<boolean>;
-}
-
-export interface ReleaseSweep {
-  released: string[];
-  kept: number;
-}
+import type { ResourceStore, ResourceState, ReleaseSweep } from "./resource-ports.js";
+export type { ResourceStore, ResourceState, ReleaseSweep } from "./resource-ports.js";
 
 /** Resource capacity, health and held permits. A permit is released only when its owner provably stopped. */
 export class ResourceService {
@@ -31,6 +15,7 @@ export class ResourceService {
       workflows: StopEvidenceReader;
       log: Logger;
       now?: () => Date;
+      stopVerification?: StopVerification;
     },
   ) {}
 
@@ -81,6 +66,21 @@ export class ResourceService {
       }
     }
     return { released, kept: judged.length - released.length };
+  }
+
+  verifyStop(permitId: string) {
+    return this.verification().verify(permitId, (id) => this.release(id));
+  }
+
+  verifyStops() {
+    return this.verification().sweep((id) => this.release(id));
+  }
+
+  private verification(): StopVerification {
+    if (!this.deps.stopVerification) {
+      throw appErrors.create("PERMIT.VERIFICATION_NOT_CONFIGURED");
+    }
+    return this.deps.stopVerification;
   }
 
   private now(): Date {

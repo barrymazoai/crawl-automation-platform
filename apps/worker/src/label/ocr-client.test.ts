@@ -45,7 +45,7 @@ it.each([undefined, false, true])(
         cancel_requested: false,
       });
     });
-    const client = ocrClient(settings, fetch);
+    const client = ocrClient(settings, { fetch, jobControlFetch: fetch });
     await expect(client.recognize(file, bytes, new AbortController().signal)).rejects.toMatchObject(
       {
         code: jobControl ? "OCR.JOB_FAILED" : "OCR.RESPONSE_UNKNOWN",
@@ -59,3 +59,37 @@ it.each([undefined, false, true])(
     expect(!!jobId).toBe(jobControl === true);
   },
 );
+
+it("does not carry the aborted OCR request or failed upload transport into stop verification", async () => {
+  const settings = OcrApiSettingsSchema.parse({
+    baseUrl: "https://ocr.example.test",
+    provider: "test/1",
+    jobControl: true,
+  });
+  const original = new AbortController();
+  let uploadSignal: AbortSignal | undefined;
+  const fetch = vi.fn(async (request: Request): Promise<Response> => {
+    uploadSignal = request.signal;
+    original.abort();
+    throw new TypeError("fetch failed", { cause: new Error("upload connection closed") });
+  });
+  const jobControlFetch = vi.fn(async (request: Request) => {
+    expect(uploadSignal?.aborted).toBe(true);
+    expect(request.signal).not.toBe(uploadSignal);
+    expect(request.signal.aborted).toBe(false);
+    expect(request.method).toBe("GET");
+    return Response.json({
+      state: "failed",
+      worker_pid: 42,
+      started_at: "2026-10-01T00:00:00Z",
+      finished_at: "2026-10-01T00:01:30Z",
+      cancel_requested: false,
+    });
+  });
+  const client = ocrClient(settings, { fetch, jobControlFetch });
+  await expect(client.recognize(file, bytes, original.signal)).rejects.toMatchObject({
+    details: { cleanup: { stopped: true } },
+  });
+  expect(fetch).toHaveBeenCalledOnce();
+  expect(jobControlFetch).toHaveBeenCalledOnce();
+});

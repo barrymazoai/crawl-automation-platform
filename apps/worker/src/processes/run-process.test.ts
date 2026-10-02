@@ -4,11 +4,11 @@ import type { WorkerParts } from "../container.js";
 import { runProcess } from "./run-process.js";
 import type { WorkerRole } from "./process-config.js";
 
-const { runWorkers, runBrowserRecovery } = vi.hoisted(() => ({
+const { runWorkers, runStopSweep } = vi.hoisted(() => ({
   runWorkers: vi.fn(),
-  runBrowserRecovery: vi.fn(async (_parts: unknown, _signal: AbortSignal) => undefined),
+  runStopSweep: vi.fn(async (_parts: unknown, _signal: AbortSignal) => undefined),
 }));
-vi.mock("../browser/browser-recovery-parts.js", () => ({ runBrowserRecovery }));
+vi.mock("../resources/stop-sweep.js", () => ({ runStopSweep }));
 vi.mock("@crawl-automation/platform/temporal-worker", () => ({ runWorkers }));
 vi.mock("./role-workers.js", () => ({ roleWorkers: vi.fn(() => []) }));
 
@@ -126,14 +126,14 @@ describe("worker-owned resource health lifecycle", () => {
   });
 });
 
-it("starts browser recovery only with the browser process and aborts it on shutdown", async () => {
-  const test = fixture("browser");
+it("starts API stop sweep only with the resources process and aborts it on shutdown", async () => {
+  const test = fixture("resources");
   const running = test.start();
-  await vi.waitFor(() => expect(runBrowserRecovery).toHaveBeenCalledOnce());
-  const signal = runBrowserRecovery.mock.calls[0]?.[1];
+  await vi.waitFor(() => expect(runStopSweep).toHaveBeenCalledOnce());
+  const signal = runStopSweep.mock.calls[0]?.[1];
   expect(signal?.aborted).toBe(false);
   test.stopped.resolve();
   await running;
   expect(signal?.aborted).toBe(true);
-  expect(test.run).not.toHaveBeenCalled();
+  expect(test.run).toHaveBeenCalledOnce();
 });

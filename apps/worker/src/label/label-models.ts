@@ -85,7 +85,7 @@ function createOcrStep(stores: LabelStores, verifiedFailures: boolean): OcrStep 
   }
   const { nodeId, storageId } = settings;
   const api = measuredProvider(
-    ocrClient(settings.ocrApi, globalThis.fetch, verifiedFailures),
+    ocrClient(settings.ocrApi, {}, verifiedFailures),
     "recognize",
     "ocr",
   );

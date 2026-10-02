@@ -1,3 +1,4 @@
+import { resourceService } from "./resources/resource-parts.js";
 import { siteAnalysisService } from "./site-analysis-parts.js";
 import type { UsageService, EvidenceService } from "@crawl-automation/app";
 import { configuredDtcSites } from "@crawl-automation/channel-dtc";
@@ -27,7 +28,7 @@ import {
   QueueService,
   type ListingStateService,
   type QueueDispatcher,
-  ResourceService,
+  type ResourceService,
   type ReviewService,
   RunService,
 } from "@crawl-automation/app";
@@ -132,14 +133,7 @@ function registerServices(container: Parts): void {
     reviews: asFunction(reviewService).singleton(),
     products: asFunction(productService).singleton(),
     history: asFunction(historyService).singleton(),
-    resources: asFunction(
-      (parts: ApiParts) =>
-        new ResourceService({
-          resources: parts.resourceStore,
-          workflows: parts.workflowTree,
-          log: parts.log,
-        }),
-    ).singleton(),
+    resources: asFunction(resourceService).singleton(),
     fleet: asFunction(fleetService).singleton(),
     listingStates: asFunction((parts: ApiParts) =>
       listingStateService(parts.database, parts.queue),

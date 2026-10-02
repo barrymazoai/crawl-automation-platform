@@ -46,7 +46,7 @@ export class BrowserRecovery {
     }
   }
 
-  private async recover(
+  async recover(
     entry: BrowserRecoveryEntry,
     scope: { host: string; taskSpaceId: number },
   ): Promise<void> {
@@ -56,14 +56,21 @@ export class BrowserRecovery {
         continue;
       }
       const cli = entry.executions.find(
-        (item) => item.identity.executionId === `${round.executionId}/cli`,
+        (item) =>
+          item.identity.executionId === `${round.executionId}/cli` &&
+          item.identity.metadata?.host === scope.host &&
+          "taskSpaceId" in item.identity &&
+          item.identity.taskSpaceId === scope.taskSpaceId,
       );
       if (!cli?.stopped || cli.identity.kind !== "browser-cli") {
         continue;
       }
       const targets = entry.executions.filter(
         (item) =>
-          item.identity.kind === "browser" && item.identity.metadata?.roundId === round.executionId,
+          item.identity.kind === "browser" &&
+          item.identity.metadata?.roundId === round.executionId &&
+          item.identity.metadata.host === scope.host &&
+          item.identity.taskSpaceId === scope.taskSpaceId,
       );
       await this.deps.stop({
         round,

@@ -1,3 +1,4 @@
+import { StopSweepSettingsSchema } from "./resources/stop-sweep-settings.js";
 import { isAbsolute } from "node:path";
 import type { LabelSettings } from "@crawl-automation/app";
 import {
@@ -139,6 +140,7 @@ export const WorkerConfigSchema = z
     resourceKinds: ResourceKindsSchema.default({}),
     /** Refreshed only by the process hosting the resources role. */
     resourceHealth: ResourceHealthConfigSchema.optional(),
+    stopSweep: StopSweepSettingsSchema.optional(),
     /** Listing-only route/options for permit-gated HTTP brand scans; uses storage.r2 for originals. */
     brandScans: ListingFetchSettingsSchema.extend({
       swanson: SwansonBrandScanSettingsSchema.optional(),
@@ -147,6 +149,10 @@ export const WorkerConfigSchema = z
   })
   .refine((config) => config.processes !== undefined || config.taskQueue !== undefined, {
     message: "Name the processes, or the pipeline's task queue",
+  })
+  .refine((config) => !config.browser || config.database.maxConnections >= 2, {
+    message: "Browser stop verification needs one lock connection and one journal connection",
+    path: ["database", "maxConnections"],
   })
   .superRefine(validateBrowserWorker);
 export type WorkerConfig = z.infer<typeof WorkerConfigSchema>;
