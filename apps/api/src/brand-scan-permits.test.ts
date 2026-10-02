@@ -1,4 +1,5 @@
-import { PostgresBrandScans } from "@crawl-automation/adapters";
+import { PostgresBrandScans, PostgresSiteAnalyses } from "@crawl-automation/adapters";
+import { configuredDtcSites } from "@crawl-automation/channel-dtc";
 import type { ListingStateService, QueueService } from "@crawl-automation/app";
 import { ListingPages } from "@crawl-automation/channels-core";
 import { createLogger, type Database, type TemporalClient } from "@crawl-automation/platform";
@@ -9,22 +10,25 @@ import fixture from "./fixtures/api-config.json" with { type: "json" };
 
 afterEach(() => vi.restoreAllMocks());
 
-it.each(["swanson", "wholefoods"])(
-  "wires %s to the HTTP ResourceGate listing workflow",
+it.each(["swanson", "wholefoods", "dtc"])(
+  "routes configured %s permits through the matching execution gateway",
   async (channel) => {
     const scanId = "11111111-1111-4111-8111-111111111111";
     const source = {
       sourceId: "22222222-2222-4222-8222-222222222222",
       channel,
       url:
-        channel === "swanson"
-          ? "https://www.swansonvitamins.com/collections/brand-now-foods"
-          : "https://www.wholefoodsmarket.com/grocery/search?k=Nordic+Naturals&rh=p_123%3A234060",
+        channel === "dtc"
+          ? "https://shop.example/collections/all"
+          : channel === "swanson"
+            ? "https://www.swansonvitamins.com/collections/brand-now-foods"
+            : "https://www.wholefoodsmarket.com/grocery/search?k=Nordic+Naturals&rh=p_123%3A234060",
     };
     vi.spyOn(PostgresBrandScans.prototype, "claim").mockResolvedValue([
       { scanId, source } as Awaited<ReturnType<PostgresBrandScans["claim"]>>[number],
     ]);
     vi.spyOn(PostgresBrandScans.prototype, "knownListings").mockResolvedValue([]);
+    vi.spyOn(PostgresSiteAnalyses.prototype, "settings").mockResolvedValue([]);
     vi.spyOn(PostgresBrandScans.prototype, "isCancellationRequested").mockResolvedValue(false);
     const finish = vi.spyOn(PostgresBrandScans.prototype, "finish").mockResolvedValue();
     const read = vi.spyOn(ListingPages.prototype, "read");
@@ -36,6 +40,9 @@ it.each(["swanson", "wholefoods"])(
         unresolvedFamilies: 0,
         full: true,
         credits: 0,
+        complete: true,
+        soldHere: true,
+        archiveKeys: [],
       }),
       cancel: vi.fn(),
     }));
@@ -47,11 +54,23 @@ it.each(["swanson", "wholefoods"])(
           resourceQueue: "resources",
           resourceId: `${channel}-brand-scan`,
           gapAfterSeconds: 30,
+          ...(channel === "dtc"
+            ? { additionalResources: [{ resourceId: "mini-model-account", units: 1 }] }
+            : {}),
         },
       },
     });
     const { runner } = brandScanParts({
       settings,
+      dtcSites: configuredDtcSites({
+        sites: [
+          {
+            siteKey: "shop.example",
+            platform: "shopify",
+            catalogUrl: "https://shop.example/collections/all",
+          },
+        ],
+      }),
       database: {} as Database,
       queue: {} as QueueService,
       listingStates: {} as ListingStateService,
@@ -60,21 +79,43 @@ it.each(["swanson", "wholefoods"])(
     });
     await runner?.tick(new AbortController().signal);
     expect(start).toHaveBeenCalledWith(
-      "BrandListingWorkflow",
+      channel === "dtc" ? "BrowserScanWorkflow" : "BrandListingWorkflow",
       expect.objectContaining({
         taskQueue: "pipeline",
         args: [
-          {
-            scanId,
-            source,
-            gapAfterSeconds: 30,
-            ...(channel === "wholefoods" ? { cooldownSeconds: 60 } : {}),
-            resources: {
-              queue: "resources",
-              maxWaitSeconds: channel === "wholefoods" ? 120 : 900,
-              activities: { readBrandListing: [{ resourceId: `${channel}-brand-scan`, units: 1 }] },
-            },
-          },
+          channel === "dtc"
+            ? {
+                scanId,
+                sourceId: source.sourceId,
+                sourceUrl: source.url,
+                channel: "dtc",
+                capture: "browser",
+                gapAfterSeconds: 30,
+                cooldownSeconds: 0,
+                resources: {
+                  queue: "resources",
+                  maxWaitSeconds: 900,
+                  activities: {
+                    scanBrandInBrowser: [
+                      { resourceId: "dtc-brand-scan", units: 1 },
+                      { resourceId: "mini-model-account", units: 1 },
+                    ],
+                  },
+                },
+              }
+            : {
+                scanId,
+                source,
+                gapAfterSeconds: 30,
+                ...(channel === "wholefoods" ? { cooldownSeconds: 60 } : {}),
+                resources: {
+                  queue: "resources",
+                  maxWaitSeconds: channel === "wholefoods" ? 120 : 900,
+                  activities: {
+                    readBrandListing: [{ resourceId: `${channel}-brand-scan`, units: 1 }],
+                  },
+                },
+              },
         ],
       }),
     );

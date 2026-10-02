@@ -12,6 +12,7 @@ function browserPermit(channel: string) {
   };
 }
 export const BROWSER_SCAN_PERMITS = {
+  dtc: browserPermit("dtc"),
   wholefoods: browserPermit("wholefoods"),
   costco: browserPermit("costco"),
 };

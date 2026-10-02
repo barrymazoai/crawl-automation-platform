@@ -135,3 +135,15 @@ Server 二 Codex login status 仍已登录 ChatGPT。等待后的一次独立 30
 根因已从留存 HTML 对照：旧 traitBlockRe 把嵌套 accordion__content 当成新区块边界，前一正文与后一 summary 配对；buildSupplementFacts 又把 Directions/notes/storage 及任何含 supplement 的标题当 Facts。修复以已有版本 linkedom 解析区块结构，按同一 details/summary、ARIA controls、同一 accordion 行或有界 heading/body 配对，不跨相邻区块；Facts 只接受真实 Facts/营养/活性成分表标题和表格，图片形式无文本时留空，图像仍按完整图库保留给下游。显式模型字段映射保留。采前预览要求调用实际提取方法，不能手写期望值代替。
 
 87 项本地纯回归通过；新增 Mini 真实原件回放使用原 HTML 实际重新提取字段，而非复用错误 records.fields，检查 Directions、Ingredients、空文本 Facts，再在独立临时目录校验品牌、规格、图库、字节及库存。Mini 原件回放、部署与新端到端任务尚待完成。目录耗尽、HMW 多规格和 Worker SIGKILL 异常恢复仍未验收。
+
+`c026d9b` 已通过全仓 check 并提交/push main；Server 二 fresh Git clone 的 61 项检查（包括第九轮原件实际提取/完整 harvest 重放）全部通过，不访问网络、不改旧记录。10:14:00 经 Git fresh clone/build 部署成功，只有 browser-worker 更换，Server 一仍 `92d4cb3`。第十轮 Solaray `4f615cb1-5129-46bf-8273-fa6f4aea4860` 于 10:14:22 启动；任务目录 `c6f4c6d360d0461860106603a35973f5244fe31a2ca3a6f19c6853e2a34d54b2`、p105 / `9671318C8DD9A4ECF0E5203644CC8344`。DTC 批量保持 paused，其他原本 running 的空队列已恢复原状态。CRAWLV3-165 库存修复进入 Review，166/163 仍待真实端到端结果。
+
+第九轮账本四项停止证明已逐项读出核验：Codex PID 47471 进程组 absent（10:05:32.674）、精确任务页 absent（10:05:33.020）、CLI PID 47469 exited、round ended；许可自然释放于 10:06:11.305 UTC。
+
+## 首个原生单品 collected 与目录接线问题（10:34 UTC）
+
+第十轮 `4f615cb1-5129-46bf-8273-fa6f4aea4860` 于 10:28:17.756 返回 collected。记录 `label-be75167e52eb56e572cf5270232095efad2fe6cc916b54779971a301de0675a2`：Iodine 53 mcg / 35%、Zinc 50 mg / 455%、Copper 2 mg / 222%、Pumpkin 10 mg，四项辅料和 Serving Size 1 VegCap 均与实际原图一致；warningCodes=[]。R2 42 份文件、7,931,219 字节全部回读大小/hash一致。下游 file.acquire 的 Facts 原件 SHA-256 `fb4d15753485a989a47e989fc22f98ebc3c4905cc67141ef97266d2716776318` 与采集原件相同，没有替换或重抓。四项停止证明齐全：Codex PID55894 进程组 absent、CLI55892 exited、p105精确目标10:23:51.547 absent、round ended；许可10:24:49.503释放，最终所有heldPermits=[]。
+
+字段预览本次确实执行 applyDetailExtractionProfile，不是手写期望值；正式记录 Ingredients/Directions/Warnings 分开，Facts 文本缺失时留空且两张图库完整。CRAWLV3-166 进入 Review。但网站 variants 中 `100 ct` 未进入后续 enrichment（candidate.variant.count=null，notes 说未提供包装数），单列 CRAWLV3-167 In Progress。标签配方结果与网站包装元数据是不同来源；不能改用每份量或图片猜规格，也不能因 collected 就宣称全部数据完整。
+
+10:30:02.482 发起 HMW 原生目录 scan `454aaa75-59fb-45d4-88af-8750a7ef1938`。10:30:36.441 以 Review `DTC.AGENT_REQUIRED/capture_model_permit_required` 结束，0页/0产品/0入队，未执行原生浏览器采集。账本实际 workflow 是 `brand-listing-*`，只申请 dtc-brand-scan 与 server2-ego-space-6；私有 API 配置 additionalResources 已有 mini-model-account。根因 gatedListings 依据 BROWSER_SCAN_PERMITS 排除浏览器渠道，该集合遗漏 DTC；TemporalBrandListings 因此抢先接走 DTC，未走已有正确保留 additionalResources 的 TemporalBrowserScans。CRAWLV3-168 In Progress。修复纳入 DTC 浏览器渠道，实际 brandScanParts/runner/Temporal 接线等33项回归通过；尚待 main 部署 Server 一和新受控目录验证。旧 Review 保留，DTC 批量仍 paused。
