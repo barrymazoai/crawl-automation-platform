@@ -189,3 +189,13 @@ HMW第三次原生目录scan `6e6a71fe-fca7-4bcc-8f72-5e470b7667e7`（10:55:18�
 旧 Shopify 对账算法提取到 `catalog-coverage.mjs`，供采集与宿主共用。Ego 原生 `captureShopifyCatalogCoverage` 按旧上限取得目录容器实际 DOM、HTML、截图及最多两页对应接口响应；每份响应先落盘后解析，失败也留存。只有页面集合、提交集合与接口完整集合相同且有空终页才通过，接口独有商品不纳入发现。宿主还核对保留 HTML 的目录链接、独立响应原件、source/seed 范围及平台身份；不接受手写计数。新目录证明类型区分 enumeration/shopify，旧普通目录证据默认 enumeration，不修改历史 Review。
 
 首轮本地 132 项旧 collector/harvest 与新目录测试、19 项宿主/模式测试通过；补充原合同要求多个稳定轮次的拒绝检查。类型检查通过，全仓检查已修正复杂度、函数长度和非空断言问题后通过。尚未以该实现切换 Worker、启动新 HMW 目录或多规格任务；Mini 留存原件重放、构建和真实验收继续执行。
+
+`6899b3b` 已 main 推送，Server 二 fresh Git clone 的 133 项 collector/harvest/原件重放和 20 项宿主检查全部通过，Worker 构建成功。原件重放读取 Solaray 第十轮 native-originals，先核对全部 receipt 大小/hash，在独立临时目录重新提取，不访问网站；规格、品牌、库存、字段和两张图片字节一致。11:37:15.867 UTC 正式部署完成，仅 browser-worker 切换；Server 一仍 bb8bb14。
+
+11:37:39.286 UTC 新 HMW 目录 scan `dd93e125-5c07-4a01-82d2-0172623ebb5e`、request `60fd5a05-7d82-4530-96e0-e8146275a4b6` 受理，11:37:43.356 开始。资源含 dtc-brand-scan / mini-model-account / server2-ego-space-6；Codex PID97928，p108 / `A587EE68878FEFA6209F3B6E2BC0FE70`，workspace `f30288e08e2067f5c19e76de00b85b1a420a763fc364dd9515d6b17bf59032fd`。11:41 已进入原生机械脚本执行，尚未报告验收通过。其他原 running 空渠道已按部署前快照恢复，DTC 仍 paused。
+
+## 原生单品被 pack 关键词提前排除（CRAWLV3-171）
+
+多规格验收准备时，从 R2 重读既有 HMW Travel Pack HTML：`v3/dtc-html/product-9fd4d4ee-f43b-40aa-9e54-a7f44cace411/original.html`，475111 字节、SHA256 `0dc966e703b803bbfc1c78b897313db09fb617cde22ab43d2732571ef9d91135` 一致。实际 ProductGroup 为同一 Multivitamin & Mineral，网站提供 One Week Supply / 30 Day Supply、SKU012/022；未重抓网页。旧 runHarvest 的 URL 预筛选会仅凭 travel-pack 排除，新的纯测试复现 complete=0/excluded=1。
+
+修复限定 Ego 宿主精确派发的 capture-only 单品：URL 范围和身份校验保留，原件采集不执行旧 pack/bundle/non-nutrition 关键词的采前筛选；保存完整资料后交现有下游判断。普通独立旧 harvest 继续原筛选规则，目录不因此直接采集商品。77 项 harvest/产品范围回归和全仓检查通过（另一个首次测试失败是 fixture HTML 少于既有 500 字符最低值，修正测试原件长度，未放松生产门槛）。该修复尚未部署，等待当前目录任务完成；155 的真实多规格验证仍待执行。

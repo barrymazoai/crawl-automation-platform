@@ -839,3 +839,29 @@ it("requires observed native gallery URLs before acquisition and excludes heuris
   expect(kept.records[0].fields.images).toEqual(observedGalleryUrls);
   expect(kept.records[0].gallery.map(image => image.url)).toEqual(observedGalleryUrls);
 });
+
+it.each(["travel-pack", "vitamin"])("retains raw native product evidence before semantic scope classification (%s)", async handle => {
+  const target = `https://shop.test/products/${handle}`;
+  const outDir = await makeOutDir();
+  const hooks = baseHooks([target]);
+  delete hooks.filterScope;
+  hooks.extract = async () => ({ records: [{
+    ...record(target, "Multivitamin Travel Pack"),
+    variants: [
+      { variantId: "week", sku: "012", title: "One Week Supply", options: { Supply: "One Week Supply" } },
+      { variantId: "month", sku: "022", title: "30 Day Supply", options: { Supply: "30 Day Supply" } },
+    ],
+  }], needsUpgrade: [], failed: [] });
+  const browser = { mode: "ego-native", productUrl: target, harvestHooks: {
+    fetchImage: hooks.fetchImage, fetchProductData: async () => null,
+    fetchPageHtml: async () => `<main>${"Multivitamin Travel Pack: One Week Supply / 30 Day Supply. ".repeat(12)}</main>`,
+  } };
+  const result = await runHarvest(browser, null, plan(), { outDir, hooks,
+    observedGalleryUrls: ["https://cdn.test/front.jpg", "https://cdn.test/back.jpg"],
+  });
+  expect(result.counts).toMatchObject({ complete: 1, excluded: 0 });
+  const [saved] = JSON.parse(await fs.readFile(path.join(outDir, "evidence/records.json"), "utf8"));
+  expect(saved.variants.map(variant => variant.sku)).toEqual(["012", "022"]);
+  expect(saved.gallery).toHaveLength(2);
+  expect(saved.pageHtml).toBeTruthy();
+});

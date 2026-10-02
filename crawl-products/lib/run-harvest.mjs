@@ -284,6 +284,7 @@ export async function runHarvest(browser, tab, planInput, opts = {}) {
     || workerProduct.origin !== new URL(plan.site.origin).origin)) {
     throw new Error("harvest_worker_product_scope_invalid");
   }
+  const captureOnly = browser?.mode === "ego-native" && workerProduct !== null;
   const observedGallery = browser?.mode === "ego-native" && workerProduct
     ? nativeGallery(opts.observedGalleryUrls) : null;
   const inWorkerScope = (value) => {
@@ -346,7 +347,10 @@ export async function runHarvest(browser, tab, planInput, opts = {}) {
           return await response.text();
         } catch { return null; }
       }),
-    filterScope: opts.hooks?.filterScope || filterHarvestStageRecords,
+    // The host has already dispatched this exact product. Preserve its raw
+    // evidence; pack/bundle/nutrition classification belongs to downstream work.
+    filterScope: captureOnly ? records => ({ included: records, excluded: [] })
+      : opts.hooks?.filterScope || filterHarvestStageRecords,
   };
 
   const budgets = plan.termination.budgets;
@@ -512,6 +516,7 @@ export async function runHarvest(browser, tab, planInput, opts = {}) {
   // bundle/non-nutrition URL never earns navigation retries.
   for (const url of discovered) {
     if (processed.has(url)) continue;
+    if (captureOnly) continue;
     const decision = classifyNutritionProductUrl(url);
     if (!decision.included) {
       attemptsByUrl.set(url, [
