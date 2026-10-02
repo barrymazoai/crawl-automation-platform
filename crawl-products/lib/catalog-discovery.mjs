@@ -21,7 +21,9 @@ export async function discoverCatalog(tab, seedUrls, options = {}) {
       }
       const before = found.size;
       const observed = await enumerate(tab, seedUrls, {
-        ...options, known: [...found],
+        // Each verification round must walk the catalog again. Passing prior URLs to
+        // the legacy collector can stop after two already-known pagination pages.
+        ...options, known: [], knownInlineRecords: [],
         onListingPage: async page => {
           const prefix = `catalog-round-${round}-page-${result.pages.length + 1}`;
           const htmlPath = `${prefix}.html`, screenshotPath = `${prefix}.png`;

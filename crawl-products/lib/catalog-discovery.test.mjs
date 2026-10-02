@@ -25,7 +25,7 @@ it("rechecks a single-page catalog, retaining each observed page before declarin
   expect(result).toMatchObject({ complete: true, zeroGrowthRounds: 1, productUrls: [url] });
   expect(result.rounds.map(r => r.growth)).toEqual([1, 0]);
   expect(result.pages).toHaveLength(2);
-  expect(f.enumerate.mock.calls[1][2].known).toEqual([url]);
+  expect(f.enumerate.mock.calls[1][2].known).toEqual([]);
   expect(JSON.parse(await readFile(join(f.outDir, "catalog-discovery.json"), "utf8"))).toEqual(result);
   expect(await readFile(join(f.outDir, result.pages[0].htmlPath), "utf8")).toContain("Zinc");
 });
