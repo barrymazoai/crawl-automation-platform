@@ -171,3 +171,13 @@ HMW 第二次原生目录扫描于10:47:23.600终态 cancelled，0产品入队�
 HMW第三次原生目录scan `6e6a71fe-fca7-4bcc-8f72-5e470b7667e7`（10:55:18提交）已只执行目录发现，不再runHarvest。实际发现6个产品，保存了目录HTML/截图、标题及路线；但只有一次collectProductUrls，events只有added=6，zeroGrowthRounds=0。Codex错误声称complete，宿主正确拦截catalog_completion_unverified，11:00:16.332 Review DTC.CAPTURE_EVIDENCE，0入队、heldPermits=[]。R2 archive21文件、4,107,716字节全部大小/hash回读一致。169阶段隔离已在实际任务生效，但目录完成仍失败；新增CRAWLV3-170 In Progress。
 
 170根因是拆目录阶段时只调用了底层单轮collector，漏掉旧runHarvest ENUMERATE-to-fixpoint循环。补充discoverCatalog仅做该机械阶段，保留逐页原始HTML/截图，至少两轮且额外一轮无增长才报告complete，预算/覆盖缺失/异常保持不完整且不自动业务重试；新增宿主按实际轮次/增长/产品集与留存页面校验。69项目录收集和旧collector纯测试通过，另有12项宿主校验/指令测试正在核验。修复尚未部署。
+
+## 目录设计复核与用户决策（11:20 UTC 后）
+
+补齐上节实际部署状态：`561457f1d1a4a731ad33a99ce02fc627ff3ac51b` 在 Server 二完成 Git clone/install/build，部署器于 11:09:25.251 UTC 记录 browser-worker 已替换、ready、Deployed；81 项相关检查在 Mini 通过。11:19:44 的 fleet 显示新 PID83772 正常轮询。尚未启动第四次 HMW 原生目录 scan，不能宣称真实目录验收通过。
+
+用户要求先讨论原设计和如何修改。再次对照 `20b09db` skill 与旧 V3 接入后，纠正上节过度概括：完整旧 skill 的 runHarvest 确有枚举至零增长循环，但旧 V3 本来就将目录和单品分开，并对受支持的 Shopify 单目录提供 DOM / 目录结果 / 对应接口完整集合的一致性与空终页证明。因此，所有目录强制额外遍历并不等价于原样恢复旧 V3 的完成判据。
+
+用户确认“确实复用旧机制比较好”。确定方向：共享旧 ENUMERATE 阶段和原契约，保留当前逐页证据与防提前结束修复；恢复旧 Shopify 有界集合对账校验，通过 Ego 原生操作取得原件；宿主按明确的证明类型核验，不维护两套枚举算法，不接回 CDP。详细设计为 `docs/spark/2026-10-02-dtc-legacy-catalog-reuse-design.md`。此方向尚未实施；CRAWLV3-170 保持 In Progress，旧 Review 和原件不改。
+
+上一轮部署的五个其他渠道仍临时 paused。核验它们均无 queued/ready/running、无 held permit 后，于 11:20:05.881 UTC 按部署前快照恢复 Amazon/GNC/Swanson/Whole Foods/Costco 原 running 状态；DTC 保持 paused。Server 一保留 `after-dtc-catalog-fixpoint-deploy-restored.json`，没有投送新 DTC、重新入队或改写历史业务结果。
