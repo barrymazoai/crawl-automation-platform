@@ -121,5 +121,5 @@ async function retainedFixture(
     await publication.publish(objectKey, bytes, mediaType, new AbortController().signal);
     files.push({ path, objectKey, mediaType, byteSize: bytes.length, sha256: sha256(bytes) });
   }
-  return { root, prefix, files, manifestKey: `${prefix}/capture.json` };
+  return { root, prefix, files, evidenceFiles: files, manifestKey: `${prefix}/capture.json` };
 }

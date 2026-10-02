@@ -2,7 +2,7 @@ import { afterEach, beforeEach, expect, it } from "vitest";
 import { mkdtemp, mkdir, rm, writeFile, symlink, realpath } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { captureFile, type CaptureFile } from "./archive.js";
+import { captureFile, captureOutputFiles, type CaptureFile } from "./archive.js";
 import { readCapturedProduct } from "./product-record.js";
 import { capturedProductProjection } from "./product-projection.js";
 import { dtcSitePolicy } from "../site-policy.js";
@@ -95,3 +95,103 @@ it("rejects path traversal and symlink evidence", async () => {
     code: "DTC.CAPTURE_PATH",
   });
 });
+
+it("accepts an archived workspace screenshot without admitting it as a product asset", async () => {
+  const retained = captureOutputFiles([
+    ...files.map((file) => ({ ...file, path: `capture/${file.path}` })),
+    { ...(files[0] as CaptureFile), path: "preflight.png" },
+  ]);
+  await writeFile(
+    join(root, "capture-review.json"),
+    JSON.stringify({ ...review, evidence: ["../preflight.png"] }),
+  );
+  await expect(readCapturedProduct({ root, ...retained, url })).resolves.toBeDefined();
+  await expect(readCapturedProduct({ root, files: retained.files, url })).rejects.toThrow();
+  await writeFile(
+    join(root, "evidence/records.json"),
+    JSON.stringify([
+      { ...record, gallery: [{ ...record.gallery[0], localPath: "../preflight.png" }] },
+    ]),
+  );
+  await expect(readCapturedProduct({ root, ...retained, url })).rejects.toThrow();
+});
+
+it("rejects unarchived review references outside the task", async () => {
+  await writeFile(
+    join(root, "capture-review.json"),
+    JSON.stringify({ ...review, evidence: ["../../other-task/preflight.png"] }),
+  );
+  await expect(readCapturedProduct({ root, files, evidenceFiles: files, url })).rejects.toThrow();
+});
+
+it.each([1, 2])(
+  "preserves website variants and their full gallery independently (%i variants)",
+  async (count) => {
+    const facts = "https://shop.example/gallery/facts.png";
+    const variants = ["one", "two"].slice(0, count).map((variantId) => ({
+      variantId,
+      sku: `website-sku-${variantId}`,
+      options: { Size: variantId === "one" ? "30 capsules" : "60 capsules" },
+      url: `${url}?variant=${variantId}`,
+    }));
+    await writeFile(
+      join(root, "evidence/records.json"),
+      JSON.stringify([
+        {
+          ...record,
+          variants,
+          gallery: [...record.gallery, { url: facts, localPath: "facts.png", mime: "image/png" }],
+        },
+      ]),
+    );
+    await writeFile(
+      join(root, "capture-review.json"),
+      JSON.stringify({
+        ...review,
+        selectedVariantId: "one",
+        galleryUrls: [image, facts],
+        imageAssignments: [
+          { url: image, variantId: "one", basis: "variant-featured" },
+          { url: facts, variantId: null, basis: "product-gallery" },
+        ],
+      }),
+    );
+    const result = await readCapturedProduct({
+      root,
+      url,
+      files: [...files, { ...(files[0] as CaptureFile), path: "facts.png" }],
+    });
+    const project = () =>
+      capturedProductProjection({
+        ...result,
+        url,
+        site: dtcSitePolicy({
+          siteKey: "shop.example",
+          platform: "shopify",
+          catalogUrl: "https://shop.example/collections/all",
+        }),
+      });
+    expect(result.record.variants).toEqual(variants);
+    expect(project().evidence.variants.map((variant) => variant.variantId)).toEqual(
+      variants.map((variant) => variant.variantId),
+    );
+    expect(
+      project().evidence.imageCandidates.map((candidate) => [candidate.url, candidate.variantId]),
+    ).toEqual([
+      [image, "one"],
+      [facts, count === 1 ? "one" : null],
+    ]);
+    if (count === 2) {
+      const other = "https://shop.example/gallery/other-size.png";
+      result.review.imageAssignments.push({
+        url: other,
+        variantId: "two",
+        basis: "variant-featured",
+      });
+      expect(project().evidence.imageCandidates.at(-1)).toMatchObject({
+        url: other,
+        variantId: "two",
+      });
+    }
+  },
+);

@@ -9,7 +9,7 @@ import {
   type RetainedPublication,
 } from "@crawl-automation/platform";
 import type { DtcAgentSettings } from "./settings.js";
-import { retainCaptureDirectory, type CaptureFile } from "./archive.js";
+import { captureOutputFiles, retainCaptureDirectory, type CaptureFile } from "./archive.js";
 import { dtcAgentErrors } from "./errors.js";
 import { capturePrompt } from "./prompt.js";
 import type { AgentCaptureRequest } from "./request.js";
@@ -41,17 +41,15 @@ export class DtcCaptureAgent {
     } finally {
       files = await this.finish(page, { cwd, prefix });
     }
-    files = files
-      .filter((file) => file.path.startsWith("capture/"))
-      .map((file) => ({ ...file, path: file.path.slice(8) }));
+    const retained = captureOutputFiles(files);
     const manifestKey = `${prefix}/capture.json`;
     await publication.publish(
       manifestKey,
-      Buffer.from(JSON.stringify({ request, files })),
+      Buffer.from(JSON.stringify({ request, ...retained })),
       "application/json",
       signal,
     );
-    return { root: outDir, prefix, files, manifestKey };
+    return { root: outDir, prefix, ...retained, manifestKey };
   }
 
   private async prepare(operationId: string) {
@@ -122,7 +120,7 @@ export class DtcCaptureAgent {
     try {
       await page?.close();
     } finally {
-      const signal = AbortSignal.timeout(120_000);
+      const signal = AbortSignal.timeout(300_000);
       files = await retainCaptureDirectory(
         this.deps.publication,
         { root: input.cwd, prefix: input.prefix },

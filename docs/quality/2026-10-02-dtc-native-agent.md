@@ -51,3 +51,13 @@ Server 一 Docker/Postgres 已恢复。第二轮真实 Workflow ID 为 `product-
 08:11 UTC Server 二已从 origin/main fresh clone/build 部署 `3cf56e9`（包含 `13fc82b` 和 `ccfb0d8`），唯一 browser Worker 健康检查通过；Server 一保持 `92d4cb3`。08:11:50 新受控 Solaray 验收 run `3f9250b2-0478-4aad-8734-40c1cd0b9aad` 已受理，DTC 批量队列保持 paused。此处仅记录测试开始，不代表产品采集或端到端已通过。
 
 部署前所有队列自然暂停且无 held permit；部署后恢复原本 running 的 Amazon/GNC/Swanson/Whole Foods/Costco，DTC 批量队列保持 paused。配置和队列快照在两台机器各自的 `manual-releases/dtc-native-20261002/`，旧 PM2 配置由部署器留存。
+
+## 第三轮归档失败及交接回归（08:21 UTC）
+
+第三轮 `3f9250b2-0478-4aad-8734-40c1cd0b9aad` 的 Codex 于 08:18:56 退出，最终保存一条 Solaray Zinc Copper record、一个规格 `32703815778364` 和两张图库原图。随后 finish 的 120 秒原件归档超时，08:21:01 Workflow 以 Review `PIPELINE.ACTIVITY_UNRESOLVED` 结束；不能将 Workflow COMPLETED 或模型自报 complete 当成业务成功。原件仍位于任务目录 `8598f052cfafa059085c8c75e9b1d296e63ce4fc792781627442bae7f592e201`，包含模型修正前的两轮 capture 副本。p98 / `81C4F1EC8C6E708377DB58E207AD78F3` 已关闭，space 6 仅余既有 p1，heldPermits=[]。
+
+本地修复：归档最多并行四份文件、等待同批全部上传停止后才返回失败，归档上限五分钟；review 允许引用同一 workspace 已归档的截图，产品 HTML/图片仍限制在 capture 内，不放宽读文件的穿越/符号链接保护；仅一个规格时，保留其商品共用图库图并绑定已验证的选中规格。旧逻辑会丢弃 Solaray 的共享成分表图，因为该图的 assignment.variantId=null、选中规格非空。35 项针对性测试及全仓 pnpm check 通过，服务器尚未部署。
+
+模型声称逐图视觉验证，但 exec JSON 记录中没有独立看图事件，尚未确认该日志是否完整记录此工具，不据此认定视觉验收通过。prompt 已明确要求使用 view_image 并记录逐图观察。旧版变体文档已复读：平台商品先保存全部 variants 和图库，基础商品语义处理后再展开规格；无法确定的规格图片不得混用。Solaray 只有一个规格，本次不是多规格内容歧义。多规格、HMW 目录/分析及 R2 到后续处理的端到端验收仍待完成。CRAWLV3-163 已补充精简状态评论。
+
+用户进一步纠正：规格来自网站自身，而非图片。已移除新 capture projection 中 `variant_gallery_unassigned` 的前置拒绝及按默认规格筛掉其余图片的行为；交接保留全部网站 variants 和全部图库候选，单规格共享图片可归属唯一规格，多规格未明确绑定的图片维持 null、已知其他规格图片保持其原 ID。prompt 明确 SKU/选项/平台数据才是规格来源，共用图片未绑定本身不构成采集失败。没有放松后续 planner 的规格隔离，当前后续处理对多规格共享素材仍可能产生 CHANNEL.VARIANT_CONFLICT；CRAWLV3-155 继续跟踪旧版按基础商品处理后展开规格与现行处理链的差异，不能把本次修复称为多规格端到端通过。

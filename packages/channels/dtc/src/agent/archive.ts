@@ -13,6 +13,18 @@ export const CaptureFileSchema = z.strictObject({
 });
 export type CaptureFile = z.infer<typeof CaptureFileSchema>;
 
+/** Only already retained workspace files may serve as review references outside capture/. */
+export function captureOutputFiles(archived: CaptureFile[]) {
+  const files = archived
+    .filter((file) => file.path.startsWith("capture/"))
+    .map((file) => ({ ...file, path: file.path.slice(8) }));
+  const evidenceFiles = archived.map((file) => ({
+    ...file,
+    path: file.path.startsWith("capture/") ? file.path.slice(8) : `../${file.path}`,
+  }));
+  return { files, evidenceFiles };
+}
+
 export async function captureFile(root: string, name: string): Promise<Buffer> {
   const path = resolve(root, name);
   const local = relative(resolve(root), path);
@@ -37,26 +49,49 @@ export async function retainCaptureDirectory(
   const names = await captureNames(input.root);
   const files: CaptureFile[] = [];
   let total = 0;
-  for (const path of names) {
-    const bytes = await captureFile(input.root, path);
-    total += bytes.length;
+  for (let index = 0; index < names.length; index += 4) {
+    signal.throwIfAborted();
+    const batch = await Promise.all(
+      names.slice(index, index + 4).map(async (path) => ({
+        path,
+        bytes: await captureFile(input.root, path),
+      })),
+    );
+    total += batch.reduce((size, file) => size + file.bytes.length, 0);
     if (total > 256 * 1024 * 1024) {
       throw dtcAgentErrors.create("DTC.CAPTURE_LIMIT");
     }
-    if (!bytes.length) {
-      continue;
-    }
-    const file = {
-      path,
-      objectKey: `${input.prefix}/files/${sha256(Buffer.from(path))}`,
-      sha256: sha256(bytes),
-      byteSize: bytes.length,
-      mediaType: captureMime(path),
-    };
-    await publication.publish(file.objectKey, bytes, file.mediaType, signal);
-    files.push(file);
+    files.push(...(await retainBatch(publication, { batch, prefix: input.prefix }, signal)));
   }
   return files;
+}
+
+async function retainBatch(
+  publication: RetainedPublication,
+  input: { batch: { path: string; bytes: Buffer }[]; prefix: string },
+  signal: AbortSignal,
+) {
+  const results = await Promise.allSettled(
+    input.batch
+      .filter(({ bytes }) => bytes.length)
+      .map(async ({ path, bytes }) => {
+        const file = {
+          path,
+          objectKey: `${input.prefix}/files/${sha256(Buffer.from(path))}`,
+          sha256: sha256(bytes),
+          byteSize: bytes.length,
+          mediaType: captureMime(path),
+        };
+        await publication.publish(file.objectKey, bytes, file.mediaType, signal);
+        return file;
+      }),
+  );
+  return results.map((result) => {
+    if (result.status === "rejected") {
+      throw result.reason;
+    }
+    return result.value;
+  });
 }
 
 async function captureNames(root: string): Promise<string[]> {

@@ -50,6 +50,7 @@ export type CaptureReview = z.infer<typeof ReviewSchema>;
 export async function readCapturedProduct(input: {
   root: string;
   files: CaptureFile[];
+  evidenceFiles?: CaptureFile[];
   url: string;
 }) {
   const records = z
@@ -67,7 +68,10 @@ export async function readCapturedProduct(input: {
   ) {
     throw dtcAgentErrors.create("DTC.CAPTURE_EVIDENCE");
   }
-  verifyGallery(record, review, input.files);
+  verifyGallery(record, review, {
+    files: input.files,
+    evidenceFiles: input.evidenceFiles ?? input.files,
+  });
   verifyVariant(record, review, input.url);
   const htmlPath =
     typeof record.pageHtml === "string" ? record.pageHtml : record.pageHtml.localPath;
@@ -96,9 +100,14 @@ function verifyVariant(record: HarvestRecord, review: CaptureReview, url: string
   }
 }
 
-function verifyGallery(record: HarvestRecord, review: CaptureReview, files: CaptureFile[]) {
+function verifyGallery(
+  record: HarvestRecord,
+  review: CaptureReview,
+  retained: { files: CaptureFile[]; evidenceFiles: CaptureFile[] },
+) {
   const urls = new Set(record.gallery.map((image) => image.url));
-  const known = new Set(files.map((file) => file.path));
+  const known = new Set(retained.files.map((file) => file.path));
+  const proof = new Set(retained.evidenceFiles.map((file) => file.path));
   const assigned = new Set(review.imageAssignments.map((image) => image.url));
   if (
     urls.size !== record.gallery.length ||
@@ -108,7 +117,7 @@ function verifyGallery(record: HarvestRecord, review: CaptureReview, files: Capt
     review.imageAssignments.length !== urls.size ||
     [...assigned].some((url) => !urls.has(url)) ||
     record.gallery.some((image) => !known.has(image.localPath)) ||
-    review.evidence.some((path) => !known.has(path))
+    review.evidence.some((path) => !proof.has(path))
   ) {
     throw dtcAgentErrors.create("DTC.CAPTURE_EVIDENCE");
   }

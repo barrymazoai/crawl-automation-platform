@@ -53,6 +53,7 @@ it.each(["single-brand", "multi-brand", "foreign-domain"] as const)(
             root,
             prefix: "test",
             manifestKey: "test/capture.json",
+            evidenceFiles: [],
             files: [
               {
                 path: "page.png",

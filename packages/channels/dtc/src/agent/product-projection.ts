@@ -6,7 +6,6 @@ import { dtcBrandSource } from "../brand-source.js";
 import type { DtcSitePolicy } from "../site-policy.js";
 import type { DtcRendered } from "../evidence.js";
 import type { HarvestRecord, CaptureReview } from "./product-record.js";
-import { dtcAgentErrors } from "./errors.js";
 
 /** Converts retained harvest evidence only; no fixed DOM/gallery selector or new website fetch. */
 interface ProjectionInput {
@@ -77,20 +76,19 @@ function productEvidence(input: ProjectionInput, observedBrand: string | null) {
           },
         ]
       : [],
-    imageCandidates: selectedImages(review, record.variants.length),
+    imageCandidates: capturedImages(review, record.variants.length),
     warnings: record.flags,
   });
 }
 
-function selectedImages(review: CaptureReview, variantCount: number) {
-  if (variantCount > 1 && review.imageAssignments.some((image) => image.variantId === null)) {
-    throw dtcAgentErrors.create("DTC.CAPTURE_REVIEW", {
-      details: { reason: "variant_gallery_unassigned" },
-    });
-  }
-  return review.imageAssignments
-    .filter((image) => image.variantId === review.selectedVariantId)
-    .map((image) => ({ ...image, verifiedOriginal: false as const }));
+function capturedImages(review: CaptureReview, variantCount: number) {
+  // Capture retains every image. Only the downstream planner decides variant-scoped use.
+  return review.imageAssignments.map((image) => ({
+    ...image,
+    variantId:
+      variantCount === 1 && image.variantId === null ? review.selectedVariantId : image.variantId,
+    verifiedOriginal: false as const,
+  }));
 }
 
 function stringField(record: HarvestRecord, key: string): string | null {
