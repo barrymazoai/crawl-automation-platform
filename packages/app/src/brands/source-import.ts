@@ -9,6 +9,7 @@ import type { BrowserBrandScanners } from "../brand-scans/ports.js";
 import { sourceUrlOf } from "../brand-scans/scan-listing.js";
 import { ScanChannelSchema, type ScanChannel } from "../brand-scans/scan-model.js";
 import type { BrandName, BrandSourceImportStore } from "./source-import-store.js";
+import { assertSourcePolicy } from "./source-policy.js";
 export type { BrandName, BrandSourceImportStore } from "./source-import-store.js";
 
 /** A channel's brand list, as the site's brand directory shows it (name and brand listing URL). */
@@ -65,7 +66,11 @@ export class BrandSourceImport {
 
   async import(raw: unknown): Promise<SourceImportResult> {
     const { channel, entries } = ImportSourcesSchema.parse(raw);
-    const normalise = sourceUrlOf(this.deps, channel);
+    const sourceUrl = sourceUrlOf(this.deps, channel);
+    const normalise = (entry: Entry) => {
+      assertSourcePolicy(this.deps.registry, { channel, url: entry.url, brandName: entry.name });
+      return sourceUrl(entry.url);
+    };
     const brands = await this.deps.store.brandNames();
     const exact = new Map(brands.map((brand) => [brand.name.toLowerCase(), brand]));
     const result: SourceImportResult = {
@@ -96,9 +101,9 @@ export class BrandSourceImport {
     return { ...result, ...written };
   }
 
-  private sourceUrl(normalise: (url: string) => string, entry: Entry, result: SourceImportResult) {
+  private sourceUrl(normalise: (entry: Entry) => string, entry: Entry, result: SourceImportResult) {
     try {
-      return normalise(entry.url);
+      return normalise(entry);
     } catch (error) {
       recordRecovery(error, { operation: "source-import" });
       result.refused.push({

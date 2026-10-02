@@ -17,6 +17,7 @@ export class PostgresScanCancellation {
            AND ($1::uuid[] IS NULL OR scan_id = ANY($1::uuid[]))
            AND ($2::uuid IS NULL OR request_id = $2::uuid)
            AND ($3::text IS NULL OR channel = $3)
+           AND ($5::uuid[] IS NULL OR source_id = ANY($5::uuid[]))
          ORDER BY scan_id FOR UPDATE),
        updated AS (
          UPDATE brand_scan sc SET cancellation_requested_at = clock_timestamp(),
@@ -32,6 +33,7 @@ export class PostgresScanCancellation {
         query.requestId ?? null,
         query.channel ?? null,
         JSON.stringify(cancelledScanResult()),
+        query.sourceIds ?? null,
       ],
     );
     return rows[0] ?? { cancelled: 0, cancellationRequested: 0 };

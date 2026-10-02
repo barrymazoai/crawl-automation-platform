@@ -25,7 +25,6 @@ import {
 } from "@crawl-automation/channels-wholefoods";
 import type { EgoPages, RetainedPublication } from "@crawl-automation/platform";
 import { acceptsAddress, BrowserScanners, type BrowserScanCapability } from "./browser-scanners.js";
-import type { ManagedBrowserRounds } from "./managed-rounds.js";
 
 function storePreparation(browser: EgoPages, store: WholeFoodsStore) {
   let setup: Promise<unknown> | null = null;
@@ -66,7 +65,7 @@ function dtcScanner(deps: {
 /** Both Minis use this composition; routing asks URL capabilities, never switches on channel IDs. */
 export function buildBrowserScanners(deps: {
   ego: EgoPages;
-  rounds: ManagedBrowserRounds;
+  rounds: Pick<EgoPages, "round">;
   publication: RetainedPublication;
   store: WholeFoodsStore;
   dtcSites?: readonly DtcSitePolicy[];

@@ -12,6 +12,7 @@ export type PermitExecutionIdentity = {
 } & (
   | { kind: "ocr"; endpoint: string }
   | { kind: "browser"; taskSpaceId: number }
+  | { kind: "browser-cli"; taskSpaceId: number }
   | { kind: "browser-round"; taskSpaceId: number }
   | { kind: "codex"; pid: number; host: string; startedAt: string }
 );

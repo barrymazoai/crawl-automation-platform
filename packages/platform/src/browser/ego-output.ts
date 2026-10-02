@@ -4,7 +4,7 @@ import { execa } from "execa";
 import { z } from "zod";
 import { egoErrors } from "./ego-errors.js";
 import { EGO_MARKER } from "./ego-script.js";
-import type { EgoSettings } from "./ego-settings.js";
+import { EgoSettingsSchema, type EgoSettings } from "./ego-settings.js";
 
 export const EgoFailureSchema = z.object({
   name: z.string(),
@@ -13,6 +13,11 @@ export const EgoFailureSchema = z.object({
 });
 
 const MessageSchema = z.discriminatedUnion("kind", [
+  z.object({
+    kind: z.literal("health"),
+    code: z.string().nullable(),
+    targets: z.array(z.string()),
+  }),
   z.object({ kind: z.literal("stop"), reason: z.literal("user-control") }),
   z.object({ kind: z.literal("opened"), targetId: z.string().min(1) }),
   z.object({
@@ -31,23 +36,27 @@ export type EgoRoundFailure = z.infer<typeof EgoFailureSchema>;
 interface CommandOptions {
   script: string;
   signal: AbortSignal;
+  timeoutMs?: number | undefined;
   opened?: (targetId: string) => Promise<void>;
 }
 
 /** Reads opened targets while the runtime is still running, so worker loss retains ownership. */
 export async function executeEgoScript(settings: EgoSettings, options: CommandOptions) {
-  const subprocess = execa(settings.cliPath, ["nodejs"], {
+  const config = EgoSettingsSchema.parse(settings);
+  const subprocess = execa(config.cliPath, ["nodejs"], {
     input: options.script,
     cancelSignal: options.signal,
-    timeout: settings.roundTimeoutMs,
+    timeout: options.timeoutMs ?? config.roundTimeoutMs,
     all: true,
-    maxBuffer: settings.maxHtmlBytes * 2 + 65_536,
-    forceKillAfterDelay: 5_000,
+    maxBuffer: config.maxHtmlBytes * 2 + 65_536,
+    forceKillAfterDelay: config.killGraceMs,
+    // Ego is already running outside this group; only this CLI and its request-runtime children die.
+    killDescendants: true,
     reject: false,
   });
   const output = collectMessages(subprocess.all, options.opened);
   const [answer, captured] = await Promise.all([subprocess, output]);
-  return { answer, ...captured };
+  return { answer, pid: subprocess.pid, ...captured };
 }
 
 async function collectMessages(stream: Readable, opened?: (targetId: string) => Promise<void>) {

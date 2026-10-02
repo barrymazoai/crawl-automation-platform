@@ -4,7 +4,11 @@ import type { WorkerParts } from "../container.js";
 import { runProcess } from "./run-process.js";
 import type { WorkerRole } from "./process-config.js";
 
-const { runWorkers } = vi.hoisted(() => ({ runWorkers: vi.fn() }));
+const { runWorkers, runBrowserRecovery } = vi.hoisted(() => ({
+  runWorkers: vi.fn(),
+  runBrowserRecovery: vi.fn(async (_parts: unknown, _signal: AbortSignal) => undefined),
+}));
+vi.mock("../browser/browser-recovery-parts.js", () => ({ runBrowserRecovery }));
 vi.mock("@crawl-automation/platform/temporal-worker", () => ({ runWorkers }));
 vi.mock("./role-workers.js", () => ({ roleWorkers: vi.fn(() => []) }));
 
@@ -120,4 +124,16 @@ describe("worker-owned resource health lifecycle", () => {
     test.stopped.resolve();
     await running;
   });
+});
+
+it("starts browser recovery only with the browser process and aborts it on shutdown", async () => {
+  const test = fixture("browser");
+  const running = test.start();
+  await vi.waitFor(() => expect(runBrowserRecovery).toHaveBeenCalledOnce());
+  const signal = runBrowserRecovery.mock.calls[0]?.[1];
+  expect(signal?.aborted).toBe(false);
+  test.stopped.resolve();
+  await running;
+  expect(signal?.aborted).toBe(true);
+  expect(test.run).not.toHaveBeenCalled();
 });

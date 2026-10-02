@@ -70,6 +70,7 @@ export function expectMarkers(history: History, expected: readonly PatchMarker[]
     "family-formula-outcomes-v1",
     "brand-listing-cooldown-v1",
     stopProofMarker,
+    "browser-resource-outage-wait-v1",
   ] as const;
   const found = markers.filter((marker) => hasMarker(history, marker));
   expect(found).toEqual(markers.filter((marker) => expected.includes(marker)));

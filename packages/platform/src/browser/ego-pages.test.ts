@@ -15,6 +15,10 @@ async function fakeEgo(lines: unknown[], exitCode = 0) {
 const chunks = [];
 process.stdin.on("data", (chunk) => chunks.push(chunk));
 process.stdin.on("end", () => {
+  if (Buffer.concat(chunks).toString().includes('kind: "health"')) {
+    console.log(${JSON.stringify(EGO_MARKER)} + JSON.stringify({kind: "health", code: null, targets: []}));
+    return;
+  }
   require("node:fs").writeFileSync(${JSON.stringify(stdinPath)}, Buffer.concat(chunks));
   console.log("ego runtime log line");
   for (const line of ${JSON.stringify(printed)}) console.log(line);
@@ -93,11 +97,31 @@ describe("Ego task pages", () => {
     });
   });
 
-  it("treats a runtime that answered nothing as unavailable", async () => {
+  it("retains cleanup pending when a runtime answered nothing", async () => {
     const ego = await fakeEgo([], 3);
     await expect(ego.pages.round("return 1;", {}, signal())).rejects.toMatchObject({
+      code: "BROWSER.PAGE_CLEANUP_PENDING",
+      details: { interrupted: "BROWSER.UNAVAILABLE" },
+    });
+  });
+
+  it("does not pass a partial page to content parsing after an uncoded readiness failure", async () => {
+    const failure = { name: "Error", code: null, message: "connection lost" };
+    const ego = await fakeEgo([
+      {
+        kind: "result",
+        targetId: "T1",
+        closed: true,
+        failure: null,
+        value: { ...drawn, ready: false, readinessFailure: failure },
+      },
+    ]);
+    await expect(
+      ego.pages.read({ url: drawn.url, readySelector: "h1", timeoutMs: 5000 }, signal()),
+    ).rejects.toMatchObject({
       code: "BROWSER.UNAVAILABLE",
-      details: { exitCode: 3 },
+      category: "RUNTIME",
+      details: { failure },
     });
   });
 

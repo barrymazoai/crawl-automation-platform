@@ -6,11 +6,12 @@ import { ScanChannelSchema, type ScanResult } from "./scan-model.js";
 export const CancelScansSchema = z
   .strictObject({
     scanIds: z.array(z.uuid()).min(1).max(1_000).optional(),
+    sourceIds: z.array(z.uuid()).min(1).max(1_000).optional(),
     requestId: z.uuid().optional(),
     channel: ScanChannelSchema.optional(),
   })
-  .refine((query) => !!(query.scanIds || query.requestId || query.channel), {
-    message: "Name scan IDs, a request ID or a channel",
+  .refine((query) => !!(query.scanIds || query.sourceIds || query.requestId || query.channel), {
+    message: "Name scan IDs, source IDs, a request ID or a channel",
   });
 export type CancelScans = z.infer<typeof CancelScansSchema>;
 export interface CancelScanCounts {

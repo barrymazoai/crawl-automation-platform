@@ -3,6 +3,7 @@ import { DiskSpace, FleetOcrHealth, PostgresResourceHealth } from "@crawl-automa
 import { TemporalTaskQueues } from "@crawl-automation/adapters";
 import { ResourceHealthMonitor } from "@crawl-automation/app";
 import { connectTemporal } from "@crawl-automation/platform";
+import { browserHealthReason, isBrowserResource } from "./browser-health.js";
 import type { CoreParts } from "../core-parts.js";
 
 export interface ResourceHealthRunner {
@@ -25,13 +26,22 @@ async function runResourceHealth(parts: CoreParts, signal: AbortSignal): Promise
   try {
     const monitor = new ResourceHealthMonitor(
       {
+        browser: { reason: () => browserHealthReason(parts, signal) },
         repository: new PostgresResourceHealth(parts.database),
         taskQueues: new TemporalTaskQueues(temporal.client),
         ocr: new FleetOcrHealth(settings.ocrApi),
         disk: new DiskSpace(),
         log,
       },
-      settings,
+      {
+        ...settings,
+        resources: Object.fromEntries(
+          Object.entries(settings.resources).map(([id, target]) => [
+            id,
+            { ...target, browser: isBrowserResource(parts.config, id) },
+          ]),
+        ),
+      },
     );
     await monitor.run(signal);
   } finally {

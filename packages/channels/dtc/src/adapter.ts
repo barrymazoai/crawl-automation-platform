@@ -10,7 +10,13 @@ import { dtcEvidence, type DtcRendered } from "./evidence.js";
 import { dtcPageIdentity, readDtcProduct } from "./product.js";
 import { DTC_PAGE_LIMITS, DTC_SITES, type DtcSitePolicy } from "./site-policy.js";
 import { dtcBrandEvidence } from "./brand-evidence.js";
-import { dtcBrandSource, dtcBrandSources, type DtcBrandSource } from "./brand-source.js";
+import {
+  assertDtcBrandSource,
+  dtcBrandSource,
+  dtcBrandSources,
+  type DtcBrandSource,
+} from "./brand-source.js";
+import { dtcBrandSighting } from "./brand-sighting.js";
 import { dtcProjection, readDtcProjection } from "./projection.js";
 
 export interface DtcAdapter extends ChannelAdapter<DtcRendered> {
@@ -68,6 +74,7 @@ export function createDtcAdapter(
     id: "dtc",
     brandSources: source ? [source] : dtcBrandSources(sites),
     forBrandSource: (url) => createDtcAdapter(sites, url),
+    assertBrandSource: (entry) => assertDtcBrandSource(entry, scopedSites),
     captureModes: ["browser"],
     scanCapture: (url) => {
       dtcBrandSourceUrl(url, scopedSites);
@@ -83,6 +90,7 @@ export function createDtcAdapter(
     fileOrigins: [...new Set(scopedSites.flatMap((site) => site.imageOrigins))],
     productAddress: (url) => dtcProductAddress(url, scopedSites),
     pageIdentity: (page) => dtcPageIdentity(page, scopedSites),
+    pageSighting: (page) => dtcBrandSighting(page, scope),
     parseProduct: (page) => parsedProduct(page, scopedSites, productSource),
     externalId: (parsed) => parsed.identity.listingId,
     planning: {

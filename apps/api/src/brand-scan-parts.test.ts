@@ -356,7 +356,7 @@ it("routes a named DTC source by scanCapture through the API runner, never HTTP"
 
 it("routes one collection of a multi-brand site and queues its database source ID", async () => {
   const alphaUrl = "https://shop.example/collections/alpha";
-  const row = source("dtc", alphaUrl);
+  const row = { ...source("dtc", alphaUrl), brandName: "Alpha" };
   const sites = configuredDtcSites({
     sites: [
       {

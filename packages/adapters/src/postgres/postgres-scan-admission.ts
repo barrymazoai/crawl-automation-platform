@@ -15,9 +15,11 @@ export class PostgresScanAdmission {
       `WITH candidates AS MATERIALIZED (
          SELECT r.*, $4::int > 0 AND NOT EXISTS (
            SELECT 1 FROM queue_item i WHERE i.channel = $1 AND i.listing_id = r.listing_id
+             AND ($1 <> 'dtc' OR i.source_id = r.source_id)
              AND coalesce(i.variant_id, '') = coalesce(r.variant_id, '')
              AND i.state IN ('queued', 'ready', 'running', 'following')) AND EXISTS (
            SELECT 1 FROM queue_item i WHERE i.channel = $1 AND i.listing_id = r.listing_id
+             AND ($1 <> 'dtc' OR i.source_id = r.source_id)
              AND coalesce(i.variant_id, '') = coalesce(r.variant_id, '')
              AND i.state IN ('completed', 'review')
              AND i.updated_at >= statement_timestamp() - make_interval(hours => $4::int)) AS recent

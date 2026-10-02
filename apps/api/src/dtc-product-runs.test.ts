@@ -121,7 +121,7 @@ it("rejects a product on another configured site before acceptance", async () =>
   expect(test.start).not.toHaveBeenCalled();
 });
 
-it.each(["missing", "wrong-brand", "unknown-catalog"])(
+it.each(["missing", "wrong-brand", "wrong-name", "unknown-catalog"])(
   "refuses %s source context before accepting the product",
   async (failure) => {
     const test = setup("multi-brand");
@@ -136,7 +136,7 @@ it.each(["missing", "wrong-brand", "unknown-catalog"])(
                 failure === "unknown-catalog"
                   ? "https://shop.example/collections/unknown"
                   : test.catalogUrl,
-              brandName: "Alpha",
+              brandName: failure === "wrong-name" ? "Beta" : "Alpha",
               enabled: true,
             },
           ],

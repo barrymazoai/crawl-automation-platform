@@ -1,3 +1,4 @@
+import { runBrowserRecovery } from "../browser/browser-recovery-parts.js";
 import { startHeartbeat } from "@crawl-automation/platform";
 import { runWorkers, type RunningWorker } from "@crawl-automation/platform/temporal-worker";
 import type { WorkerParts } from "../container.js";
@@ -38,13 +39,16 @@ async function runWithHealth(context: {
   const monitor = chosen.roles.some((entry) => entry.role === "resources")
     ? parts.resourceHealth.run(signal)
     : Promise.resolve();
+  const recovery = chosen.roles.some((entry) => entry.role === "browser")
+    ? runBrowserRecovery(parts, signal)
+    : Promise.resolve();
   const queues = chosen.roles.map((entry) => `${entry.role}:${entry.taskQueue}`);
   parts.log.info({ process: chosen.name, queues }, "worker process running");
   try {
-    await Promise.all([done, monitor, heartbeat]);
+    await Promise.all([done, monitor, heartbeat, recovery]);
   } finally {
     shutdown();
-    await Promise.allSettled([done, monitor]);
+    await Promise.allSettled([done, monitor, recovery]);
     parts.log.info({ process: chosen.name }, "worker process stopping");
     await (await heartbeat)?.stop();
   }

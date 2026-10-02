@@ -186,7 +186,7 @@ describe("multi-brand product identity and brand evidence", () => {
     },
   );
 
-  it("retains the observed brand and source mismatch through projection replay", () => {
+  it("retains the observed brand but refuses planning a mismatched projection", () => {
     const parsed = scoped.parseProduct(page({ vendor: "Metagenics" }));
     expect(parsed.evidence.brandRaw).toBe("Metagenics");
     expect(parsed.evidence.warnings).toContain("DTC.BRAND_MISMATCH");
@@ -198,12 +198,11 @@ describe("multi-brand product identity and brand evidence", () => {
         status: "mismatch",
       },
     });
-    expect(scoped.planning?.read(projection, url, parsed.identity).evidence).toEqual(
-      parsed.evidence,
-    );
-    expect(adapter.planning?.read(projection, url, parsed.identity).evidence).toEqual(
-      parsed.evidence,
-    );
+    for (const candidate of [scoped, adapter]) {
+      expect(() => candidate.planning?.read(projection, url, parsed.identity)).toThrow(
+        expect.objectContaining({ code: "DTC.BRAND_MISMATCH" }),
+      );
+    }
   });
 
   it("does not fill missing page brand from the retailer or the brand source", () => {

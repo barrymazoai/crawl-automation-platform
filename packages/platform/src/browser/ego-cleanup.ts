@@ -1,16 +1,18 @@
+import { EGO_OWNERSHIP } from "./ego-ownership.js";
 import { egoErrors } from "./ego-errors.js";
 import { executeEgoScript } from "./ego-output.js";
 import { closeTargetScript, EGO_MARKER } from "./ego-script.js";
-import type { EgoSettings } from "./ego-settings.js";
+import { EgoSettingsSchema, type EgoSettings } from "./ego-settings.js";
 
 /** Recovery has its own bounded lifetime; a cancelled business activity cannot cancel its cleanup. */
 export async function closeAndVerifyTarget(settings: EgoSettings, targetId: string) {
-  const cleanupSettings = { ...settings, roundTimeoutMs: Math.min(settings.roundTimeoutMs, 5_000) };
+  const timeoutMs = EgoSettingsSchema.parse(settings).cleanupTimeoutMs;
   const signal = AbortSignal.timeout(25_000);
   const params = { taskSpaceId: settings.taskSpaceId, targetId };
   let failure: unknown;
   try {
-    const close = await executeEgoScript(cleanupSettings, {
+    const close = await executeEgoScript(settings, {
+      timeoutMs,
       script: closeTargetScript(params),
       signal,
     });
@@ -18,13 +20,15 @@ export async function closeAndVerifyTarget(settings: EgoSettings, targetId: stri
     failure = close.failure;
     // A close receipt can precede the tab inventory update; never repeat the close blindly.
     for (let attempt = 0; attempt < 3; attempt += 1) {
-      const check = await executeEgoScript(cleanupSettings, {
+      const check = await executeEgoScript(settings, {
+        timeoutMs,
         script: targetAbsenceScript(params),
         signal,
       });
       rejectUserControl(check.messages);
       failure = check.failure ?? failure;
       if (
+        !check.answer.failed &&
         !check.failure &&
         check.messages.some(
           (message) => message.kind === "result" && message.targetId === targetId && message.closed,
@@ -49,11 +53,15 @@ function rejectUserControl(messages: { kind: string }[]) {
 export function targetAbsenceScript(params: { taskSpaceId: number; targetId: string }): string {
   return `const emit = (value) => console.log(${JSON.stringify(EGO_MARKER)} + JSON.stringify(value));
 const params = ${JSON.stringify(params)};
-const task = await taskSpace(params.taskSpaceId);
-if (task.ownership === "user") {
+${EGO_OWNERSHIP}
+const space = await ownSpace();
+if (!space || space.ownership !== "agent") {
   emit({ kind: "stop", reason: "user-control" });
 } else {
+  const task = await taskSpace(params.taskSpaceId);
+  await requireAgent();
   const closed = !(await task.tabs()).some((tab) => tab.targetId === params.targetId);
+  await requireAgent();
   emit({ kind: "result", targetId: params.targetId, closed, failure: null, value: null });
 }`;
 }

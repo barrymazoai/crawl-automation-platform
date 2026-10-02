@@ -2,7 +2,7 @@ import { z } from "zod";
 import { egoErrors } from "./ego-errors.js";
 import { EgoRunner, EgoFailureSchema, type EgoRoundFailure } from "./ego-runner.js";
 import { READ_PAGE_BODY, closeTargetScript, pageRoundScript } from "./ego-script.js";
-import { EgoSettingsSchema, type EgoSettings } from "./ego-settings.js";
+import { EgoSettingsSchema, type ResolvedEgoSettings } from "./ego-settings.js";
 import { ListScrollResultSchema, type ListScroll } from "./list-scroll.js";
 export type { ListScroll } from "./list-scroll.js";
 
@@ -32,7 +32,7 @@ export type BrowserPage = z.infer<typeof BrowserPageSchema>;
  */
 export class EgoPages {
   readonly provider = "ego-lite/2";
-  private readonly settings: EgoSettings;
+  private readonly settings: ResolvedEgoSettings;
   private readonly runner: EgoRunner;
 
   constructor(settings: unknown) {
@@ -48,6 +48,11 @@ export class EgoPages {
   async read(request: BrowserRead, signal: AbortSignal): Promise<BrowserPage> {
     const value = await this.round(READ_PAGE_BODY, { read: request }, signal);
     const page = BrowserPageSchema.parse(value);
+    // Ego also reports some transport/target failures as plain readiness errors. Do not let
+    // a recovered connection turn that partial capture into a content or empty-page verdict.
+    if (page.readinessFailure) {
+      throw roundFailed(page.readinessFailure);
+    }
     if (Buffer.byteLength(page.html) > this.settings.maxHtmlBytes) {
       throw egoErrors.create("BROWSER.PAGE_LIMIT", {
         details: { maxBytes: this.settings.maxHtmlBytes },

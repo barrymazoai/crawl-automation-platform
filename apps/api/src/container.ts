@@ -1,11 +1,11 @@
 import type { UsageService, EvidenceService } from "@crawl-automation/app";
 import { configuredDtcSites } from "@crawl-automation/channel-dtc";
+import { brandService } from "./brand-parts.js";
 import { usageService } from "./usage-parts.js";
 import { pathAccessible } from "@crawl-automation/platform";
 import {
   PostgresEnrichmentRepository,
   EnrichmentWorkflowStarter,
-  PostgresBrandStore,
   PostgresDeliveryJournal,
   PostgresDeliveryScan,
   PostgresResourceStore,
@@ -125,10 +125,7 @@ function registerServices(container: Parts): void {
     enrichment: asFunction(enrichmentService).singleton(),
     runs: asFunction(runService).singleton(),
     queue: asFunction(queueService).singleton(),
-    brands: asFunction(
-      (parts: ApiParts) =>
-        new BrandService({ brands: new PostgresBrandStore(parts.database), log: parts.log }),
-    ).singleton(),
+    brands: asFunction(brandService).singleton(),
     reviews: asFunction(reviewService).singleton(),
     products: asFunction(productService).singleton(),
     history: asFunction(historyService).singleton(),

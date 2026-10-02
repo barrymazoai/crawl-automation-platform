@@ -50,3 +50,4 @@ export * from "./listings/index.js";
 export * from "./history/history-errors.js";
 export * from "./enrichment/index.js";
 export * from "./usage/index.js";
+export * from "./resources/browser-recovery.js";

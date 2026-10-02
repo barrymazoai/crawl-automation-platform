@@ -10,6 +10,10 @@ import { runProcess } from "../processes/run-process.js";
 import { selectProcess } from "../processes/select-process.js";
 import { workerResourceKinds } from "../resources/resource-check.js";
 
+vi.mock("./browser-recovery-parts.js", () => ({
+  runBrowserRecovery: vi.fn(async () => undefined),
+}));
+
 const { runWorkers } = vi.hoisted(() => ({ runWorkers: vi.fn() }));
 vi.mock("@crawl-automation/platform/temporal-worker", () => ({ runWorkers }));
 vi.mock("@crawl-automation/platform", async (original) => {

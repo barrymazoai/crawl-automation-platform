@@ -1,4 +1,6 @@
 import type { Logger } from "@crawl-automation/platform";
+import type { ChannelRegistry } from "@crawl-automation/channels-core";
+import { assertSourcePolicy } from "./source-policy.js";
 import {
   CreateBrand,
   CreateSource,
@@ -35,6 +37,7 @@ export const ToggleSourceSchema = ToggleSource.extend({
 export interface BrandStore {
   list(query: ListQuery): Promise<Page<Brand>>;
   find(brandId: string): Promise<Brand | null>;
+  findSource(sourceId: string): Promise<Source | null>;
   sources(query: z.infer<typeof ListSourcesSchema>): Promise<Page<SourceScanView>>;
   create(input: z.infer<typeof CreateBrandSchema>): Promise<Brand>;
   update(input: z.infer<typeof UpdateBrandSchema>): Promise<Brand>;
@@ -45,7 +48,9 @@ export interface BrandStore {
 
 /** Brands and their source URLs on each channel. */
 export class BrandService {
-  constructor(private readonly deps: { brands: BrandStore; log: Logger }) {}
+  constructor(
+    private readonly deps: { brands: BrandStore; log: Logger; registry?: ChannelRegistry },
+  ) {}
 
   list(query: ListQuery): Promise<Page<Brand>> {
     return this.deps.brands.list(query);
@@ -71,16 +76,32 @@ export class BrandService {
     return this.logged("brand updated", this.deps.brands.update(input));
   }
 
-  createSource(input: z.infer<typeof CreateSourceSchema>): Promise<Source> {
+  async createSource(input: z.infer<typeof CreateSourceSchema>): Promise<Source> {
+    await this.checkSource(input);
     return this.logged("source created", this.deps.brands.createSource(input));
   }
 
-  updateSource(input: z.infer<typeof UpdateSourceSchema>): Promise<Source> {
+  async updateSource(input: z.infer<typeof UpdateSourceSchema>): Promise<Source> {
+    await this.checkSource(input);
     return this.logged("source updated", this.deps.brands.updateSource(input));
   }
 
-  toggleSource(input: z.infer<typeof ToggleSourceSchema>): Promise<Source> {
+  async toggleSource(input: z.infer<typeof ToggleSourceSchema>): Promise<Source> {
+    if (input.enabled) {
+      const source = await this.deps.brands.findSource(input.sourceId);
+      if (!source || source.brandId !== input.brandId) {
+        throw appErrors.create("BRAND.SOURCE_NOT_FOUND");
+      }
+      await this.checkSource(source);
+    }
     return this.logged("source toggled", this.deps.brands.toggleSource(input));
+  }
+
+  private async checkSource(input: { channel: string; brandId: string; url: string }) {
+    if (input.channel === "dtc") {
+      const brand = await this.get(input.brandId);
+      assertSourcePolicy(this.deps.registry, { ...input, brandName: brand.name });
+    }
   }
 
   private async logged<Result extends { id: string }>(message: string, change: Promise<Result>) {

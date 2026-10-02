@@ -2,6 +2,7 @@ import { channelErrors } from "@crawl-automation/channels-core";
 import { z } from "zod";
 import { dtcIdentityKey } from "./identity.js";
 import type { DtcSitePolicy } from "./site-policy.js";
+import { dtcEvidenceErrors } from "./evidence-errors.js";
 
 export const DtcBrandSourceSchema = z.strictObject({
   sourceId: z.string().min(1),
@@ -35,4 +36,22 @@ export function dtcBrandSource(raw: string, sites: readonly DtcSitePolicy[]): Dt
     throw channelErrors.create("CHANNEL.URL_REJECTED", { details: { url: raw } });
   }
   return sources[0];
+}
+
+/** A database brand cannot claim another configured brand's catalog. Single-brand names stay compatible. */
+export function assertDtcBrandSource(
+  entry: { url: string; brandName: string },
+  sites: readonly DtcSitePolicy[],
+): void {
+  const source = dtcBrandSource(entry.url, sites);
+  const site = sites.find((candidate) => candidate.siteKey === source.siteKey);
+  if (site?.kind === "multi-brand" && !sameDtcBrand(source.brand, entry.brandName)) {
+    throw dtcEvidenceErrors.create("DTC.BRAND_SOURCE_MISMATCH", {
+      details: { configuredBrand: source.brand, brandName: entry.brandName, url: entry.url },
+    });
+  }
+}
+
+export function sameDtcBrand(left: string, right: string): boolean {
+  return left.trim().toLowerCase() === right.trim().toLowerCase();
 }

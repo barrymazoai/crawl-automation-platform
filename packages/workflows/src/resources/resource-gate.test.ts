@@ -316,3 +316,32 @@ it("uses a configured bounded window and never releases on unknown", async () =>
   expect(state.stop).toHaveBeenCalledTimes(3);
   expect(state.release).not.toHaveBeenCalled();
 });
+
+it("waits through a browser outage past both old budgets and starts business work exactly once", async () => {
+  let polls = 0;
+  state.reserve.mockImplementation(async ({ permitId }: { permitId: string }) => ({
+    permitId,
+    status: ++polls <= 450 ? "waiting" : "granted",
+    reason: polls <= 450 ? "browser:BROWSER.UNAVAILABLE" : "available",
+  }));
+  const work = vi.fn(async () => "done");
+  expect(await resourceGate(config)("work", work)).toBe("done");
+  expect(state.now).toBe(4_500_000);
+  expect(work).toHaveBeenCalledOnce();
+  expect(state.release).toHaveBeenCalledOnce();
+});
+
+it("retains the old browser wait expiry for histories without the outage marker", async () => {
+  state.patched = false;
+  state.reserve.mockImplementation(async ({ permitId }: { permitId: string }) => ({
+    permitId,
+    status: "waiting",
+    reason: "browser:BROWSER.UNAVAILABLE",
+  }));
+  const work = vi.fn();
+  await expect(resourceGate(config)("work", work)).rejects.toMatchObject({
+    type: "RESOURCE.WAIT_LIMIT",
+  });
+  expect(work).not.toHaveBeenCalled();
+  expect(state.now).toBe(10_000);
+});

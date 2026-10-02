@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { DtcBrandSourceSchema, type DtcBrandSource } from "./brand-source.js";
+import { DtcBrandSourceSchema, sameDtcBrand, type DtcBrandSource } from "./brand-source.js";
 import { dtcEvidenceErrors } from "./evidence-errors.js";
 import type { DtcSitePolicy } from "./site-policy.js";
 
@@ -20,14 +20,27 @@ export function dtcBrandEvidence(
   const status =
     site.kind === "single-brand"
       ? "site-brand"
-      : !observedBrand
+      : !observedBrand?.trim()
         ? "unverified"
         : !source
           ? "unscoped"
-          : observedBrand.trim().toLowerCase() === source.brand.trim().toLowerCase()
+          : sameDtcBrand(observedBrand, source.brand)
             ? "matched"
             : "mismatch";
   return { seller: site.siteKey, source, observedBrand, status };
+}
+
+/** Missing identity is a Review, never a source-derived brand or a claim that the page is gone. */
+export function assertDtcBrandVerified(evidence: DtcBrandEvidence): void {
+  if (evidence.status === "mismatch") {
+    throw dtcEvidenceErrors.create("DTC.BRAND_MISMATCH", { details: { ...evidence } });
+  }
+  if (evidence.status === "unverified") {
+    throw dtcEvidenceErrors.create("DTC.BRAND_UNVERIFIED", { details: { ...evidence } });
+  }
+  if (evidence.status === "unscoped") {
+    throw dtcEvidenceErrors.create("DTC.BRAND_SOURCE_REQUIRED", { details: { ...evidence } });
+  }
 }
 
 export function dtcBrandWarnings(evidence: DtcBrandEvidence): string[] {

@@ -8,6 +8,7 @@ function fakeSpace() {
   let closed = false;
   const page = {
     targetId: "owned",
+    cdp: vi.fn(async () => ({})),
     close: vi.fn(async () => {
       closed = true;
     }),
@@ -24,6 +25,7 @@ async function execute(script: string, task: ReturnType<typeof fakeSpace>["task"
   const messages: Record<string, unknown>[] = [];
   await runInNewContext(`(async () => { ${script} })()`, {
     taskSpace: async () => task,
+    listTaskSpaces: async () => [{ spaceId: 1, ownership: task.ownership }],
     console: { log: (line: string) => messages.push(JSON.parse(line.slice(EGO_MARKER.length))) },
     setTimeout: (resolve: () => void) => resolve(),
   });
@@ -79,7 +81,7 @@ describe("Store task-owned page lifecycle", () => {
       storeRoundScript('task.ownership = "user"; return 1;', { taskSpaceId: 1 }),
       task,
     );
-    expect(result.at(-1)).toMatchObject({ targetId: "owned", closed: false });
+    expect(result.at(-1)).toMatchObject({ kind: "stop", reason: "user-control" });
     expect(page.close).not.toHaveBeenCalled();
     expect(task.tabs).not.toHaveBeenCalled();
   });

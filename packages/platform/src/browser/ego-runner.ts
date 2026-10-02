@@ -4,113 +4,94 @@ import {
   provePermitExecutionStopped,
   recordPermitExecution,
 } from "../execution/permit-execution.js";
-import { closeAndVerifyTarget } from "./ego-cleanup.js";
 import { egoErrors } from "./ego-errors.js";
+import { requireEgo } from "./ego-health.js";
 import { executeEgoScript, type EgoRoundResult } from "./ego-output.js";
 import type { EgoSettings } from "./ego-settings.js";
+import { stopEgoRound, type EgoStoppedRound } from "./ego-stop.js";
 
 export { EgoFailureSchema, type EgoRoundFailure } from "./ego-output.js";
 type Execution = Awaited<ReturnType<typeof executeEgoScript>>;
 
-/** Runs one Ego round and proves its exact task pages ended before its permit can settle. */
+/** CLI exit and page absence are separate R59 receipts; neither substitutes for the other. */
 export class EgoRunner {
   private readonly host = hostname();
-
   constructor(private readonly settings: EgoSettings) {}
 
   async run(script: string, signal: AbortSignal): Promise<EgoRoundResult> {
+    const health = await requireEgo(this.settings, signal);
     const round = {
       kind: "browser-round" as const,
       executionId: randomUUID(),
       taskSpaceId: this.settings.taskSpaceId,
-      metadata: { host: this.host },
+      metadata: { host: this.host, protocol: "ego-single-page/1", baseline: health.targets },
     };
+    const cli = { ...round, kind: "browser-cli" as const, executionId: `${round.executionId}/cli` };
     await recordPermitExecution(round);
-    const opened = new Set<string>();
+    await recordPermitExecution(cli);
+    const targets: EgoStoppedRound["targets"] = [];
     const execution = await executeEgoScript(this.settings, {
       script,
       signal,
       opened: async (targetId) => {
-        opened.add(targetId);
-        await recordPermitExecution(this.identity(targetId));
+        const identity = this.identity(targetId, round.executionId);
+        targets.push(identity);
+        await recordPermitExecution(identity);
       },
     });
-    const result = await this.finish(execution, opened);
-    await provePermitExecutionStopped(round, {
-      kind: "browser-round-ended",
-      targets: [...opened],
+    // Execa resolves only after child closure, including SIGKILL escalation on timeout/cancellation.
+    await provePermitExecutionStopped(cli, {
+      kind: "browser-cli-exited",
+      pid: execution.pid,
       observedAt: new Date().toISOString(),
     });
-    return result;
+    return this.finish(execution, { round, targets });
   }
 
-  private async finish(execution: Execution, opened: Set<string>): Promise<EgoRoundResult> {
-    const { messages, answer, failure } = execution;
+  private async finish(execution: Execution, work: EgoStoppedRound): Promise<EgoRoundResult> {
+    const { messages, answer } = execution;
     if (messages.some((message) => message.kind === "stop")) {
-      throw egoErrors.create("BROWSER.USER_CONTROL", { details: { opened: [...opened] } });
+      throw egoErrors.create("BROWSER.USER_CONTROL", {
+        details: { opened: work.targets.map((target) => target.executionId) },
+      });
     }
     const result = messages.find((message): message is EgoRoundResult => message.kind === "result");
-    if (result && !opened.has(result.targetId)) {
-      opened.add(result.targetId);
-      await recordPermitExecution(this.identity(result.targetId));
+    if (result && !work.targets.some((target) => target.executionId === result.targetId)) {
+      const identity = this.identity(result.targetId, work.round.executionId);
+      await recordPermitExecution(identity);
+      work.targets.push(identity);
     }
     try {
-      await this.stopTargets(opened, result);
+      await stopEgoRound(this.settings, {
+        ...work,
+        closedTarget: result?.closed ? result.targetId : undefined,
+      });
     } catch (error) {
       throw egoErrors.create("BROWSER.PAGE_CLEANUP_PENDING", {
         cause: error,
         details: {
-          opened: [...opened],
           targetId: result?.targetId,
+          opened: work.targets.map((target) => target.executionId),
           failure: result?.failure,
-          cleanupFailure: result?.cleanupFailure,
-          interrupted: { cancelled: answer.isCanceled, timedOut: answer.timedOut },
+          interrupted: roundFailure(answer).code,
         },
       });
     }
-    if (failure) {
-      throw failure;
-    }
-    if (!result) {
-      throw roundFailure(answer);
-    }
-    return { ...result, closed: true };
+    return completedResult(execution, result);
   }
 
-  private async stopTargets(opened: Set<string>, result: EgoRoundResult | undefined) {
-    for (const targetId of opened) {
-      const proof =
-        result?.targetId === targetId && result.closed
-          ? {
-              kind: "browser-target-absent",
-              targetId,
-              taskSpaceId: this.settings.taskSpaceId,
-              observedAt: new Date().toISOString(),
-            }
-          : await closeAndVerifyTarget(this.settings, targetId);
-      await provePermitExecutionStopped(this.identity(targetId), proof);
-    }
-  }
-
-  private identity(targetId: string) {
+  private identity(targetId: string, roundId: string) {
     return {
       kind: "browser" as const,
       executionId: targetId,
       taskSpaceId: this.settings.taskSpaceId,
-      metadata: { host: this.host },
+      metadata: { host: this.host, roundId },
     };
   }
 }
 
-interface ExecaAnswer {
-  isCanceled: boolean;
-  timedOut: boolean;
-  isMaxBuffer: boolean;
-  exitCode?: number | undefined;
-}
-
-/** Cleanup cannot turn an interrupted business round into a successful result. */
-function roundFailure(answer: ExecaAnswer) {
+/** Interrupted browser operations are infrastructure failures, never page/content verdicts. */
+function roundFailure(answer: Execution["answer"]) {
   const details = { exitCode: answer.exitCode ?? null, executionUnknown: true };
   if (answer.isCanceled) {
     return egoErrors.create("BROWSER.CANCELLED", { details });
@@ -119,7 +100,17 @@ function roundFailure(answer: ExecaAnswer) {
     return egoErrors.create("BROWSER.TIMEOUT", { details });
   }
   if (answer.isMaxBuffer) {
-    return egoErrors.create("BROWSER.PAGE_LIMIT", { details });
+    return egoErrors.create("BROWSER.PROTOCOL", { details });
   }
   return egoErrors.create("BROWSER.UNAVAILABLE", { details });
+}
+
+function completedResult(execution: Execution, result: EgoRoundResult | undefined): EgoRoundResult {
+  if (execution.failure) {
+    throw execution.failure;
+  }
+  if (execution.answer.failed || !result) {
+    throw roundFailure(execution.answer);
+  }
+  return { ...result, closed: true };
 }

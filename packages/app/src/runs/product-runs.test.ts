@@ -87,6 +87,7 @@ describe("ProductRuns", () => {
       const wholeFoods = {
         id: channel,
         captureModes: ["browser"],
+        assertBrandSource: vi.fn(),
         productAddress: (page: string) => ({ url: page, listingId: "B002CQU54Q", variantId: null }),
       } as unknown as ChannelAdapter;
       const store: ProductRunStore = {

@@ -10,6 +10,7 @@ type Decision = { permitId: string; status: "granted" | "waiting" | "released"; 
 interface CapacityRow {
   capacity: number;
   ready: boolean;
+  reason?: string;
 }
 
 const conflict = () => storeErrors.create("RESOURCE.IDENTITY_CONFLICT");
@@ -104,7 +105,7 @@ async function capacityFor(
   need: ResourceRequest["needs"][number],
 ): Promise<string | null> {
   const rows = await tx.query<CapacityRow>(
-    `SELECT capacity, healthy AND health_until > now() AS ready
+    `SELECT capacity, healthy AND health_until > now() AS ready, reason
        FROM resource_capacity WHERE resource_id = $1 FOR UPDATE`,
     [need.resourceId],
   );
@@ -115,7 +116,7 @@ async function capacityFor(
     });
   }
   if (!resource.ready) {
-    return "unhealthy";
+    return resource.reason?.startsWith("browser:") ? resource.reason : "unhealthy";
   }
   const used = await tx.query<{ used: number }>(
     `SELECT coalesce(sum(n.units), 0)::int AS used

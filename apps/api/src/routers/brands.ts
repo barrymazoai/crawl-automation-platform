@@ -24,6 +24,7 @@ const ScanRequestInput = z.strictObject({
 });
 const ScanListInput = z
   .strictObject({
+    sourceId: z.uuid().optional(),
     channel: ScanChannelSchema.optional(),
     state: ScanStateSchema.optional(),
     limit: z.number().int().min(1).max(1_000).optional(),

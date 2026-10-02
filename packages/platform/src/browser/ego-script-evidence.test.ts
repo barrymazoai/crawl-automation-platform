@@ -23,6 +23,7 @@ it("retains both body and close failures from a task-owned script without a real
   const script = pageRoundScript("throw params.failure;", { taskSpaceId: 1, failure: bodyFailure });
   await runInNewContext(`(async () => {${script}})()`, {
     taskSpace: async () => task,
+    listTaskSpaces: async () => [{ spaceId: 1, ownership: task.ownership }],
     console: { log: (line: string) => messages.push(JSON.parse(line.slice(EGO_MARKER.length))) },
   });
   // Every task page answers location requests as denied before any site script runs.

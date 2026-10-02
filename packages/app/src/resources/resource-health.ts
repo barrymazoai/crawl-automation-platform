@@ -61,6 +61,18 @@ export class ResourceHealthMonitor {
         return reason;
       }
     }
+    if (target.browser) {
+      let reason: string | null = "BROWSER.UNAVAILABLE";
+      const ready = await this.check(resourceId, "browser:BROWSER.UNAVAILABLE", async () => {
+        reason = this.deps.browser
+          ? await this.deps.browser.reason(resourceId)
+          : "BROWSER.CONFIG_INVALID";
+        return reason === null;
+      });
+      if (!ready) {
+        return `browser:${reason}` as const;
+      }
+    }
     if (target.ocr && !(await this.check(resourceId, "ocr_unhealthy", () => this.ocrReady()))) {
       return "ocr_unhealthy";
     }

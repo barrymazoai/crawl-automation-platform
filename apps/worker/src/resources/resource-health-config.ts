@@ -16,6 +16,7 @@ export const ResourceHealthConfigSchema = z
       z.strictObject({
         taskQueues: z.array(z.string().min(1).max(200)).min(1),
         ocr: z.boolean().optional(),
+        browser: z.boolean().optional(),
       }),
     ),
   })

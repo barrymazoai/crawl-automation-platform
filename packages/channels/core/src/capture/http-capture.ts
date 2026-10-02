@@ -85,6 +85,10 @@ export class HttpCapture {
     if (conflict) {
       return { status: "sighting", sighting: conflict };
     }
+    const sighting = adapter.pageSighting?.(page);
+    if (sighting) {
+      return { status: "sighting", sighting: { ...sighting, archiveKey: saved.source.objectKey } };
+    }
     const parsed = adapter.parseProduct(page);
     // An explicit null is authoritative: the adapter has no verified page identity (Whole Foods, R22).
     const parsedConflict =

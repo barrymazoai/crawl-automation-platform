@@ -3,9 +3,10 @@ import {
   type ChannelId,
   type ListedProduct,
 } from "@crawl-automation/channels-core";
-import type { BrowserBrandScanners, ListingPageReader } from "./ports.js";
+import type { BrowserBrandScan, BrowserBrandScanners, ListingPageReader } from "./ports.js";
 import type { ScanChannel } from "./scan-model.js";
 import { appErrors } from "../errors.js";
+import { assertSourcePolicy } from "../brands/source-policy.js";
 import {
   readPages,
   listingTarget,
@@ -72,6 +73,7 @@ export async function readListing(
   scan: ListingScan,
   signal: AbortSignal,
 ): Promise<BrandListing> {
+  assertSourcePolicy(readers.registry, scan.source);
   const selected = sourceReader(readers, scan.source.channel as ScanChannel, scan.source.url);
   if (selected.capture === "http") {
     await readers.checkpoint?.(scan.scanId);
@@ -94,9 +96,14 @@ export async function readListing(
   };
   // Reattach remote browser executions even after cancellation; only their worker can prove page cleanup.
   const found = await selected.reader.scan(request, signal);
-  const products = found.pages.flatMap((page) => page.products);
+  return browserListing(found);
+}
+
+function browserListing(found: BrowserBrandScan): BrandListing {
   const unique = new Map(
-    products.map((item) => [`${item.listingId}\u0000${item.variantId ?? ""}`, item]),
+    found.pages
+      .flatMap((page) => page.products)
+      .map((item) => [`${item.listingId}\u0000${item.variantId ?? ""}`, item]),
   );
   return {
     pages: found.pages,

@@ -3,6 +3,7 @@
  * SDK (TaskSpace and Page), so a round is a script; values reach it as JSON, never spliced as code. Every line the
  * crawler reads starts with the marker below; anything else the runtime prints is ignored.
  */
+import { EGO_OWNERSHIP } from "./ego-ownership.js";
 import { LIST_SCROLL_BODY } from "./list-scroll-script.js";
 
 export const EGO_MARKER = "CRAWLV3_EGO:";
@@ -20,6 +21,27 @@ const DENY_LOCATION = `(() => {
 
 const prelude = `const emit = (value) => console.log(${JSON.stringify(EGO_MARKER)} + JSON.stringify(value));`;
 
+const CLOSE_PAGE_BODY = `  let closed = false;
+  if ((await ownSpace())?.ownership !== "agent") {
+    emit({ kind: "stop", reason: "user-control" });
+    return;
+  }
+  try {
+    await requireAgent();
+    await page.close();
+    for (let attempt = 0; attempt < 4; attempt++) {
+      await requireAgent();
+      closed = !(await task.tabs()).some(tab => tab.targetId === targetId);
+      await requireAgent();
+      if (closed) break;
+      await new Promise(resolve => setTimeout(resolve, 200));
+    }
+  } catch (error) {
+    cleanupFailure = { name: String(error?.name ?? "Error"), code: typeof error?.code === "string" ? error.code : null, message: String(error?.message ?? error) };
+    closed = false;
+  }
+`;
+
 /**
  * One round on one task-owned page: open it, report its target at once (so an interrupted round still names what to
  * close), run the body, then always close the page and confirm the tab is gone. A space the user controls is left
@@ -28,34 +50,31 @@ const prelude = `const emit = (value) => console.log(${JSON.stringify(EGO_MARKER
 export function pageRoundScript(body: string, params: unknown): string {
   return `${prelude}
 const params = ${JSON.stringify(params)};
-const task = await taskSpace(params.taskSpaceId);
-if (task.ownership === "user") {
+${EGO_OWNERSHIP}
+const space = await ownSpace();
+if (!space || space.ownership !== "agent") {
   emit({ kind: "stop", reason: "user-control" });
 } else {
+  const task = await taskSpace(params.taskSpaceId);
+  await requireAgent();
   const page = await task.newPage();
   const targetId = page.targetId;
   emit({ kind: "opened", targetId });
   // A site's location prompt hands the task space to the user; this Ego version refuses Browser.setPermission, so
   // every task page answers location requests with "denied" before any site script runs (2026-09-30).
-  await page.cdp("Page.addScriptToEvaluateOnNewDocument", { source: ${JSON.stringify(DENY_LOCATION)} });
   let value = null;
   let failure = null;
   let cleanupFailure = null;
   try {
+    await requireAgent();
+    await page.cdp("Page.addScriptToEvaluateOnNewDocument", { source: ${JSON.stringify(DENY_LOCATION)} });
     value = await (async () => {
 ${body}
     })();
   } catch (error) {
     failure = { name: String(error?.name ?? "Error"), code: typeof error?.code === "string" ? error.code : null, message: String(error?.message ?? error) };
   }
-  let closed = false;
-  try {
-    await page.close();
-    closed = !(await task.tabs()).some((tab) => tab.targetId === targetId);
-  } catch (error) {
-    cleanupFailure = { name: String(error?.name ?? "Error"), code: typeof error?.code === "string" ? error.code : null, message: String(error?.message ?? error) };
-    closed = false;
-  }
+${CLOSE_PAGE_BODY}
   emit({ kind: "result", targetId, closed, failure, cleanupFailure, value });
 }`;
 }
@@ -64,15 +83,19 @@ ${body}
 export function closeTargetScript(params: { taskSpaceId: number; targetId: string }): string {
   return `${prelude}
 const params = ${JSON.stringify(params)};
-const task = await taskSpace(params.taskSpaceId);
-if (task.ownership === "user") {
+${EGO_OWNERSHIP}
+const space = await ownSpace();
+if (!space || space.ownership !== "agent") {
   emit({ kind: "stop", reason: "user-control" });
 } else {
+  const task = await taskSpace(params.taskSpaceId);
   const tabs = await task.tabs();
   const own = tabs.filter((tab) => tab.targetId === params.targetId);
-  if (own.length === 1 && own[0].label) {
+  if (own.length === 1 && own[0].label && own[0].openedBy === "agent") {
+    await requireAgent();
     await task.page(own[0].label).close();
   }
+  await requireAgent();
   const closed = !(await task.tabs()).some((tab) => tab.targetId === params.targetId);
   emit({ kind: "result", targetId: params.targetId, closed, failure: null, value: null });
 }`;

@@ -18,9 +18,7 @@ import type { CoreParts } from "../core-parts.js";
 import { workerErrors } from "../errors.js";
 import { requireRoleSection } from "../processes/role-settings.js";
 import type { BrowserScanners } from "./browser-scanners.js";
-import { ManagedBrowserRounds, egoTargetVerifier } from "./managed-rounds.js";
 import { buildBrowserScanners } from "./scan-wiring.js";
-import { StoreEgoRounds } from "./store-rounds.js";
 
 /** Product capture plus capability-selected brand scans on either browser worker. */
 export interface BrowserParts {
@@ -73,10 +71,7 @@ export function buildBrowserParts(parts: CoreParts): BrowserParts {
     dtcSites,
     ...scanSettings(settings),
     publication: parts.publication,
-    rounds: new ManagedBrowserRounds(
-      new StoreEgoRounds({ settings: settings.ego, pages: ego }),
-      egoTargetVerifier(settings.ego),
-    ),
+    rounds: ego,
   });
   return {
     capture: new PipelineCapture<BrowserCaptureResult>({

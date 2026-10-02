@@ -3,7 +3,7 @@ import {
   type ResourceGate,
   type ResourceRequest,
 } from "@crawl-automation/v3-contracts";
-import { CancellationScope, log, sleep } from "@temporalio/workflow";
+import { CancellationScope, log, patched, sleep } from "@temporalio/workflow";
 import type { ResourceActivities } from "./resource-activities.js";
 import { resourceFailure } from "./resource-failure.js";
 
@@ -21,11 +21,7 @@ export async function waitForResource(at: {
     const result = ResourceDecisionSchema.safeParse(
       await CancellationScope.nonCancellable(() => at.ports.reserveResources(at.request)),
     );
-    if (
-      !result.success ||
-      result.data.permitId !== at.request.permitId ||
-      result.data.status === "released"
-    ) {
+    if (!result.success || invalidDecision(result.data, at.request.permitId)) {
       throw resourceFailure("RESOURCE.IDENTITY_CONFLICT", { request: at.request });
     }
     if (result.data.status === "granted") {
@@ -36,6 +32,9 @@ export async function waitForResource(at: {
         waitMs: Date.now() - requestedAt,
       });
       return;
+    }
+    if (await waitForBrowser(result.data.reason)) {
+      continue;
     }
     at.waiting.polls++;
     // Keep the current scheduling policy: occupied healthy capacity backs off; unhealthy capacity
@@ -53,4 +52,17 @@ export async function waitForResource(at: {
 
 function pollDelay(polls: number): number {
   return polls < 30 ? 10_000 : polls < 120 ? 30_000 : 60_000;
+}
+
+/** Browser availability is infrastructure waiting, never a consumed business attempt. */
+async function waitForBrowser(reason: string): Promise<boolean> {
+  if (!reason.startsWith("browser:") || !patched("browser-resource-outage-wait-v1")) {
+    return false;
+  }
+  await sleep(10_000);
+  return true;
+}
+
+function invalidDecision(result: { permitId: string; status: string }, permitId: string): boolean {
+  return result.permitId !== permitId || result.status === "released";
 }

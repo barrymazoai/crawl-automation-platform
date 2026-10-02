@@ -9,6 +9,7 @@ const source = (message: string) => ({ category: "SOURCE" as const, message });
  */
 export const egoErrors = defineErrors({
   "BROWSER.CONFIG_INVALID": runtime("The Ego browser settings are invalid."),
+  "BROWSER.SPACE_MISSING": runtime("The configured Ego task space does not exist."),
   "BROWSER.UNAVAILABLE": runtime("The Ego browser could not run the task."),
   "BROWSER.USER_CONTROL": runtime(
     "The user has taken control of the browser space; the task stopped.",

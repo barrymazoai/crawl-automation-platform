@@ -74,6 +74,14 @@ export class PostgresBrandStore implements BrandStore {
     return new PostgresBrandSources(this.database).sources(query);
   }
 
+  async findSource(sourceId: string): Promise<Source | null> {
+    const rows = await this.database.query(
+      `SELECT ${sourceColumns} FROM brand_source WHERE id = $1`,
+      [sourceId],
+    );
+    return rows[0] ? toSource(rows[0]) : null;
+  }
+
   create(input: Input<typeof CreateBrandSchema>): Promise<Brand> {
     const { requestId, ...fields } = input;
     return this.once(

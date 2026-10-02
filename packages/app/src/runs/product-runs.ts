@@ -5,6 +5,7 @@ import type { Channel } from "../delivery/delivery-coordinator.js";
 import { appErrors } from "../errors.js";
 import type { ProductRun } from "./run-model.js";
 import type { BrandScanStore } from "../brand-scans/ports.js";
+import { assertSourcePolicy } from "../brands/source-policy.js";
 
 /** A product run's workflow ID (the product_run table checks the same rule). */
 export const productRunWorkflowId = (runId: string) => `product-run-${runId}`;
@@ -85,6 +86,7 @@ export class ProductRuns {
     if (!source || source.channel !== product.channel || source.brandId !== product.brandId) {
       throw appErrors.create("RUN.SOURCE_NOT_FOUND", { details: { sourceId } });
     }
+    assertSourcePolicy(this.deps.registry, source);
     return source.url;
   }
 

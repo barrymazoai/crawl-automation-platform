@@ -118,8 +118,9 @@ export class PostgresBrandScans extends PostgresScanCancellation implements Bran
     const rows = await this.database.query(
       `SELECT ${SCAN_COLUMNS} FROM ${SCAN_FROM}
        WHERE ($1::text IS NULL OR sc.channel = $1) AND ($2::text IS NULL OR sc.state = $2)
+         AND ($4::uuid IS NULL OR sc.source_id = $4)
        ORDER BY sc.requested_at DESC LIMIT $3`,
-      [query.channel ?? null, query.state ?? null, query.limit],
+      [query.channel ?? null, query.state ?? null, query.limit, query.sourceId ?? null],
     );
     return rows.map(scanOf);
   }

@@ -13,6 +13,7 @@ async function fakeEgo(stream: "stdout" | "stderr"): Promise<string> {
   const path = join(dir, "ego-browser");
   const fd = stream === "stdout" ? 1 : 2;
   const lines = [
+    `${EGO_MARKER}${JSON.stringify({ kind: "health", code: null, targets: [] })}`,
     "[ego-browser:notice] Ego Lite update is available",
     `${EGO_MARKER}${JSON.stringify({ kind: "opened", targetId: "t1" })}`,
     `${EGO_MARKER}${JSON.stringify(result)}`,

@@ -1,3 +1,4 @@
+import { reserveWithBrowserHealth } from "../resources/browser-health.js";
 import { withCause } from "@crawl-automation/platform";
 import { activityLogger } from "./activity-log.js";
 import { contextualActivity } from "./activity-context-handler.js";
@@ -22,7 +23,17 @@ export function resourceActivities(parts: WorkerParts) {
       (raw) => stops.verify(raw),
       parts.log,
     ),
-    reserveResources: guarded("reserveResources", (raw) => parts.admission.reserve(raw), parts.log),
+    reserveResources: guarded(
+      "reserveResources",
+      (raw, signal) =>
+        reserveWithBrowserHealth({
+          parts,
+          raw,
+          signal,
+          reserve: (value) => parts.admission.reserve(value),
+        }),
+      parts.log,
+    ),
     releaseResources: contextualActivity(
       "releaseResources",
       (raw) => releaseResource(parts, raw),

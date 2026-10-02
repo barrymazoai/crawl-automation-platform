@@ -11,7 +11,10 @@ vi.mock("@temporalio/activity", () => ({
   },
 }));
 vi.mock("../capture-records.js", () => ({
-  captureRecords: () => ({ listings: { record: vi.fn() }, history: { record: vi.fn() } }),
+  captureRecords: () => ({
+    listings: { record: vi.fn(async () => ({ observationId: "listing-observation" })) },
+    history: { record: vi.fn() },
+  }),
 }));
 
 import {
@@ -162,7 +165,7 @@ async function queuedInputs(parts: WorkerParts, catalogs = [alphaUrl, betaUrl]) 
     brandId,
     channel: "dtc",
     url: catalog,
-    brandName: index === 0 ? "Alpha" : "Beta",
+    brandName: catalog === alphaUrl ? "Alpha" : "Beta",
     enabled: true,
   }));
   const start = vi.fn(async (_id: string, _input: ProductPipelineInput) => ({
@@ -238,7 +241,7 @@ async function retained(publication: RetainedPublication, key: string) {
 
 afterEach(() => vi.restoreAllMocks());
 
-it("captures and plans queued products concurrently with their own database source and brand", async () => {
+it("rejects the cross-brand task and plans only the matching brand task", async () => {
   const test = setup();
   const inputs = await queuedInputs(test.parts);
   const bind = vi.spyOn(test.parts.channelPlans, "forBrandSource");
@@ -246,13 +249,22 @@ it("captures and plans queued products concurrently with their own database sour
     inputs.map(async (input, index) => {
       expect(input.sourceId).toBe(sourceIds[index]);
       expect(input.sourceUrl).toBe(index === 0 ? alphaUrl : betaUrl);
+      if (index === 0) {
+        expect(await browserActivities(test.parts).captureBrowserProduct?.(input)).toMatchObject({
+          status: "listing",
+          state: "unlisted",
+          reason: "identity_conflict",
+          causeCode: "DTC.BRAND_MISMATCH",
+        });
+        return;
+      }
       const sourcePlan = await capture(test.parts, input);
       expect(sourcePlan.owner.sourceId).toBe(input.sourceId);
       const projection = await retained(test.publication, sourcePlan.source.objectKey);
       expect(projection.brandEvidence).toMatchObject({
         source: { brand: index === 0 ? "Alpha" : "Beta", catalogUrl: input.sourceUrl },
         observedBrand: "Beta",
-        status: index === 0 ? "mismatch" : "matched",
+        status: "matched",
       });
       expect(
         await pipelineActivities(test.parts).prepareChannelProduct?.({
@@ -265,22 +277,17 @@ it("captures and plans queued products concurrently with their own database sour
       );
       expect(plan.input.owner.sourceId).toBe(input.sourceId);
       expect(plan.product.brandRaw).toBe("Beta");
-      expect(plan.product.warnings.includes("DTC.BRAND_MISMATCH")).toBe(index === 0);
+      expect(plan.product.warnings).not.toContain("DTC.BRAND_MISMATCH");
     }),
   );
-  expect(bind.mock.calls).toEqual(
-    expect.arrayContaining([
-      ["dtc", alphaUrl],
-      ["dtc", betaUrl],
-    ]),
-  );
+  expect(bind.mock.calls).toEqual(expect.arrayContaining([["dtc", betaUrl]]));
   expect(test.read).toHaveBeenCalledTimes(2);
   expect(test.records.size).toBe(0);
 });
 
 it("refuses planning a capture under another brand's catalog", async () => {
   const test = setup();
-  const [input] = await queuedInputs(test.parts, [alphaUrl]);
+  const [input] = await queuedInputs(test.parts, [betaUrl]);
   if (!input) {
     throw new Error("Expected queued input");
   }
@@ -288,7 +295,7 @@ it("refuses planning a capture under another brand's catalog", async () => {
   expect(
     await pipelineActivities(test.parts).prepareChannelProduct?.({
       ...sourcePlan,
-      sourceUrl: betaUrl,
+      sourceUrl: alphaUrl,
     }),
   ).toMatchObject({ status: "review", code: "DTC.IDENTITY_CONFLICT" });
   expect(test.read).toHaveBeenCalledOnce();

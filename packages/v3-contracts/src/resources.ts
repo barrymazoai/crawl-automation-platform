@@ -5,7 +5,7 @@ export const ResourceRequestSchema = z.strictObject({ permitId: ExecutionIdSchem
   runId: z.uuid(), needs: z.array(ResourceNeedSchema).min(1).max(8) }).refine(r => new Set(r.needs.map(n => n.resourceId)).size === r.needs.length);
 export type ResourceRequest = z.infer<typeof ResourceRequestSchema>;
 export const ResourceDecisionSchema = z.strictObject({ permitId: ExecutionIdSchema, status: z.enum(["granted", "waiting", "released"]),
-  reason: z.enum(["available", "capacity", "unhealthy", "released"]) });
+  reason: z.union([z.enum(["available", "capacity", "unhealthy", "released"]), z.string().regex(/^browser:BROWSER\.[A-Z_]+$/).max(200)]) });
 export const ResourceGateSchema = z.strictObject({ queue: VersionTagSchema,
   // Allow OCR's 120 s independent cleanup to finish and publish its journal receipt.
   stopVerificationSeconds: z.number().int().min(1).max(600).optional(),

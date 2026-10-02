@@ -32,6 +32,7 @@ function storeWith(found: boolean): BrandStore {
   return {
     list: vi.fn(async () => ({ items: [brand], limit: 25, offset: 0, hasMore: false })),
     find: vi.fn(async () => (found ? brand : null)),
+    findSource: vi.fn(async () => (found ? source : null)),
     sources: vi.fn(async () => ({
       items: [{ ...source, brandName: brand.name, lastScan: null, queueProductCount: 0 }],
       limit: 25,

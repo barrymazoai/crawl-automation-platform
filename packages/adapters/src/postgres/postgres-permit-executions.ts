@@ -1,3 +1,4 @@
+import { pendingBrowserExecutions } from "./pending-browser-executions.js";
 import type { PermitActivityLedger } from "@crawl-automation/app";
 import type { Database, PermitExecutionIdentity, PermitOwner } from "@crawl-automation/platform";
 import { resourceGateErrors } from "@crawl-automation/platform/errors/resource-gate";
@@ -6,6 +7,10 @@ import { lockPermit } from "./permit-owner.js";
 /** Awaited provider writes: no execution starts before its identity is durable. */
 export class PostgresPermitExecutions implements PermitActivityLedger {
   constructor(private readonly database: Database) {}
+
+  pendingBrowser(host: string, taskSpaceId: number) {
+    return pendingBrowserExecutions(this.database, { host, taskSpaceId });
+  }
 
   async begin(owner: PermitOwner): Promise<boolean> {
     return this.database.transaction(async (tx) => {

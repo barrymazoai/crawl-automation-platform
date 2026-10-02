@@ -117,7 +117,7 @@ const settings: PlanSettings = {
   factsPolicy: "text-facts-first/1",
 };
 
-it("archives and publishes both brands when a source-bound product capture disagrees", async () => {
+it("archives a brand conflict and stops browser capture before publishing a formula plan", async () => {
   const sourceUrl = "https://shop.example/collections/alpha";
   const multi = dtcSitePolicy({
     siteKey: site.siteKey,
@@ -135,24 +135,17 @@ it("archives and publishes both brands when a source-bound product capture disag
     sourcePlans: new ProductSourcePlans(test.publication, settings),
   });
   const result = await browser.capture(request, AbortSignal.timeout(5000));
-  if (result.status !== "captured" || !result.planned) {
-    throw new Error("Expected source-bound browser capture");
-  }
-  expect(Buffer.from(test.remote.data.get(result.archiveKey) ?? []).toString()).toBe(html);
-  const plan = result.planned.sourcePlan;
-  const projection = JSON.parse(
-    Buffer.from(test.remote.data.get(plan.source.objectKey) ?? []).toString(),
-  );
-  expect(projection).toMatchObject({
-    evidence: { brandRaw: "Beta", warnings: ["DTC.BRAND_MISMATCH"] },
-    brandEvidence: {
-      seller: site.siteKey,
-      source: { brand: "Alpha", catalogUrl: sourceUrl },
-      observedBrand: "Beta",
-      status: "mismatch",
-    },
+  expect(result).toMatchObject({
+    status: "sighted",
+    sighting: { state: "unlisted", reason: "identity_conflict", causeCode: "DTC.BRAND_MISMATCH" },
   });
-  expect(scoped.planning?.read(projection, url, plan.owner).evidence.brandRaw).toBe("Beta");
+  if (result.status !== "sighted") {
+    throw new Error("Expected a brand-conflict sighting");
+  }
+  expect(Buffer.from(test.remote.data.get(result.sighting.archiveKey ?? "") ?? []).toString()).toBe(
+    html,
+  );
+  expect(result).not.toHaveProperty("planned");
 });
 
 it.each([null, "11"])(

@@ -40,6 +40,10 @@ const fs = require('node:fs');
 const chunks = [];
 process.stdin.on('data', chunk => chunks.push(chunk));
 process.stdin.on('end', () => {
+  if (Buffer.concat(chunks).toString().includes('kind: "health"')) {
+    console.log(${JSON.stringify(EGO_MARKER)} + JSON.stringify({kind: "health", code: null, targets: []}));
+    return;
+  }
   const counter = ${JSON.stringify(counter)};
   const index = fs.existsSync(counter) ? Number(fs.readFileSync(counter, 'utf8')) : 0;
   fs.writeFileSync(counter, String(index + 1));
@@ -97,24 +101,28 @@ describe("Ego permit stop evidence", () => {
     await expect(run(test, journal)).resolves.toMatchObject({ closed: true });
     expect(journal.record.mock.calls.map(([, identity]) => identity.kind)).toEqual([
       "browser-round",
+      "browser-cli",
       "browser",
     ]);
     expect(journal.record).toHaveBeenCalledWith(owner, {
       kind: "browser",
       executionId: "task-page",
       taskSpaceId: 7,
-      metadata: { host: hostname() },
+      metadata: { host: hostname(), roundId: expect.any(String) },
     });
     expect(journal.record).toHaveBeenCalledWith(
       owner,
-      expect.objectContaining({ kind: "browser-round", metadata: { host: hostname() } }),
+      expect.objectContaining({
+        kind: "browser-round",
+        metadata: expect.objectContaining({ host: hostname() }),
+      }),
     );
     expect(journal.prove).toHaveBeenCalledWith(
       owner,
       expect.objectContaining({ kind: "browser", executionId: "task-page" }),
       expect.objectContaining({ kind: "browser-target-absent", targetId: "task-page" }),
     );
-    expect(journal.prove).toHaveBeenCalledTimes(2);
+    expect(journal.prove).toHaveBeenCalledTimes(3);
   });
 
   it("closes once, rechecks delayed absence, and preserves the business failure", async () => {
@@ -139,7 +147,7 @@ describe("Ego permit stop evidence", () => {
       expect(script).not.toContain(".close()");
       expect(script).not.toContain("newPage");
     }
-    expect(journal.prove).toHaveBeenCalledTimes(2);
+    expect(journal.prove).toHaveBeenCalledTimes(3);
   });
 
   it("stops after three failed absence checks, retaining identities without proof", async () => {
@@ -157,8 +165,8 @@ describe("Ego permit stop evidence", () => {
       details: { opened: ["task-page"], failure },
     });
     expect(await test.scripts()).toHaveLength(5);
-    expect(journal.record).toHaveBeenCalledTimes(2);
-    expect(journal.prove).not.toHaveBeenCalled();
+    expect(journal.record).toHaveBeenCalledTimes(3);
+    expect(journal.prove).toHaveBeenCalledTimes(1);
   });
 
   it("stops recovery immediately when the space is under user control", async () => {
@@ -172,7 +180,7 @@ describe("Ego permit stop evidence", () => {
       cause: { cause: { code: "BROWSER.USER_CONTROL" } },
     });
     expect(await test.scripts()).toHaveLength(2);
-    expect(journal.prove).not.toHaveBeenCalled();
+    expect(journal.prove).toHaveBeenCalledTimes(1);
   });
 
   it("uses an independent cleanup lifetime when the business signal was cancelled", async () => {
@@ -192,8 +200,8 @@ describe("Ego permit stop evidence", () => {
       details: { executionUnknown: true },
     });
     expect(await test.scripts()).toHaveLength(3);
-    // The known page is gone, but a missing final result cannot prove the interrupted round ended safely.
-    expect(journal.prove).toHaveBeenCalledTimes(1);
+    // CLI exit plus a verified unchanged inventory proves this single-page round stopped.
+    expect(journal.prove).toHaveBeenCalledTimes(3);
     expect(journal.prove).toHaveBeenCalledWith(
       owner,
       expect.objectContaining({ kind: "browser", executionId: "task-page" }),
@@ -213,22 +221,21 @@ describe("Ego permit stop evidence", () => {
     await expect(run(test, journal)).rejects.toMatchObject({
       code: "BROWSER.PAGE_CLEANUP_PENDING",
     });
-    expect(journal.prove).not.toHaveBeenCalled();
+    expect(journal.prove).toHaveBeenCalledTimes(1);
   });
 
-  it("retains the round intent if the process exits before reporting any page", async () => {
+  it("retains a round with no reported page even after CLI exit: a late newPage cannot be ruled out", async () => {
     const test = await fixture([{ messages: [] }]);
     const journal = ledger();
     await expect(run(test, journal)).rejects.toMatchObject({
-      code: "BROWSER.UNAVAILABLE",
-      details: { executionUnknown: true },
+      code: "BROWSER.PAGE_CLEANUP_PENDING",
     });
-    expect(journal.record).toHaveBeenCalledTimes(1);
+    expect(journal.record).toHaveBeenCalledTimes(2);
     expect(journal.record).toHaveBeenCalledWith(
       owner,
       expect.objectContaining({ kind: "browser-round" }),
     );
-    expect(journal.prove).not.toHaveBeenCalled();
+    expect(journal.prove).toHaveBeenCalledTimes(1);
   });
 
   it("leaves an opened page pending without cleanup when the round reports user control", async () => {
@@ -239,7 +246,7 @@ describe("Ego permit stop evidence", () => {
       details: { opened: ["task-page"] },
     });
     expect(await test.scripts()).toHaveLength(1);
-    expect(journal.prove).not.toHaveBeenCalled();
+    expect(journal.prove).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -253,9 +260,12 @@ describe("read-only target absence script", () => {
     const script = new AsyncFunction(
       "taskSpace",
       "console",
+      "listTaskSpaces",
       targetAbsenceScript({ taskSpaceId: 7, targetId: "task-page" }),
     );
-    await script(taskSpace, { log: emitted });
+    await script(taskSpace, { log: emitted }, async () => [
+      { spaceId: 7, ownership: task.ownership },
+    ]);
     expect(taskSpace).toHaveBeenCalledWith(7);
     expect(emitted).toHaveBeenCalledWith(expect.stringContaining('"closed":true'));
     expect(task.tabs).toHaveBeenCalledTimes(1);
@@ -267,9 +277,14 @@ describe("read-only target absence script", () => {
     const script = new AsyncFunction(
       "taskSpace",
       "console",
+      "listTaskSpaces",
       targetAbsenceScript({ taskSpaceId: 7, targetId: "task-page" }),
     );
-    await script(async () => task, { log: emitted });
+    await script(
+      async () => task,
+      { log: emitted },
+      async () => [{ spaceId: 7, ownership: task.ownership }],
+    );
     expect(task.tabs).not.toHaveBeenCalled();
     expect(emitted).toHaveBeenCalledWith(expect.stringContaining('"reason":"user-control"'));
   });
@@ -283,16 +298,21 @@ describe("read-only target absence script", () => {
       ownership: "agent",
       tabs: async () => [
         { targetId: "user-page", label: "user-tab" },
-        ...(present ? [{ targetId: "task-page", label: "task-tab" }] : []),
+        ...(present ? [{ targetId: "task-page", label: "task-tab", openedBy: "agent" }] : []),
       ],
       page: vi.fn(() => ({ close })),
     };
     const script = new AsyncFunction(
       "taskSpace",
       "console",
+      "listTaskSpaces",
       closeTargetScript({ taskSpaceId: 7, targetId: "task-page" }),
     );
-    await script(async () => task, { log: vi.fn() });
+    await script(
+      async () => task,
+      { log: vi.fn() },
+      async () => [{ spaceId: 7, ownership: task.ownership }],
+    );
     expect(task.page).toHaveBeenCalledExactlyOnceWith("task-tab");
     expect(close).toHaveBeenCalledTimes(1);
   });

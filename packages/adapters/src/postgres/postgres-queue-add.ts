@@ -74,7 +74,13 @@ function queueRows(input: AddToQueue) {
   const seen = new Set<string>();
   return input.products
     .map((product) => ({
-      item_id: sha256([input.channel, input.batchId, product.listingId, product.variantId]),
+      item_id: sha256([
+        input.channel,
+        input.batchId,
+        product.listingId,
+        product.variantId,
+        ...(input.channel === "dtc" ? [product.sourceId] : []),
+      ]),
       source_id: product.sourceId,
       url: product.url,
       listing_id: product.listingId,

@@ -5,6 +5,7 @@ import { sourceUrlOf } from "./scan-listing.js";
 import type { Logger, ObjectStore } from "@crawl-automation/platform";
 import { ScanEvidenceService } from "./scan-evidence.js";
 import { appErrors } from "../errors.js";
+import { assertSourcePolicy } from "../brands/source-policy.js";
 import type { BrandScanStore } from "./ports.js";
 import {
   RequestScansSchema,
@@ -90,6 +91,7 @@ export class BrandScanService {
         details: { sourceId: source.sourceId },
       });
     }
+    assertSourcePolicy(this.deps.registry, source);
     const normalise = sourceUrlOf(this.deps, source.channel as ScanChannel);
     return { ...source, url: normalise(source.url) };
   }

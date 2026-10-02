@@ -44,6 +44,7 @@ export const ScanStateSchema = z.enum([
 export type ScanState = z.infer<typeof ScanStateSchema>;
 
 export const ScanListQuerySchema = z.strictObject({
+  sourceId: z.uuid().optional(),
   channel: ScanChannelSchema.optional(),
   state: ScanStateSchema.optional(),
   limit: z.number().int().min(1).max(1_000).default(100),

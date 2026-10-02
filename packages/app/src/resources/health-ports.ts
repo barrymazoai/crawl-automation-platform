@@ -4,6 +4,7 @@ import type { FleetStatusPorts, FleetTaskQueues } from "../fleet/status-ports.js
 export interface ResourceHealthTarget {
   taskQueues: string[];
   ocr?: boolean | undefined;
+  browser?: boolean | undefined;
 }
 
 export interface ResourceHealthOptions {
@@ -16,7 +17,12 @@ export interface ResourceHealthOptions {
 }
 
 export type ResourceHealthReason =
-  "ready" | `no_pollers:${string}` | "ocr_unhealthy" | "disk_low" | "monitor_stopping";
+  | "ready"
+  | `browser:${string}`
+  | `no_pollers:${string}`
+  | "ocr_unhealthy"
+  | "disk_low"
+  | "monitor_stopping";
 
 export interface ResourceHealthWrite {
   resourceId: string;
@@ -32,6 +38,7 @@ export interface ResourceHealthRepository {
 }
 
 export interface ResourceHealthPorts {
+  browser?: { reason(resourceId: string): Promise<string | null> };
   repository: ResourceHealthRepository;
   taskQueues: FleetTaskQueues;
   ocr: FleetStatusPorts["ocr"];

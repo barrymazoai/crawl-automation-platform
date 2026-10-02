@@ -9,6 +9,7 @@ import type { z } from "zod";
 import type { CaptureMode } from "./capture.js";
 import type { ProductFamily } from "./product-family.js";
 import type { BrandScanReader } from "./listing/brand-scan.js";
+import type { ListingSighting } from "./pipeline/listing-sighting-model.js";
 
 /** Price, rating, review count and availability as a product page shows them. */
 export type CommerceEvidence = z.infer<typeof CommerceEvidenceSchema>;
@@ -111,6 +112,8 @@ export interface LabelCoreReader {
 export interface ChannelAdapter<Rendered = unknown> {
   /** Bind a task to its catalog when a channel hosts multiple brand sources. */
   forBrandSource?(catalogUrl: string): ChannelAdapter<Rendered>;
+  /** Check a stored brand/catalog binding against explicit channel configuration. */
+  assertBrandSource?(source: { url: string; brandName: string }): void;
   readonly id: ChannelId;
   /** Allowed product capture strategies; browser-only channels never use ScraperAPI. */
   readonly captureModes: readonly CaptureMode[];
@@ -136,6 +139,8 @@ export interface ChannelAdapter<Rendered = unknown> {
    * Adapters without this hook are compared after parsing, using ParsedProduct.identity.
    */
   pageIdentity?(page: FetchedPage): ProductIdentity | null;
+  /** Additional page-owned identity evidence, checked after archiving and before product acceptance. */
+  pageSighting?(page: FetchedPage): Omit<ListingSighting, "archiveKey"> | null;
   /** Reads one archived product page. Throws a channel error code when the page is not a readable product. */
   parseProduct(page: FetchedPage): ParsedProduct<Rendered>;
   /** The product's family as its page shows it (other sizes, flavours…); null when the page shows none. */

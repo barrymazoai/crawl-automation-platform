@@ -7,7 +7,12 @@ import { ChannelProductEvidenceSchema } from "@crawl-automation/v3-contracts";
 import { z } from "zod";
 import { isDeepStrictEqual } from "node:util";
 import { dtcProductAddress, siteForUrl } from "./address.js";
-import { dtcBrandEvidence, DtcBrandEvidenceSchema, dtcBrandWarnings } from "./brand-evidence.js";
+import {
+  assertDtcBrandVerified,
+  dtcBrandEvidence,
+  DtcBrandEvidenceSchema,
+  dtcBrandWarnings,
+} from "./brand-evidence.js";
 import { dtcBrandSource, type DtcBrandSource } from "./brand-source.js";
 import type { DtcRendered } from "./evidence.js";
 import type { DtcSitePolicy } from "./site-policy.js";
@@ -42,6 +47,7 @@ function validateBrand(read: z.infer<typeof Projection>, site: DtcSitePolicy) {
   ) {
     throw platformPageErrors.create("DTC.IDENTITY_CONFLICT");
   }
+  assertDtcBrandVerified(expected);
 }
 
 function projectionData(projection: unknown, site: DtcSitePolicy) {
