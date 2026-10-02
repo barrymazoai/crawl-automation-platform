@@ -199,3 +199,23 @@ HMW第三次原生目录scan `6e6a71fe-fca7-4bcc-8f72-5e470b7667e7`（10:55:18�
 多规格验收准备时，从 R2 重读既有 HMW Travel Pack HTML：`v3/dtc-html/product-9fd4d4ee-f43b-40aa-9e54-a7f44cace411/original.html`，475111 字节、SHA256 `0dc966e703b803bbfc1c78b897313db09fb617cde22ab43d2732571ef9d91135` 一致。实际 ProductGroup 为同一 Multivitamin & Mineral，网站提供 One Week Supply / 30 Day Supply、SKU012/022；未重抓网页。旧 runHarvest 的 URL 预筛选会仅凭 travel-pack 排除，新的纯测试复现 complete=0/excluded=1。
 
 修复限定 Ego 宿主精确派发的 capture-only 单品：URL 范围和身份校验保留，原件采集不执行旧 pack/bundle/non-nutrition 关键词的采前筛选；保存完整资料后交现有下游判断。普通独立旧 harvest 继续原筛选规则，目录不因此直接采集商品。77 项 harvest/产品范围回归和全仓检查通过（另一个首次测试失败是 fixture HTML 少于既有 500 字符最低值，修正测试原件长度，未放松生产门槛）。该修复尚未部署，等待当前目录任务完成；155 的真实多规格验证仍待执行。
+
+## 旧 Shopify 目录证明真实通过；开始原生多规格验收（11:50 UTC）
+
+HMW 第四次目录 scan `dd93e125-5c07-4a01-82d2-0172623ebb5e` 于 11:43:30.827 UTC complete：full=true、1页、6个产品、入队6、missing=0、付费 credits=0。实际采用旧 Shopify 有界证明：`main` 容器的真实 DOM / 提交条目 / 对应接口均为同一6项，第二页接口原件为空；只有一轮目录观察，增长6、zeroGrowthRounds=0，未伪称普通枚举已收敛，也没有执行商品 harvest。
+
+R2 `v3/dtc-agent/catalog-dd93e125-5c07-4a01-82d2-0172623ebb5e/archive.json` 的26份文件、4,253,322字节全部回读大小/SHA256一致。停止账本四项齐全：Codex PID97928进程组11:42:29.803 absent、精确p108目标11:42:30.198 absent、CLI97926已退出、round结束；许可 `permit-01a0fc67-e926-7116-a4af-12fabe7bff13-0` 于11:43:30.754释放，held=[]。CRAWLV3-170转Review；此结果不代表大目录分页/load-more、其他品牌或Worker强杀恢复已验收。
+
+`210a1aaf36c4306ff4d92f4a35a5a200788ec0b6` 已main推送，Mini Git拉取后的78项harvest/范围/留存原件重放与3项模式检查全部通过。11:46:00.914 UTC经fresh clone/locked install/build部署Server二；Server一仍bb8bb14。DTC保持paused、queued=6，其他五个原running空渠道按部署前快照恢复。
+
+HMW Travel Pack新的手动原生单品run `78cb3b78-f65f-41c0-9171-fdfee1dbeb0c` 于11:46:30.339受理。来源 `743aae55-33ee-4233-ba73-037c1b534af5`，网页 `/products/foundation-multiviatim-and-mineral-travel-pack`；模型PID2916、p109目标 `EAEC75AEB040B6EFA7C4052165E9DB07`，round `c30bf9f7-501d-451f-9ef7-c198c8c6907e`，原baseline页保持。11:50只读检查仍在采集页面结构，无业务终态，不能将保存网站规格视为所有规格均已完成后续处理。CRAWLV3-171与155保持In Progress。
+
+## 多规格原件已保存，但字段采集路线偏差阻止验收（CRAWLV3-172）
+
+上述单品保存1条记录、2张实际图库、网站两个规格（54311671398766/SKU012/One Week Supply/9.99/OutOfStock；54311689552238/SKU022/30 Day Supply/34.99/InStock）。描述却是`Your cart is empty`，基础price错误为推荐商品的$49.98。Codex采后返回needs_review / field_extraction_mixed_unrelated_content，PID2916于11:52:21.579停止；随后API查询工作流已结束、held=[]。R2逐件回读和精确页面停止账本尚待本轮复核，不能只凭无许可声称全部清理验收完成。
+
+CRAWLV3-172已创建。用户质疑是否偏成机械提取后，暂停继续改代码，重新对照旧部署对应20b09db的skill、Shopify hooks和旧V3 prompt。旧设计确实包含机械执行，但动态站点/字段/图库判断由模型负责，脚本执行已验证的方法；Shopify可直接从真实商品数据获取title/body_html/variants等，浏览器补足页面证据。普通浏览器路径先视觉逐字段定位、再重放映射并验证、然后收割，失效局部重学。
+
+本轮模型生成的run-capture.mjs没有复用旧Shopify字段extract hook，而将HTML送入applyDetailExtractionProfile；描述的后代/伪类CSS映射超出旧firstSelectorText正则模拟能力，静默落到通用全页fallback。采前检查仅检查非空和少量词，把购物车文本误判pass，直至采后模型复核才拦截。这是流程与实现共同的缺口，不能概括成仅缺一个CSS语法补丁，也不能宣称当前只是Chrome换Ego、旧采集方法已完整复用。下一步须先确认并恢复旧数据源选择、逐字段验证与执行分工；不为通过单个站点继续堆固定字段规则。本次质疑后未修改引擎、未部署或开启新测试。
+
+用户随后明确“不能使用通用提取器”，要求修改前重新总结。172已追加此要求：原生DTC禁止通用全页字段提取及自动fallback；恢复模型观察并逐字段核验的站点方法、已验证profile的本轮复核、身份明确的平台商品数据映射。缺少有效方法时交回模型局部重新探索，不能自动走通用extract/upgrade；图片仍由实际完整图库决定，机械代码只执行明确的方法、IO、校验、归档和清理。规格来自网站，原件齐备后才进入既有后处理。此次仅记录设计边界，未修改引擎或上线。
