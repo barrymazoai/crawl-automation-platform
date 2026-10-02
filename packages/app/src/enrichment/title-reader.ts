@@ -40,12 +40,17 @@ export class EnrichmentTitleReader {
     );
     const evidence = { sourceId: plan.source.objectKey, sha256: plan.source.sha256 };
     const variant = websiteVariant(product.evidence, subject);
-    return {
+    const result: EnrichmentSubject = {
       ...subject,
       title: product.evidence.title,
       titleEvidence: evidence,
-      websiteVariant: variant ? { ...variant, evidence } : undefined,
     };
+    if (variant) {
+      result.websiteVariant = { ...variant, evidence };
+    } else {
+      delete result.websiteVariant;
+    }
+    return result;
   }
 }
 

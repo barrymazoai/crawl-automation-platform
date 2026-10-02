@@ -2,7 +2,10 @@ import { expect, it, vi } from "vitest";
 import { swansonPipelineFixture } from "@crawl-automation/channel-swanson";
 import type { ChannelRegistry } from "@crawl-automation/channels-core";
 import type { ArtifactResolver } from "@crawl-automation/platform";
+import { enrichmentHash, enrichmentErrors } from "@crawl-automation/processing";
+import type { ReviewRecord } from "@crawl-automation/v3-contracts";
 import { EnrichmentTitleReader } from "./title-reader.js";
+import { enrichmentReview } from "./review.js";
 
 async function setup(channel: "swanson" | "dtc" = "swanson") {
   const { sourcePlan } = await swansonPipelineFixture(AbortSignal.timeout(5000));
@@ -88,16 +91,48 @@ it("does not assign a default website variant to a multi-variant base product", 
     variantId: "two",
     title: "200 ct",
   });
-  expect(
-    (await state.reader.read(state.request, state.subject, AbortSignal.timeout(5000)))
-      .websiteVariant,
-  ).toBeUndefined();
+  const result = await state.reader.read(state.request, state.subject, AbortSignal.timeout(5000));
+  expect(Object.hasOwn(result, "websiteVariant")).toBe(false);
+  expect(() => enrichmentHash(result)).not.toThrow();
   state.request.sourcePlan.owner.variantId = "one";
   state.subject.variantId = "one";
   expect(
     (await state.reader.read(state.request, state.subject, AbortSignal.timeout(5000)))
       .websiteVariant?.title,
   ).toBe("100 ct");
+});
+
+it("clears a stale variant and records the original failure for a multi-variant base product", async () => {
+  const state = await setup("dtc");
+  const prior = await state.reader.read(state.request, state.subject, AbortSignal.timeout(5000));
+  state.product.evidence.variants.push({ ...state.variant, variantId: "two", title: "200 ct" });
+  const subject = await state.reader.read(state.request, prior, AbortSignal.timeout(5000));
+  expect(prior.websiteVariant?.variantId).toBe("one");
+  expect(Object.hasOwn(subject, "websiteVariant")).toBe(false);
+  const reviews = new Map<string, ReviewRecord>();
+  const publish = vi.fn(async () => undefined);
+  const outcome = await enrichmentReview(
+    {
+      publication: { publish },
+      reviews: {
+        read: async (id) => reviews.get(id) ?? null,
+        append: async (record) => {
+          reviews.set(record.reviewId, JSON.parse(JSON.stringify(record)));
+        },
+      },
+    },
+    {
+      subject,
+      inputHash: "a".repeat(64),
+      error: enrichmentErrors.create("ENRICH.OUTPUT_INVALID", { details: { reason: "schema" } }),
+      executionFact: "executed",
+      candidate: null,
+      inputKey: "retained/input.json",
+    },
+  );
+  expect(outcome).toMatchObject({ status: "review", code: "ENRICH.OUTPUT_INVALID" });
+  expect(publish).toHaveBeenCalledOnce();
+  expect([...reviews.values()][0]?.rawError.details).toMatchObject({ subject, reason: "schema" });
 });
 
 it("does not take a sibling listing's variant or extend non-DTC behavior", async () => {

@@ -249,3 +249,27 @@ CRAWLV3-172已创建。用户质疑是否偏成机械提取后，暂停继续改
 实际过程还包括采前计划误填oracle type=single_page_confirmed，校验拒绝后改为oracles=[]；首次修正重新读取了平台JSON，其时间性字段改变导致新hash与未覆盖的旧source文件不符，再次被source_hash拒绝。随后改为读取既有原件完成唯一一次正式harvest。所有版本原件保留；没有清空checkpoint或覆盖历史资料。后续指令将计划校验前移到获取原件之前，计划/方法修正复用原件，避免此类多余请求。
 
 本轮39个R2文件共9,713,915字节全部回读大小/SHA256一致；四项stop proof齐备，精确p110目标12:40:50.729 absent、round12:40:50.949结束，API最终held=[]。旧Review保持，后续不自动重试；DTC6项批量仍暂停。
+
+## 172 复核协议与库存来源补丁（885b96c）
+
+`885b96c7fd5c581524506bd5bf766fafed8749ad` main推送，全仓检查通过。宿主与模型共用实际ReviewSchema生成的JSON schema，错误类型给出明确DTC.CAPTURE_EVIDENCE；平台JSON缺available时必须显式提供offerSource；方法对象改名observedMethod，避免误填到复核说明method字符串。补充await taskSpace、先validateHarvestPlan再取原件、修正计划复用已保存原件以及selectedVariantId记录真实页面选中状态的要求。
+
+本地19项宿主/模式及24项库存/来源检查通过；Server二隔离checkout经Git pull后95项采集/两份历史原件重放和49项宿主检查通过，Worker构建成功。正式fresh clone/locked install/build部署：Server二12:49:44.324Z，Server一12:50:16.311Z；全部配置job ready。部署前已确认所有队列paused、无在途/held；12:50:37.323恢复五个原running空渠道，DTC仍paused/queued=6。前后快照在 `manual-releases/dtc-native-20261002/before-dtc-review-stock-885b96c-deploy.json` 和 `after-dtc-review-stock-885b96c-restored.json`。
+
+12:50:58.052Z手动发起新HMW单品run/request `7725ee3e-611a-4110-92c7-fcd16fae0d71`，workspace `9a558d78a19688de3728bdd34a6f43820d8edddf227b39106cb8b00b57191179`。仅此一条受控验收，DTC批量仍暂停；业务结果待核实。
+
+本轮Codex于12:55:16.668Z退出，原生采集和宿主字段复核通过，进入既有LabelWorkflow。实际保存1个基础商品、2个网站规格及2/2轮播图；标题/品牌/完整商品描述来自模型明确选择的Shopify字段，未使用通用提取器。SKU012/9.99/OutOfStock与SKU022/34.99/InStock均完整，库存由显式offerSource读取。基础商品未回填默认SKU/价格，复核method为字符串，selectedVariantId忠实记录页面当时的54311689552238而未改变任务身份。
+
+R2 archive41份文件、9,375,010字节全部回读大小/SHA256通过。SQL核实4项stop proof：Codex35283进程组12:55:16.668Z absent；精确p111目标`10446BA95A7469ED5BF83BDB97967BF6`于12:55:17.073Z absent；round `f47c7f88-af20-4d04-869c-12e4a18a868f`结束、CLI35281退出；许可12:56:12.229Z释放。基线页面未动，DTC仍paused/queued=6。
+
+后处理投影`v3/dtc-products/product-7725ee3e-611a-4110-92c7-fcd16fae0d71/projection.json`回读2763字节，SHA256 `bbba90bfe525ea91b80994de0e298eff8ffd95bcd1afdd041a90069f9e05edfe`。两个规格的SKU、options、price、availability/available完整到达后处理，2张图库均保留商品级null归属，不虚构逐规格关联。本次实际选择的是网页观察到的width=990地址，不能写成与上轮width=1800原图字节相同。原件采集通过仍不等于逐规格处理或完整业务成功；12:58检查LabelWorkflow仍在执行，155继续跟踪。
+
+## 新原生采集与标签成功，标准化登记故障分票173
+
+上述7725ee3e于12:59:56.566Z结束：标签业务`collected`，operation `label-fcfa330e47f84b950ea2f5f3347e63e6234e26299da7a9f180a0ad4fccb1e0e8`，recordHash `be72551f6ad58ccd07bf8b2a0302f73240d612b03898cdf90f053823bf7ddfa2`。标签使用的原图SHA256 `4f0d96d66c956d6980c43bfe08819cd09043f070648b62bdfbdf6e0cb85f1758`与本轮采集相同，19条营养行、6项Other ingredients已保存。仅基础商品的一份标签结果，不是两个规格均已独立处理；155保持未完成。
+
+随后标准化返回`review / recordingPending=true / PIPELINE.ACTIVITY_UNRESOLVED`。新增CRAWLV3-173。R2 inputHash `8b4265ad8f2f0cc733bcd993a269113a24c9c1289db3e61e4c1725e936ba1841` 的原回答390字节、SHA256 `7c8bb9641941afc21f4cd4fd1687110a9f200b004094a9ded63c08cf3ae6afdb`按原解码器通过；record.json 1970字节、SHA256 `d47f2a7225f48f01f00d6e9d3c5cd7505539fc6707503267b34cf1ac29608954`也已保存，但数据库没有成功登记行。实际原因是EnrichmentTitleReader对无唯一规格显式赋值websiteVariant=undefined，严格JSON hash拒绝登记，同一字段又导致Review schema拒绝，遮蔽了原始错误。不是模型回答无效。
+
+173修复只在来源处省略缺失属性，并清除可能遗留的旧规格字段，不放松JSON规则或任填默认规格。本地20项title-reader/service检查通过，新增Mini真实留存输入/投影/模型回答重放，验证JSONB往返hash及成功登记路径；不访问网站、不重新调用模型、不改旧workflow终态。当前未宣称该修复已部署。
+
+另已向148补记原生内容完整性缺口：field-preview以capture-only为由未提取文本ingredients，缺少逐项存在/缺失/未检查证明；DOM明确节点的raw格式目前仍转纯文本，可能损失Facts表格结构（代码审计，尚未实站复现）。本轮172通过不替代148下方内容/展开/懒加载验收。
