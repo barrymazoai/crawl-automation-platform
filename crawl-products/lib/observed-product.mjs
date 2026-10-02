@@ -4,7 +4,7 @@ import { resolve, relative, isAbsolute } from "node:path";
 import { isDeepStrictEqual } from "node:util";
 import { parseHTML } from "linkedom";
 import { htmlToText } from "./engine.mjs";
-import { normalizePlatformVariants } from "./run-harvest.mjs";
+import { normalizePlatformVariants } from "./platform-variants.mjs";
 import { nativeAvailability } from "./native-availability.mjs";
 
 const fail = reason => { throw new Error(`DTC.OBSERVED_METHOD:${reason}`); };

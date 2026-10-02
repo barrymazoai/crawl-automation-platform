@@ -229,3 +229,5 @@ CRAWLV3-172已创建。用户质疑是否偏成机械提取后，暂停继续改
 本地第一轮75项纯测试与25项宿主/品牌/模式测试通过；补充失败响应原件检查、两份Mini历史原件重放及全仓检查中，未部署、未开始新业务验收。新增Mini回归只读取已留存Solaray和HMW原件，在独立临时目录执行模型明确位置的方法；禁止网络，并比较所有规格和原图字节。其站点具体selector仅是历史测试fixture，不进入生产站点规则。
 
 旧 HMW run `78cb3b78-f65f-41c0-9171-fdfee1dbeb0c` 的R2 manifest 36个文件、9,611,147字节全部回读，大小/SHA256一致。数据库查询 `product-run-78cb3b78-f65f-41c0-9171-fdfee1dbeb0c` 核实4项stop proof：Codex进程组11:52:21.579 absent、browser CLI退出、round结束、确切目标 `EAEC75AEB040B6EFA7C4052165E9DB07` 于11:52:21.984 absent；许可11:52:55.950释放。此前待核验事项已补齐。原Review及原件保持，DTC批量保持暂停。
+
+`8bcd861` 已main推送。Server二 fresh Git checkout 的94项采集/原件重放及420项DTC/契约/label-plan检查通过（6项无外部fixture的检查跳过）。HMW重放正确读取描述且保持两个规格全部值；Solaray保持配料/用法/品牌/库存与两张原图，并保留描述后续完整段落。Worker构建失败：宿主校验模块为复用规格规范化导入整个run-harvest，间接将浏览器工具的fsevents原生依赖带入bundle。生产未切换。现将原有规格规范化原封不动提取为纯模块，由harvest与离线校验共享，继续Mini构建验证。
