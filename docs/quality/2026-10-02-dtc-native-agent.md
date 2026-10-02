@@ -42,4 +42,12 @@ Server 二已部署 `49bf609`，第二轮 Solaray run `2ca43098-fc07-4be9-9acb-1
 
 待验收：环境恢复后的精确账本停止/许可释放；部署新修复；新 Solaray 任务完整轮播逐图检查、HTML/原图 R2 和下游处理；HMW 全目录发现/耗尽与站点分析；后续多规格、其他截图品牌和异常恢复。Server 一生产仍为 `92d4cb3`，Server 二生产仍为 `49bf609`，不能把 main 最新修复当成已上线。
 
+## 窗口显示复核与恢复（08:11 UTC，替代上一节阻塞状态）
+
+用户说明 Server 二没有锁屏。本轮 IOConsoleUsers 已无 ScreenIsLocked 标志，Solaray 及 about:blank 的原生截图仍超时，32×32/raw 截图同样失败，Page.info 的 1908×861 视口和 1920×1080 在线显示设备正常。因此此前将失败直接归因为锁屏不准确。Ego 官方仓库 [PR 255](https://github.com/citrolabs/ego-lite/pull/255) 记录了隐藏/最小化窗口时 DOM 正常但截图超时的症状。用 `open -a '/Applications/ego lite.app'` 恢复现有应用窗口显示后，原生 `Page.screenshot` 成功；已实际查看 Solaray 正常商品页截图。该对照支持窗口显示状态相关，未区分隐藏与最小化，也未重启/升级浏览器或更改空间所有权。诊断 p95/p96/p97 均已精确关闭、核验不存在；截图保存在 Server 二 `manual-releases/dtc-native-20261002/native-visible-recheck.png`。采集时保持 Ego 窗口正常显示；只凭截图超时不能判断用户锁屏。
+
+Server 一 Docker/Postgres 已恢复。第二轮真实 Workflow ID 为 `product-run-2ca43098-fc07-4be9-9acb-1ae72592b782`，Temporal run ID `01a0fb83-b040-74f3-8fe6-d31b9769aaee`；以业务 run UUID 查询 ledger 的 workflowId 会漏查。其 permit `permit-01a0fb83-b040-74f3-8fe6-d31b9769aaee-0` 因数据库中断保留 running。已验证 owner FAILED 且无 pending Activity，R2 process.json 与执行机原件 SHA-256 均为 `7383b07e75fecdb3ce82fc266d23a858822802b3e5b51e09e0ae9703e9a6122d`，本机 PID/PGID 71609 均 ESRCH。通过现有应用 ledger 精确补写原 Codex 停止证明，再调用 `resources.verifyStop`，返回四项 stopped=true、released=true，后续 held permits=[]。历史失败和 Review 没有重跑或修改。
+
+08:11 UTC Server 二已从 origin/main fresh clone/build 部署 `3cf56e9`（包含 `13fc82b` 和 `ccfb0d8`），唯一 browser Worker 健康检查通过；Server 一保持 `92d4cb3`。08:11:50 新受控 Solaray 验收 run `3f9250b2-0478-4aad-8734-40c1cd0b9aad` 已受理，DTC 批量队列保持 paused。此处仅记录测试开始，不代表产品采集或端到端已通过。
+
 部署前所有队列自然暂停且无 held permit；部署后恢复原本 running 的 Amazon/GNC/Swanson/Whole Foods/Costco，DTC 批量队列保持 paused。配置和队列快照在两台机器各自的 `manual-releases/dtc-native-20261002/`，旧 PM2 配置由部署器留存。
