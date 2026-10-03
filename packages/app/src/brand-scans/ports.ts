@@ -22,8 +22,8 @@ export interface BrandScanStore {
   /** One scan per (request, source); asking again returns the scans already requested. */
   request(requestId: string, sources: readonly ScanSource[]): Promise<ScanRecord[]>;
   /**
-   * Up to `limit` scans to run now: queued ones, and running ones whose process stopped more than `staleMs` ago
-   * (their pages are archived, so running them again reads the archive and pays nothing twice).
+   * Up to `limit` scans: queued ones and stale running rows. A stale timestamp is not stop proof.
+   * DTC admits one active scan globally; recovery reconnects the same browser workflow, never a new attempt.
    */
   claim(limit: number, staleMs: number): Promise<ScanRecord[]>;
   cancel(query: CancelScans): Promise<CancelScanCounts>;

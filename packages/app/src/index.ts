@@ -55,5 +55,6 @@ export * from "./resources/browser-recovery.js";
 export * from "./site-analysis/site-analysis-service.js";
 export * from "./site-analysis/site-analysis-runner.js";
 export * from "./site-analysis/errors.js";
+export * from "./site-analysis/site-analysis-tasks.js";
 
 export * from "./stops/stop-verification.js";

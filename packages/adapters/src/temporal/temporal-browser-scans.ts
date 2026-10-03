@@ -1,7 +1,7 @@
 import { recordRecovery } from "@crawl-automation/platform";
 import type { BrandScanPermit, BrowserBrandScan } from "@crawl-automation/app";
 import type { ChannelId } from "@crawl-automation/v3-contracts";
-import type { Client } from "@temporalio/client";
+import { WorkflowExecutionAlreadyStartedError, type Client } from "@temporalio/client";
 import { z } from "zod";
 import { codedFailure } from "./coded-failure.js";
 
@@ -29,20 +29,16 @@ export class TemporalBrowserScans {
     request: { channel: ChannelId; scanId: string; sourceUrl: string },
     signal: AbortSignal,
   ): Promise<BrowserBrandScan> {
-    const handle = await this.client.workflow.start("BrowserScanWorkflow", {
-      workflowId: `browser-scan-${request.scanId}`,
-      taskQueue: this.permits[request.channel]?.taskQueue ?? this.taskQueue,
-      args: [{ ...request, capture: "browser", ...this.gate(request.channel) }],
-      // The same scan asked again waits for the one already running; nothing is scanned twice.
-      workflowIdReusePolicy: "REJECT_DUPLICATE",
-      workflowIdConflictPolicy: "USE_EXISTING",
-      ...(this.permits[request.channel] ? {} : { workflowExecutionTimeout: "90 minutes" }),
-    });
+    signal.throwIfAborted();
+    const handle = await this.start(request);
     const cancel = () =>
       void handle.cancel().catch((error: unknown) => {
         recordRecovery(error, { runId: request.scanId, operation: "browserScan.cancel" });
       });
     signal.addEventListener("abort", cancel, { once: true });
+    if (signal.aborted) {
+      cancel();
+    }
     try {
       const result = BrowserBrandScanSchema.parse(await handle.result());
       return result as BrowserBrandScan;
@@ -50,6 +46,27 @@ export class TemporalBrowserScans {
       throw codedFailure(error);
     } finally {
       signal.removeEventListener("abort", cancel);
+    }
+  }
+
+  private async start(request: { channel: ChannelId; scanId: string; sourceUrl: string }) {
+    const workflowId = `browser-scan-${request.scanId}`;
+    try {
+      return await this.client.workflow.start("BrowserScanWorkflow", {
+        workflowId,
+        taskQueue: this.permits[request.channel]?.taskQueue ?? this.taskQueue,
+        args: [{ ...request, capture: "browser", ...this.gate(request.channel) }],
+        // The same scan asked again waits for the one already running; nothing is scanned twice.
+        workflowIdReusePolicy: "REJECT_DUPLICATE",
+        workflowIdConflictPolicy: "USE_EXISTING",
+        ...(this.permits[request.channel] ? {} : { workflowExecutionTimeout: "90 minutes" }),
+      });
+    } catch (error) {
+      if (!(error instanceof WorkflowExecutionAlreadyStartedError)) {
+        throw error;
+      }
+      // Reconnect even to a closed result; never start a replacement browser operation.
+      return this.client.workflow.getHandle(workflowId);
     }
   }
 

@@ -31,6 +31,7 @@ website-shared 必须提供 sharedScope 网站明确声明的原文和确切来�
 禁止执行 semantic queue、enrich 或旧 API-ready 导出；后续系统用本次原件处理。`;
 
 export const catalogInstructions = `按旧采集流程先视觉确认站点身份和完整目录族，制定路线与终止契约，再用 discoverCatalog 复用旧 ENUMERATE 阶段及 Shopify 目录对账。普通目录按契约遍历至零增长；符合旧有界规则的 Shopify 单目录可用页面/目录结果/对应接口完整集合相同及空终页证明，不强制重复遍历。证明选择在采前完成。
+本任务已经绑定scope.source中的一个品牌和目录，直接从该入口开始；复用适用的已保存路线/profile，不重新发现全站品牌，不执行crawlTarget/crawlPortfolio整站调度，也不创建其他品牌任务。本站若为多品牌卖场，已配置的该品牌目录属于授权范围，覆盖旧skill的卖场默认排除；仍须核对商品品牌且不得采其他品牌。
 只发现产品，不进入逐个产品采集和 OCR。商品必须来自实际目录/导航；平台 API 库存不能直接代替目录产品集。
 保存 catalog.json：{pages:[{url,htmlPath,screenshotPath,entries:[{url,title,brand:null或页面品牌}]}],complete:boolean,termination:{proof:"enumeration"或"shopify",exhausted:boolean,reason:string,method:string,evidence:[相对路径],zeroGrowthRounds:number,oracle:{expected:number|null,observed:number,comparable:boolean}}}。
 每页/每个加载阶段保留原始渲染 HTML；每个 seed 留截图，最后耗尽状态留截图。entries 只能列出该页实际出现的产品详情链接。
@@ -39,10 +40,12 @@ export const catalogInstructions = `按旧采集流程先视觉确认站点身�
 用户给的是一个已配置品牌来源，范围只限该来源；多品牌卖场不得把其他品牌放进来。`;
 
 export const analysisInstructions = `分析入口属于官网、自营商店、直属品牌组合还是第三方卖场。视觉验证目录入口和至少一个真实商品，不使用固定选择器模板代替观察。
+这是独立的品牌发现阶段，只输出品牌、入口与证据；可以查看代表商品核实身份，不枚举全品牌商品或进入单品材料收割。保存本次确认的入口/路线和适用profile供后续目录任务复用，由宿主另行创建排队任务。
+用户提交的多品牌站点允许按真实品牌分别分析，覆盖旧skill的multi_brand_retailer默认排除。对站内品牌目录确认真实品牌身份；vendor名称仅为候选，大小写、渠道前缀或同品牌别名不能自动当成多个品牌。不同目录确属同品牌时保存覆盖该品牌的已观察入口，不猜造URL。直属品牌跨域仍只展开一层，广告/社媒/无关零售商外链不作为子品牌。
 允许沿官方实际链接展开一层直属品牌，不递归。遵守 scope 中 maxBrands/maxPages/maxDomains 限额。
 保存 analysis.json：{state:"completed"或"needs-review",brands:[{name,domain,platform:"shopify"或"woocommerce"或"jsonld",catalogUrl,productCount,countExact,wholeCatalog,discoveredFrom:{page,link},status:"verified"或"needs-review",reason:null或说明}],archiveKeys:[],reasons:[]}。
 每个品牌保存 evidence-pages.json：[{url,htmlPath,screenshotPath}]，至少包含来源页、目录和代表商品的实际 HTML 与截图。
 保存 analysis-verification.json：{method,surface:"live_site",evidence:[相对文件路径],verifier:"codex",limitsReached:boolean}。
 platform 是实际观测，不凭URL猜；不支持的自建数据结构返回 needs-review，保留原因。不能只因公司同名就确认品牌。
 完整枚举之前 productCount 只报实际观察数，countExact=false、wholeCatalog=false；平台库存数不能冒充完整目录数。
-本站所有已发现直属品牌均被验证且预算未耗尽才能 state=completed。不要调用 apply 或自动启动商品采集。`;
+本站所有已发现品牌均被验证且预算未耗尽才能 state=completed。不要调用 apply 或自动启动商品采集。`;

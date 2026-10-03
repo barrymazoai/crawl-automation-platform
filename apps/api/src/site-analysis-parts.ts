@@ -12,5 +12,6 @@ export function siteAnalysisService(parts: {
     store: new PostgresSiteAnalyses(parts.database),
     gateway: new TemporalSiteAnalyses(parts.temporal.client, parts.config.brandScans?.permits.dtc),
     limits: SiteAnalysisLimitsSchema.parse(parts.config.siteAnalysis ?? {}),
+    canEnqueue: !!parts.config.brandScans?.browserQueue && !!parts.config.brandScans.permits.dtc,
   });
 }

@@ -13,6 +13,8 @@ import {
 import type { z } from "zod";
 import { oncePerRequest } from "./request-receipt.js";
 import { applySiteAnalysis } from "./site-analysis-apply.js";
+import { enqueueAnalyzedBrands } from "./site-analysis-enqueue.js";
+import { analyzedTasks } from "./site-analysis-tasks.js";
 
 const columns = `id AS "analysisId", url, limits, state, brands, archive_keys AS "archiveKeys", reasons`;
 export class PostgresSiteAnalyses implements SiteAnalysisStore {
@@ -75,9 +77,18 @@ export class PostgresSiteAnalyses implements SiteAnalysisStore {
           input: selection,
           parse: SiteAnalysisApplyResultSchema.parse,
         },
-        () => applySiteAnalysis(tx, selection),
+        async () => {
+          const result = await applySiteAnalysis(tx, selection);
+          if (input.enqueue) {
+            await enqueueAnalyzedBrands(tx, input.analysisId, result);
+          }
+          return result;
+        },
       ),
     );
+  }
+  tasks(analysisId: string) {
+    return analyzedTasks(this.database, analysisId);
   }
   async settings(): Promise<unknown[]> {
     const rows = await this.database.query<

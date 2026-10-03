@@ -4,6 +4,7 @@ import type { BrowserBrandScanners } from "./ports.js";
 import { sourceUrlOf } from "./scan-listing.js";
 import type { Logger, ObjectStore } from "@crawl-automation/platform";
 import { ScanEvidenceService } from "./scan-evidence.js";
+import { DtcScanQueueChangeSchema, type DtcScanQueue } from "./dtc-scan-queue.js";
 import { appErrors } from "../errors.js";
 import { assertSourcePolicy } from "../brands/source-policy.js";
 import type { BrandScanStore } from "./ports.js";
@@ -30,6 +31,7 @@ export class BrandScanService {
       /** False when this process has no scan settings (R2 and ScraperAPI): requests are refused, never parked. */
       enabled: boolean;
       objects?: Pick<ObjectStore, "read"> | undefined;
+      dtcQueue?: DtcScanQueue;
     },
   ) {}
 
@@ -58,6 +60,21 @@ export class BrandScanService {
 
   cancel(raw: unknown): Promise<CancelScanCounts> {
     return this.deps.store.cancel(CancelScansSchema.parse(raw));
+  }
+
+  dtcQueueStatus() {
+    return this.dtcQueue().status();
+  }
+
+  controlDtcQueue(raw: unknown) {
+    return this.dtcQueue().change(DtcScanQueueChangeSchema.parse(raw));
+  }
+
+  private dtcQueue() {
+    if (!this.deps.dtcQueue || !this.deps.enabled || !this.deps.browsers.dtc) {
+      throw appErrors.create("BRAND_SCAN.NOT_CONFIGURED");
+    }
+    return this.deps.dtcQueue;
   }
 
   evidence(raw: unknown) {

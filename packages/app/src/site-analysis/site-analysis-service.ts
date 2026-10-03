@@ -6,17 +6,22 @@ import {
   type SiteAnalysisResult,
 } from "@crawl-automation/v3-contracts";
 import { siteAnalysisErrors } from "./errors.js";
+import { SiteAnalysisTaskSchema, type SiteAnalysisTaskProgress } from "./site-analysis-tasks.js";
 
 export const AnalyzeSiteSchema = z.strictObject({ requestId: z.uuid(), url: SiteUrlSchema });
 export const ApplySiteAnalysisSchema = z.strictObject({
   requestId: z.uuid(),
   analysisId: z.uuid(),
   brands: z.array(z.string().trim().min(1)).min(1).max(500).optional(),
+  /** Explicitly persist one queued brand task per verified source; old callers only save sources. */
+  enqueue: z.boolean().optional(),
 });
 export const SiteAnalysisApplyResultSchema = z.object({
   created: z.array(z.object({ name: z.string(), brandId: z.uuid(), sourceId: z.uuid() })),
   matched: z.array(z.object({ name: z.string(), brandId: z.uuid(), sourceId: z.uuid() })),
   skipped: z.array(z.object({ name: z.string(), reason: z.string() })),
+  tasks: z.array(SiteAnalysisTaskSchema).optional(),
+  notQueued: z.array(z.object({ name: z.string(), reason: z.string() })).optional(),
 });
 export type SiteAnalysisApplyResult = z.infer<typeof SiteAnalysisApplyResultSchema>;
 export interface SiteAnalysisStore {
@@ -29,6 +34,7 @@ export interface SiteAnalysisStore {
   evidence(analysisId: string, key: string): Promise<void>;
   finish(analysisId: string, result: SiteAnalysisResult): Promise<void>;
   apply(input: z.infer<typeof ApplySiteAnalysisSchema>): Promise<SiteAnalysisApplyResult>;
+  tasks?(analysisId: string): Promise<SiteAnalysisTaskProgress[]>;
 }
 export interface SiteAnalysisGateway {
   start(analysis: SiteAnalysis): Promise<void>;
@@ -41,6 +47,7 @@ export class SiteAnalysisService {
       store: SiteAnalysisStore;
       gateway: SiteAnalysisGateway;
       limits: SiteAnalysisLimits;
+      canEnqueue?: boolean;
     },
   ) {}
 
@@ -69,6 +76,9 @@ export class SiteAnalysisService {
 
   async apply(raw: unknown): Promise<SiteAnalysisApplyResult> {
     const input = ApplySiteAnalysisSchema.parse(raw);
+    if (input.enqueue && !this.deps.canEnqueue) {
+      throw siteAnalysisErrors.create("SITE_ANALYSIS.NOT_CONFIGURED");
+    }
     const analysis = await this.get(input.analysisId);
     if (analysis.state !== "completed") {
       throw siteAnalysisErrors.create("SITE_ANALYSIS.NOT_APPLICABLE", {
@@ -76,5 +86,13 @@ export class SiteAnalysisService {
       });
     }
     return this.deps.store.apply(input);
+  }
+
+  async tasks(analysisId: string) {
+    await this.get(analysisId);
+    if (!this.deps.store.tasks) {
+      throw siteAnalysisErrors.create("SITE_ANALYSIS.NOT_CONFIGURED");
+    }
+    return { analysisId, tasks: await this.deps.store.tasks(analysisId) };
   }
 }

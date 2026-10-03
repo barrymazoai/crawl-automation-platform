@@ -2,6 +2,7 @@ import { dtcBrandSourceUrl, type DtcSitePolicy } from "@crawl-automation/channel
 import { channelRegistry, persistedRegistry } from "./resources/channel-registry.js";
 import {
   PostgresBrandScans,
+  PostgresDtcScanQueue,
   PostgresBrandSourceImport,
   TemporalBrowserScans,
   TemporalBrandListings,
@@ -92,6 +93,7 @@ export function brandScanParts(parts: BrandScanDependencies): BrandScanParts {
     ...{ registry, browsers, log },
     enabled: !!settings,
     objects: parts.evidenceObjects,
+    dtcQueue: new PostgresDtcScanQueue(database),
   });
   if (!settings || !remote) {
     return { brandScans, brandSources, runner: null };

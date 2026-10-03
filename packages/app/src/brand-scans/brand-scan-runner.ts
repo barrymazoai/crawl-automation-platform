@@ -144,6 +144,11 @@ export class BrandScanRunner {
   }
 
   private read(scan: ScanRecord, signal: AbortSignal): Promise<BrandListing> {
+    if (!scan.source.enabled) {
+      throw appErrors.create("BRAND_SCAN.SOURCE_DISABLED", {
+        details: { sourceId: scan.source.sourceId },
+      });
+    }
     const gated = this.deps.gatedListings?.[scan.source.channel as ScanChannel];
     return gated
       ? gated.read(scan, signal)

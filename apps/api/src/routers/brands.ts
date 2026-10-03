@@ -2,6 +2,7 @@ import {
   CreateBrandSchema,
   AnalyzeSiteSchema,
   ApplySiteAnalysisSchema,
+  DtcScanQueueChangeSchema,
   siteAnalysisErrors,
   CancelScansSchema,
   DerivedSourcesSchema,
@@ -51,6 +52,13 @@ export const brandsRouter = router({
   applySiteAnalysis: procedure
     .input(ApplySiteAnalysisSchema)
     .mutation(({ ctx, input }) => analyses(ctx).apply(input)),
+  siteAnalysisTasks: procedure
+    .input(z.strictObject({ analysisId: z.uuid() }))
+    .query(({ ctx, input }) => analyses(ctx).tasks(input.analysisId)),
+  dtcScanQueue: procedure.query(({ ctx }) => ctx.brandScans.dtcQueueStatus()),
+  controlDtcScans: procedure
+    .input(DtcScanQueueChangeSchema)
+    .mutation(({ ctx, input }) => ctx.brandScans.controlDtcQueue(input)),
   list: procedure
     .input(ListQuery.optional())
     .query(({ ctx, input }) => ctx.brands.list(ListQuery.parse(input ?? {}))),

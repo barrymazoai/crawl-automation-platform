@@ -12,6 +12,7 @@ import type {
 } from "@crawl-automation/app";
 import type { Database } from "@crawl-automation/platform";
 import { z } from "zod";
+import { claimBrandScans } from "./brand-scan-claim.js";
 import {
   REVISIT_OUTCOMES,
   SCAN_COLUMNS,
@@ -76,15 +77,8 @@ export class PostgresBrandScans extends PostgresScanCancellation implements Bran
   }
 
   async claim(limit: number, staleMs: number): Promise<ScanRecord[]> {
-    const claimed = await this.database.query<{ scanId: string }>(
-      `UPDATE brand_scan SET state = 'running', started_at = clock_timestamp()
-       WHERE scan_id IN (
-         SELECT scan_id FROM brand_scan
-         WHERE state = 'queued'
-            OR (state = 'running' AND started_at < clock_timestamp() - $2::int * interval '1 millisecond')
-         ORDER BY requested_at LIMIT $1 FOR UPDATE SKIP LOCKED)
-       RETURNING scan_id::text AS "scanId"`,
-      [limit, staleMs],
+    const claimed = await this.database.transaction((tx) =>
+      claimBrandScans(tx, { limit, staleMs }),
     );
     if (claimed.length === 0) {
       return [];

@@ -8,4 +8,5 @@ export type { ScanReaders } from "./scan-listing.js";
 export * from "./run-scans.js";
 export * from "./scan-permits.js";
 export * from "./scan-cancellation.js";
+export * from "./dtc-scan-queue.js";
 export { ScanEvidenceInputSchema } from "./scan-evidence.js";
