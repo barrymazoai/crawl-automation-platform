@@ -3,6 +3,7 @@ import { CodexClient, CodexVisionConfigSchema } from "@crawl-automation/processi
 import {
   OcrOutputSchema,
   assertProcessingResultMatches,
+  observationIdentity,
   DtcGalleryFinishSchema,
   type OcrInput,
 } from "@crawl-automation/v3-contracts";
@@ -49,7 +50,13 @@ export function dtcGalleryModelActivities(parts: WorkerParts) {
           return await new DtcGalleryScope(new DtcMixedGallery(parts.publication), {
             ocr: (input, active) => readOcr(parts, input, active),
             image: async (input, active) =>
-              (await parts.label.stores.artifacts.resolve(input.file, input, active)).bytes,
+              (
+                await parts.label.stores.artifacts.resolve(
+                  input.file,
+                  observationIdentity(input),
+                  active,
+                )
+              ).bytes,
             model: (call, active) => client.run(call, active),
           }).run(raw, signal);
         } finally {

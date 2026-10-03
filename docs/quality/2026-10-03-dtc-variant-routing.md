@@ -70,3 +70,10 @@
 - 增加机械 `saveObservedVariant`：保存模型已经选定的完整方法 JSON，返回真实 `methodPath` 和预检结果。最终 `readPreflightVariantContexts` 再验证该文件与预检内联 method 一致。不会选择字段、推断规格或按关键词匹配图片。21 项 native 回归通过，完整 check 通过。
 - 增加手动有界工具 `tools/verify-dtc-retained-mixed.mts`。仅针对首轮 Solaray 原件，先验证本地与 R2 全部文件散列，在新记录下引用完整预检上下文，保留 `retained-analysis.json` 来源说明。`--prepare` 只读远端原件且派生产物仅落本地；`--execute` 明确开启一次现有 DtcGalleryWorkflow，再为 ready 规格分别调用现有 DtcVariantWorkflow。工具不访问网站、不打开浏览器、不改旧 Review，不伪装成原失败任务成功，也不自动重试。
 - 该验收拆开验证真实采集与留存原件后续处理；不能将手动下游验收描述为第二轮原任务端到端成功。
+
+## 留存原件真实下游验收：归属参数接线错误（12:12 北京）
+
+- `02335a9` 已推送 main，并于 04:10:48Z 经 Git fresh clone/build 部署到 Server 二，browser-worker ready。第二轮 74 文件 / 15,773,017 字节已全量回读验证；目标 `020066319BAE7C13F2C36CC4A1F8B6E9` absent、Codex 进程组 absent、round ended 的证据完整，许可于 03:59:03Z 释放。
+- 新留存验收 `01a38890-e474-4445-bc89-fced78dbf88e`，独立 `dtc-gallery-accept-…`：首轮 72 文件 / 14,182,840 字节均校验通过，两规格 mixed。第一张真实 OCR 及回执核验完成，但 `scopeDtcGalleryImage` 在模型调用前因严格 Observation schema 报错；未生成任何归属决策、未派发单规格，结果仍 Review 2/2。
+- 根因：新增 activity 将整个 OcrInput 传给 ArtifactResolver 的 owner 参数。旧 OCR 正确使用 `observationIdentity(input)`；此处改为同一函数，保留严格归属与完整性校验，不能靠放宽 schema 绕过。
+- 新 activity 接线回归使用真实 ArtifactResolver，覆盖正确原图、错 observation/source/listing/variant 和损坏字节。先复现原错误，再验证修复。真实验收日志和意图/结果在 Server 二 `manual-releases/retained178-02335a9-live/` 及 `dtc-mixed-852546a/retained-02335a9-live.log`。
