@@ -43,10 +43,16 @@ scope.siteKind是宿主实际品牌校验策略。multi-brand策略下每个entr
 export const analysisInstructions = `分析入口属于官网、自营商店、直属品牌组合还是第三方卖场。视觉验证目录入口和至少一个真实商品，不使用固定选择器模板代替观察。
 这是独立的品牌发现阶段，只输出品牌、入口与证据；可以查看代表商品核实身份，不枚举全品牌商品或进入单品材料收割。保存本次确认的入口/路线和适用profile供后续目录任务复用，由宿主另行创建排队任务。
 用户提交的多品牌站点允许按真实品牌分别分析，覆盖旧skill的multi_brand_retailer默认排除。对站内品牌目录确认真实品牌身份；vendor名称仅为候选，大小写、渠道前缀或同品牌别名不能自动当成多个品牌。不同目录确属同品牌时保存覆盖该品牌的已观察入口，不猜造URL。直属品牌跨域仍只展开一层，广告/社媒/无关零售商外链不作为子品牌。
+按以下顺序完成本次站点分析，不能把一个品牌的代表页试验当成整站任务结束：
+1. 先观察并展开实际品牌导航/品牌索引，保存原始HTML与截图；沿模型观察到的真实区域枚举品牌候选和目录入口，去除重复链接，记录来源页、别名及尚不确定的项。不要只取Featured或第一个品牌。将候选清单、观察到的区域/方法、枚举是否完整及数量写入brand-candidates.json供追溯；候选不能直接标成verified。
+2. 在逐品牌商品验证之前检查scope上限。清单超过maxBrands时立即明确needs-review、limitsReached=true，reasons写实际候选数、上限和未验证范围；保留完整候选清单，不截成前N个冒充完整，不继续逐品牌或扩大全站采集。候选别名尚不能确认时明确写候选数量，不声称已确认同样数量的品牌。页面/域名或时间预算实际触及时同样写明已完成与剩余范围。
+3. 未超限时按清单逐一验证品牌目录与代表商品身份。正常完成一个品牌后继续下一个；“其他品牌尚未验证”是待办，不是停止原因，不能仅以multi_brand_retailer_requires_brand_by_brand_verification结束。只在真实权限/挑战、观察失败、身份歧义或实际预算边界时保留原因结束，不伪造所有品牌通过。
+4. 代表商品只需核对真实品牌与目录归属。不要展开Ingredients/Facts/FAQ、检查整套图库或执行旧skill的单品完整性预检；这些属于后续单品任务。本站没有多品牌清单时，先以实际站点证据确认品牌范围，再按单品牌路线验证。
 允许沿官方实际链接展开一层直属品牌，不递归。遵守 scope 中 maxBrands/maxPages/maxDomains 限额。
 保存 analysis.json：{state:"completed"或"needs-review",brands:[{name,domain,platform:"shopify"或"woocommerce"或"jsonld",catalogUrl,productCount,countExact,wholeCatalog,discoveredFrom:{page,link},status:"verified"或"needs-review",reason:null或说明}],archiveKeys:[],reasons:[]}。
 每个品牌保存 evidence-pages.json：[{url,htmlPath,screenshotPath}]，至少包含来源页、目录和代表商品的实际 HTML 与截图。
+超限且尚未验证任何品牌时brands可为空，候选保存在brand-candidates.json；不得为补齐代表商品而违反先检查上限的顺序。evidence-pages仅列实际已保存的HTML/截图对，htmlPath和screenshotPath不能null或引用不存在文件；额外截图放verification.evidence。discoveredFrom.page必须是实际看到该目录链接且已保存的页面，link为观察到的目标；不能把网站存在但没访问的品牌索引页写作来源。
 保存 analysis-verification.json：{method,surface:"live_site",evidence:[相对文件路径],verifier:"codex",limitsReached:boolean}。
 platform 是实际观测，不凭URL猜；不支持的自建数据结构返回 needs-review，保留原因。不能只因公司同名就确认品牌。
-完整枚举之前 productCount 只报实际观察数，countExact=false、wholeCatalog=false；平台库存数不能冒充完整目录数。
+完整枚举之前 productCount 只报实际观察的商品数，countExact=false、wholeCatalog=false；页面声明总数和平台库存数可记notes/reasons，不得写成实际观察数。
 本站所有已发现品牌均被验证且预算未耗尽才能 state=completed。不要调用 apply 或自动启动商品采集。`;
