@@ -44,7 +44,7 @@ export async function prepareSiteMethod(input: {
   );
 }
 
-/** Persist only the actual executed method after the offline review accepts its raw capture. */
+/** Persist only the actual executed method after its raw material files have been verified and archived. */
 export async function retainSiteMethod(input: { profileDir: string; root: string; url: string }) {
   const source = await captureFile(input.root, "site-method.mjs");
   const use = JSON.parse((await captureFile(input.root, "method-use.json")).toString());

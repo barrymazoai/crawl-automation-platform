@@ -21,8 +21,11 @@ export async function runSiteCapture(input, globals) {
     browser, tab: browser.tab, page, productUrl, outDir, skillRoot,
   }));
   if (captured?.record?.sourceUrl !== productUrl || !captured.record.fields
-    || !Array.isArray(captured.galleryUrls) || !captured.galleryUrls.length) {
+    || !captured.materials || !Array.isArray(captured.galleryUrls) || !captured.galleryUrls.length) {
     throw new Error("site_method_product_output_invalid");
+  }
+  if (Object.keys(captured.record.fields).some(key => !["title", "brand", "currency"].includes(key))) {
+    throw new Error("capture_contains_parsed_product_fields");
   }
   if (!source.equals(await readFile(methodPath))) throw new Error("site_method_changed_during_capture");
   // Preserve the exact executed method alongside the old raw output, before any post-capture work.
@@ -32,6 +35,7 @@ export async function runSiteCapture(input, globals) {
     sha256: digest, path: "site-method.mjs",
   }), { flag: "wx" });
   await writeFile(join(outDir, "capture-notes.json"), JSON.stringify(captured.notes ?? {}), { flag: "wx" });
+  await writeFile(join(outDir, "materials.json"), JSON.stringify(captured.materials), { flag: "wx" });
   const plan = {
     site: { origin: new URL(productUrl).origin, entryUrl: productUrl, browserMode: "ego-native" },
     decision: { kind: "storefront", evidence: ["host-dispatched-product"] },

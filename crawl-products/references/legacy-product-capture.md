@@ -1,36 +1,45 @@
-# 旧 DTC 单品采集出口（legacy-harvest/1）
+# DTC 资料采集出口（dtc-materials/1）
 
-此宿主复用已经使用 Ego 的旧 DTC 采集行为：模型观察、验证并学习站点方法，旧 runHarvest 保存原始商品包。浏览器阶段结束后宿主关页、归档，再对留存资料复核、判断混合规格并固定转换。不要把 native-product-method.md 中后加的详情/规格证明流程搬进本阶段。
+复用已有 Ego 和旧 runHarvest 保存材料。采集不解析产品业务字段，不运行额外采后复核。宿主关页、归档后固定整理材料引用，交原有后续处理；只有混合规格材料进入已有 OCR/图片归属流程。
 
-## 固定启动器与可复用方法
+## 站点脚本
 
-宿主生成任务根 `run-capture.mjs`，内部使用 `lib/site-capture.mjs` 调旧 runHarvest。不要改启动器、手写交接转换或重新枚举已派发商品。模型只负责站点方法 `site-method.mjs`：
+宿主生成固定 run-capture.mjs。模型维护可复用 site-method.mjs，重放已观察验证的导航、展开、网站规格和完整原图采集动作；不要重写启动器。
 
 ```js
 export async function capture({ browser, tab, page, productUrl, outDir, skillRoot }) {
-  // 重放这个站点实际验证过的动作和位置；从本商品读值，不复制示例商品的值。
-  // 用 browser.harvestHooks 保存当前 HTML、明确需要的平台响应与原件。
-  // 按需从 skillRoot 动态 import 已有纯读取/规范化工具。
   return {
-    record: { sourceUrl: productUrl, fields, variants },
-    galleryUrls, // 当前实际产品轮播/详情中的完整原图集合
-    notes, // 覆盖、展开/切换观察、缺项、截图/原件路径；相对 outDir
+    record: {
+      sourceUrl: productUrl,
+      fields: { title, brand, currency }, // 仅网站身份元数据；未知项省略
+      variants, // 网站ID/URL/选项/SKU/价格/库存，包含缺货
+    },
+    galleryUrls, // 所有状态的实际商品轮播和详情原图并集
+    materials: {
+      selectedVariantId, // 网站初始选中项，未知为null
+      productHtml, // 初始商品区域原样HTML文件路径
+      variants: variantMaterials, // 多规格逐项对应；单规格可为[]
+    },
+    notes, // 简记实际操作、原件位置与缺项
   };
 }
 ```
 
-示例变量均须由当前页面真实观察/已验证方法产生。函数只保存规则与动作，不硬编码某商品 URL、ID、价格、SKU、字段正文或图库 URL 数组，也不引用以前任务的文件。可使用旧 profile 的导航、展开和已确认字段选择器；不得调用通用关键词/猜测提取器。`readObservedProduct` 可作为执行确切位置的工具，但不要求为了使用旧输出再造 fieldEvidence。若使用了它，原件与方法保持真实，不能改返回值掩盖来源冲突。
+每项 variantMaterials 只记录材料对应关系：
 
-首次学习按旧机制先视觉观察、再映射与核对。宿主提供已有 `site-method.mjs` 时先读 `method-cache.json`，对当前商品做便宜校验后复用；一个成功样本仅为 candidate，下一商品验证同一方法后才有多样本依据。普通商品值变化不应改脚本。方法失效只修不适用的步骤；保留原件，不用宽泛 fallback 代替观察。
+- 可采集：`{variantId, status: "independent" 或 "mixed", pageHtml, productHtml, galleryUrls, reason}`。
+- 不可采集：`{variantId, status: "unresolved", reason}`。隔离该规格，不丢掉其他规格。
 
-先 `node --check site-method.mjs`，再通过 Ego `nodejs -e` import 固定启动器的绝对 file URL。Ego 每次 nodejs 是新进程，不能依赖上一轮变量。写额外观察脚本时同样先做语法检查。宿主会保存实际执行的模块散列与副本，在采后复核接受原始输出后，将该版本留在原有 profileDir 下的 capture-methods；后续任务自动获得这个方法。无需手改 profile 的成功计数。
+所有路径相对 outDir。pageHtml 为该状态完整页面；productHtml 为观察确认的商品正文区域原样 outerHTML，可原样连接多个实际区域，包含展开后的正文与FAQ。不按配料/用法等字段拆解、不总结或改写文字。文件只写一次，原件与索引一同归档。同一页面共用材料可复用路径，不重复抓取。规格自己的ID、SKU、价格来自网站，不能用基础默认值填充。
 
-## 原始内容范围
+页面切换后材料独立才标 independent；URL变化本身不能证明独立。页面仍混着多个规格则 mixed，保留该状态全部实际图库，由已有混合流程判断归属；此处不挑Facts图片、不OCR、不提取营养信息。按页面实际行为记录，不按文件名、alt、图片顺序猜测。原图并集交旧runHarvest统一保存。
 
-- 保留完整 fields、variants、gallery、pageHtml、coverage、flags，网站全规格包含缺货项。基础多规格商品的 SKU/价格不能来自任意默认项。
-- 商品详情的用法、原料、描述、警告、质量/认证、FAQ 等按实际适用范围采集，不能只读平台 body_html。实际展开嵌套折叠，保留原文和截图；没检查不能记作不存在。
-- 如果切换规格改变正文/图库，按旧流程观察对应状态并另存原件，分别保存适用正文，保留状态说明。没有独立 URL 时也看实际选项和内容变化；无需手写新版 variantContexts/preflight。缺货项仍尝试其公开资料，记录真实失败范围。
-- 收齐实际轮播和详情原图，排除经观察确认的推荐、徽章或导航图；不能按文件名、alt、顺序、关键词挑 Facts。图片全部留给采后复核与既有 Facts 流程。
-- `fetchPageSource` 只保存当前已展开状态，不导航。每次新状态用新文件名，原始副本由 native-originals 与宿主归档保留。
+## 复用与执行
 
-收割前解决方法问题，运行 runHarvest 后保留所有产物；不删除 checkpoint、不改 records、不 fresh 重抓。失败或未能确认的关键缺口返回 needs_review。先有原始输出，再判断混合，最后固定转换；采集不做 OCR、配方推断、语义归一化、API-ready 导出或入库。
+先复用已有 site-method.mjs / method-cache.json，仅局部修正不适用步骤。首次才视觉观察并验证真实节点或网站数据位置。脚本只保存动作/规则，不硬编码商品值或引用旧任务目录。禁止通用关键词提取器。
+
+实际展开相关折叠、嵌套FAQ和懒加载，再保存当前完整页面与商品区域。`browser.harvestHooks.fetchPageSource` 不导航；不同状态另存。需要的平台响应仅通过明确观察过的 `fetchProductSource` 取得。收割前恢复初始选中状态。
+
+先 `node --check site-method.mjs`，再用 Ego `nodejs -e` import 固定启动器绝对file URL。宿主保存实际执行脚本和散列；材料完整存档后保留该方法，后续同站商品复用，不手改成功计数。一个样本通过不代表全站验证。
+
+runHarvest仍保存records、页面和完整图片；fields不装业务内容。materials.json由固定启动器保存，不需要模型另写证明文件。开始收割后不删checkpoint、不改原件、不重抓。只采集，不执行semantic导出、Facts、enrich或入库。

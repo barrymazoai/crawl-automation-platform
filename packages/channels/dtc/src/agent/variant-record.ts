@@ -18,6 +18,8 @@ export interface VariantRecordInput {
 interface ScopedRecord {
   record: HarvestRecord;
   review: CaptureReview;
+  html?: Uint8Array;
+  detailsHtml?: string;
   context: Pick<ObservedVariantContext, "status" | "evidence" | "reason"> & {
     difference?:
       | {

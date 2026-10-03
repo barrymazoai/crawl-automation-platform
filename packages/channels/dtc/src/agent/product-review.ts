@@ -12,7 +12,7 @@ export const CaptureReviewSchema = z.object({
   detailCoveragePath: z.string().min(1).optional(),
   method: z.string().min(1),
   surface: z.literal("local_file"),
-  verifier: z.literal("codex"),
+  verifier: z.enum(["codex", "capture"]),
   evidence: z.array(z.string()).min(1),
   // Validate independently: one bad variant must not discard the other retained variants.
   variantContexts: z.array(z.unknown()).max(200).optional(),

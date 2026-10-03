@@ -5,6 +5,7 @@ import { dtcAgentErrors } from "./errors.js";
 import { verifyObservedProduct } from "../../../../../crawl-products/lib/observed-product.mjs";
 import { verifyDetailReview } from "./detail-review.js";
 import { sha256 } from "@crawl-automation/platform";
+import { capturedMaterials } from "./capture-materials.js";
 
 const VariantSchema = z
   .object({
@@ -37,13 +38,12 @@ export async function readCapturedProduct(input: {
   url: string;
   requireObservedMethod?: boolean;
   requireDetailCoverage?: boolean;
-  reviewRoot?: string;
-  captureContract?: "legacy-harvest/1";
+  captureContract?: "dtc-materials/1";
 }) {
-  const { record, review } = await readRecordAndReview(input.root, input.url, input.reviewRoot);
-  if (input.captureContract === "legacy-harvest/1") {
+  if (input.captureContract === "dtc-materials/1") {
     await verifyArchivedCapture(input);
   }
+  const { record, review, detailsHtml } = await readRecordAndReview(input);
   await validateCapture(input, record, review);
   const htmlPath =
     typeof record.pageHtml === "string" ? record.pageHtml : record.pageHtml.localPath;
@@ -52,6 +52,7 @@ export async function readCapturedProduct(input: {
     record,
     review,
     html,
+    detailsHtml,
     images: record.gallery.map((image) => ({
       ...input.files.find((file) => file.path === image.localPath),
       url: image.url,
@@ -93,19 +94,30 @@ async function verifyArchivedCapture(input: { root: string; files: CaptureFile[]
   }
 }
 
-async function readRecordAndReview(root: string, url: string, reviewRoot = root) {
+async function readRecordAndReview(input: Parameters<typeof readCapturedProduct>[0]) {
+  const { root, url } = input;
   const records = z
     .array(RecordSchema)
     .length(1)
     .parse(JSON.parse((await captureFile(root, "evidence/records.json")).toString()));
   const record = records[0];
-  const review = parseCaptureReview(
-    JSON.parse((await captureFile(reviewRoot, "capture-review.json")).toString()),
-  );
+  if (!record) {
+    throw dtcAgentErrors.create("DTC.CAPTURE_EVIDENCE");
+  }
+  const materials =
+    input.captureContract === "dtc-materials/1"
+      ? await capturedMaterials({ ...input, record })
+      : {
+          review: parseCaptureReview(
+            JSON.parse((await captureFile(root, "capture-review.json")).toString()),
+          ),
+          detailsHtml: undefined,
+        };
+  const { review } = materials;
   if (!record || !sameProduct(record.productUrl, url) || !sameProduct(review.productUrl, url)) {
     throw dtcAgentErrors.create("DTC.CAPTURE_EVIDENCE");
   }
-  return { record, review };
+  return { record, ...materials };
 }
 
 export async function verifyMethod(

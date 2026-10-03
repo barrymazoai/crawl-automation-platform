@@ -78,7 +78,10 @@ export class DtcAgentProductCapture {
         operationId: request.operationId,
         url: request.url,
         source: original.source,
-        fields: retained.record.fields,
+        fields: {
+          ...retained.record.fields,
+          ...(retained.detailsHtml ? { html: retained.detailsHtml } : {}),
+        },
         variants: retained.record.variants,
       },
       signal,
@@ -141,7 +144,7 @@ export class DtcAgentProductCapture {
     const retained = await readCapturedProduct({
       ...captured,
       url: request.url,
-      requireObservedMethod: captured.captureContract !== "legacy-harvest/1",
+      requireObservedMethod: captured.captureContract !== "dtc-materials/1",
     });
     const original = await this.saveOriginal(archive, retained, signal);
     return { captured, retained, original };

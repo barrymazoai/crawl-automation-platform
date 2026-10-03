@@ -9,7 +9,6 @@ import { dtcAgentErrors } from "./errors.js";
 import { capturePrompt } from "./prompt.js";
 import type { AgentCaptureRequest } from "./request.js";
 import { prepareSiteMethod, retainSiteMethod } from "./site-method.js";
-import { assessCapture } from "./post-capture.js";
 import { readCapturedProduct } from "./product-record.js";
 
 const ResultSchema = z.strictObject({
@@ -24,8 +23,7 @@ interface AgentCaptureOutput {
   evidenceFiles: CaptureFile[];
   manifestKey: string;
   requireDetailCoverage?: boolean;
-  captureContract?: "legacy-harvest/1";
-  reviewRoot?: string;
+  captureContract?: "dtc-materials/1";
 }
 
 export class DtcCaptureAgent {
@@ -54,19 +52,13 @@ export class DtcCaptureAgent {
     if (request.mode !== "product") {
       return output;
     }
-    return this.productOutput({ ...output, cwd }, request.url, signal);
+    return this.productOutput(output, request.url, signal);
   }
 
-  private async productOutput(
-    input: AgentCaptureOutput & { cwd: string },
-    url: string,
-    signal: AbortSignal,
-  ) {
-    const { cwd, ...output } = input;
+  private async productOutput(output: AgentCaptureOutput, url: string, signal: AbortSignal) {
     const { prefix, manifestKey, root } = output;
     const { publication } = this.deps;
-    const assessment = await assessCapture(this.deps, { ...output, cwd, url }, signal);
-    const result = { ...output, ...assessment };
+    const result = { ...output, captureContract: "dtc-materials/1" as const };
     await readCapturedProduct({ ...result, url });
     const method = await retainSiteMethod({
       profileDir: join(this.deps.settings.codex.workRoot, "site-profiles"),
@@ -77,9 +69,9 @@ export class DtcCaptureAgent {
       `${prefix}/handoff.json`,
       Buffer.from(
         JSON.stringify({
-          captureContract: assessment.captureContract,
+          captureContract: result.captureContract,
           capture: manifestKey,
-          review: assessment.reviewArtifact,
+          materials: output.files.find((file) => file.path === "materials.json"),
           method,
         }),
       ),

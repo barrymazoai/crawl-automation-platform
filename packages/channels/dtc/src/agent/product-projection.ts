@@ -16,6 +16,7 @@ interface ProjectionInput {
   url: string;
   sourceUrl?: string | undefined;
   html?: Uint8Array;
+  detailsHtml?: string | undefined;
   /** Host verified a separate model-observed context for this exact website variant. */
   variantContextVerified?: boolean;
   /** Selection is verified even when the gallery still needs DTC scope processing. */
@@ -39,7 +40,7 @@ export function capturedProductProjection(input: ProjectionInput): ParsedProduct
     identity,
     evidence,
     facts,
-    commerce: schemaCommerce({ ...record.fields, priceCurrency: record.fields.currency }),
+    commerce: capturedCommerce(record, variantId),
     variants: record.variants.flatMap((variant) =>
       variant.url ? [dtcProductAddress(variant.url, [site])] : [],
     ),
@@ -52,6 +53,13 @@ export function capturedProductProjection(input: ProjectionInput): ParsedProduct
       platform: site.platform === "unverified" ? "jsonld" : site.platform,
     },
   };
+}
+
+function capturedCommerce(record: HarvestRecord, variantId: string | null) {
+  const variant =
+    variantId === null ? undefined : record.variants.find((item) => item.variantId === variantId);
+  const fields = { ...record.fields, ...variant };
+  return schemaCommerce({ ...fields, priceCurrency: fields.currency });
 }
 
 function productEvidence(input: ProjectionInput, observedBrand: string | null) {
@@ -79,7 +87,7 @@ function productEvidence(input: ProjectionInput, observedBrand: string | null) {
       available: variant.available,
       imageUrl: variant.imageUrl,
     })),
-    detailsHtml: details(record),
+    detailsHtml: input.detailsHtml ?? details(record),
     factsCandidates: factsHtml
       ? [
           {
