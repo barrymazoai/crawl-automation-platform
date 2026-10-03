@@ -34,3 +34,39 @@ Nature’s Truth 分析 `ec8a7bc7-397a-4230-adc9-67404b3c9975` 的原生 Ego 日
 2. 新任务页验证通知请求返回拒绝、权限查询一致、Push 请求被拒绝，空间保持 Agent 控制。
 3. 重新导航后仍生效；实际站点目录和代表产品可读，关闭任务页并证明目标消失。
 4. 区分代码检查、浏览器实测与完整 DTC 链路验收，不把未跑项目写成通过。
+
+## 部署与本次恢复
+
+实现提交 `46d33f901683ab116fe334600a635e5082b35fbc` 已推送 main，`pnpm check`
+及注入脚本语法检查通过。Server 二按 Git fresh clone、锁定依赖和构建流程部署，
+browser-worker 于 10:07:15Z ready。Server 一随后同样 fresh clone/build，通过现有
+JobService 只切换 collection-api，另外六个 Worker 保持原运行版本；同时上线 158fbc1
+对站点分析未清理许可的队列保护。
+
+用户第一次确认后，`takeOverTaskSpace` 报旧任务已结束，需要 `claimTaskSpace`。
+自动审批拒绝认领，要求对该状态重新确认；未绕过。用户再次明确授权后认领成功。
+`resources.verifyStop` 对旧许可返回四项 stopped=true、released=true，未知来源空白页
+保留。R2 的旧分析 archive.json 下 14 份文件（1,819,270 字节）全部回读、大小及 SHA-256
+校验通过，原分析失败未改写。
+
+新的明确授权实测分析 `cdc9e58d-083a-4ef6-8558-dd988d5f5a02` 于 10:08:30Z 开始。
+Server 一证据目录：`manual-releases/dtc-native-20261002/notification185-*`；
+Server 二部署记录：`manual-releases/notification185-46d33f9/deploy.log`。
+
+## 首次补丁实测未通过
+
+新分析保存首页后，在下一次 Ego 调用读到 `agentDelegatedToUser` 并停止。
+本轮没有明确的 notifications 错误，控制权变化原因待核；不能仅凭此说通知再次弹出。
+PID66941 于 10:10:56Z 退出，精确页 `E182F582D72378C9F129C8A26C61B0B0`
+仍待清理，许可 `permit-01a1013c-9598-71e5-aa31-dd7ab3b73f56-0` 未释放。
+修复后的 API 队列正确显示 paused / queued2 / running0 / cleanupPending1。
+
+待验证的生命周期问题：宿主注册预加载的 CLI 会先退出，Codex 另开 CLI 导航；
+[Chromium 实现](https://raw.githubusercontent.com/chromium/chromium/main/content/browser/devtools/protocol/page_handler.cc)
+把新文档脚本存放在 DevTools session state。Ego 各调用之间是否保留该会话，必须用两次
+独立 CLI 的页面标记验证，不能凭注入注册成功就认定后续导航生效。
+
+本轮失败的 14 份原件（2,141,545 字节）亦已从 R2 回读并核对大小及 SHA-256。
+失败分析执行 `applySiteAnalysis(enqueue=true)` 实测返回 HTTP400 /
+`SITE_ANALYSIS.NOT_APPLICABLE`，关联 tasks 为空，原两条品牌扫描仍暂停排队。
+小范围跨调用验证尚待用户交还本轮 `agentDelegatedToUser` 空间；尚未执行，不算通过。
