@@ -50,7 +50,7 @@ export class DtcProductScope {
     }
     await this.save(`${root}/input.json`, evidence, signal);
     const started = await this.publication.remote.create(
-      `${root}/intent.json`,
+      `v3/dtc-product-scope-operations/${sha256(Buffer.from(input.operationId))}/intent.json`,
       bytes,
       "application/json",
       signal,

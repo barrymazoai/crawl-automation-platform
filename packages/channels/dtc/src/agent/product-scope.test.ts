@@ -118,6 +118,9 @@ it("does not repeat an uncertain failed model operation", async () => {
   context.model.mockRejectedValue(new Error("provider failed"));
   await expect(context.review.review(context.input, signal)).rejects.toThrow("provider failed");
   await expect(context.review.review(context.input, signal)).rejects.toThrow("processing scope");
+  await expect(
+    context.review.review({ ...context.input, variants: [{ title: "changed inventory" }] }, signal),
+  ).rejects.toThrow("processing scope");
   expect(context.model).toHaveBeenCalledOnce();
 });
 
