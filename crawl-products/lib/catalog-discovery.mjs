@@ -4,6 +4,7 @@ import { collectProductUrls } from "./crawl.mjs";
 import { enumerateCatalog } from "./catalog-enumeration.mjs";
 import { captureShopifyCatalogCoverage } from "./catalog-shopify.mjs";
 import { dtcCatalogCoverageTarget } from "./catalog-coverage.mjs";
+import { retainCatalogProfile } from "./catalog-profile.mjs";
 
 /** The old ENUMERATE-to-fixpoint phase alone. Never extracts products or interprets pictures. */
 export async function discoverCatalog(tab, seedUrls, options = {}) {
@@ -21,6 +22,7 @@ export async function discoverCatalog(tab, seedUrls, options = {}) {
   const requiredZeroGrowthRounds = options.extraRoundsAfterConverge ?? 1;
   if (!Number.isInteger(requiredZeroGrowthRounds) || requiredZeroGrowthRounds < 1 || requiredZeroGrowthRounds > 100) throw new Error("catalog_fixpoint_invalid");
   await mkdir(options.outDir, { recursive: true });
+  const method = tab.captureMode === "catalog" ? await retainCatalogProfile(seedUrls, options) : null;
   const progressPath = join(options.outDir, "catalog-progress.jsonl");
   await writeFile(progressPath, "", { flag: "wx" });
   const progress = async (event, details) => {
@@ -31,7 +33,7 @@ export async function discoverCatalog(tab, seedUrls, options = {}) {
   const observedUrls = new Set();
   const enumerate = options.enumerate ?? collectProductUrls;
   const found = new Set();
-  const result = { codec: "catalog-discovery/1", completionProof, requiredZeroGrowthRounds, seedUrls, pages: [], rounds: [],
+  const result = { codec: "catalog-discovery/1", completionProof, requiredZeroGrowthRounds, seedUrls, method, pages: [], rounds: [],
     productUrls: [], zeroGrowthRounds: 0, complete: false, reason: "round_limit" };
   const startedAt = Date.now();
   try {

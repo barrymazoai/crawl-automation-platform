@@ -4,9 +4,11 @@ import { dtcAgentErrors } from "./errors.js";
 import { dtcProductAddress } from "../address.js";
 import type { DtcSitePolicy } from "../site-policy.js";
 import { verifyShopifyCatalog } from "./catalog-shopify.js";
+import { verifyCatalogMethod } from "./catalog-method.js";
 
 const Discovery = z.object({
   codec: z.literal("catalog-discovery/1"),
+  method: z.unknown(),
   completionProof: z.enum(["enumeration", "shopify"]).default("enumeration"),
   requiredZeroGrowthRounds: z.number().int().min(1).max(100).default(1),
   seedUrls: z.array(z.url()).optional(),
@@ -55,6 +57,7 @@ export async function verifyCatalogDiscovery(
     JSON.parse((await captureFile(saved.root, "catalog-discovery.json")).toString()),
   );
   const known = new Set(saved.files.map((file) => file.path));
+  await verifyCatalogMethod(saved.root, proof.method, expected.sourceUrl);
   const { consistent, stable, seen } = measuredRounds(proof);
   if (
     !known.has("catalog-discovery.json") ||
