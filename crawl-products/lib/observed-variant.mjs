@@ -1,6 +1,7 @@
 import { isDeepStrictEqual } from "node:util";
-import { readFile } from "node:fs/promises";
-import { join } from "node:path";
+import { readFile, mkdir, writeFile, realpath } from "node:fs/promises";
+import { join, resolve, relative, isAbsolute } from "node:path";
+import { createHash } from "node:crypto";
 import { readObservedProduct, readObservedField } from "./observed-product.mjs";
 import { verifyObservedGallery } from "./observed-gallery.mjs";
 
@@ -11,7 +12,7 @@ export async function readPreflightVariantContexts(root) {
     throw new Error("variant_preflight_contexts_missing");
   }
   const seen = new Set();
-  return preflight.contexts.map(entry => {
+  const entries = preflight.contexts.map(entry => {
     const context = entry.context;
     if (entry.passed !== true || !["observed", "mixed"].includes(context?.status)
         || typeof context.variantId !== "string" || !context.variantId
@@ -21,8 +22,37 @@ export async function readPreflightVariantContexts(root) {
       throw new Error("variant_preflight_context_invalid");
     }
     seen.add(context.variantId);
-    return context;
+    return entry;
   });
+  return Promise.all(entries.map(async ({ context, method }) => {
+    const path = resolve(root, context.methodPath);
+    const local = relative(resolve(root), path);
+    if (!local || local.startsWith("..") || isAbsolute(local) || await realpath(path) !== path
+        || !isDeepStrictEqual(JSON.parse(await readFile(path, "utf8")), method)) {
+      throw new Error("variant_preflight_method_mismatch");
+    }
+    return context;
+  }));
+}
+
+/** Persist only the model-selected method, return its real path and the same verified context. */
+export async function saveObservedVariant(root, base, context, method) {
+  if (typeof context.reason !== "string" || !context.reason.trim()
+      || !Array.isArray(context.evidence) || !context.evidence.length) {
+    throw new Error("variant_preflight_context_invalid");
+  }
+  const bytes = JSON.stringify(method, null, 2);
+  const key = createHash("sha256").update(JSON.stringify([context.variantId, method])).digest("hex");
+  const saved = { ...context, methodPath: `methods/variant-${key}.json` };
+  await readObservedVariant(root, base, saved, method);
+  await mkdir(join(root, "methods"), { recursive: true });
+  const path = join(root, saved.methodPath);
+  try {
+    await writeFile(path, bytes, { flag: "wx" });
+  } catch (error) {
+    if (error.code !== "EEXIST" || await readFile(path, "utf8") !== bytes) throw error;
+  }
+  return { context: saved, method, passed: true };
 }
 
 /** The model previews the same source checks that the host repeats after archival. No navigation or writes. */

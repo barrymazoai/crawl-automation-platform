@@ -55,3 +55,18 @@
 - 修复生产者交接：增加 `readPreflightVariantContexts` 原样读取已通过的完整上下文；生成用的 `CaptureReviewAuthoringSchema` 展开逐规格类型，入站依然逐规格隔离错误。不能靠手抄字段再漏证据，不能在宿主静默补齐旧坏记录。
 - 增加漏字段、未通过预检、重复规格的回归，以及针对本轮真实原件的 Mini 只读回放。旧最终交接和旧 Review 不修改，派生上下文只用于内存回归。验证实际生成环节仍需新的独立验收，不自动重试旧任务。
 - R2 全量回读：72 文件 / 14,182,840 字节，大小和 SHA-256 全部相符（03:43:52Z）。浏览器 Codex 进程 66224 于 03:37:28Z 退出且进程组 absent；03:39:44Z 全任务 held permits 为空。证据：Server 一 `manual-releases/dtc-native-20261002/mixed178-solaray-{result,r2-proof}.json`。
+
+## 交接修复部署与第二轮（11:47 北京）
+
+- `20bec74e725d475d0212dd99fea0798df6ca2857` 已推送 main，完整 check 通过。纯回归 30 项、native 原件/图库 20 项通过；Server 二真实首轮原件及相关回归 31 passed / 6 unrelated skipped。内存派生复用完整预检上下文通过两个 mixed 规格的原件校验；原始坏交接及旧 Review 均未修改。
+- Server 二于 03:46:34Z 从 Git fresh clone、锁定依赖安装、构建后切换 `browser-worker` 并验证 ready。只改采集生成侧，Server 一仍运行 `852546a` 的 OCR/归属逻辑，无需为此重启。
+- 新独立验收 `e3b68ada-7b9d-4889-89c3-b0e7619cd7cc` 于 03:47:18Z 接收，验证修复后的最终交接生成和完整混合 Facts 链路。不是重试或覆写第一轮；DTC 批量保持 paused。
+- 日志位于 Server 二 `manual-releases/dtc-mixed-852546a/handoff-20bec74-*`；首次部署预检从 workspace 根查不到 tsx，未执行服务切换，改用 `pnpm --filter @crawl-automation/ops-deploy exec tsx` 正常完成。新请求及回执在 Server 一 `manual-releases/dtc-native-20261002/mixed178-solaray2-{request,receipt}.json`。
+- 首轮停止证据补核：确切目标 `185FFDC3D5B15C6C7BA58F1CD159D309` 于 03:37:28.799Z 验证 absent，browser round 结束，许可于 03:38:56.596Z 释放；不只是账本清零。
+
+## 第二轮：方法路径没有对应文件（12:00 北京）
+
+- 第二轮最终 contexts 与预检完全一致，reason 未丢失；但是两项 `methodPath` 都被模型写成 `sources/details-…html + sources/product.json` 的说明文字。预检验证了内联 method，未验证对应文件；宿主读取路径报 ENOENT，两项再次 Review，未调用 OCR，held 为空。
+- 增加机械 `saveObservedVariant`：保存模型已经选定的完整方法 JSON，返回真实 `methodPath` 和预检结果。最终 `readPreflightVariantContexts` 再验证该文件与预检内联 method 一致。不会选择字段、推断规格或按关键词匹配图片。21 项 native 回归通过，完整 check 通过。
+- 增加手动有界工具 `tools/verify-dtc-retained-mixed.mts`。仅针对首轮 Solaray 原件，先验证本地与 R2 全部文件散列，在新记录下引用完整预检上下文，保留 `retained-analysis.json` 来源说明。`--prepare` 只读远端原件且派生产物仅落本地；`--execute` 明确开启一次现有 DtcGalleryWorkflow，再为 ready 规格分别调用现有 DtcVariantWorkflow。工具不访问网站、不打开浏览器、不改旧 Review，不伪装成原失败任务成功，也不自动重试。
+- 该验收拆开验证真实采集与留存原件后续处理；不能将手动下游验收描述为第二轮原任务端到端成功。

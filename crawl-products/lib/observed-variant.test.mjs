@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { createHash } from "node:crypto";
 import { afterEach, expect, it } from "vitest";
 import { readObservedProduct } from "./observed-product.mjs";
-import { readObservedVariant, readPreflightVariantContexts } from "./observed-variant.mjs";
+import { readObservedVariant, readPreflightVariantContexts, saveObservedVariant } from "./observed-variant.mjs";
 
 const roots = [];
 const url = "https://shop.test/products/pack";
@@ -13,14 +13,28 @@ afterEach(async () => {
 });
 
 it("carries the complete checked mixed context into the final review without dropping state or reason", async () => {
-  const { root } = await fixture();
+  const { root, base, method } = await fixture();
   const context = { variantId: "22", status: "mixed", basis: "variant-state", methodPath: "method.json",
     galleryUrls: ["https://shop.test/gallery/package.png"], reason: "Both package panels remain visible",
     evidence: ["details.html"], selectedState: { rule: { source: 0, selector: 'input[name="id"]', attribute: "value" }, value: "22" } };
-  const bytes = JSON.stringify({ contexts: [{ context, method: {}, passed: true }] });
+  const entry = await saveObservedVariant(root, base, context, method);
+  const bytes = JSON.stringify({ contexts: [entry] });
   await writeFile(join(root, "variant-preflight.json"), bytes);
-  expect(await readPreflightVariantContexts(root)).toEqual([context]);
+  expect(await readPreflightVariantContexts(root)).toEqual([entry.context]);
+  expect(entry.context).toMatchObject({ reason: context.reason, selectedState: context.selectedState });
+  expect(JSON.parse(await readFile(join(root, entry.context.methodPath), "utf8"))).toEqual(method);
+  expect(await saveObservedVariant(root, base, context, method)).toEqual(entry);
   expect(await readFile(join(root, "variant-preflight.json"), "utf8")).toBe(bytes);
+});
+
+it("rejects a prose methodPath even when the inline preflight method was valid", async () => {
+  const { root, base, method } = await fixture();
+  const context = { variantId: "22", status: "mixed", basis: "variant-state", reason: "Observed mixed gallery",
+    evidence: ["details.html"], galleryUrls: base.gallery.map(image => image.url) };
+  const entry = await saveObservedVariant(root, base, context, { ...method, productUrl: method.sources[0].url });
+  entry.context.methodPath = "details.html + product.json";
+  await writeFile(join(root, "variant-preflight.json"), JSON.stringify({ contexts: [entry] }));
+  await expect(readPreflightVariantContexts(root)).rejects.toThrow("ENOENT");
 });
 
 it.each(["unchecked", "reason-missing", "duplicate"])("refuses %s preflight contexts without repairing them", async (damage) => {

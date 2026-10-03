@@ -27,11 +27,11 @@
 在 `runHarvest` 前，对每个 `status:observed` 上下文执行以下只读预检，并将结果、方法路径和未解决原因保存到 `variant-preflight.json`。这是宿主使用的同一个检查函数，不是另一套非空判断：
 
 ```js
-import { readObservedVariant } from "./lib/observed-variant.mjs"; // 按 skillRoot 使用绝对路径
-const checked = await readObservedVariant(outDir,
+import { saveObservedVariant } from "./lib/observed-variant.mjs"; // 按 skillRoot 使用绝对路径
+const checked = await saveObservedVariant(outDir,
   {...basePreview, gallery: observedGalleryUrls.map(url => ({url}))}, context, variantMethod);
-// 成功后保存最终上下文和方法；宿主会按相同原件重放，并与最终 capture-review 精确比对。
-preflight.contexts.push({context, method: variantMethod, passed: true});
+// 工具保存真实方法文件，返回包含 methodPath 的完整上下文；宿主随后重放并精确比对。
+preflight.contexts.push(checked);
 ```
 
 `variant-preflight.json` 格式为 `{contexts:[{context,method,passed:true}]}`，覆盖全部 observed 上下文。不能用空 galleryUrls 做来源预检后再填图库；完整图库逐图检查也在同一函数内。采前修改上下文必须重做预检、保留修订记录，最终文件只引用实际通过的版本。收割后发现范围错误保留产物并 Review，不手改范围补成成功。
@@ -134,3 +134,5 @@ await writeFile(`${outDir}/capture-review.json`, JSON.stringify(review), { flag:
 ```
 
 该函数只搬运已保存的完整预检上下文，不重新判断图片、不提取字段、不补造规格证据。最终仍由宿主重放原件并精确比对。真实 unresolved 项可单独追加；全部 unresolved 时直接保存这些项，不把失败预检标为通过。`capture-review.schema.json` 现在包含逐规格的完整类型要求，最终校验不能只检查顶层字段。
+
+`methodPath` 必须是实际保存的 JSON 方法文件，不能写成“HTML 路径 + JSON 路径”的文字说明。采前用 `saveObservedVariant` 由工具保存方法并返回路径；它仍使用模型选定的原件/字段方法/图库范围，不提供任何通用提取器。`readPreflightVariantContexts` 会重新读取该文件并与预检内联方法比对，缺失或不一致就停止交接。
