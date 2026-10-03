@@ -4,6 +4,7 @@ import { Worker } from "@temporalio/worker";
 import { expect, it, vi } from "vitest";
 import {
   ChannelPlanInputSchema,
+  ChannelPlanOutcomeSchema,
   ResourceRequestSchema,
   ExecutionIdSchema,
   type DtcVariantHandoff,
@@ -88,13 +89,14 @@ it("admits OCR in real DTC variant descendants with production-length identities
           planned: { ...capture, sourcePlan },
           variants,
         }),
-        prepareChannelProduct: async () => ({
-          status: "prepared",
-          operationId: sourcePlan.operationId,
-          inputFingerprint: "a".repeat(64),
-          evidenceKey: "plan.json",
-          manifest: label.loaded.manifest,
-        }),
+        prepareChannelProduct: async () =>
+          ChannelPlanOutcomeSchema.parse({
+            status: "prepared",
+            operationId: sourcePlan.operationId,
+            inputFingerprint: "a".repeat(64),
+            evidenceKey: "retained/plan.json",
+            manifest: label.loaded.manifest,
+          }),
         prepareLabelTask: async () => ({
           ...label.input,
           resources: {
@@ -106,7 +108,7 @@ it("admits OCR in real DTC variant descendants with production-length identities
         acquireProductFile: async ({ acquire }: { acquire: { operationId: string } }) => ({
           status: "durable",
           operationId: acquire.operationId,
-          evidenceKey: "file.json",
+          evidenceKey: "retained/file.json",
           file: label.tasks.find((task) => task.file.producer.operationId === acquire.operationId)
             ?.file,
         }),
