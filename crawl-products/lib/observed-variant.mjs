@@ -1,6 +1,29 @@
 import { isDeepStrictEqual } from "node:util";
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
 import { readObservedProduct, readObservedField } from "./observed-product.mjs";
 import { verifyObservedGallery } from "./observed-gallery.mjs";
+
+/** Copy the model's complete checked contexts; never reconstruct a shorter handoff. */
+export async function readPreflightVariantContexts(root) {
+  const preflight = JSON.parse(await readFile(join(root, "variant-preflight.json"), "utf8"));
+  if (!Array.isArray(preflight.contexts) || !preflight.contexts.length) {
+    throw new Error("variant_preflight_contexts_missing");
+  }
+  const seen = new Set();
+  return preflight.contexts.map(entry => {
+    const context = entry.context;
+    if (entry.passed !== true || !["observed", "mixed"].includes(context?.status)
+        || typeof context.variantId !== "string" || !context.variantId
+        || typeof context.reason !== "string" || !context.reason.trim()
+        || !Array.isArray(context.evidence) || !context.evidence.length
+        || seen.has(context.variantId)) {
+      throw new Error("variant_preflight_context_invalid");
+    }
+    seen.add(context.variantId);
+    return context;
+  });
+}
 
 /** The model previews the same source checks that the host repeats after archival. No navigation or writes. */
 export async function readObservedVariant(root, base, context, method) {

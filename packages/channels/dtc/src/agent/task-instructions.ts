@@ -21,6 +21,7 @@ observed 的 galleryReview 逐一覆盖基础商品全部 observedGalleryUrls；
 website-shared 必须提供 sharedScope 网站明确声明的原文和确切来源，不能仅凭默认规格或同一图库。缺少声明时实际操作规格并保存 variant-state，可按混合资料交接；缺的是选中状态/原件而非图片归属时才 status:unresolved，记录实际尝试和阻塞物。OCR 不能补造采集证据。
 收割前从 lib/observed-variant.mjs 导入 readObservedVariant，对每个 observed 或 mixed 上下文实际执行预检。方法 productUrl 使用实际观察到的 URL；有独立规格地址时明确打开并核实自身身份后保存，不把客户端残留的旧初始化数据当新规格。URL 不变时提供 selectedState:{rule:本轮选中状态的精确来源规则,value:实际variantId}，宿主从原件重读，不允许用规格清单中的任意项冒充当前选中状态。保存 HTML 本身不导航。其他规格必须实际切换再保存；当前默认状态可以复用已保存 DOM 并另存方法。
 预检 base 传 {...basePreview,gallery:observedGalleryUrls.map(url=>({url}))}。mixed.galleryUrls 必须含全部基础图库，不得先按关键词删图；observed 使用最终 galleryReview/galleryUrls。保存 variant-preflight.json 格式 {contexts:[{context:最终上下文,method:实际规格方法,passed:true}]}，仅在 readObservedVariant 成功后写 passed:true；宿主按原件复核并逐项比对。改了方法或最终上下文就收割前另存修订预检，capture-review.json 复用通过的版本。确实无法获取某规格状态时只标该规格 unresolved，不把其他完整采集一同丢弃。
+写最终 capture-review.json 时，存在通过预检的项就必须从 lib/observed-variant.mjs 调用 await readPreflightVariantContexts(outDir)，把完整返回值直接作为 variantContexts；不可手写或逐字段重建已通过的 context，这会漏掉 reason、selectedState 等证据。确实 unresolved 的上下文另外追加，不能冒充已通过项。最终交接必须按 capture-review.schema.json 中的逐规格 schema 校验，不能只检查顶层键；预检与交接必须原样一致。
 禁止执行 semantic queue、enrich 或旧 API-ready 导出；后续系统用本次原件处理。`;
 
 export const catalogInstructions = `按旧采集流程先视觉确认站点身份和完整目录族，制定路线与终止契约，再用 discoverCatalog 复用旧 ENUMERATE 阶段及 Shopify 目录对账。普通目录按契约遍历至零增长；符合旧有界规则的 Shopify 单目录可用页面/目录结果/对应接口完整集合相同及空终页证明，不强制重复遍历。证明选择在采前完成。

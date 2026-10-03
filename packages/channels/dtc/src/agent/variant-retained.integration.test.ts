@@ -6,7 +6,13 @@ import { ProductSourcePlans } from "@crawl-automation/channels-core";
 import { DtcAgentProductCapture } from "./product-capture.js";
 import { retainCaptureDirectory, captureOutputFiles } from "./archive.js";
 import { dtcSitePolicy } from "../site-policy.js";
-import { readObservedVariant } from "../../../../../crawl-products/lib/observed-variant.mjs";
+import {
+  readObservedVariant,
+  readPreflightVariantContexts,
+} from "../../../../../crawl-products/lib/observed-variant.mjs";
+import { readCapturedProduct } from "./product-record.js";
+import { readVariantRecord } from "./variant-record.js";
+import { CaptureReviewAuthoringSchema } from "./product-review.js";
 
 // Mini-only, read-only originals. All derived publications stay in memory; no provider or DB work.
 it.skipIf(!process.env["CRAWL_RETAINED_DTC_LEGACY_CAPTURE"])(
@@ -152,6 +158,30 @@ it.skipIf(!process.env["CRAWL_RETAINED_DTC_MIXED_GALLERY_CAPTURE"])(
   },
 );
 
+it.skipIf(!process.env["CRAWL_RETAINED_DTC_PREFLIGHT_CAPTURE"])(
+  "keeps the real lossy handoff in Review but validates complete saved contexts without rewriting originals",
+  async () => {
+    const capture = await retained(process.env["CRAWL_RETAINED_DTC_PREFLIGHT_CAPTURE"] ?? "");
+    if (capture.result.status !== "captured") {
+      throw new Error("Expected archived product");
+    }
+    expect(capture.result.variants?.map((member) => member.status)).toEqual(["review", "review"]);
+    const { root, files, url } = capture;
+    const before = await readFile(join(root, "capture-review.json"));
+    const product = await readCapturedProduct({ root, ...files, url, requireObservedMethod: true });
+    const review = CaptureReviewAuthoringSchema.parse({
+      ...product.review,
+      variantContexts: await readPreflightVariantContexts(root),
+    });
+    for (const variantId of ["39660429836348", "39660429803580"]) {
+      const verified = await readVariantRecord({ root, ...files, ...product, review }, variantId);
+      expect(verified.context.status).toBe("mixed");
+      expect(verified.context.reason).not.toBe("");
+    }
+    expect(await readFile(join(root, "capture-review.json"))).toEqual(before);
+  },
+);
+
 async function retained(workspace: string) {
   const root = join(workspace, "capture");
   const records = JSON.parse(await readFile(join(root, "evidence/records.json"), "utf8"));
@@ -210,5 +240,5 @@ async function retained(workspace: string) {
     },
     signal,
   );
-  return { result, data };
+  return { result, data, root, files, url };
 }

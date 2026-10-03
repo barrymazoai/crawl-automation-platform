@@ -12,7 +12,7 @@ import type { DtcAgentSettings } from "./settings.js";
 import { captureOutputFiles, retainCaptureDirectory, type CaptureFile } from "./archive.js";
 import { dtcAgentErrors } from "./errors.js";
 import { capturePrompt } from "./prompt.js";
-import { CaptureReviewSchema } from "./product-review.js";
+import { CaptureReviewAuthoringSchema } from "./product-review.js";
 import { VariantContextSchema } from "./variant-review.js";
 import type { AgentCaptureRequest } from "./request.js";
 
@@ -68,7 +68,7 @@ export class DtcCaptureAgent {
     if (request.mode === "product") {
       await writeFile(
         join(cwd, "capture-review.schema.json"),
-        JSON.stringify(z.toJSONSchema(CaptureReviewSchema)),
+        JSON.stringify(z.toJSONSchema(CaptureReviewAuthoringSchema)),
         { flag: "wx" },
       );
       await writeFile(

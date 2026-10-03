@@ -1,4 +1,5 @@
 import type { readObservedProduct } from "./observed-product.mjs";
+export function readPreflightVariantContexts(root: string): Promise<Array<Record<string, unknown>>>;
 export function readObservedVariant(root: string, base: {
   productUrl?: string;
   sourceUrl?: string;

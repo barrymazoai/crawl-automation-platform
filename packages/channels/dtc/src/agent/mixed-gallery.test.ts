@@ -10,6 +10,7 @@ import {
   type OcrOutput,
 } from "@crawl-automation/v3-contracts";
 import { sha256 } from "@crawl-automation/platform";
+import { CaptureReviewAuthoringSchema, CaptureReviewSchema } from "./product-review.js";
 
 const signal = new AbortController().signal;
 let fixture: Awaited<ReturnType<typeof variantCaptureFixture>>;
@@ -66,6 +67,18 @@ function decision(variantId: string): DtcGalleryDecision {
     websiteEvidence: variantId === "1" ? "Orange" : "Berry",
   };
 }
+
+it("requires per-variant reasons in the authoring contract while ingestion can isolate malformed siblings", async () => {
+  await prepare();
+  expect(CaptureReviewAuthoringSchema.safeParse(fixture.input.review).success).toBe(true);
+  const raw = JSON.parse(JSON.stringify(fixture.input.review));
+  delete raw.variantContexts[0].reason;
+  expect(CaptureReviewAuthoringSchema.safeParse(raw).success).toBe(false);
+  expect(CaptureReviewSchema.safeParse(raw).success).toBe(true);
+  fixture.input.review = CaptureReviewSchema.parse(raw);
+  fixture.input.request.operationId = "capture-authoring-invalid";
+  expect((await fixture.publish()).map((member) => member.status)).toEqual(["review", "mixed"]);
+});
 
 it("keeps URL-changed mixed galleries unassigned until the prepass and preserves original bytes", async () => {
   const { gallery, prepared, variants, task } = await prepare();

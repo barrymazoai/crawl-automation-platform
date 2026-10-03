@@ -39,3 +39,19 @@
 - 混合分支不接受未归属 Facts，不按首图兜底；同规格仍有多张 Facts 需要联合确认时保留 Review。明确共用单张 Facts 可分发到多个已验证规格。
 - 归属后 `family:null`，避免共用兄弟配方检查 bug 179 影响本轮；配方识别继续由原单品流程完成。前置 OCR/判断原件均留存引用，但**尚未实现跨 owner 的 OCR 回执复用**，子任务目前仍按原流程 OCR。此前提案中“子任务不再次 OCR”并非本次已实现能力。
 - 本地采集/交接/旧浏览器路径 44 项纯回归、原件状态/图库 16 项纯回归通过。完整 pnpm check 一轮通过；新增工作流重放用例将在 Mini 执行。此时尚未部署新代码、未产生新 OCR 实测结果。
+
+## 部署与验收记录（2026-10-03 11:28 北京）
+
+- `852546a29b751ebf757bc68c022e929f77f2d484` 已提交并推送 main，两台 Mini 均从 Git fresh clone、锁定依赖安装、构建后部署。Server 二 03:24:21Z 完成；Server 一首次切换因缺少 `PM2_HOME` 停止，使用既有 PM2_HOME 完成切换，03:25:08Z 七个服务与远端浏览器 poller 全部 ready，held permits 为空。
+- Mini：87 passed / 6 skipped，涵盖新混合图库成功、OCR Review、模型失败、许可释放与工作流重放，以及旧变体重放。另取两份真实留存原件验证：2 passed / 4 unrelated fixtures skipped；旧 Zinc Copper 继续原路径，旧 Magnesium 未归属记录仍为 Review。Worker bundle 构建通过，完整 `pnpm check` 再次通过。
+- 临时暂停的五条其他渠道队列在确认前后均无 queued/ready/running 商品后，恢复维护前的 running 状态。DTC 批量队列保持 paused（6 queued）。
+- 新单品验收 `d7ad53b4-a202-4c32-a82d-f61ba99d2f90` 于 03:28:20Z 接收，目标 `https://solaray.com/products/magnesium-glycinate`，使用 native Ego。此处只记录已启动；真实 OCR、归属、单品处理和清理结果待后续证据。
+- 部署日志：Server 二 `manual-releases/dtc-mixed-852546a/`；Server 一 `manual-releases/dtc-native-20261002/mixed-852546a-*.log`。提交回执：Server 一同目录 `mixed178-solaray-{request,receipt}.json`。
+
+## 首轮真实验收：交接文件漏字段（11:43 北京）
+
+- `d7ad53b4-a202-4c32-a82d-f61ba99d2f90` 于 03:39:04Z 业务结束为 Review：2 个规格均 `DTC.VARIANT_EVIDENCE`，未进入 OCR。不得将 Temporal COMPLETED 等同业务通过。
+- 原始采集已齐：240ct / SKU 076280895049 / 31.99 / InStock，120ct / SKU 076280549010 / 18.39 / InStock；5 张原图。原件预检有完整 mixed context，但 Codex 手写最终 `capture-review.json` 时漏了两项 `reason` 和 240ct 的 `selectedState`。宿主严格校验拦截符合预期。
+- 修复生产者交接：增加 `readPreflightVariantContexts` 原样读取已通过的完整上下文；生成用的 `CaptureReviewAuthoringSchema` 展开逐规格类型，入站依然逐规格隔离错误。不能靠手抄字段再漏证据，不能在宿主静默补齐旧坏记录。
+- 增加漏字段、未通过预检、重复规格的回归，以及针对本轮真实原件的 Mini 只读回放。旧最终交接和旧 Review 不修改，派生上下文只用于内存回归。验证实际生成环节仍需新的独立验收，不自动重试旧任务。
+- R2 全量回读：72 文件 / 14,182,840 字节，大小和 SHA-256 全部相符（03:43:52Z）。浏览器 Codex 进程 66224 于 03:37:28Z 退出且进程组 absent；03:39:44Z 全任务 held permits 为空。证据：Server 一 `manual-releases/dtc-native-20261002/mixed178-solaray-{result,r2-proof}.json`。

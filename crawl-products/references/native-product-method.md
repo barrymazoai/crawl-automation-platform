@@ -121,3 +121,16 @@ const result = await runHarvest(browser, browser.tab, plan, {
 URL 变化不证明资料隔离，URL 不变也不证明无法隔离。没有独立规格 URL 时，提供 `selectedState:{rule:{source,selector,attribute},value:实际variantId}`，规则必须指向已保存页面中的实际选中状态，不能指向规格清单任意项。有独立地址时明确访问、验证自身身份，再保存；保存 HTML 的工具不自动导航，客户端遗留的旧 JSON 不当成新规格原件。
 
 所有 observed/mixed 上下文都用 `readObservedVariant` 完成原件预检，保留最终 context、method、passed:true 于 `variant-preflight.json`。mixed 必须保留完整图库；缺少状态或原件则 `unresolved`，OCR 不负责猜补采集。共用 Facts 必须有明确依据，不能由相同图片、相似成分、文件名或轮播位置推定。
+
+## 最终交接不重复抄写规格上下文
+
+真实验收中曾出现：预检完整，但手写最终 `variantContexts` 时漏掉 `reason` 和 `selectedState`，两个规格都被宿主拦成 Review。已通过的上下文必须原样读取，不能逐字段重建：
+
+```js
+import { readPreflightVariantContexts } from "./lib/observed-variant.mjs"; // 使用 skillRoot 绝对路径
+const variantContexts = await readPreflightVariantContexts(outDir);
+const review = { ...reviewWithoutVariantContexts, variantContexts };
+await writeFile(`${outDir}/capture-review.json`, JSON.stringify(review), { flag: "wx" });
+```
+
+该函数只搬运已保存的完整预检上下文，不重新判断图片、不提取字段、不补造规格证据。最终仍由宿主重放原件并精确比对。真实 unresolved 项可单独追加；全部 unresolved 时直接保存这些项，不把失败预检标为通过。`capture-review.schema.json` 现在包含逐规格的完整类型要求，最终校验不能只检查顶层字段。

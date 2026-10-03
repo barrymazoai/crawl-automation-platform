@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { dtcAgentErrors } from "./errors.js";
+import { VariantContextSchema } from "./variant-review.js";
 
 export const CaptureReviewSchema = z.object({
   productUrl: z.url(),
@@ -25,6 +26,11 @@ export const CaptureReviewSchema = z.object({
     .min(1),
 });
 export type CaptureReview = z.infer<typeof CaptureReviewSchema>;
+
+// Authoring must expose the full contract; ingestion still isolates bad siblings independently.
+export const CaptureReviewAuthoringSchema = CaptureReviewSchema.extend({
+  variantContexts: z.array(VariantContextSchema).max(200).optional(),
+});
 
 export function parseCaptureReview(raw: unknown): CaptureReview {
   const result = CaptureReviewSchema.safeParse(raw);

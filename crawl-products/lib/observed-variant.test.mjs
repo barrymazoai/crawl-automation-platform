@@ -4,12 +4,32 @@ import { tmpdir } from "node:os";
 import { createHash } from "node:crypto";
 import { afterEach, expect, it } from "vitest";
 import { readObservedProduct } from "./observed-product.mjs";
-import { readObservedVariant } from "./observed-variant.mjs";
+import { readObservedVariant, readPreflightVariantContexts } from "./observed-variant.mjs";
 
 const roots = [];
 const url = "https://shop.test/products/pack";
 afterEach(async () => {
   await Promise.all(roots.splice(0).map(root => rm(root, { recursive: true, force: true })));
+});
+
+it("carries the complete checked mixed context into the final review without dropping state or reason", async () => {
+  const { root } = await fixture();
+  const context = { variantId: "22", status: "mixed", basis: "variant-state", methodPath: "method.json",
+    galleryUrls: ["https://shop.test/gallery/package.png"], reason: "Both package panels remain visible",
+    evidence: ["details.html"], selectedState: { rule: { source: 0, selector: 'input[name="id"]', attribute: "value" }, value: "22" } };
+  const bytes = JSON.stringify({ contexts: [{ context, method: {}, passed: true }] });
+  await writeFile(join(root, "variant-preflight.json"), bytes);
+  expect(await readPreflightVariantContexts(root)).toEqual([context]);
+  expect(await readFile(join(root, "variant-preflight.json"), "utf8")).toBe(bytes);
+});
+
+it.each(["unchecked", "reason-missing", "duplicate"])("refuses %s preflight contexts without repairing them", async (damage) => {
+  const { root } = await fixture();
+  const entry = { context: { variantId: "22", status: "mixed", reason: "Observed mixed gallery", evidence: ["details.html"] }, passed: true };
+  if (damage === "unchecked") entry.passed = false;
+  if (damage === "reason-missing") delete entry.context.reason;
+  await writeFile(join(root, "variant-preflight.json"), JSON.stringify({ contexts: damage === "duplicate" ? [entry, entry] : [entry] }));
+  await expect(readPreflightVariantContexts(root)).rejects.toThrow("variant_preflight_context_invalid");
 });
 
 async function fixture() {
