@@ -8,6 +8,7 @@ import { executeEgoScript } from "./ego-output.js";
 import { requireEgo } from "./ego-health.js";
 import { EGO_MARKER, DENY_LOCATION } from "./ego-script.js";
 import { EGO_OWNERSHIP } from "./ego-ownership.js";
+import { DENY_NOTIFICATIONS } from "./deny-notifications.js";
 import { egoErrors } from "./ego-errors.js";
 import { stopEgoRound, type EgoStoppedRound } from "./ego-stop.js";
 import type { EgoSettings } from "./ego-settings.js";
@@ -34,7 +35,12 @@ export class EgoAgentPage {
         kind: "browser-round",
         executionId: randomUUID(),
         taskSpaceId: settings.taskSpaceId,
-        metadata: { host: hostname(), protocol: "ego-native-capture/1", baseline: health.targets },
+        metadata: {
+          host: hostname(),
+          protocol: "ego-native-capture/1",
+          baseline: health.targets,
+          notificationPolicy: "deny-task-page/1",
+        },
       },
       targets: [],
     };
@@ -110,6 +116,6 @@ const task = await taskSpace(params.taskSpaceId);
 const page = await task.newPage();
 emit({ kind: "opened", targetId: page.targetId });
 await requireAgent();
-await page.cdp("Page.addScriptToEvaluateOnNewDocument", { source: ${JSON.stringify(DENY_LOCATION)} });
+await page.cdp("Page.addScriptToEvaluateOnNewDocument", { source: ${JSON.stringify(`${DENY_LOCATION}\n${DENY_NOTIFICATIONS}`)} });
 emit({ kind: "result", targetId: page.targetId, closed: false, failure: null, value: page.label });`;
 }
