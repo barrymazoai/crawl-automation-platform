@@ -98,7 +98,7 @@ try {
     if (result.decision.kind !== sample.expected) throw new Error(`Unexpected scope: ${result.decision.kind}`);
     const boundary = await verifyRetainedScopeBoundary({ config, original, root, captured, result });
     await write(`case-${index}-boundary.json`, boundary);
-    const held = await database.query("SELECT permit_id FROM resource_permit WHERE request->>'workflowId'=$1 AND state <> 'released'", [workflowId]);
+    const held = await database.query("SELECT permit_id FROM resource_permit WHERE request->>'workflowId'=$1 AND released_at IS NULL", [workflowId]);
     if (held.length) throw new Error("Acceptance left a permit held");
     console.log(JSON.stringify({ stage: "verified", index, workflowId, kind: result.decision.kind, boundary }));
   }
