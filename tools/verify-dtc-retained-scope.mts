@@ -52,7 +52,7 @@ try {
   for (const [index, sample] of cases.entries()) {
     const signal = AbortSignal.timeout(300_000);
     const history = await temporal.client.workflow.getHandle(`product-run-${sample.runId}`).fetchHistory();
-    await Worker.runReplayHistory({ workflowBundle: productionBundle }, history);
+    await Worker.runReplayHistory({ workflowBundle: productionBundle }, history, `product-run-${sample.runId}`);
     await write(`case-${index}-replay.json`, { sourceRunId: sample.runId, replayed: true });
     const payload = history.events?.find(e => e.workflowExecutionStartedEventAttributes)?.workflowExecutionStartedEventAttributes?.input?.payloads?.[0]?.data;
     if (!payload) throw new Error("Original workflow input missing");
