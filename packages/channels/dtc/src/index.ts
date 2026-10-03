@@ -16,6 +16,7 @@ export * from "./agent/settings.js";
 export * from "./agent/runner.js";
 export * from "./agent/errors.js";
 export * from "./agent/product-capture.js";
+export * from "./agent/product-scope.js";
 export * from "./agent/file-transport.js";
 export * from "./agent/catalog.js";
 export * from "./agent/analysis.js";

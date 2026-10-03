@@ -224,6 +224,18 @@ async function retained(workspace: string) {
   const capture = new DtcAgentProductCapture({
     publication,
     sourcePlans,
+    // This fixture isolates the retained variant handoff; scope has its own real-evidence acceptance.
+    productScope: {
+      review: async () => ({
+        decision: {
+          kind: "single_product" as const,
+          reason: "Fixture isolates variant handoff",
+          evidence: [],
+          components: [],
+        },
+        evidence: { objectKey: "test/scope.json", sha256: "c".repeat(64), byteSize: 1 },
+      }),
+    },
     sites: [site],
     routeId: "retained-test",
     egressId: "retained-test",

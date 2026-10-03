@@ -12,6 +12,7 @@ import {
 } from "@crawl-automation/channel-dtc";
 import type { ProductSourcePlans } from "@crawl-automation/channels-core";
 import type { CoreParts } from "../core-parts.js";
+import { dtcProductScope } from "./dtc-product-scope.js";
 
 /** The same capture agent drives analysis, catalog discovery and per-product harvest. */
 export function dtcAgentParts(
@@ -27,6 +28,7 @@ export function dtcAgentParts(
       sites,
       publication: parts.publication,
       sourcePlans,
+      productScope: dtcProductScope(parts),
       routeId: browser?.routeId ?? "ego-browser",
       egressId: browser?.egressId ?? "ego-browser/1",
     }),

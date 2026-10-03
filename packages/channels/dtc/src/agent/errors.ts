@@ -1,6 +1,10 @@
 import { defineErrors } from "@crawl-automation/platform";
 
 export const dtcAgentErrors = defineErrors({
+  "DTC.PRODUCT_SCOPE_UNRESOLVED": {
+    category: "SOURCE",
+    message: "The retained website evidence does not establish a single-product processing scope.",
+  },
   "DTC.AGENT_REQUIRED": {
     category: "VALIDATION",
     message: "DTC requires its Codex/Ego native capture settings.",

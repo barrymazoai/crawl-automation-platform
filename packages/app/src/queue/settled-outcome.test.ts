@@ -2,6 +2,25 @@ import { describe, expect, it } from "vitest";
 import { settledOutcome } from "./dispatch-model.js";
 
 describe("settledOutcome remaining terminal and malformed cases", () => {
+  it("settles a verified scope exclusion with its reason, not as a collected formula", () => {
+    const result = {
+      status: "scope-excluded",
+      operationId: "product-scope",
+      listingId: "offer",
+      variantId: null,
+      reason: "DTC.MULTI_PRODUCT_BUNDLE",
+      policy: "dtc-product-scope/1",
+      evidence: { objectKey: "scope/result.json", sha256: "a".repeat(64), byteSize: 120 },
+    };
+    expect(settledOutcome({ status: "COMPLETED", result })).toEqual({
+      state: "completed",
+      reason: "DTC.MULTI_PRODUCT_BUNDLE",
+    });
+    expect(settledOutcome({ status: "COMPLETED", result: { ...result, evidence: null } })).toEqual({
+      state: "review",
+      reason: "QUEUE.OUTCOME_UNRECOGNIZED",
+    });
+  });
   it.each([
     ["FAILED", "QUEUE.RUN_FAILED"],
     ["TERMINATED", "QUEUE.RUN_TERMINATED"],

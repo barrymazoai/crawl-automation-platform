@@ -1,6 +1,7 @@
 import {
   AcquisitionReviewSchema,
   DtcVariantHandoffsSchema,
+  DtcScopeExcludedSchema,
   ChannelPlanInputSchema,
   ExecutionIdSchema,
   FileAcquireInputSchema,
@@ -201,6 +202,7 @@ export type ProductPlanRequest = z.infer<typeof ProductPlanRequestSchema>;
 
 /** A page read in the browser (its metrics are recorded at capture), or the listing's unlisted sighting, or a Review. */
 export const BrowserCaptureResultSchema = z.discriminatedUnion("status", [
+  DtcScopeExcludedSchema,
   z.strictObject({
     status: z.literal("captured"),
     listingId: z.string().min(1).max(200),

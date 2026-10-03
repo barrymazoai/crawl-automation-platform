@@ -16,6 +16,7 @@ import { dtcAgentErrors } from "./errors.js";
 import { capturedBrandSighting } from "./product-sighting.js";
 import { DtcVariantHandoffs } from "./variant-handoffs.js";
 import { nativeCaptureResult } from "./product-result.js";
+import { scopeProductOutcome, type DtcProductScope } from "./product-scope.js";
 
 export class DtcAgentProductCapture {
   constructor(
@@ -24,6 +25,7 @@ export class DtcAgentProductCapture {
       sites: readonly DtcSitePolicy[];
       publication: RetainedPublication;
       sourcePlans: ProductSourcePlans;
+      productScope: Pick<DtcProductScope, "review">;
       routeId: string;
       egressId: string;
     },
@@ -47,25 +49,57 @@ export class DtcAgentProductCapture {
       url: request.url,
       sourceUrl: request.sourceUrl,
     });
-    const sourcePlan = await this.deps.sourcePlans.publish(request, { parsed, planning }, signal);
-    const expanded = await this.expand(
+    const excluded = await this.scope(
+      request,
+      { retained, original, identity: parsed.identity },
+      signal,
+    );
+    if (excluded) {
+      return excluded;
+    }
+    return this.complete(
+      { ...captured, ...retained, request, site, parsed, planning, original },
+      signal,
+    );
+  }
+
+  private async scope(
+    request: CaptureRequest,
+    input: {
+      retained: Awaited<ReturnType<typeof readCapturedProduct>>;
+      original: ArchivedHtml;
+      identity: { listingId: string; variantId: string | null };
+    },
+    signal: AbortSignal,
+  ) {
+    const { retained, original, identity } = input;
+    const scope = await this.deps.productScope.review(
       {
-        ...captured,
-        ...retained,
-        request,
-        site,
-        parsed,
-        planning,
+        operationId: request.operationId,
+        url: request.url,
+        source: original.source,
+        fields: retained.record.fields,
+        variants: retained.record.variants,
       },
       signal,
     );
+    return scopeProductOutcome({ scope, operationId: request.operationId, identity });
+  }
+
+  private async complete(
+    input: Parameters<DtcVariantHandoffs["publish"]>[0] & { original: ArchivedHtml },
+    signal: AbortSignal,
+  ) {
+    const { request, parsed, planning, original } = input;
+    const sourcePlan = await this.deps.sourcePlans.publish(request, { parsed, planning }, signal);
+    const expanded = await this.expand(input, signal);
     return nativeCaptureResult({
       request,
       parsed,
       sourcePlan,
       original,
       variants: expanded.variants,
-      currency: retained.record.fields.currency,
+      currency: input.record.fields.currency,
     });
   }
 

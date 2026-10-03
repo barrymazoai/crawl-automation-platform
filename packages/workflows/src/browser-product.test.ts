@@ -1,6 +1,6 @@
 import { beforeEach, expect, it, vi } from "vitest";
 
-const env = vi.hoisted(() => ({ activities: {} as Record<string, unknown> }));
+const env = vi.hoisted(() => ({ activities: {} as Record<string, unknown>, native: false }));
 
 vi.mock("@temporalio/workflow", () => {
   class ApplicationFailure extends Error {
@@ -20,12 +20,14 @@ vi.mock("@temporalio/workflow", () => {
     workflowInfo: () => ({ workflowId: "product-run-1", runId: "run-1" }),
     // Historical browser product results retain their recorded route before capture-mode-v1.
     patched: (marker: string) =>
-      ![
-        "browser-resource-routing-v1",
-        "capture-mode-v1",
-        "family-formula-outcomes-v1",
-        "product-enrichment-v1",
-      ].includes(marker),
+      marker === "capture-mode-v1"
+        ? env.native
+        : ![
+            "browser-resource-routing-v1",
+            "capture-mode-v1",
+            "family-formula-outcomes-v1",
+            "product-enrichment-v1",
+          ].includes(marker),
     sleep: async () => undefined,
     isCancellation: (error: unknown) => (error as { type?: string }).type === "CANCELLED",
     CancellationScope: { nonCancellable: (run: () => unknown) => run() },
@@ -75,7 +77,36 @@ function setup() {
   return { browser, pipeline, plan };
 }
 
-beforeEach(() => vi.clearAllMocks());
+beforeEach(() => {
+  vi.clearAllMocks();
+  env.native = false;
+});
+
+it("ends a DTC multi-product exclusion before formula planning, reuse or label work", async () => {
+  env.native = true;
+  const { browser, pipeline, plan } = setup();
+  const excluded = {
+    status: "scope-excluded",
+    operationId: input.operationId,
+    listingId: "dtc-offer",
+    variantId: null,
+    reason: "DTC.MULTI_PRODUCT_BUNDLE",
+    policy: "dtc-product-scope/1",
+    evidence: { objectKey: "scope/result.json", sha256: "a".repeat(64), byteSize: 120 },
+  };
+  browser.captureBrowserProduct.mockResolvedValue(excluded);
+  expect(
+    await ProductPipelineWorkflow({
+      ...input,
+      channel: "dtc",
+      capture: "browser",
+      url: "https://example.test/products/offer",
+    }),
+  ).toEqual(excluded);
+  expect(plan.prepareChannelProduct).not.toHaveBeenCalled();
+  expect(pipeline.findKnownFormula).not.toHaveBeenCalled();
+  expect(pipeline.reviewProduct).not.toHaveBeenCalled();
+});
 
 it("replays a legacy Whole Foods browser capture and takes the formula of the same ASIN from its family", async () => {
   const { browser, pipeline, plan } = setup();

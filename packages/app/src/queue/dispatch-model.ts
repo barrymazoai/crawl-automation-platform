@@ -2,6 +2,7 @@ import { z } from "zod";
 import type { appErrors } from "../errors.js";
 import type { ProductRun } from "../runs/run-model.js";
 import type { QueueChannel, QueueMode } from "./queue-model.js";
+import { DtcScopeExcludedSchema } from "@crawl-automation/v3-contracts";
 
 export interface QueueControl {
   channel: QueueChannel;
@@ -20,7 +21,7 @@ export interface StartedItem {
   stopRequested: boolean;
 }
 
-/** How an item ended. The reason is the Review's failure code; null when completed. */
+/** How an item ended. Reason records a Review code or an explicit completed scope exclusion. */
 export interface SettledOutcome {
   state: "completed" | "review" | "pending";
   reason: string | null;
@@ -93,6 +94,10 @@ export function settledOutcome(execution: RunExecution): SettledOutcome | null {
 
 /** A completed run: collected or unlisted is done; a Review keeps its own code; anything else is unrecognized. */
 function completedOutcome(raw: unknown): SettledOutcome {
+  const excluded = DtcScopeExcludedSchema.safeParse(raw);
+  if (excluded.success) {
+    return { state: "completed", reason: excluded.data.reason };
+  }
   const result = PipelineResultSchema.safeParse(raw);
   if (!result.success) {
     return { state: "review", reason: "QUEUE.OUTCOME_UNRECOGNIZED" };
