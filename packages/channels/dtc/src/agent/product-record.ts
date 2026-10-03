@@ -6,15 +6,8 @@ import { verifyObservedProduct } from "../../../../../crawl-products/lib/observe
 import { verifyDetailReview } from "./detail-review.js";
 import { sha256 } from "@crawl-automation/platform";
 import { capturedMaterials } from "./capture-materials.js";
+import { CapturedVariantSchema } from "./variant-metadata.js";
 
-const VariantSchema = z
-  .object({
-    variantId: z.union([z.string(), z.number()]).transform(String).optional(),
-    sku: z.string().optional(),
-    title: z.string().optional(),
-    url: z.url().optional(),
-  })
-  .passthrough();
 const RecordSchema = z
   .object({
     productUrl: z.url(),
@@ -23,7 +16,7 @@ const RecordSchema = z
       .array(z.object({ url: z.url(), localPath: z.string().min(1), mime: z.string().min(1) }))
       .min(1)
       .max(100),
-    variants: z.array(VariantSchema).default([]),
+    variants: z.array(CapturedVariantSchema).default([]),
     pageHtml: z.union([z.string(), z.object({ localPath: z.string() })]),
     flags: z.array(z.string()).default([]),
   })

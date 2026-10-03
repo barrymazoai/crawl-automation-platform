@@ -82,14 +82,17 @@ try {
       }));
     }
     const root = join(sample.workspace, "capture");
-    const captured = captureOutputFiles(files);
-    const retained = await readCapturedProduct({ root, ...captured, url: original.url, requireObservedMethod: true });
+    const captured = {
+      ...captureOutputFiles(files),
+      ...(files.some(file => file.path === "capture/materials.json") ? { captureContract: "dtc-materials/1" as const } : {}),
+    };
+    const retained = await readCapturedProduct({ root, ...captured, url: original.url, requireObservedMethod: !captured.captureContract });
     const htmlPath = typeof retained.record.pageHtml === "string" ? retained.record.pageHtml : retained.record.pageHtml.localPath;
     const source = captured.files.find(file => file.path === htmlPath);
     if (!source) throw new Error("Original HTML reference missing");
     let evidence: ProductScopeInput = {
       operationId: `dtc-scope-accept-${randomUUID()}`, url: original.url, source,
-      fields: retained.record.fields, variants: retained.record.variants,
+      fields: { ...retained.record.fields, ...(retained.detailsHtml ? { html: retained.detailsHtml } : {}) }, variants: retained.record.variants,
     };
     if (previousScope) {
       const previous = JSON.parse(await readFile(join(previousScope, "case-0-intent.json"), "utf8"));

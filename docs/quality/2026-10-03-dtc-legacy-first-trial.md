@@ -12,7 +12,15 @@ HMW第5项试跑于08:23:23Z请求取消，08:26:36Z的runs.get确认Workflow=CA
 
 用户明确：复用9月28日已经使用Ego的旧采集行为，不重复迁移浏览器；原始输出之后再判断混合，然后转换下游。2026-10-03追加要求：不写单元测试，直接在Mini测试。本轮没有新增或运行单元测试，进行了必要的静态/类型检查与服务器构建。
 
-## 实现与部署
+## 简化版部署与首次实测
+
+`adce0177778966225d2b34840767c68d4205046b` 已提交并push origin/main，完整pnpm check通过。Server二于08:39:59Z完成fresh Git clone、locked install、build和browser-worker ready。Server一既有处理流程未更换。
+
+08:41:04Z启动唯一尚未尝试的HMW第6项 `/products/hmw-method-perform-strawberry-kiwi-creatine-chews-coming-soon`，run `ce451185-d317-48d1-99c7-f34510842f45`；attempt0→1，1/1投送后立即drain，5项历史Review保留，没有剩余queued。回执Server一 `manual-releases/dtc-native-20261002/materials183-hmw6-{preflight,start}.json`。08:46:02Z浏览器采集完成，fields仅title/brand/images，保存完整页面与30,560字节商品区域原样HTML、1张实际图库原图、网站1规格。交接因SKU=null被旧VariantSchema拒绝进入Review，未执行任何Facts子流程；options数组/available=null也需规范为下游元数据格式。此为转换兼容缺陷，已修复本地，使用留存原件验证，不重抓或改写原件。71个R2文件共5,812,616字节全部回读hash/大小匹配；进程08:46:02Z、任务页/round08:46:03Z停止，许可08:47:10Z释放，held=[]。
+
+旧HMW5的7个R2文件、1,106,582字节已全部回读，大小和SHA-256全部匹配；回执 `legacy183-hmw5-r2-proof.json`。
+
+## 第一版历史实现与部署（方向已纠正）
 
 `6170cfa61dba9abcf25b79b02795be5df675ac80` 已提交并push origin/main。完整 `pnpm check` 通过。Server二于2026-10-03T08:18:29.468Z完成全新Git clone、locked install、build及browser-worker ready；Server一仍为9c8b107，既有Facts和混合图库工作流不改。
 
