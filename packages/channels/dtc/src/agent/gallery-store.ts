@@ -28,6 +28,17 @@ export class GalleryStore {
     await this.publication.publish(key, bytes, "application/json", signal);
     return ref;
   }
+  async claim(root: string, value: unknown, signal: AbortSignal) {
+    const claimed = await this.publication.remote.create(
+      `${root}/intent.json`,
+      Buffer.from(JSON.stringify(value)),
+      "application/json",
+      signal,
+    );
+    if (claimed !== "created") {
+      throw new Error("DTC.GALLERY_EXECUTION_UNKNOWN");
+    }
+  }
 }
 export function galleryEvidence(raw: unknown) {
   return ChannelProductEvidenceSchema.parse(

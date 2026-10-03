@@ -77,3 +77,14 @@
 - 新留存验收 `01a38890-e474-4445-bc89-fced78dbf88e`，独立 `dtc-gallery-accept-…`：首轮 72 文件 / 14,182,840 字节均校验通过，两规格 mixed。第一张真实 OCR 及回执核验完成，但 `scopeDtcGalleryImage` 在模型调用前因严格 Observation schema 报错；未生成任何归属决策、未派发单规格，结果仍 Review 2/2。
 - 根因：新增 activity 将整个 OcrInput 传给 ArtifactResolver 的 owner 参数。旧 OCR 正确使用 `observationIdentity(input)`；此处改为同一函数，保留严格归属与完整性校验，不能靠放宽 schema 绕过。
 - 新 activity 接线回归使用真实 ArtifactResolver，覆盖正确原图、错 observation/source/listing/variant 和损坏字节。先复现原错误，再验证修复。真实验收日志和意图/结果在 Server 二 `manual-releases/retained178-02335a9-live/` 及 `dtc-mixed-852546a/retained-02335a9-live.log`。
+- `476c318` 完整 check、6 项接线回归通过，Server 二同 6 项通过。Server 一于 04:14:17Z 经 Git fresh clone/build 部署，7 服务 ready；其余 5 条空队列恢复维护前 running，DTC 仍 paused 6。
+- 原下游验收 OCR 有同步结束证明，04:09:56Z 释放许可；模型在 provider 调用前失败，未创建执行进程，04:10:00Z 释放。停止核验记录：Server 一 `manual-releases/dtc-native-20261002/retained178-first-stop-proof.json`。
+- 第二次独立留存验收 `5bc5721c-ea94-4a4d-95b4-13ce4bc9d8e2` 已启动，原件再次全量核验；04:16 已真实完成 2 次 OCR、1 次图片归属，第二张正在模型处理，无 Activity 失败。结果目录 Server 二 `manual-releases/retained178-476c318-live/`，此处尚不宣称完整通过。
+
+## 同规格重复 Facts 与非 Facts 输出约束（12:25 北京）
+
+- 上述留存验收实际完成 4 次 OCR / 3 份有效归属后 Review。前两份 Facts 均明确归到 120ct（4 VegCaps × 30 servings）；第 4 张是 240ct 正面包装图，模型却同时返回 `kind:other` 和 240ct 的 variantId，触发 `DTC.GALLERY_SCOPE_UNPROVEN`。全部原始答案保留，不能静默删字段后宣称通过。
+- 新模型输出使用根对象内的分支 schema：非 Facts / unresolved 的 variantIds 强制为空，Facts 必须带归属和依据；消费校验仍保留。营销包装图能看出规格也不作 Facts 归属。
+- 同规格多张 Facts 新增 DTC 联合核对：复用已产生的 OCR，Codex 同时查看独立、未改字节的原图，比较 serving、份数、所有剂量/单位/DV、行列、其他配料及脚注。仅明确一致且选中图覆盖完整内容时选择一张代表；冲突、需多图拼接、不可读或超过单次 8 张的边界仍 Review。该语义核对取代“多张一律 Review”的临时限制，不按位置、文件名或 OCR 字符串相等去重。
+- 共用 Codex 传输增加可选多原图附件，既有单图调用字节与协议保持；不更改共用 Facts 业务步骤。独立模型许可延续逐图阶段的同一序列，新增 Workflow patch 保留旧历史行为。需 Mini 多图传输测试及新旧 Workflow 重放后才能部署。
+- 本地 14 项图库/联合核对回归及 6 项活动接线回归通过，完整 `pnpm check` 通过。上一轮 8 次 provider 执行均有停止证据、许可全部释放（4 次 OCR synchronous response、4 次 process exit），记录于 Server 一 `retained178-476-stop-proof.json`。Mini 回归与真实验收尚待执行。

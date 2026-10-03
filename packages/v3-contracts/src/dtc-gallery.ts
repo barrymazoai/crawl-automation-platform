@@ -31,6 +31,7 @@ export const DtcGalleryImageRequestSchema = z.strictObject({
 });
 export const DtcGalleryFinishSchema = z.strictObject({
   task: DtcGalleryRefSchema, decisions: z.array(DtcGalleryRefSchema).min(1).max(100),
+  selections: z.array(DtcGalleryRefSchema).max(200).optional(),
 });
 export type DtcGalleryRef = z.infer<typeof DtcGalleryRefSchema>;
 export type DtcGalleryTask = z.infer<typeof DtcGalleryTaskSchema>;

@@ -8,7 +8,11 @@ export interface FixtureParameters {
   ephemeral: boolean;
   environments: unknown[];
   effort: string;
-  input: [{ text: string }, { type: string; detail: string; path: string }];
+  input: [
+    { text: string },
+    { type: string; detail: string; path: string },
+    ...{ type: string; detail: string; path: string }[],
+  ];
   outputSchema?: { properties?: { codec?: { const?: string } } };
 }
 

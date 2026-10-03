@@ -21,3 +21,4 @@ export * from "./agent/catalog.js";
 export * from "./agent/analysis.js";
 export * from "./agent/mixed-gallery.js";
 export * from "./agent/gallery-scope.js";
+export * from "./agent/gallery-selection.js";

@@ -8,7 +8,14 @@ export class DtcMixedGallery extends GalleryStore {
   prepare(raw: unknown, signal: AbortSignal) {
     return prepareGalleryTask(this, raw, signal);
   }
-  finish(input: { task: DtcGalleryRef; decisions: DtcGalleryRef[] }, signal: AbortSignal) {
+  finish(
+    input: {
+      task: DtcGalleryRef;
+      decisions: DtcGalleryRef[];
+      selections?: DtcGalleryRef[] | undefined;
+    },
+    signal: AbortSignal,
+  ) {
     return finishGallery(this, input, signal);
   }
 }

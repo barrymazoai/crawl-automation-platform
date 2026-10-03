@@ -26,7 +26,7 @@ async function initializeThread(rpc: CodexRpc, input: CodexTurnInput, signal: Ab
   await assertCodexModel(rpc, settings, {
     cwd: input.cwd,
     signal,
-    modalities: input.image ? ["text", "image"] : ["text"],
+    modalities: input.image || input.images?.length ? ["text", "image"] : ["text"],
   });
   const reply = await rpc.request("thread/start", threadRequest(settings, input.cwd), signal);
   return { settings, threadId: verifiedThread(reply, settings, input.cwd) };

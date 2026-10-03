@@ -8,6 +8,8 @@ export interface CodexCall {
   outputSchema: object;
   /** An image the model reads with the prompt, as its original file. */
   image?: { name: string; bytes: Uint8Array };
+  /** Separate, unmodified originals for a joint visual comparison. */
+  images?: { name: string; bytes: Uint8Array }[];
 }
 
 /** One app-server turn on an owned connection; an image is written into the call's own directory first. */
@@ -20,12 +22,17 @@ export async function runOwnedTurn(
   const image = call.image
     ? { path: await writeImage(cwd, call.image), detail: "original" as const }
     : undefined;
+  const images = [];
+  for (const original of call.images ?? []) {
+    images.push({ path: await writeImage(cwd, original), detail: "original" as const });
+  }
   const turn = {
     ...settings.settings,
     cwd,
     prompt: call.prompt,
     outputSchema: call.outputSchema,
     ...(image ? { image } : {}),
+    ...(images.length ? { images } : {}),
   };
   return runCodexTurn(rpc, turn, { signal, timeoutMs: settings.timeoutMs });
 }

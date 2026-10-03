@@ -1,4 +1,8 @@
-import { DtcMixedGallery, DtcGalleryScope } from "@crawl-automation/channel-dtc";
+import {
+  DtcMixedGallery,
+  DtcGalleryScope,
+  DtcGallerySelection,
+} from "@crawl-automation/channel-dtc";
 import { CodexClient, CodexVisionConfigSchema } from "@crawl-automation/processing";
 import {
   OcrOutputSchema,
@@ -27,7 +31,14 @@ export function dtcGalleryPipelineActivities(parts: WorkerParts) {
         return {
           ...(await gallery().prepare(raw, signal)),
           queues: settings.queues,
-          resources: { ...resources, activities: { ocrFile: ocr, scopeDtcGalleryImage: vision } },
+          resources: {
+            ...resources,
+            activities: {
+              ocrFile: ocr,
+              scopeDtcGalleryImage: vision,
+              selectDtcGalleryFacts: vision,
+            },
+          },
         };
       },
       parts.log,
@@ -42,30 +53,35 @@ export function dtcGalleryPipelineActivities(parts: WorkerParts) {
 
 export function dtcGalleryModelActivities(parts: WorkerParts) {
   return {
-    scopeDtcGalleryImage: guarded(
-      "scopeDtcGalleryImage",
-      async (raw, signal) => {
-        const client = await galleryModel(parts);
-        try {
-          return await new DtcGalleryScope(new DtcMixedGallery(parts.publication), {
-            ocr: (input, active) => readOcr(parts, input, active),
-            image: async (input, active) =>
-              (
-                await parts.label.stores.artifacts.resolve(
-                  input.file,
-                  observationIdentity(input),
-                  active,
-                )
-              ).bytes,
-            model: (call, active) => client.run(call, active),
-          }).run(raw, signal);
-        } finally {
-          await client.close();
-        }
-      },
-      parts.log,
-    ),
+    scopeDtcGalleryImage: galleryActivity(parts, false),
+    selectDtcGalleryFacts: galleryActivity(parts, true),
   };
+}
+function galleryActivity(parts: WorkerParts, selection: boolean) {
+  return guarded(
+    selection ? "selectDtcGalleryFacts" : "scopeDtcGalleryImage",
+    async (raw, signal) => {
+      const client = await galleryModel(parts);
+      try {
+        const Review = selection ? DtcGallerySelection : DtcGalleryScope;
+        return await new Review(new DtcMixedGallery(parts.publication), {
+          ocr: (input, active) => readOcr(parts, input, active),
+          image: async (input, active) =>
+            (
+              await parts.label.stores.artifacts.resolve(
+                input.file,
+                observationIdentity(input),
+                active,
+              )
+            ).bytes,
+          model: (call, active) => client.run(call, active),
+        }).run(raw, signal);
+      } finally {
+        await client.close();
+      }
+    },
+    parts.log,
+  );
 }
 
 function galleryModel(parts: WorkerParts) {

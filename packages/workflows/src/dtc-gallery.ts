@@ -6,6 +6,7 @@ import {
   uuid4,
   ParentClosePolicy,
   ChildWorkflowCancellationType,
+  patched,
 } from "@temporalio/workflow";
 import {
   DtcGalleryRefSchema,
@@ -28,6 +29,7 @@ interface GalleryActivities {
   ocrFile(raw: unknown): Promise<unknown>;
   resolveOcrReceipt(raw: unknown): Promise<unknown>;
   scopeDtcGalleryImage(raw: unknown): Promise<unknown>;
+  selectDtcGalleryFacts(raw: unknown): Promise<unknown>;
 }
 const Prepared = z.strictObject({
   task: DtcGalleryRefSchema,
@@ -75,31 +77,45 @@ export async function DtcGalleryWorkflow(raw: unknown) {
   });
   try {
     const prepared = Prepared.parse(await pipeline.prepareDtcGallery({ sourcePlan, variants }));
-    const decisions = await processImages(prepared);
+    const gate = versionedResourceGate(prepared.resources);
+    const decisions = await processImages(prepared, gate);
+    const selections = patched("dtc-gallery-joint-facts-v1")
+      ? { selections: await selectFacts({ prepared, decisions, gate }) }
+      : {};
     return DtcVariantHandoffsSchema.parse(
-      await pipeline.finishDtcGallery({ task: prepared.task, decisions }),
+      await pipeline.finishDtcGallery({ task: prepared.task, decisions, ...selections }),
     );
   } catch (error) {
     if (isCancellation(error)) {
       throw error;
     }
-    return variants.map((member) =>
-      member.status !== "mixed"
-        ? member
-        : {
-            operationId: member.operationId,
-            variant: member.variant,
-            evidence: member.evidence,
-            status: "review" as const,
-            code: "DTC.VARIANT_EVIDENCE" as const,
-            reason: `DTC gallery preprocessing failed: ${String(error).slice(0, 3500)}`,
-          },
-    );
+    return galleryFailure(variants, error);
   }
 }
 
-async function processImages(prepared: z.infer<typeof Prepared>) {
-  const gate = versionedResourceGate(prepared.resources);
+async function selectFacts(context: {
+  prepared: z.infer<typeof Prepared>;
+  decisions: z.infer<typeof DtcGalleryRefSchema>[];
+  gate: ReturnType<typeof versionedResourceGate>;
+}) {
+  const { prepared, decisions, gate } = context;
+  const selected = await gate("selectDtcGalleryFacts", (binding) =>
+    withHeartbeatFailure(() =>
+      proxyActivities<GalleryActivities>({
+        taskQueue: prepared.queues.model,
+        ...once,
+        heartbeatTimeout,
+        ...binding,
+      }).selectDtcGalleryFacts({ task: prepared.task, decisions }),
+    ),
+  );
+  return DtcGalleryRefSchema.array().max(200).parse(selected);
+}
+
+async function processImages(
+  prepared: z.infer<typeof Prepared>,
+  gate: ReturnType<typeof versionedResourceGate>,
+) {
   const decisions = [];
   for (const ocr of prepared.inputs) {
     const outcome = await gate("ocrFile", (binding) =>
@@ -145,4 +161,19 @@ async function verifyReceipt(
   ) {
     throw new Error("DTC.GALLERY_OCR_UNVERIFIED");
   }
+}
+
+function galleryFailure(variants: DtcVariantHandoff[], error: unknown) {
+  return variants.map((member) =>
+    member.status !== "mixed"
+      ? member
+      : {
+          operationId: member.operationId,
+          variant: member.variant,
+          evidence: member.evidence,
+          status: "review" as const,
+          code: "DTC.VARIANT_EVIDENCE" as const,
+          reason: `DTC gallery preprocessing failed: ${String(error).slice(0, 3500)}`,
+        },
+  );
 }

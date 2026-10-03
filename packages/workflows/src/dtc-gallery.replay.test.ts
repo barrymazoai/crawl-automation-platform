@@ -8,7 +8,7 @@ import {
   type OcrInput,
   type DtcVariantHandoff,
 } from "@crawl-automation/v3-contracts";
-import { currentBundle, type ReplayBundle } from "./testing/replay/bundles.js";
+import { currentBundle, withoutPatches, type ReplayBundle } from "./testing/replay/bundles.js";
 import { recordHistory } from "./testing/replay/history.js";
 import { pipelineFixture } from "./testing/replay/product-fixture.js";
 
@@ -22,7 +22,7 @@ afterAll(async () => {
   await environment?.teardown();
 });
 
-it.each(["scoped", "ocr-review", "scope-failure"])(
+it.each(["scoped", "legacy-scoped", "ocr-review", "scope-failure", "selection-failure"])(
   "replays the DTC-only prepass: %s",
   async (scenario) => {
     const queue = `dtc-gallery-${randomUUID()}`;
@@ -71,9 +71,18 @@ it.each(["scoped", "ocr-review", "scope-failure"])(
     const finishDtcGallery = vi.fn(async () =>
       variants.map((member) => ({ ...member, status: "ready" })),
     );
+    const selectDtcGalleryFacts = vi.fn(async () => {
+      if (scenario === "selection-failure") {
+        throw new Error("Joint comparison unavailable");
+      }
+      return [];
+    });
     const { history, result, workflowId } = await recordHistory({
       environment,
-      bundle,
+      bundle:
+        scenario === "legacy-scoped"
+          ? withoutPatches(bundle, ["dtc-gallery-joint-facts-v1"])
+          : bundle,
       queue,
       workflow: "DtcGalleryWorkflow",
       input: { input: { ...fixture.input, channel: "dtc" }, sourcePlan, variants },
@@ -90,6 +99,7 @@ it.each(["scoped", "ocr-review", "scope-failure"])(
             activities: {
               ocrFile: [{ resourceId: "ocr", units: 1 }],
               scopeDtcGalleryImage: [{ resourceId: "model", units: 1 }],
+              selectDtcGalleryFacts: [{ resourceId: "model", units: 1 }],
             },
           },
         }),
@@ -97,17 +107,29 @@ it.each(["scoped", "ocr-review", "scope-failure"])(
         resolveOcrReceipt: async () =>
           scenario === "ocr-review" ? fixture.activities.resolveOcrReceipt() : registeredOcr(ocr),
         scopeDtcGalleryImage,
+        selectDtcGalleryFacts,
         finishDtcGallery,
       },
     });
     expect(ocrFile).toHaveBeenCalledOnce();
     expect(scopeDtcGalleryImage).toHaveBeenCalledTimes(scenario === "ocr-review" ? 0 : 1);
-    expect(finishDtcGallery).toHaveBeenCalledTimes(scenario === "scoped" ? 1 : 0);
+    expect(finishDtcGallery).toHaveBeenCalledTimes(
+      ["scoped", "legacy-scoped"].includes(scenario) ? 1 : 0,
+    );
+    expect(selectDtcGalleryFacts).toHaveBeenCalledTimes(
+      ["scoped", "selection-failure"].includes(scenario) ? 1 : 0,
+    );
     expect((result as DtcVariantHandoff[]).map((member) => member.status)).toEqual([
-      scenario === "scoped" ? "ready" : "review",
+      ["scoped", "legacy-scoped"].includes(scenario) ? "ready" : "review",
       "ready",
     ]);
     expect(fixture.gate.held.size).toBe(0);
+    const permitActivities =
+      history.events?.flatMap((event) => {
+        const activity = event.activityTaskScheduledEventAttributes;
+        return activity?.activityId?.startsWith("permit-") ? [activity.activityId] : [];
+      }) ?? [];
+    expect(new Set(permitActivities).size).toBe(permitActivities.length);
     await Worker.runReplayHistory({ workflowBundle: bundle }, history, workflowId);
   },
   60_000,

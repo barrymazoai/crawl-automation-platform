@@ -16,6 +16,7 @@ export const labelPageVerdictMarker = "label-page-verdict-fallback-v1";
 export const labelNoSourceMarker = "label-no-source-review-v1";
 export const stopProofMarker = "resource-execution-stop-proof-v1";
 export type PatchMarker =
+  | "dtc-gallery-joint-facts-v1"
   | "dtc-variant-workflow-id-v1"
   | "dtc-variant-handoff-v1"
   | "dtc-site-analysis-v1"

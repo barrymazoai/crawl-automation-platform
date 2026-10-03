@@ -1,33 +1,50 @@
+import {
+  DtcGalleryImageResultSchema,
+  readGalleryResults,
+  selectedGalleryImages,
+} from "./gallery-decisions.js";
+export { DtcGalleryImageResultSchema, validateGalleryDecision } from "./gallery-decisions.js";
 import { z } from "zod";
 import { sha256 } from "@crawl-automation/platform";
 import {
   ChannelProductEvidenceSchema,
   ChannelPlanInputSchema,
-  DtcGalleryDecisionSchema,
-  DtcGalleryRefSchema,
   type DtcGalleryRef,
   type DtcGalleryTask,
   type DtcVariantHandoff,
 } from "@crawl-automation/v3-contracts";
 import { GalleryStore, galleryEvidence as evidence } from "./gallery-store.js";
-export const DtcGalleryImageResultSchema = z.strictObject({
-  task: DtcGalleryRefSchema,
-  imageId: z.string(),
-  decision: DtcGalleryDecisionSchema,
-  ocr: DtcGalleryRefSchema,
-});
-
+import {
+  GallerySelectionProof,
+  verifyGallerySelection,
+  type GallerySelection,
+} from "./gallery-selection-proof.js";
 export async function finishGallery(
   store: GalleryStore,
-  input: { task: DtcGalleryRef; decisions: DtcGalleryRef[] },
+  input: {
+    task: DtcGalleryRef;
+    decisions: DtcGalleryRef[];
+    selections?: DtcGalleryRef[] | undefined;
+  },
   signal: AbortSignal,
 ) {
   const task = await store.task(input.task, signal);
-  const results = await readResults(store, input, signal);
+  const results = await readGalleryResults(store, input, signal);
+  const selections = await readSelections(store, { input, task, results }, signal);
   const members: DtcVariantHandoff[] = [];
   for (const member of task.variants) {
     members.push(
-      await resolveMember(store, { task, results, member, refs: input.decisions }, signal),
+      await resolveMember(
+        store,
+        {
+          task,
+          results,
+          member,
+          selections,
+          refs: [...input.decisions, ...(input.selections ?? [])],
+        },
+        signal,
+      ),
     );
   }
   await store.save(
@@ -37,39 +54,44 @@ export async function finishGallery(
   );
   return members;
 }
-async function readResults(
+async function readSelections(
   store: GalleryStore,
-  input: { task: DtcGalleryRef; decisions: DtcGalleryRef[] },
+  context: {
+    input: { task: DtcGalleryRef; selections?: DtcGalleryRef[] | undefined };
+    task: DtcGalleryTask;
+    results: MemberContext["results"];
+  },
   signal: AbortSignal,
 ) {
-  const task = await store.task(input.task, signal);
-  const results: z.infer<typeof DtcGalleryImageResultSchema>[] = [];
-  for (const ref of input.decisions) {
-    const result = DtcGalleryImageResultSchema.parse(await store.read(ref, signal));
-    if (JSON.stringify(result.task) !== JSON.stringify(input.task)) {
-      throw new Error("DTC.GALLERY_RESULT_OWNER");
+  const { input, task, results } = context;
+  const selections: GallerySelection[] = [];
+  for (const ref of input.selections ?? []) {
+    const proof = GallerySelectionProof.parse(await store.read(ref, signal));
+    const member = task.variants.find((item) => item.variant.variantId === proof.variantId);
+    if (
+      member?.status !== "mixed" ||
+      selections.some((item) => item.variantId === proof.variantId)
+    ) {
+      throw new Error("DTC.GALLERY_SELECTION_OWNER");
     }
-    results.push(result);
+    selections.push(
+      verifyGallerySelection(proof, {
+        task: input.task,
+        variantId: proof.variantId,
+        candidateImageIds: selectedGalleryImages(task, results, proof.variantId).map(
+          (image) => image.input.file.artifactId,
+        ),
+      }),
+    );
   }
-  if (
-    results.length !== task.images.length ||
-    new Set(results.map((item) => item.imageId)).size !== results.length ||
-    task.images.some(
-      (image) => !results.some((result) => result.imageId === image.input.file.artifactId),
-    )
-  ) {
-    throw new Error("DTC.GALLERY_RESULTS_INCOMPLETE");
-  }
-  for (const result of results) {
-    validateGalleryDecision(task, result.decision);
-  }
-  return results;
+  return selections;
 }
 interface MemberContext {
   task: DtcGalleryTask;
   results: z.infer<typeof DtcGalleryImageResultSchema>[];
   member: DtcVariantHandoff;
   refs: DtcGalleryRef[];
+  selections: GallerySelection[];
 }
 async function resolveMember(
   store: GalleryStore,
@@ -81,14 +103,15 @@ async function resolveMember(
     return member;
   }
   const unresolved = results.some((result) => result.decision.kind === "unresolved");
-  const selected = task.images.filter((image) =>
-    results.some(
-      (result) =>
-        result.imageId === image.input.file.artifactId &&
-        result.decision.kind === "facts" &&
-        result.decision.variantIds.includes(member.variant.variantId ?? ""),
-    ),
+  let selected = selectedGalleryImages(task, results, member.variant.variantId ?? "");
+  const selection = context.selections.find(
+    (proof) => proof.variantId === member.variant.variantId,
   );
+  if (selected.length > 1 && selection?.decision.selectedImageId) {
+    selected = selected.filter(
+      (image) => image.input.file.artifactId === selection.decision.selectedImageId,
+    );
+  }
   const proof = [...member.evidence, ...refs.map((ref) => ref.objectKey)].slice(0, 200);
   if (unresolved || selected.length !== 1) {
     return scopeReview(member, proof, { unresolved, count: selected.length });
@@ -145,30 +168,6 @@ async function scopedPlan(
   });
   return sourcePlan;
 }
-export function validateGalleryDecision(task: DtcGalleryTask, raw: unknown) {
-  const decision = DtcGalleryDecisionSchema.parse(raw);
-  const ids = task.websiteVariants.map((variant) => variant.variantId);
-  if (
-    new Set(decision.variantIds).size !== decision.variantIds.length ||
-    decision.variantIds.some((id) => !ids.includes(id))
-  ) {
-    throw new Error("DTC.GALLERY_INVENTED_VARIANT");
-  }
-  if (
-    decision.kind === "facts" &&
-    (!decision.variantIds.length ||
-      !decision.imageEvidence.trim() ||
-      !decision.websiteEvidence.trim() ||
-      !["label-content", "website-shared"].includes(decision.basis))
-  ) {
-    throw new Error("DTC.GALLERY_SCOPE_UNPROVEN");
-  }
-  if (decision.kind !== "facts" && decision.variantIds.length) {
-    throw new Error("DTC.GALLERY_SCOPE_UNPROVEN");
-  }
-  return decision;
-}
-
 function scopeReview(
   member: DtcVariantHandoff,
   proof: string[],

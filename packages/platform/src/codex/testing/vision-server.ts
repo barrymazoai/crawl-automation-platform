@@ -40,6 +40,15 @@ function labelAnswer(parameters: FixtureParameters, hash: string) {
 }
 
 function imageAnswer(parameters: FixtureParameters, scenario: string, thread?: FixtureParameters) {
+  if (scenario === "vision-multiple") {
+    if (parameters.input.length !== 3) {
+      throw Error("INVALID_MULTIPLE_IMAGE_TURN");
+    }
+    const [text, ...images] = parameters.input;
+    return JSON.stringify({
+      hashes: images.map((image) => imageHash({ ...parameters, input: [text, image] }, thread)),
+    });
+  }
   const hash = imageHash(parameters, thread);
   return scenario === "label-result" ? labelAnswer(parameters, hash) : JSON.stringify({ hash });
 }

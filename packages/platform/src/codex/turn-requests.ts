@@ -23,6 +23,7 @@ export interface CodexTurnInput {
   prompt: string;
   outputSchema: object;
   image?: { path: string; detail: "original" };
+  images?: { path: string; detail: "original" }[];
 }
 
 /** Keep property order: the serialized app-server requests are covered by a legacy comparison. */
@@ -76,6 +77,7 @@ export function turnRequest(threadId: string, settings: CodexModelSettings, inpu
       ...(input.image
         ? [{ type: "localImage", path: input.image.path, detail: input.image.detail }]
         : []),
+      ...(input.images ?? []).map((image) => ({ type: "localImage", ...image })),
     ],
     outputSchema: input.outputSchema,
   };

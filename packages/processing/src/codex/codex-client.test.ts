@@ -6,6 +6,7 @@ import {
   CodexError,
   CodexRpc,
   fakeCodexServerPath,
+  sha256,
   type CodexConnectionOptions,
 } from "@crawl-automation/platform";
 import { CodexClient } from "./codex-client.js";
@@ -101,6 +102,23 @@ describe("shared Codex client", () => {
       CodexError,
     );
     expect([opened.connections.length, stopped]).toEqual([1, 1]);
+    await opened.client.close();
+  });
+
+  it("jointly attaches separate original images without changing their bytes and cleans the workspace", async () => {
+    const opened = await openClient("vision-multiple", {
+      profile: profile({ modalities: ["text", "image"] }),
+      effort: "medium",
+      model: "fixture",
+    });
+    const images = [
+      { name: "first.jpg", bytes: Buffer.from([0xff, 0xd8, 0xff, 0x01]) },
+      { name: "second.jpg", bytes: Buffer.from([0xff, 0xd8, 0xff, 0x02]) },
+    ];
+    const answer = await opened.client.run({ ...call, images }, signal());
+    expect(JSON.parse(answer)).toEqual({ hashes: images.map((image) => sha256(image.bytes)) });
+    expect(opened.connections).toHaveLength(1);
+    expect(await readdir(opened.settings.workRoot)).toEqual([]);
     await opened.client.close();
   });
 
