@@ -1,6 +1,6 @@
 import type { Queryable } from "@crawl-automation/platform";
 import { z } from "zod";
-import { DTC_HELD_SCAN } from "./dtc-scan-queries.js";
+import { DTC_HELD_BROWSER_PERMITS } from "./dtc-scan-queries.js";
 
 /** One DTC task globally; stale running rows reconnect their fixed workflow even while paused. */
 export async function claimBrandScans(tx: Queryable, settings: { limit: number; staleMs: number }) {
@@ -13,7 +13,7 @@ export async function claimBrandScans(tx: Queryable, settings: { limit: number; 
        (state='running' AND started_at < clock_timestamp() - $1::int * interval '1 millisecond')
        OR (state='queued' AND $2::boolean
          AND NOT EXISTS (SELECT 1 FROM brand_scan WHERE channel='dtc' AND state='running')
-         AND NOT EXISTS (${DTC_HELD_SCAN})))
+         AND NOT EXISTS (${DTC_HELD_BROWSER_PERMITS})))
      ORDER BY requested_at,scan_id LIMIT 1`,
     [settings.staleMs, control.mode === "running"],
   );

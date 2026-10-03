@@ -21,3 +21,15 @@ CRAWLV3-147；整体验收151。用户确认：代码按站点分析、任务编
 09:27Z只读预检：DTC商品队列paused，6个历史Review，ready/running上限1；所有channel当前running品牌扫描为空，held许可为空。旧Review/原件不改写。
 
 待验收：迁移与新接口；分析结果独立入队及重复提交；DTC串行/暂停恢复；品牌结果与商品来源关联；真实多品牌、混合variant和跨站方法复用。每次浏览器业务结束均核对原件、任务页、执行停止和许可释放。
+
+## 1e34fe0 部署及首次直接验证
+
+两台Mini均经Git fresh clone/locked install/build部署1e34fe0。Server二09:31:44Z完成，Server一09:36前完成；迁移050之前保存数据库备份`deploy-20260930/db-backups/v3-backup-EmZgcd`，迁移前后目录哈希校验通过。Server一7/7进程ready；五个原本运行但为空的其他通道已恢复，DTC商品队列保持paused/1/1。
+
+新API返回品牌队列paused/concurrent=1。暂停请求`1a5b642d-81f4-4dd5-9091-758d205cd03b`重复提交回执一致。以旧的已完成真实HMW和Solaray分析单独验证持久化交接：分别创建扫描`fe2efc4a-6db2-4653-97a7-1aa97596f832`、`c9961ba9-7f19-48dd-95c8-749964f438e7`。每项原请求重交、换请求ID再次应用都返回同一扫描ID；来源均matched，没有重复创建。09:43Z两项queued、零running，任务关联接口分别正确返回品牌/目录。这里只验证队列交接，未访问这些网站，也不算新版原生多品牌分析通过。
+
+Nature's Truth新分析`ec8a7bc7-397a-4230-adc9-67404b3c9975`于09:37:03Z开始。浏览器通知权限弹窗把Space6交给用户，模型立即停止；PID51410于09:39:26Z退出。目录与代表商品未验证，未创建品牌任务。宿主报`BROWSER.PAGE_CLEANUP_PENDING`，目标`E03D4CE669BD3BBA54641F4C83AAF37D`仍待清理；09:41许可`permit-01a1011f-ca9e-743c-b68e-5899e301a8a5-0`仍持有且CLEANUP_UNVERIFIED。已请求用户处理提示，未接管/关闭用户空间，未释放无停止证明的许可。原有unknown blank保留。
+
+实测补充修正：第一版新队列只统计/阻止旧品牌扫描的遗留许可，漏了同一DTC资源上的站点分析。本次补为分析和扫描共同阻止新品牌领取，并将终态分析的清理待办计入cleanupPending。另撤回新增的执行前enabled短路：禁用仅在新入队时校验，已运行扫描必须先接续旧工作流以核实停止，不能跳过清理。补丁静态检查/部署与后续验证另记。
+
+证据位于Server一`manual-releases/dtc-native-20261002/multibrand147-*`；Server二分析任务目录末级`95e68725add5a2969dc57305f87697138ccb6f22da6d32536c1d799a7ca76472`，原件及模型结果均保留。147/150记录本次权限边界与待清理状态。
