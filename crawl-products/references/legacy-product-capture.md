@@ -27,6 +27,16 @@ export async function capture({ browser, tab, page, productUrl, outDir, skillRoo
 
 网站规格可直接复用 `lib/platform-variants.mjs` 的 `normalizePlatformVariants` 整理ID/选项等元数据，保留网站实际选项名称；无需重写格式转换。缺失值保持缺失，不补默认SKU、库存或币种。
 
+已观察确认平台接口时，`const source = await browser.harvestHooks.fetchProductSource(productUrl)`
+返回 `{product,text,url,receipt}`；使用 `normalizePlatformVariants(source.product, productUrl)`，
+不要重新手写规格格式。平台的title/vendor可作为已确认商品的身份元数据，不解析正文。
+网页选项的radio.value可能是240ct等文字或option-value ID，不等于真实variant ID。先观察
+选项控件、实际选中项与网站variant ID的对应关系，再执行切换；从实际选中状态读取ID并与
+网站规格清单核对，不允许用选项文字兜底。控件是radio/select/按钮由模型实际观察，不猜类型。
+保存前可调用 `lib/material-variants.mjs` 的 `assertMaterialVariantIds(variants, materials)`
+核对索引。固定启动器会在runHarvest前执行同一检查，并与本次显式请求的原始平台规格对账。
+多规格每项均须有材料索引或明确unresolved原因，不能缺一项仍声明采齐；不要求新增证明报告。
+
 每项 variantMaterials 只记录材料对应关系：
 
 - 可采集：`{variantId, status: "independent" 或 "mixed", pageHtml, productHtml, galleryUrls, reason}`。
@@ -35,6 +45,11 @@ export async function capture({ browser, tab, page, productUrl, outDir, skillRoo
 所有路径相对 outDir。pageHtml 为该状态完整页面；productHtml 为观察确认的商品正文区域原样 outerHTML，可原样连接多个实际区域，包含展开后的正文与FAQ。不按配料/用法等字段拆解、不总结或改写文字。文件只写一次，原件与索引一同归档。同一页面共用材料可复用路径，不重复抓取。规格自己的ID、SKU、价格来自网站，不能用基础默认值填充。
 
 页面切换后材料独立才标 independent；URL变化本身不能证明独立。页面仍混着多个规格则 mixed，保留该状态全部实际图库，由已有混合流程判断归属；此处不挑Facts图片、不OCR、不提取营养信息。按页面实际行为记录，不按文件名、alt、图片顺序猜测。原图并集交旧runHarvest统一保存。
+
+复用脚本不能把所有商品的材料状态无条件写成mixed；本商品的判断理由与观察记录不放进可复用
+脚本常量。图库按已观察的实际媒体项选择完整原图，缩略图和响应尺寸不另算一项；优先读取
+页面实际原图链接或srcset中已出现的最大版本。不通过删除width/height、改文件名或拼URL造
+原图，不丢弃可能改变内容的crop/format等参数。图库来源映射仍由模型观察选择。
 
 ## 复用与执行
 

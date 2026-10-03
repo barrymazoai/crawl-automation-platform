@@ -5,6 +5,8 @@ import { pathToFileURL } from "node:url";
 import { createEgoBrowser } from "./ego-native-browser.mjs";
 import { runHarvest } from "./run-harvest.mjs";
 import { withNativeExtractionBoundary } from "./native-extraction-boundary.mjs";
+import { normalizePlatformVariants } from "./platform-variants.mjs";
+import { assertMaterialVariantIds } from "./material-variants.mjs";
 
 /** Stable host launcher around the original harvest. Only the learned site method varies. */
 export async function runSiteCapture(input, globals) {
@@ -13,6 +15,13 @@ export async function runSiteCapture(input, globals) {
   const page = await task.page(label);
   const browser = createEgoBrowser({ task, page, targetId, listTaskSpaces: globals.listTaskSpaces,
     workDir: cwd, productUrl, captureMode: "product" });
+  let observedVariants;
+  const fetchProductSource = browser.harvestHooks.fetchProductSource;
+  browser.harvestHooks.fetchProductSource = async url => {
+    const source = await fetchProductSource(url);
+    if (source?.product) observedVariants = normalizePlatformVariants(source.product, url);
+    return source;
+  };
   const source = await readFile(methodPath);
   const digest = createHash("sha256").update(source).digest("hex");
   const method = await import(pathToFileURL(methodPath).href);
@@ -27,6 +36,7 @@ export async function runSiteCapture(input, globals) {
   if (Object.keys(captured.record.fields).some(key => !["title", "brand", "currency"].includes(key))) {
     throw new Error("capture_contains_parsed_product_fields");
   }
+  assertMaterialVariantIds(captured.record.variants ?? [], captured.materials, observedVariants);
   if (!source.equals(await readFile(methodPath))) throw new Error("site_method_changed_during_capture");
   // Preserve the exact executed method alongside the old raw output, before any post-capture work.
   await writeFile(join(outDir, "site-method.mjs"), source, { flag: "wx" });

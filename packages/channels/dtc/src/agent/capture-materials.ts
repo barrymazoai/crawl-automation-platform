@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { captureFile, type CaptureFile } from "./archive.js";
 import { CaptureReviewSchema } from "./product-review.js";
+import { assertMaterialVariantIds } from "../../../../../crawl-products/lib/material-variants.mjs";
 
 const MaterialsSchema = z.strictObject({
   selectedVariantId: z.string().nullable(),
@@ -8,16 +9,24 @@ const MaterialsSchema = z.strictObject({
   variants: z.array(z.unknown()).max(200),
 });
 
+interface MaterialRecord {
+  productUrl: string;
+  fields: Record<string, unknown>;
+  gallery: { url: string }[];
+  variants: Array<{ variantId?: string | undefined }>;
+}
+
 /** Read the collector's file index. No model call or product-content extraction. */
 export async function capturedMaterials(input: {
   root: string;
   files: CaptureFile[];
-  record: { productUrl: string; fields: Record<string, unknown>; gallery: { url: string }[] };
+  record: MaterialRecord;
 }) {
   const { record } = input;
   const materials = MaterialsSchema.parse(
     JSON.parse((await captureFile(input.root, "materials.json")).toString()),
   );
+  assertMaterialVariantIds(record.variants, materials);
   const metadata = new Set(["title", "brand", "currency", "images"]);
   if (Object.keys(record.fields).some((name) => !metadata.has(name))) {
     throw new Error("capture_contains_parsed_product_fields");

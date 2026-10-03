@@ -36,3 +36,25 @@ Server一证据：`manual-releases/dtc-native-20261002/multibrand147-nutriessent
 
 没有通用关键词提取器、站点专用分支、自动重试或单元测试。静态检查、Git部署和新Mini实测
 结果另行追加；当前未宣称多品牌正例或整个DTC已验收。
+
+## 修复后实站验收
+
+`1c3e1427c16e344b1226ebb6634b346bd3ac6ada`通过完整pnpm check（22项类型任务），
+main推送后在Server二fresh Git clone、locked install/build，12:39:10.666Z部署ready。
+新分析`c924ad51-85bd-4956-b7a6-c53c85c0fc4d`于12:39:46Z开始，12:43Z结束。
+
+模型先访问实际Brands索引，保存224个去重目录候选，明确超过50上限、未进入代表商品验证。
+这是品牌索引范围，旧179来自首页菜单，不能把差值解释为同范围丢失或新增品牌；两者均是
+候选数而非认证品牌数。新API状态needs-review，具体原因和capture.json引用完整。
+对本分析执行apply(enqueue=true)返回HTTP400/SITE_ANALYSIS.NOT_APPLICABLE，tasks为空，
+品牌队列paused/queued0/running0/cleanupPending0。没有把部分分析应用到业务队列。
+
+23份R2原件/2,698,018字节全部回读大小/SHA-256通过；Codex12:42:37.438Z、
+任务页12:42:37.847Z、round12:42:38.007Z及host CLI停止证明均早于12:43:04.266Z许可释放。
+Server二任务目录末级`bc2011a76dd6049dc277542f69ca2dbfbdc9788dc6988933583422630422fe32`。
+Server一`analysis191-*`保存请求/结果/不可应用证明，R2校验仍沿catalog-<analysisId>-r2-proof
+命名。191交Review；上限内真实多品牌完整拆分正例仍归147，不宣称本项超限测试覆盖该路径。
+
+12:45:18.874Z接续现有Solaray队列首项Magnesium Glycinate，run
+`a1c175bc-b157-4762-bc17-a89cda96ca62`，attempt0→1，1/1开始后立即drain且无强制超时。
+644项继续等待，6个旧Review不变；后续材料/混合变体结果另记183/184。
