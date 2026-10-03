@@ -103,8 +103,7 @@ export class DtcCaptureAgent {
   ) {
     const { cwd, outDir, page, prefix } = at;
     const { settings, ego } = this.deps;
-    await writeFile(join(cwd, "browser-preparation.mjs"), page.preparationModule(), { flag: "wx" });
-    await this.method(request, at);
+    await this.prepareTask(request, at);
     const prompt = capturePrompt({
       ...request,
       cwd,
@@ -116,6 +115,7 @@ export class DtcCaptureAgent {
       taskSpaceId: ego.taskSpaceId,
       label: page.label,
       targetId: page.targetId,
+      timeBudgetMs: settings.codex.timeoutMs,
     });
     const result = ResultSchema.parse(
       await runCodexCapture(
@@ -137,10 +137,13 @@ export class DtcCaptureAgent {
     }
   }
 
-  private async method(
+  private async prepareTask(
     request: AgentCaptureRequest,
     at: { cwd: string; outDir: string; page: EgoAgentPage },
   ) {
+    await writeFile(join(at.cwd, "browser-preparation.mjs"), at.page.preparationModule(), {
+      flag: "wx",
+    });
     if (request.mode !== "product") {
       return;
     }

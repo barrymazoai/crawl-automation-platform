@@ -18,6 +18,7 @@ export function createEgoBrowser({ task, page, targetId = page.targetId, listTas
   const scoped = Object.fromEntries(["evaluate", "click", "press", "events", "fetch"].map(method => [method, (...args) => call(method, ...args)]));
   const tab = {
     id: targetId,
+    captureMode,
     playwright: {
       // Ego rejects explicit undefined; the legacy harvest API uses it for an omitted argument.
       evaluate: (fn, arg) => arg === undefined ? call("evaluate", fn) : call("evaluate", fn, arg),

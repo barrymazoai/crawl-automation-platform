@@ -32,6 +32,7 @@ website-shared 必须提供 sharedScope 网站明确声明的原文和确切来�
 
 export const catalogInstructions = `按旧采集流程先视觉确认站点身份和完整目录族，制定路线与终止契约，再用 discoverCatalog 复用旧 ENUMERATE 阶段及 Shopify 目录对账。普通目录按契约遍历至零增长；符合旧有界规则的 Shopify 单目录可用页面/目录结果/对应接口完整集合相同及空终页证明，不强制重复遍历。证明选择在采前完成。
 本任务已经绑定scope.source中的一个品牌和目录，直接从该入口开始；复用适用的已保存路线/profile，不重新发现全站品牌，不执行crawlTarget/crawlPortfolio整站调度，也不创建其他品牌任务。本站若为多品牌卖场，已配置的该品牌目录属于授权范围，覆盖旧skill的卖场默认排除；仍须核对商品品牌且不得采其他品牌。
+scope.siteKind是宿主实际品牌校验策略。multi-brand策略下每个entry.brand都必须有网站真实身份依据并与来源品牌一致；不能填null、照抄scope.source.brand或仅靠域名。即使视觉上像单品牌官网，动态来源也可能使用这个严格策略。正式遍历前在代表目录原件上验证实际品牌元数据规则，并保存出处；拿不到就明确身份证据不足。single-brand策略才允许卡片未印品牌时brand:null，由已核实的站点身份提供范围。不要遍历结束才发现没有可用品牌规则。
 只发现产品，不进入逐个产品采集和 OCR。商品必须来自实际目录/导航；平台 API 库存不能直接代替目录产品集。
 保存 catalog.json：{pages:[{url,htmlPath,screenshotPath,entries:[{url,title,brand:null或页面品牌}]}],complete:boolean,termination:{proof:"enumeration"或"shopify",exhausted:boolean,reason:string,method:string,evidence:[相对路径],zeroGrowthRounds:number,oracle:{expected:number|null,observed:number,comparable:boolean}}}。
 每页/每个加载阶段保留原始渲染 HTML；每个 seed 留截图，最后耗尽状态留截图。entries 只能列出该页实际出现的产品详情链接。

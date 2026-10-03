@@ -1,6 +1,7 @@
 import type { AgentCaptureRequest } from "./request.js";
 import { pathToFileURL } from "node:url";
 import { legacyCapturePrompt } from "./legacy-prompt.js";
+import { captureExecutionRules } from "./execution-prompt.js";
 import {
   productInstructions,
   catalogInstructions,
@@ -17,6 +18,7 @@ interface PromptInput extends AgentCaptureRequest {
   taskSpaceId: number;
   label: string;
   targetId: string;
+  timeBudgetMs?: number;
 }
 
 /** This boundary is the old V3 capture-only contract, with the browser replaced by Ego's own skill. */
@@ -44,6 +46,7 @@ export function capturePrompt(input: PromptInput): string {
    不 newPage、不接管空间、不操作或关闭其他页。所有图片、HTML、截图保存完后由宿主关闭并验证本页消失。
    本次仅是长期 Worker 批次中的一个采集子任务，不是 Ego skill 所指的整个用户任务完成。禁止调用 task.finish()、task.handOff()、task.release()、page.close()，也不通过 CDP 关闭页面/浏览器或结束 round；不要创建 finish/cleanup 脚本。Ego skill 中成功时 finish 的默认步骤在本宿主中不适用：完成后只返回采集结果，由宿主关闭这一精确任务页、验证消失并结束 round，Space 继续保留给后续任务。遇到用户接管/权限提示仍立即停下，不接管或绕过。
 5. 按 Ego skill 直接观察、点击和截图。Ego 每次 nodejs 调用是新进程，显式重建句柄，不能依赖上一轮 JS 变量。
+   ${captureExecutionRules(input.timeBudgetMs)}
    复用旧机械工具时，在 Ego nodejs 内 import ${input.skillRoot}/lib/ego-native-browser.mjs：
    const browser = createEgoBrowser({task, page, targetId:${JSON.stringify(input.targetId)}, listTaskSpaces, workDir:${JSON.stringify(input.cwd)}, captureMode:${JSON.stringify(input.mode)}, productUrl:null});
    const tab = browser.tab; browserMode="ego-native"。该适配仅复用旧 harvest 方法，不启动服务。
@@ -65,7 +68,7 @@ function mechanicalInstructions(input: PromptInput) {
     return `先读 ${input.skillRoot}/references/native-product-method.md。runHarvest(browser, tab, plan, {outDir:${JSON.stringify(input.outDir)},observedGalleryUrls,hooks:{extract:async()=>({records:[await readObservedProduct(${JSON.stringify(input.outDir)},observedMethod)],needsUpgrade:[],failed:[]})},log:(event,details)=>console.log(JSON.stringify({event,details}))}) 仅收割派发商品。observedMethod 来自本轮观察并绑定已保存原件；没有明确 extract 会停止，不提供通用默认提取或字段回填。`;
   }
   if (input.mode === "catalog") {
-    return `本次只做目录发现：从 ${input.skillRoot}/lib/catalog-discovery.mjs 导入 discoverCatalog，调用 discoverCatalog(tab, seedUrls, {...listingOptions,outDir:${JSON.stringify(input.outDir)},completionProof})。seedUrls/listingOptions来自本轮实际观察，包含listingCoverage、分页方式、已验证的listingProfile；extraRoundsAfterConverge沿用终止契约，默认1。该入口与旧runHarvest共用ENUMERATE阶段，逐页保存HTML/截图和catalog-discovery.json。开采前选择证明：普通路线completionProof="enumeration"，完整覆盖后按契约做实际零增长复核；已确认Shopify、单个/collections/<名称>目录、预计不超过100项且页面可完整展示时，可选completionProof="shopify"并传本轮实际目录容器selector为catalogRoot。Shopify使用旧页面/结果/对应接口集合一致且接口空终页的有界证明（最多两页），成功时不额外重走目录。超过范围走普通路线；已取证出现冲突立即保留并needs_review，不改证明类型掩盖失败。接口只用于对账，不把接口独有商品当目录发现。禁止调用 runHarvest、extractProducts、upgradeProducts 或逐个商品收割。catalog.pages按discovery.pages中各页原件逐页提取标题，不把最终页代替前面页面。complete、zeroGrowthRounds、termination.proof分别使用discovery.complete、discovery.zeroGrowthRounds、discovery.completionProof；禁止手改机械证据或伪造实际零增长复核记录。`;
+    return `本次只做目录发现：从 ${input.skillRoot}/lib/catalog-discovery.mjs 导入 discoverCatalog，调用 discoverCatalog(tab, seedUrls, {...listingOptions,outDir:${JSON.stringify(input.outDir)},completionProof})。seedUrls/listingOptions来自本轮实际观察，包含listingCoverage、分页方式、已验证的listingProfile；extraRoundsAfterConverge沿用终止契约，默认1。原生目录必须传非空productLinkSelectors，来自已观察的实际商品卡片区域；禁止留空后使用默认语义选择器或整页URL扫描。正式遍历前预览匹配的链接与标题/品牌元数据规则，和页面卡片核对，排除导航/推荐；不能等遍历结束才发现猜测的JSON字段或正则没有标题。把该方法保存到profile，下次结构仍适用就直接复用。该入口与旧runHarvest共用ENUMERATE阶段，逐页保存HTML/截图和catalog-progress.jsonl，最终写catalog-discovery.json。开采前选择证明：普通路线completionProof="enumeration"，完整覆盖后按契约做实际零增长复核；已确认Shopify、单个/collections/<名称>目录、预计不超过100项且页面可完整展示时，可选completionProof="shopify"并传本轮实际目录容器selector为catalogRoot。Shopify使用旧页面/结果/对应接口集合一致且接口空终页的有界证明（最多两页），成功时不额外重走目录。超过范围走普通路线；已取证出现冲突立即保留并needs_review，不改证明类型掩盖失败。接口只用于对账，不把接口独有商品当目录发现。禁止调用 runHarvest、extractProducts、upgradeProducts 或逐个商品收割。catalog.pages按discovery.pages中各页原件逐页提取标题，不把最终页代替前面页面。complete、zeroGrowthRounds、termination.proof分别使用discovery.complete、discovery.zeroGrowthRounds、discovery.completionProof；禁止手改机械证据或伪造实际零增长复核记录。`;
   }
   return "本次只做站点分析与代表页验证；禁止调用 runHarvest 或批量商品采集，不执行商品图库完整性收割。";
 }

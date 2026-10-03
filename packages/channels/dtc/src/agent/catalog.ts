@@ -60,7 +60,7 @@ export class DtcAgentBrandScan {
         operationId: `catalog-${request.scanId}`,
         url: request.sourceUrl,
         mode: "catalog",
-        scope: { source, maxPages: 100, maxProducts: 10000 },
+        scope: { source, siteKind: site.kind, maxPages: 100, maxProducts: 10000 },
       },
       signal,
     );
