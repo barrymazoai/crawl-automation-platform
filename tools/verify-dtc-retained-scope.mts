@@ -18,14 +18,17 @@ import { ProductPipelineInputSchema } from "../packages/workflows/src/pipeline-m
 import { CaptureFileSchema, captureFile, captureOutputFiles } from "../packages/channels/dtc/src/agent/archive.js";
 import { readCapturedProduct } from "../packages/channels/dtc/src/agent/product-record.js";
 import { verifyRetainedScopeBoundary } from "./verify-dtc-scope-boundary.mjs";
+import { processDtcRetainedSingle } from "./process-dtc-retained-single.mjs";
 import type { ProductScopeInput } from "../packages/channels/dtc/src/agent/product-scope.js";
 
-const [configPath, casesPath, output] = process.argv.slice(2);
+const [configPath, casesPath, output, action] = process.argv.slice(2);
 if (!configPath || !casesPath || !output) throw new Error("Usage: <worker-config> <cases.json> <new-output-dir>");
+if (action && action !== "--process-single") throw new Error("Unknown explicit action");
 await mkdir(output, { mode: 0o700 }); // Existing output is never retried.
 const write = (name: string, value: unknown) => writeFile(join(output, name), JSON.stringify(value, null, 2), { flag: "wx" });
 const cases: { runId: string; workspace: string; expected: string }[] = JSON.parse(await readFile(casesPath, "utf8"));
 if (cases.length < 1 || cases.length > 3) throw new Error("Acceptance requires 1–3 explicit retained cases");
+if (action && cases.length !== 1) throw new Error("Downstream acceptance processes exactly one retained case");
 const config = WorkerConfigSchema.parse(JSON.parse(await readFile(configPath, "utf8")));
 const log = createLogger({ name: "dtc-scope-acceptance" });
 const database = createDatabase(config.database, log);
@@ -57,6 +60,9 @@ try {
     const payload = history.events?.find(e => e.workflowExecutionStartedEventAttributes)?.workflowExecutionStartedEventAttributes?.input?.payloads?.[0]?.data;
     if (!payload) throw new Error("Original workflow input missing");
     const original = ProductPipelineInputSchema.parse(JSON.parse(Buffer.from(payload).toString()));
+    if (action && history.events?.some(e => e.childWorkflowExecutionStartedEventAttributes)) {
+      throw new Error("Downstream child already existed; refusing a business retry");
+    }
     if (original.channel !== "dtc" || original.operationId !== `product-${sample.runId}`) throw new Error("Original identity mismatch");
     const archiveKey = `v3/dtc-agent/${original.operationId}/archive.json`;
     const archive = await r2.store.read(archiveKey, 1_000_000, signal);
@@ -101,6 +107,10 @@ try {
     const held = await database.query("SELECT permit_id FROM resource_permit WHERE request->>'workflowId'=$1 AND released_at IS NULL", [workflowId]);
     if (held.length) throw new Error("Acceptance left a permit held");
     console.log(JSON.stringify({ stage: "verified", index, workflowId, kind: result.decision.kind, boundary }));
+    if (action === "--process-single") {
+      await processDtcRetainedSingle({ config, database, publication, temporal, original, retained,
+        scope: result, output, index, archiveKey, archiveSha256: sha256(archive) });
+    }
   }
 } finally {
   worker.shutdown();
