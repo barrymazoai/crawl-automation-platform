@@ -3,7 +3,7 @@ import { captureFile, type CaptureFile } from "./archive.js";
 import { CaptureReviewSchema } from "./product-review.js";
 import { assertMaterialVariantIds } from "../../../../../crawl-products/lib/material-variants.mjs";
 
-const MaterialsSchema = z.strictObject({
+const MaterialsSchema = z.object({
   selectedVariantId: z.string().nullable(),
   productHtml: z.string().min(1),
   variants: z.array(z.unknown()).max(200),

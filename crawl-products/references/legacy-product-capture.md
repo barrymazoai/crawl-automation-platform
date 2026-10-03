@@ -30,12 +30,19 @@ export async function capture({ browser, tab, page, productUrl, outDir, skillRoo
 已观察确认平台接口时，`const source = await browser.harvestHooks.fetchProductSource(productUrl)`
 返回 `{product,text,url,receipt}`；使用 `normalizePlatformVariants(source.product, productUrl)`，
 不要重新手写规格格式。平台的title/vendor可作为已确认商品的身份元数据，不解析正文。
+规范化结果的身份字段是`variant.variantId`（字符串），不是原始平台对象的`variant.id`。
+例如`for (const variant of variants) { const variantId = variant.variantId; }`；所有等待条件、
+材料variantId、文件名和恢复初始状态均使用该字段，不能混用两种对象格式。
 网页选项的radio.value可能是240ct等文字或option-value ID，不等于真实variant ID。先观察
 选项控件、实际选中项与网站variant ID的对应关系，再执行切换；从实际选中状态读取ID并与
 网站规格清单核对，不允许用选项文字兜底。控件是radio/select/按钮由模型实际观察，不猜类型。
 保存前可调用 `lib/material-variants.mjs` 的 `assertMaterialVariantIds(variants, materials)`
 核对索引。固定启动器会在runHarvest前执行同一检查，并与本次显式请求的原始平台规格对账。
 多规格每项均须有材料索引或明确unresolved原因，不能缺一项仍声明采齐；不要求新增证明报告。
+新方法首次运行前，先用同一来源/选择规则预览网站规格ID、当前选中ID和对应控件，确认没有
+undefined或错对象字段，再开始保存与收割；不新增逐商品证明文件。存在真实规格URL时，
+可沿旧流程直接`page.goto(variant.url)`，再核对选中状态并保存，不强制改成点击radio。
+已经验证的同站方法直接复用，只有真正失效的步骤才局部重新观察。
 
 每项 variantMaterials 只记录材料对应关系：
 
@@ -50,6 +57,9 @@ export async function capture({ browser, tab, page, productUrl, outDir, skillRoo
 脚本常量。图库按已观察的实际媒体项选择完整原图，缩略图和响应尺寸不另算一项；优先读取
 页面实际原图链接或srcset中已出现的最大版本。不通过删除width/height、改文件名或拼URL造
 原图，不丢弃可能改变内容的crop/format等参数。图库来源映射仍由模型观察选择。
+每个规格“各存一份HTML”或“选中ID正确”都不等于independent：还要观察资料是否实际随规格
+分开。完整图库继续包含多个规格、或资料归属仍不明确时使用mixed，让后续已有归属流程处理。
+不要仅因为保存动作独立就写independent，也不要在脚本里将全部商品无条件写mixed。
 
 ## 复用与执行
 

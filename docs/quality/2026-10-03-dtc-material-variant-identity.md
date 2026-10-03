@@ -38,3 +38,31 @@ URL，不把响应缩略尺寸各算一项；共享方法不得硬编码所有�
 
 不新增或运行单元测试。后续在Mini用本次真实错误材料与既有单规格材料直接验证，再做新的
 有界采集验收；不覆盖旧原件或自动重跑原队列项。当前未宣称192或新版混合全链路通过。
+
+## 部署与真实原件校验
+
+`269d195fa356ae8903996d7d27e9a8562dab6b7f`完整pnpm check通过（22类型任务），main
+推送后在Server二fresh Git clone/locked install/build，12:58:59.849Z就绪。没有单元测试。
+12:59:48Z在Mini直接读两组原件：上述Solaray两真实ID为39660429836348/39660429803580，
+材料选中240ct被material_selected_variant_unknown拒绝；HMW6旧原件
+`ce451185-d317-48d1-99c7-f34510842f45`的合法单规格54759816167790通过。
+原件未改，文件SHA和结果保存在Server二`manual-releases/materials192-retained-proof.json`。
+
+13:00:20Z通过runs.submit启动新的独立Solaray验收观察
+`2e2abe46-38ae-47d0-8180-4f212d8a2d32`。原取消队列项仍Review，批量队列paused，
+644项未开始。新采集及下游真实结果待记录，不能用上述原件校验替代浏览器/混合流程验收。
+
+## 后续实测：规范化对象字段用错
+
+`2e2abe46-38ae-47d0-8180-4f212d8a2d32`于13:03:58Z结束采集，业务Review原因
+variant_state_timeout，无下游子流程。方法调用了旧normalizePlatformVariants，但后续仍读
+原始对象的variant.id（undefined），没有使用返回的variant.variantId，导致10秒等待永不满足。
+只保存初始两份HTML，尚未到达材料对账/runHarvest；不能称新检查已在这次浏览器运行通过。
+16份原件/2,096,215字节全量R2回读通过；4种停止证明早于13:04:16.908Z许可释放。
+
+对照旧成功e3415944任务的实际脚本：它直接导航到真实variant URL并核对选中状态。
+因此补齐工具返回字段的明确示例，以及允许沿旧方式直接打开variant.url，不强制改成radio
+点击；新方法第一次保存前预览同一规则取得的实际ID，避免到完整脚本执行时才发现undefined。
+另明确独立保存HTML/ID正确不证明资料已隔离，不能据此标independent。材料索引允许保留
+额外元数据（如initialPage），固定转换只使用既定字段；不因无害的附加路径拒绝整份采集。
+没有增加站点专用分支或业务解析。后续补丁和新验收结果另记，192仍In Progress。
