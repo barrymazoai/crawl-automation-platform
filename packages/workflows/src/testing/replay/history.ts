@@ -19,6 +19,7 @@ interface Recording {
   bundle: ReplayBundle;
   queue: string;
   workflow: string;
+  workflowId?: string;
   input: unknown;
   activities: NonNullable<WorkerOptions["activities"]>;
   afterStart?: (handle: Handle) => Promise<void>;
@@ -34,7 +35,7 @@ export async function recordHistory(recording: Recording) {
     activities: recording.activities,
   });
   return worker.runUntil(async () => {
-    const workflowId = randomUUID();
+    const workflowId = recording.workflowId ?? randomUUID();
     const handle = await recording.environment.client.workflow.start(recording.workflow, {
       taskQueue: recording.queue,
       workflowId,

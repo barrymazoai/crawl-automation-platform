@@ -4,6 +4,7 @@ import { Worker } from "@temporalio/worker";
 import { beforeAll, afterAll, expect, it, vi } from "vitest";
 import {
   ChannelPlanInputSchema,
+  ResourceRequestSchema,
   type DtcVariantHandoff,
   type EnrichmentRequest,
 } from "@crawl-automation/v3-contracts";
@@ -21,7 +22,7 @@ afterAll(async () => {
   await environment?.teardown();
 });
 
-it.each(["expanded", "partial", "before-patch"])(
+it.each(["expanded", "partial", "before-patch", "before-id-patch"])(
   "replays DTC variant children: %s",
   async (scenario) => {
     const queue = `dtc-variants-${randomUUID()}`;
@@ -43,7 +44,10 @@ it.each(["expanded", "partial", "before-patch"])(
     });
     const variants: DtcVariantHandoff[] = ["one", "two"].map((variantId) => ({
       status: "ready",
-      operationId: `capture-${variantId}`,
+      operationId:
+        scenario === "before-id-patch"
+          ? `capture-${variantId}`
+          : `dtc-variant-${(variantId === "one" ? "1" : "2").repeat(64)}`,
       evidence: ["observed.html"],
       variant: {
         listingId: sourcePlan.owner.listingId,
@@ -99,15 +103,19 @@ it.each(["expanded", "partial", "before-patch"])(
     const recording = withoutPatches(bundle, [
       "browser-resource-routing-v1",
       ...(scenario === "before-patch" ? ["dtc-variant-handoff-v1" as const] : []),
+      ...(scenario === "before-id-patch" ? ["dtc-variant-workflow-id-v1" as const] : []),
     ]);
     const { history, result, workflowId } = await recordHistory({
       environment,
       bundle: recording,
       queue,
       workflow: "ProductPipelineWorkflow",
+      workflowId: `product-run-${randomUUID()}`,
       input,
       activities: {
         ...fixture.activities,
+        reserveResources: async (raw: unknown) =>
+          fixture.gate.activities.reserveResources(ResourceRequestSchema.parse(raw)),
         reviewProduct: async (request: unknown) => ({ status: "review", request }),
         captureBrowserProduct,
         findKnownFormula: async () => ({ operationId: "known-formula" }),
@@ -142,7 +150,11 @@ it.each(["expanded", "partial", "before-patch"])(
       );
       expect(
         enrichCollectedProduct.mock.calls.map(([request]) => request.captureOperationId),
-      ).toEqual(scenario === "partial" ? ["capture-two"] : ["capture-one", "capture-two"]);
+      ).toEqual(
+        variants
+          .filter((variant) => variant.status === "ready")
+          .map((variant) => variant.operationId),
+      );
     }
     await Worker.runReplayHistory({ workflowBundle: bundle }, history, workflowId);
   },

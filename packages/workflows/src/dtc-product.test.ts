@@ -6,6 +6,7 @@ const env = vi.hoisted(() => ({
   execute: vi.fn(),
   patched: vi.fn((_marker: string) => true),
   held: false,
+  sequence: 0,
 }));
 
 vi.mock("@temporalio/workflow", () => ({
@@ -15,6 +16,7 @@ vi.mock("@temporalio/workflow", () => ({
   startChild: env.start,
   executeChild: env.execute,
   workflowInfo: () => ({ workflowId: "dtc-run" }),
+  uuid4: () => `00000000-0000-4000-8000-${String(++env.sequence).padStart(12, "0")}`,
   isCancellation: (error: unknown) => error === "cancelled",
   CancellationScope: { nonCancellable: (run: () => unknown) => run() },
   ParentClosePolicy: { REQUEST_CANCEL: "REQUEST_CANCEL" },
@@ -97,6 +99,7 @@ async function setup() {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  env.sequence = 0;
   env.execute.mockReset();
   // Capture-routing histories before enrichment keep their original child/result sequence.
   env.patched.mockImplementation((marker: string) => marker !== "product-enrichment-v1");
@@ -146,14 +149,24 @@ it("captures once, releases the browser, and processes every website variant wit
   expect(test.browser.captureBrowserProduct).toHaveBeenCalledOnce();
   expect(test.pipeline.prepareChannelProduct).not.toHaveBeenCalled();
   expect(env.execute.mock.calls.map(([name, options]) => [name, options.workflowId])).toEqual([
-    ["DtcVariantWorkflow", "dtc-run-variant-11"],
-    ["DtcVariantWorkflow", "dtc-run-variant-22"],
+    ["DtcVariantWorkflow", "dtc-variant-00000000-0000-4000-8000-000000000001"],
+    ["DtcVariantWorkflow", "dtc-variant-00000000-0000-4000-8000-000000000002"],
   ]);
   expect(env.execute.mock.calls[0]?.[1]).toMatchObject({
     retry: { maximumAttempts: 1 },
     cancellationType: "WAIT",
     args: [{ input: { operationId: "variant-11", url: test.variants[0]?.variant.url } }],
   });
+});
+
+it("keeps recorded variant workflow IDs when the bounded-ID marker is absent", async () => {
+  const test = await variantSetup();
+  env.patched.mockImplementation((marker) => marker !== "dtc-variant-workflow-id-v1");
+  await ProductPipelineWorkflow(test.input);
+  expect(env.execute.mock.calls.map(([, options]) => options.workflowId)).toEqual([
+    "dtc-run-variant-11",
+    "dtc-run-variant-22",
+  ]);
 });
 
 it.each(["missing-evidence", "child-failed", "enrichment-pending", "review-write-failed"])(

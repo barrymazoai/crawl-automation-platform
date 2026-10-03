@@ -7,6 +7,8 @@ import {
   proxyActivities,
   ParentClosePolicy,
   ChildWorkflowCancellationType,
+  patched,
+  uuid4,
 } from "@temporalio/workflow";
 import {
   ProductPipelineInputSchema,
@@ -59,8 +61,13 @@ export async function collectDtcVariants(
 }
 
 function variantChild(input: ProductPipelineInput, member: DtcVariantHandoff) {
+  // Keep room for Label/enrichment suffixes within the resource ledger's 120-character IDs.
+  // Temporal's replay-safe UUID also isolates separate parent executions of the same operation.
+  const workflowId = patched("dtc-variant-workflow-id-v1")
+    ? `dtc-variant-${uuid4()}`
+    : `${workflowInfo().workflowId}-${member.operationId}`;
   return executeChild("DtcVariantWorkflow", {
-    workflowId: `${workflowInfo().workflowId}-${member.operationId}`,
+    workflowId,
     taskQueue: input.queues.activities,
     args: [{ input, member }],
     retry: { maximumAttempts: 1 },
