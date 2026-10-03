@@ -4,6 +4,7 @@ import { join, resolve, relative, isAbsolute } from "node:path";
 import { createHash } from "node:crypto";
 import { readObservedProduct, readObservedField } from "./observed-product.mjs";
 import { verifyObservedGallery } from "./observed-gallery.mjs";
+import { verifyObservedDetails } from "./observed-details.mjs";
 
 /** Copy the model's complete checked contexts; never reconstruct a shorter handoff. */
 export async function readPreflightVariantContexts(root) {
@@ -101,6 +102,15 @@ export async function readObservedVariant(root, base, context, method) {
     }
   } else {
     verifyObservedGallery(base, context);
+  }
+  if (context.detailCoveragePath) {
+    const path = resolve(root, context.detailCoveragePath), local = relative(resolve(root), path);
+    if (!local || local.startsWith("..") || isAbsolute(local) || await realpath(path) !== path) {
+      throw new Error("variant_detail_proof_path");
+    }
+    await verifyObservedDetails(root, { ...observed,
+      gallery: (base.gallery ?? []).filter(image => context.galleryUrls.includes(image.url)),
+    }, JSON.parse(await readFile(path, "utf8")));
   }
   return observed;
 }

@@ -143,6 +143,8 @@ function stringField(record: HarvestRecord, key: string): string | null {
 }
 
 function details(record: HarvestRecord): string | null {
+  const method = record["fieldEvidence"] as
+    { fields?: Record<string, { format?: string }> } | undefined;
   const values = Object.entries(record.fields).filter(
     ([key, value]) =>
       typeof value === "string" &&
@@ -154,7 +156,7 @@ function details(record: HarvestRecord): string | null {
     values
       .map(
         ([key, value]) =>
-          `<section><h2>${escape(key)}</h2><div>${escape(String(value))}</div></section>`,
+          `<section><h2>${escape(key)}</h2><div>${method?.fields?.[key]?.format === "html" ? String(value) : escape(String(value))}</div></section>`,
       )
       .join("\n") || null
   );

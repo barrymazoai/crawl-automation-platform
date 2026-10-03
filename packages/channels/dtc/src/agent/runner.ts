@@ -14,6 +14,7 @@ import { dtcAgentErrors } from "./errors.js";
 import { capturePrompt } from "./prompt.js";
 import { CaptureReviewAuthoringSchema } from "./product-review.js";
 import { VariantContextSchema } from "./variant-review.js";
+import { DetailCoverageSchema } from "./detail-review.js";
 import type { AgentCaptureRequest } from "./request.js";
 
 const ResultSchema = z.strictObject({
@@ -29,10 +30,19 @@ export interface AgentCaptureDependencies {
   environment: NodeJS.ProcessEnv;
 }
 
+interface AgentCaptureOutput {
+  root: string;
+  prefix: string;
+  files: CaptureFile[];
+  evidenceFiles: CaptureFile[];
+  manifestKey: string;
+  requireDetailCoverage?: boolean;
+}
+
 export class DtcCaptureAgent {
   constructor(private readonly deps: AgentCaptureDependencies) {}
 
-  async capture(request: AgentCaptureRequest, signal: AbortSignal) {
+  async capture(request: AgentCaptureRequest, signal: AbortSignal): Promise<AgentCaptureOutput> {
     const { ego, publication } = this.deps;
     const { cwd, outDir, prefix } = await this.prepare(request);
     let page: EgoAgentPage | undefined;
@@ -51,7 +61,7 @@ export class DtcCaptureAgent {
       "application/json",
       signal,
     );
-    return { root: outDir, prefix, ...retained, manifestKey };
+    return { root: outDir, prefix, ...retained, manifestKey, requireDetailCoverage: true };
   }
 
   private async prepare(request: AgentCaptureRequest) {
@@ -74,6 +84,11 @@ export class DtcCaptureAgent {
       await writeFile(
         join(cwd, "variant-context.schema.json"),
         JSON.stringify(z.toJSONSchema(VariantContextSchema)),
+        { flag: "wx" },
+      );
+      await writeFile(
+        join(cwd, "detail-coverage.schema.json"),
+        JSON.stringify(z.toJSONSchema(DetailCoverageSchema)),
         { flag: "wx" },
       );
     }

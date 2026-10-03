@@ -10,6 +10,7 @@ const observed = z.strictObject({
   ...proof,
   status: z.literal("observed"),
   methodPath: z.string().min(1),
+  detailCoveragePath: z.string().min(1).optional(),
   galleryUrls: z.array(z.url()).min(1).max(100),
   galleryReview: z
     .array(
@@ -49,6 +50,7 @@ export const VariantContextSchema = z.union([
     status: z.literal("mixed"),
     basis: z.literal("variant-state"),
     methodPath: z.string().min(1),
+    detailCoveragePath: z.string().min(1).optional(),
     selectedState,
     galleryUrls: z.array(z.url()).min(1).max(100),
   }),

@@ -4,6 +4,7 @@ import { captureFile, type CaptureFile } from "./archive.js";
 import { verifyMethod, type HarvestRecord, type CaptureReview } from "./product-record.js";
 import { VariantContextSchema, type ObservedVariantContext } from "./variant-review.js";
 import { sha256 } from "@crawl-automation/platform";
+import { verifyDetailReview } from "./detail-review.js";
 
 export interface VariantRecordInput {
   root: string;
@@ -40,18 +41,29 @@ export async function readVariantRecord(input: VariantRecordInput, variantId: st
     gallery: input.record.gallery.filter((image) => context.galleryUrls.includes(image.url)),
   };
   await verifyMethod(input, record);
-  const review: CaptureReview = {
-    ...input.review,
-    selectedVariantId: variantId,
+  const review = variantReview(input.review, context);
+  await verifyDetailReview({
+    ...input,
+    record,
+    review,
+    required: Boolean(input.review.detailCoveragePath),
+  });
+  return { record, review, context };
+}
+
+function variantReview(base: CaptureReview, context: ObservedVariantContext): CaptureReview {
+  return {
+    ...base,
+    detailCoveragePath: context.detailCoveragePath,
+    selectedVariantId: context.variantId,
     galleryUrls: context.galleryUrls,
     evidence: context.evidence,
     imageAssignments: context.galleryUrls.map((url) => ({
       url,
-      variantId: context.status === "mixed" ? null : variantId,
+      variantId: context.status === "mixed" ? null : context.variantId,
       basis: "product-gallery",
     })),
   };
-  return { record, review, context };
 }
 
 function readContext(input: VariantRecordInput, variantId: string) {

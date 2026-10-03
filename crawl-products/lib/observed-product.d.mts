@@ -12,3 +12,6 @@ export function readObservedProduct(root: string, method: unknown): Promise<{
   fieldEvidence: { sources: Array<{ path: string; sha256: string }> };
 }>;
 export function readObservedField(root: string, method: unknown, rule: unknown): Promise<unknown>;
+export function inspectObservedField(root: string, method: unknown, rule: unknown): Promise<{
+  value: unknown; collapsed: boolean;
+}>;

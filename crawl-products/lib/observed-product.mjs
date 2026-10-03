@@ -22,6 +22,21 @@ export async function readObservedField(root, method, rule) {
   return readField(rule, await readSources(root, method));
 }
 
+/** Inspect only the model-selected node; never discover or expand page sections. */
+export async function inspectObservedField(root, method, rule) {
+  const sources = await readSources(root, method);
+  const value = readField(rule, sources);
+  let collapsed = false;
+  if (sources[rule.source].kind === "dom") {
+    let node = sources[rule.source].value.querySelector(rule.selector);
+    while (node) {
+      if (node.localName === "details" && !node.hasAttribute("open")) collapsed = true;
+      node = node.parentElement;
+    }
+  }
+  return { value, collapsed };
+}
+
 async function readSources(root, method) {
   if (method?.codec !== "observed-product/1" || !Array.isArray(method.sources)
     || !method.sources.length || !method.fields || typeof method.fields !== "object") fail("method_required");
@@ -73,12 +88,13 @@ function readField(rule, sources) {
     try { matches = source.value.querySelectorAll(rule.selector); } catch { fail("invalid_selector"); }
     if (matches.length !== 1) fail("selector_not_unique");
     const node = matches[0];
-    value = rule.attribute ? node.getAttribute(rule.attribute) : node.innerHTML;
-    if (!rule.attribute) value = htmlToText(value).trim();
+    value = rule.attribute ? node.getAttribute(rule.attribute)
+      : rule.format === "html" ? node.outerHTML : htmlToText(node.innerHTML).trim();
   }
   if (value === undefined || value === null || value === "") fail("field_absent");
   if (rule.format === "html-text") value = htmlToText(String(value)).trim();
-  else if (rule.format && rule.format !== "raw") fail("field_format");
+  else if (rule.format && !["raw", "html"].includes(rule.format)) fail("field_format");
+  if (rule.format === "html" && (rule.attribute || typeof value !== "string")) fail("html_field_required");
   return value;
 }
 

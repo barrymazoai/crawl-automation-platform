@@ -9,6 +9,7 @@ export const CaptureReviewSchema = z.object({
   galleryComplete: z.literal(true),
   variantsComplete: z.literal(true),
   detailComplete: z.literal(true),
+  detailCoveragePath: z.string().min(1).optional(),
   method: z.string().min(1),
   surface: z.literal("local_file"),
   verifier: z.literal("codex"),
@@ -29,6 +30,7 @@ export type CaptureReview = z.infer<typeof CaptureReviewSchema>;
 
 // Authoring must expose the full contract; ingestion still isolates bad siblings independently.
 export const CaptureReviewAuthoringSchema = CaptureReviewSchema.extend({
+  detailCoveragePath: z.string().min(1),
   variantContexts: z.array(VariantContextSchema).max(200).optional(),
 });
 

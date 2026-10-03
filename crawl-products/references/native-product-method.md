@@ -74,12 +74,52 @@ const observedMethod = {
 
 - `source` 是 sources 下标。DOM selector 使用完整 CSS 语法，必须匹配且仅匹配一个节点。默认返回该节点 HTML 的旧 `htmlToText` 转换结果；`attribute` 可读取明确的属性，如 `content`。不自动查其他 selector。
 - JSON `pointer` 使用 JSON Pointer；默认保存原值，明确 HTML 字段可指定 `format:"html-text"`。不存在的路径报错。品牌不能从任务名称补齐。
+- 需要保留表格或结构正文时显式指定 `format:"html"`：DOM 保存所选节点的完整 outerHTML（包括 table、行列和脚注），JSON 保存原 HTML 字符串；下游保留其结构。默认及旧 `raw` 的 DOM 文本语义保持兼容，不能用 `raw` 代替新 HTML 格式。
 - Shopify `platform` 仅映射已验证商品的全部网站 variants，复用旧规格规范化。不会把平台图片数组替代实际轮播，也不会按关键词解析 body_html。
 - 非 Shopify 不填 platform。用 `variantMappings:[{variantId:{source,pointer},sku:{source,pointer},title:{source,pointer},options:{source,pointer},price:{source,pointer},available:{source,pointer},url:{source,pointer}}]` 指定每个真实规格字段；也支持 DOM selector/attribute。只填来源里存在的字段，不编造 ID、选项或库存。
 - 基础商品有多个规格时，SKU 和价格只留在各自 variants。派发明确 variant URL 时，fields 中的 SKU/价格必须等于对应规格的值，DOM 来源 URL 必须保留同一 variant。
 - 缺失的可选字段不写规则，在预览中说明 `not_present` 及检查过的区块；没有检查过写 `not_observed`，不能称缺失已确认。不同原件的币种、地区、订阅方案、商品身份或库存互相冲突时，保留冲突并返回 needs_review。
 
 ## 预览与收割执行同一个方法
+
+### 详情完整性预检
+
+完整读取宿主生成的 `detail-coverage.schema.json`。页面走到底，实际打开商品折叠内容，检查懒加载后，按实际观察列出每个区块。商品描述、质量/认证、用法、警告及 FAQ 的适用正文都要进入相应 `method.fields`；其他商品、导航等明确排除并说明依据。包含多种商品的公共文案不能整块当成本商品资料。宿主不按标题关键词代你选择。
+
+`detailCoverage` 格式（下面每项只是格式示例，位置和结论必须来自实际观察）：
+
+```js
+const detailCoverage = {
+  version: "observed-details/1", reachedEnd: true,
+  pageEvidence: ["walk-to-bottom.png"],
+  sections: [{
+    name: "本次观察到的区块名称", status: "captured",
+    field: "description", location: observedMethod.fields.description,
+    imageUrls: [], reason: "确属本商品且完整正文进入该字段", evidence: ["description-open.png"],
+  } /* 列出所有实际观察的商品区块；排除项 status:excluded,field:null */],
+  checks: [
+    {kind:"description",status:"captured",fields:["description"],imageUrls:[],reason:"实际依据",evidence:["description-open.png"]},
+    // ingredients、directions、warnings、facts 各一项，不能省略。
+    // 仅图片：status:"image-only",fields:[],imageUrls:[已保存原图URL]。
+    // 真实检查后没有：status:"not-present",fields:[],imageUrls:[],reason及检查证据。
+  ],
+};
+```
+
+每个 section 都有确切 `location`（规则格式与字段相同）、reason、evidence、field（没有文字则 null）和 imageUrls。`captured` 的 location 必须等于实际交接字段规则。`image-only` 区块用已观察的唯一图像节点及其属性定位，并引用保存的原图；不能只把 Facts 标题当作正文。闭合的原生 details 不能伪称展开；自定义折叠也必须实际操作并留证。遮挡、未检查或无法确认的项记 `uninspected`，返回 needs_review，不能填 not-present。
+
+在收割前调用同一机械校验并保存完整证据，避免最终手抄遗漏：
+
+```js
+import { saveObservedDetails } from "./lib/observed-details.mjs"; // 使用 skillRoot 绝对路径
+const { detailCoveragePath } = await saveObservedDetails(outDir,
+  {...basePreview, gallery: observedGalleryUrls.map(url => ({url}))}, detailCoverage);
+// 最终 capture-review.json 使用这个原样返回的 detailCoveragePath。
+```
+
+工具只校验模型的选择与原件、展开状态、实际交接字段及图片之间的一致性，不发现字段、不 OCR、不操作浏览器。所有截图/来源放在 outDir 内。`detailComplete:true` 不能代替这份逐项证明；宿主对新原生采集强制验证。旧原件继续保持原样可审查，但不能声称已经通过新的完整性验收。
+
+每个 observed/mixed 规格使用自己的方法返回值与适用图库执行同样的 `saveObservedDetails`，将返回路径放进 `context.detailCoveragePath`，再调用 `saveObservedVariant`。最终上下文仍原样读取预检，不手抄。确有网站共用依据时可以复用相同原件/位置，但必须证明该规格方法实际包含正文；不能把基础商品的字段证明套在缺少这些字段的规格方法上。缺少证明或不完整的规格单独 Review，不丢其他完整规格。
 
 先用 `validateHarvestPlan(plan)` 验证计划，在获取 HTML/JSON/图片之前修正 schema 错误；该函数从 `lib/harvest-plan.mjs` 导入，返回 `{valid,errors,plan}`。单品 `single_page_confirmed` 只属于 perSeed.exhaustionSignal，不是 oracle 类型；无目录总数断言时使用 `oracles:[]`。采前修正计划/方法时读取已保存原件，不再次调用抓取函数、不覆盖或清空旧文件。字段与校验结论的修订另存版本。
 

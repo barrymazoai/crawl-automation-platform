@@ -3,6 +3,7 @@ import { parseCaptureReview, type CaptureReview } from "./product-review.js";
 import { captureFile, type CaptureFile } from "./archive.js";
 import { dtcAgentErrors } from "./errors.js";
 import { verifyObservedProduct } from "../../../../../crawl-products/lib/observed-product.mjs";
+import { verifyDetailReview } from "./detail-review.js";
 
 const VariantSchema = z
   .object({
@@ -34,6 +35,7 @@ export async function readCapturedProduct(input: {
   evidenceFiles?: CaptureFile[];
   url: string;
   requireObservedMethod?: boolean;
+  requireDetailCoverage?: boolean;
 }) {
   const { record, review } = await readRecordAndReview(input.root, input.url);
   verifyGallery(record, review, {
@@ -44,6 +46,13 @@ export async function readCapturedProduct(input: {
   if (input.requireObservedMethod) {
     await verifyMethod(input, record);
   }
+  await verifyDetailReview({
+    root: input.root,
+    record,
+    review,
+    files: input.files,
+    required: input.requireDetailCoverage,
+  });
   const htmlPath =
     typeof record.pageHtml === "string" ? record.pageHtml : record.pageHtml.localPath;
   const html = await captureFile(input.root, htmlPath);
