@@ -3,12 +3,12 @@ import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import {
-  connectTemporal, createR2Objects, LocalObjectStore, RetainedPublication, sha256,
+  connectTemporal, createR2Objects, LocalObjectStore, RetainedPublication, sha256, verifyBytes,
 } from "../packages/platform/src/index.js";
 import { ProductSourcePlans } from "../packages/channels/core/src/index.js";
 import { WorkerConfigSchema } from "../apps/worker/src/config.js";
 import { ProductPipelineInputSchema } from "../packages/workflows/src/pipeline-model.js";
-import { DtcVariantHandoffsSchema } from "../packages/v3-contracts/src/index.js";
+import { DtcVariantHandoffsSchema, ChannelPlanInputSchema } from "../packages/v3-contracts/src/index.js";
 import { captureFile, captureOutputFiles, CaptureFileSchema } from "../packages/channels/dtc/src/agent/archive.js";
 import { readCapturedProduct } from "../packages/channels/dtc/src/agent/product-record.js";
 import { CaptureReviewAuthoringSchema } from "../packages/channels/dtc/src/agent/product-review.js";
@@ -16,6 +16,7 @@ import { capturedProductProjection } from "../packages/channels/dtc/src/agent/pr
 import { DtcVariantHandoffs } from "../packages/channels/dtc/src/agent/variant-handoffs.js";
 import { createDtcAdapter } from "../packages/channels/dtc/src/adapter.js";
 import { dtcSitePolicy } from "../packages/channels/dtc/src/site-policy.js";
+import { DtcBrandEvidenceSchema } from "../packages/channels/dtc/src/brand-evidence.js";
 import { readPreflightVariantContexts } from "../crawl-products/lib/observed-variant.mjs";
 
 const sourceRunId = "d7ad53b4-a202-4c32-a82d-f61ba99d2f90";
@@ -40,6 +41,25 @@ try {
   if (original.channel !== "dtc" || original.url !== url || original.operationId !== `product-${sourceRunId}`) {
     throw new Error("Acceptance source identity mismatch");
   }
+  const captureEvent = history.events?.find(e => e.activityTaskScheduledEventAttributes?.activityType?.name === "captureBrowserProduct");
+  if (!captureEvent) throw new Error("Original browser activity missing");
+  const captureResult = history.events?.find(e => e.activityTaskCompletedEventAttributes &&
+    String(e.activityTaskCompletedEventAttributes.scheduledEventId) === String(captureEvent.eventId))
+    ?.activityTaskCompletedEventAttributes?.result?.payloads?.[0]?.data;
+  if (!captureResult) throw new Error("Original browser result missing");
+  const originalPlan = ChannelPlanInputSchema.parse(JSON.parse(Buffer.from(captureResult).toString()).planned?.sourcePlan);
+  const projectionBytes = await r2.store.read(originalPlan.source.objectKey, originalPlan.source.byteSize, signal);
+  if (!projectionBytes) throw new Error("Original projection missing");
+  verifyBytes(originalPlan.source, projectionBytes, 2_000_000);
+  const originalProjection = JSON.parse(Buffer.from(projectionBytes).toString());
+  const brandEvidence = DtcBrandEvidenceSchema.parse(originalProjection.brandEvidence);
+  const brandSource = brandEvidence.source;
+  if (brandEvidence.status !== "matched" || !brandSource || brandSource.siteKey !== "solaray.com" ||
+      brandSource.catalogUrl !== original.sourceUrl) throw new Error("Original brand source mismatch");
+  const site = dtcSitePolicy({ siteKey: brandSource.siteKey, platform: "shopify", kind: "multi-brand",
+    brands: [{ brand: brandSource.brand, catalogUrl: brandSource.catalogUrl }] });
+  const adapter = createDtcAdapter([site], original.sourceUrl);
+  adapter.planning!.read(originalProjection, original.url, originalPlan.owner);
   const archiveKey = `v3/dtc-agent/${original.operationId}/archive.json`;
   const archive = await r2.store.read(archiveKey, 1_000_000, signal);
   if (!archive) throw new Error("Original archive missing");
@@ -72,14 +92,14 @@ try {
   const cache = await LocalObjectStore.open(join(output, "publications"));
   // Preparation is offline except for reading originals; derived publications stay local without --execute.
   const publication = new RetainedPublication(cache, action === "--execute" ? r2.store : cache);
-  const site = dtcSitePolicy({ siteKey: "solaray.com", platform: "shopify", catalogUrl: original.sourceUrl ?? null });
   const parsed = capturedProductProjection({ ...retained, review, site, url, sourceUrl: original.sourceUrl });
-  const planning = { ...createDtcAdapter([site]).planning!, parserVersion: "dtc-agent/1" as const };
+  const planning = { ...adapter.planning!, parserVersion: "dtc-agent/1" as const };
   if (!config.plan) throw new Error("Plan configuration missing");
   const sourcePlans = new ProductSourcePlans(publication, { ...config.plan, egressId: "direct/1" });
   const provenance = {
     purpose: "CRAWLV3-178 retained-original acceptance; no new website capture",
     sourceRunId, archiveKey, archiveSha256: sha256(archive), files: files.length, bytesVerified,
+    originalProjection: originalPlan.source, brandEvidence,
     runId, derivedAt: new Date().toISOString(),
     derivation: "Use the complete original preflight contexts; keep the lossy original final review unchanged",
     review,
@@ -91,6 +111,13 @@ try {
     root, ...retainedFiles, ...retained, review, request: input, site, parsed, planning,
   }, signal);
   if (variants.some(member => member.status !== "mixed")) throw new Error(`Unexpected handoff: ${JSON.stringify(variants)}`);
+  // Exercise the same source-bound adapter reader before any OCR/model or workflow execution.
+  for (const member of variants) {
+    if (member.status !== "mixed") throw new Error("Expected mixed member");
+    const bytes = await cache.read(member.planned.sourcePlan.source.objectKey, 2_000_000, signal);
+    if (!bytes) throw new Error("Derived projection missing");
+    planning.read(JSON.parse(Buffer.from(bytes).toString()), member.variant.url, member.planned.sourcePlan.owner);
+  }
   const prepared = { input, sourcePlan, variants, provenance };
   await write("prepared.json", prepared);
   console.log(JSON.stringify({ stage: "prepared", runId, originalFiles: files.length, bytesVerified, variants: variants.map(m => ({ id: m.variant.variantId, status: m.status })) }));
