@@ -40,7 +40,7 @@ function labelAnswer(parameters: FixtureParameters, hash: string) {
 }
 
 function imageAnswer(parameters: FixtureParameters, scenario: string, thread?: FixtureParameters) {
-  if (scenario === "vision-multiple") {
+  if (scenario === "multiple") {
     if (parameters.input.length !== 3) {
       throw Error("INVALID_MULTIPLE_IMAGE_TURN");
     }
