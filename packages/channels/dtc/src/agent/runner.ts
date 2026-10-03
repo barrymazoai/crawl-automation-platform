@@ -14,7 +14,7 @@ import { dtcAgentErrors } from "./errors.js";
 import { capturePrompt } from "./prompt.js";
 import { CaptureReviewAuthoringSchema } from "./product-review.js";
 import { VariantContextSchema } from "./variant-review.js";
-import { DetailCoverageSchema } from "./detail-review.js";
+import { DetailCoverageAuthoringSchema } from "./detail-review.js";
 import type { AgentCaptureRequest } from "./request.js";
 
 const ResultSchema = z.strictObject({
@@ -88,7 +88,7 @@ export class DtcCaptureAgent {
       );
       await writeFile(
         join(cwd, "detail-coverage.schema.json"),
-        JSON.stringify(z.toJSONSchema(DetailCoverageSchema)),
+        JSON.stringify(z.toJSONSchema(DetailCoverageAuthoringSchema)),
         { flag: "wx" },
       );
     }

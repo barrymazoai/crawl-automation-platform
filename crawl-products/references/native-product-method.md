@@ -90,7 +90,7 @@ const observedMethod = {
 
 ```js
 const detailCoverage = {
-  version: "observed-details/1", reachedEnd: true,
+  version: "observed-details/1", checkScope: "website-text", reachedEnd: true,
   pageEvidence: ["walk-to-bottom.png"],
   sections: [{
     name: "本次观察到的区块名称", status: "captured",
@@ -107,6 +107,10 @@ const detailCoverage = {
 ```
 
 每个 section 都有确切 `location`（规则格式与字段相同）、reason、evidence、field（没有文字则 null）和 imageUrls。`captured` 的 location 必须等于实际交接字段规则。`image-only` 区块用已观察的唯一图像节点及其属性定位，并引用保存的原图；不能只把 Facts 标题当作正文。闭合的原生 details 不能伪称展开；自定义折叠也必须实际操作并留证。遮挡、未检查或无法确认的项记 `uninspected`，返回 needs_review，不能填 not-present。
+
+`checkScope:"website-text"` 明确五项 checks 审查文字/HTML字段。`facts:not-present` 仅表示没有网页文字版 Facts；不表示图库没有 Facts 图片。图库完整保存、逐张原图查看及后续 Facts 处理独立进行。收割后看到已保存的 Facts 图片，不与这项文字检查矛盾；未查看原图时更不能在 reason 中声称没有背标。图片若已在预检明确观察，可用 image-only 指向原图；也可完整保留尚未分类的图库供旧 Facts 流程，不把 OCR 或成分抄录提前到采集阶段。
+
+缺货只是库存状态。真实权限/挑战之外，应实际尝试缺货选项或网站已提供的规格 URL，再记录状态能否查看。没有尝试不能写“网站无法切换”，不能以 option-value ID 或常量补造 variant ID。确实未能观察的规格独立 Review，完整的网站规格清单仍保留。
 
 在收割前调用同一机械校验并保存完整证据，避免最终手抄遗漏：
 

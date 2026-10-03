@@ -17,7 +17,7 @@ async function fixture(open = true) {
     fields:{ title:{source:0,selector:"h1"},brand:{source:0,selector:"#brand"},description:{source:0,selector:"#quality",format:"html"} } };
   const record = {...await readObservedProduct(root,method),gallery:[{url:"https://test.example/facts.png"}]};
   const base = {reason:"Inspected original and applicable location",evidence:["screen.png"],imageUrls:[]};
-  const review = { version:"observed-details/1",reachedEnd:true,pageEvidence:["screen.png"],sections:[
+  const review = { version:"observed-details/1",checkScope:"website-text",reachedEnd:true,pageEvidence:["screen.png"],sections:[
     {...base,name:"Quality",status:"captured",field:"description",location:method.fields.description},
     {...base,name:"Facts image",status:"image-only",field:null,location:{source:0,selector:"#facts",attribute:"src"},imageUrls:["https://test.example/facts.png"]},
     {...base,name:"Other product",status:"excluded",field:null,location:{source:0,selector:"#other"}},
@@ -42,6 +42,17 @@ it("preserves the full selected HTML table and checked handoff without changing 
 it("rejects a still-collapsed ancestor even though its text exists in saved HTML", async () => {
   const {root,record,review} = await fixture(false);
   await expect(verifyObservedDetails(root,record,review)).rejects.toThrow("section_not_expanded");
+});
+
+it("does not confuse absent website-text Facts with Facts images retained for the old pipeline", async () => {
+  const {root,record,review} = await fixture();
+  const facts = review.checks.find(check => check.kind === "facts");
+  facts.status = "not-present";
+  facts.imageUrls = [];
+  facts.reason = "No website text or HTML Facts table; gallery is retained independently.";
+  await expect(saveObservedDetails(root,record,review)).resolves.toMatchObject({passed:true});
+  delete review.checkScope;
+  await expect(saveObservedDetails(root,record,review)).rejects.toThrow("check_scope_required");
 });
 
 it.each(["missing-field","wrong-location","uninspected","missing-check","unretained-image","missing-evidence","changed-record","changed-source"])("blocks %s from a claimed complete handoff", async failure => {

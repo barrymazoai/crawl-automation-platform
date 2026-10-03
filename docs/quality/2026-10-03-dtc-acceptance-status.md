@@ -12,6 +12,10 @@ Second item exposed 182: native model mistakenly finished the shared Ego Space a
 
 At `06:42:42Z`, corrected retained processing passed: variant `53076953891182`, 19 formula rows / 6 other ingredients, 2 Tablets / 30 servings, enrichment registered, four permits released after provider stop proofs. The original native Review remains unchanged. A separate raw HTML audit reopened 148: Quality/FAQ were present but not handed off, with closed details despite a complete claim. The model-directed section-proof/HTML-structure fix is in local verification before the next native item; this retained success does not establish complete page coverage.
 
+At `06:50:37Z`, detail fix `17a3b91` deployed ready on Server 二 after 83 Mini checks and a retained negative check. Travel Pack first queue attempt `33eabc93-12b2-44ba-becd-21515aaffdf3` started `06:51:42Z`; intake draining with three queued / two historical Reviews / one running. Tickets 148/182 await this fresh native result.
+
+Third item settled Review before Facts: website-text absence was conflated with a retained Facts image, and the sold-out option was not actually attempted. All 57 originals passed R2 verification; exact page/process/round cleanup and permit release passed without manual takeover. Current queue paused / three queued / three Reviews. 148's follow-up explicitly separates website-text checks from retained gallery processing (84 targeted checks passed); 155's unavailable-option observation remains open. No old Review was retried or overwritten.
+
 | Scope | Verified evidence | Still required |
 | --- | --- | --- |
 | Native discovery | HMW scan `dd93e125-5c07-4a01-82d2-0172623ebb5e`: 6 products, catalog identity and empty terminal page reconciled (170). | Other screenshot brands' full native catalog discovery; multi-brand/cross-domain cases. |

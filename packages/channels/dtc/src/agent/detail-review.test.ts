@@ -25,6 +25,7 @@ it("verifies archived proof and rejects an evidence file absent from the archive
   const common = { reason: "Inspected retained source", evidence: ["product.json"], imageUrls: [] };
   const proof = {
     version: "observed-details/1",
+    checkScope: "website-text",
     reachedEnd: true,
     pageEvidence: ["variant-1.html"],
     sections: [
@@ -84,6 +85,7 @@ it("continues the variant with its own verified details while isolating a siblin
   };
   const proof = {
     version: "observed-details/1",
+    checkScope: "website-text",
     reachedEnd: true,
     pageEvidence: ["variant-1.html"],
     sections: ["description", "ingredients"].map((field) => ({

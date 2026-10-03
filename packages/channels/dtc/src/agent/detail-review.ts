@@ -20,6 +20,7 @@ const location = z.object({
 
 export const DetailCoverageSchema = z.object({
   version: z.literal("observed-details/1"),
+  checkScope: z.literal("website-text").optional(),
   reachedEnd: z.literal(true),
   pageEvidence: strings.min(1),
   sections: z
@@ -43,6 +44,10 @@ export const DetailCoverageSchema = z.object({
     .length(5),
 });
 
+export const DetailCoverageAuthoringSchema = DetailCoverageSchema.extend({
+  checkScope: z.literal("website-text"),
+});
+
 /** Historical captures stay readable; every newly produced native capture requires this proof. */
 export async function verifyDetailReview(input: {
   root: string;
@@ -62,6 +67,9 @@ export async function verifyDetailReview(input: {
     const proof = DetailCoverageSchema.parse(
       JSON.parse((await retainedFile(input, path)).toString()),
     );
+    if (input.required && proof.checkScope !== "website-text") {
+      throw new Error("detail_check_scope_missing");
+    }
     const verified = await verifyObservedDetails(input.root, input.record, proof);
     for (const entry of verified.evidence) {
       await retainedFile(input, entry);

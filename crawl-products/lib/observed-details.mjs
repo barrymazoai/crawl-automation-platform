@@ -11,6 +11,7 @@ const kinds = ["description", "ingredients", "directions", "warnings", "facts"];
 
 /** Verify the model's section inventory and handoff, not discover or classify sections. */
 export async function verifyObservedDetails(root, record, review) {
+  if (review?.checkScope !== undefined && review.checkScope !== "website-text") fail("check_scope");
   if (review?.version !== "observed-details/1" || !list(review.pageEvidence)
       || !review.pageEvidence.length || review.reachedEnd !== true
       || !Array.isArray(review.sections) || !review.sections.length
@@ -70,6 +71,7 @@ async function localFile(root, path) {
 
 /** Save the checked proof intact; final capture review references this path without copying fields. */
 export async function saveObservedDetails(root, record, review) {
+  if (review?.checkScope !== "website-text") fail("check_scope_required");
   await verifyObservedDetails(root, record, review);
   const bytes = JSON.stringify(review, null, 2);
   const digest = createHash("sha256").update(bytes).digest("hex");
