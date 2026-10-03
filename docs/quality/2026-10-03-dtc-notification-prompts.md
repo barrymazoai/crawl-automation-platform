@@ -21,8 +21,33 @@ released=true；精确 p6 消失，原失败及未知来源空白页保留。回
 不假设导入模块能读到调用方局部变量。产品固定 launcher 自动调用；站点分析、目录
 及临时观察脚本使用同一模块。旧采集方法保持原样，不添加产品规则或解析。
 
-策略版本为 `deny-each-ego-call/2`。静态检查与生成模块语法检查通过；修正后的
-跨调用实测与新的站点分析尚待部署验证。下文保留第一版补丁及失败过程。
+策略版本为 `deny-each-ego-call/2`。修正提交 `56cd201465338cce230d28b761ac53d80fe89e5a`
+已推送 main，Server 二经 Git fresh clone、locked install/build 于 10:32:54Z 切换
+browser-worker ready。静态检查与生成模块/注入脚本语法检查通过，没有单元测试。
+
+10:34:07Z 与 10:34:40Z 两次独立 CLI 使用实际生成的准备模块，分别导航后标记均存在；
+第二次 Notification.permission、Promise、旧 callback、permissions.query 均 denied，
+Push permissionState=denied、subscribe=NotAllowedError，ownership 持续 agent。
+精确 p8 / target D59EAEA541A47F4DC30D46E41A1DF063 已关闭并验证消失。
+回执位于 Server 二 `manual-releases/notification185-56cd201/` 的
+`fixed-one.json`、`fixed-two.json`、`fixed-cleanup.json`、`browser-preparation.jsonl`。
+仅用于验证的 data URL 不代表实站采集通过。
+
+新的 Nature’s Truth 站点分析 `800b3ac9-3c9e-480a-ba03-607f4e4e610e` 已 completed，
+确认一个品牌及 `https://naturestruth.com/collections/all-products`。首页、目录及代表商品
+均保存 HTML/截图；实际查看的目录/商品截图符合身份。24 是当前观察数，
+countExact/wholeCatalog=false；页面显示 389 不是已采齐 389。
+
+真实工作流 run `01a10154-f85a-7401-b8e0-74e76d1fe60a`：Codex 于 10:41:40Z 停止，
+p9 / CBB2790767AF570D3328C1D434E38D71 于 10:41:41Z 验证消失，round 同秒结束。
+四项停止证明齐全后，许可于 10:42:11.134Z 释放。全程不用再次接管；未知来源空白页保留。
+R2 归档 25 份文件共 4,616,065 字节，全部回读及大小/SHA-256 校验通过。Server 一
+`notification185-per-call-r2-proof.json` 与 `notification185-per-call-stop-proof.json`
+记录完整证据。185 进入 Review；这不代表完整目录或全部 DTC 链路验收通过。
+
+启动前品牌队列 paused/queued2/running0/cleanupPending0，held 许可为空。分析完成后
+独立入队与串行验收继续归 147；三次应用返回同一扫描，详见品牌任务记录。
+下文保留第一版补丁及失败过程。
 
 ## 已确认的原因
 

@@ -2,6 +2,25 @@
 
 CRAWLV3-147；整体验收151。用户确认：代码按站点分析、任务编排、品牌目录、单品材料采集分开，品牌任务排队慢慢运行。
 
+## 10:46Z 后续验收
+
+通知问题已由 56cd201 修正并通过 Nature’s Truth 实站分析，见[185记录](2026-10-03-dtc-notification-prompts.md)。
+分析 `800b3ac9-3c9e-480a-ba03-607f4e4e610e` completed，25份R2原件大小/hash通过、四项停止
+证明后释放许可。确认一个真实品牌，不能称为多品牌正例。
+
+应用新分析创建来源 `166bb8fb-9b63-4191-a2d1-762a1d3c18f7`、扫描
+`4f1d38ba-b53e-4200-ad65-2a75413e7fee`。同 requestId 重交、不同 requestId 再次应用均返回
+相同 scanId；与已有 HMW/Solaray 共三个独立排队任务，关联 API 正确。
+
+预检产品队列 paused/readyLimit1/runningLimit1，仅6个历史Review，无持有许可或清理待办。
+已手动启动品牌队列 running/concurrent1，验收跨站目录串行执行；产品队列继续暂停。
+历史Review不重试，不把两个队列的暂停状态混为一谈。实际结果待后续回填。
+Server一证据 `multibrand147-nature-apply.json`、`multibrand147-serial-start.json`。
+
+10:47:37Z 首次检查：HMW 于10:46:03.916Z开始，另两项仍queued，running=1。
+随即手动paused，返回queued2/running1，当前任务未被取消，后项暂停领取；等待当前项结束
+后再验证恢复。回执 `multibrand147-pause-running.json`。
+
 ## 实现
 
 - 保留独立analysis/catalog/product业务入口，复用Ego/Codex执行、原件归档与精确清理。目录任务直接使用已核实品牌入口，不从首页重新发现全站品牌；原单品材料与混合variant处理边界不变。
