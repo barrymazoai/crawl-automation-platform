@@ -1,8 +1,4 @@
-import { isDeepStrictEqual } from "node:util";
-import {
-  readObservedProduct,
-  readObservedField,
-} from "../../../../../crawl-products/lib/observed-product.mjs";
+import { readObservedVariant } from "../../../../../crawl-products/lib/observed-variant.mjs";
 import { captureFile, type CaptureFile } from "./archive.js";
 import { verifyMethod, type HarvestRecord, type CaptureReview } from "./product-record.js";
 import { VariantContextSchema, type ObservedVariantContext } from "./variant-review.js";
@@ -29,9 +25,8 @@ export async function readVariantRecord(input: VariantRecordInput, variantId: st
     throw new Error("variant_method_not_archived");
   }
   const sourceMethod = JSON.parse(method.toString());
-  const observed = await readObservedProduct(input.root, sourceMethod);
-  await verifySharedScope(input.root, sourceMethod, context);
-  verifyIdentity(input, { context, observed, variantId });
+  const observed = await readObservedVariant(input.root, input.record, context, sourceMethod);
+  verifyGallery(input, context);
   const record: HarvestRecord = {
     ...input.record,
     ...observed,
@@ -55,15 +50,6 @@ export async function readVariantRecord(input: VariantRecordInput, variantId: st
   return { record, review, context };
 }
 
-async function verifySharedScope(root: string, method: unknown, context: ObservedVariantContext) {
-  if (context.basis === "website-shared") {
-    const statement = await readObservedField(root, method, context.sharedScope.rule);
-    if (typeof statement !== "string" || statement !== context.sharedScope.text) {
-      throw new Error("variant_shared_scope_statement_mismatch");
-    }
-  }
-}
-
 function readContext(input: VariantRecordInput, variantId: string) {
   const candidates = (input.review.variantContexts ?? []).filter(
     (raw) => raw && typeof raw === "object" && "variantId" in raw && raw.variantId === variantId,
@@ -77,30 +63,6 @@ function readContext(input: VariantRecordInput, variantId: string) {
     throw new Error("variant_evidence_not_archived");
   }
   return context;
-}
-
-function verifyIdentity(
-  input: VariantRecordInput,
-  parts: {
-    context: ObservedVariantContext;
-    observed: Awaited<ReturnType<typeof readObservedProduct>>;
-    variantId: string;
-  },
-) {
-  const { context, observed, variantId } = parts;
-  const source = new URL(observed.sourceUrl),
-    base = new URL(input.record.productUrl);
-  const selected = source.searchParams.get("variant") ?? source.searchParams.get("variation_id");
-  if (
-    source.origin !== base.origin ||
-    source.pathname !== base.pathname ||
-    (context.basis === "variant-state" && selected !== variantId) ||
-    (selected !== null && selected !== variantId) ||
-    !isDeepStrictEqual(observed.variants, input.record.variants)
-  ) {
-    throw new Error("variant_source_identity_or_inventory_changed");
-  }
-  verifyGallery(input, context);
 }
 
 function verifyGallery(input: VariantRecordInput, context: ObservedVariantContext) {

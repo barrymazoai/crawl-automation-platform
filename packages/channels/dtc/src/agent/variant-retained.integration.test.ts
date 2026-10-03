@@ -6,6 +6,7 @@ import { ProductSourcePlans } from "@crawl-automation/channels-core";
 import { DtcAgentProductCapture } from "./product-capture.js";
 import { retainCaptureDirectory, captureOutputFiles } from "./archive.js";
 import { dtcSitePolicy } from "../site-policy.js";
+import { readObservedVariant } from "../../../../../crawl-products/lib/observed-variant.mjs";
 
 // Mini-only, read-only originals. All derived publications stay in memory; no provider or DB work.
 it.skipIf(!process.env["CRAWL_RETAINED_DTC_LEGACY_CAPTURE"])(
@@ -85,6 +86,43 @@ it.skipIf(!process.env["CRAWL_RETAINED_DTC_UNPROVEN_SHARED_CAPTURE"])(
       ),
     ).toHaveLength(0);
     expect(result.variantPages?.map((entry) => entry.page.commerce?.sku)).toEqual(["012", "022"]);
+  },
+);
+
+it.skipIf(!process.env["CRAWL_RETAINED_DTC_WRONG_STATE_CAPTURE"])(
+  "rejects the real base-method state claim and previews the actual selected original without rewriting it",
+  async () => {
+    const workspace = process.env["CRAWL_RETAINED_DTC_WRONG_STATE_CAPTURE"] ?? "";
+    const { result } = await retained(workspace);
+    if (result.status !== "captured") {
+      throw new Error("Expected archived product");
+    }
+    expect(result.variants?.map((member) => member.status)).toEqual(["review", "review"]);
+    for (const member of result.variants ?? []) {
+      expect(member.status === "review" && member.reason).toContain(
+        "variant_method_requires_selected_url",
+      );
+    }
+    const root = join(workspace, "capture");
+    const [base] = JSON.parse(await readFile(join(root, "evidence/records.json"), "utf8"));
+    const method = JSON.parse(await readFile(join(root, "observed-product/1/method.json"), "utf8"));
+    const selectedUrl = method.sources.find(
+      (source: { kind: string }) => source.kind === "dom",
+    ).url;
+    // Derived in-memory method only: checks structural eligibility, not semantic label scope or a new success.
+    const preview = await readObservedVariant(
+      root,
+      base,
+      {
+        status: "observed",
+        basis: "variant-state",
+        variantId: "54311689552238",
+      },
+      { ...method, productUrl: selectedUrl },
+    );
+    expect(preview.sourceUrl).toBe(selectedUrl);
+    expect(preview.variants).toEqual(base.variants);
+    expect(method.productUrl).not.toContain("variant=");
   },
 );
 
