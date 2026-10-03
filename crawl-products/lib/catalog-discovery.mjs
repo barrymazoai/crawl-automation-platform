@@ -21,6 +21,14 @@ export async function discoverCatalog(tab, seedUrls, options = {}) {
   }
   const requiredZeroGrowthRounds = options.extraRoundsAfterConverge ?? 1;
   if (!Number.isInteger(requiredZeroGrowthRounds) || requiredZeroGrowthRounds < 1 || requiredZeroGrowthRounds > 100) throw new Error("catalog_fixpoint_invalid");
+  if (tab.captureMode === "catalog") {
+    const coverage = options.listingCoverage;
+    if (!Array.isArray(coverage) || seedUrls.some(url => !coverage.some(item =>
+      item.url === url && item.verifiedVisually === true && ["none", "link", "click", "scroll"].includes(item.paginationMode)
+    ))) throw new Error("catalog_pagination_mapping_required_before_capture");
+    if (typeof options.profileDir !== "string" || !options.profileDir.trim()) throw new Error("catalog_profile_dir_required");
+    await tab.beginCatalog(options.outDir);
+  }
   await mkdir(options.outDir, { recursive: true });
   const method = tab.captureMode === "catalog" ? await retainCatalogProfile(seedUrls, options) : null;
   const progressPath = join(options.outDir, "catalog-progress.jsonl");

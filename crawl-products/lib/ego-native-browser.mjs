@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
-import { readFile, unlink } from "node:fs/promises";
-import { join } from "node:path";
+import { readFile, unlink, writeFile } from "node:fs/promises";
+import { join, resolve } from "node:path";
 import { egoLocator } from "./ego-native-locator.mjs";
 import { retainNativeOriginal } from "./ego-native-originals.mjs";
 
@@ -19,6 +19,15 @@ export function createEgoBrowser({ task, page, targetId = page.targetId, listTas
   const tab = {
     id: targetId,
     captureMode,
+    async beginCatalog(outDir) {
+      if (resolve(outDir) !== resolve(workDir, "capture")) throw new Error("catalog_output_root_mismatch");
+      await writeFile(join(workDir, "catalog-attempt.json"), JSON.stringify({
+        targetId, outDir, startedAt: new Date().toISOString(),
+      }), { flag: "wx" }).catch(error => {
+        if (error.code === "EEXIST") throw new Error("catalog_attempt_already_started");
+        throw error;
+      });
+    },
     playwright: {
       // Ego rejects explicit undefined; the legacy harvest API uses it for an omitted argument.
       evaluate: (fn, arg) => arg === undefined ? call("evaluate", fn) : call("evaluate", fn, arg),

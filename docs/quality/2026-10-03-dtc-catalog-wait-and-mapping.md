@@ -36,3 +36,19 @@ vendor命中替全目录背书。旧任务与原件保留，不通过批量覆�
 catalog-method-profile.json和SHA-256回执；宿主校验副本、回执和发现结果的一致性。
 参数未提供profileDir即明确失败。规则继续来自模型观察；没有增加默认关键词、产品字段提取器
 或Solaray专用分支。静态检查通过，部署/直接验收待回填。
+
+## bd443dd 的直接验证与190
+
+bd443dd已Git部署Server二。用Solaray真实任务保存的卡片规则执行新持久化函数，公共profile与
+任务副本逐字节一致，SHA-256 `8b3ce9f37fc486fa64431f615f8dd26496dccf98c60e44357c7eb92b9a68ef9c`。
+这是已有真实规则的本地重放，不是重新抓网页；旧profile备份及新回执位于
+`manual-releases/catalog188-retained-solaray/`。旧采集目录未改写。
+
+新HMW扫描 `5299292c-8850-45e5-ad86-65df4852216f` 11:43:00Z开始，11:49:19Z Review，
+代码PIPELINE.ACTIVITY_UNRESOLVED。首次目录已保存1页，返回seed_pagination_mapping_missing；
+模型改脚本到capture/catalog-run-2重跑并返回complete，但宿主仍读取原根目录。没有接纳该次
+输出，也没有重试旧商品。11:50Z held为空、cleanupPending0。不能将第二次子目录成功称为验收通过。
+
+此行为单独记190：开采前验证逐seed分页声明；固定宿主capture根目录；开始后在任务根写单次
+执行标记，换子目录/新CLI不能重跑。采前参数缺失可以修正，已开始的失败保留并终止。补丁
+静态检查通过，无单元测试；新实站结果待记录。
