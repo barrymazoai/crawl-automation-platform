@@ -1,0 +1,267 @@
+{
+  "observedAt": "2026-10-03T02:55:36.073Z",
+  "server": "Server 二",
+  "space": 6,
+  "directory": "/Users/server2/apps/crawler-dtc/evidence/variant-research-20261003",
+  "kind": "New bounded browser observation, separate from production HTTP archives; WF store 10523, not production 10259",
+  "manifest": [
+    {
+      "name": "costco-chocolate.html",
+      "bytes": 3135539,
+      "sha256": "a76f12b725a1eed5edc92923a12d21e565929a321643ab9211454e6bc409e3a3"
+    },
+    {
+      "name": "costco-chocolate.txt",
+      "bytes": 25678,
+      "sha256": "6e5a943a9de474990ac070d49369a87abbdefd97c4cd8ff528a50b0195f8c625"
+    },
+    {
+      "name": "costco-search.html",
+      "bytes": 4109898,
+      "sha256": "6f798bf1e91b8d5092227b5615196379e6be1133d086aed61525c2aef70dbcf5"
+    },
+    {
+      "name": "costco-search.txt",
+      "bytes": 115392,
+      "sha256": "bbe38476b2ac4e0152bd01de7e0621c33863437a610bc808b76a1ecb9c6bc5c8"
+    },
+    {
+      "name": "costco-vanilla.html",
+      "bytes": 3102260,
+      "sha256": "8d5fdeb30e6a018a4b80ae4724eb83b706d3a0be6cd5d61790afbbf73029df08"
+    },
+    {
+      "name": "costco-vanilla.txt",
+      "bytes": 23768,
+      "sha256": "4de1ad3b25114792040d9b2e2ed88c4e338b647d935acaeb7e16a1373ff9bfca"
+    },
+    {
+      "name": "wholefoods-30.html",
+      "bytes": 119544,
+      "sha256": "bc339c1826ec07594d7a003472daa0e57c44947577f9b28c92746c9448514f1d"
+    },
+    {
+      "name": "wholefoods-30.txt",
+      "bytes": 14493,
+      "sha256": "044aa46502bf4b53519517c415091e86e18785779f3d01edc74e8c9476d890d5"
+    },
+    {
+      "name": "wholefoods-90-fresh.html",
+      "bytes": 128457,
+      "sha256": "850ed8f8d875d014c11bfdbf463801f81527e645fcb00145c2af07de79996a1c"
+    },
+    {
+      "name": "wholefoods-90-fresh.json",
+      "bytes": 781,
+      "sha256": "cf4d45e1a09c184124177da156ccfaf2273698fa5ad4c63be100130f913b1fa9"
+    },
+    {
+      "name": "wholefoods-90-fresh.txt",
+      "bytes": 14959,
+      "sha256": "853b13cbb43781f6c7d42dbeb666af24a16f1ba7a07cbca29b222285f5761eab"
+    },
+    {
+      "name": "wholefoods-90.html",
+      "bytes": 132884,
+      "sha256": "133e977dd02cb58ed732cc2e962bc58cb51900ee3dc065ede7f164356f8d2cdc"
+    },
+    {
+      "name": "wholefoods-90.txt",
+      "bytes": 14956,
+      "sha256": "b485afee6c9a7bf9a85b95a9205ad4940ee5b0d548bf2956944ffc8af76022c7"
+    },
+    {
+      "name": "wholefoods-amazing-data.json",
+      "bytes": 2560,
+      "sha256": "0a7e23fc88e2106b1c69141542ce42bca17901f66d461466e22107c3459088e4"
+    },
+    {
+      "name": "wholefoods-amazing-herbs.html",
+      "bytes": 125385,
+      "sha256": "a3fd29142fe255651f4cb743a639528ae825dd84ac60bd9479af2a82fe76da97"
+    },
+    {
+      "name": "wholefoods-amazing-herbs.txt",
+      "bytes": 14487,
+      "sha256": "1cb1c3a8664f29203d395b4f87903959d6ae1e26691ec093852975bff74c5dfd"
+    }
+  ],
+  "costco": [
+    {
+      "file": "costco-chocolate.html",
+      "id": "100428750",
+      "selected": "1243880",
+      "children": [
+        {
+          "id": "1243880",
+          "title": "Optimum Nutrition Gold Standard 100% Whey Protein Powder, 5.64 lbs, Chocolate",
+          "upc": "748927059113"
+        }
+      ],
+      "canonical": "https://www.costco.com/p/-/optimum-nutrition-gold-standard-100-whey-protein-powder-extreme-milk-chocolate-564-lbs/100428750"
+    },
+    {
+      "file": "costco-vanilla.html",
+      "id": "4000177608",
+      "selected": "1243864",
+      "children": [
+        {
+          "id": "1243864",
+          "title": "Optimum Nutrition Gold Standard 100% Whey Protein Powder, Vanilla Ice Cream, 5.47 lbs",
+          "upc": "748927065404"
+        }
+      ],
+      "canonical": "https://www.costco.com/p/-/optimum-nutrition-gold-standard-100-whey-protein-powder-vanilla-ice-cream-547-lbs/4000177608"
+    }
+  ],
+  "wholefoods": [
+    {
+      "file": "wholefoods-30.html",
+      "selected": "B00014ECYU",
+      "name": "MegaFood Blood Builder Iron Supplement, Energy Support, Vegan, 30 Tablets | Clinically Shown to Increase Iron Levels Without Side Effects, with B12, Folic Acid & Vitamin C for Absorption, 30 Servings",
+      "storeId": 10523,
+      "images": [
+        "https://m.media-amazon.com/images/I/518ITxUQDbL.jpg",
+        "https://m.media-amazon.com/images/I/619V1QKDMCL.jpg",
+        "https://m.media-amazon.com/images/I/611IZiOZ1GL.jpg"
+      ],
+      "variations": [
+        {
+          "axis": "size_name",
+          "nodes": [
+            {
+              "asin": "B00014ECYU",
+              "closestAsin": null,
+              "value": "30 Count (Pack of 1)",
+              "availability": "IN_STOCK"
+            },
+            {
+              "asin": "B000F4ZRCC",
+              "closestAsin": null,
+              "value": "90 Count (Pack of 1)",
+              "availability": "IN_STOCK"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "file": "wholefoods-90.html",
+      "selected": "B00014ECYU",
+      "name": "MegaFood Blood Builder Iron Supplement, Energy Support, Vegan, 30 Tablets | Clinically Shown to Increase Iron Levels Without Side Effects, with B12, Folic Acid & Vitamin C for Absorption, 30 Servings",
+      "storeId": 10523,
+      "images": [
+        "https://m.media-amazon.com/images/I/518ITxUQDbL.jpg",
+        "https://m.media-amazon.com/images/I/619V1QKDMCL.jpg",
+        "https://m.media-amazon.com/images/I/611IZiOZ1GL.jpg"
+      ],
+      "variations": [
+        {
+          "axis": "size_name",
+          "nodes": [
+            {
+              "asin": "B00014ECYU",
+              "closestAsin": null,
+              "value": "30 Count (Pack of 1)",
+              "availability": "IN_STOCK"
+            },
+            {
+              "asin": "B000F4ZRCC",
+              "closestAsin": null,
+              "value": "90 Count (Pack of 1)",
+              "availability": "IN_STOCK"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "file": "wholefoods-90-fresh.html",
+      "selected": "B000F4ZRCC",
+      "name": "MegaFood Blood Builder Iron Supplement, Energy Support, Vegan, 90 Tablets | Clinically Shown to Increase Iron Levels Without Side Effects, with B12, Folic Acid & Vitamin C for Absorption, 90 Servings",
+      "storeId": 10523,
+      "images": [
+        "https://m.media-amazon.com/images/I/71t5LcfZjDL.jpg",
+        "https://m.media-amazon.com/images/I/81Ivzw+6BnL.jpg",
+        "https://m.media-amazon.com/images/I/81tZ0wz+jPL.jpg",
+        "https://m.media-amazon.com/images/I/81TWMq2xf2L.jpg",
+        "https://m.media-amazon.com/images/I/71eOASdAvUL.jpg",
+        "https://m.media-amazon.com/images/I/710DRm-fTrL.jpg",
+        "https://m.media-amazon.com/images/I/81z3D6PGrOL.jpg",
+        "https://m.media-amazon.com/images/I/81PG0Nye10L.jpg"
+      ],
+      "variations": [
+        {
+          "axis": "size_name",
+          "nodes": [
+            {
+              "asin": "B00014ECYU",
+              "closestAsin": null,
+              "value": "30 Count (Pack of 1)",
+              "availability": "IN_STOCK"
+            },
+            {
+              "asin": "B000F4ZRCC",
+              "closestAsin": null,
+              "value": "90 Count (Pack of 1)",
+              "availability": "IN_STOCK"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "file": "wholefoods-amazing-herbs.html",
+      "selected": "B0001CNL08",
+      "name": "Amazing Herbs Premium Black Seed Oil Liquid - 4 Fl Oz Glass Bottle | Cold Pressed Nigella Sativa, Aids in Digestive Health & Brain Function for Adults, Gluten Free, Non GMO",
+      "storeId": 10523,
+      "images": [
+        "https://m.media-amazon.com/images/I/71XAjzIqnlL.jpg",
+        "https://m.media-amazon.com/images/I/813SPNRbNVL.jpg",
+        "https://m.media-amazon.com/images/I/818o5K-HdzL.jpg",
+        "https://m.media-amazon.com/images/I/81tDfknLAUL.jpg",
+        "https://m.media-amazon.com/images/I/81AJRJbHpZL.jpg",
+        "https://m.media-amazon.com/images/I/81+dpPAVSkL.jpg",
+        "https://m.media-amazon.com/images/I/81aiOZ41n9L.jpg"
+      ],
+      "variations": [
+        {
+          "axis": "size_name",
+          "nodes": [
+            {
+              "asin": "B0001CNL08",
+              "closestAsin": null,
+              "value": "4 Fl Oz (Pack of 1)",
+              "availability": "IN_STOCK"
+            },
+            {
+              "asin": "B0009EYIQ4",
+              "closestAsin": null,
+              "value": "8 Fl Oz (Pack of 1)",
+              "availability": "IN_STOCK"
+            }
+          ]
+        },
+        {
+          "axis": "flavor_name",
+          "nodes": [
+            {
+              "asin": "B0001CNL08",
+              "closestAsin": null,
+              "value": "Premium",
+              "availability": "IN_STOCK"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "clickObservation": {
+    "from": "B00014ECYU",
+    "to": "B000F4ZRCC",
+    "url": "https://www.wholefoodsmarket.com/grocery/product/90-count-pack-of-1-b000f4zrcc",
+    "visibleTitleCount": 90,
+    "embeddedAsinAfterClick": "B00014ECYU",
+    "embeddedAsinAfterFreshNavigation": "B000F4ZRCC"
+  }
+}
