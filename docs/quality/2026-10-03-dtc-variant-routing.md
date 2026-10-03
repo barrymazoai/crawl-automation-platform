@@ -2,6 +2,8 @@
 
 关联 CRAWLV3-178 / 155 / 180。本文收敛此前 OCR 前置方案：只给仍然混在一起的规格资料增加处理，不让所有 DTC 产品都额外经过一次 OCR。本文记录已确认的设计；代码接入与实际验收状态见文末，不把设计等同于已验收。
 
+**当前结论（2026-10-03 13:14 北京）**：本次分流与混合图库修复已部署。Solaray Magnesium Glycinate 从 native Ego 采集到旧 Facts / enrichment 全链路真实通过，2 个规格成功、0 Review；120ct / 30 servings 与 240ct / 60 servings 独立保存，原图散列、规格数量及停止证明均已核验。DTC 批量仍 paused / 6 queued。这是本案例及下述回归的验收，不代表所有网站或其他渠道变体漏项均已修复。
+
 ## 两条处理路径
 
 | 采集后观察到的情况 | 处理路径 |
@@ -96,3 +98,26 @@
 - 留存验收 `966530bf-a10d-474e-865f-b0bc39f6cf47` 已真实完成 5 次 OCR、5 次逐图模型判断及 1 次联合核对，两个规格均 ready。240ct 对应 4 VegCaps / 60 servings；120ct 两张 Facts 对应 4 VegCaps / 30 servings，经联合核对所有剂量/DV/其他配料一致后选完整代表图。非 Facts 两张均未分配规格；全部决策、OCR 和原图引用保留。
 - 后续两项 DtcVariantWorkflow 均被旧规划器以 `DTC.IDENTITY_CONFLICT` 拦下，尚未做 Facts。已证实是**手动验收工具的品牌来源丢失**：原 native projection 的 `brandEvidence` 为 matched，source 指向 Solaray 的真实 catalog；工具硬编码 single-brand 策略生成 source:null / site-brand，与线上 source-bound adapter 不一致。规格和图的身份相符，不是图片归属失败。
 - 工具修正为从原 native Activity 的 sourcePlan 引用回读并验证 projection 散列，保留原品牌来源，生成后先经过同一 source-bound adapter reader 再允许 OCR。线上消费校验不放宽，原 Review 不修改。这一修改只涉及手动验收工具；下一步从 native Ego 开始完整闭环验收。
+
+## 第三轮 native 全链路验收（12:48 北京起）
+
+- 新独立验收 `e3415944-675d-4732-b976-b3b463041c5e` 于 04:48:40.820Z 接收。Server 二 native browser 为 `02335a9`，Server 一下游为 `d8d9b03`；不重试任何旧任务，DTC 批量保持 paused / 6 queued。提交回执在 Server 一 `manual-releases/dtc-native-20261002/mixed178-solaray3-{request,receipt}.json`。
+- 工具修复 `05e2978` 已推送 main，完整 check 及独立 TypeScript 检查通过。Server 二 Git pull 后的只读 `--prepare` 成功：首轮 72 原文件 / 14,182,840 字节全部验证，原 source-bound adapter 同时接受两个派生规格。输出 `manual-releases/retained178-05e2978-prepare/`，未为此再调用 OCR/模型。
+- 人工视觉复核已留存的两张代表原图：120ct 为 4 VegCaps / 30 servings，240ct 为 4 VegCaps / 60 servings；均列 Calories 10、Magnesium 350 mg / 83% DV、BioPerine 5 mg，其他配料一致。只读 R2 原件，不重新请求网站。具体完整配方仍由原单品 Facts 流程产出。
+- 上一轮留存验收的全部 11 次 provider 执行均有停止证明：5 OCR synchronous response、6 Codex process exit；各自许可均在执行结束后释放。停止记录在 Server 一 `manual-releases/dtc-native-20261002/retained178-d8d9-stop-proof.json`。
+- 04:54Z native 全链路仍在 `captureBrowserProduct`，attempt 1，心跳正常，无 Activity failure；真实采集及单品 Facts 最终结果仍待验证。
+- 第三轮采集模型完成后，最终交接保留两项完整 `reason` / `selectedState`，两份 `methods/variant-…json` 均真实存在；240ct 在基础 URL、120ct 在 variant URL 上各自观察。网站原件给出 240ct / 076280895049 / 31.99、120ct / 076280549010 / 18.39，不能由图片生成或默认规格补值。
+- 05:04:49Z R2 全量回读成功：81 文件 / 16,251,253 字节，所有大小与 SHA-256 一致。证明在 Server 一 `manual-releases/dtc-native-20261002/mixed178-solaray3-r2-proof.json`。Server 二原始工作区 `apps/crawler-dtc/browser-model/dtc-native/68e821b053e46c0711e7f3a6870d9d082e399b056d79c15127251165ef0fe86c/`。
+- 宿主交接通过，真实 `DtcGalleryWorkflow` 子任务 `dtc-gallery-11c7fa3e-e36c-443a-9eac-f2685c4a48c4` 已启动，05:05:50Z 正在逐图归属、尚无 Activity failure。采集页 `F405BF2E7554E485DED3BC15A2BB7A31` 于 05:03:09Z 验证 absent，Codex PID 7082 进程组 absent、browser round ended；浏览器许可于 05:04:55Z 释放。后续 OCR/模型不保留任务页面。完整停止证明在 `mixed178-solaray3-browser-stop-proof.json`。
+- 本轮 native Gallery 已完成 5 图 OCR / 5 次逐图模型 / 1 次联合比较：两张正面图为 non-Facts，不赋规格；120ct 的两张 Facts（4 VegCaps / 30 servings）逐项一致，选择完整代表图；240ct 使用自己的 4 VegCaps / 60 servings Facts。两个规格均 ready，证明 `mixed178-solaray3-gallery-proof.json`。05:10:12Z，240ct 已通过旧规划并进入真实 LabelWorkflow 的 `collectLabelProduct`，尚无 Activity failure；完整业务结果待最终检查。
+
+## 最终验收通过（13:14 北京）
+
+- Root `product-run-e3415944-675d-4732-b976-b3b463041c5e` 业务结果 `collected`：total 2 / completed 2 / review 0。共 8 个工作流全部 COMPLETED，没有未结束 Activity 或子任务。本轮两个规格各自执行真实 LabelWorkflow 和 enrichment，未以旧配方复用代替 Facts 验收。
+- 240ct：SKU `076280895049`，网站价格 `31.99`；最终 Facts 为 `4 VegCaps` / `60` servings。收集 operation `label-3dcf6a0f7bba14d7d4e3b3806741e65385667dd6d66823cbd0090fb2e771c311`；enrichment registered，count 240。
+- 120ct：SKU `076280549010`，网站价格 `18.39`；最终 Facts 为 `4 VegCaps` / `30` servings。收集 operation `label-44182e3cfef8364e48710c62bc5a05ff2664540ee48b890bd8d1819133f7f5a2`；enrichment registered，count 120。
+- 两份数据库记录回读：Calories 10、Magnesium (from Magnesium Bisglycinate) 350 mg / 83% DV、BioPerine Black Pepper Extract 5 mg / DV not established；其他配料原文完整保留。两份各自引用的图像字节大小和 SHA-256 与前置选定原件严格相符：240ct `319af690…` / 110,232 bytes；120ct `2f6bb5b0…` / 1,479,476 bytes。网站规格与价格保留在交接及 scoped projection；不将它们伪称为 Facts 图片提取结果。
+- 资源闭环：18 个许可全部 released，21 项执行全部有停止证明（7 OCR synchronous response、10 model process exit、任务 browser target absent / CLI exited / capture process group absent / round ended 各 1）。全局 held permits 为空。旧失败 Review / 原始归档未改写，DTC 仍 paused / 6 queued。
+- 最终证据在 Server 一 `manual-releases/dtc-native-20261002/`：`mixed178-solaray3-workflows.json`、`mixed178-solaray3-final-business-proof.json`（完整产品记录和字段断言）、`mixed178-solaray3-final-stop-proof.json`、`mixed178-solaray3-gallery-proof.json`、`mixed178-solaray3-r2-proof.json`。所有部署代码均通过 main → origin → Mini Git clone/build；最新生产执行版本为 Server 二 `02335a9`、Server 一 `d8d9b03`，工具修复 `05e2978` 不涉及生产 Worker。
+
+仍保留的边界：不改变共用 Facts 业务步骤；跨 owner OCR 回执复用未接入（本轮前置 5 次、原流程 2 次 OCR）；冲突、互补且需拼接、不可读或超过 8 张候选的联合 Facts 保留 Review。相同 URL 的选中状态与分流、明确共用、差异/不确定结果的阻断、失败清理及旧工作流重放已有回归；本次真实闭环覆盖 Solaray 混合图库，未将测试夹具冒充更多真实网站。179 的共用配方复用审计、180 的 Whole Foods / Costco 变体派发仍是独立未完成项。
