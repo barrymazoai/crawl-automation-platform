@@ -19,11 +19,12 @@ import { CaptureFileSchema, captureFile, captureOutputFiles } from "../packages/
 import { readCapturedProduct } from "../packages/channels/dtc/src/agent/product-record.js";
 import { verifyRetainedScopeBoundary } from "./verify-dtc-scope-boundary.mjs";
 import { processDtcRetainedSingle } from "./process-dtc-retained-single.mjs";
-import type { ProductScopeInput } from "../packages/channels/dtc/src/agent/product-scope.js";
+import { DtcProductScope, type ProductScopeInput } from "../packages/channels/dtc/src/agent/product-scope.js";
 
-const [configPath, casesPath, output, action] = process.argv.slice(2);
+const [configPath, casesPath, output, action, previousScope] = process.argv.slice(2);
 if (!configPath || !casesPath || !output) throw new Error("Usage: <worker-config> <cases.json> <new-output-dir>");
 if (action && action !== "--process-single") throw new Error("Unknown explicit action");
+if (previousScope && action !== "--process-single") throw new Error("Scope reuse requires explicit single-case processing");
 await mkdir(output, { mode: 0o700 }); // Existing output is never retried.
 const write = (name: string, value: unknown) => writeFile(join(output, name), JSON.stringify(value, null, 2), { flag: "wx" });
 const cases: { runId: string; workspace: string; expected: string }[] = JSON.parse(await readFile(casesPath, "utf8"));
@@ -86,20 +87,35 @@ try {
     const htmlPath = typeof retained.record.pageHtml === "string" ? retained.record.pageHtml : retained.record.pageHtml.localPath;
     const source = captured.files.find(file => file.path === htmlPath);
     if (!source) throw new Error("Original HTML reference missing");
-    const evidence: ProductScopeInput = {
+    let evidence: ProductScopeInput = {
       operationId: `dtc-scope-accept-${randomUUID()}`, url: original.url, source,
       fields: retained.record.fields, variants: retained.record.variants,
     };
+    if (previousScope) {
+      const previous = JSON.parse(await readFile(join(previousScope, "case-0-intent.json"), "utf8"));
+      const old: ProductScopeInput = previous.evidence;
+      if (previous.sample.runId !== sample.runId || old.url !== evidence.url ||
+          old.source.objectKey !== source.objectKey || old.source.sha256 !== source.sha256 ||
+          JSON.stringify(old.fields) !== JSON.stringify(evidence.fields) ||
+          JSON.stringify(old.variants) !== JSON.stringify(evidence.variants)) throw new Error("Retained scope source mismatch");
+      evidence = old;
+    }
     const workflowId = evidence.operationId;
     const modelNeed = original.resources.activities["captureProduct"]?.filter(n => n.resourceId === "mini-model-account");
     if (modelNeed?.length !== 1) throw new Error("Original model permit missing");
     await write(`case-${index}-intent.json`, { workflowId, sample, archiveKey, archiveSha256: sha256(archive), files: files.length, bytesVerified, evidence });
-    const handle = await temporal.client.workflow.start("DtcScopeAcceptanceWorkflow", {
-      workflowId, taskQueue, args: [{ resources: { queue: original.resources.queue, maxWaitSeconds: 120, activities: { reviewScope: modelNeed } }, evidence }],
-      retry: { maximumAttempts: 1 },
-    });
-    console.log(JSON.stringify({ stage: "started", index, workflowId, originalFiles: files.length, bytesVerified }));
-    const result = await handle.result() as Awaited<ReturnType<typeof scope.review>>;
+    let result: Awaited<ReturnType<typeof scope.review>>;
+    if (previousScope) {
+      result = await new DtcProductScope(publication, async () => { throw new Error("Cached scope missing: model call forbidden"); }).review(evidence, signal);
+      console.log(JSON.stringify({ stage: "scope-reused", index, workflowId, originalFiles: files.length, bytesVerified, modelCalls: 0 }));
+    } else {
+      const handle = await temporal.client.workflow.start("DtcScopeAcceptanceWorkflow", {
+        workflowId, taskQueue, args: [{ resources: { queue: original.resources.queue, maxWaitSeconds: 120, activities: { reviewScope: modelNeed } }, evidence }],
+        retry: { maximumAttempts: 1 },
+      });
+      console.log(JSON.stringify({ stage: "started", index, workflowId, originalFiles: files.length, bytesVerified }));
+      result = await handle.result() as Awaited<ReturnType<typeof scope.review>>;
+    }
     await write(`case-${index}-result.json`, result);
     if (result.decision.kind !== sample.expected) throw new Error(`Unexpected scope: ${result.decision.kind}`);
     const boundary = await verifyRetainedScopeBoundary({ config, original, root, captured, result });

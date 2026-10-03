@@ -47,7 +47,7 @@ export async function processDtcRetainedSingle(at: {
   };
   await publication.publish(`${prefix}/retained-analysis.json`, Buffer.from(JSON.stringify(provenance)), "application/json", signal);
   await publication.publish(`${prefix}/images.json`, Buffer.from(JSON.stringify({ version: "dtc-agent-images/1", url: input.url, images: retained.images })), "application/json", signal);
-  const sourcePlans = new ProductSourcePlans(publication, { ...at.config.plan, egressId: "retained-native/1" });
+  const sourcePlans = new ProductSourcePlans(publication, { ...at.config.plan, egressId: "direct/1" });
   const sourcePlan = await sourcePlans.publish(input, { parsed, planning }, signal);
   const projection = await publication.remote.read(sourcePlan.source.objectKey, sourcePlan.source.byteSize, signal);
   if (!projection) throw new Error("Retained projection publication missing");
