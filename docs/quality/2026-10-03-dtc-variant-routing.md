@@ -88,3 +88,6 @@
 - 同规格多张 Facts 新增 DTC 联合核对：复用已产生的 OCR，Codex 同时查看独立、未改字节的原图，比较 serving、份数、所有剂量/单位/DV、行列、其他配料及脚注。仅明确一致且选中图覆盖完整内容时选择一张代表；冲突、需多图拼接、不可读或超过单次 8 张的边界仍 Review。该语义核对取代“多张一律 Review”的临时限制，不按位置、文件名或 OCR 字符串相等去重。
 - 共用 Codex 传输增加可选多原图附件，既有单图调用字节与协议保持；不更改共用 Facts 业务步骤。独立模型许可延续逐图阶段的同一序列，新增 Workflow patch 保留旧历史行为。需 Mini 多图传输测试及新旧 Workflow 重放后才能部署。
 - 本地 14 项图库/联合核对回归及 6 项活动接线回归通过，完整 `pnpm check` 通过。上一轮 8 次 provider 执行均有停止证据、许可全部释放（4 次 OCR synchronous response、4 次 process exit），记录于 Server 一 `retained178-476-stop-proof.json`。Mini 回归与真实验收尚待执行。
+- `7e5820e` 已推送 main，Mini 10 项新旧 DTC 工作流重放、35 项既有 Codex 传输、14 项图库回归通过。新增多图客户端用例首次因测试夹具将已去掉前缀的场景名仍与 `vision-multiple` 比较而失败；`aa46a0e` 仅修正该夹具，Git 拉取后 9 项客户端测试全部通过，含两份原字节 SHA-256 与目录清理。合计 68 项 Mini 检查通过；完整 check 再次通过。Server 一部署正在执行，尚未声明新真实模型验收成功。
+- Server 一于 04:32:57Z 经 Git fresh clone/install/build 部署 `aa46a0e`，7 服务 ready；维护中的 5 条空队列恢复原 running，DTC 保持 paused 6。新留存验收日志在 Server 二 `manual-releases/dtc-mixed-852546a/retained-aa46a0e-live.log`，新派生记录在 `manual-releases/retained178-aa46a0e-live/`，未重新访问网站。
+- 新验收 `90189353-cce9-4ffd-82e7-c58ce3ce71d8` 第一张 OCR 完成后，模型服务拒绝输出 schema：`decision.oneOf is not permitted`（Worker 脱敏日志 04:34:42Z）。这是 Zod discriminatedUnion 的生成格式与服务端不兼容，尚无模型答案，两个规格仍 Review。改为普通 union 生成 `anyOf`，三种分支约束保持，增加实际 JSON Schema 输出回归；不放宽非 Facts 归属规则，不修改旧失败记录。

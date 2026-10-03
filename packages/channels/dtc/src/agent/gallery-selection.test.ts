@@ -1,4 +1,5 @@
 import { rm } from "node:fs/promises";
+import { z } from "zod";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { processingIdentity } from "@crawl-automation/v3-contracts";
 import { variantCaptureFixture } from "./variant-capture-fixture.js";
@@ -138,4 +139,10 @@ it("prevents non-Facts variant assignments in the model output schema", () => {
   expect(GalleryModelOutput.safeParse({ decision: { ...decision, variantIds: [] } }).success).toBe(
     true,
   );
+});
+
+it("uses the provider-supported anyOf schema while retaining the three semantic branches", () => {
+  const schema = z.toJSONSchema(GalleryModelOutput);
+  expect(schema).toMatchObject({ properties: { decision: { anyOf: expect.any(Array) } } });
+  expect(JSON.stringify(schema)).not.toContain('"oneOf"');
 });
