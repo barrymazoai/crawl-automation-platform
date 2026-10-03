@@ -4,6 +4,7 @@ import { captureFile, type CaptureFile } from "./archive.js";
 import { dtcAgentErrors } from "./errors.js";
 import { verifyObservedProduct } from "../../../../../crawl-products/lib/observed-product.mjs";
 import { verifyDetailReview } from "./detail-review.js";
+import { sha256 } from "@crawl-automation/platform";
 
 const VariantSchema = z
   .object({
@@ -36,23 +37,14 @@ export async function readCapturedProduct(input: {
   url: string;
   requireObservedMethod?: boolean;
   requireDetailCoverage?: boolean;
+  reviewRoot?: string;
+  captureContract?: "legacy-harvest/1";
 }) {
-  const { record, review } = await readRecordAndReview(input.root, input.url);
-  verifyGallery(record, review, {
-    files: input.files,
-    evidenceFiles: input.evidenceFiles ?? input.files,
-  });
-  verifyVariant(record, review, input.url);
-  if (input.requireObservedMethod) {
-    await verifyMethod(input, record);
+  const { record, review } = await readRecordAndReview(input.root, input.url, input.reviewRoot);
+  if (input.captureContract === "legacy-harvest/1") {
+    await verifyArchivedCapture(input);
   }
-  await verifyDetailReview({
-    root: input.root,
-    record,
-    review,
-    files: input.files,
-    required: input.requireDetailCoverage,
-  });
+  await validateCapture(input, record, review);
   const htmlPath =
     typeof record.pageHtml === "string" ? record.pageHtml : record.pageHtml.localPath;
   const html = await captureFile(input.root, htmlPath);
@@ -68,14 +60,47 @@ export async function readCapturedProduct(input: {
   };
 }
 
-async function readRecordAndReview(root: string, url: string) {
+async function validateCapture(
+  input: Parameters<typeof readCapturedProduct>[0],
+  record: HarvestRecord,
+  review: CaptureReview,
+) {
+  verifyGallery(record, review, {
+    files: input.files,
+    evidenceFiles: input.evidenceFiles ?? input.files,
+  });
+  verifyVariant(record, review, input.url);
+  if (input.requireObservedMethod || record.fieldEvidence) {
+    await verifyMethod(input, record);
+  }
+  await verifyDetailReview({
+    root: input.root,
+    record,
+    review,
+    files: input.files,
+    required: input.requireDetailCoverage,
+  });
+}
+
+async function verifyArchivedCapture(input: { root: string; files: CaptureFile[] }) {
+  for (const file of input.files) {
+    const bytes = await captureFile(input.root, file.path);
+    if (bytes.length !== file.byteSize || sha256(bytes) !== file.sha256) {
+      throw dtcAgentErrors.create("DTC.CAPTURE_EVIDENCE", {
+        details: { reason: "retained_raw_capture_changed", path: file.path },
+      });
+    }
+  }
+}
+
+async function readRecordAndReview(root: string, url: string, reviewRoot = root) {
   const records = z
     .array(RecordSchema)
     .length(1)
     .parse(JSON.parse((await captureFile(root, "evidence/records.json")).toString()));
   const record = records[0];
   const review = parseCaptureReview(
-    JSON.parse((await captureFile(root, "capture-review.json")).toString()),
+    JSON.parse((await captureFile(reviewRoot, "capture-review.json")).toString()),
   );
   if (!record || !sameProduct(record.productUrl, url) || !sameProduct(review.productUrl, url)) {
     throw dtcAgentErrors.create("DTC.CAPTURE_EVIDENCE");

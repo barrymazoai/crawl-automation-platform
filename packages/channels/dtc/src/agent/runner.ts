@@ -1,35 +1,22 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { z } from "zod";
-import {
-  EgoAgentPage,
-  runCodexCapture,
-  sha256,
-  type EgoSettings,
-  type RetainedPublication,
-} from "@crawl-automation/platform";
-import type { DtcAgentSettings } from "./settings.js";
+import { EgoAgentPage, runCodexCapture, sha256 } from "@crawl-automation/platform";
+import type { AgentCaptureDependencies } from "./settings.js";
+export type { AgentCaptureDependencies } from "./settings.js";
 import { captureOutputFiles, retainCaptureDirectory, type CaptureFile } from "./archive.js";
 import { dtcAgentErrors } from "./errors.js";
 import { capturePrompt } from "./prompt.js";
-import { CaptureReviewAuthoringSchema } from "./product-review.js";
-import { VariantContextSchema } from "./variant-review.js";
-import { DetailCoverageAuthoringSchema } from "./detail-review.js";
 import type { AgentCaptureRequest } from "./request.js";
+import { prepareSiteMethod, retainSiteMethod } from "./site-method.js";
+import { assessCapture } from "./post-capture.js";
+import { readCapturedProduct } from "./product-record.js";
 
 const ResultSchema = z.strictObject({
   status: z.enum(["complete", "needs_review", "failed"]),
   summary: z.string(),
   reasonCode: z.string().nullable(),
 });
-export interface AgentCaptureDependencies {
-  settings: DtcAgentSettings;
-  ego: EgoSettings;
-  publication: RetainedPublication;
-  skillRoot: string;
-  environment: NodeJS.ProcessEnv;
-}
-
 interface AgentCaptureOutput {
   root: string;
   prefix: string;
@@ -37,6 +24,8 @@ interface AgentCaptureOutput {
   evidenceFiles: CaptureFile[];
   manifestKey: string;
   requireDetailCoverage?: boolean;
+  captureContract?: "legacy-harvest/1";
+  reviewRoot?: string;
 }
 
 export class DtcCaptureAgent {
@@ -61,7 +50,43 @@ export class DtcCaptureAgent {
       "application/json",
       signal,
     );
-    return { root: outDir, prefix, ...retained, manifestKey, requireDetailCoverage: true };
+    const output = { root: outDir, prefix, ...retained, manifestKey };
+    if (request.mode !== "product") {
+      return output;
+    }
+    return this.productOutput({ ...output, cwd }, request.url, signal);
+  }
+
+  private async productOutput(
+    input: AgentCaptureOutput & { cwd: string },
+    url: string,
+    signal: AbortSignal,
+  ) {
+    const { cwd, ...output } = input;
+    const { prefix, manifestKey, root } = output;
+    const { publication } = this.deps;
+    const assessment = await assessCapture(this.deps, { ...output, cwd, url }, signal);
+    const result = { ...output, ...assessment };
+    await readCapturedProduct({ ...result, url });
+    const method = await retainSiteMethod({
+      profileDir: join(this.deps.settings.codex.workRoot, "site-profiles"),
+      root,
+      url,
+    });
+    await publication.publish(
+      `${prefix}/handoff.json`,
+      Buffer.from(
+        JSON.stringify({
+          captureContract: assessment.captureContract,
+          capture: manifestKey,
+          review: assessment.reviewArtifact,
+          method,
+        }),
+      ),
+      "application/json",
+      signal,
+    );
+    return result;
   }
 
   private async prepare(request: AgentCaptureRequest) {
@@ -75,23 +100,6 @@ export class DtcCaptureAgent {
     await mkdir(outDir, { mode: 0o700 });
     await mkdir(join(settings.codex.workRoot, "site-profiles"), { recursive: true, mode: 0o700 });
     const prefix = `v3/dtc-agent/${operationId}`;
-    if (request.mode === "product") {
-      await writeFile(
-        join(cwd, "capture-review.schema.json"),
-        JSON.stringify(z.toJSONSchema(CaptureReviewAuthoringSchema)),
-        { flag: "wx" },
-      );
-      await writeFile(
-        join(cwd, "variant-context.schema.json"),
-        JSON.stringify(z.toJSONSchema(VariantContextSchema)),
-        { flag: "wx" },
-      );
-      await writeFile(
-        join(cwd, "detail-coverage.schema.json"),
-        JSON.stringify(z.toJSONSchema(DetailCoverageAuthoringSchema)),
-        { flag: "wx" },
-      );
-    }
     await this.skills(cwd);
     return { cwd, outDir, prefix };
   }
@@ -103,6 +111,7 @@ export class DtcCaptureAgent {
   ) {
     const { cwd, outDir, page, prefix } = at;
     const { settings, ego } = this.deps;
+    await this.method(request, at);
     const prompt = capturePrompt({
       ...request,
       cwd,
@@ -133,6 +142,26 @@ export class DtcCaptureAgent {
     if (result.status !== "complete") {
       throw dtcAgentErrors.create("DTC.CAPTURE_REVIEW", { details: { result, prefix } });
     }
+  }
+
+  private async method(
+    request: AgentCaptureRequest,
+    at: { cwd: string; outDir: string; page: EgoAgentPage },
+  ) {
+    if (request.mode !== "product") {
+      return;
+    }
+    const { cwd, outDir, page } = at;
+    await prepareSiteMethod({
+      cwd,
+      outDir,
+      productUrl: request.url,
+      skillRoot: this.deps.skillRoot,
+      profileDir: join(this.deps.settings.codex.workRoot, "site-profiles"),
+      taskSpaceId: this.deps.ego.taskSpaceId,
+      label: page.label,
+      targetId: page.targetId,
+    });
   }
 
   private async skills(cwd: string): Promise<void> {

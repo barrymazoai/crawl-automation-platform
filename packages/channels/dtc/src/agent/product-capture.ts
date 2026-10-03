@@ -141,7 +141,7 @@ export class DtcAgentProductCapture {
     const retained = await readCapturedProduct({
       ...captured,
       url: request.url,
-      requireObservedMethod: true,
+      requireObservedMethod: captured.captureContract !== "legacy-harvest/1",
     });
     const original = await this.saveOriginal(archive, retained, signal);
     return { captured, retained, original };

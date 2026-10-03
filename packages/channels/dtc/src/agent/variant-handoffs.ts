@@ -9,7 +9,6 @@ import { DtcVariantHandoffsSchema, type DtcVariantHandoff } from "@crawl-automat
 import type { DtcSitePolicy } from "../site-policy.js";
 import { capturedProductProjection } from "./product-projection.js";
 import { readVariantRecord, type VariantRecordInput } from "./variant-record.js";
-import type { ObservedVariantContext } from "./variant-review.js";
 import type { readCapturedProduct } from "./product-record.js";
 
 interface HandoffInput extends VariantRecordInput {
@@ -142,7 +141,7 @@ async function scopedProjection(input: HandoffInput, variant: DtcVariantHandoff[
 
 function family(
   input: HandoffInput,
-  context: ObservedVariantContext,
+  context: Awaited<ReturnType<typeof readVariantRecord>>["context"],
   selected: DtcVariantHandoff["variant"],
 ) {
   if (context.status !== "observed" || !context.difference) {

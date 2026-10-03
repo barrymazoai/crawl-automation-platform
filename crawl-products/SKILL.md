@@ -63,6 +63,8 @@ description: "用视觉优先的三步 preflight（站点判定 → 路径探索
 
 ### Ego 原生采集任务
 
+宿主声明 `legacy-harvest/1` 时，单品默认使用 [旧采集出口](references/legacy-product-capture.md)：站点方法复用、旧 runHarvest 原始输出，宿主关页归档后才做资料复核与混合归属。该合约不要求下文 native-product-method 的新增详情/规格证明；不影响已有历史证明读取。通用关键词提取仍禁止。
+
 宿主明确选择 `ego-native` 时，先读 Ego 自带 `ego-browser` skill；跳过下方 Chrome/IAB/worker_cdp 的绑定代码。
 由 Codex 通过 `ego-browser nodejs` 原生 TaskSpace/Page API 操作宿主派发的确切页面，不运行 CDP 桥或 Playwright。
 旧 `runHarvest` 的机械接口通过 `lib/ego-native-browser.mjs` 的 `createEgoBrowser({task,page,targetId,listTaskSpaces,workDir,productUrl})` 复用：

@@ -5,6 +5,7 @@ import { verifyMethod, type HarvestRecord, type CaptureReview } from "./product-
 import { VariantContextSchema, type ObservedVariantContext } from "./variant-review.js";
 import { sha256 } from "@crawl-automation/platform";
 import { verifyDetailReview } from "./detail-review.js";
+import { scopedHarvestRecord } from "./material-scope.js";
 
 export interface VariantRecordInput {
   root: string;
@@ -14,8 +15,31 @@ export interface VariantRecordInput {
   review: CaptureReview;
 }
 
+interface ScopedRecord {
+  record: HarvestRecord;
+  review: CaptureReview;
+  context: Pick<ObservedVariantContext, "status" | "evidence" | "reason"> & {
+    difference?:
+      | {
+          kind: "size" | "pack-count" | "flavour" | "strength" | "form" | "unknown";
+          group: string;
+        }
+      | undefined;
+  };
+}
+
 /** Read only archived, model-selected sources. No navigation, inference or generic extraction. */
-export async function readVariantRecord(input: VariantRecordInput, variantId: string) {
+export async function readVariantRecord(
+  input: VariantRecordInput,
+  variantId: string,
+): Promise<ScopedRecord> {
+  if (input.review.materialScopes) {
+    return scopedHarvestRecord(input, variantId);
+  }
+  return readObservedRecord(input, variantId);
+}
+
+async function readObservedRecord(input: VariantRecordInput, variantId: string) {
   const context = readContext(input, variantId);
   if (context.status === "unresolved") {
     throw new Error(context.reason);

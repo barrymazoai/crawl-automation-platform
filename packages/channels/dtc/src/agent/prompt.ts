@@ -1,5 +1,6 @@
 import type { AgentCaptureRequest } from "./request.js";
 import { pathToFileURL } from "node:url";
+import { legacyCapturePrompt } from "./legacy-prompt.js";
 import {
   productInstructions,
   catalogInstructions,
@@ -20,6 +21,9 @@ interface PromptInput extends AgentCaptureRequest {
 
 /** This boundary is the old V3 capture-only contract, with the browser replaced by Ego's own skill. */
 export function capturePrompt(input: PromptInput): string {
+  if (input.mode === "product") {
+    return legacyCapturePrompt(input);
+  }
   const instructions = {
     product: productInstructions,
     catalog: catalogInstructions,
@@ -40,7 +44,7 @@ export function capturePrompt(input: PromptInput): string {
    本次仅是长期 Worker 批次中的一个采集子任务，不是 Ego skill 所指的整个用户任务完成。禁止调用 task.finish()、task.handOff()、task.release()、page.close()，也不通过 CDP 关闭页面/浏览器或结束 round；不要创建 finish/cleanup 脚本。Ego skill 中成功时 finish 的默认步骤在本宿主中不适用：完成后只返回采集结果，由宿主关闭这一精确任务页、验证消失并结束 round，Space 继续保留给后续任务。遇到用户接管/权限提示仍立即停下，不接管或绕过。
 5. 按 Ego skill 直接观察、点击和截图。Ego 每次 nodejs 调用是新进程，显式重建句柄，不能依赖上一轮 JS 变量。
    复用旧机械工具时，在 Ego nodejs 内 import ${input.skillRoot}/lib/ego-native-browser.mjs：
-   const browser = createEgoBrowser({task, page, targetId:${JSON.stringify(input.targetId)}, listTaskSpaces, workDir:${JSON.stringify(input.cwd)}, captureMode:${JSON.stringify(input.mode)}, productUrl:${JSON.stringify(input.mode === "product" ? input.url : null)}});
+   const browser = createEgoBrowser({task, page, targetId:${JSON.stringify(input.targetId)}, listTaskSpaces, workDir:${JSON.stringify(input.cwd)}, captureMode:${JSON.stringify(input.mode)}, productUrl:null});
    const tab = browser.tab; browserMode="ego-native"。该适配仅复用旧 harvest 方法，不启动服务。
    ${mechanicalInstructions(input)}
 6. 主脚本放任务根目录 run-capture.mjs；先 node --check 再由 ego-browser nodejs -e 'await import("file://绝对脚本路径")' 执行。其他多行浏览器观察脚本也先写成任务目录内的 .mjs 文件并 node --check，再用同一 import 方式执行，避免多层 shell 引号改坏选择器或脚本。taskSpace/listTaskSpaces 使用注入全局，不从 CLI 文件 import。截图和采集文件都保存到 outDir，所有证据路径相对 outDir；每次新观察使用新文件名，不复用脚本覆盖之前的截图。
