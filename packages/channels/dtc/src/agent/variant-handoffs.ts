@@ -73,7 +73,7 @@ export class DtcVariantHandoffs {
     const sourcePlan = await this.publishPlan(input, { ...member, scoped }, signal);
     return {
       ...member,
-      status: "ready",
+      status: scoped.context.status === "mixed" ? "mixed" : "ready",
       evidence: scoped.context.evidence,
       planned: {
         status: "captured",
@@ -128,7 +128,8 @@ async function scopedProjection(input: HandoffInput, variant: DtcVariantHandoff[
     site: input.site,
     url: variant.url,
     sourceUrl: input.request.sourceUrl,
-    variantContextVerified: true,
+    variantContextVerified: scoped.context.status === "observed",
+    variantStateVerified: true,
   });
   if (
     parsed.identity.variantId !== variant.variantId ||
@@ -144,7 +145,7 @@ function family(
   context: ObservedVariantContext,
   selected: DtcVariantHandoff["variant"],
 ) {
-  if (!context.difference) {
+  if (context.status !== "observed" || !context.difference) {
     return null;
   }
   const result = ProductFamilySchema.safeParse({

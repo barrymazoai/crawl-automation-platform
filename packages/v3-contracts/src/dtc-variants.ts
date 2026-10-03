@@ -10,7 +10,7 @@ const member = {
   evidence: z.array(z.string()).max(200),
 };
 export const DtcVariantHandoffSchema = z.discriminatedUnion("status", [
-  z.strictObject({ ...member, status: z.literal("ready"), planned: z.strictObject({
+  z.strictObject({ ...member, status: z.enum(["ready", "mixed"]), planned: z.strictObject({
     status: z.literal("captured"), sourcePlan: ChannelPlanInputSchema,
     factsComplete: z.boolean(), labelText: z.string().max(200_000).nullable(),
     family: z.unknown(),

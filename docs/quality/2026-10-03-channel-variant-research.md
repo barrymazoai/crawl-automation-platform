@@ -90,7 +90,7 @@ MegaFood Blood Builder：
 ## 返回 DTC 的边界
 
 - 两渠道缺口留在 180 / 94 / 95，不改变现有 Whole Foods 精确 ASIN 配方共享策略。
-- DTC 继续处理 Solaray 混合图库：在进入共用单品 Facts 前，单独复用既有 OCR 能力取得 Facts 证据，让 Codex 根据真实规格与 Facts 内容判断归属，再进入原流程。共用 Facts 流程不扩大改写；179 的复用校验 bug 单独保留。
+- 用户随后确认 [两条处理路径](2026-10-03-dtc-variant-routing.md)：页面及资料已明确对应规格的，直接走原流程；只有仍混在一起的图库 / Facts 才增加 DTC OCR 前置归属。Solaray 当前属于后者，即使 URL 变化也不能自动判为资料已分开。共用 Facts 流程不扩大改写；179 的复用校验 bug 单独保留。
 - 不能把“URL 已变”“HTML 已保存”“family 已解析”分别误当作身份、图片归属、全部入队的完成证明。
 - DTC 接下来仍需单独 OCR 实测及逐规格端到端验收。本轮未调用 OCR，未修改或部署 DTC 代码。
 

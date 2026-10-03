@@ -19,3 +19,5 @@ export * from "./agent/product-capture.js";
 export * from "./agent/file-transport.js";
 export * from "./agent/catalog.js";
 export * from "./agent/analysis.js";
+export * from "./agent/mixed-gallery.js";
+export * from "./agent/gallery-scope.js";

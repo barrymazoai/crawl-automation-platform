@@ -1,0 +1,145 @@
+{
+  "observedAt": "2026-10-03T02:31:24.412Z",
+  "scope": "local pure checker audit; synthetic inputs, no provider/browser/database calls",
+  "codeCommit": "4db6d4aad9d65d2cb39ea14509fc981365711229",
+  "saved": {
+    "formula": {
+      "servingSize": {
+        "text": "2 Capsules",
+        "sourceId": "audit-image",
+        "citation": {
+          "kind": "image",
+          "evidence": "2 Capsules"
+        }
+      },
+      "servingsPerContainer": {
+        "text": "30",
+        "sourceId": "audit-image",
+        "citation": {
+          "kind": "image",
+          "evidence": "30"
+        }
+      },
+      "columns": [
+        {
+          "heading": {
+            "text": "Amount Per Serving",
+            "sourceId": "audit-image",
+            "citation": {
+              "kind": "image",
+              "evidence": "Amount Per Serving"
+            }
+          },
+          "rows": [
+            {
+              "kind": "nutrient",
+              "name": {
+                "text": "Magnesium",
+                "sourceId": "audit-image",
+                "citation": {
+                  "kind": "image",
+                  "evidence": "Magnesium"
+                }
+              },
+              "amount": {
+                "text": "50 mg",
+                "sourceId": "audit-image",
+                "citation": {
+                  "kind": "image",
+                  "evidence": "50 mg"
+                }
+              },
+              "dailyValue": {
+                "text": "12%",
+                "sourceId": "audit-image",
+                "citation": {
+                  "kind": "image",
+                  "evidence": "12%"
+                }
+              },
+              "amountStatus": "printed",
+              "parentRowIndex": null
+            }
+          ]
+        }
+      ]
+    },
+    "otherIngredients": {
+      "heading": {
+        "text": "Other Ingredients",
+        "sourceId": "audit-image",
+        "citation": {
+          "kind": "image",
+          "evidence": "Other Ingredients"
+        }
+      },
+      "items": [
+        {
+          "text": "None",
+          "sourceId": "audit-image",
+          "citation": {
+            "kind": "image",
+            "evidence": "None"
+          }
+        }
+      ]
+    }
+  },
+  "cases": [
+    {
+      "name": "container-count-only",
+      "label": "Supplement Facts\nServing Size 2 Capsules\nServings Per Container 60\nAmount Per Serving % Daily Value\nMagnesium 50 mg 12%\nOther Ingredients: None",
+      "expectedMatch": true,
+      "actual": {
+        "match": true
+      }
+    },
+    {
+      "name": "dose-51mg",
+      "label": "Supplement Facts\nServing Size 2 Capsules\nServings Per Container 60\nAmount Per Serving % Daily Value\nMagnesium 51 mg 12%\nOther Ingredients: None",
+      "expectedMatch": false,
+      "actual": {
+        "match": false,
+        "mismatches": [
+          {
+            "kind": "row-missing",
+            "name": "magnesium",
+            "amount": "50 mg"
+          }
+        ]
+      }
+    },
+    {
+      "name": "dose-250mg",
+      "label": "Supplement Facts\nServing Size 2 Capsules\nServings Per Container 60\nAmount Per Serving % Daily Value\nMagnesium 250 mg 12%\nOther Ingredients: None",
+      "expectedMatch": false,
+      "actual": {
+        "match": true
+      }
+    },
+    {
+      "name": "daily-value-13-percent",
+      "label": "Supplement Facts\nServing Size 2 Capsules\nServings Per Container 60\nAmount Per Serving % Daily Value\nMagnesium 50 mg 13%\nOther Ingredients: None",
+      "expectedMatch": false,
+      "actual": {
+        "match": true
+      }
+    },
+    {
+      "name": "serving-size-12-capsules",
+      "label": "Supplement Facts\nServing Size 12 Capsules\nServings Per Container 60\nAmount Per Serving % Daily Value\nMagnesium 50 mg 12%\nOther Ingredients: None",
+      "expectedMatch": false,
+      "actual": {
+        "match": true
+      }
+    },
+    {
+      "name": "changed-ingredient-source",
+      "label": "Supplement Facts\nServing Size 2 Capsules\nServings Per Container 60\nAmount Per Serving % Daily Value\nMagnesium (as oxide) 50 mg 12%\nOther Ingredients: None",
+      "expectedMatch": false,
+      "actual": {
+        "match": true
+      }
+    }
+  ]
+}

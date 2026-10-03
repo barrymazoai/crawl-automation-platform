@@ -4,7 +4,7 @@ import { verifyObservedGallery } from "./observed-gallery.mjs";
 
 /** The model previews the same source checks that the host repeats after archival. No navigation or writes. */
 export async function readObservedVariant(root, base, context, method) {
-  if (context?.status !== "observed" || !["variant-state", "website-shared"].includes(context.basis)) {
+  if (!["observed", "mixed"].includes(context?.status) || !["variant-state", "website-shared"].includes(context.basis)) {
     throw new Error("variant_observed_context_required");
   }
   if (base.variants.filter(variant => String(variant.variantId) === context.variantId).length !== 1) {
@@ -16,11 +16,17 @@ export async function readObservedVariant(root, base, context, method) {
   if (source.origin !== product.origin || source.pathname !== product.pathname) {
     throw new Error("variant_source_identity_conflict");
   }
-  if (context.basis === "variant-state" && selected === null) {
+  if (context.basis === "variant-state" && selected === null && !context.selectedState) {
     throw new Error("variant_method_requires_selected_url");
   }
   if (selected !== null && selected !== context.variantId) {
     throw new Error("variant_source_selected_conflict");
+  }
+  if (context.selectedState) {
+    const actual = await readObservedField(root, method, context.selectedState.rule);
+    if (String(actual) !== context.variantId || context.selectedState.value !== context.variantId) {
+      throw new Error("variant_selected_state_mismatch");
+    }
   }
   if (!isDeepStrictEqual(observed.variants, base.variants)) {
     throw new Error("variant_inventory_changed");
@@ -32,6 +38,16 @@ export async function readObservedVariant(root, base, context, method) {
       throw new Error("variant_shared_scope_statement_mismatch");
     }
   }
-  verifyObservedGallery(base, context);
+  if (context.status === "mixed") {
+    const urls = (base.gallery ?? []).map(image => image.url);
+    if (context.basis !== "variant-state" || !urls.length
+      || context.galleryUrls?.length !== urls.length
+      || new Set(context.galleryUrls).size !== urls.length
+      || context.galleryUrls.some(url => !urls.includes(url))) {
+      throw new Error("variant_mixed_gallery_incomplete");
+    }
+  } else {
+    verifyObservedGallery(base, context);
+  }
   return observed;
 }

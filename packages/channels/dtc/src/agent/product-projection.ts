@@ -18,6 +18,8 @@ interface ProjectionInput {
   html?: Uint8Array;
   /** Host verified a separate model-observed context for this exact website variant. */
   variantContextVerified?: boolean;
+  /** Selection is verified even when the gallery still needs DTC scope processing. */
+  variantStateVerified?: boolean;
 }
 
 export function capturedProductProjection(input: ProjectionInput): ParsedProduct<DtcRendered> {
@@ -114,7 +116,10 @@ function captureVariant(input: ProjectionInput) {
   const address = dtcProductAddress(input.url, [input.site]);
   // A base-product task must not become a variant task merely because the page selected a default.
   return (
-    address.variantId ?? (input.record.variants.length > 1 ? null : input.review.selectedVariantId)
+    address.variantId ??
+    (input.variantStateVerified || input.record.variants.length <= 1
+      ? input.review.selectedVariantId
+      : null)
   );
 }
 

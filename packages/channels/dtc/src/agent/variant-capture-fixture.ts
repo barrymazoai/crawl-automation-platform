@@ -164,7 +164,10 @@ export async function variantCaptureFixture() {
   async function preflight() {
     const entries = (review.variantContexts ?? []).filter(
       (value): value is (typeof contexts)[number] =>
-        !!value && typeof value === "object" && "status" in value && value.status === "observed",
+        !!value &&
+        typeof value === "object" &&
+        "status" in value &&
+        ["observed", "mixed"].includes(String(value.status)),
     );
     const previous = files.findIndex((file) => file.path === "variant-preflight.json");
     if (previous !== -1) {
@@ -239,6 +242,7 @@ export async function variantCaptureFixture() {
     preflight,
     save,
     handoffs,
+    sourcePlans,
     publish: () => handoffs.publish(input, new AbortController().signal),
   };
 }

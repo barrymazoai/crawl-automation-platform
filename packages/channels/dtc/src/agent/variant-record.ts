@@ -28,7 +28,9 @@ export async function readVariantRecord(input: VariantRecordInput, variantId: st
   const sourceMethod = JSON.parse(method.toString());
   const observed = await readObservedVariant(input.root, input.record, context, sourceMethod);
   await verifyPreflight(input, context, sourceMethod);
-  verifyGallery(input, context);
+  if (context.status === "observed") {
+    verifyGallery(input, context);
+  }
   const record: HarvestRecord = {
     ...input.record,
     ...observed,
@@ -45,7 +47,7 @@ export async function readVariantRecord(input: VariantRecordInput, variantId: st
     evidence: context.evidence,
     imageAssignments: context.galleryUrls.map((url) => ({
       url,
-      variantId,
+      variantId: context.status === "mixed" ? null : variantId,
       basis: "product-gallery",
     })),
   };
@@ -99,6 +101,9 @@ async function verifyPreflight(
 }
 
 function verifyGallery(input: VariantRecordInput, context: ObservedVariantContext) {
+  if (context.status !== "observed") {
+    throw new Error("variant_gallery_not_observed");
+  }
   if (
     context.galleryReview.some(
       (image) =>

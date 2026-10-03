@@ -11,7 +11,7 @@ export function variantPages(input: {
   return input.variants.map((member) => {
     const { variant, operationId } = member;
     const source =
-      member.status === "ready" ? member.planned.sourcePlan.source : input.sourcePlan.source;
+      member.status !== "review" ? member.planned.sourcePlan.source : input.sourcePlan.source;
     return {
       operationId,
       page: {

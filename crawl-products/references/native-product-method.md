@@ -113,3 +113,11 @@ const result = await runHarvest(browser, browser.tab, plan, {
 保存 `field-preview.json`、`profile-validation.json`、方法 candidate 副本、截图、`capture-review.json`；逐张查看落盘原图。只凭一次单品成功不能更新为全站已验证 profile。方法错误只能在收割前基于已保存原件修正并保留预览版本；收割后发现问题保持本次结果并返回 needs_review，不清空重抓。
 
 图库完整性、规格完整性和后续业务成功是三件事。保留网站确切图片归属；商品共用图的 variantId=null，不猜规格。保存完成后宿主关闭确切任务页并验证消失；模型不操作其他页、接管空间或开启后台任务。
+
+## DTC 规格资料分流
+
+规格选中状态必须实际观察并留存独立方法，默认项也不例外。资料已对应选中规格时使用 `status:observed` 和逐图 `galleryReview`；图库/Facts 仍混在一起时使用 `status:mixed`、`basis:variant-state`、完整 `galleryUrls`、实际 `methodPath` 与观察证据。mixed 不要求浏览器先做图片归属，页面关闭后由 DTC 前置复用 OCR，再让 Codex 根据网站规格和原图判断。两路最终都回到旧单品 Facts 流程。
+
+URL 变化不证明资料隔离，URL 不变也不证明无法隔离。没有独立规格 URL 时，提供 `selectedState:{rule:{source,selector,attribute},value:实际variantId}`，规则必须指向已保存页面中的实际选中状态，不能指向规格清单任意项。有独立地址时明确访问、验证自身身份，再保存；保存 HTML 的工具不自动导航，客户端遗留的旧 JSON 不当成新规格原件。
+
+所有 observed/mixed 上下文都用 `readObservedVariant` 完成原件预检，保留最终 context、method、passed:true 于 `variant-preflight.json`。mixed 必须保留完整图库；缺少状态或原件则 `unresolved`，OCR 不负责猜补采集。共用 Facts 必须有明确依据，不能由相同图片、相似成分、文件名或轮播位置推定。

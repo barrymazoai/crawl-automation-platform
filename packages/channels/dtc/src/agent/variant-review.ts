@@ -37,15 +37,24 @@ const scopeRule = z.union([
   }),
   z.strictObject({ ...location, pointer: z.string().startsWith("/") }),
 ]);
+const selectedState = z.strictObject({ rule: scopeRule, value: z.string().min(1) }).optional();
 export const VariantContextSchema = z.union([
-  observed.extend({ basis: z.literal("variant-state") }),
+  observed.extend({ basis: z.literal("variant-state"), selectedState }),
   observed.extend({
     basis: z.literal("website-shared"),
     sharedScope: z.strictObject({ rule: scopeRule, text: z.string().min(1).max(16000) }),
+  }),
+  z.strictObject({
+    ...proof,
+    status: z.literal("mixed"),
+    basis: z.literal("variant-state"),
+    methodPath: z.string().min(1),
+    selectedState,
+    galleryUrls: z.array(z.url()).min(1).max(100),
   }),
   z.strictObject({ ...proof, status: z.literal("unresolved") }),
 ]);
 export type ObservedVariantContext = Extract<
   z.infer<typeof VariantContextSchema>,
-  { status: "observed" }
+  { status: "observed" | "mixed" }
 >;

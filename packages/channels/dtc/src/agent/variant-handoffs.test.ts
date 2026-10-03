@@ -23,7 +23,7 @@ it("isolates mixed flavour text/images and preserves every website variant inclu
   expect(new Set(members.map((member) => member.operationId)).size).toBe(2);
   for (const member of members) {
     if (member.status !== "ready") {
-      throw new Error(member.reason);
+      throw new Error(member.status === "review" ? member.reason : "Unexpected mixed fixture");
     }
     const plan = member.planned.sourcePlan;
     const saved = JSON.parse(Buffer.from(test.data.get(plan.source.objectKey) ?? []).toString());

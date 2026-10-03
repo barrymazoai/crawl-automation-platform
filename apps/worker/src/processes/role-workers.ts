@@ -12,6 +12,10 @@ import {
 } from "../activities/enrichment-activities.js";
 import type { WorkerParts } from "../container.js";
 import type { ProcessRole, WorkerRole } from "./process-config.js";
+import {
+  dtcGalleryPipelineActivities,
+  dtcGalleryModelActivities,
+} from "../activities/dtc-gallery-activities.js";
 
 type RoleWork = Pick<WorkerSpec, "activities" | "workflowBundlePath">;
 
@@ -24,6 +28,7 @@ const roleWork: Record<WorkerRole, (parts: WorkerParts) => RoleWork> = {
     activities: {
       ...pipelineActivities(parts),
       ...enrichmentPipelineActivities(parts),
+      ...dtcGalleryPipelineActivities(parts),
       ...collectionActivities(parts),
       ...brandListingActivities(parts),
     },
@@ -33,7 +38,11 @@ const roleWork: Record<WorkerRole, (parts: WorkerParts) => RoleWork> = {
   label: (parts) => ({ activities: labelActivities(parts), workflowBundlePath }),
   "label-ocr": (parts) => ({ activities: ocrActivities(parts) }),
   "label-model": (parts) => ({
-    activities: { ...modelActivities(parts), ...enrichmentModelActivities(parts) },
+    activities: {
+      ...modelActivities(parts),
+      ...enrichmentModelActivities(parts),
+      ...dtcGalleryModelActivities(parts),
+    },
   }),
   resources: (parts) => ({ activities: resourceActivities(parts) }),
   // Browser workers run on each Mac mini with Ego for DTC and Amazon Store-page brands.

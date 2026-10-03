@@ -92,3 +92,25 @@ it("requires the same exact shared website statement as the host", async () => {
   context.sharedScope.text = "Invented common formula";
   await expect(readObservedVariant(root, base, context, method)).rejects.toThrow("variant_shared_scope_statement_mismatch");
 });
+
+it("accepts an unchanged URL only with a replayable selected-state value, for isolated or mixed material", async () => {
+  const { root, method, base, galleryProof } = await fixture();
+  method.sources[0].url = url;
+  const state = { rule: { source: 0, selector: 'input[name="id"]', attribute: "value" }, value: "22" };
+  for (const status of ["observed", "mixed"]) {
+    const context = { status, basis: "variant-state", variantId: "22", selectedState: state,
+      ...(status === "observed" ? galleryProof : { galleryUrls: galleryProof.galleryUrls }) };
+    expect((await readObservedVariant(root, base, context, method)).variants).toEqual(base.variants);
+    await expect(readObservedVariant(root, base, { ...context, variantId: "12", selectedState: { ...state, value: "12" } }, method))
+      .rejects.toThrow("variant_selected_state_mismatch");
+  }
+});
+
+it("allows a changed URL with mixed material only when all gallery originals remain in the handoff", async () => {
+  const { root, method, base, galleryProof } = await fixture();
+  const selected = { ...method, productUrl: method.sources[0].url };
+  const context = { status: "mixed", basis: "variant-state", variantId: "22", galleryUrls: galleryProof.galleryUrls };
+  expect((await readObservedVariant(root, base, context, selected)).variants).toEqual(base.variants);
+  await expect(readObservedVariant(root, base, { ...context, galleryUrls: [] }, selected))
+    .rejects.toThrow("variant_mixed_gallery_incomplete");
+});
