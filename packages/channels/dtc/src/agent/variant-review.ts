@@ -11,6 +11,18 @@ const observed = z.strictObject({
   status: z.literal("observed"),
   methodPath: z.string().min(1),
   galleryUrls: z.array(z.url()).min(1).max(100),
+  galleryReview: z
+    .array(
+      z.strictObject({
+        url: z.url(),
+        status: z.enum(["applicable", "other-variant", "unresolved"]),
+        basis: z.enum(["website-binding", "visual-content", "website-shared"]).optional(),
+        reason: z.string().min(1).max(4000),
+        evidence: z.array(z.string().min(1)).min(1).max(200),
+      }),
+    )
+    .min(1)
+    .max(100),
   difference: z.strictObject({ kind: FamilyDifferenceSchema, group: z.string().min(1) }).optional(),
 });
 const location = {

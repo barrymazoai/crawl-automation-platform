@@ -37,7 +37,10 @@ async function fixture() {
       description: { source: 0, selector: "main .details" } },
     platform: { kind: "shopify", source: 1, pointer: "/product" },
   };
-  return { root, method, base: await readObservedProduct(root, method), html };
+  const image = "https://shop.test/gallery/package.png";
+  return { root, method, base: { ...await readObservedProduct(root, method), gallery: [{ url: image }] }, html,
+    galleryProof: { galleryUrls: [image], galleryReview: [{ url: image, status: "applicable", basis: "visual-content",
+      reason: "This fixture package names the selected website option", evidence: ["package.png"] }] } };
 }
 
 it("identifies a base method incorrectly reused as either selected state before harvest", async () => {
@@ -49,10 +52,10 @@ it("identifies a base method incorrectly reused as either selected state before 
 });
 
 it("reuses the actual current-state original under a distinct method without changing the base or any file", async () => {
-  const { root, method, base, html } = await fixture();
+  const { root, method, base, html, galleryProof } = await fixture();
   const selectedMethod = { ...method, productUrl: method.sources[0].url };
   const observed = await readObservedVariant(root, base,
-    { status: "observed", basis: "variant-state", variantId: "22" }, selectedMethod);
+    { status: "observed", basis: "variant-state", variantId: "22", ...galleryProof }, selectedMethod);
   expect(observed.variants).toEqual(base.variants);
   expect(observed.fields).toEqual(base.fields);
   expect(method.productUrl).toBe(url);
@@ -80,8 +83,8 @@ it("rejects changed website inventory and invented or duplicate identities", asy
 });
 
 it("requires the same exact shared website statement as the host", async () => {
-  const { root, method, base } = await fixture();
-  const context = { status: "observed", basis: "website-shared", variantId: "12" };
+  const { root, method, base, galleryProof } = await fixture();
+  const context = { status: "observed", basis: "website-shared", variantId: "12", ...galleryProof };
   await expect(readObservedVariant(root, base, context, method)).rejects.toThrow("variant_shared_scope_statement_required");
   context.sharedScope = { rule: { source: 1, pointer: "/product/shared" },
     text: "The listed product details apply to both One Week and 30 Day packages." };

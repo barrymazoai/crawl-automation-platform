@@ -1,20 +1,8 @@
-import { mkdtemp, realpath } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { RetainedPublication, sha256, type ObjectStore } from "@crawl-automation/platform";
-import { ProductSourcePlans } from "@crawl-automation/channels-core";
-import { readObservedProduct } from "../../../../../crawl-products/lib/observed-product.mjs";
-import { capturedProductProjection } from "./product-projection.js";
-import { DtcVariantHandoffs } from "./variant-handoffs.js";
-import { CaptureReviewSchema } from "./product-review.js";
-import type { CaptureFile } from "./archive.js";
-import type { HarvestRecord } from "./product-record.js";
-import { createDtcAdapter } from "../adapter.js";
-import { dtcSitePolicy } from "../site-policy.js";
-
-import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { rm, writeFile } from "node:fs/promises";
+import { readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { DtcAgentFileTransport } from "./file-transport.js";
+import { variantCaptureFixture } from "./variant-capture-fixture.js";
 
 let test: Awaited<ReturnType<typeof variantCaptureFixture>>;
 beforeEach(async () => {
@@ -144,6 +132,49 @@ it("reports both old unscoped variants as Review without inventing a default for
   expect([...test.data.keys()].some((key) => key.includes("projection.json"))).toBe(false);
 });
 
+it.each([
+  "missing-review",
+  "mixed-gallery",
+  "unarchived-proof",
+  "changed-final-context",
+  "missing-preflight",
+])(
+  "isolates a variant with %s while retaining the healthy sibling and full inventory",
+  async (failure) => {
+    const context = (test.input.review.variantContexts ?? [])[0] as Record<string, unknown>;
+    if (failure === "missing-review") {
+      delete context["galleryReview"];
+    }
+    if (failure === "mixed-gallery") {
+      test.input.review.imageAssignments.forEach((image) => {
+        image.variantId = null;
+      });
+      context["galleryUrls"] = test.input.record.gallery.map((image) => image.url);
+    }
+    if (failure === "unarchived-proof") {
+      const first = (context["galleryReview"] as { evidence: string[] }[])[0];
+      if (!first) {
+        throw new Error("Fixture gallery missing");
+      }
+      first.evidence = ["never-observed.png"];
+    }
+    if (failure === "changed-final-context") {
+      context["reason"] = "Changed after preview";
+    }
+    if (failure === "missing-preflight") {
+      const raw = JSON.parse(await readFile(join(test.root, "variant-preflight.json"), "utf8"));
+      raw.contexts.shift();
+      const index = test.input.files.findIndex((file) => file.path === "variant-preflight.json");
+      test.input.files.splice(index, 1);
+      await test.save("variant-preflight.json", JSON.stringify(raw));
+    }
+    const members = await test.publish();
+    expect(members.map((member) => member.status)).toEqual(["review", "ready"]);
+    expect(members.map((member) => member.variant.sku)).toEqual(["ORANGE", "BERRY"]);
+    expect(test.input.record.gallery).toHaveLength(2);
+  },
+);
+
 it("uses an explicit website-shared scope only when retained and does not infer it from null image bindings", async () => {
   const contexts = test.input.review.variantContexts as Record<string, unknown>[];
   for (const context of contexts) {
@@ -159,6 +190,7 @@ it("uses an explicit website-shared scope only when retained and does not infer 
   test.input.review.imageAssignments.forEach((image) => {
     image.variantId = null;
   });
+  await test.preflight();
   const members = await test.publish();
   expect(members.map((member) => member.status)).toEqual(["ready", "ready"]);
   expect(members[1]).toMatchObject({ planned: { family: { differsBy: "size" } } });
@@ -207,193 +239,3 @@ it("limits an explicit-variant task to the requested website identity", async ()
     variant: { variantId: "2", sku: "BERRY", price: "34.99" },
   });
 });
-
-/** Synthetic website originals for offline isolation tests; no browser/network/model. */
-async function variantCaptureFixture() {
-  const root = await realpath(await mkdtemp(join(tmpdir(), "dtc-variants-")));
-  const data = new Map<string, Uint8Array>();
-  const store: ObjectStore = {
-    read: async (key) => data.get(key) ?? null,
-    create: async (key, bytes) => {
-      if (data.has(key)) {
-        return "exists";
-      }
-      data.set(key, bytes);
-      return "created";
-    },
-  };
-  const publication = new RetainedPublication(store, store);
-  const files: CaptureFile[] = [];
-  async function save(path: string, text: string) {
-    const bytes = Buffer.from(text);
-    await writeFile(join(root, path), bytes);
-    const file = {
-      path,
-      objectKey: `original/${path}`,
-      sha256: sha256(bytes),
-      byteSize: bytes.length,
-      mediaType: "application/octet-stream",
-    };
-    files.push(file);
-    data.set(file.objectKey, bytes);
-    return file;
-  }
-  const url = "https://shop.example/products/zinc";
-  const json = await save(
-    "product.json",
-    JSON.stringify({
-      product: {
-        id: 99,
-        handle: "zinc",
-        title: "Zinc",
-        vendor: "Actual Brand",
-        body_html: "Website base description",
-        shared_scope: "These product details and the shared gallery apply to Orange and Berry.",
-        options: ["Flavour"],
-        variants: [
-          {
-            id: 1,
-            title: "Orange",
-            option1: "Orange",
-            sku: "ORANGE",
-            price: "9.99",
-            available: false,
-          },
-          {
-            id: 2,
-            title: "Berry",
-            option1: "Berry",
-            sku: "BERRY",
-            price: "34.99",
-            available: true,
-          },
-        ],
-      },
-    }),
-  );
-  const source = { path: json.path, sha256: json.sha256, kind: "json", url: `${url}.json` };
-  const baseMethod = {
-    codec: "observed-product/1",
-    productUrl: url,
-    sources: [source],
-    fields: {
-      title: { source: 0, pointer: "/product/title" },
-      brand: { source: 0, pointer: "/product/vendor" },
-      description: { source: 0, pointer: "/product/body_html" },
-    },
-    platform: { kind: "shopify", source: 0, pointer: "/product" },
-  };
-  await save("base-method.json", JSON.stringify(baseMethod));
-  const contexts = [];
-  const gallery = [];
-  for (const id of ["1", "2"]) {
-    const variantUrl = `${url}?variant=${id}`;
-    const dom = await save(
-      `variant-${id}.html`,
-      `<main><p class="ingredients">${id === "1" ? "Orange peel" : "Berry extract"}</p></main>`,
-    );
-    const method = {
-      ...baseMethod,
-      productUrl: variantUrl,
-      sources: [source, { path: dom.path, sha256: dom.sha256, kind: "dom", url: variantUrl }],
-      fields: { ...baseMethod.fields, ingredients: { source: 1, selector: "main .ingredients" } },
-    };
-    await save(`method-${id}.json`, JSON.stringify(method));
-    await save(`image-${id}.png`, `retained-image-${id}`);
-    const imageUrl = `https://shop.example/gallery/${id}.png`;
-    gallery.push({ url: imageUrl, localPath: `image-${id}.png`, mime: "image/png" });
-    contexts.push({
-      variantId: id,
-      status: "observed",
-      methodPath: `method-${id}.json`,
-      galleryUrls: [imageUrl],
-      basis: "variant-state",
-      reason: "Observed website option and associated details",
-      evidence: [dom.path],
-      difference: { kind: "flavour", group: "Flavour" },
-    });
-  }
-  const record: HarvestRecord = {
-    ...(await readObservedProduct(root, baseMethod)),
-    productUrl: url,
-    variants: [],
-    pageHtml: "variant-1.html",
-    flags: [],
-    gallery,
-  };
-  record.variants = (await readObservedProduct(root, baseMethod)).variants;
-  const review = CaptureReviewSchema.parse({
-    productUrl: url,
-    selectedVariantId: "1",
-    galleryUrls: gallery.map((image) => image.url),
-    galleryComplete: true,
-    variantsComplete: true,
-    detailComplete: true,
-    method: "Observed both options",
-    surface: "local_file",
-    verifier: "codex",
-    evidence: ["variant-1.html", "variant-2.html"],
-    variantContexts: contexts,
-    imageAssignments: gallery.map((image, index) => ({
-      url: image.url,
-      variantId: String(index + 1),
-      basis: "variant-featured",
-    })),
-  });
-  const site = dtcSitePolicy({
-    siteKey: "shop.example",
-    platform: "shopify",
-    catalogUrl: "https://shop.example/collections/all",
-  });
-  const parsed = capturedProductProjection({ record, review, url, site });
-  const planning = createDtcAdapter([site]).planning;
-  if (!planning) {
-    throw new Error("fixture requires planning");
-  }
-  const compat = {
-    schemaVersion: 1 as const,
-    implementationVersion: "test/1",
-    policyVersion: "test/1",
-    resultSchemaVersion: 2 as const,
-    configFingerprint: "a".repeat(64),
-  };
-  const sourcePlans = new ProductSourcePlans(publication, {
-    egressId: "test-egress",
-    text: { ...compat, module: "codex.text" },
-    ocr: { ...compat, module: "ocr.file" },
-    visionConfigFingerprint: "b".repeat(64),
-  });
-  const input = {
-    root,
-    files,
-    record,
-    review,
-    site,
-    parsed,
-    planning: { ...planning, parserVersion: "dtc-agent/1" as const },
-    images: gallery.map((image) => ({
-      ...files.find((file) => file.path === image.localPath),
-      url: image.url,
-      mediaType: image.mime,
-    })),
-    request: {
-      runId: "11111111-1111-4111-8111-111111111111",
-      channel: "dtc" as const,
-      url,
-      brandId: "22222222-2222-4222-8222-222222222222",
-      sourceId: "33333333-3333-4333-8333-333333333333",
-      operationId: "capture-test",
-    },
-  };
-  const handoffs = new DtcVariantHandoffs({ publication, sourcePlans });
-  return {
-    root,
-    input,
-    publication,
-    data,
-    contexts,
-    save,
-    handoffs,
-    publish: () => handoffs.publish(input, new AbortController().signal),
-  };
-}

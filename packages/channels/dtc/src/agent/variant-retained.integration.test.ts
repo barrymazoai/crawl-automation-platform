@@ -98,11 +98,6 @@ it.skipIf(!process.env["CRAWL_RETAINED_DTC_WRONG_STATE_CAPTURE"])(
       throw new Error("Expected archived product");
     }
     expect(result.variants?.map((member) => member.status)).toEqual(["review", "review"]);
-    for (const member of result.variants ?? []) {
-      expect(member.status === "review" && member.reason).toContain(
-        "variant_method_requires_selected_url",
-      );
-    }
     const root = join(workspace, "capture");
     const [base] = JSON.parse(await readFile(join(root, "evidence/records.json"), "utf8"));
     const method = JSON.parse(await readFile(join(root, "observed-product/1/method.json"), "utf8"));
@@ -110,19 +105,50 @@ it.skipIf(!process.env["CRAWL_RETAINED_DTC_WRONG_STATE_CAPTURE"])(
       (source: { kind: string }) => source.kind === "dom",
     ).url;
     // Derived in-memory method only: checks structural eligibility, not semantic label scope or a new success.
-    const preview = await readObservedVariant(
-      root,
-      base,
-      {
-        status: "observed",
-        basis: "variant-state",
-        variantId: "54311689552238",
-      },
-      { ...method, productUrl: selectedUrl },
-    );
-    expect(preview.sourceUrl).toBe(selectedUrl);
-    expect(preview.variants).toEqual(base.variants);
+    await expect(
+      readObservedVariant(
+        root,
+        base,
+        {
+          status: "observed",
+          basis: "variant-state",
+          variantId: "54311689552238",
+        },
+        { ...method, productUrl: selectedUrl },
+      ),
+    ).rejects.toThrow("variant_gallery_selection_required");
     expect(method.productUrl).not.toContain("variant=");
+  },
+);
+
+it.skipIf(!process.env["CRAWL_RETAINED_DTC_MIXED_GALLERY_CAPTURE"])(
+  "rejects Solaray's actual null-bound mixed gallery without publishing a variant projection",
+  async () => {
+    const { result, data } = await retained(
+      process.env["CRAWL_RETAINED_DTC_MIXED_GALLERY_CAPTURE"] ?? "",
+    );
+    if (result.status !== "captured") {
+      throw new Error("Expected archived product");
+    }
+    expect(
+      result.variants?.map((member) => ({
+        status: member.status,
+        sku: member.variant.sku,
+        price: member.variant.price,
+      })),
+    ).toEqual([
+      { status: "review", sku: "076280895049", price: "31.99" },
+      { status: "review", sku: "076280549010", price: "18.39" },
+    ]);
+    expect(
+      [...data.keys()].filter(
+        (key) => key.includes("dtc-variant-") && key.endsWith("projection.json"),
+      ),
+    ).toHaveLength(0);
+    expect(result.variantPages?.map((entry) => entry.page.commerce?.sku)).toEqual([
+      "076280895049",
+      "076280549010",
+    ]);
   },
 );
 

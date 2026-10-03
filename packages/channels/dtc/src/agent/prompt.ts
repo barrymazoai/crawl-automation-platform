@@ -42,7 +42,7 @@ export function capturePrompt(input: PromptInput): string {
    const browser = createEgoBrowser({task, page, targetId:${JSON.stringify(input.targetId)}, listTaskSpaces, workDir:${JSON.stringify(input.cwd)}, captureMode:${JSON.stringify(input.mode)}, productUrl:${JSON.stringify(input.mode === "product" ? input.url : null)}});
    const tab = browser.tab; browserMode="ego-native"。该适配仅复用旧 harvest 方法，不启动服务。
    ${mechanicalInstructions(input)}
-6. 主脚本放任务根目录 run-capture.mjs；先 node --check 再由 ego-browser nodejs -e 'await import("file://绝对脚本路径")' 执行。截图和采集文件都保存到 outDir，所有证据路径相对 outDir。
+6. 主脚本放任务根目录 run-capture.mjs；先 node --check 再由 ego-browser nodejs -e 'await import("file://绝对脚本路径")' 执行。其他多行浏览器观察脚本也先写成任务目录内的 .mjs 文件并 node --check，再用同一 import 方式执行，避免多层 shell 引号改坏选择器或脚本。taskSpace/listTaskSpaces 使用注入全局，不从 CLI 文件 import。截图和采集文件都保存到 outDir，所有证据路径相对 outDir；每次新观察使用新文件名，不复用脚本覆盖之前的截图。
    校验脚本后直接使用这条完整命令，不缩写目录哈希：${captureCommand(input)}
    不改引擎源码或手改 harvest-result/checkpoint/evidence。仅 product 模式可按 native-product-method.md 提供明确的 hooks.extract；所有字段和规格通过保存原件上的实际位置读取，保留 fieldEvidence，不能在收割后补值。
    禁止删除、清空或覆盖已取得的 HTML/图片/证据记录，禁止触碰 native-originals 原始副本；采集后若发现混入其他商品、资料缺失或需要 fresh 重抓，保留当前产物并返回 needs_review，不能清 checkpoint 重启任务。修正路线必须在收割前完成。

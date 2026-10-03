@@ -18,6 +18,8 @@
 - `website-shared`：仅当网站明确说明这些内容适用于该规格/全部这些规格时使用，可以引用基础商品方法。必须增加 `sharedScope:{rule:{source:原件下标,selector:"明确声明的确切DOM位置"},text:"该位置读取的完整网站原文"}`；JSON 可用 pointer，读取规则与字段方法相同。先用 `readObservedField(outDir, observedMethod, rule)` 核对原文；宿主会按原件散列重放位置并逐字比对。reason 解释该原文为何明确覆盖此规格及本次资料范围，不能把自己的总结填作网站原文。网页普通商品描述、单一轮播、当前默认选项、图库未变化、商品名相同或图片没绑定，都不是网站共用声明。找不到明确声明时，实际操作各规格并走 `variant-state`；不可访问或范围仍有冲突的规格记 unresolved。基础商品共用的方法不能带默认规格 SKU/价格。
 - 不同配方/口味/剂量的内容按网站选项和对应区块分别指定；不得复制兄弟规格的原料、用法或 Facts。网站明确的尺寸/包装数量关系可加 `difference:{"kind":"size"或"pack-count","group":"网站实际选项组名"}`；其他关系可用 flavour/strength/form/unknown。不凭关键词自动分类；该声明仅允许后续尝试现有的标签一致性检查，不直接复用配方。
 - 各状态观察到的新图库原图加入基础收割的 `observedGalleryUrls` 并全部保存，再在每项中引用已保存子集；不可用其他规格明确绑定的图片。
+- 每个 observed 上下文增加 `galleryReview`，逐图覆盖全部 `observedGalleryUrls`。每项为 `{url,status:"applicable"|"other-variant"|"unresolved",reason,evidence:["实际查看的截图或原图"]}`；applicable 还需 `basis:"website-binding"|"visual-content"|"website-shared"`。website-binding 要与网站确切绑定一致，visual-content 要说明实际图中文字/包装标记为什么对应网站已知规格；website-shared 必须有本上下文的 sharedScope 声明。**切换后仍显示、图片绑定为空、文件名/alt、共用轮播本身均不证明适用。** 比如同一轮播包含 120ct 与 240ct 的包装和成分表，应保存全部图，但不能把两种每瓶份数的表都交给 120ct。此步骤限定图片使用范围，不从图片采集规格，也不执行配方语义提取。
+- `galleryUrls` 恰好等于 galleryReview 中 applicable 的 URL；其余图仍在基础商品原件中，不能改绑给当前规格。没有任何已确认适用图片时该规格 unresolved，其他规格继续。默认选项也须独立保存状态，采前漏存可以通过真实控件切回补证，不能直接把“没保存”说成“网站不可访问”。
 - 无法确认某规格的适用范围、选项不可访问或出现状态冲突，保存 `{"variantId":"真实ID","status":"unresolved","reason":"具体未确认内容","evidence":["实际证据路径"]}`。不要猜测，也不丢掉该规格。宿主会单独记 Review，继续处理其他规格。缺少上下文的旧原件也会这样保留，不能把旧基础商品成功冒充每个规格都成功。
 
 这些都是资料采集及交接，不在浏览器阶段执行 OCR、语义提取或入库；完成原件和复核后释放页面。
@@ -26,8 +28,13 @@
 
 ```js
 import { readObservedVariant } from "./lib/observed-variant.mjs"; // 按 skillRoot 使用绝对路径
-const checked = await readObservedVariant(outDir, basePreview, context, variantMethod);
+const checked = await readObservedVariant(outDir,
+  {...basePreview, gallery: observedGalleryUrls.map(url => ({url}))}, context, variantMethod);
+// 成功后保存最终上下文和方法；宿主会按相同原件重放，并与最终 capture-review 精确比对。
+preflight.contexts.push({context, method: variantMethod, passed: true});
 ```
+
+`variant-preflight.json` 格式为 `{contexts:[{context,method,passed:true}]}`，覆盖全部 observed 上下文。不能用空 galleryUrls 做来源预检后再填图库；完整图库逐图检查也在同一函数内。采前修改上下文必须重做预检、保留修订记录，最终文件只引用实际通过的版本。收割后发现范围错误保留产物并 Review，不手改范围补成成功。
 
 `variant_method_requires_selected_url` 表示错误引用了基础方法，`variant_source_selected_conflict` / `source_variant` 表示引用了另一个规格状态。基于已有原件另存正确方法，不改变原件 URL、散列或内容；需要新观察时在收割前操作。仍无法确认的规格明确记 unresolved。只有原件一致性通过后，再由模型核对资料的实际适用范围；预检不会替你判断共用配方，也不会导航、补字段或重抓。
 

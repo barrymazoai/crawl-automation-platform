@@ -1,5 +1,6 @@
 import { isDeepStrictEqual } from "node:util";
 import { readObservedProduct, readObservedField } from "./observed-product.mjs";
+import { verifyObservedGallery } from "./observed-gallery.mjs";
 
 /** The model previews the same source checks that the host repeats after archival. No navigation or writes. */
 export async function readObservedVariant(root, base, context, method) {
@@ -31,5 +32,6 @@ export async function readObservedVariant(root, base, context, method) {
       throw new Error("variant_shared_scope_statement_mismatch");
     }
   }
+  verifyObservedGallery(base, context);
   return observed;
 }
