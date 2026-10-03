@@ -20,6 +20,8 @@ it.each(["product", "catalog", "analysis"] as const)(
       targetId: "owned",
     });
     expect(prompt).toContain(`captureMode:${JSON.stringify(mode)}`);
+    expect(prompt).toContain("禁止调用 task.finish()");
+    expect(prompt).toContain("Ego skill 中成功时 finish 的默认步骤在本宿主中不适用");
     if (mode === "product") {
       expect(prompt).toContain("runHarvest(browser, tab, plan,");
       expect(prompt).toContain("observedGalleryUrls");
