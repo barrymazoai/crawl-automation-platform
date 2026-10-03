@@ -1,5 +1,29 @@
 # DTC 通知请求中断采集（CRAWLV3-185）
 
+## 当前进度：跨 CLI 丢失预加载已实证
+
+用户回复“好了”后，Space 6 的只读状态为 user；按本次明确授权 claim 成功。
+第二个失败分析 cdc9e58d… 经 `resources.verifyStop` 得到四项 stopped=true、
+released=true；精确 p6 消失，原失败及未知来源空白页保留。回执为 Server 一
+`manual-releases/dtc-native-20261002/notification185-first-fix-cleanup.json`。
+
+2026-10-03 10:24Z 在 Server 二作两次独立 Ego CLI 实测，只导航 data URL：
+
+- 第一次注册中性标记后导航，页面值为 `call-one`（10:24:11.892Z）。
+- 第二次 CLI 读旧文档仍有该值，再次导航后变为 null（10:24:33.337Z）。
+- p7 / target `76F7272873A7126EDAED664A0DACC9D2` 已关闭并验证消失。
+- 原始回执在 Server 二 `manual-releases/notification185-46d33f9/probe-{one,two}.json`。
+
+因此最初只在宿主开页阶段注册预加载不足。修正为宿主生成固定的
+`browser-preparation.mjs`，每次实际 Ego 调用在观察/导航前执行：核对当前空间控制权
+与精确任务页、为本次 CLI 注册定位/通知拒绝，并立即应用于现有文档；原始回执写入
+任务目录并随采集证据归档。模块显式接收当前 CLI 的 taskSpace/listTaskSpaces，
+不假设导入模块能读到调用方局部变量。产品固定 launcher 自动调用；站点分析、目录
+及临时观察脚本使用同一模块。旧采集方法保持原样，不添加产品规则或解析。
+
+策略版本为 `deny-each-ego-call/2`。静态检查与生成模块语法检查通过；修正后的
+跨调用实测与新的站点分析尚待部署验证。下文保留第一版补丁及失败过程。
+
 ## 已确认的原因
 
 Nature’s Truth 分析 `ec8a7bc7-397a-4230-adc9-67404b3c9975` 的原生 Ego 日志在

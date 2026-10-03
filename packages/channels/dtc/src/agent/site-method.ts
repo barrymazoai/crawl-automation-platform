@@ -37,7 +37,9 @@ export async function prepareSiteMethod(input: {
   const driver = pathToFileURL(join(input.skillRoot, "lib/site-capture.mjs")).href;
   await writeFile(
     join(input.cwd, "run-capture.mjs"),
-    `import { runSiteCapture } from ${JSON.stringify(driver)};\n` +
+    `import { prepareBrowserRound } from "./browser-preparation.mjs";\n` +
+      `import { runSiteCapture } from ${JSON.stringify(driver)};\n` +
+      `await prepareBrowserRound({ taskSpace, listTaskSpaces });\n` +
       `const result = await runSiteCapture(${JSON.stringify({ ...input, methodPath })}, { taskSpace, listTaskSpaces });\n` +
       `console.log(JSON.stringify(result));\n`,
     { flag: "wx" },

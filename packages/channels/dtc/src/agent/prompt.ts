@@ -39,7 +39,8 @@ export function capturePrompt(input: PromptInput): string {
 3. 只使用 Ego 原生 CLI ${input.cliPath} nodejs。禁止 Chrome、Playwright connectOverCDP、CDP 桥或另建浏览器。
 4. 宿主已创建唯一任务页：TaskSpace ${input.taskSpaceId}、label ${JSON.stringify(input.label)}、targetId ${JSON.stringify(input.targetId)}。
    taskSpace/listTaskSpaces 是 Ego nodejs 注入的全局，直接使用，不导入猜测的 SDK 路径。
-   用 await taskSpace(${input.taskSpaceId}) 和 task.page(${JSON.stringify(input.label)})；恢复的 Page 可能没有 targetId 属性，每次以 task.tabs() 中该 label 的 targetId 和 listTaskSpaces() 中该空间 ownership=agent 核对。
+   每次独立Ego调用（包含首次观察、后续导航和run-capture.mjs）都先从 ${input.cwd}/browser-preparation.mjs 导入prepareBrowserRound，再 const {task,page}=await prepareBrowserRound({taskSpace,listTaskSpaces})；不要改该宿主模块。它使用原生taskSpace/page核对ownership和精确任务页，在当前调用注册通知/定位拒绝并保存回执。设置不跨CLI保存，不能只在首次调用。
+   恢复的 Page 可能没有 targetId 属性，每次以 task.tabs() 中该 label 的 targetId 和 listTaskSpaces() 中该空间 ownership=agent 核对。
    不 newPage、不接管空间、不操作或关闭其他页。所有图片、HTML、截图保存完后由宿主关闭并验证本页消失。
    本次仅是长期 Worker 批次中的一个采集子任务，不是 Ego skill 所指的整个用户任务完成。禁止调用 task.finish()、task.handOff()、task.release()、page.close()，也不通过 CDP 关闭页面/浏览器或结束 round；不要创建 finish/cleanup 脚本。Ego skill 中成功时 finish 的默认步骤在本宿主中不适用：完成后只返回采集结果，由宿主关闭这一精确任务页、验证消失并结束 round，Space 继续保留给后续任务。遇到用户接管/权限提示仍立即停下，不接管或绕过。
 5. 按 Ego skill 直接观察、点击和截图。Ego 每次 nodejs 调用是新进程，显式重建句柄，不能依赖上一轮 JS 变量。

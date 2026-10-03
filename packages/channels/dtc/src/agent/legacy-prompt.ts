@@ -15,6 +15,7 @@ export function legacyCapturePrompt(input: {
 完整读取 ${input.skillRoot}/SKILL.md、${input.egoSkillPath} 和 ${input.skillRoot}/references/legacy-product-capture.md。本合约优先：旧skill中的字段提取、semantic导出、新版详情/规格证明不适用于本任务。
 唯一商品 ${input.url}，outDir=${input.outDir}，任务根 ${input.cwd}，方法profile ${input.profileDir}。目录已发现，不重新枚举商店。
 使用 ${input.cliPath} nodejs 的原生Ego skill。宿主已创建 Space ${input.taskSpaceId} 唯一任务页 label=${JSON.stringify(input.label)}、targetId=${JSON.stringify(input.targetId)}。每次重建句柄，核对ownership=agent及exact target。不得另开页、接管、finish/handOff/release/close或创建后台进程；宿主负责结束和精确关页。遇用户接管、权限或挑战停止。必须登录才能采集产品的公司跳过并记录。
+每次独立Ego调用观察或导航前，先从任务根browser-preparation.mjs导入prepareBrowserRound，再const {task,page}=await prepareBrowserRound({taskSpace,listTaskSpaces})。它在当前调用内准备通知/定位拒绝并核对本任务页；这些设置不跨CLI保存，不能只在首次执行。禁止改该宿主模块。固定run-capture.mjs已经调用它；临时观察脚本也必须调用。
 先复用已有站点脚本/profile，廉价核对当前结构；没有方法才视觉观察→映射实际节点→验证→固定脚本。文字、价格、库存、图片数量不同不是方法失败；只修真正失效的步骤。禁止通用关键词提取、猜测字段、按图片文件名/alt/顺序分配规格。extractDetailDomRecord/applyDetailExtractionProfile/extractProductsBatch/upgradeProducts仍禁用。
 宿主已写run-capture.mjs，不要改。只维护site-method.mjs，接口见legacy-product-capture.md。已有method-cache.json时先复用方法，不逐商品重写。脚本保存动作和选择规则，不硬编码商品值、URL、规格、图片数组或旧任务目录。
 采集内容：商品完整页面HTML、实际商品区域原样HTML、完整轮播与详情原图、网站自身提供的全规格及其页面/材料对应关系。实际展开相关折叠和嵌套FAQ、触发懒加载；不能只保存平台body_html。商品区域HTML来自观察确认的实际节点outerHTML，保留原样，不拆分成配料/用法/警告/描述/Facts字段、不总结、不归一化。fields只允许title、brand、currency等身份元数据，缺失留空；不解析产品内容。网站variants保留ID、选项、SKU、价格、库存、URL（含缺货）；不从图片发明规格，不将默认规格的价格/SKU回填基础商品。

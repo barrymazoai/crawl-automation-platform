@@ -103,6 +103,7 @@ export class DtcCaptureAgent {
   ) {
     const { cwd, outDir, page, prefix } = at;
     const { settings, ego } = this.deps;
+    await writeFile(join(cwd, "browser-preparation.mjs"), page.preparationModule(), { flag: "wx" });
     await this.method(request, at);
     const prompt = capturePrompt({
       ...request,
