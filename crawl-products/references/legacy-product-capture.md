@@ -25,6 +25,8 @@ export async function capture({ browser, tab, page, productUrl, outDir, skillRoo
 }
 ```
 
+网站规格可直接复用 `lib/platform-variants.mjs` 的 `normalizePlatformVariants` 整理ID/选项等元数据，保留网站实际选项名称；无需重写格式转换。缺失值保持缺失，不补默认SKU、库存或币种。
+
 每项 variantMaterials 只记录材料对应关系：
 
 - 可采集：`{variantId, status: "independent" 或 "mixed", pageHtml, productHtml, galleryUrls, reason}`。
