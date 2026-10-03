@@ -2,6 +2,7 @@ import { expect, it, vi } from "vitest";
 import { RetainedPublication, type ObjectStore } from "@crawl-automation/platform";
 import {
   DtcProductScope,
+  productScopeFields,
   validateProductScope,
   type ProductScopeInput,
   type ProductScopeModel,
@@ -142,6 +143,22 @@ it("refuses a bundle without two distinct cited components", () => {
     validateProductScope(
       { ...bundle, components: [bundle.components[0], bundle.components[0]] },
       fields,
+    ),
+  ).toThrow("processing scope");
+});
+
+it("accepts actual website variant citations and rejects invented counts", async () => {
+  const answer = {
+    ...single,
+    evidence: [{ field: "variants", quote: "120ct" }],
+  };
+  const context = fixture(answer);
+  const input = { ...context.input, variants: [{ title: "120ct" }, { title: "240ct" }] };
+  expect((await context.review.review(input, signal)).decision.kind).toBe("single_product");
+  expect(() =>
+    validateProductScope(
+      { ...answer, evidence: [{ field: "variants", quote: "360ct" }] },
+      productScopeFields(input),
     ),
   ).toThrow("processing scope");
 });
