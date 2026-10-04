@@ -12,7 +12,8 @@ export const ChannelProductEvidenceSchema = z.strictObject({ codec: z.literal("c
   listingId: ExecutionIdSchema, variantId: ExecutionIdSchema.nullable(), url, title: z.string().min(1).max(4000), brandRaw: z.string().max(1000).nullable(),
   variantOptions: z.array(z.string().max(500)).max(10), variants: z.array(ChannelEntrySchema.extend({
     sku: z.string().max(1000).optional(), options: z.record(z.string(), z.string()).optional(),
-    price: z.string().max(100).optional(), availability: z.string().max(100).optional(),
+    price: z.string().max(100).optional(), currency: z.string().max(20).optional(),
+    availability: z.string().max(100).optional(),
     available: z.boolean().optional(), imageUrl: url.optional(),
   })).max(200),
   detailsHtml: z.string().max(2000000).nullable(),

@@ -22,7 +22,7 @@ export function variantPages(input: {
         externalId: variant.listingId,
         commerce: schemaCommerce({
           ...variant,
-          priceCurrency: input.currency,
+          priceCurrency: variant.currency ?? input.currency,
           availability: variant.availability ?? variant.available,
         }),
         archive: { objectKey: source.objectKey, sha256: source.sha256 },

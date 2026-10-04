@@ -83,6 +83,7 @@ function productEvidence(input: ProjectionInput, observedBrand: string | null) {
       sku: variant.sku,
       options: variant.options,
       price: variant.price,
+      currency: variant.currency,
       availability: variant.availability,
       available: variant.available,
       imageUrl: variant.imageUrl,
