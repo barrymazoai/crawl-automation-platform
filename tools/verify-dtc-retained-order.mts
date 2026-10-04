@@ -86,7 +86,8 @@ try {
     sourceResult: await sourceHandle.result() });
   console.log(JSON.stringify({ stage: "originals-verified", sourceRunId, files: files.length, bytesVerified, order }));
   await processDtcRetainedSingle({ config, database, publication, temporal, original, retained,
-    scope, output, index: 0, archiveKey, archiveSha256: sha256(archive), purpose });
+    scope, output, index: 0, archiveKey, archiveSha256: sha256(archive), purpose,
+    preserveCaptureIdentity: true });
 } finally {
   await temporal.close();
   r2.close();
