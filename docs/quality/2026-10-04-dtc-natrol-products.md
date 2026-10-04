@@ -95,3 +95,28 @@ variantMaterials固定mixed。该商品仅一个variant，最终按原单商品L
 没有混合归属子流程；不能拿它证明多规格判定已修好。针对86b777b3的新已确认反馈继续
 精确绑定其SHA，要求去掉假选中状态及其依赖门槛、单规格复用原路径、notes不复制数量，
 保持已正确的板块修正。旧原件保持不变，本任务没有采后重抓。
+
+## B12终态与新的下游阻塞
+
+06:55:58Z root/Label均结束，仍为`CHANNEL.LABEL_NO_SOURCE` Review
+`chl-review-d9b303515631605566c64d8dcea3727a8b875c6822ab703ec607309c836e9222`，
+未得到新商品/enrichment。此次不是148再次漏板块：page文档已包含新增原始区块，
+文本模型抽到完整B12表和辅料，但将商品营销、标题、评论UI等逐段作为排除项。
+原`label-text/5`规则不接受这类整页正文排除，06:58:43Z Mini直接复用原文/原回答
+诊断仅有`LABEL.COVERAGE_UNCERTAIN`，没有`LABEL.EXTRACTION_INCOMPLETE`。
+
+图库image-3的Vision结果已registered，formulaComplete/ingredientsComplete=true，
+B12 1,000mcg、41,667%DV及完整辅料已读出；合并仍受文本覆盖失败阻断。
+最终主错误却取了无关末图的`LABEL_NO_SOURCE`，不能据此解释成网页或图库没有Facts。
+另有真实官网差异：正文为30 servings，Facts图为60；这是本商品原始资料差异，
+不得在解释规则失败时一并隐藏。此下游问题单独记207，206仍未完整验收。
+
+59份原件/4997388字节06:52:14Z全量R2回读通过；06:56:32Z两个Workflow、10许可/
+14执行停止审计invalid=[]。Server一证据`crosssite206-natrol-b12-{workflows,stop-proof,
+review,text-review,document,vision,text-diagnostic}.json`及`product-b3ba1835-dd38-4ab6-8060-6ae3e26f92a3-r2-proof.json`。
+后续方法反馈`260ff3911d3750c61d1544cab6f67a98472cf26b`经完整push检查，06:53:55Z
+Git新克隆/构建部署Server二；无其它channel变更，无单元测试，无旧业务重试。
+
+207首个修正仅处理诊断：同等处理进度下，DTC优先展示实际失败，避免最后一张
+没有标签的图片把文本覆盖失败冲掉。仍保持原完整性/来源冲突规则及原Review；
+其它channel继续原排序。使用本run留存的真实ordered progress验证，不重跑业务。

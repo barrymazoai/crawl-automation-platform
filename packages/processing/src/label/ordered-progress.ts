@@ -31,9 +31,7 @@ export function orderedProgress(request: OrderedProgress, evidence: OrderedEvide
     };
     return [{ failure, progress: outcome.progress + (conflict ? 10 : 0), index }];
   });
-  const reason = [...ranked].sort(
-    (left, right) => right.progress - left.progress || right.index - left.index,
-  )[0]?.failure;
+  const reason = primaryOrderedFailure(request.input.failurePolicy, ranked);
   return {
     complete: !evidence.terminal && merged?.status === "ready",
     terminal: evidence.terminal,
@@ -41,6 +39,21 @@ export function orderedProgress(request: OrderedProgress, evidence: OrderedEvide
     outcomes,
     codes: merged?.codes ?? [],
   };
+}
+
+/** Opted-in tasks prefer a real failure to an equally progressed source without a label. */
+export function primaryOrderedFailure(
+  policy: "source-failure-first/1" | undefined,
+  ranked: { failure: SourceFailure; progress: number; index: number }[],
+) {
+  const useful = (code: string) =>
+    policy === "source-failure-first/1" && code !== "CHANNEL.LABEL_NO_SOURCE" ? 1 : 0;
+  return [...ranked].sort(
+    (left, right) =>
+      right.progress - left.progress ||
+      useful(right.failure.code) - useful(left.failure.code) ||
+      right.index - left.index,
+  )[0]?.failure;
 }
 
 function sourceConflict(sections: string[], conflicts: string[]) {

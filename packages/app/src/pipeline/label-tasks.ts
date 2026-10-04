@@ -76,6 +76,7 @@ export class LabelTasks {
       text,
       visionConfigFingerprint,
       admission: "label-packaging/1",
+      ...(pipeline.channel === "dtc" ? { failurePolicy: "source-failure-first/1" } : {}),
       ...(policy ? { evidencePolicy: policy } : {}),
       ...(sourcePlan.sourcePolicy ? { sourcePolicy: sourcePlan.sourcePolicy } : {}),
       ...(corePolicy ? { corePolicy } : {}),

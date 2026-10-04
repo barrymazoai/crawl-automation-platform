@@ -35,6 +35,8 @@ export const LabelPlanInputSchema = z
     corePolicy: z.string().min(1).max(120).optional(),
     evidencePolicy: LabelEvidencePolicySchema.optional(),
     sourcePolicy: LabelSourcePolicySchema.optional(),
+    /** Diagnostics only: prefer a real failure to an equally progressed source without a label. */
+    failurePolicy: z.literal("source-failure-first/1").optional(),
     /** Packaging admission: the label is compared with the product's full page documents. */
     admission: z.literal("label-packaging/1").optional(),
   })
