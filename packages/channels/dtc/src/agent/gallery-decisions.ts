@@ -43,6 +43,7 @@ export async function readGalleryResults(
   }
   return results;
 }
+/** Candidates still require a joint comparison when more than one original is returned. */
 export function selectedGalleryImages(
   task: DtcGalleryTask,
   results: z.infer<typeof DtcGalleryImageResultSchema>[],
@@ -52,12 +53,18 @@ export function selectedGalleryImages(
   if (shared && task.websiteVariants.some((variant) => variant.variantId === variantId)) {
     return [shared];
   }
+  const facts = results.filter((result) => result.decision.kind === "facts");
+  const compareUnassigned =
+    facts.length > 1 &&
+    facts.every((result) => result.decision.basis === "scope-unassigned") &&
+    !results.some((result) => result.decision.kind === "unresolved") &&
+    task.websiteVariants.some((variant) => variant.variantId === variantId);
   return task.images.filter((image) =>
     results.some(
       (result) =>
         result.imageId === image.input.file.artifactId &&
         result.decision.kind === "facts" &&
-        result.decision.variantIds.includes(variantId),
+        (compareUnassigned || result.decision.variantIds.includes(variantId)),
     ),
   );
 }
