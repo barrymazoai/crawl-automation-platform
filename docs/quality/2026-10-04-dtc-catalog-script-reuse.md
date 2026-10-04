@@ -44,3 +44,20 @@ interactive时超时，模型直接结束。03:29:21Z Review，尚未执行固�
 完整采集通过。另由[202](2026-10-04-dtc-navigation-readiness.md)修正采前导航就绪边界。
 12原件及1许可/4执行停止审计通过。后续HMW `f8cc235d-097e-4cbc-b1e3-d81c2c0a8b53`
 03:29:26Z接续，沿既有6项小目录验证另一站点新建方法及固定入口。
+
+HMW于03:33:30Z Review，实际prepare将body.innerText包含过滤抽屉数量作为就绪条件，
+该文字不在可见bodyText中；不是网格不存在。17原件及1许可/4执行停止审计全部通过。
+具体原因及保留已观察方法的局部修正见[203](2026-10-04-dtc-catalog-readiness.md)。
+
+修复202后，新复用验证1cd66cda-8f77-42aa-83a3-7b5d493fea6c于03:41:40Z宿主
+complete/full=true、46项。使用相同verified脚本f19defade…且字节一致，无模型重写；
+两轮24+22，第二轮growth0。46条known/following、added0/newListings0/queued0，
+没有重复入队。35原件/5,840,432字节R2校验通过，1许可/4执行先停止后释放通过。
+200交Review：Natrol完整采集、方法保存及下次原样复用通过。目录成功不等于46商品
+业务处理成功，产品队列保持paused。HMW本次回归的局部准备错误由203继续验证。
+
+203在a6e9851实站回归通过：e9e5cf87于03:48:21Z完整6项、两轮零增长、recent6、
+added0/queued0；准确脚本4046bc19…保存为verified。31原件与1许可/4执行停止审计通过。
+本轮目录验证与真实脚本复用完成，运行Worker为a6e98515b76fa603628b53dc42c2abe05fcdab71。
+两个队列恢复paused，无活动目录/待清理项；未开启688项商品批次。后续覆盖仍需区分
+Jarrow目录、跨商品材料采集/变体与下游结果，不能将这里的52个目录条目称为52件成品数据。

@@ -16,3 +16,18 @@ CRAWLV3-203，关联200/183/151。HMW回归f8cc235d-097e-4cbc-b1e3-d81c2c0a8b53
 
 17原件/1,357,150字节于03:36:00Z全量R2回读通过；03:36:21Z停止审计1许可/4执行
 invalid=[]。历史失败不改写。静态检查、Mini真实原件与新站点验证待回填；不新增单元测试。
+
+a6e98515b76fa603628b53dc42c2abe05fcdab71已main push，pnpm check及MJS语法检查通过。
+03:43:22Z Git部署Server二browser-worker完成。03:43:45Z直接以原完整8065832a
+目录HTML验证：候选投影的6个URL集合与保存的发现集合相同，标题/品牌完整，数量节点
+原文6 products与卡片数相同。HTML SHA为4f171d22a2d603201e808a9cc1809d4b46171919999cbcddee3b2dd297dee734，
+回执Server二manual-releases/catalog203-retained/proof.json。新实站任务
+e9e5cf87-c2ac-44bf-8f18-4b8a57c23415于03:43:53Z单项入队，终态待核对。
+
+实站03:43:55Z开始，03:48:21Z宿主complete/full=true：6个唯一产品，单页两轮、
+第二轮growth0，expected/observed=6/6；recent6、added0/newListings0/queued0。
+实际查看preflight-grid-end截图，包含最后两张商品卡片和网格末端，不是网站页脚替代。
+修复候选未经模型改写，公共脚本与实际源字节一致，保存为verified：
+4046bc1983e6fa0b05d572d8d6b9897c79e66722a5b9c42a957716e12e0f9a3c。
+31原件/5,539,919字节03:48:52Z全量R2回读通过；03:49:00Z停止审计1许可/4执行
+invalid=[]。203交Review。没有重跑旧HMW商品或把历史Review改为成功。
