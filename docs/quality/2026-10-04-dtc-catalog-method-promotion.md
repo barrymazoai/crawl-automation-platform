@@ -16,3 +16,21 @@ CRAWLV3-201，关联 183/199/200/147/151。Natrol 新验证
 检查候选不创建公共条目、不替换已有条目的字节/文件身份，以及已验收 HMW 方法精确保存。
 没有网络采集、模型请求、单元测试或历史业务结果改写；不把这个验证冒充实站目录成功。
 pnpm check 已通过（22 类型任务），部署/留存验证和新的实站验证结果待追加。
+
+05e8445 于 02:45:27Z 经 main Git fresh clone/locked install/build 部署 Server 二，只切换
+browser-worker。02:45:44Z 上述 Mini 真实留存验证全部通过，proof 位于
+`manual-releases/catalog201-retained/proof.json`。失败候选 SHA 为 09b440fb…，成功 HMW
+方法 SHA 为 fcd279b3…；检查未调用浏览器/模型，未写生产方法缓存。
+
+原 Natrol 公共 profile 与失败回执完整 SHA 09b440fb65b761d044ae6b08f1df0658eedb3c9d13c566e1b649017580c80b35
+相同，02:45:20Z 已保存完整备份 `manual-releases/catalog201-invalid-natrol-profile.json`
+及同名 receipt 后撤下其活动路径，确认不存在；只撤下这个已证实无效的目录方法缓存。
+旧捕获及 R2 未改。随后手工创建新的单项 Natrol scan
+`1ed4f3ac-79ca-45b9-8fc7-d1fc827ed630`，商品队列仍 paused，实站验收待其终态。
+
+该 scan 于 02:52:16Z Review，实际发现主网格两页 24+22=46 项；失败发生在模型自写
+enumerate 的完成回执聚合，详见 200。公共 Natrol profile 在执行中及 Review 后均仍
+不存在：失败候选 SHA bf11d243…只留在本任务，没有晋升。02:53:54Z 全部 30 个文件 /
+2,716,842 字节 R2 大小与 SHA 回读通过；02:54:09Z 1 Workflow / 1 许可 / 4 执行的停止
+审计 invalid=[]。两队列 paused，held=[]。这证明真实失败路径不会污染公共缓存；
+正向晋升目前仅 Mini 已验收 HMW 原件隔离缓存验证通过，不能说新的 Natrol 完整目录已通过。

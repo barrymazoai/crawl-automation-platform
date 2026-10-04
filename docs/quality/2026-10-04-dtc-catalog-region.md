@@ -26,3 +26,13 @@ f844eb3 于 02:29:55Z 完成 Server 二 Git 部署。新 Natrol scan
 不能把已部署提示称为该问题已修好。候选方法在采集通过前就写进公共缓存的具体缺陷
 另由 [201](2026-10-04-dtc-catalog-method-promotion.md) 修复。1 许可 / 4 执行停止审计
 02:43:39Z invalid=[]，本轮旧任务不自动重试。
+
+撤下失败缓存后，05e8445 上的新 scan `1ed4f3ac-79ca-45b9-8fc7-d1fc827ed630` 已正确选择
+`.product-item a.h7`，两页分别 24、22 项，唯一总数 46；02:52:16Z 仍 Review。
+实际 run-capture.mjs 另写 enumerateObservedPages，将 onListingPage 页面对象（无 status）
+与两个 status=complete 的 seedReports 混合，再 every 判 complete，故产生假 incomplete。
+也不应把多页目录拆成 maxPagesPerSeed=1 的手写遍历回调。现有 collectProductUrls 已支持
+观察到的点击分页和独立完成回执，改为明确复用默认旧枚举器并提供最小参数调用参考，
+不另加品牌引擎、不改变已保存的失败结果或完成判据。实站验证待新修正部署后执行。
+
+此失败 30 原件 / 2,716,842 字节 R2 全量回读通过，1 许可 / 4 执行停止审计 invalid=[]。
