@@ -19,6 +19,14 @@
       "observation": "readState 用 URL query 兜底 selectedVariantId，independent 用原始 productHtml 字符串不等或图库 URL 不等判定。实际两规格链接显示相同图库，网页没有确认的选择控件，动态 HTML 差异被误报为资料独立。notes 还写入了上一商品的规格数量与图片数量。",
       "correction": "保留网站真实完整规格与URL，selectedVariantId 只能来自实际网站状态，未知留空。删除仅凭HTML字符串或图库URL差异决定independent的规则；局部观察当前网站真实资料关联，只有确认独立才用independent，无明确独立依据的共用/混合资料交既有mixed分路。保留各规格原件，不按文件名配图。notes 描述方法或当前实际观察，不能保留上一商品的数量断言。",
       "evidence": "run ae2f72a3-21e4-422e-8cbb-a5d5ede2f9be 的 site-method.mjs、materials.json 和两规格页面原件，见 docs/quality/2026-10-04-dtc-natrol-products.md"
+    },
+    {
+      "origin": "https://www.natrol.com",
+      "sha256": ["86b777b32801020856df0d2d421be68641fddcf2568baa934ad563a8a52eae00"],
+      "tickets": ["CRAWLV3-155", "CRAWLV3-206"],
+      "observation": "这一修订已正确补入原始 sliderNutritionFacts 区块，继续保留该修正。仍未落实上一反馈：readState 里 || new URL(location.href).searchParams.get('variant') || null 把请求参数当实际选中状态，后面的 selectedVariantId !== variantId 又依赖这个假状态；notes 把上次七张图库写成固定断言。",
+      "correction": "局部删除 selectedVariantId 的 URL query 兜底，实际控件未给出状态时留 null。不要再用这个已删除的兜底作为变体页面可保存的门槛：沿网站真实 variant.url 保存观察到的页面，未知选择状态也保留原件，材料独立性另按真实网页观察决定；真实页面身份冲突才 unresolved。仅一个网站 variant 时直接沿原单商品路径，materials.variants 可为空，不必额外导航或写 mixed。多规格时保留所有真实选项和各自URL；当前模板无明确独立资料关联才 mixed，若实际模板有控件/资料变化则局部观察再决定，不能对所有未来模板恒定 mixed。notes 的图片数量从当前 galleryUrls.length 取得或省略具体数量，不为新商品改写常量。不要重做已正确的原始板块保存。",
+      "evidence": "run b3ba1835-dd38-4ab6-8060-6ae3e26f92a3 的已执行 site-method.mjs、materials.json；Server二 manual-releases/crosssite206-natrol-b12-region-proof.json；docs/quality/2026-10-04-dtc-natrol-products.md"
     }
   ]
 }

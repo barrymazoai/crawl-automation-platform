@@ -76,3 +76,22 @@ ID43004492579036/SKU7281.957/14.49USD。正在观察这两个规格材料关联�
 及方法SHA的已确认缺陷到本任务。Codex先读反馈，局部修正对应步骤并保留其余方法；
 工作目录反馈随原采集证据归档，新方法SHA不自动继承旧缺陷。不加业务解析、关键词
 规则或采后复核。缓存samples只说明原件已归档，不再误称它证明下游正确。
+
+`1bb21ef31716cf9a5ac38c4f50a51263c6291aaf`静态/类型检查与push检查通过，06:44:45Z
+Server二经Git新克隆、锁定依赖、构建部署browser-worker，Server一下游保持4c178eca。
+06:45:04Z首次启动Natrol目录中的`https://www.natrol.com/products/methyl-b12-1000mcg-capsules-60ct`，
+run `b3ba1835-dd38-4ab6-8060-6ae3e26f92a3`，预检held=[]、实际资源健康、两DTC队列paused。
+Server一证据`crosssite206-natrol-b12-{intent,start}.json`。验证具体缺陷反馈被读取、原始板块
+保存范围及既有下游，尚未得到结果。
+
+06:48:57Z对留存原件的DOM核验通过：初始页和唯一规格页各有一个2985字节的
+`sliderNutritionFacts`板块，productHtml内各自与页面原件outerHTML相同（无重复）。
+证据Server二`manual-releases/crosssite206-natrol-b12-region-proof.json`。
+新方法`86b777b32801020856df0d2d421be68641fddcf2568baa934ad563a8a52eae00`
+已补范围，原图库7张/网站唯一规格51047470563548/SKU8561/22.99USD完整保留。
+
+206仍有未通过部分：实际代码依旧有URL query selectedVariantId兜底，notes写死七张图，
+variantMaterials固定mixed。该商品仅一个variant，最终按原单商品LabelWorkflow处理，
+没有混合归属子流程；不能拿它证明多规格判定已修好。针对86b777b3的新已确认反馈继续
+精确绑定其SHA，要求去掉假选中状态及其依赖门槛、单规格复用原路径、notes不复制数量，
+保持已正确的板块修正。旧原件保持不变，本任务没有采后重抓。
