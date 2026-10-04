@@ -66,3 +66,36 @@ variant_state_timeout，无下游子流程。方法调用了旧normalizePlatform
 另明确独立保存HTML/ID正确不证明资料已隔离，不能据此标independent。材料索引允许保留
 额外元数据（如initialPage），固定转换只使用既定字段；不因无害的附加路径拒绝整份采集。
 没有增加站点专用分支或业务解析。后续补丁和新验收结果另记，192仍In Progress。
+
+## 字段说明补丁后的独立验收
+
+`ab3d62c77a85f81dc7c736dcba5444786b5573cd`通过完整pnpm check，经main推送、Server二
+fresh Git clone/locked install/build，13:12:43.210Z仅browser-worker切换完成。
+13:13:35.341Z新独立验收`d45fe3e0-b54a-4a2b-bb99-a732c06d0bb6`启动，同一Solaray
+Magnesium Glycinate。预检held=[]，品牌队列paused且空，商品队列paused/644queued/7Review。
+保留原Review，不自动重排，不新增或运行单元测试。结果与方法复用验收待追加。
+
+2026-10-04 00:38Z恢复核对：该任务已于10-03 13:22:41.465Z collected，2/2规格成功。
+240ct（39660429836348）SKU076280895049、31.99，120ct（39660429803580）
+SKU076280549010、18.39；5张实际原图、每规格原样HTML完整保留。55份原件共12,186,497
+字节全量R2大小/SHA回读通过。浏览器页13:17:23.733Z/round13:17:23.896Z结束；
+parent还有既有商品范围判断Codex，最后执行13:18:43.196Z停止后13:19:10.275Z释放许可。
+
+真实混合流程处理5张图库，两个规格均ready；最终各自使用已确认的标签配方与enrichment
+缓存（reusedFormula/reused=true），不是声称本轮重新生成了两份配方。实际收录240ct=60
+servings、120ct=30 servings，均4 VegCaps，3配方行和3条其他配料。固定转换后的商品HTML
+分别与115,894/114,932字节原件逐字一致。全局held=[]，批量paused/644queued/7Review。
+
+方法744c8c2d…已真实留存，当前samples仅Magnesium Glycinate。审读发现方法仍无条件mixed，
+reason带本商品120ct/240ct，不能因此宣布跨商品可复用；此项交183继续实测/局部修正。
+192的真实规格身份与收割前检查交Review；183/184/151整体验收保持未完成。
+Server一materials192-followup-{workflows,products,projection-proof}.json及
+product-d45fe3e0-b54a-4a2b-bb99-a732c06d0bb6-r2-proof.json保留完整验证记录。
+
+全树清理复核：14个许可已全部释放，16个已登记执行均先停止后释放。另两个enrichment
+许可只命中缓存，未创建提供商执行，不能把执行表空值误报成未清理。
+`materials192-followup-stop-summary.json`记录该区分与验证结果。
+
+00:42:05.710Z继续原队列下项Tongkat Ali root，item9c5f8ca2…首次attempt0→1，
+run `fc02f046-693c-4a95-936c-ec50fd1b750f`。随即drain(graceSeconds=0)，643queued/
+7旧Review不变。本项用已保存方法验证183的跨商品加载与局部修正，实际结果待记录。
