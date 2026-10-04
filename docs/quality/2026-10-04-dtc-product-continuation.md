@@ -86,6 +86,46 @@ selection的finishGallery，两个规格最终handoff与此前成功结果逐字
 允许不改变含义的语法/标点/同义措辞；数字、成分身份、人群、条件或限定含义变化仍阻塞。
 比较缓存升v3，旧模型回答和派生Review不覆盖。下一次仅为新修订的留存材料验证。
 
+5c86f34修订已再次通过pnpm check，并以Git fresh clone/锁定安装/build部署到Server一
+label-model-worker；其余6作业unchanged，pipeline仍为8dfb01f。回执
+facts204-v3-model-{intent,result}.json。04:34:26Z开始新提示留存验证，工具输出
+Server二manual-releases/facts204-papaya-semantic，未触及原Review或网站。
+新派生run b4b1d310-2389-484e-972e-0eeec99cc783；原52文件/17,725,068字节再次校验通过。
+
+## 最终结果与剩余项
+
+04:36:52Z等价比较通过，两规格ready。两次模型联合原图判断都选相同代表图，明确记录
+脚注仅语法不同，数量/配方/DV/辅料含义一致；不是按文件名/OCR字符串或图序指定。
+website variant ID、90/180数量、SKU、8.99/12.69USD分别保留，未编造servings per container。
+
+- 90ct：04:39:51Z完成collected与新的enrichment registered（reused=false），
+  operation label-e0c4139c2b09bb4548603be6ae5ada19a6d16e0dcb74c8e67bb89ed15e145604。
+  原图逐项对照：8行Facts、1 Chewable Tablet和上述数量/DV均一致；每瓶份数null。
+  完整辅料文字保留为7条，末条“Silica and Stevia (leaf extract).”仍合在一起，
+  不声称已规范拆成8个独立辅料。当前记录没有漏掉这两个名称，不为此阻断继续覆盖。
+  选图SHA52bdb8069e25635ac59fb48c2722fed48df63287b222886ba695d743fb2f8782
+  与最初原件相同，04:41:42Z再次校验选图和assembly的R2字节/hash，enrichment原件读回成功。
+- 180ct：04:37:41Z下游Review VISION.LABEL_AMOUNT_STATE_CONFLICT；单独记录205。
+  模型把明确写在“Includes 0 g Added Sugars”行内的数量误当成没有独立数量列而不可读，
+  输出amount="."、amountStatus=unreadable。90ct同一原图正确返回0g/printed，说明是
+  共享Facts解析判定不稳定，不是采集缺失或204共用判断失败。不关闭校验、不回填结果，
+  旧失败保留，不自动重试。205追踪行内数量规则；194/197仍保留各自的问题。
+
+04:41:06Z本轮6个Workflow均结束，14许可/15已登记执行有先停止后释放证明，invalid=[]；
+04:40:37Z全局held=[]。两个原生产品任务页已在浏览器阶段结束时关闭，派生阶段无浏览器。
+商品队列paused：686 queued / 9 review / 2 completed / 46 following，attention=0。
+原Papaya队列Review不改成派生成功；未启动后续686项。
+
+204交Review（修复与Mini等价正例、不同份数隔离回归通过）。183/184/155/151继续进行中，
+本轮是Zinc可用结果加Papaya90ct新结果，不是Papaya2/2或全DTC验收通过。还需跨站的
+独立规格材料、不同配方/口味、缺货状态和完整多品牌队列覆盖；205为独立下游缺陷。
+所有验证均为Mini真实材料/真实处理与必要静态/构建检查，未增加或运行单元测试。
+
+Server一证据（共同目录manual-releases/dtc-native-20261002）：
+facts204-semantic-{workflows,stop-proof}.json；facts204-papaya90-{product,proof}.json；
+facts204-papaya180-vision.json；facts204-magnesium-{workflows,proof}.json。
+Server二facts204-papaya-semantic/{prepared,gallery-result,results}.json保存派生入口与结果。
+
 页面清理证据另核对：Zinc目标32A0D95F8027D7D0E13DF0E7F560E841于04:12:41Z确认不存在；
 Papaya目标09C4B6A61587B5FA2B9D2D37A991798B于04:18:12Z确认不存在，均在浏览器许可释放前。
 原Space6基线2B17A86DBCA4F3AC717200EF04BD6BA4保留，派生验收没有浏览器阶段。
