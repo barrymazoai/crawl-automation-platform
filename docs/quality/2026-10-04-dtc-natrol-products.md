@@ -120,3 +120,15 @@ Git新克隆/构建部署Server二；无其它channel变更，无单元测试，
 207首个修正仅处理诊断：同等处理进度下，DTC优先展示实际失败，避免最后一张
 没有标签的图片把文本覆盖失败冲掉。仍保持原完整性/来源冲突规则及原Review；
 其它channel继续原排序。使用本run留存的真实ordered progress验证，不重跑业务。
+
+诊断修复`9b8ed97fbd22b2041a978f7d1c16c9d542e539f8`已main提交/push并通过完整静态/
+类型检查。新DTC标签任务显式带`source-failure-first/1`；旧任务和其它channel保留旧排序。
+07:04:22Z在Server一新Git克隆构建中直接读取B12真实progress，新策略得到
+page/`TEXT.LABEL_COVERAGE_UNCERTAIN`，旧策略仍为image-0/`CHANNEL.LABEL_NO_SOURCE`。
+这是仅原件的新诊断策略验证，不是重跑业务，也不改写旧Review。
+
+07:04:27Z只切换Server一pipeline-worker/label-worker并完成健康核验，其余5进程原定义
+保留；Server二仍260ff39。Server一证据`crosssite207-natrol-b12-diagnostic-proof.json`、
+`crosssite207-deploy.json`。07:04:41Z held=[]，DTC商品/站点队列均paused，零running/
+cleanupPending。207的整页正文输入适配与来源差异处理尚未完成，206的方法修正亦未完整
+验收，下一轮先解决这些已知缺口，不盲目扩大商品批量。三项Natrol没有完整成功结果。
