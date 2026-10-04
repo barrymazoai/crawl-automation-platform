@@ -36,3 +36,25 @@ f844eb3 于 02:29:55Z 完成 Server 二 Git 部署。新 Natrol scan
 不另加品牌引擎、不改变已保存的失败结果或完成判据。实站验证待新修正部署后执行。
 
 此失败 30 原件 / 2,716,842 字节 R2 全量回读通过，1 许可 / 4 执行停止审计 invalid=[]。
+
+9c51e7addc027204d1c43d000aaa0f07b7f71b9b 已于 02:56:43Z Git fresh clone/build 部署
+Server 二，pnpm check 通过，无单元测试。新 scan `cf03ab1c-d195-4bda-a42b-957d9df35b45`
+02:57:32Z 启动。实际脚本已不重写 enumerate，但模型又把 footer 当分页检查位置，声明
+scroll、paginationActions=[]。只读下载并实际查看 preflight-pagination-4.png，内容确实是
+网站页脚而非商品网格末尾；命名不能作为已观察分页的证明。
+
+03:06:44Z 默认旧枚举器重复第一页，机械零增长完成但只有 24 项。模型随后 catalog.json
+如实 complete=false、expected=46、observed=24；公共 profile 此时仍不存在。额外读取
+`/collections/all/products.json` 和 `/products.json` 得到 48 项，它们不是派发的
+`/collections/all-products`，不应把 46/48 称为同范围官网冲突。上轮保存的正确两页 46 项
+与早先同 collection 响应逐 URL 比较 missing=[]、extra=[]，证明问题仍在路线判断。
+
+本轮不能交付 200 已修好。最小默认调用参考解决了多余 wrapper，却不足以使采前观察可靠。
+后续应复用已验证的网格/分页观察并局部修正方法，不能每次丢弃有效步骤、重新发现后再
+把页脚当目录耗尽；也不能仅以模型写入 verifiedVisually=true 宣布已验收。旧失败与原件
+保留，本轮结束后先完成归档/停止审计，不继续原样增加失败尝试。
+
+03:08:57Z 此项终态 Review / DTC.CAPTURE_REVIEW。03:09:58Z 全部33份原件 /
+2,735,107 字节 R2 大小与SHA回读通过；03:10:06Z 1 Workflow / 1许可 / 4执行停止审计
+invalid=[]。03:10:48Z 公共 profile 不存在，实际脚本确认没有自定义 enumerate。
+目录与商品队列均 paused、held=[]、cleanupPending=0。200 保持 In Progress，未宣称通过。
