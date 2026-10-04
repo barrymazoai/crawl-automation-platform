@@ -22,6 +22,7 @@ export function legacyCapturePrompt(input: {
 ${captureExecutionRules(input.timeBudgetMs)}
 先复用已有站点脚本/profile，廉价核对当前结构；没有方法才视觉观察→映射实际节点→验证→固定脚本。文字、价格、库存、图片数量不同不是方法失败；只修真正失效的步骤。禁止通用关键词提取、猜测字段、按图片文件名/alt/顺序分配规格。extractDetailDomRecord/applyDetailExtractionProfile/extractProductsBatch/upgradeProducts仍禁用。
 宿主已写run-capture.mjs，不要改。只维护site-method.mjs，接口见legacy-product-capture.md。已有method-cache.json时先复用方法，不逐商品重写。脚本保存动作和选择规则，不硬编码商品值、URL、规格、图片数组或旧任务目录。
+若宿主提供method-feedback.json，先读其中与当前方法版本绑定的已确认缺陷，并在收割前局部修正对应步骤；缓存样本只证明原件已存档，不代表方法没有已知错误。反馈已带观察和ticket依据，不从头重做所有步骤，也不新增采后复核。不要修改宿主反馈文件；改正后的实际执行方法由原收割流程留存。
 采集内容：商品完整页面HTML、实际商品区域原样HTML、完整轮播与详情原图、网站自身提供的全规格及其页面/材料对应关系。实际展开相关折叠和嵌套FAQ、触发懒加载；不能只保存平台body_html。商品区域HTML来自观察确认的实际节点outerHTML，保留原样，不拆分成配料/用法/警告/描述/Facts字段、不总结、不归一化。fields只允许title、brand、currency等身份元数据，缺失留空；不解析产品内容。网站variants保留ID、选项、SKU、价格、库存、URL（含缺货）；不从图片发明规格，不将默认规格的价格/SKU回填基础商品。
 商品内容不一定都在main、首屏商品容器或它们的直接子section内。首次建立或修正方法时，沿完整页面实际观察本商品的下方/外置板块，确认保存范围覆盖它们；整页HTML已保存不代表productHtml已包含这些板块。将观察确认的本商品板块原样outerHTML一并保存，按实际节点排除推荐，不通过标题关键词自动找字段。若旧方法遗漏了当前可见的本商品板块，只局部补充该方法的范围/展开步骤并保留其余动作；无需重写采集流程、增加逐字段报告或采后复核。
 按网站选项切换规格并保存不同状态的完整页面HTML和商品区域HTML，逐项记录对应原图。URL变不变不是判断依据：实际页面材料独立才independent；图库/正文仍混着多个规格则mixed，保留该页面完整图库供后面现有OCR归属处理；公开状态不可查看则该项unresolved。相同页面材料可引用同一已保存文件，不重复下载。不要挑Facts图、OCR或解析图片文字。单规格variants材料列表可为空。

@@ -1,0 +1,24 @@
+{
+  "codec": "dtc-method-feedback/1",
+  "entries": [
+    {
+      "origin": "https://www.natrol.com",
+      "sha256": [
+        "644bbf7ffaebf5f9a2ae23410dc6504cc153845153a992e84f715f98269f419d",
+        "d46cf623fb72c208d56fd8fdb75e8a84df5e6cc2278f360af2063a9caccfce6c"
+      ],
+      "tickets": ["CRAWLV3-148", "CRAWLV3-206"],
+      "observation": "已留存页面证明：main > section:not(.more-for-you-section) 会漏掉 main 内经 DIV 包裹的 section[x-data=\"sliderNutritionFacts\"]。此完整商品营养/用法区块存在于页面原件，却未进入 productHtml，造成后续 LABEL_NO_SOURCE。",
+      "correction": "收割前针对这个已知遗漏核对当前页面真实区域，将属于当前商品的这个区块 outerHTML 原样并入 productHtml，保留已有商品区块与其它导航/图库动作，不重复嵌套保存。不要用标题关键词提取营养/辅料等业务字段，不复制旧商品内容。",
+      "evidence": "docs/quality/2026-10-04-dtc-natrol-products.md；原始run 02192773-1ad1-425e-9ac1-fdb56396b2be、ae2f72a3-21e4-422e-8cbb-a5d5ede2f9be；Server二 manual-releases/crosssite183-natrol1-region-proof.json"
+    },
+    {
+      "origin": "https://www.natrol.com",
+      "sha256": ["d46cf623fb72c208d56fd8fdb75e8a84df5e6cc2278f360af2063a9caccfce6c"],
+      "tickets": ["CRAWLV3-155", "CRAWLV3-206"],
+      "observation": "readState 用 URL query 兜底 selectedVariantId，independent 用原始 productHtml 字符串不等或图库 URL 不等判定。实际两规格链接显示相同图库，网页没有确认的选择控件，动态 HTML 差异被误报为资料独立。notes 还写入了上一商品的规格数量与图片数量。",
+      "correction": "保留网站真实完整规格与URL，selectedVariantId 只能来自实际网站状态，未知留空。删除仅凭HTML字符串或图库URL差异决定independent的规则；局部观察当前网站真实资料关联，只有确认独立才用independent，无明确独立依据的共用/混合资料交既有mixed分路。保留各规格原件，不按文件名配图。notes 描述方法或当前实际观察，不能保留上一商品的数量断言。",
+      "evidence": "run ae2f72a3-21e4-422e-8cbb-a5d5ede2f9be 的 site-method.mjs、materials.json 和两规格页面原件，见 docs/quality/2026-10-04-dtc-natrol-products.md"
+    }
+  ]
+}

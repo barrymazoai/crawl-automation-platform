@@ -5,13 +5,14 @@ import { z } from "zod";
 import { sha256 } from "@crawl-automation/platform";
 import { captureFile } from "./archive.js";
 import { dtcAgentErrors } from "./errors.js";
+import { prepareMethodFeedback } from "./method-feedback.js";
 
 const Receipt = z.strictObject({
   codec: z.literal("dtc-site-method/1"),
   origin: z.url(),
   path: z.string().min(1),
   sha256: z.string().regex(/^[a-f0-9]{64}$/),
-  // Distinct successful products validate a method; values and Facts are never cached.
+  // These samples confirm archived captures, not downstream content correctness.
   samples: z.array(z.url()).min(1),
 });
 const key = (url: string) => sha256(Buffer.from(new URL(url).origin));
@@ -33,6 +34,7 @@ export async function prepareSiteMethod(input: {
     await writeFile(join(input.cwd, "method-cache.json"), JSON.stringify(prior.receipt), {
       flag: "wx",
     });
+    await prepareMethodFeedback({ ...input, ...prior.receipt });
   }
   const driver = pathToFileURL(join(input.skillRoot, "lib/site-capture.mjs")).href;
   await writeFile(
