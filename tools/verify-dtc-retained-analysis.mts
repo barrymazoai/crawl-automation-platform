@@ -64,12 +64,12 @@ try {
       if (bytes.length !== file.byteSize || sha256(bytes) !== file.sha256) {
         throw new Error(`Retained file integrity mismatch: ${file.path}`);
       }
-      await originals.create(file.path, bytes, file.mediaType, signal);
+      await originals.create(`workspace/${file.path}`, bytes, file.mediaType, signal);
       bytesVerified += bytes.length;
     }));
   }
   const result = await analyzeWithDtcAgent({
-    capture: async () => ({ root: join(originalsRoot, "capture"), prefix, manifestKey, ...captured }),
+    capture: async () => ({ root: join(originalsRoot, "workspace", "capture"), prefix, manifestKey, ...captured }),
   }, original, signal);
   await write("validation.json", {
     at: new Date().toISOString(), source: original, archiveKey, archiveSha256: sha256(archiveBytes),
