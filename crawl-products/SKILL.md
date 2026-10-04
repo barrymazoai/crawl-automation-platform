@@ -77,6 +77,7 @@ HTML、平台数据、图片和每轮收割结果同时保存在任务根目录 
 任务页由宿主关闭并验证不存在；遇用户接管立即停止。宿主的 capture-only 合约覆盖本 skill 的语义、导出、重试和多线程部分。
 
 宿主派发 catalog 模式时使用 `lib/catalog-discovery.mjs` 的 `discoverCatalog`，不运行完整 `runHarvest`。
+宿主已生成固定启动器时，只维护 `catalog-method.mjs`，启动器负责调用上述旧入口及交接；不能重写启动器或另造完成回执。
 必读 [native-catalog-method.md](references/native-catalog-method.md)：将观察到的分页参数交给默认旧枚举器；普通目录不要另写 `enumerate` 或拼装完成记录。
 此入口只在本任务生成候选 `catalog-method-profile.json` 和 `catalog-method-use.json`；
 目录通过宿主原有完整性校验后，由宿主更新公共 profile，失败候选不会覆盖已验证的方法。

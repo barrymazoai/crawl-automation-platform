@@ -1,0 +1,7 @@
+[
+  {
+    "sourceUrl": "https://www.natrol.com/collections/all-products",
+    "path": "natrol.mjs",
+    "evidence": "CRAWLV3-200; retained scan 1ed4f3ac-79ca-45b9-8fc7-d1fc827ed630 observed .product-item a.h7 on both pages and #pagination next-page control; candidate requires live click validation before promotion."
+  }
+]

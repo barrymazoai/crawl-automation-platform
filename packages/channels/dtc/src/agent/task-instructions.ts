@@ -36,10 +36,10 @@ export const catalogInstructions = `按旧采集流程先视觉确认站点身�
 分页检查定位到商品网格末尾，观察其附近的页码、圆点、箭头、加载更多或滚动加载行为；到达网站页脚不证明目录耗尽，控件也不一定是 a/button 或带“下一页”文字。声明 none 前核对当前网格数量与网站可比总数；有差额就继续观察实际分页方法。可点击的分页先实际验证并保存 paginationActions。页面分多页时采用 enumeration，不因总数小于100就选要求全目录已呈现在页面的 Shopify 单页证明。
 scope.siteKind是宿主实际品牌校验策略。multi-brand策略下每个entry.brand都必须有网站真实身份依据并与来源品牌一致；不能填null、照抄scope.source.brand或仅靠域名。即使视觉上像单品牌官网，动态来源也可能使用这个严格策略。正式遍历前在代表目录原件上验证实际品牌元数据规则，并保存出处；拿不到就明确身份证据不足。single-brand策略才允许卡片未印品牌时brand:null，由已核实的站点身份提供范围。不要遍历结束才发现没有可用品牌规则。
 只发现产品，不进入逐个产品采集和 OCR。商品必须来自实际目录/导航；平台 API 库存不能直接代替目录产品集。
-保存 catalog.json：{pages:[{url,htmlPath,screenshotPath,entries:[{url,title,brand:null或页面品牌}]}],complete:boolean,termination:{proof:"enumeration"或"shopify",exhausted:boolean,reason:string,method:string,evidence:[相对路径],zeroGrowthRounds:number,oracle:{expected:number|null,observed:number,comparable:boolean}}}。
+固定启动器保存 catalog.json（模型不手写）：{pages:[{url,htmlPath,screenshotPath,entries:[{url,title,brand:null或页面品牌}]}],complete:boolean,termination:{proof:"enumeration"或"shopify",exhausted:boolean,reason:string,method:string,evidence:[相对路径],zeroGrowthRounds:number,oracle:{expected:number|null,observed:number,comparable:boolean}}}。
 每页/每个加载阶段保留原始渲染 HTML；每个 seed 留截图，最后耗尽状态留截图。entries 只能列出该页实际出现的产品详情链接。
 所有目标目录覆盖完整且选定的完成证明通过、可比 oracle 无缺口时才能 complete=true。Shopify的catalog-coverage.json和逐份原始响应由机械工具保存，不能手写对账成功；子目录不能用全店接口背书。达到预算、发现循环、漏页或差额时 complete=false 并说明原因，不伪造全品牌完成。
-标题和品牌按页面原文保存；去重按真实规范产品 URL。保存 entry-decision.json、route-plan.json、termination-contract.json、验证查漏痕迹。
+标题和品牌按页面原文保存；去重按真实规范产品 URL。已有方法时不重复编写路线报告；保留本次实际视觉核验痕迹，固定启动器保存方法、分页与数量依据。
 用户给的是一个已配置品牌来源，范围只限该来源；多品牌卖场不得把其他品牌放进来。`;
 
 export const analysisInstructions = `分析入口属于官网、自营商店、直属品牌组合还是第三方卖场。视觉验证目录入口和至少一个真实商品，不使用固定选择器模板代替观察。

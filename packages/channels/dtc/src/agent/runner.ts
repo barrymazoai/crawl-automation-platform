@@ -8,9 +8,11 @@ import { captureOutputFiles, retainCaptureDirectory, type CaptureFile } from "./
 import { capturePrompt } from "./prompt.js";
 import { ResultSchema, verifyAgentResult } from "./agent-result.js";
 import type { AgentCaptureRequest } from "./request.js";
-import { prepareSiteMethod, retainSiteMethod } from "./site-method.js";
+import { retainSiteMethod } from "./site-method.js";
+import { prepareCaptureTask } from "./task-preparation.js";
 import { readCapturedProduct } from "./product-record.js";
 import { promoteCatalogProfile } from "../../../../../crawl-products/lib/catalog-profile.mjs";
+import { retainCatalogScript } from "../../../../../crawl-products/lib/catalog-script-store.mjs";
 
 interface AgentCaptureOutput {
   root: string;
@@ -26,11 +28,13 @@ export class DtcCaptureAgent {
   constructor(private readonly deps: AgentCaptureDependencies) {}
 
   async acceptCatalogMethod(saved: AgentCaptureOutput, sourceUrl: string): Promise<void> {
-    await promoteCatalogProfile({
+    const input = {
       profileDir: join(this.deps.settings.codex.workRoot, "site-profiles"),
       root: saved.root,
       sourceUrl,
-    });
+    };
+    await retainCatalogScript(input);
+    await promoteCatalogProfile(input);
   }
 
   async capture(request: AgentCaptureRequest, signal: AbortSignal): Promise<AgentCaptureOutput> {
@@ -140,26 +144,15 @@ export class DtcCaptureAgent {
     await verifyAgentResult(result, { mode: request.mode, outDir, prefix });
   }
 
-  private async prepareTask(
+  private prepareTask(
     request: AgentCaptureRequest,
     at: { cwd: string; outDir: string; page: EgoAgentPage },
   ) {
-    await writeFile(join(at.cwd, "browser-preparation.mjs"), at.page.preparationModule(), {
-      flag: "wx",
-    });
-    if (request.mode !== "product") {
-      return;
-    }
-    const { cwd, outDir, page } = at;
-    await prepareSiteMethod({
-      cwd,
-      outDir,
-      productUrl: request.url,
+    return prepareCaptureTask(request, {
+      ...at,
       skillRoot: this.deps.skillRoot,
       profileDir: join(this.deps.settings.codex.workRoot, "site-profiles"),
       taskSpaceId: this.deps.ego.taskSpaceId,
-      label: page.label,
-      targetId: page.targetId,
     });
   }
 

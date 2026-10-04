@@ -1,5 +1,27 @@
 # 原生目录：观察路线，直接复用旧枚举器
 
+宿主已生成固定 `run-capture.mjs` 时，模型不要改启动器。只维护任务根目录
+`catalog-method.mjs`，导出两个函数：
+
+- `async prepare({page,tab,sourceUrl,outDir})`：复用已经观察验证的导航步骤，读取本次
+  目录数量，返回 `{seedUrls,listingOptions,oracle:{expected:number|null,comparable:boolean,basis}}`。
+  `listingOptions` 使用下文的旧参数；不传 `outDir/profileDir/enumerate/onListingPage`。
+- `projectPage({document,url,sourceUrl})`：在固定入口传入的本页原始HTML document 上，
+  按已观察规则返回 `[{url,title,brand}]`。仅目录身份，不提取商品业务字段。不要读其他页面
+  或API补条目，返回集合必须与该页旧枚举器保存的URL完全相同。
+
+固定入口负责唯一 `discoverCatalog` 调用、逐页原件、方法源代码与散列、`catalog.json`
+及完成回执。`comparable=true` 时数量不符会保留 `complete=false`，不能手改交接结果。
+先 `node --check catalog-method.mjs`，再通过 Ego 导入固定启动器。开始后不重跑。
+
+`catalog-script-cache.json` 为 `verified` 时复用已通过完整目录验收的确切脚本，只修
+结构确实失效的步骤。为 `candidate` 时是保留原始观察的修复候选，不等于已通过验收；
+沿其中已知商品网格和分页控件做当前首末页视觉核验、实际点击并检查变化，不从零猜路线。
+控件可用 `page.hover(已知选择器)` 带入视口后截图查看，不能用网站页脚当目录尾部。
+公共脚本缓存按完整来源URL隔离，只在宿主现有身份/页面/完整性校验通过后保存。
+方法可以包含站点已观察的选择器、动作及原文映射规则，不包含固定商品清单或上次总数。
+版本化候选登记在 [站点方法目录](../methods/catalog/index.json)，不是通用关键词提取模板。
+
 先在实际页面确认商品网格、分页动作和最后一页。将已验证的选择器作为参数传给
 `discoverCatalog`，让它默认调用旧 `collectProductUrls`；普通翻页、点击加载、滚动
 不需要自行实现 `enumerate`，也不需要重新组装 coverage、seedReports 或 onListingPage。
