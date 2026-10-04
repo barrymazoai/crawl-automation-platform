@@ -22,6 +22,11 @@
 方法可以包含站点已观察的选择器、动作及原文映射规则，不包含固定商品清单或上次总数。
 版本化候选登记在 [站点方法目录](../methods/catalog/index.json)，不是通用关键词提取模板。
 
+采前导航使用 `prepareBrowserRound` 返回的 `navigate(url)`，等待 DOMContentLoaded，
+然后等待方法已知的卡片/选中状态并查看截图；不要裸 `page.goto(url)` 等整页所有资源load。
+已明确提交到准确目标URL且页面interactive/complete的导航超时，先留警告并检查当前页，
+不再发一次导航。URL不符、页面不可用、权限/用户控制/挑战仍停止；DOM就绪不是资料已完整。
+
 先在实际页面确认商品网格、分页动作和最后一页。将已验证的选择器作为参数传给
 `discoverCatalog`，让它默认调用旧 `collectProductUrls`；普通翻页、点击加载、滚动
 不需要自行实现 `enumerate`，也不需要重新组装 coverage、seedReports 或 onListingPage。

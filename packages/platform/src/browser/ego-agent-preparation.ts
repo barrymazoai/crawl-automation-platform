@@ -1,6 +1,7 @@
 import { DENY_LOCATION } from "./ego-script.js";
 import { DENY_NOTIFICATIONS } from "./deny-notifications.js";
 import { EGO_OWNERSHIP } from "./ego-ownership.js";
+import { EGO_AGENT_NAVIGATION } from "./ego-agent-navigation.js";
 
 /** CDP preload registration belongs to one CLI session, so prepare in the call that navigates. */
 export function agentPagePreparationModule(input: {
@@ -37,7 +38,8 @@ export async function prepareBrowserRound({ taskSpace, listTaskSpaces }) {
     policy: "deny-each-ego-call/2", taskSpaceId: params.taskSpaceId, label: params.label,
     targetId: target.targetId, observedAt: new Date().toISOString(), ...state,
   }) + "\\n");
-  return { task, page };
+  ${EGO_AGENT_NAVIGATION}
+  return { task, page, navigate };
 }
 `;
 }
