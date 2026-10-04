@@ -14,7 +14,7 @@ type Field = { text: string; evidence: string } | null;
 
 // label-extraction/1 for images. The prompt and schema are part of its setup's fingerprint: changing one character
 // changes every such setup. A new rule is a new policy version, never an edit.
-export const labelVisionPolicyVersion = "label-vision/7";
+export const labelVisionPolicyVersion = "label-vision/8";
 export const labelVisionOutputSchema = z.toJSONSchema(
   legacyLabelExtractionSchema(LabelImageFieldSchema),
 );
@@ -28,6 +28,8 @@ A line wrap, synonym in parentheses, trademark name or botanical source descript
 Repeated group names are separate groups. Never rename them or use the name as identity. Do not split wrapped ingredient names.
 A printed group header continues through its visually grouped rows until a new section or an explicit visual group boundary. Do not classify a vitamin/mineral as independent merely because it has a daily value or is commonly a nutrient. When layout does not establish group membership, report AMBIGUOUS rather than guessing.
 For visible amounts use printed; unreadable amounts use unreadable. not_declared is only for a component with a printed blend total but no individual printed dose. Never erase visible doses.
+An amount need not occupy a separate visual column: a quantity and unit explicitly printed within the SAME row's wording is a printed amount, including zero. Transcribe that amount into amount and set amountStatus printed even when the separate amount cell is blank. Retain the printed row wording in name; quote enough of the original row in amount.evidence to establish which quantity belongs to it. Do not mark such a row unreadable or invent a placeholder solely because its quantity is inline.
+Use the quantity stated for that row and serving basis, not a number from an ingredient identifier, % Daily Value, another row, a marketing claim or an equivalent quantity. Preserve printed units and inequality signs; do not calculate a missing amount. A genuinely illegible amount remains unreadable with an issue, never an invented value. If the label does not establish which visible quantity is the row's amount, report AMBIGUOUS.
 Keep Other Ingredients in their own headed list, not duplicated formula components; Contains/allergen warnings are not ingredients.
 Other Ingredients.items contains ONE item per top-level comma or semicolon, not one item per printed line. Parentheses and wrapped continuation belong to the preceding ingredient: 'BSE-free gelatin' followed on the next line by '(capsule), vegetable glycerine' is 'BSE-free gelatin (capsule)' and 'vegetable glycerine', never a standalone '(capsule)' item. Keep parenthesized subingredients together. Do not infer illegible characters or repair text from OCR.
 One printed blend name with a printed total dose is ONE blend_total row, not a duplicate group_header and blend_total. Components point directly to that row.

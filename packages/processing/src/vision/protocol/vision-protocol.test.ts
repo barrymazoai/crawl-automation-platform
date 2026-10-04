@@ -57,18 +57,18 @@ describe("vision answer formats", () => {
       "52a08fad889754ac35b358362abf1145817e6c35831d75f09207037870d0bf71",
     );
     expect(sha(labelVisionPrompt)).toBe(
-      "32632271004bf63b5369d2f7332bed7595e11fbbca7990b3e1dac1065ce576d2",
+      "8540e2154833f124dbee09bb9acf27513ea0f46a087610b0140cb65974d0cfae",
     );
     expect(sha(labelVisionOutputSchema)).toBe(
       "9066378b09630a7fc220ed8c5e5607e70788c4150df668fca3d2a95c616ac647",
     );
     expect(sha(labelVisionPromptV2)).toBe(
-      "1f5312f8a92e3fe49c7e1b85b8f8a8b84423116e8e9041c01eca022ad44d06b3",
+      "363d90d348f03fd1690ffe1fb1ff6af89a5f221f8841f4be343184b26f0b19c3",
     );
     expect(sha(labelVisionOutputV2Schema)).toBe(
       "22dbd982e96d1dfa7c28485cf729734a0e2ca4c79ae966365c8e721ca63512c0",
     );
-    expect(labelVisionPolicyVersion).toBe("label-vision/7");
+    expect(labelVisionPolicyVersion).toBe("label-vision/8");
   });
 
   it("accept explicit typed headings without a false core-missing Review", () => {
