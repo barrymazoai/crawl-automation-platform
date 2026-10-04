@@ -9,7 +9,9 @@ export function labelSourcePolicy(channel: string, order?: SourcePolicy["order"]
     version: "label-sources/1",
     order:
       order ??
-      (["amazon", "wholefoods-amazon-formula"].includes(channel) ? "images-first" : "text-first"),
+      (["amazon", "wholefoods-amazon-formula", "dtc"].includes(channel)
+        ? "images-first"
+        : "text-first"),
   };
 }
 

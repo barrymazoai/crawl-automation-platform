@@ -1,4 +1,4 @@
-/** Explicit first downstream execution after native capture failed during cleanup; never recaptures. */
+/** Explicit downstream execution from retained capture under a recorded purpose; never recaptures. */
 import { randomUUID } from "node:crypto";
 import { writeFile } from "node:fs/promises";
 import { join } from "node:path";
@@ -21,6 +21,7 @@ export async function processDtcRetainedSingle(at: {
   retained: Awaited<ReturnType<typeof readCapturedProduct>>;
   scope: Awaited<ReturnType<DtcProductScope["review"]>>;
   output: string; index: number; archiveKey: string; archiveSha256: string;
+  purpose?: string;
 }) {
   if (!at.config.browser || !at.config.plan || at.scope.decision.kind !== "single_product" ||
       at.retained.record.variants.length !== 1) throw new Error("Requires verified scope and exactly one website variant");
@@ -40,7 +41,7 @@ export async function processDtcRetainedSingle(at: {
   const prefix = `v3/dtc-agent/${operationId}`;
   const signal = AbortSignal.timeout(60_000);
   const provenance = {
-    purpose: "First downstream processing from already-archived native capture; no new website observation",
+    purpose: at.purpose ?? "First downstream processing from already-archived native capture; no new website observation",
     sourceRunId: original.runId, sourceOperationId: original.operationId,
     sourceArchive: { objectKey: at.archiveKey, sha256: at.archiveSha256 },
     originalHtmlPath: retained.record.pageHtml, scope: at.scope.evidence, derivedAt: new Date().toISOString(),
