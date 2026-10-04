@@ -19,10 +19,11 @@ export function normalizePlatformVariants(product, productUrl) {
       ...(variant?.title ? { title: String(variant.title).trim() } : {}),
       ...(Object.keys(options).length > 0 ? { options } : {}),
       ...(variant?.price != null ? { price: String(variant.price) } : {}),
+      ...(typeof variant?.price_currency === "string" && variant.price_currency.trim()
+        ? { currency: variant.price_currency.trim() } : {}),
       ...(typeof variant?.available === "boolean" ? { available: variant.available } : {}),
       ...(id ? { url: `${productUrl.split("?")[0]}?variant=${id}` } : {}),
       ...(variant?.featured_image?.src ? { imageUrl: String(variant.featured_image.src) } : {}),
     };
   }).filter((variant) => variant.variantId || variant.sku || variant.title);
 }
-
