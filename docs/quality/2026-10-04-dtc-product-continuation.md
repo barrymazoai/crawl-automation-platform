@@ -50,7 +50,7 @@ Papaya原采集于04:20前完成，实际method-use与源码SHA均为fd8aee79，
 两图都是1 Chewable Tablet；Total Carbohydrate 0g <1%、Total Sugars 0g、
 Includes 0g Added Sugars <1%、Papain(100,000 FCC PU)2mg、Amylase(250 FCC)50mg、
 Protease(50 FCC HUT)10mg、Bromelain(12 MCU)7mg、Papaya(fruit)10mg。
-两图八项辅料及DV脚注也相同，都没有包装数量或servings per container。
+两图八项辅料相同，DV脚注含义相同而非逐字相同，都没有包装数量或servings per container。
 原图为capture/evidence/img/{b7cb082d5ef99501,67af95bbaeefd098}.png。
 
 单图模型正确返回facts/scope-unassigned；代码只接受唯一Facts或已明确归属的图片，
@@ -61,3 +61,31 @@ Protease(50 FCC HUT)10mg、Bromelain(12 MCU)7mg、Papaya(fruit)10mg。
 不是OCR文本、文件名或品牌专用匹配；不改原采集和共享业务解析；比较缓存升级v2，
 精确task/variant/candidate所有权检查保留。接下来用Mini留存原件做派生验收，
 原Review不改、原采集不重跑，成功后首次进入尚未执行的Papaya下游。
+
+8dfb01f已提交main并push，pnpm check静态/22包类型检查通过，无单元测试。
+Server一按Git fresh clone/锁定安装/build完成，只通过既有JobService更新
+pipeline-worker与label-model-worker，其他5作业unchanged且ready。部署前六渠道均无
+running/ready、非DTC无queued、held=[]；其他队列模式保持原样。
+自动审批拒绝了暂停非DTC队列和不必要的Server二部署，两项均未执行；实际采用上述
+两个必需空闲执行器的定点更新，Server二采集版本不动。
+
+留存派生run009f29a0-7e97-45e2-87fc-b3f84773a255，52原件再次校验通过，
+gallery workflow dtc-gallery-accept-009f29a0-7e97-45e2-87fc-b3f84773a255开始。
+工具为既有verify-dtc-retained-mixed.mts，输出Server二manual-releases/facts204-papaya-retained。
+
+04:28:56Z不同份数反例通过：在Server一新代码直接执行Magnesium原真实task/decisions/
+selection的finishGallery，两个规格最终handoff与此前成功结果逐字段相同，仍分别保留
+各自30/60份标签，未被新等价候选路径合并。没有模型调用、没有远端写入；
+这是既有归属隔离的回归，不冒称新增一次模型对差异标签的判断。
+证据Server一facts204-magnesium-{workflows,proof}.json。
+
+首轮派生于04:30:26Z仍Review；联合比较已执行，模型确认配方/剂量/辅料一致，却将
+脚注“Percent Daily Values are based…”与“Percent Daily Value based…”的同义语法差异
+判为不等价。原图确有该文字差异；不能声称逐字相同。04:31:54Z本轮9许可/10执行均
+先停后释放、invalid=[]，没有开始下游。204继续修复：明确按营养/配方含义等价，
+允许不改变含义的语法/标点/同义措辞；数字、成分身份、人群、条件或限定含义变化仍阻塞。
+比较缓存升v3，旧模型回答和派生Review不覆盖。下一次仅为新修订的留存材料验证。
+
+页面清理证据另核对：Zinc目标32A0D95F8027D7D0E13DF0E7F560E841于04:12:41Z确认不存在；
+Papaya目标09C4B6A61587B5FA2B9D2D37A991798B于04:18:12Z确认不存在，均在浏览器许可释放前。
+原Space6基线2B17A86DBCA4F3AC717200EF04BD6BA4保留，派生验收没有浏览器阶段。
