@@ -4,9 +4,14 @@ import type { DtcCaptureAgent } from "./runner.js";
 import { captureFile, type CaptureFile } from "./archive.js";
 import { dtcAgentErrors } from "./errors.js";
 
+const Page = z.object({ url: z.url(), htmlPath: z.string(), screenshotPath: z.string() });
 const Pages = z
-  .array(z.object({ url: z.url(), htmlPath: z.string(), screenshotPath: z.string() }))
-  .min(1);
+  .union([z.array(Page), z.record(z.string(), z.array(Page))])
+  .transform((pages) => {
+    const entries = Array.isArray(pages) ? pages : Object.values(pages).flat();
+    return [...new Map(entries.map((page) => [JSON.stringify(page), page])).values()];
+  })
+  .pipe(z.array(Page).min(1));
 const Verification = z.object({
   method: z.string().min(1),
   surface: z.literal("live_site"),
@@ -83,16 +88,22 @@ function verifyBrand(
   brand: z.infer<typeof SiteAnalysisResultSchema>["brands"][number],
   urls: Set<string>,
 ) {
+  if (brand.status !== "verified") {
+    return;
+  }
+  const hostname = brand.catalogUrl ? new URL(brand.catalogUrl).hostname : "";
+  const declared = brand.domain.trim().toLowerCase();
+  const sameHost = hostname.replace(/^www\./, "") === declared.replace(/^www\./, "");
   if (
-    brand.status === "verified" &&
-    (!brand.catalogUrl ||
-      !urls.has(brand.catalogUrl) ||
-      new URL(brand.catalogUrl).hostname !== brand.domain ||
-      typeof brand.discoveredFrom === "string" ||
-      !urls.has(brand.discoveredFrom.page))
+    !brand.catalogUrl ||
+    !urls.has(brand.catalogUrl) ||
+    !sameHost ||
+    typeof brand.discoveredFrom === "string" ||
+    !urls.has(brand.discoveredFrom.page)
   ) {
     throw dtcAgentErrors.create("DTC.CAPTURE_EVIDENCE");
   }
+  brand.domain = hostname;
 }
 
 function verifyEvidence(pages: z.infer<typeof Pages>, files: CaptureFile[]) {
