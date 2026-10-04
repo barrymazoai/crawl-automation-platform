@@ -12,6 +12,13 @@ export const GalleryModelOutput = z.strictObject({
       websiteEvidence: z.string().min(1).max(16000),
     }),
     DtcGalleryDecisionSchema.extend({
+      kind: z.literal("facts"),
+      variantIds: z.array(z.string()).max(0),
+      basis: z.literal("scope-unassigned"),
+      imageEvidence: z.string().min(1).max(16000),
+      websiteEvidence: z.string().min(1).max(16000),
+    }),
+    DtcGalleryDecisionSchema.extend({
       kind: z.literal("other"),
       variantIds: z.array(z.string()).max(0),
       basis: z.literal("not-facts"),

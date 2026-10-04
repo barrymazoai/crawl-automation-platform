@@ -20,7 +20,7 @@ export const DtcGalleryTaskSchema = DtcGalleryRequestSchema.extend({
 export const DtcGalleryDecisionSchema = z.strictObject({
   kind: z.enum(["facts", "other", "unresolved"]),
   variantIds: z.array(z.string().min(1)).max(200),
-  basis: z.enum(["label-content", "website-shared", "unresolved", "not-facts"]),
+  basis: z.enum(["label-content", "website-shared", "scope-unassigned", "unresolved", "not-facts"]),
   reason: z.string().min(1).max(8000),
   /** Verbatim image/OCR and website evidence, retained for review; not a formula-equivalence claim. */
   imageEvidence: z.string().max(16000),

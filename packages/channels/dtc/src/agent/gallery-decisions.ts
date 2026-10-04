@@ -6,6 +6,8 @@ import {
   type DtcGalleryTask,
 } from "@crawl-automation/v3-contracts";
 import { GalleryStore } from "./gallery-store.js";
+import { GalleryModelOutput } from "./gallery-model-output.js";
+import { singleFactsImage } from "./gallery-sharing.js";
 export const DtcGalleryImageResultSchema = z.strictObject({
   task: DtcGalleryRefSchema,
   imageId: z.string(),
@@ -46,6 +48,10 @@ export function selectedGalleryImages(
   results: z.infer<typeof DtcGalleryImageResultSchema>[],
   variantId: string,
 ) {
+  const shared = singleFactsImage(task, results);
+  if (shared && task.websiteVariants.some((variant) => variant.variantId === variantId)) {
+    return [shared];
+  }
   return task.images.filter((image) =>
     results.some(
       (result) =>
@@ -55,8 +61,9 @@ export function selectedGalleryImages(
     ),
   );
 }
+
 export function validateGalleryDecision(task: DtcGalleryTask, raw: unknown) {
-  const decision = DtcGalleryDecisionSchema.parse(raw);
+  const decision = GalleryModelOutput.parse({ decision: raw }).decision;
   const ids = task.websiteVariants.map((variant) => variant.variantId);
   if (
     new Set(decision.variantIds).size !== decision.variantIds.length ||
@@ -66,14 +73,8 @@ export function validateGalleryDecision(task: DtcGalleryTask, raw: unknown) {
   }
   if (
     decision.kind === "facts" &&
-    (!decision.variantIds.length ||
-      !decision.imageEvidence.trim() ||
-      !decision.websiteEvidence.trim() ||
-      !["label-content", "website-shared"].includes(decision.basis))
+    (!decision.imageEvidence.trim() || !decision.websiteEvidence.trim())
   ) {
-    throw new Error("DTC.GALLERY_SCOPE_UNPROVEN");
-  }
-  if (decision.kind !== "facts" && decision.variantIds.length) {
     throw new Error("DTC.GALLERY_SCOPE_UNPROVEN");
   }
   return decision;

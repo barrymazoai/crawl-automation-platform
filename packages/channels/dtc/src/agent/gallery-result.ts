@@ -14,6 +14,7 @@ import {
   type DtcVariantHandoff,
 } from "@crawl-automation/v3-contracts";
 import { GalleryStore, galleryEvidence as evidence } from "./gallery-store.js";
+import { sharingEvidence } from "./gallery-sharing.js";
 import {
   GallerySelectionProof,
   verifyGallerySelection,
@@ -31,6 +32,7 @@ export async function finishGallery(
   const task = await store.task(input.task, signal);
   const results = await readGalleryResults(store, input, signal);
   const selections = await readSelections(store, { input, task, results }, signal);
+  const refs = await sharingEvidence(store, { input, task, results }, signal);
   const members: DtcVariantHandoff[] = [];
   for (const member of task.variants) {
     members.push(
@@ -41,7 +43,7 @@ export async function finishGallery(
           results,
           member,
           selections,
-          refs: [...input.decisions, ...(input.selections ?? [])],
+          refs,
         },
         signal,
       ),

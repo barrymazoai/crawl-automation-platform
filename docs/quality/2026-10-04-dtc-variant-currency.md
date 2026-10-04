@@ -18,3 +18,12 @@ CRAWLV3-193，关联184/155/151。审计真实Solaray材料时发现旧normalize
 currency，保留已有基础币种兼容行为。共享契约只增加可选元数据，不改其他channel逻辑。
 因旧契约严格校验，部署时同时更新实际运行工作流/读取证据的Server一版本，避免新旧
 版本交接拒绝currency。当前真实任务完成并清理后再切换；不得只部署归一化的第一处。
+
+## 直接验证结果
+
+194db3b 已通过 origin/main Git fresh clone/install/build 部署两台 Mini。
+2026-10-04 01:00:07Z，Server 二用上述真实原件直接验证两规格的归一化、
+ChannelProductEvidence、commerce 和 variantPages 均保留 USD；SKU/价格对应各自规格，
+detailsHtml 与材料逐字一致，原始 JSON SHA 不变。无浏览器、OCR 或模型调用。
+证据：`/Users/server2/apps/crawler-v3/manual-releases/currency193-retained-proof.json`。
+193 已交 Review；此验证不宣称网站本身未提供的库存数据完整。

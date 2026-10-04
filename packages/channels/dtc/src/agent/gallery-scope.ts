@@ -48,7 +48,8 @@ export class DtcGalleryScope {
     if (!image) {
       throw new Error("DTC.GALLERY_IMAGE_OWNER");
     }
-    const root = `v3/dtc-gallery-scope/${sha256(Buffer.from(JSON.stringify(request)))}`;
+    // Old unresolved decisions conflated an unreadable panel with a legible unassigned one.
+    const root = `v3/dtc-gallery-scope/v2/${sha256(Buffer.from(JSON.stringify(request)))}`;
     const retained = await this.previous({ request, task, root }, signal);
     if (retained) {
       return retained;
@@ -127,7 +128,8 @@ Return the decision inside the required decision object. For other and unresolve
 Match only to the WEBSITE variant inventory below. Never invent specs, SKU or prices from images.
 Use visible content and website options/product identity; serving size and servings per container can distinguish website package counts. Explain the comparison. Do not assign by image URL, filename, alt text, order, default variant, or mere carousel visibility.
 Do not merge small formula differences: amounts, units, DV, serving size and ingredients may differ. Equal formulas alone do not prove identical package scope. Different servings per container still require correct package assignment.
-Multiple variantIds are allowed only when the image/website evidence explicitly supports every assigned variant. A flavour/strength-specific panel cannot be shared with siblings by assumption. If scope is uncertain, return unresolved with an empty variantIds array.
+Multiple variantIds with website-shared basis require website/image support for those assignments. If the Facts panel is legible but its variant scope is not established, return facts with basis scope-unassigned and empty variantIds. Missing package count, servings per container or a website sharing statement is NOT unreadable/unresolved evidence.
+The DTC product-level policy will share a sole legible Facts panel across this product's website variants after all gallery images have been classified. Do not invent variant bindings to implement that policy yourself. When multiple different Facts panels exist, preserve their actual distinctions and supported assignments.
 Provide the specific visible label evidence and website evidence in imageEvidence and websiteEvidence. These are scope reasons, not claims that the old Facts pipeline has run.
 Website variants (all verified by capture):
 ${JSON.stringify(task.websiteVariants)}

@@ -19,11 +19,10 @@ import { dtcSitePolicy } from "../packages/channels/dtc/src/site-policy.js";
 import { DtcBrandEvidenceSchema } from "../packages/channels/dtc/src/brand-evidence.js";
 import { readPreflightVariantContexts } from "../crawl-products/lib/observed-variant.mjs";
 
-const sourceRunId = "d7ad53b4-a202-4c32-a82d-f61ba99d2f90";
-const url = "https://solaray.com/products/magnesium-glycinate";
-const [configPath, workspace, output, action] = process.argv.slice(2);
+const [configPath, workspace, output, action, retainedRunId] = process.argv.slice(2);
+const sourceRunId = retainedRunId ?? "d7ad53b4-a202-4c32-a82d-f61ba99d2f90";
 if (!configPath || !workspace || !output || !["--prepare", "--execute"].includes(action ?? "")) {
-  throw new Error("Usage: verify-dtc-retained-mixed <worker-config> <original-workspace> <new-output-dir> --prepare|--execute");
+  throw new Error("Usage: verify-dtc-retained-mixed <worker-config> <original-workspace> <new-output-dir> --prepare|--execute [source-run-id]");
 }
 // mkdir without recursive makes any ambiguous or repeated invocation stop before publication/execution.
 await mkdir(output, { mode: 0o700 });
@@ -38,7 +37,8 @@ try {
   const payload = started?.input?.payloads?.[0]?.data;
   if (!payload) throw new Error("Original workflow input missing");
   const original = ProductPipelineInputSchema.parse(JSON.parse(Buffer.from(payload).toString()));
-  if (original.channel !== "dtc" || original.url !== url || original.operationId !== `product-${sourceRunId}`) {
+  const url = original.url;
+  if (original.channel !== "dtc" || original.operationId !== `product-${sourceRunId}`) {
     throw new Error("Acceptance source identity mismatch");
   }
   const captureEvent = history.events?.find(e => e.activityTaskScheduledEventAttributes?.activityType?.name === "captureBrowserProduct");
@@ -78,13 +78,16 @@ try {
   }
   const root = join(workspace, "capture");
   const retainedFiles = captureOutputFiles(files);
-  const retained = await readCapturedProduct({ root, ...retainedFiles, url, requireObservedMethod: true });
-  const review = CaptureReviewAuthoringSchema.parse({
+  const captureContract = files.some(file => file.path === "capture/materials.json")
+    ? "dtc-materials/1" as const : undefined;
+  const retained = await readCapturedProduct({ root, ...retainedFiles, url,
+    requireObservedMethod: !captureContract, ...(captureContract ? { captureContract } : {}) });
+  const review = captureContract ? retained.review : CaptureReviewAuthoringSchema.parse({
     ...retained.review,
     variantContexts: await readPreflightVariantContexts(root),
   });
-  if (retained.record.variants.length !== 2 || retained.images.length !== 5) {
-    throw new Error("Bounded acceptance requires the two-variant/five-image original");
+  if (retained.record.variants.length < 2 || retained.record.variants.length > 10) {
+    throw new Error("Bounded acceptance requires 2–10 retained website variants");
   }
   const runId = randomUUID();
   const input = ProductPipelineInputSchema.parse({ ...original, runId, operationId: `dtc-retained-${runId}` });
@@ -97,11 +100,13 @@ try {
   if (!config.plan) throw new Error("Plan configuration missing");
   const sourcePlans = new ProductSourcePlans(publication, { ...config.plan, egressId: "direct/1" });
   const provenance = {
-    purpose: "CRAWLV3-178 retained-original acceptance; no new website capture",
+    purpose: "CRAWLV3-184 retained-original mixed-gallery acceptance; no new website capture",
     sourceRunId, archiveKey, archiveSha256: sha256(archive), files: files.length, bytesVerified,
     originalProjection: originalPlan.source, brandEvidence,
     runId, derivedAt: new Date().toISOString(),
-    derivation: "Use the complete original preflight contexts; keep the lossy original final review unchanged",
+    derivation: captureContract
+      ? "Use the archived material contract under the current DTC policy; keep the original result unchanged"
+      : "Use the complete original preflight contexts; keep the original final review unchanged",
     review,
   };
   await publication.publish(`${prefix}/retained-analysis.json`, Buffer.from(JSON.stringify(provenance)), "application/json", signal);
