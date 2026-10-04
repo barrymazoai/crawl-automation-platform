@@ -46,7 +46,8 @@ const Catalog = z.object({
 export class DtcAgentBrandScan {
   constructor(
     private readonly deps: {
-      agent: Pick<DtcCaptureAgent, "capture">;
+      agent: Pick<DtcCaptureAgent, "capture"> &
+        Partial<Pick<DtcCaptureAgent, "acceptCatalogMethod">>;
       sites: readonly DtcSitePolicy[];
     },
   ) {}
@@ -80,6 +81,7 @@ export class DtcAgentBrandScan {
     }
     const completionScope = { listingIds: seen, site, sourceUrl: request.sourceUrl };
     await verifyCompletion(catalog, saved, completionScope);
+    await this.acceptMethod(catalog.complete, saved, request.sourceUrl);
     return {
       sourceUrl: request.sourceUrl,
       source,
@@ -89,6 +91,15 @@ export class DtcAgentBrandScan {
       archiveKeys: [saved.manifestKey],
       stopped: catalog.complete ? "end" : "page_limit",
     };
+  }
+  private async acceptMethod(
+    complete: boolean,
+    saved: Awaited<ReturnType<DtcCaptureAgent["capture"]>>,
+    sourceUrl: string,
+  ) {
+    if (complete) {
+      await this.deps.agent.acceptCatalogMethod?.(saved, sourceUrl);
+    }
   }
 }
 

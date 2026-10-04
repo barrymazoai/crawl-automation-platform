@@ -60,6 +60,15 @@ function captureAgent(parts: CoreParts) {
         })
       : null;
   return {
+    acceptCatalogMethod: async (
+      saved: Parameters<DtcCaptureAgent["acceptCatalogMethod"]>[0],
+      sourceUrl: string,
+    ) => {
+      if (!agent) {
+        throw dtcAgentErrors.create("DTC.AGENT_REQUIRED");
+      }
+      await agent.acceptCatalogMethod(saved, sourceUrl);
+    },
     capture: async (request: Parameters<DtcCaptureAgent["capture"]>[0], signal: AbortSignal) => {
       if (!agent) {
         throw dtcAgentErrors.create("DTC.AGENT_REQUIRED");

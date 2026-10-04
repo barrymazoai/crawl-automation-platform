@@ -5,17 +5,13 @@ import { EgoAgentPage, runCodexCapture, sha256 } from "@crawl-automation/platfor
 import type { AgentCaptureDependencies } from "./settings.js";
 export type { AgentCaptureDependencies } from "./settings.js";
 import { captureOutputFiles, retainCaptureDirectory, type CaptureFile } from "./archive.js";
-import { dtcAgentErrors } from "./errors.js";
 import { capturePrompt } from "./prompt.js";
+import { ResultSchema, verifyAgentResult } from "./agent-result.js";
 import type { AgentCaptureRequest } from "./request.js";
 import { prepareSiteMethod, retainSiteMethod } from "./site-method.js";
 import { readCapturedProduct } from "./product-record.js";
+import { promoteCatalogProfile } from "../../../../../crawl-products/lib/catalog-profile.mjs";
 
-const ResultSchema = z.strictObject({
-  status: z.enum(["complete", "needs_review", "failed"]),
-  summary: z.string(),
-  reasonCode: z.string().nullable(),
-});
 interface AgentCaptureOutput {
   root: string;
   prefix: string;
@@ -28,6 +24,14 @@ interface AgentCaptureOutput {
 
 export class DtcCaptureAgent {
   constructor(private readonly deps: AgentCaptureDependencies) {}
+
+  async acceptCatalogMethod(saved: AgentCaptureOutput, sourceUrl: string): Promise<void> {
+    await promoteCatalogProfile({
+      profileDir: join(this.deps.settings.codex.workRoot, "site-profiles"),
+      root: saved.root,
+      sourceUrl,
+    });
+  }
 
   async capture(request: AgentCaptureRequest, signal: AbortSignal): Promise<AgentCaptureOutput> {
     const { ego, publication } = this.deps;
@@ -127,7 +131,8 @@ export class DtcCaptureAgent {
           environment: this.deps.environment,
           captureMode: request.mode,
           profileDir: join(settings.codex.workRoot, "site-profiles"),
-          writableDirectories: [join(settings.codex.workRoot, "site-profiles")],
+          writableDirectories:
+            request.mode === "catalog" ? [] : [join(settings.codex.workRoot, "site-profiles")],
         },
         signal,
       ),
@@ -188,22 +193,5 @@ export class DtcCaptureAgent {
       );
     }
     return files;
-  }
-}
-
-async function verifyAgentResult(
-  result: z.infer<typeof ResultSchema>,
-  at: { mode: AgentCaptureRequest["mode"]; outDir: string; prefix: string },
-) {
-  // Partial site analyses still pass the full analysis/evidence validation after archiving.
-  if (at.mode === "analysis" && result.status === "needs_review") {
-    const analysis = JSON.parse(await readFile(join(at.outDir, "analysis.json"), "utf8"));
-    z.object({ state: z.literal("needs-review") }).parse(analysis);
-    return;
-  }
-  if (result.status !== "complete") {
-    throw dtcAgentErrors.create("DTC.CAPTURE_REVIEW", {
-      details: { result, prefix: at.prefix },
-    });
   }
 }

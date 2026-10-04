@@ -16,3 +16,12 @@ preflight-method.json，不提前写引擎文件或调用其内部留存函数�
 4 执行停止审计 invalid=[]；证明存于 Server 一 dtc-native-20261002 的
 `catalog-16d8f89e-71a4-4d94-b3cb-c986be79ec3a-{r2,stop}-proof.json`。
 原失败不重试或覆盖。必要静态检查 pnpm check 通过，无单元测试；部署与 Mini 新任务验证待追加。
+
+745225d 修正随 f844eb3 于 02:29:55Z 在 Server 二经 origin main fresh clone、锁定安装/
+构建部署；只切换 browser-worker。新受控 Jarrow scan
+`5f83464f-a782-4cb2-8911-99e1acb589f0` 02:30:32Z 开始，02:33:20Z 在预检阶段遇到
+Codex `stream disconnected before completion: … error decoding response body`，
+终态 TEXT.CODEX_EXITED，尚未运行 discoverCatalog。它不能证明 199 已通过，也不是同名
+文件冲突复发。1 Workflow / 1 许可 / 4 执行停止审计 invalid=[]，旧记录保持不变。
+随后新的 Natrol 验证 `8917c5a0-e373-463c-b9bf-56c2e539cae4` 02:33:25Z 接续启动。
+两个新任务由明确 sourceIds 手工创建以验证本轮修正，不重排或更改旧失败任务，商品队列仍暂停。

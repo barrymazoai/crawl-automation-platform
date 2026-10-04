@@ -77,9 +77,10 @@ HTML、平台数据、图片和每轮收割结果同时保存在任务根目录 
 任务页由宿主关闭并验证不存在；遇用户接管立即停止。宿主的 capture-only 合约覆盖本 skill 的语义、导出、重试和多线程部分。
 
 宿主派发 catalog 模式时使用 `lib/catalog-discovery.mjs` 的 `discoverCatalog`，不运行完整 `runHarvest`。
-此入口自动保存实际执行的方法到公共 profile，并生成 `catalog-method-profile.json` 和
-`catalog-method-use.json`；模型只读取旧 profile、观察验证并传入方法参数，不提前调用
-`saveSiteProfile` / `retainCatalogProfile`，也不手写这两个引擎文件。采前草案放
+此入口只在本任务生成候选 `catalog-method-profile.json` 和 `catalog-method-use.json`；
+目录通过宿主原有完整性校验后，由宿主更新公共 profile，失败候选不会覆盖已验证的方法。
+模型只读取旧 profile、观察验证并传入方法参数；本模式公共 profile 只读，不调用
+`saveSiteProfile` / `retainCatalogProfile` / `promoteCatalogProfile`，也不手写引擎文件。采前草案放
 `route-plan.json` 或 `preflight-method.json`，不会占用正式输出文件。
 它与 harvest 共用旧 ENUMERATE 阶段；普通路线按原终止契约复核至零增长。
 已观察确认的 Shopify 单个 collection（不超过旧有界规则的 100 项）可在采前选择 `completionProof:"shopify"`，
