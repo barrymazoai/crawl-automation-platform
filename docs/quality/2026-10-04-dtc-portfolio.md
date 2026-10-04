@@ -34,4 +34,44 @@ URL/文件对；保留真实页面、文件、来源与限额校验。仅兼容 
 可选 `--register` 只对未应用的失败分析，通过既有 SiteAnalysisService/Runner 登记一份
 新的派生分析，附上原捕获/归档散列和派生证明，旧分析必须前后完全不变。它不自动 apply
 或启动品牌/商品，后续仍走现有 API；这不是重新执行原业务或覆盖失败记录。
-实际验证、派生分析和入队结果待追加。
+## 留存验证与独立品牌入队
+
+Server 二于 02:09:00Z 经 origin main 全新部署 `99c716d`，只切换 browser Worker。
+验证工具首次运行遇到本地材料缓存键缺少命名空间的问题，在任何分析登记前停止；
+`54c6bbd` 修正工具缓存前缀，失败输出目录保留，没有重跑浏览器或模型。
+Server 一从 Git 新建验证 checkout 并完成锁定依赖安装、构建；常驻 API/Worker 未切换。
+
+修正工具后，母站 35 份原件的身份、大小、SHA 全部通过；同一转换函数得到 completed、
+两个品牌。另用 Nature’s Truth 旧平铺数组样本验证，25 份 / 4,616,065 字节全部通过，
+仍为 completed、一个品牌。未增加或运行单元测试。
+
+通过现有 SiteAnalysisService/Runner 登记新的派生分析
+`50b6b4f8-cd20-4517-879e-14ed93fc0f86`，旧失败分析前后完全相同。
+派生出处保存在 `v3/dtc-retained-analysis/50b6b4f8-cd20-4517-879e-14ed93fc0f86/provenance.json`。
+Server 一验证输出分别为 `manual-releases/analysis198-vytalogy-54c6bbd` 和
+`manual-releases/analysis198-nature-54c6bbd`。CRAWLV3-198 已进入 Review；这只表示修正已供复核，
+不表示全部 DTC 验收完成。
+
+02:13:05Z，通过原 apply/enqueue API 创建两项独立目录任务：
+
+| 品牌 | scan ID | 目录 |
+| --- | --- | --- |
+| Jarrow | `16d8f89e-71a4-4d94-b3cb-c986be79ec3a` | `https://jarrow.com/collections/all` |
+| Natrol | `78b25d2d-944d-43ca-911a-b411ffe82e2b` | `https://www.natrol.com/collections/all-products` |
+
+同一 requestId 重复 apply 的结果完全一致；新 requestId 再 apply 也复用相同 source 和
+scan ID，没有新增任务。两任务均能从父分析查询到。证据为 Server 一
+`dtc-native-20261002/multibrand147-vytalogy-apply-{intent,first,proof}.json`。
+
+确认 held=[]、cleanupPending=0 后手工启动品牌目录队列，并发 1；商品处理队列保持暂停。
+02:16:56Z：Jarrow running、Natrol queued，未发布目录结果；discovered=0 是尚未完成时的
+状态值，不能解释为网站没有商品。02:17:24Z 只读执行材料显示 Jarrow 已保存实际目录、
+分页和代表商品预检 HTML/截图，正式目录尚未结束。串行衔接、最终完整性和清理证据待任务结束核验。
+
+Jarrow 于 02:20:42Z 进入 Review：模型的 setup-preflight.mjs 提前写入
+catalog-method-profile.json，与 discoverCatalog 自动留存的同名不可覆盖输出冲突，尚未开始
+翻页即 EEXIST。CRAWLV3-199 单独修正提示中的双重写入职责，不新增品牌专用逻辑。
+26 份原件共 4,644,255 字节于 02:23:15Z 全量 R2 大小/SHA 回读通过；失败 Workflow、
+1 个许可、4 个执行在 02:23:07Z 停止审计 invalid=[]，旧 Review 与证据保留。
+Natrol 随后于 02:20:47Z 自动开始独立目录任务，证明前品牌失败没有阻断后项领取；
+这一时序仍需与确切释放时间一起核验。详见 [199 修复记录](2026-10-04-dtc-catalog-profile-owner.md)。
