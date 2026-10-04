@@ -3,5 +3,10 @@
     "sourceUrl": "https://www.natrol.com/collections/all-products",
     "path": "natrol.mjs",
     "evidence": "CRAWLV3-200; retained scan 1ed4f3ac-79ca-45b9-8fc7-d1fc827ed630 observed .product-item a.h7 on both pages and #pagination next-page control; candidate requires live click validation before promotion."
+  },
+  {
+    "sourceUrl": "https://shop.hmwmethod.com/collections/all",
+    "path": "hmw.mjs",
+    "evidence": "CRAWLV3-203; retained complete scan 8065832a-bbe3-422a-a1c3-cbe9a79eb1a7 HTML and f8cc235d-097e-4cbc-b1e3-d81c2c0a8b53 current visual grid-end observation. Reuse exact grid, count and card metadata nodes; candidate needs live validation before promotion."
   }
 ]
