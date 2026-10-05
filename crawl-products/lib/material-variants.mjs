@@ -1,5 +1,5 @@
 /** Check website IDs against the collector's material index without extracting product content. */
-export function assertMaterialVariantIds(variants, materials, observedVariants) {
+export function assertMaterialVariantIds(variants, materials, observedVariants, options = {}) {
   if (!Array.isArray(variants) || !Array.isArray(materials?.variants)) {
     throw new Error("material_variant_inventory_required");
   }
@@ -24,7 +24,8 @@ export function assertMaterialVariantIds(variants, materials, observedVariants) 
     scoped.add(scope.variantId);
   }
   // A single variant can use the base material; multiple variants need explicit states or reasons.
-  if (ids.size > 1 && [...ids].some(id => !scoped.has(id))) {
+  // The host may accept missing states: those variants then use the base materials as a mixed scope.
+  if (!options.allowMissingStates && ids.size > 1 && [...ids].some(id => !scoped.has(id))) {
     throw new Error("material_variant_state_missing");
   }
 }

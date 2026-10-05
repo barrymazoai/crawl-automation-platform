@@ -26,7 +26,7 @@ export async function capturedMaterials(input: {
   const materials = MaterialsSchema.parse(
     JSON.parse((await captureFile(input.root, "materials.json")).toString()),
   );
-  assertMaterialVariantIds(record.variants, materials);
+  assertMaterialVariantIds(record.variants, materials, undefined, { allowMissingStates: true });
   const metadata = new Set(["title", "brand", "currency", "images"]);
   if (Object.keys(record.fields).some((name) => !metadata.has(name))) {
     throw new Error("capture_contains_parsed_product_fields");

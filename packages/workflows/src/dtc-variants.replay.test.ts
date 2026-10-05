@@ -136,7 +136,7 @@ it.each(["expanded", "partial", "before-patch", "before-id-patch"])(
       expect(childCommands(history).types).toEqual(["ProductEnrichmentWorkflow"]);
     } else {
       expect(result).toMatchObject({
-        status: scenario === "partial" ? "review" : "collected",
+        status: "collected",
         counts: {
           total: 2,
           completed: scenario === "partial" ? 1 : 2,

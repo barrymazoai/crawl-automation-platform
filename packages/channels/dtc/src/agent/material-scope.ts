@@ -18,6 +18,7 @@ export const MaterialScopeSchema = z.discriminatedUnion("status", [
     galleryUrls: z.array(z.url()).min(1).max(100),
   }),
 ]);
+type ResolvedScope = Exclude<z.infer<typeof MaterialScopeSchema>, { status: "unresolved" }>;
 interface ScopeInput {
   root: string;
   record: HarvestRecord;
@@ -75,17 +76,38 @@ function variantMetadata(record: HarvestRecord, variant: HarvestRecord["variants
   return fields;
 }
 
-function readScope(input: ScopeInput, variantId: string) {
+function readScope(input: ScopeInput, variantId: string): ResolvedScope {
   const raw = (input.review.materialScopes ?? []).filter(
     (entry) =>
       entry && typeof entry === "object" && "variantId" in entry && entry.variantId === variantId,
   );
-  if (raw.length !== 1) {
-    throw new Error("variant_material_scope_missing_or_duplicate");
+  if (raw.length > 1) {
+    throw new Error("variant_material_scope_duplicate");
   }
-  const scope = MaterialScopeSchema.parse(raw[0]);
-  if (scope.status === "unresolved") {
-    throw new Error(scope.reason);
+  const scope = raw[0] === undefined ? null : MaterialScopeSchema.parse(raw[0]);
+  if (scope && scope.status !== "unresolved") {
+    return scope;
   }
-  return scope;
+  return mixedFallback(input, scope?.reason ?? "variant_material_scope_missing");
+}
+
+/**
+ * A variant without its own resolved materials uses the product's base page and full gallery as a mixed
+ * scope (owner 2026-10-05). The existing mixed-gallery step then assigns or shares its Facts, or reviews it.
+ */
+function mixedFallback(input: ScopeInput, reason: string): ResolvedScope {
+  const pageHtml =
+    typeof input.record.pageHtml === "string"
+      ? input.record.pageHtml
+      : input.record.pageHtml.localPath;
+  // capturedMaterials records the base product region as the evidence entry after materials.json.
+  const productHtml = input.review.evidence.find((path) => path !== "materials.json") ?? pageHtml;
+  return {
+    variantId: "fallback",
+    status: "mixed",
+    reason: `base materials used: ${reason}`.slice(0, 4000),
+    pageHtml,
+    productHtml,
+    galleryUrls: input.record.gallery.map((image) => image.url),
+  };
 }

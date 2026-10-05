@@ -50,8 +50,10 @@ export async function collectDtcVariants(
     });
   }
   const completed = results.filter((entry) => complete.safeParse(entry.result).success).length;
+  // Each variant stands alone (owner 2026-10-05): one collected variant completes the product, and
+  // the others keep their own Review records; the code still marks the product as partial.
   return {
-    status: completed === results.length ? "collected" : "review",
+    status: completed > 0 ? "collected" : "review",
     ...(completed === results.length
       ? {}
       : { code: pipelineErrors.code("DTC.VARIANTS_INCOMPLETE") }),

@@ -6,7 +6,8 @@ import type { AgentCaptureDependencies } from "./settings.js";
 export type { AgentCaptureDependencies } from "./settings.js";
 import { captureOutputFiles, retainCaptureDirectory, type CaptureFile } from "./archive.js";
 import { capturePrompt } from "./prompt.js";
-import { ResultSchema, verifyAgentResult } from "./agent-result.js";
+import { ResultSchema, verifyAgentResult, type AgentWarning } from "./agent-result.js";
+import { dtcAgentErrors } from "./errors.js";
 import type { AgentCaptureRequest } from "./request.js";
 import { retainSiteMethod } from "./site-method.js";
 import { prepareCaptureTask } from "./task-preparation.js";
@@ -42,9 +43,10 @@ export class DtcCaptureAgent {
     const { cwd, outDir, prefix } = await this.prepare(request);
     let page: EgoAgentPage | undefined;
     let files: CaptureFile[] = [];
+    let warning: AgentWarning | null = null;
     try {
       page = await EgoAgentPage.open(ego, signal);
-      await this.run(request, { cwd, outDir, prefix, page }, signal);
+      warning = await this.run(request, { cwd, outDir, prefix, page }, signal);
     } finally {
       files = await this.finish(page, { cwd, prefix });
     }
@@ -60,14 +62,29 @@ export class DtcCaptureAgent {
     if (request.mode !== "product") {
       return output;
     }
-    return this.productOutput(output, request.url, signal);
+    return this.productOutput(output, { url: request.url, warning }, signal);
   }
 
-  private async productOutput(output: AgentCaptureOutput, url: string, signal: AbortSignal) {
+  private async productOutput(
+    output: AgentCaptureOutput,
+    at: { url: string; warning: AgentWarning | null },
+    signal: AbortSignal,
+  ) {
     const { prefix, manifestKey, root } = output;
+    const { url, warning } = at;
     const { publication } = this.deps;
     const result = { ...output, captureContract: "dtc-materials/1" as const };
-    await readCapturedProduct({ ...result, url });
+    try {
+      await readCapturedProduct({ ...result, url });
+    } catch (error) {
+      // The model doubted the capture and the retained materials do not verify: keep both reasons.
+      if (warning) {
+        throw dtcAgentErrors.create("DTC.CAPTURE_REVIEW", {
+          details: { result: warning, prefix, verification: String(error).slice(0, 2000) },
+        });
+      }
+      throw error;
+    }
     const method = await retainSiteMethod({
       profileDir: join(this.deps.settings.codex.workRoot, "site-profiles"),
       root,
@@ -81,6 +98,7 @@ export class DtcCaptureAgent {
           capture: manifestKey,
           materials: output.files.find((file) => file.path === "materials.json"),
           method,
+          ...(warning ? { agentWarning: warning } : {}),
         }),
       ),
       "application/json",
@@ -108,7 +126,7 @@ export class DtcCaptureAgent {
     request: AgentCaptureRequest,
     at: { cwd: string; outDir: string; prefix: string; page: EgoAgentPage },
     signal: AbortSignal,
-  ) {
+  ): Promise<AgentWarning | null> {
     const { cwd, outDir, page, prefix } = at;
     const { settings, ego } = this.deps;
     await this.prepareTask(request, at);
@@ -141,7 +159,7 @@ export class DtcCaptureAgent {
         signal,
       ),
     );
-    await verifyAgentResult(result, { mode: request.mode, outDir, prefix });
+    return verifyAgentResult(result, { mode: request.mode, outDir, prefix });
   }
 
   private prepareTask(
