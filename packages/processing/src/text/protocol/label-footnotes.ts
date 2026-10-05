@@ -1,10 +1,10 @@
 const DV_BASIS = new RegExp(
-  String.raw`(?:(?:percent|%)\s*daily\s+values?|%dv)\s+(?:\(%?dv\)\s+)?(?:are\s+)?` +
+  String.raw`(?:(?:percent(?:age)?|%)\s*daily\s+values?|%dv)\s+(?:\(%?dv\)\s+)?(?:are\s+|is\s+)?` +
     String.raw`based\s+(?:on|upon)\s+(?:a\s+)?2,?000[\s-]+calorie\s+diet`,
   "i",
 );
 const DV_NOT_ESTABLISHED = new RegExp(
-  String.raw`(?:(?:percent|%)\s*)?daily\s+values?(?:\s*\(%?dv\))?\s+` +
+  String.raw`(?:(?:percent(?:age)?|%)\s*)?daily\s+values?(?:\s*\(%?dv\))?\s+` +
     String.raw`not\s+(?:established|determined)`,
   "i",
 );

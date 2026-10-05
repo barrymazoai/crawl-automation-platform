@@ -30,7 +30,7 @@ export const TextInputSchema = z.strictObject({ ...ObservationSchema.shape, ...T
     // Half-open UTF-16 code-unit offsets into the original decoded text, not bytes or code points.
     range: z.strictObject({ start: z.number().int().nonnegative(), end: z.number().int().positive().max(200000) }).refine(r => r.end > r.start),
 }).superRefine((input, ctx) => {
-    if (input.resultSchemaVersion === 3 && (input.implementationVersion !== "codex-text/3" || !["label-text/1", "label-text/2", "label-text/3", "label-text/4", "label-text/5"].includes(input.policyVersion)))
+    if (input.resultSchemaVersion === 3 && (input.implementationVersion !== "codex-text/3" || !["label-text/1", "label-text/2", "label-text/3", "label-text/4", "label-text/5", "label-text/6"].includes(input.policyVersion)))
         ctx.addIssue({ code: "custom", message: "Label text requires its explicit implementation and policy" });
     const source = input.source;
     const ref = source.kind === "prepared" ? source.document : source.registration.result;

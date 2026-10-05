@@ -17,6 +17,8 @@ interface Judged {
 
 const ESTABLISHED_FOOTNOTE =
   /^[*+†]+\s*(?:percent\s+daily\s+values?|daily\s+values?)(?:\s*\(DV\))?\s+(?:not established\.?|not determined\.?)$/i;
+/** Drug Facts and every later rule set (label-text/5 onward). */
+const DRUG_POLICIES = ["label-text/5", "label-text/6"];
 const ALLERGEN = /^(?:contains\s*:|may\s+contain|manufactured\s+(?:in|on)|processed\s+(?:in|on))/i;
 
 /** Unrecognized exclusions retain `LABEL.COVERAGE_UNCERTAIN`; marketing always stays for Review. */
@@ -26,7 +28,7 @@ export function exclusionCodes(judged: Judged): string[] {
       !exactlyPlacedExclusion(exclusion, judged) &&
       !allowedExclusion(exclusion, judged) &&
       !(
-        judged.policyVersion === "label-text/5" &&
+        DRUG_POLICIES.includes(judged.policyVersion) &&
         judged.candidate.formula?.drugFacts &&
         drugExclusionAllowed(exclusion, judged.text)
       ),
@@ -36,7 +38,7 @@ export function exclusionCodes(judged: Judged): string[] {
 
 /** label-text/4: the heading field itself, a field's printed prefix, or a DV footnote symbol. */
 function exactlyPlacedExclusion(exclusion: Exclusion, judged: Judged): boolean {
-  if (!["label-text/4", "label-text/5"].includes(judged.policyVersion)) {
+  if (!["label-text/4", ...DRUG_POLICIES].includes(judged.policyVersion)) {
     return false;
   }
   return (
@@ -81,15 +83,21 @@ function isDvFootnote(exclusion: Exclusion): boolean {
   );
 }
 
-function allowedExclusion(exclusion: Exclusion, judged: Judged): boolean {
-  const value = exclusion.quote.text.trim();
-  if (
+/** Label structure, not content: headings, standard footnotes and notes, list connectors, marker legends. */
+function structuralExclusion(exclusion: Exclusion, judged: Judged, value: string): boolean {
+  return (
     ["heading", "metadata", "footnote", "noise"].includes(exclusion.reason) &&
     (labelHeadingAllowed(value, judged.candidate) ||
       STANDARD_FOOTNOTE.test(value) ||
       labelNoteAllowed(exclusion, judged.candidate) ||
-      ingredientConnector(exclusion, judged))
-  ) {
+      ingredientConnector(exclusion, judged) ||
+      markerLegend(exclusion, judged))
+  );
+}
+
+function allowedExclusion(exclusion: Exclusion, judged: Judged): boolean {
+  const value = exclusion.quote.text.trim();
+  if (structuralExclusion(exclusion, judged, value)) {
     return true;
   }
   switch (exclusion.reason) {
@@ -104,10 +112,32 @@ function allowedExclusion(exclusion: Exclusion, judged: Judged): boolean {
   }
 }
 
+const LEGEND = /^([*†‡§¶#+⁺¹²³⁴⁵⁶⁷⁸⁹◇^]+)\s*([^\s*†‡§¶#+⁺¹²³⁴⁵⁶⁷⁸⁹◇^][^\n]{0,59})$/u;
+const DOSE = /\d[\d,.]*\s*(?:mg|mcg|µg|μg|g|iu|cfu|ml|%|billion|million)\b/i;
+
+/**
+ * label-text/6: a short legend for a marker printed elsewhere on this label ("¹Organic", "† 2-amino ethanol
+ * phosphate"). Never a dose: a legend with an amount stays for Review.
+ */
+function markerLegend(exclusion: Exclusion, judged: Judged): boolean {
+  const legend = LEGEND.exec(exclusion.quote.text.trim());
+  const marker = legend?.[1];
+  if (
+    exclusion.reason !== "footnote" ||
+    judged.policyVersion !== "label-text/6" ||
+    !marker ||
+    DOSE.test(legend[2] ?? "")
+  ) {
+    return false;
+  }
+  const { start, end } = exclusion.quote;
+  return (judged.text.slice(0, start) + judged.text.slice(end)).includes(marker);
+}
+
 /** label-text/3+: "consisting of" / "and" between a blend total and one of its components. */
 function isBlendLinkingWord(exclusion: Exclusion, judged: Judged): boolean {
   const quote = exclusion.quote;
-  if (!["label-text/3", "label-text/4", "label-text/5"].includes(judged.policyVersion)) {
+  if (!["label-text/3", "label-text/4", ...DRUG_POLICIES].includes(judged.policyVersion)) {
     return false;
   }
   if (!/^(?:consisting of|and)$/i.test(quote.text.trim())) {
@@ -130,7 +160,9 @@ function isBlendLinkingWord(exclusion: Exclusion, judged: Judged): boolean {
 
 function allowedDirections(exclusion: Exclusion, judged: Judged): boolean {
   if (judged.candidate.formula?.drugFacts) {
-    return judged.policyVersion === "label-text/5" && drugExclusionAllowed(exclusion, judged.text);
+    return (
+      DRUG_POLICIES.includes(judged.policyVersion) && drugExclusionAllowed(exclusion, judged.text)
+    );
   }
   return (
     /^(?:suggested\s+use|directions)\s*:/i.test(exclusion.quote.text.trim()) &&

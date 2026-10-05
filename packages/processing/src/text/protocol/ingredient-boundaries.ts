@@ -34,6 +34,18 @@ export function completeIngredientItem(text: string): boolean {
   );
 }
 
+// "Hydroxypropyl Methylcellulose. Contains <2% of: Magnesium Stearate" continues the same list (Swanson).
+const MINOR_INGREDIENTS =
+  /^\s*(?:[,;.]\s*){0,2}contains\s+(?:(?:<|less\s+than)\s*2\s*%|2\s*%\s+or\s+less)\s+of\s*:\s*$/i;
+
+function listSeparator(previous: string, gap: string): boolean {
+  return (
+    /^\s*(?:[,;.]\s*(?:and\s+)?|and\s+)$/i.test(gap) ||
+    (/\.\s*$/.test(previous) && /^\s+$/.test(gap)) ||
+    MINOR_INGREDIENTS.test(gap)
+  );
+}
+
 /** Separators must contain no skipped words; conjunctions are used only between anchored items. */
 export function ingredientGap(text: string, previous: Quote, next: Quote): Span | null {
   if (
@@ -44,9 +56,7 @@ export function ingredientGap(text: string, previous: Quote, next: Quote): Span 
     return null;
   }
   const gap = text.slice(previous.end, next.start);
-  const separated =
-    /^\s*(?:[,;.]\s*(?:and\s+)?|and\s+)$/i.test(gap) ||
-    (/\.\s*$/.test(previous.text) && /^\s+$/.test(gap));
+  const separated = listSeparator(previous.text, gap);
   // This conjunction joins adjectives inside one ingredient name, never two list entries.
   const compound =
     /\bnatural\s*$/i.test(previous.text) &&

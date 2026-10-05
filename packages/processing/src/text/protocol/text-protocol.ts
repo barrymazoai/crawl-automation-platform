@@ -22,6 +22,7 @@ const LABEL_POLICIES = [
   "label-text/3",
   "label-text/4",
   "label-text/5",
+  "label-text/6",
 ];
 
 /** The first-generation prompt (result schema 1): offsets into the original text. */
@@ -86,7 +87,7 @@ export function labelReviewFailure(labelCode: string) {
 /** The answer format the model must return for this task. */
 export function textOutputSchema(input: TextInput): object {
   if (input.resultSchemaVersion === 3) {
-    return input.policyVersion === "label-text/5"
+    return input.policyVersion === "label-text/5" || input.policyVersion === "label-text/6"
       ? labelTextOutputSchema
       : legacyLabelTextOutputSchema;
   }

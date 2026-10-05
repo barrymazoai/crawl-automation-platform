@@ -34,7 +34,7 @@ import { ResourceHealthConfigSchema } from "./resources/resource-health-config.j
 const absolutePath = z.string().refine(isAbsolute, "Must be an absolute path");
 
 /** New label work reads labels with this protocol only; older versions stay readable for stored answers. */
-export const LABEL_TEXT_POLICY = "label-text/5";
+export const LABEL_TEXT_POLICY = "label-text/6";
 
 export const WorkerConfigSchema = z
   .strictObject({

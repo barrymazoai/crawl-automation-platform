@@ -8,9 +8,14 @@ import { z } from "zod";
 import { evidenceLines } from "./evidence-lines.js";
 import { strictOutputSchema } from "./strict-output-schema.js";
 
-export const labelTextPolicyVersion = "label-text/5";
+export const labelTextPolicyVersion = "label-text/6";
 export type LabelTextPolicyVersion =
-  "label-text/1" | "label-text/2" | "label-text/3" | "label-text/4" | "label-text/5";
+  | "label-text/1"
+  | "label-text/2"
+  | "label-text/3"
+  | "label-text/4"
+  | "label-text/5"
+  | "label-text/6";
 export const labelTextOutputSchema = strictOutputSchema(z.toJSONSchema(LabelTextWireSchema));
 export const legacyLabelTextOutputSchema = z.toJSONSchema(
   legacyLabelExtractionSchema(LabelAnchorSchema),
@@ -50,7 +55,7 @@ export const v4LabelTextInstructions = [
 ].join("\n");
 
 /** label-text/5: Drug Facts uses active ingredients, printed strengths and cited Purpose fields. */
-export const labelTextInstructions = [
+export const v5LabelTextInstructions = [
   v4LabelTextInstructions,
   "For Drug Facts ONLY, formula.drugFacts quotes the exact Drug Facts heading. drugFacts is null for Supplement/Nutrition Facts. Serving Size and Servings Per Container may be null for Drug Facts; never invent them from Directions or package weight.",
   "Drug Facts formula rows are active ingredients, kind nutrient, parentRowIndex null, dailyValue null. Quote each ingredient name and its complete strength as printed in amount, including homeopathic dilution, HPUS, percentage and parenthesized mass when present. Never convert homeopathic strengths to mass. Quote the printed Purpose in that row's purpose field; purpose is null when absent and on every non-Drug-Facts row. Purpose is not an amount column or an exclusion.",
@@ -58,8 +63,16 @@ export const labelTextInstructions = [
   "Drug Facts Uses, Warning/Warnings, Directions, Other information and Questions sections are directions exclusions, including their printed headings and body. Quote each section separately; never cross into active or inactive ingredients. HPUS definitions, homeopathic dilution explanations and parenthesized trace-alkaloid/constituent notes are exact footnote exclusions. Never discard a strength or Purpose as a note. All other coverage rules still apply.",
 ].join("\n");
 
+/** label-text/6: a "Contains <2% of:" list continues Other Ingredients; marker legends are footnotes. */
+export const labelTextInstructions = [
+  v5LabelTextInstructions,
+  "A list after 'Contains <2% of:', 'Contains less than 2% of:' or 'Contains 2% or less of:' is part of the ingredient list, not an allergen statement: continue otherIngredients.items with each listed ingredient. Only allergen statements (Contains: milk, soy; may contain; made in a facility) are allergen exclusions.",
+  "A printed legend that explains a marker used on the label (such as '¹Organic' or '† Wildcrafted') is a footnote exclusion; keep the marker on its row or ingredient as printed.",
+].join("\n");
+
 const INSTRUCTIONS: Record<string, string> = {
-  "label-text/5": labelTextInstructions,
+  "label-text/6": labelTextInstructions,
+  "label-text/5": v5LabelTextInstructions,
   "label-text/4": v4LabelTextInstructions,
   "label-text/3": v3LabelTextInstructions,
 };

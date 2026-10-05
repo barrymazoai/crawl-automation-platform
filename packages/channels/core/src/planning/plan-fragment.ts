@@ -4,17 +4,23 @@ import {
   type ChannelProductEvidence,
 } from "@crawl-automation/v3-contracts";
 import { fingerprinted, planTaskId } from "./plan-codec.js";
+import { hasIngredientsSection } from "./source-order.js";
 
-/** Retain product facts and details for evidence; label-section admission separately gates the model. */
+/**
+ * The page text the label model reads: product facts, plus details only when no facts block prints its own
+ * ingredient list. Marketing bullets and descriptions next to a complete ingredient list only become excluded
+ * text that leaves the label's coverage uncertain (owner 2026-10-05).
+ */
 export function fragmentOf(
   input: ChannelPlanInput,
   evidence: ChannelProductEvidence,
   sourceModule: string,
 ) {
-  const selected = evidence.factsCandidates.filter((facts) => facts.scope === "selected-product");
-  const html = [...selected.map((facts) => facts.html), evidence.detailsHtml]
-    .filter(Boolean)
-    .join("\n");
+  const facts = evidence.factsCandidates
+    .filter((candidate) => candidate.scope === "selected-product")
+    .map((candidate) => candidate.html);
+  const details = facts.some(hasIngredientsSection) ? null : evidence.detailsHtml;
+  const html = [...new Set([...facts, details])].filter(Boolean).join("\n");
   const bytes = Buffer.from(html);
   if (!html) {
     return { fragment: null, bytes };

@@ -37,3 +37,10 @@ const LABEL_HEADING = new RegExp(
 export function hasLabelSection(html: string): boolean {
   return LABEL_HEADING.test(convert(html, { wordwrap: false }));
 }
+
+const INGREDIENTS_HEADING = /(?:^|\n)\s*(?:(?:Other|Inactive)\s+)?Ingredients\s*(?::|$)/im;
+
+/** A facts block that prints its own ingredient list ("Ingredients", "Other Ingredients:"). */
+export function hasIngredientsSection(html: string): boolean {
+  return INGREDIENTS_HEADING.test(convert(html, { wordwrap: false }));
+}

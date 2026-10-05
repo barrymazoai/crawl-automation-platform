@@ -43,7 +43,7 @@ export function decodeLabelText(request: LabelTextRequest): DecodedLabel {
   const { scope, text, response, policyVersion = "label-text/2" } = request;
   assertLimits(scope, text, response);
   const schema =
-    policyVersion === "label-text/5"
+    policyVersion === "label-text/5" || policyVersion === "label-text/6"
       ? LabelTextWireSchema
       : legacyLabelExtractionSchema(LabelAnchorSchema);
   const wire: Wire = schema.parse(JSON.parse(response));
