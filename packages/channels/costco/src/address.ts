@@ -19,7 +19,10 @@ function costcoUrl(raw: string): URL {
   return url;
 }
 
-/** Online ID, never the separate warehouse item number in JSON-LD sku. */
+/** A non-default child of a multi-child page; the fragment never reaches Costco (owner 2026-10-05). */
+const CHILD = /^#item=(\d{4,12})$/;
+
+/** Online ID, never the separate warehouse item number in JSON-LD sku; `#item=` names a non-default child. */
 export function costcoProductAddress(raw: string): ProductAddress {
   const url = costcoUrl(raw);
   const match = PRODUCT.exec(url.pathname) ?? CANONICAL.exec(url.pathname);
@@ -28,7 +31,9 @@ export function costcoProductAddress(raw: string): ProductAddress {
     throw costcoErrors.create("COSTCO.URL", { details: { path: url.pathname } });
   }
   const path = match[1] ? `/${match[1]}.product.${listingId}.html` : `/p/-/${listingId}`;
-  return { url: `${COSTCO_ORIGIN}${path}`, listingId, variantId: null };
+  const child = CHILD.exec(url.hash)?.[1] ?? null;
+  const fragment = child ? `#item=${child}` : "";
+  return { url: `${COSTCO_ORIGIN}${path}${fragment}`, listingId, variantId: child };
 }
 
 export function costcoProductUrl(listingId: string): string {

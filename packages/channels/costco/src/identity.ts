@@ -8,6 +8,7 @@ import {
 import { parseHTML } from "linkedom";
 import { costcoProductAddress } from "./address.js";
 import { costcoErrors } from "./errors.js";
+import { costcoChildren } from "./children.js";
 
 /** Only page-owned URLs establish the online ID; JSON-LD sku is a warehouse item number. */
 export function costcoStructured(document: Document): {
@@ -36,8 +37,16 @@ export function costcoStructured(document: Document): {
   };
 }
 
+/** A requested child must be one of this page's own children; otherwise the identity conflicts. */
 export function costcoPageIdentity(page: FetchedPage) {
   const { document } = parseHTML(page.html);
   const { listingId } = costcoStructured(document);
-  return { listingId, variantId: null };
+  const requested = costcoProductAddress(page.url).variantId;
+  if (!requested) {
+    return { listingId, variantId: null };
+  }
+  const own = costcoChildren(document, listingId).children.some(
+    (child) => child.itemNumber === requested,
+  );
+  return { listingId, variantId: own ? requested : null };
 }

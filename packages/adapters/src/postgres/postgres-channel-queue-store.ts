@@ -15,7 +15,7 @@ import type { Database, Queryable } from "@crawl-automation/platform";
 import type { FamilyFormulaOutcome, FamilyFormulaQuery } from "@crawl-automation/app";
 import { recordFamilyOutcome, familyOutcomes } from "./queue-family-queries.js";
 import { PostgresFormulaIndex } from "./postgres-formula-index.js";
-import type { FormulaQuery } from "@crawl-automation/app";
+import type { FormulaQuery, QueuedProduct } from "@crawl-automation/app";
 import { channelQueueStatus, lockChannelQueue } from "./channel-queue-queries.js";
 import { PostgresQueueReader } from "./postgres-queue-reader.js";
 import { PostgresQueueRequeue } from "./postgres-queue-requeue.js";
@@ -53,6 +53,30 @@ export class PostgresChannelQueueStore implements QueueStore {
 
   add(input: AddToQueue, discovery?: ScanAdmissionSettings) {
     return this.locked(input.channel, (tx) => new PostgresQueueAdd(tx).add(input, discovery));
+  }
+
+  /** The products this channel's queue has never held, in any state (discovered variants are queued once). */
+  async unseen(channel: string, products: QueuedProduct[]): Promise<QueuedProduct[]> {
+    if (!products.length) {
+      return [];
+    }
+    const rows = await this.database.query<{ index: number }>(
+      `SELECT r.index FROM jsonb_to_recordset($2::jsonb) AS r(index int, listing_id text, variant_id text)
+       WHERE NOT EXISTS (
+         SELECT 1 FROM queue_item q WHERE q.channel = $1 AND q.listing_id = r.listing_id
+           AND COALESCE(q.variant_id, '') = COALESCE(r.variant_id, ''))`,
+      [
+        channel,
+        JSON.stringify(
+          products.map((product, index) => ({
+            index,
+            listing_id: product.listingId,
+            variant_id: product.variantId,
+          })),
+        ),
+      ],
+    );
+    return rows.map((row) => products[row.index]).filter((product) => product !== undefined);
   }
 
   /** Formula requests from Whole Foods use the same Amazon queue and dispatcher as direct product lists. */

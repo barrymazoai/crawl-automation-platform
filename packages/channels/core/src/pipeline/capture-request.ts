@@ -27,12 +27,20 @@ export type PlanSettings = Pick<ChannelPlanInput, "text" | "ocr" | "visionConfig
   >;
 };
 
+/** A variant the captured page names, as its own address; queued by the pipeline when never seen before. */
+export interface DiscoveredVariant {
+  url: string;
+  listingId: string;
+  variantId: string | null;
+}
+
 export interface FamilyCaptureResult {
   status: "captured-family";
   listingId: string;
   variantId: string | null;
   archiveKey: string;
   page: CapturedPage;
+  discovered?: DiscoveredVariant[];
 }
 
 export type ChannelCaptureResult = ProductCaptureResult | FamilyCaptureResult;
@@ -49,6 +57,8 @@ export type ProductCaptureResult =
       family: ProductFamily | null;
       /** What the page showed, for the metrics history (recorded by the pipeline, not passed to the workflow). */
       page: CapturedPage;
+      /** The page's other variants, for adapters that discover them. */
+      discovered?: DiscoveredVariant[];
     }
   | {
       /** The revisit showed the listing is unlisted (the reason is recorded); nothing was parsed or planned. */

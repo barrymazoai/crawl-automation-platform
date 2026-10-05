@@ -11,8 +11,8 @@ import {
   type WholeFoodsHttpScanSettings,
 } from "./whole-foods-http-settings.js";
 import { WholeFoodsBrandReader } from "./whole-foods-brand-reader.js";
-import { wholeFoodsProductAddress } from "./whole-foods-address.js";
-import { wholeFoodsPageIdentity } from "./whole-foods-identity.js";
+import { wholeFoodsProductAddress, wholeFoodsProductUrl } from "./whole-foods-address.js";
+import { wholeFoodsPageIdentity, wholeFoodsVariationAsins } from "./whole-foods-identity.js";
 import { WHOLE_FOODS_PAGE_POLICY } from "./whole-foods-policy.js";
 import { parseWholeFoodsProduct, type WholeFoodsProduct } from "./whole-foods-product.js";
 import type { WholeFoodsStore } from "./whole-foods-store.js";
@@ -89,6 +89,7 @@ export function wholeFoodsAdapter(
     httpPolicy: WHOLE_FOODS_PAGE_POLICY,
     productAddress: wholeFoodsProductAddress,
     pageIdentity: wholeFoodsPageIdentity,
+    discoversVariants: true,
     parseProduct(page: FetchedPage): ParsedProduct<WholeFoodsProduct> {
       const product = parseWholeFoodsProduct(page, store);
       return {
@@ -97,7 +98,9 @@ export function wholeFoodsAdapter(
         rendered: product,
         evidence: evidenceOf(product),
         commerce: commerceOf(product),
-        variants: [],
+        variants: wholeFoodsVariationAsins(page, product.asin).map((asin) =>
+          wholeFoodsProductAddress(wholeFoodsProductUrl(asin)),
+        ),
         facts: { text: product.factsText, complete: false, missing: ["FACTS.FROM_AMAZON_BY_ASIN"] },
       };
     },

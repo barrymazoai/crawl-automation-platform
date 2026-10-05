@@ -1,11 +1,12 @@
 import { pipelineErrors } from "@crawl-automation/platform/errors/activity";
 import { resourceGateCodes } from "@crawl-automation/platform/errors/resource-gate";
-import { isCancellation, patched, proxyActivities } from "@temporalio/workflow";
+import { isCancellation, log, patched, proxyActivities } from "@temporalio/workflow";
 import { legacyBrowserCapture } from "./legacy-capture.js";
 import { collectFamilyProduct } from "./family-product.js";
 import { failureCode } from "./failure-code.js";
 import {
   ProductPipelineInputSchema,
+  type CaptureResult,
   type PipelineActivities,
   type ProductPipelineInput,
 } from "./pipeline-model.js";
@@ -68,6 +69,13 @@ async function collect(
   pipeline: PipelineActivities,
 ): Promise<unknown> {
   const captured = await captureProduct(input, pipeline);
+  if (
+    (captured.status === "captured" || captured.status === "captured-family") &&
+    captured.discovered?.length &&
+    patched("queue-discovered-variants-v1")
+  ) {
+    await queueDiscovered(input, pipeline, captured.discovered);
+  }
   if (captured.status === "captured-family" && patched("formula-family-capture-v1")) {
     return collectFamilyProduct(input, pipeline, captured);
   }
@@ -76,4 +84,21 @@ async function collect(
     return captured;
   }
   return collectCapturedProduct(input, pipeline, captured);
+}
+
+/** Best effort: a variant that fails to queue never turns the captured product into a Review. */
+async function queueDiscovered(
+  input: ProductPipelineInput,
+  pipeline: PipelineActivities,
+  variants: NonNullable<Extract<CaptureResult, { status: "captured" }>["discovered"]>,
+): Promise<void> {
+  const { runId, channel, sourceId } = input;
+  try {
+    await pipeline.queueDiscoveredVariants({ runId, channel, sourceId, variants });
+  } catch (error) {
+    if (isCancellation(error)) {
+      throw error;
+    }
+    log.warn("Discovered variants were not queued", { runId, code: failureCode(error) });
+  }
 }

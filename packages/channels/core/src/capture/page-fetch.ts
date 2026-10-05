@@ -50,7 +50,10 @@ export class ScraperApiPages implements PageFetcher {
 
   async fetchPage(request: PageRequest, abort: AbortSignal): Promise<FetchedHtml> {
     const { policy } = request;
-    const target = allowedTarget(request.url, policy.origins).href;
+    const allowed = allowedTarget(request.url, policy.origins);
+    // A fragment never reaches the website; channels may use one to name a variant on a shared page.
+    allowed.hash = "";
+    const target = allowed.href;
     const options = channelOptions(this.settings.defaults, this.settings.channels[request.channel]);
     const signal = AbortSignal.any([abort, AbortSignal.timeout(policy.timeoutMs)]);
     const tooLarge = () =>

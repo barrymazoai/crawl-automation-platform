@@ -3,13 +3,22 @@ import { ChannelProductEvidenceSchema } from "@crawl-automation/v3-contracts";
 import { costcoContent } from "./content.js";
 import { costcoImages } from "./images.js";
 import { costcoErrors } from "./errors.js";
+import type { CostcoChild } from "./children.js";
 
+const pageUrl = (url: string) => url.split("#")[0] ?? url;
+
+/** A non-default child keeps its own title and options; the page's gallery and facts are shared by its children. */
 export function costcoEvidence(
   document: Document,
-  selected: { product: JsonObject; url: string; listingId: string },
+  selected: {
+    product: JsonObject;
+    url: string;
+    listingId: string;
+    child?: CostcoChild | undefined;
+  },
 ) {
-  const { product, url, listingId } = selected;
-  const title = string(product.name) ?? document.querySelector("h1")?.textContent?.trim();
+  const { product, url, listingId, child } = selected;
+  const title = evidenceTitle(document, product, child);
   if (!title) {
     throw costcoErrors.create("COSTCO.PRODUCT_UNVERIFIED");
   }
@@ -18,17 +27,17 @@ export function costcoEvidence(
     codec: "channel-product/1",
     channel: "costco",
     listingId,
-    variantId: null,
+    variantId: child?.itemNumber ?? null,
     url,
     title,
     brandRaw: schemaBrand(product.brand),
-    variantOptions: [],
+    variantOptions: child?.options ?? [],
     variants: [],
     detailsHtml: content.detailsHtml,
     factsCandidates: content.factsHtml
       ? [{ field: "page-facts", html: content.factsHtml, scope: "selected-product" }]
       : [],
-    imageCandidates: costcoImages(document, product, url).map((image) => ({
+    imageCandidates: costcoImages(document, product, pageUrl(url)).map((image) => ({
       url: image,
       variantId: null,
       basis: "product-gallery",
@@ -36,4 +45,8 @@ export function costcoEvidence(
     })),
     warnings: [],
   });
+}
+
+function evidenceTitle(document: Document, product: JsonObject, child: CostcoChild | undefined) {
+  return child?.title ?? string(product.name) ?? document.querySelector("h1")?.textContent?.trim();
 }

@@ -58,14 +58,14 @@ export function costcoCommerce(input: {
   prices: CostcoPrice[];
   store: CostcoStore;
   storeVerified: boolean;
+  /** A non-default child: the page carries only the default child's price, so this child's price is unknown. */
+  otherChild?: boolean;
 }): CommerceEvidence {
   const { product, listingId, itemNumber, prices, store, storeVerified } = input;
   const offer = object(product.offers) ?? {};
   const base = schemaCommerce(offer, product);
-  const selected =
-    prices.find((entry) => entry.source === "page") ??
-    prices.find((entry) => entry.label === "Delivered Price");
-  const price = selected?.price ?? base.price;
+  const selected = input.otherChild ? undefined : shownPrice(prices);
+  const price = childPrice(input.otherChild, selected?.price ?? base.price);
   return {
     ...base,
     // The server HTML's JSON-LD always says OutOfStock; real stock is loaded later by the page (2026-10-01).
@@ -80,7 +80,20 @@ export function costcoCommerce(input: {
       `costco-warehouse-verified:${storeVerified}`,
       `costco-price-source:${selected?.source ?? "jsonld"}`,
       ...(itemNumber ? [`costco-item:${itemNumber}`] : []),
+      ...(input.otherChild ? ["costco-child-price:not-in-page"] : []),
       ...prices.map((entry) => `costco-price:${entry.label}:${entry.price}`),
     ],
   };
+}
+
+function shownPrice(prices: CostcoPrice[]): CostcoPrice | undefined {
+  return (
+    prices.find((entry) => entry.source === "page") ??
+    prices.find((entry) => entry.label === "Delivered Price")
+  );
+}
+
+/** A non-default child's price is not in the page; it stays unknown rather than borrowing the default's. */
+function childPrice(otherChild: boolean | undefined, price: string | null): string | null {
+  return otherChild ? null : price;
 }

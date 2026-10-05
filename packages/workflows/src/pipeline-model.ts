@@ -66,6 +66,26 @@ export const ListingResultSchema = z.strictObject({
   causeCode: z.string().min(1).max(120),
 });
 
+/** Variants a captured page names (adapters that opt in); absent in earlier histories. */
+const DiscoveredVariantsSchema = z
+  .array(
+    z.strictObject({
+      url: z.url().max(4096),
+      listingId: z.string().min(1).max(200),
+      variantId: z.string().min(1).max(200).nullable(),
+    }),
+  )
+  .max(200);
+
+/** The run's discovered variants, queued on the run's channel and brand source when never seen there. */
+export const DiscoveredVariantsRequestSchema = z.strictObject({
+  runId: z.uuid(),
+  channel: PipelineChannelSchema,
+  sourceId: z.uuid(),
+  variants: DiscoveredVariantsSchema.min(1),
+});
+export type DiscoveredVariantsRequest = z.infer<typeof DiscoveredVariantsRequestSchema>;
+
 export const CaptureResultSchema = z.discriminatedUnion("status", [
   z.strictObject({
     status: z.literal("captured"),
@@ -76,12 +96,14 @@ export const CaptureResultSchema = z.discriminatedUnion("status", [
     labelText: z.string().max(200_000).nullable().optional(),
     /** The product's family as the adapter read it; checked by the reuse activity (absent in earlier histories). */
     family: z.unknown().optional(),
+    discovered: DiscoveredVariantsSchema.optional(),
   }),
   z.strictObject({
     status: z.literal("captured-family"),
     listingId: z.string().min(1).max(200),
     variantId: z.string().min(1).max(200).nullable(),
     archiveKey: z.string().min(1).max(1024),
+    discovered: DiscoveredVariantsSchema.optional(),
   }),
   AcquisitionReviewSchema,
   ListingResultSchema,
@@ -169,6 +191,8 @@ export interface PipelineActivities {
   reviewProduct(request: ReviewRequest): Promise<AcquisitionReview>;
   /** Holds an ASIN that has no Amazon formula yet in Amazon's queue, once per ASIN. */
   requestAmazonFormula(request: AmazonFormulaRequest): Promise<unknown>;
+  /** Queues the captured page's variants that the channel has never seen. */
+  queueDiscoveredVariants(request: DiscoveredVariantsRequest): Promise<unknown>;
 }
 
 /** An ASIN seen on a channel that shares Amazon's formulas, without an Amazon formula yet. */

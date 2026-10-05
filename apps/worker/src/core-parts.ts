@@ -1,6 +1,7 @@
 import type { PostgresFormulaIndex, PostgresReviewLedger } from "@crawl-automation/adapters";
 import type {
   AmazonFormulaRequests,
+  DiscoveredVariants,
   FormulaLookup,
   LabelHandoffs,
   PipelineCapture,
@@ -45,6 +46,7 @@ export interface CoreParts {
   formulaLookup: FormulaLookup;
   siblingReuse: SiblingFormulaReuse;
   amazonFormulaRequests: AmazonFormulaRequests;
+  discoveredVariants: DiscoveredVariants;
   labelHandoffs: LabelHandoffs;
   productReviews: ProductReviews;
 }

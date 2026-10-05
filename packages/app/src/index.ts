@@ -26,6 +26,7 @@ export * from "./queue/queue-model.js";
 export * from "./queue/queue-service.js";
 export * from "./queue/dispatch-model.js";
 export * from "./queue/queue-dispatcher.js";
+export * from "./queue/discovered-variants.js";
 export * from "./brands/brand-service.js";
 export * from "./brands/source-import.js";
 export * from "./brand-scans/index.js";

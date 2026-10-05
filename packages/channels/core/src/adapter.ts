@@ -145,6 +145,11 @@ export interface ChannelAdapter<Rendered = unknown> {
   parseProduct(page: FetchedPage): ParsedProduct<Rendered>;
   /** The product's family as its page shows it (other sizes, flavours…); null when the page shows none. */
   productFamily?(parsed: ParsedProduct<Rendered>): ProductFamily | null;
+  /**
+   * The page's own variants (ParsedProduct.variants) are handed back with the capture so the pipeline can queue the
+   * ones that channel has never seen. Opt-in per adapter (owner 2026-10-05: Whole Foods and Costco).
+   */
+  discoversVariants?: boolean;
   /** The product ID the metrics history keys this listing by; the address's listing ID when absent. */
   externalId?(parsed: ParsedProduct<Rendered>): string;
 }

@@ -44,17 +44,32 @@ export function costcoAdapter(store: CostcoStore = COSTCO_STORE): ChannelAdapter
       projection: (rendered) => rendered.evidence,
       read: readProjection,
     },
+    discoversVariants: true,
     parseProduct(page) {
       const rendered = parseCostcoProduct(page, store);
       return {
         channel: "costco",
-        identity: { listingId: rendered.evidence.listingId, variantId: null },
+        identity: {
+          listingId: rendered.evidence.listingId,
+          variantId: rendered.evidence.variantId,
+        },
         rendered,
         evidence: rendered.evidence,
         commerce: rendered.commerce,
-        variants: [],
+        variants: costcoChildVariants(rendered),
         facts: costcoFacts(rendered.evidence),
       };
     },
   };
+}
+
+/** The page's other children, each by its own `#item=` address; the plain page stands for the default child. */
+function costcoChildVariants(rendered: CostcoProduct) {
+  const { selected, children } = rendered.children;
+  if (children.length < 2) {
+    return [];
+  }
+  return children
+    .filter((child) => child.itemNumber !== selected)
+    .map((child) => costcoProductAddress(`${rendered.pageUrl}#item=${child.itemNumber}`));
 }

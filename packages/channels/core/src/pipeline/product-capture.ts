@@ -8,6 +8,7 @@ import type {
   CaptureRequest,
   ProductCaptureResult,
   ChannelCaptureResult,
+  DiscoveredVariant,
 } from "./capture-request.js";
 import { capturedPage } from "./captured-page.js";
 import type { ProductSourcePlans } from "./source-plans.js";
@@ -58,6 +59,7 @@ export class ProductCapture {
       labelText: parsed.facts.text,
       family: adapter.productFamily?.(parsed) ?? null,
       page: capturedPage(adapter, address, captured),
+      ...discoveredVariants(adapter, address, parsed),
     };
   }
 
@@ -85,6 +87,7 @@ export class ProductCapture {
       variantId,
       archiveKey: captured.archiveKey,
       page: capturedPage(adapter, address, captured),
+      ...discoveredVariants(adapter, address, captured.parsed),
     };
   }
 
@@ -116,4 +119,33 @@ export class ProductCapture {
       },
     });
   }
+}
+
+const MAX_DISCOVERED = 200;
+
+/** The page's variants other than the captured one, only for adapters that opt in. */
+function discoveredVariants(
+  adapter: ChannelAdapter,
+  address: ProductAddress,
+  parsed: { variants: ProductAddress[] },
+): { discovered?: DiscoveredVariant[] } {
+  if (!adapter.discoversVariants) {
+    return {};
+  }
+  const seen = new Set([key(address)]);
+  const discovered = parsed.variants.filter((variant) => {
+    const id = key(variant);
+    return seen.has(id) ? false : (seen.add(id), true);
+  });
+  return discovered.length
+    ? {
+        discovered: discovered
+          .slice(0, MAX_DISCOVERED)
+          .map(({ url, listingId, variantId }) => ({ url, listingId, variantId })),
+      }
+    : {};
+}
+
+function key(address: { listingId: string; variantId: string | null }) {
+  return `${address.listingId}\u0000${address.variantId ?? ""}`;
 }

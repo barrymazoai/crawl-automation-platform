@@ -14,6 +14,7 @@ import {
 } from "@crawl-automation/adapters";
 import {
   AmazonFormulaRequests,
+  DiscoveredVariants,
   formulaFamilies,
   FormulaLookup,
   LabelHandoffs,
@@ -155,6 +156,11 @@ function registerServices(container: Parts): void {
           queue: new PostgresChannelQueueStore(database),
           amazonProduct: amazonFormulaProduct,
         }),
+    ).singleton(),
+    // Variants a captured page names (Whole Foods, Costco) join the channel's queue once, when never seen there.
+    discoveredVariants: asFunction(
+      ({ database }: WorkerParts) =>
+        new DiscoveredVariants(new PostgresChannelQueueStore(database)),
     ).singleton(),
     labelHandoffs: asFunction(
       ({ registry, channelPlans, publication, database, config }: WorkerParts) =>
