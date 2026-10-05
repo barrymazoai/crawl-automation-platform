@@ -34,9 +34,10 @@ export function completeIngredientItem(text: string): boolean {
   );
 }
 
-// "Hydroxypropyl Methylcellulose. Contains <2% of: Magnesium Stearate" continues the same list (Swanson).
+// "Hydroxypropyl Methylcellulose. Contains <2% of: Magnesium Stearate" (Swanson) or "Water, Less than 2% of:
+// Pectin" (Costco) continues the same list.
 const MINOR_INGREDIENTS =
-  /^\s*(?:[,;.]\s*){0,2}contains\s+(?:(?:<|less\s+than)\s*2\s*%|2\s*%\s+or\s+less)\s+of\s*:\s*$/i;
+  /^\s*(?:[,;.]\s*){0,2}(?:contains\s+)?(?:(?:<|less\s+than)\s*2\s*%|2\s*%\s+or\s+less)\s+of\s*:\s*$/i;
 
 function listSeparator(previous: string, gap: string): boolean {
   return (
