@@ -8,18 +8,18 @@ import { costcoFacts, parseCostcoProduct, type CostcoProduct } from "./product.j
 import { COSTCO_STORE, type CostcoStore } from "./store.js";
 import { costcoErrors } from "./errors.js";
 
+/** A child (`#item=`) must name the same item in the task, the evidence and both addresses. */
 function readProjection(raw: unknown, url: string, owner: ProductIdentity) {
   const evidence = ChannelProductEvidenceSchema.parse(raw);
   const expected = costcoProductAddress(url);
   const actual = costcoProductAddress(evidence.url);
-  if (
-    evidence.channel !== "costco" ||
-    evidence.variantId !== null ||
-    owner.variantId !== null ||
-    evidence.listingId !== owner.listingId ||
-    actual.listingId !== owner.listingId ||
-    expected.listingId !== owner.listingId
-  ) {
+  const sameListing = [evidence.listingId, actual.listingId, expected.listingId].every(
+    (id) => id === owner.listingId,
+  );
+  const sameChild = [evidence.variantId, actual.variantId, expected.variantId].every(
+    (id) => id === owner.variantId,
+  );
+  if (evidence.channel !== "costco" || !sameListing || !sameChild) {
     throw costcoErrors.create("COSTCO.PROJECTION_CONFLICT");
   }
   return { evidence, facts: costcoFacts(evidence) };
