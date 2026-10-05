@@ -37,9 +37,10 @@ export function costcoEvidence(
     factsCandidates: content.factsHtml
       ? [{ field: "page-facts", html: content.factsHtml, scope: "selected-product" }]
       : [],
+    // A child's task uses the page's shared gallery as its own (owner 2026-10-05: children share one formula).
     imageCandidates: costcoImages(document, product, pageUrl(url)).map((image) => ({
       url: image,
-      variantId: null,
+      variantId: child?.itemNumber ?? null,
       basis: "product-gallery",
       verifiedOriginal: false,
     })),

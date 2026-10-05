@@ -22,9 +22,9 @@ export const ChannelPlanInputSchema = z.strictObject({
 }).superRefine((i, ctx) => {
   try { assertArtifactBelongsTo(i.source, i.owner); } catch { ctx.addIssue({ code: "custom", message: "Source owner conflict" }); }
   // A projection comes from an owned browser page or, for Amazon, Swanson and GNC, from one archived static HTTP fetch
-  // through a provider route (ScraperAPI).
+  // through a provider route (ScraperAPI). Costco children of a multi-child page carry their item number (2026-10-05).
   if (i.source.kind !== "result-json" || ![`${i.channel}.browser-projection`, ...(i.channel === "amazon" || i.channel === "swanson" || i.channel === "gnc" || i.channel === "costco" ? [`${i.channel}.http-projection`] : [])].includes(i.source.producer.module) ||
-    i.source.producer.implementationVersion !== i.parserVersion || !(i.parserVersion === `${i.channel}-rendered/1` || (i.channel === "dtc" && i.parserVersion === "dtc-agent/1")) || i.source.producer.operationId === i.operationId || (i.channel === "swanson" ? i.owner.variantId === null : i.channel !== "dtc" && i.owner.variantId !== null))
+    i.source.producer.implementationVersion !== i.parserVersion || !(i.parserVersion === `${i.channel}-rendered/1` || (i.channel === "dtc" && i.parserVersion === "dtc-agent/1")) || i.source.producer.operationId === i.operationId || (i.channel === "swanson" ? i.owner.variantId === null : i.channel !== "dtc" && i.channel !== "costco" && i.owner.variantId !== null))
     ctx.addIssue({ code: "custom", message: "Rendered source provenance required" });
 });
 export type ChannelPlanInput = z.infer<typeof ChannelPlanInputSchema>;
