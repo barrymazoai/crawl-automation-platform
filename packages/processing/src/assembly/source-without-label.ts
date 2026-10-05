@@ -6,7 +6,7 @@ import { assemblyErrors } from "./assembly-errors.js";
 import { fail, type MergeState } from "./merge-state.js";
 
 /** FORMULA_MISSING is a model issue, not a Review code. An empty label becomes CORE_MISSING. */
-const SOURCE_WITHOUT_LABEL: readonly string[] = [
+export const SOURCE_WITHOUT_LABEL: readonly string[] = [
   textErrors.code("TEXT.LABEL_CORE_MISSING"),
   labelValidationErrors.code("LABEL.CORE_MISSING"),
 ];

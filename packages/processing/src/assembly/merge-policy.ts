@@ -7,7 +7,7 @@ import {
   labelNumericSourceConflict,
 } from "@crawl-automation/v3-contracts";
 import type { MergeFailure, MergeState, LabelEvidence } from "./merge-state.js";
-import { applySourceReview } from "./source-without-label.js";
+import { applySourceReview, SOURCE_WITHOUT_LABEL } from "./source-without-label.js";
 import { splitLabel } from "./split-label.js";
 
 /** What the manifest's evidence policy decides for this set of verified sources. */
@@ -42,6 +42,8 @@ const FROM_3 = [
 ];
 const SECONDARY_TEXT =
   /^TEXT\.LABEL_(?:GROUP_EMPTY|GROUP_INVALID|ROW_ORDER_INVALID|COVERAGE_UNCERTAIN|EXTRACTION_INCOMPLETE|FORMULA_INCOMPLETE|INGREDIENTS_INCOMPLETE|INVALID_OUTPUT|INGREDIENT_BOUNDARY)$/;
+const TEXT_QUALITY =
+  /^TEXT\.(?:LABEL_[A-Z_]+|CITATION_INVALID|COVERAGE_UNCERTAIN|EXTRACTION_INCOMPLETE)$/;
 const PARTIAL_IMAGE =
   /^VISION\.LABEL_(?:INGREDIENTS_INCOMPLETE|FORMULA_INCOMPLETE|AMOUNT_UNREADABLE|CORE_MISSING|EVIDENCE_UNCERTAIN)$/;
 const QUALITY_IMAGE = /^VISION\.LABEL_(?:AMOUNT_EVIDENCE_CONFLICT|INGREDIENT_BOUNDARY)$/;
@@ -101,6 +103,7 @@ export function applyFailures(
     // text never contributes fields. Other formula-bearing coverage failures remain blocking.
     if (
       partialTextFallback(failure, policy) ||
+      imageReplacesText(state, failure, policy) ||
       (failure.hasFormula === undefined && excused(state, failure, policy))
     ) {
       state.warnings.push({ id: failure.id, code: failure.code });
@@ -112,6 +115,24 @@ export function applyFailures(
       );
     }
   }
+}
+
+/**
+ * Owner 2026-10-05: under /6 a failed page-text reading yields to a complete image label. The failed text
+ * never contributes fields; identity, receipt and conflict failures are not label-quality codes and still block.
+ */
+function imageReplacesText(state: MergeState, failure: MergeFailure, policy: MergePolicy): boolean {
+  return (
+    state.manifest.evidencePolicy === "label-image-first/6" &&
+    policy.imageFirst &&
+    failure.verifiedExecuted === true &&
+    // A text Review proven to hold no formula keeps its existing "source without label" warning path.
+    failure.hasFormula !== false &&
+    state.sources.get(failure.id)?.kind === "text" &&
+    // Text that holds no label keeps the existing "source without label" warning path.
+    !SOURCE_WITHOUT_LABEL.includes(failure.code) &&
+    TEXT_QUALITY.test(failure.code)
+  );
 }
 
 function partialTextFallback(failure: MergeFailure, policy: MergePolicy): boolean {

@@ -64,7 +64,7 @@ describe("text coverage Reviews without a formula", () => {
       [false, true].map((missingIssue) => ({ policy, missingIssue })),
     ),
   )(
-    "keeps formula-bearing coverage blocking under $policy (missing issue: $missingIssue)",
+    "keeps formula-bearing coverage blocking before /6 under $policy (missing issue: $missingIssue)",
     async ({ policy, missingIssue }) => {
       const answer = drugWire();
       // Even a contradictory missing-formula issue must not hide the extracted formula.
@@ -73,10 +73,12 @@ describe("text coverage Reviews without a formula", () => {
       }
       const setup = await reviewed(JSON.stringify(answer));
       setup.join.manifest.evidencePolicy = policy;
-      expect(await setup.assembly.run(setup.join, signal())).toMatchObject({
-        status: "review",
-        codes: [code],
-      });
+      // Owner 2026-10-05: under /6 a complete image label replaces the failed page reading.
+      expect(await setup.assembly.run(setup.join, signal())).toMatchObject(
+        policy === "label-image-first/6"
+          ? { status: "ready" }
+          : { status: "review", codes: [code] },
+      );
     },
   );
 
