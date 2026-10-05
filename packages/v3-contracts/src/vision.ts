@@ -7,8 +7,11 @@ export const KeywordPolicySchema = z.strictObject({
   keywords: z.array(z.string().regex(/^[A-Za-z]+(?: [A-Za-z]+)*$/).max(100)).min(1).max(50)
     .refine(terms => new Set(terms.map(t => t.toLowerCase())).size === terms.length),
 });
+// Panel-only phrases (owner 2026-10-05) admit Facts panels whose heading is cropped on a curved bottle
+// ("...plement Facts"); bare "Servings" also appears on front labels, so it is not a keyword.
 export const DefaultKeywordPolicy = KeywordPolicySchema.parse({ version: "label-keywords/1",
-  keywords: ["Supplement Facts", "Nutrition Facts", "Ingredients", "Other Ingredients"] });
+  keywords: ["Supplement Facts", "Nutrition Facts", "Ingredients", "Other Ingredients",
+    "Amount Per Serving", "Daily Value", "Servings Per Container"] });
 export const KeywordResultSchema = z.strictObject({
   schemaVersion: z.literal(1), observation: ObservationSchema, image: ImageEvidenceSchema,
   ocrOperationId: ExecutionIdSchema, ocrTextSha256: Sha256Schema,

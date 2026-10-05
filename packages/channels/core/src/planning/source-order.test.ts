@@ -7,7 +7,7 @@ it.each([
   ["gnc", "text-first"],
   ["swanson", "text-first"],
   ["costco", "text-first"],
-  ["dtc", "text-first"],
+  ["dtc", "images-first"],
 ])("chooses the configured default for %s", (channel, order) => {
   expect(labelSourcePolicy(channel)).toEqual({ version: "label-sources/1", order });
 });

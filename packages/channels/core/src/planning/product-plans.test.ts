@@ -159,7 +159,7 @@ describe("formula planner (text facts first)", () => {
     ["gnc", "text-first"],
     ["swanson", "text-first"],
     ["costco", "text-first"],
-    ["dtc", "text-first"],
+    ["dtc", "images-first"],
   ] as const)("persists the default source policy for new %s plans", async (channel, order) => {
     const { plan } = await setup({ facts: table, complete: true, channel });
     expect(plan.sourcePolicy).toEqual({ version: "label-sources/1", order });

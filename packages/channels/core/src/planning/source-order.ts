@@ -23,6 +23,8 @@ const LABEL_HEADING = new RegExp(
   [
     String.raw`(?:Supplement|Nutrition|Drug)\s+Facts\b`,
     String.raw`(?:(?:Other|Inactive)\s+)?Ingredients\s*:`,
+    // Amazon's "Important information" prints a bare "Ingredients" heading line (owner 2026-10-05).
+    String.raw`Ingredients\s*$`,
     String.raw`(?:Other|Inactive)\s+Ingredients\b`,
     String.raw`Serving\s+Size\s*:?\s*\d`,
     String.raw`Amount\s+Per\s+Serving\b`,
