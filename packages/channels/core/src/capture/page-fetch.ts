@@ -50,10 +50,7 @@ export class ScraperApiPages implements PageFetcher {
 
   async fetchPage(request: PageRequest, abort: AbortSignal): Promise<FetchedHtml> {
     const { policy } = request;
-    const allowed = allowedTarget(request.url, policy.origins);
-    // A fragment never reaches the website; channels may use one to name a variant on a shared page.
-    allowed.hash = "";
-    const target = allowed.href;
+    const target = allowedTarget(withoutFragment(request.url), policy.origins).href;
     const options = channelOptions(this.settings.defaults, this.settings.channels[request.channel]);
     const signal = AbortSignal.any([abort, AbortSignal.timeout(policy.timeoutMs)]);
     const tooLarge = () =>
@@ -79,4 +76,14 @@ export class ScraperApiPages implements PageFetcher {
       fetchedVia: { ...fetchedVia, creditCost: page.creditCost, ...moved },
     };
   }
+}
+
+/** A fragment never reaches the website; channels may use one to name a variant on a shared page (Costco). */
+function withoutFragment(raw: string): string {
+  const url = URL.parse(raw);
+  if (!url) {
+    return raw;
+  }
+  url.hash = "";
+  return url.href;
 }
