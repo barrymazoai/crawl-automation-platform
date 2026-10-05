@@ -71,11 +71,11 @@ undefined或错对象字段，再开始保存与收割；不新增逐商品证�
 
 若有宿主写入的 `method-feedback.json`，先读取它：其中反馈严格绑定站点 origin 和当前方法 SHA，来自已确认缺陷及留存证据。只修反馈指出的失效步骤，继续复用其它动作；缓存样本表示采集原件已存档，不保证下游正确。不要修改反馈文件、复制其中的旧商品值、为每个商品再写证明或加入采后复核。修正后的实际方法按原流程留存，新版本不会自动继承旧 SHA 的缺陷。
 
-实际展开相关折叠、嵌套FAQ和懒加载，再保存当前完整页面与商品区域。`browser.harvestHooks.fetchPageSource` 不导航；不同状态另存。需要的平台响应仅通过明确观察过的 `fetchProductSource` 取得。收割前恢复初始选中状态。
+实际展开相关折叠、嵌套FAQ和懒加载，再保存当前完整页面与商品区域。`browser.harvestHooks.fetchPageSource` 不导航；不同状态另存。需要的平台响应仅通过明确观察过的 `fetchProductSource` 取得。切换过规格时，收割前恢复初始选中状态；单规格或页面没有规格控件时从未切换，跳过恢复，不能因找不到控件而失败。
 
 先 `node --check site-method.mjs`，再用 Ego `nodejs -e` import 固定启动器绝对file URL。宿主保存实际执行脚本和散列；材料完整存档后保留该方法，后续同站商品复用，不手改成功计数。一个样本通过不代表全站验证。
 
-runHarvest仍保存records、页面和完整图片；fields不装业务内容。materials.json由固定启动器保存，不需要模型另写证明文件。开始收割后不删checkpoint、不改原件、不重抓。只采集，不执行semantic导出、Facts、enrich或入库。
+runHarvest仍保存records、页面和完整图片；fields不装业务内容。materials.json由固定启动器保存，不需要模型另写证明文件。开始收割后不删checkpoint、不改原件、不重抓。site-method在runHarvest开始前某一步失败时（尚无checkpoint），先把已生成的materials复制到attempt-1/，只修该步骤后重新运行固定run-capture.mjs一次；同一任务最多一次，仍失败则保留材料返回needs_review。只采集，不执行semantic导出、Facts、enrich或入库。
 
 固定收割完整结束且材料已保存时，图片像素较小、网站可选字段缺失等差异只记 notes，
 不能仅因此返回 needs_review，也不在采集阶段预测后续 OCR/产品处理能否成功。
