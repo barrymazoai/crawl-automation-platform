@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { sha256, type RetainedPublication } from "@crawl-automation/platform";
+import { pageText } from "@crawl-automation/channels-core";
 import {
   DtcGalleryRefSchema,
   DtcScopeExcludedSchema,
@@ -16,6 +17,7 @@ export const ProductScopeDecisionSchema = z.strictObject({
     .array(z.strictObject({ name: z.string().min(1).max(300), evidence: citation }))
     .max(20),
 });
+export type ProductScopeDecision = z.infer<typeof ProductScopeDecisionSchema>;
 export interface ProductScopeInput {
   operationId: string;
   url: string;
@@ -39,10 +41,10 @@ export class DtcProductScope {
     const evidence = scopeEvidence(input);
     const { fields } = evidence;
     const bytes = Buffer.from(JSON.stringify(evidence));
-    if (bytes.length > 200_000) {
-      throw dtcAgentErrors.create("DTC.PRODUCT_SCOPE_UNRESOLVED");
-    }
     const root = `v3/dtc-product-scope/${sha256(bytes)}`;
+    if (bytes.length > 200_000) {
+      return this.oversized(root, bytes.length, signal);
+    }
     const prior = await this.publication.remote.read(`${root}/result.json`, 100_000, signal);
     if (prior) {
       const decision = validateProductScope(JSON.parse(Buffer.from(prior).toString()), fields);
@@ -72,6 +74,18 @@ export class DtcProductScope {
     return { decision, evidence: await this.save(`${root}/result.json`, decision, signal) };
   }
 
+  /** Owner 2026-10-05: an oversized offer continues as one product; a real bundle surfaces as a formula conflict. */
+  private async oversized(root: string, byteSize: number, signal: AbortSignal) {
+    const decision: ProductScopeDecision = {
+      kind: "single_product",
+      reason: "scope_evidence_too_large",
+      evidence: [],
+      components: [],
+    };
+    const evidence = await this.save(`${root}/oversized.json`, { decision, byteSize }, signal);
+    return { decision, evidence };
+  }
+
   private async save(key: string, value: unknown, signal: AbortSignal): Promise<DtcGalleryRef> {
     const bytes = Buffer.from(JSON.stringify(value));
     await this.publication.publish(key, bytes, "application/json", signal);
@@ -86,11 +100,15 @@ function scopeEvidence(input: ProductScopeInput) {
   return { ...input, source, fields, policy: "dtc-product-scope/1" };
 }
 
-/** The reserved variants field is the exact retained website inventory, never inferred specifications. */
+/**
+ * The reserved variants field is the exact retained website inventory, never inferred specifications.
+ * The product region's HTML is read as visible text (owner 2026-10-05): scripts and markup only inflate the
+ * decision input, and the archived HTML and gallery files stay untouched for the label stage.
+ */
 export function productScopeFields(input: Pick<ProductScopeInput, "fields" | "variants">) {
   const fields = Object.fromEntries(
-    Object.entries(input.fields).filter(
-      (entry): entry is [string, string] => typeof entry[1] === "string",
+    Object.entries(input.fields).flatMap(([name, value]): [string, string][] =>
+      typeof value !== "string" ? [] : [[name, name === "html" ? pageText(value) : value]],
     ),
   );
   return { ...fields, variants: JSON.stringify(input.variants) };
