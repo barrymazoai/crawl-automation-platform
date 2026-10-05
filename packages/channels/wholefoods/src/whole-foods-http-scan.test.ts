@@ -143,9 +143,10 @@ it("keeps the first read when the second exhausts its empty tries; no canary", a
 
 it("counts the union even when different successful reads have different totals", async () => {
   const test = setup([answer([2, 1]), answer([3, 2, 4])]);
+  // Owner 2026-10-05: each read complete against its own total proves the list; missing items are revisited.
   expect(await test.run()).toMatchObject({
-    complete: false,
-    statedTotal: null,
+    complete: true,
+    statedTotal: 3,
     metrics: {
       readsFinished: true,
       catalogueAgreement: false,
@@ -155,10 +156,10 @@ it("counts the union even when different successful reads have different totals"
   });
 });
 
-it("does not call equal counts a full catalogue when the ASIN sets differ", async () => {
+it("takes the union when equal counts list different ASINs (owner 2026-10-05)", async () => {
   const result = await setup([answer([1, 2]), answer([2, 3])]).run();
   expect(result).toMatchObject({
-    complete: false,
+    complete: true,
     credits: 2,
     metrics: { readsFinished: true, catalogueAgreement: false, unionSize: 3 },
   });
@@ -281,11 +282,11 @@ it.each([
     [2, 1],
   ],
 ])(
-  "treats complete subsets as compatible but never stable enough for delisting",
+  "accepts complete subsets as their union while recording them as unstable (owner 2026-10-05)",
   async (first, second) => {
     const result = await setup([answer(first), answer(second)]).run();
     expect(result).toMatchObject({
-      complete: false,
+      complete: true,
       metrics: { catalogueAgreement: true, catalogueStable: false, unionSize: 3 },
     });
     expect(result.metrics.attempts).toEqual([

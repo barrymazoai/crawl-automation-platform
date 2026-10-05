@@ -125,10 +125,10 @@ it.each([undefined, null])(
   },
 );
 
-it("marks changing totals partial even when the union reaches the largest total", async () => {
+it("accepts changing totals when each read is complete against its own total (owner 2026-10-05)", async () => {
   expect(await setup([answer([1], 1), answer([1, 2], 2)]).run()).toMatchObject({
-    complete: false,
-    statedTotal: null,
-    metrics: { unionSize: 2 },
+    complete: true,
+    statedTotal: 2,
+    metrics: { unionSize: 2, catalogueStable: false },
   });
 });

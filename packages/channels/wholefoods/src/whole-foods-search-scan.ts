@@ -42,13 +42,17 @@ function outcome(
   const readsFinished = reads.length === 2 && reads.every((read) => read.summary.code === null);
   const agreement = readsFinished && catalogueAgreement(reads);
   const stable = agreement && new Set(reads.map((read) => read.summary.products)).size === 1;
-  const complete = readsFinished && wholeFoodsSearchComplete(pages);
+  // The search API restates a different total on each call (owner 2026-10-05): two reads that are each
+  // complete against their own total prove the brand list; their union is kept and catalogueStable records drift.
+  const complete =
+    readsFinished &&
+    (wholeFoodsSearchComplete(pages) || reads.every((read) => read.summary.succeeded));
   const code = reads.find((read) => read.summary.code)?.summary.code ?? null;
   return {
     pages,
     credits: run.observations.credits,
     complete,
-    statedTotal: wholeFoodsSearchTotal(pages),
+    statedTotal: wholeFoodsSearchTotal(pages) ?? largestReadTotal(reads),
     ...(pages.some((page) => page.cards > 0) ? { soldHere: true } : {}),
     cooldownRequested: run.observations.cooldownRequested,
     code: scanCode(code, complete),
@@ -62,6 +66,11 @@ function outcome(
       unionSize: new Set(pages.flatMap((page) => page.products.map((item) => item.listingId))).size,
     },
   };
+}
+
+function largestReadTotal(reads: WholeFoodsSearchRead[]): number | null {
+  const totals = reads.flatMap((read) => read.summary.availableCounts);
+  return totals.length ? Math.max(...totals) : null;
 }
 
 /** Agreement is diagnostic only: completeness is proved by the deduplicated union and API total. */
