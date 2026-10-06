@@ -1,4 +1,9 @@
-import { insertAnalyzedSettings, conflictingCatalog } from "./site-analysis-settings.js";
+import {
+  insertAnalyzedSettings,
+  conflictingCatalog,
+  singleBrandSite,
+  storeCatalog,
+} from "./site-analysis-settings.js";
 import {
   siteAnalysisErrors,
   type SiteAnalysisApplyResult,
@@ -29,20 +34,20 @@ export async function applySiteAnalysis(
     if (selected && !selected.includes(brand.name.toLowerCase())) {
       continue;
     }
-    await applyBrand(tx, { analysisId: input.analysisId, brand }, result);
+    await applyBrand(tx, { analysisId: input.analysisId, brand, analysed: brands }, result);
   }
   return result;
 }
 
 async function applyBrand(
   tx: Queryable,
-  input: { analysisId: string; brand: AnalyzedBrand },
+  input: { analysisId: string; brand: AnalyzedBrand; analysed: readonly AnalyzedBrand[] },
   result: SiteAnalysisApplyResult,
 ) {
-  const { brand, analysisId } = input;
-  if (brand.status !== "verified" || !brand.catalogUrl || brand.name.length > 80) {
+  const { analysisId, brand: found } = input;
+  if (found.status !== "verified" || !found.catalogUrl || found.name.length > 80) {
     result.skipped.push({
-      name: brand.name,
+      name: found.name,
       reason: "Unverified catalog or brand name exceeds the brand record limit",
     });
     return;
@@ -50,8 +55,10 @@ async function applyBrand(
   // Serialize source creation across different analysis/request IDs for the same normalized brand.
   await tx.query<Record<string, unknown>>(
     "SELECT pg_advisory_xact_lock(hashtextextended(lower($1), 74))",
-    [brand.name],
+    [found.name],
   );
+  const singleBrand = await singleBrandSite(tx, input);
+  const brand = storeCatalog(found, singleBrand);
   const conflict = await conflictingCatalog(tx, brand);
   if (conflict) {
     result.skipped.push({ name: brand.name, reason: conflict });
@@ -63,25 +70,25 @@ async function applyBrand(
     [brandId, brand.catalogUrl],
   );
   if (existing[0]) {
-    await matchSource(tx, { row: existing[0], brand, brandId, analysisId }, result);
+    await matchSource(tx, { row: existing[0], brand, brandId, analysisId, singleBrand }, result);
     return;
   }
-  const sourceId = await insertSource(tx, { brand, brandId, analysisId });
+  const sourceId = await insertSource(tx, { brand, brandId, analysisId, singleBrand });
   result.created.push({ name: brand.name, brandId, sourceId });
 }
 
 async function insertSource(
   tx: Queryable,
-  input: { brand: AnalyzedBrand; brandId: string; analysisId: string },
+  input: { brand: AnalyzedBrand; brandId: string; analysisId: string; singleBrand: boolean },
 ) {
-  const { brand, brandId, analysisId } = input;
+  const { brand, brandId, analysisId, singleBrand } = input;
   const sources = await tx.query<Record<string, unknown>>(
     `INSERT INTO brand_source (brand_id,channel,region,url,enabled)
     VALUES ($1,'dtc','US',$2,true) RETURNING id`,
     [brandId, brand.catalogUrl],
   );
   const sourceId = z.uuid().parse(sources[0]?.["id"]);
-  await insertAnalyzedSettings(tx, { sourceId, analysisId, brand });
+  await insertAnalyzedSettings(tx, { sourceId, analysisId, brand, singleBrand });
   return sourceId;
 }
 async function matchBrand(tx: Queryable, name: string): Promise<string> {
@@ -115,16 +122,17 @@ async function matchSource(
     brand: AnalyzedBrand;
     brandId: string;
     analysisId: string;
+    singleBrand: boolean;
   },
   result: SiteAnalysisApplyResult,
 ) {
-  const { row, brand, brandId, analysisId } = input;
+  const { row, brand, brandId, analysisId, singleBrand } = input;
   if (row["channel"] !== "dtc") {
     result.skipped.push({ name: brand.name, reason: "Existing source belongs to another channel" });
     return;
   }
   const sourceId = z.uuid().parse(row["id"]);
-  if (!(await insertAnalyzedSettings(tx, { sourceId, analysisId, brand }))) {
+  if (!(await insertAnalyzedSettings(tx, { sourceId, analysisId, brand, singleBrand }))) {
     result.skipped.push({
       name: brand.name,
       reason: "Existing source settings conflict; preserved unchanged",

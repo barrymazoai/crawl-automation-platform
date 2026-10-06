@@ -90,9 +90,9 @@ const legacyMigrations = [
 ];
 
 describe("release SQL catalog", () => {
-  it("pins all 001–054 names and hashes in order", async () => {
+  it("pins all 001–055 names and hashes in order", async () => {
     const catalog = await loadSqlCatalog(release);
-    expect(catalog).toHaveLength(54);
+    expect(catalog).toHaveLength(55);
     expect(catalog.map(({ name, sha256 }) => [name, sha256])).toEqual([
       ...legacyMigrations,
       [
@@ -184,8 +184,12 @@ describe("release SQL catalog", () => {
         "054_windows_ocr_capacity.sql",
         "fb314315d396a0aee553f7fc4cdd45a249ab7acf9fde415a0023929e2f797bb7",
       ],
+      [
+        "055_dtc_single_brand_sites.sql",
+        "4693a2f6f2ded6a1de5034a47efb0c145358fe92285d7f2f58ea4339fd11580e",
+      ],
     ]);
-    expect(catalog.at(-1)?.name).toBe("054_windows_ocr_capacity.sql");
+    expect(catalog.at(-1)?.name).toBe("055_dtc_single_brand_sites.sql");
   });
 
   it("preserves bytes and hashes exactly like the old UTF-8 tool", async () => {
