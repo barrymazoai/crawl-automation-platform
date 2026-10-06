@@ -20,7 +20,12 @@ export function checkApiResources(
     const resources = channels[channel]?.resources;
     if (resources !== undefined) {
       const adapter = registry.get(channel);
-      assertCaptureGate(adapter.captureModes, resources.activities["captureProduct"] ?? [], kindOf);
+      // A pool member is the capture's lane too (CRAWLV3-212: DTC products take one of three Ego spaces).
+      const pool = (resources.pools?.["captureProduct"] ?? []).map((resourceId) => ({
+        resourceId,
+      }));
+      const needs = [...(resources.activities["captureProduct"] ?? []), ...pool];
+      assertCaptureGate(adapter.captureModes, needs, kindOf);
     }
   }
 }
