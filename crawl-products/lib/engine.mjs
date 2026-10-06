@@ -304,7 +304,8 @@ function extractListingBodyHtml(html) {
 function normalizeProductUrl(url) {
 	const parsed = new URL(url);
 	parsed.hash = "";
-	for (const key of [...parsed.searchParams.keys()]) if (/^(?:categorycode|qid|queryid|utm_|fbclid|gclid|currency|lang)/i.test(key)) parsed.searchParams.delete(key);
+	// Shopify search/recommendation tracking (_pos, _fid, _ss, _sid, _psq) names the same product (Energi, 2026-10-06).
+	for (const key of [...parsed.searchParams.keys()]) if (/^(?:categorycode|qid|queryid|utm_|fbclid|gclid|currency|lang|_(?:pos|fid|ss|sid|psq)$)/i.test(key)) parsed.searchParams.delete(key);
 	return finalizeNormalizedUrl(parsed);
 }
 function normalizeUrl(url) {
