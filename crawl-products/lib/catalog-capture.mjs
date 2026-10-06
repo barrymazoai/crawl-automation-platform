@@ -90,11 +90,19 @@ function enumeratedEntries(document, saved) {
   return saved.productUrls.map(url => ({ url, title: titles.get(url) || slugTitle(url), brand: null }));
 }
 
+/** Method links use the enumerator's URL rule, so tracking parameters never decide whether they match. */
+function sameUrlRule(entries) {
+  if (!Array.isArray(entries)) return entries;
+  return entries.map(entry => {
+    try { return { ...entry, url: normalizeProductUrl(new URL(entry.url).href) }; } catch { return entry; }
+  });
+}
+
 async function projectSavedPage({ method, saved, outDir, sourceUrl }) {
   if (!saved.productUrls.length) return { entries: [], warning: null };
   const { document } = parseHTML(await readFile(join(outDir, saved.htmlPath), "utf8"));
   try {
-    const entries = await method.projectPage({ document, url: saved.url, sourceUrl });
+    const entries = sameUrlRule(await method.projectPage({ document, url: saved.url, sourceUrl }));
     if (projectionMatches(entries, saved)) return { entries, warning: null };
     return { entries: enumeratedEntries(document, saved), warning: "catalog_page_projection_mismatch" };
   } catch (error) {

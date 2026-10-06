@@ -192,8 +192,10 @@ function verifyTermination(catalog: z.infer<typeof Catalog>, count: number, file
   const oracle = termination.oracle;
   const evidence = new Set(files.map((file) => file.path));
   const consistent = !oracle.comparable || oracle.expected === count;
+  // The enumerator counts link URLs, so one product's ?variant= links count separately (Kate Farms, 2026-10-06).
+  const urls = new Set(catalog.pages.flatMap((page) => page.entries.map((entry) => entry.url)));
   if (
-    oracle.observed !== count ||
+    oracle.observed !== urls.size ||
     termination.evidence.some((path) => !evidence.has(path)) ||
     (catalog.complete &&
       (!termination.exhausted ||
