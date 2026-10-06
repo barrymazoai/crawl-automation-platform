@@ -1,4 +1,4 @@
-import { readFile } from "node:fs/promises";
+import { access, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { z } from "zod";
 import { dtcAgentErrors } from "./errors.js";
@@ -29,8 +29,15 @@ export async function verifyAgentResult(
     return null;
   }
   // A product capture with doubts continues when host verification of its retained materials passes
-  // (owner 2026-10-05): only a wrong product or missing/corrupt materials stop it.
-  if (at.mode === "product" && result.status === "needs_review") {
+  // (owner 2026-10-05): only a wrong product or missing/corrupt materials stop it. A catalog with doubts that
+  // still produced catalog.json is read as a partial scan (owner 2026-10-06); without it, it stays a Review.
+  const keptCatalog =
+    at.mode === "catalog" &&
+    (await access(join(at.outDir, "catalog.json")).then(
+      () => true,
+      () => false,
+    ));
+  if ((at.mode === "product" || keptCatalog) && result.status === "needs_review") {
     return {
       status: "needs_review",
       reasonCode: result.reasonCode,

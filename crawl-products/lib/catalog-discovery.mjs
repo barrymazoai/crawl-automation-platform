@@ -52,6 +52,7 @@ export async function discoverCatalog(tab, seedUrls, options = {}) {
       budgetBreach: () => Date.now() - startedAt > (options.wallClockMinutes ?? 10) * 60_000 ? "wall_clock_budget" : null,
       enumerate: (seeds, enumerateOptions, round) => enumerate(tab, seeds, {
         ...enumerateOptions,
+        stayInCatalogPath: tab.captureMode === "catalog",
         onListingPage: async page => {
           const prefix = `catalog-round-${round}-page-${result.pages.length + 1}`;
           const htmlPath = `${prefix}.html`, screenshotPath = `${prefix}.png`;

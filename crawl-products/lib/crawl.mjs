@@ -884,6 +884,19 @@ export async function discoverPortfolioSites(_tab, _startUrl, opts = {}) {
  * limit, a fetch failure, or missing pagination proof is resumable incomplete
  * work, never catalog exhaustion.
  */
+/** Same origin and under the seed's catalog path; page numbers in the path or query stay inside it. */
+export function withinCatalogPath(seedUrl, candidateUrl) {
+  try {
+    const seed = new URL(seedUrl);
+    const candidate = new URL(candidateUrl);
+    const base = seed.pathname.replace(/\/page\/\d+\/?$/, "").replace(/\/+$/, "");
+    const path = candidate.pathname.replace(/\/+$/, "");
+    return candidate.origin === seed.origin && (path === base || path.startsWith(`${base}/`));
+  } catch {
+    return false;
+  }
+}
+
 export async function collectProductUrls(tab, seedUrls, opts = {}) {
   const log = opts.log || (() => {});
   const maxItems = opts.maxItems || 200;
@@ -1057,7 +1070,12 @@ export async function collectProductUrls(tab, seedUrls, opts = {}) {
         break;
       }
 
-      const nextPageUrl = findNextListingPage(listing.url, body, visited);
+      let nextPageUrl = findNextListingPage(listing.url, body, visited);
+      if (nextPageUrl && opts.stayInCatalogPath && !withinCatalogPath(seed, nextPageUrl)) {
+        // A guessed "next" outside the catalog (e.g. a WordPress /feed/ link) is not a catalog page.
+        log("listing_next_outside_catalog", { url: listing.url, next: nextPageUrl });
+        nextPageUrl = null;
+      }
       if (nextPageUrl) {
         pageUrl = nextPageUrl;
         continue;

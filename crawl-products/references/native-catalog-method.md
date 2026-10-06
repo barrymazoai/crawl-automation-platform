@@ -1,9 +1,42 @@
 # 原生目录：观察路线，直接复用旧枚举器
 
+## 标准写法：用 catalog-kit 填写观察到的配置（2026-10-06）
+
+新站点和需要重写的方法一律优先用公共工具，只填本轮实际观察到的事实，不手写 prepare/projectPage：
+
+```js
+import { defineCatalogMethod } from "<skillRoot>/lib/catalog-kit.mjs";
+export const { prepare, projectPage } = defineCatalogMethod({
+  ready: "已观察的商品网格就绪选择器",
+  productLinks: "限定在商品网格内的商品详情链接选择器",
+  card: "可选：一张商品卡片",
+  title: "可选：卡片内标题选择器（默认用链接文字）",
+  pagination: { mode: "none" },   // none | link | click（需 next 选择器）| scroll
+  identity: "可选：只在第一页核对一次的站点身份选择器",
+  count: { selector: "可选：网站显示总数的节点", pattern: "(\\d+) items" },
+  brand: "可选：多品牌卖场卡片内的品牌节点",
+});
+```
+
+工具负责导航、就绪等待、listingOptions、oracle 和 projectPage。只有工具确实表达不了的路线
+才手写方法，并必须遵守下面的接口和规则：
+
+- `prepare` 的参数恰好是 `{ page, tab, sourceUrl, outDir, navigate }`；导航用 `navigate(url)`。
+- `projectPage({ document, url, sourceUrl })` 在 Node 中读取已保存的页面 HTML（linkedom），
+  不是浏览器：没有 `location`，`document.baseURI` 不可用。链接一律 `new URL(a.getAttribute("href"), url)`。
+- 不写死上次看到的数量或网格个数；总数只作为可比 oracle。
+- 站点身份只在 `prepare` 的第一页核对一次，不在每页 projectPage 里抛错。
+- 固定启动器只跟随目录路径之内的下一页（如 `/page/2/`、`?page=2`）；`/feed/` 等目录外链接不是分页。
+- 方法读不出某页时，启动器保留枚举器已在该页保存的商品链接并记警告，不丢弃已取得的商品。
+- 脚本在开始遍历之前报错（如 prepare 失败）时，可修正 catalog-method.mjs 后再执行一次启动器；
+  第一次的文件自动移到 attempt-1/。遍历开始后或第二次之后不再重跑。
+
+## 原有接口说明
+
 宿主已生成固定 `run-capture.mjs` 时，模型不要改启动器。只维护任务根目录
 `catalog-method.mjs`，导出两个函数：
 
-- `async prepare({page,tab,sourceUrl,outDir})`：复用已经观察验证的导航步骤，读取本次
+- `async prepare({page,tab,sourceUrl,outDir,navigate})`：复用已经观察验证的导航步骤，读取本次
   目录数量，返回 `{seedUrls,listingOptions,oracle:{expected:number|null,comparable:boolean,basis}}`。
   `listingOptions` 使用下文的旧参数；不传 `outDir/profileDir/enumerate/onListingPage`。
 - `projectPage({document,url,sourceUrl})`：在固定入口传入的本页原始HTML document 上，
@@ -12,7 +45,7 @@
 
 固定入口负责唯一 `discoverCatalog` 调用、逐页原件、方法源代码与散列、`catalog.json`
 及完成回执。`comparable=true` 时数量不符会保留 `complete=false`，不能手改交接结果。
-先 `node --check catalog-method.mjs`，再通过 Ego 导入固定启动器。开始后不重跑。
+先 `node --check catalog-method.mjs`，再通过 Ego 导入固定启动器。遍历开始后不重跑；开始遍历之前的脚本错误可修正后再执行一次。
 
 `catalog-script-cache.json` 为 `verified` 时复用已通过完整目录验收的确切脚本，只修
 结构确实失效的步骤。为 `candidate` 时是保留原始观察的修复候选，不等于已通过验收；

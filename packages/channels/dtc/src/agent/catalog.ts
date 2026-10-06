@@ -66,9 +66,7 @@ export class DtcAgentBrandScan {
       signal,
     );
     await request.checkpoint?.();
-    const catalog = Catalog.parse(
-      JSON.parse((await captureFile(saved.root, "catalog.json")).toString()),
-    );
+    const catalog = await readCatalog(saved);
     const pages: DtcListingPage[] = [];
     const seen = new Set<string>();
     for (const page of catalog.pages) {
@@ -76,7 +74,7 @@ export class DtcAgentBrandScan {
       await verifyCatalogPage(page, { ...saved, site });
       const products = page.entries
         .map((entry) => listedProduct(entry, { site, source }))
-        .filter((product) => firstSeen(seen, product.listingId));
+        .filter((product) => !seen.has(product.listingId) && seen.add(product.listingId));
       pages.push({ products, cards: products.length, nextPage: null, statedTotal: null });
     }
     const completionScope = { listingIds: seen, site, sourceUrl: request.sourceUrl };
@@ -103,6 +101,14 @@ export class DtcAgentBrandScan {
   }
 }
 
+/** A catalog the model doubted keeps its products but never proves the brand's full listing. */
+async function readCatalog(saved: Awaited<ReturnType<DtcCaptureAgent["capture"]>>) {
+  const read = Catalog.parse(
+    JSON.parse((await captureFile(saved.root, "catalog.json")).toString()),
+  );
+  return saved.agentWarning ? { ...read, complete: false } : read;
+}
+
 async function verifyCompletion(
   catalog: z.infer<typeof Catalog>,
   saved: Awaited<ReturnType<DtcCaptureAgent["capture"]>>,
@@ -125,14 +131,6 @@ function verifyCatalogScope(url: string, site: DtcSitePolicy, source: string) {
   } else {
     catalogUrl(url, site, source);
   }
-}
-
-function firstSeen(seen: Set<string>, id: string) {
-  if (seen.has(id)) {
-    return false;
-  }
-  seen.add(id);
-  return true;
 }
 
 function listedProduct(

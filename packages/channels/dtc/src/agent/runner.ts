@@ -23,6 +23,8 @@ interface AgentCaptureOutput {
   manifestKey: string;
   requireDetailCoverage?: boolean;
   captureContract?: "dtc-materials/1";
+  /** The model's own doubt; a catalog with one is never read as complete. */
+  agentWarning?: AgentWarning;
 }
 
 export class DtcCaptureAgent {
@@ -60,7 +62,7 @@ export class DtcCaptureAgent {
     );
     const output = { root: outDir, prefix, ...retained, manifestKey };
     if (request.mode !== "product") {
-      return output;
+      return warning ? { ...output, agentWarning: warning } : output;
     }
     return this.productOutput(output, { url: request.url, warning }, signal);
   }

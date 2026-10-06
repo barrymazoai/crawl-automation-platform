@@ -49,8 +49,9 @@ export async function prepareCatalogScript(input) {
   await writeFile(join(input.cwd, "run-capture.mjs"),
     `import { prepareBrowserRound } from "./browser-preparation.mjs";\n`
     + `import { runCatalogCapture } from ${JSON.stringify(driver)};\n`
-    + `await prepareBrowserRound({ taskSpace, listTaskSpaces });\n`
-    + `console.log(JSON.stringify(await runCatalogCapture(${JSON.stringify({ ...input, methodPath })}, { taskSpace, listTaskSpaces })));\n`,
+    + `const round = await prepareBrowserRound({ taskSpace, listTaskSpaces });\n`
+    // The method's prepare receives the round's navigate(url), as native-catalog-method.md documents.
+    + `console.log(JSON.stringify(await runCatalogCapture(${JSON.stringify({ ...input, methodPath })}, { taskSpace, listTaskSpaces, navigate: round.navigate })));\n`,
     { flag: "wx" });
 }
 
