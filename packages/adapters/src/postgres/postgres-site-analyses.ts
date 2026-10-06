@@ -96,8 +96,11 @@ export class PostgresSiteAnalyses implements SiteAnalysisStore {
     >(`SELECT settings FROM dtc_source_settings setting
       JOIN brand_source source ON source.id=setting.source_id
       JOIN brand ON brand.id=source.brand_id
-      WHERE source.channel='dtc' AND source.url=setting.settings->'brands'->0->>'catalogUrl'
-      AND lower(brand.name)=lower(setting.settings->'brands'->0->>'brand') ORDER BY setting.source_id`);
+      WHERE source.channel='dtc' AND (
+        (source.url=setting.settings->'brands'->0->>'catalogUrl'
+          AND lower(brand.name)=lower(setting.settings->'brands'->0->>'brand'))
+        OR (setting.settings->>'kind'='single-brand' AND source.url=setting.settings->>'catalogUrl'))
+      ORDER BY setting.source_id`);
     return rows.map((row) => row["settings"]);
   }
 }
