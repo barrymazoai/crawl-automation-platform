@@ -115,3 +115,86 @@ it("does not send the capture prompt when durable execution registration fails",
   await expect(work).rejects.toThrow("ledger unavailable");
   await expect(access(join(root, "descendant.pid"))).rejects.toMatchObject({ code: "ENOENT" });
 });
+
+/** A fake Codex that answers "model is at capacity" on its first `refusals` runs, then completes. */
+async function capacityFixture(refusals: number, afterWork = false) {
+  const root = await realpath(await mkdtemp(join(tmpdir(), "dtc-exec-capacity-")));
+  roots.push(root);
+  const executable = join(root, "fake-codex");
+  const work = afterWork
+    ? 'console.log(JSON.stringify({type:"item.completed",item:{type:"command_execution"}}));'
+    : "";
+  await writeFile(
+    executable,
+    `#!${process.execPath}
+const fs = require("node:fs");
+process.stdin.resume();
+process.stdin.on("end", () => {
+const runs = fs.existsSync("runs") ? Number(fs.readFileSync("runs", "utf8")) : 0;
+fs.writeFileSync("runs", String(runs + 1));
+if (runs < ${refusals}) {
+  console.log(JSON.stringify({type:"thread.started"}));
+  ${work}
+  console.log(JSON.stringify({type:"error",message:"Selected model is at capacity. Please try a different model."}));
+  process.exit(1);
+}
+fs.writeFileSync(process.argv[process.argv.indexOf("--output-last-message")+1], JSON.stringify({status:"complete"}));
+process.exit(0);
+});
+`,
+    { mode: 0o700 },
+  );
+  const settings = CodexExecutionConfigSchema.parse({
+    executable,
+    codexHome: root,
+    workRoot: root,
+    runtimeProfileVersion: "test/1",
+    timeoutMs: 10000,
+    settings: { provider: "openai", model: "gpt-5.6-luna", reasoningEffort: "medium" },
+  });
+  const run = (waits: number[]) =>
+    withPermitExecution(
+      {
+        owner: { permitId: "one", workflowId: "capture", runId: "run" },
+        ledger: { record: async () => undefined, prove: async () => undefined },
+      },
+      () =>
+        runCodexCapture(
+          settings,
+          {
+            cwd: root,
+            prompt: "test",
+            outputSchema: {},
+            environment: process.env,
+            capacityRetryDelaysMs: waits,
+          },
+          new AbortController().signal,
+        ),
+    );
+  return { root, run };
+}
+
+// Owner 2026-10-06: a capacity refusal before any work starts the same task again after a wait.
+it("starts again after a capacity refusal and keeps each attempt's records", async () => {
+  const { root, run } = await capacityFixture(2);
+  await expect(run([1, 1])).resolves.toEqual({ status: "complete" });
+  await access(join(root, "events.attempt-1.jsonl"));
+  await access(join(root, "process.attempt-2.json"));
+  expect(JSON.parse(await readFile(join(root, "process.json"), "utf8"))).toMatchObject({
+    exitCode: 0,
+  });
+});
+
+it("stops with the capacity code when every attempt is refused", async () => {
+  const { run } = await capacityFixture(5);
+  await expect(run([1])).rejects.toMatchObject({
+    code: "TEXT.CODEX_MODEL_CAPACITY",
+    executionFact: "not_executed",
+  });
+});
+
+it("never starts again when the refusal came after work began", async () => {
+  const { root, run } = await capacityFixture(1, true);
+  await expect(run([1])).rejects.toMatchObject({ code: "TEXT.CODEX_EXITED" });
+  expect(await readFile(join(root, "runs"), "utf8")).toBe("1");
+});

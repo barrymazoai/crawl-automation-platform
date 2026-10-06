@@ -20,6 +20,7 @@ const reasons = {
   OUTPUT_LIMIT: "The app-server exceeded its output limit.",
   OUTPUT_MISSING: "The completed turn has no final answer.",
   EXITED: "The owned app-server exited.",
+  MODEL_CAPACITY: "The model provider was at capacity before any work started.",
   SPAWN: "The app-server could not start.",
   TRANSPORT: "The app-server transport failed.",
   SERVER_REQUEST: "The app-server requested an unsupported client operation.",

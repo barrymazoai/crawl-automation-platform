@@ -1,6 +1,8 @@
 import { z } from "zod";
 
 export const SiteUrlSchema = z.url().max(2000).refine((value) => {
+  // A value that is not a URL at all is a validation issue, never a thrown error.
+  if (!URL.canParse(value)) return false;
   const url = new URL(value);
   return url.protocol === "https:" && !url.username && !url.password && !url.hash &&
     !url.port && /^[a-z0-9.-]+\.[a-z]{2,}$/i.test(url.hostname);

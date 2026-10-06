@@ -11,7 +11,7 @@ const Pages = z
     const entries = Array.isArray(pages) ? pages : Object.values(pages).flat();
     return [...new Map(entries.map((page) => [JSON.stringify(page), page])).values()];
   })
-  .pipe(z.array(Page).min(1));
+  .pipe(z.array(Page));
 const Verification = z.object({
   method: z.string().min(1),
   surface: z.literal("live_site"),
@@ -34,12 +34,15 @@ export async function analyzeWithDtcAgent(
     },
     signal,
   );
-  const result = SiteAnalysisResultSchema.parse(
-    JSON.parse((await captureFile(saved.root, "analysis.json")).toString()),
-  );
+  const raw: unknown = JSON.parse((await captureFile(saved.root, "analysis.json")).toString());
   const pages = Pages.parse(
     JSON.parse((await captureFile(saved.root, "evidence-pages.json")).toString()),
   );
+  const unreachable = unreachableSite(raw, pages);
+  if (unreachable) {
+    return { ...unreachable, archiveKeys: [saved.manifestKey] };
+  }
+  const result = SiteAnalysisResultSchema.parse(withPageUrls(raw, pages));
   const verification = Verification.parse(
     JSON.parse((await captureFile(saved.root, "analysis-verification.json")).toString()),
   );
@@ -54,6 +57,62 @@ export async function analyzeWithDtcAgent(
     state: incomplete ? ("needs-review" as const) : result.state,
     archiveKeys: [saved.manifestKey],
   };
+}
+
+const Unreachable = z.object({
+  state: z.enum(["needs-review", "failed"]),
+  brands: z.array(z.unknown()).length(0),
+  reasons: z.array(z.string()).default([]),
+});
+
+/**
+ * A site the agent could not open at all (owner 2026-10-06: e.g. pharmics.com's TLS certificate error) has no pages
+ * to verify; it is a needs-review analysis with the agent's reasons, not an unreadable answer.
+ */
+function unreachableSite(raw: unknown, pages: z.infer<typeof Pages>) {
+  const parsed = Unreachable.safeParse(raw);
+  if (pages.length || !parsed.success) {
+    return null;
+  }
+  return { state: "needs-review" as const, brands: [], reasons: parsed.data.reasons };
+}
+
+/**
+ * The agent sometimes cites a saved page by its file name ("entry-001.html") instead of its URL. Its own
+ * evidence-pages list maps each saved file to the page URL, so only names on that list are replaced.
+ */
+function withPageUrls(raw: unknown, pages: z.infer<typeof Pages>): unknown {
+  const urls = new Map(
+    pages.flatMap((page) => [
+      [page.htmlPath, page.url],
+      [page.screenshotPath, page.url],
+    ]),
+  );
+  const replace = (value: unknown) =>
+    typeof value === "string" ? (urls.get(value) ?? value) : value;
+  if (!raw || typeof raw !== "object" || !Array.isArray((raw as { brands?: unknown }).brands)) {
+    return raw;
+  }
+  const brands = (raw as { brands: unknown[] }).brands.map((brand) => {
+    if (!brand || typeof brand !== "object") {
+      return brand;
+    }
+    const entry = brand as { catalogUrl?: unknown; discoveredFrom?: unknown };
+    const from = entry.discoveredFrom;
+    return {
+      ...entry,
+      catalogUrl: replace(entry.catalogUrl),
+      discoveredFrom:
+        from && typeof from === "object"
+          ? {
+              ...from,
+              page: replace((from as { page?: unknown }).page),
+              link: replace((from as { link?: unknown }).link),
+            }
+          : from,
+    };
+  });
+  return { ...raw, brands };
 }
 
 function verifyAnalysis(
