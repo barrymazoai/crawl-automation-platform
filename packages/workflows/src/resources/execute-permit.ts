@@ -1,22 +1,29 @@
 import type { ResourceGate, ResourceRequest } from "@crawl-automation/v3-contracts";
 import { ActivityCancellationType, CancellationScope, patched } from "@temporalio/workflow";
 import { releasePermit, type ResourceActivities } from "./resource-activities.js";
-import type { GatedWork } from "./resource-binding.js";
+import type { GatedWork, ResourceGrant } from "./resource-binding.js";
 import { stopAndReleasePermit } from "./stop-permit.js";
 import { needsStopProof, unknownExecutionFailure } from "./execution-outcome.js";
 
 export async function executePermit<Result>(
-  at: { request: ResourceRequest; ports: ResourceActivities; config: ResourceGate },
+  at: {
+    request: ResourceRequest;
+    ports: ResourceActivities;
+    config: ResourceGate;
+    grant?: ResourceGrant | undefined;
+  },
   run: GatedWork<Result>,
 ): Promise<Result> {
   let proofRequired = false;
   let failure: Record<string, unknown> | null = null;
   try {
-    const result = await run({
+    const binding = {
       activityId: at.request.permitId,
       cancellationType: ActivityCancellationType.WAIT_CANCELLATION_COMPLETED,
       heartbeatTimeout: "30 seconds",
-    });
+    } as const;
+    // Only a pooled grant adds the held member; fixed-need gates keep their exact call.
+    const result = await (at.grant ? run(binding, at.grant) : run(binding));
     proofRequired = needsStopProof(result);
     return result;
   } catch (error) {

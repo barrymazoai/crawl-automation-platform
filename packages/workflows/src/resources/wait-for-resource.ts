@@ -5,6 +5,7 @@ import {
 } from "@crawl-automation/v3-contracts";
 import { CancellationScope, log, patched, sleep } from "@temporalio/workflow";
 import type { ResourceActivities } from "./resource-activities.js";
+import type { ResourceGrant } from "./resource-binding.js";
 import { resourceFailure } from "./resource-failure.js";
 
 /** Reserve is shielded so cancellation cannot hide a committed grant before finally owns it. */
@@ -13,7 +14,7 @@ export async function waitForResource(at: {
   request: ResourceRequest;
   ports: ResourceActivities;
   waiting: { polls: number };
-}): Promise<void> {
+}): Promise<ResourceGrant | undefined> {
   const requestedAt = Date.now();
   const deadline = requestedAt + at.config.maxWaitSeconds * 1000;
   log.info("resource permit requested", { ...at.request, requestedAt });
@@ -30,8 +31,9 @@ export async function waitForResource(at: {
         requestedAt,
         grantedAt: Date.now(),
         waitMs: Date.now() - requestedAt,
+        host: result.data.host,
       });
-      return;
+      return result.data.host ? { host: result.data.host } : undefined;
     }
     if (await waitForBrowser(result.data.reason)) {
       continue;

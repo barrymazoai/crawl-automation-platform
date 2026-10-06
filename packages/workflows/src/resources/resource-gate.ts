@@ -5,7 +5,7 @@ import { waitForResource } from "./wait-for-resource.js";
 import { executePermit } from "./execute-permit.js";
 
 import type { GatedWork } from "./resource-binding.js";
-export type { GatedWork, ResourceActivityBinding } from "./resource-binding.js";
+export type { GatedWork, ResourceActivityBinding, ResourceGrant } from "./resource-binding.js";
 
 /**
  * One permit per step. Activity cancellation waits for acknowledgement; activity/scope timeouts also
@@ -21,14 +21,16 @@ export function resourceGate(raw: unknown) {
       return run();
     }
     const info = workflowInfo();
+    const pool = config.pools?.[name];
     const request: ResourceRequest = {
       permitId: `permit-${info.runId}-${sequence++}`,
       workflowId: info.workflowId,
       runId: info.runId,
       needs,
+      ...(pool ? { pool } : {}),
     };
     const ports = resourceActivities(config.queue);
-    await waitForResource({ config, request, ports, waiting });
-    return executePermit({ request, ports, config }, run);
+    const grant = await waitForResource({ config, request, ports, waiting });
+    return executePermit({ request, ports, config, grant }, run);
   };
 }

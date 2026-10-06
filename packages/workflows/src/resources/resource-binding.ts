@@ -6,4 +6,12 @@ export interface ResourceActivityBinding {
   heartbeatTimeout?: "30 seconds";
 }
 
-export type GatedWork<Result> = (binding?: ResourceActivityBinding) => Promise<Result>;
+/** What the permit granted beyond its fixed needs: the pool member it holds. */
+export interface ResourceGrant {
+  host?: string;
+}
+
+export type GatedWork<Result> = (
+  binding?: ResourceActivityBinding,
+  grant?: ResourceGrant,
+) => Promise<Result>;

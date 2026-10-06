@@ -1,4 +1,5 @@
 import {
+  BrowserResourceIdSchema,
   browserResourceOfQueue,
   browserResources,
   browserTaskQueue,
@@ -6,6 +7,7 @@ import {
 } from "@crawl-automation/platform/browser-routing";
 import { resourceGateErrors } from "@crawl-automation/platform/errors/resource-gate";
 import type { ResourceGate } from "@crawl-automation/v3-contracts";
+import type { ResourceGrant } from "./resource-binding.js";
 import { ApplicationFailure, patched } from "@temporalio/workflow";
 
 /** Keep the old gate and queue byte-for-byte on replay. New scans also take a host permit. */
@@ -56,4 +58,35 @@ function selectedHost(
     );
   }
   return resourceId;
+}
+
+/**
+ * Product captures with a browser pool (owner 2026-10-06: three Ego spaces for DTC products) are routed after the
+ * grant, to the queue of the exact space the permit holds. Without a pool the fixed single-host route applies.
+ */
+export function pooledRoute(
+  resources: ResourceGate | undefined,
+): { resources: ResourceGate; queue: undefined } | undefined {
+  const pool = resources?.pools?.["captureProduct"];
+  if (!resources || !pool || !patched("browser-pool-v1")) {
+    return undefined;
+  }
+  if (browserResources(pool).length !== pool.length) {
+    throw ApplicationFailure.nonRetryable(
+      "Browser pool names an unknown browser resource",
+      resourceGateErrors.code("RESOURCE.BROWSER_ROUTE_INVALID"),
+    );
+  }
+  return { resources, queue: undefined };
+}
+
+export function pooledQueue(grant: ResourceGrant | undefined): string {
+  const host = BrowserResourceIdSchema.safeParse(grant?.host);
+  if (!host.success) {
+    throw ApplicationFailure.nonRetryable(
+      "Browser pool grant names no browser resource",
+      resourceGateErrors.code("RESOURCE.BROWSER_ROUTE_INVALID"),
+    );
+  }
+  return browserTaskQueue(host.data);
 }

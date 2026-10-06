@@ -10,7 +10,7 @@ import {
 import { collectFamilyProduct } from "./family-product.js";
 import { once } from "./activity-options.js";
 import { collectCapturedProduct } from "./collect-captured-product.js";
-import { browserRoute } from "./resources/browser-route.js";
+import { browserRoute, pooledQueue, pooledRoute } from "./resources/browser-route.js";
 import { collectDtcVariants } from "./dtc-variants.js";
 import { resolveDtcGallery } from "./dtc-gallery.js";
 
@@ -47,17 +47,19 @@ async function captureInBrowser(input: ProductPipelineInput) {
       pipelineErrors.code("PIPELINE.BROWSER_QUEUE_MISSING"),
     );
   }
-  const route = browserRoute({
-    resources: input.resources,
-    activity: "captureProduct",
-    queue: input.queues.browser,
-    required: true,
-  });
+  const route =
+    pooledRoute(input.resources) ??
+    browserRoute({
+      resources: input.resources,
+      activity: "captureProduct",
+      queue: input.queues.browser,
+      required: true,
+    });
   const gate = versionedResourceGate(route.resources, { ignoreLegacyBinding: true });
   const captured = BrowserCaptureResultSchema.parse(
-    await gate("captureProduct", (binding) =>
+    await gate("captureProduct", (binding, grant) =>
       proxyActivities<BrowserActivities>({
-        taskQueue: route.queue,
+        taskQueue: route.queue ?? pooledQueue(grant),
         ...once,
         ...(input.channel === "dtc" && patched("dtc-native-capture-timeout-v1")
           ? { startToCloseTimeout: "30 minutes", scheduleToCloseTimeout: "60 minutes" }
