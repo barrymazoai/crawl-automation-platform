@@ -75,6 +75,14 @@ export const QueueLimitsSchema = z.strictObject({
 });
 export type QueueLimits = z.infer<typeof QueueLimitsSchema>;
 
+/** Owner 2026-10-06: a source's queued products start before lower-priority sources' (0 = normal, oldest first). */
+export const SourcePrioritySchema = z.strictObject({
+  channel: QueueChannelSchema,
+  sourceIds: z.array(z.uuid()).min(1).max(1_000),
+  priority: z.number().int().min(0).max(100),
+});
+export type SourcePriority = z.infer<typeof SourcePrioritySchema>;
+
 const RequeueIdsSchema = z.strictObject({
   channel,
   itemIds: z
@@ -130,6 +138,8 @@ export interface QueueStore extends Partial<FamilyFormulaOutcomes> {
   summary(query: QueueSummaryQuery): Promise<QueueSourceSummary[]>;
   add(input: AddToQueue, discovery?: ScanAdmissionSettings): Promise<QueueAddResult>;
   setLimits(limits: QueueLimits): Promise<void>;
+  /** Sets the priority of this channel's sources; returns how many named sources belong to the channel. */
+  setSourcePriority(input: SourcePriority): Promise<number>;
   pause(options: PauseQueue): Promise<void>;
   resume(channel: QueueChannel): Promise<void>;
   requeue(input: Requeue): Promise<RequeueResult>;

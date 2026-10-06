@@ -31,6 +31,7 @@ function fakeStore(): QueueStore {
     summary: vi.fn(async () => []),
     add: vi.fn(async () => ({ added: 1 })),
     setLimits: vi.fn(async () => undefined),
+    setSourcePriority: vi.fn(async () => 0),
     pause: vi.fn(async () => undefined),
     resume: vi.fn(async () => undefined),
     requeue: vi.fn(async () => ({ requeued: 1 })),

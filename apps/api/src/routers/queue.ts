@@ -4,6 +4,7 @@ import {
   PauseQueueSchema,
   QueueItemsQuerySchema,
   QueueLimitsSchema,
+  SourcePrioritySchema,
   QueueSummaryQuerySchema,
   RequeueSchema,
   FamilyFormulaQuerySchema,
@@ -54,6 +55,11 @@ export const queueRouter = router({
   setLimits: procedure
     .input(QueueLimitsSchema)
     .mutation(({ ctx, input }) => ctx.queue.setLimits(input)),
+
+  /** Products of higher-priority sources start first; 0 restores oldest-first. */
+  setSourcePriority: procedure
+    .input(SourcePrioritySchema)
+    .mutation(({ ctx, input }) => ctx.queue.setSourcePriority(input)),
 
   /** Explicit IDs keep the existing behavior; a bounded Review filter defaults to a read-only preview. */
   requeue: procedure.input(RequeueSchema).mutation(({ ctx, input }) => ctx.queue.requeue(input)),

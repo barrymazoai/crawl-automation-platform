@@ -17,6 +17,7 @@ import type {
   Requeue,
   RequeueResult,
   QueueSummaryQuery,
+  SourcePriority,
 } from "./queue-model.js";
 
 export interface QueueServiceDeps {
@@ -76,6 +77,20 @@ export class QueueService {
     await this.deps.channels.setLimits(limits);
     this.deps.log.info(limits, "queue limits set");
     return this.status(limits.channel);
+  }
+
+  async setSourcePriority(input: SourcePriority): Promise<{ sources: number }> {
+    const sources = await this.deps.channels.setSourcePriority(input);
+    if (sources !== input.sourceIds.length) {
+      throw appErrors.create("QUEUE.SOURCE_UNKNOWN", {
+        details: { channel: input.channel, named: input.sourceIds.length, found: sources },
+      });
+    }
+    this.deps.log.info(
+      { channel: input.channel, sources, priority: input.priority },
+      "queue priority set",
+    );
+    return { sources };
   }
 
   async pause(options: PauseQueue): Promise<QueueStatus> {

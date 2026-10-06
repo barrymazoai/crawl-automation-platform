@@ -10,13 +10,14 @@ import {
   type Requeue,
   type QueueSummaryQuery,
   type ScanAdmissionSettings,
+  type SourcePriority,
 } from "@crawl-automation/app";
 import type { Database, Queryable } from "@crawl-automation/platform";
 import type { FamilyFormulaOutcome, FamilyFormulaQuery } from "@crawl-automation/app";
 import { recordFamilyOutcome, familyOutcomes } from "./queue-family-queries.js";
 import { PostgresFormulaIndex } from "./postgres-formula-index.js";
 import type { FormulaQuery, QueuedProduct } from "@crawl-automation/app";
-import { channelQueueStatus, lockChannelQueue } from "./channel-queue-queries.js";
+import { QUEUE_ORDER, channelQueueStatus, lockChannelQueue } from "./channel-queue-queries.js";
 import { PostgresQueueReader } from "./postgres-queue-reader.js";
 import { PostgresQueueRequeue } from "./postgres-queue-requeue.js";
 import { PostgresQueueSummary } from "./postgres-queue-summary.js";
@@ -104,10 +105,32 @@ export class PostgresChannelQueueStore implements QueueStore {
       // A lower ceiling never cancels running work; it only moves unstarted items back.
       await tx.query(
         `UPDATE queue_item SET state = 'queued', updated_at = clock_timestamp() WHERE item_id IN (
-           SELECT item_id FROM queue_item WHERE channel = $1 AND state = 'ready'
-           ORDER BY created_at, item_id OFFSET $2)`,
+           SELECT item_id FROM queue_item q WHERE channel = $1 AND state = 'ready'
+           ORDER BY ${QUEUE_ORDER} OFFSET $2)`,
         [limits.channel, limits.ready],
       );
+    });
+  }
+
+  /** All named sources must be this channel's; otherwise nothing changes. Priority 0 is normal order. */
+  setSourcePriority(input: SourcePriority): Promise<number> {
+    const sourceIds = [...new Set(input.sourceIds)];
+    return this.locked(input.channel, async (tx) => {
+      const rows = await tx.query<{ found: number }>(
+        `SELECT count(*)::int AS found FROM brand_source WHERE channel = $1 AND id = ANY($2::uuid[])`,
+        [input.channel, sourceIds],
+      );
+      const found = rows[0]?.found ?? 0;
+      if (found === sourceIds.length) {
+        await tx.query(
+          `INSERT INTO queue_source_priority (channel, source_id, priority)
+           SELECT $1, id, $3 FROM unnest($2::uuid[]) AS id
+           ON CONFLICT (channel, source_id)
+           DO UPDATE SET priority = EXCLUDED.priority, updated_at = clock_timestamp()`,
+          [input.channel, sourceIds, input.priority],
+        );
+      }
+      return found === sourceIds.length ? input.sourceIds.length : found;
     });
   }
 

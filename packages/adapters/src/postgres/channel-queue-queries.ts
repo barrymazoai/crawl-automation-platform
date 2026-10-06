@@ -40,3 +40,10 @@ export async function channelQueueItems(
 ): Promise<QueueItemView[]> {
   return new PostgresQueueReader(db).items(query);
 }
+
+/**
+ * Queue order (owner 2026-10-06): products of higher-priority sources first, then oldest first. Use with the queued
+ * table aliased `q`.
+ */
+export const QUEUE_ORDER = `COALESCE((SELECT p.priority FROM queue_source_priority p
+    WHERE p.channel = q.channel AND p.source_id = q.source_id), 0) DESC, q.created_at, q.item_id`;

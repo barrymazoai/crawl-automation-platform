@@ -8,7 +8,7 @@ import {
 } from "@crawl-automation/app";
 import type { Database, Queryable } from "@crawl-automation/platform";
 import { z } from "zod";
-import { lockChannelQueue } from "./channel-queue-queries.js";
+import { QUEUE_ORDER, lockChannelQueue } from "./channel-queue-queries.js";
 
 const ControlRow = z.object({
   channel: QueueChannelSchema,
@@ -61,7 +61,7 @@ export class PostgresQueueDispatch implements DispatchStore {
     return this.locked(control.channel, async (tx) => {
       await tx.query(
         `UPDATE queue_item SET state = 'ready', updated_at = clock_timestamp() WHERE item_id IN (
-           SELECT item_id FROM queue_item WHERE channel = $1 AND state = 'queued' ORDER BY created_at, item_id
+           SELECT item_id FROM queue_item q WHERE channel = $1 AND state = 'queued' ORDER BY ${QUEUE_ORDER}
            LIMIT GREATEST(0, $2 - (SELECT count(*) FROM queue_item WHERE channel = $1 AND state = 'ready')))`,
         [control.channel, control.readyLimit],
       );
@@ -73,7 +73,7 @@ export class PostgresQueueDispatch implements DispatchStore {
     return this.locked(control.channel, async (tx) => {
       const rows = await tx.query(
         `WITH picked AS (
-           SELECT item_id FROM queue_item WHERE channel = $1 AND state = 'ready' ORDER BY created_at, item_id
+           SELECT item_id FROM queue_item q WHERE channel = $1 AND state = 'ready' ORDER BY ${QUEUE_ORDER}
            LIMIT GREATEST(0, $2 - (SELECT count(*) FROM queue_item WHERE channel = $1 AND state = 'running'))),
          moved AS (
            UPDATE queue_item i SET state = 'running', attempt = i.attempt + 1, run_id = gen_random_uuid(),

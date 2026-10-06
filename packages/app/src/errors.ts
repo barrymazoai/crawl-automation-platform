@@ -84,6 +84,10 @@ export const appErrors = defineErrors({
     category: "RUNTIME",
     message: "This API has no storage settings, so it cannot read Review evidence.",
   },
+  "QUEUE.SOURCE_UNKNOWN": {
+    category: "VALIDATION",
+    message: "A named source does not belong to this channel.",
+  },
   "QUEUE.IMPORT_CONFLICT": {
     category: "VALIDATION",
     message: "A product in this list is already queued with different details.",
