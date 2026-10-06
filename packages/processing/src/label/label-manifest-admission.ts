@@ -1,4 +1,8 @@
-import type { ArtifactRef, LabelProductManifest } from "@crawl-automation/v3-contracts";
+import {
+  isOrderedEvidencePolicy,
+  type ArtifactRef,
+  type LabelProductManifest,
+} from "@crawl-automation/v3-contracts";
 import { labelFailure } from "./label-errors.js";
 import type { LabelPlanInput, SavedManifest } from "./label-plan-model.js";
 
@@ -19,7 +23,7 @@ export async function manifestAdmission(
   if (documents.length) {
     return { policy: input.admission, comparison: "label-typography/2", documents };
   }
-  if (!input.sourcePolicy || input.evidencePolicy !== "label-image-first/6") {
+  if (!input.sourcePolicy || !isOrderedEvidencePolicy(input.evidencePolicy)) {
     throw labelFailure("CHANNEL.LABEL_SOURCE_UNVERIFIED");
   }
   const { manifest } = await plans.load(input, signal);

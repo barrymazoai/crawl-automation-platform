@@ -14,13 +14,21 @@ const words = (field: { text: string } | null | undefined) =>
   field?.text.replace(/\s+/gu, " ").trim().toLowerCase();
 type Formula = NonNullable<LabelCandidate["formula"]>;
 
-/** A partial panel may omit unreadable content, but every readable field must agree with the full label. */
-export function partialLabelConflicts(partial: LabelCandidate, complete: LabelCandidate): string[] {
+/**
+ * A partial panel may omit unreadable content, but every readable field must agree with the full label. A part the
+ * selected label does not carry (/7) is not compared: there is nothing to disagree with.
+ */
+export function partialLabelConflicts(
+  partial: LabelCandidate,
+  complete: LabelCandidate,
+  parts: { formula: boolean; ingredients: boolean } = { formula: true, ingredients: true },
+): string[] {
   const codes: string[] = [];
-  if (partial.formula && (!complete.formula || !formulaFits(partial.formula, complete.formula))) {
+  const formula = parts.formula && partial.formula;
+  if (formula && (!complete.formula || !formulaFits(formula, complete.formula))) {
     codes.push(assemblyErrors.code("LABEL_PRODUCT.FORMULA_CONFLICT"));
   }
-  if (partial.otherIngredients && !ingredientsFit(partial, complete)) {
+  if (parts.ingredients && partial.otherIngredients && !ingredientsFit(partial, complete)) {
     codes.push(assemblyErrors.code("LABEL_PRODUCT.INGREDIENTS_CONFLICT"));
   }
   return codes;

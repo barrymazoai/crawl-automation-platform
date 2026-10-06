@@ -28,7 +28,7 @@ describe("label merge policies", () => {
     );
     const record = await collectBoth(setup);
     expect(record.evidencePolicy).toBe("label-image-first/1");
-    expect(defined(record.formula.columns[0]).rows[17]).toMatchObject({
+    expect(defined(record.formula?.columns[0]).rows[17]).toMatchObject({
       kind: "blend_component",
       parentRowIndex: 13,
       name: { citation: { kind: "image" } },

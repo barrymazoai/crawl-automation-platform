@@ -8,7 +8,7 @@ export const MISSING_ENRICHMENT = `
            p.record->'observation'->>'variantId' AS variant_id
       FROM collected_product p
       JOIN brand_source s ON s.id::text = p.record->'observation'->>'sourceId'
-     WHERE p.record->>'codec' IN ('collected-product/3', 'collected-product/4')
+     WHERE p.record->>'codec' IN ('collected-product/3', 'collected-product/4', 'collected-product/5')
     UNION
     SELECT formula_operation_id, channel, listing_id, variant_id FROM formula_link
   )

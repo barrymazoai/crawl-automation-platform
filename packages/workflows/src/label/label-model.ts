@@ -2,6 +2,7 @@ import {
   ExecutionIdSchema,
   ImageOcrPrepareOutcomeSchema,
   LabelEvidencePolicySchema,
+  isOrderedEvidencePolicy,
   LabelSourcePolicySchema,
   LabelPreparationSchema,
   LabelProductManifestSchema,
@@ -39,7 +40,7 @@ export const LabelTaskSchema = z
     admission: z.literal("label-packaging/1").optional(),
   })
   .refine(
-    (input) => !input.sourcePolicy || input.evidencePolicy === "label-image-first/6",
+    (input) => !input.sourcePolicy || isOrderedEvidencePolicy(input.evidencePolicy),
     "Ordered labels retain the current merge safeguards",
   );
 export type LabelTask = z.infer<typeof LabelTaskSchema>;

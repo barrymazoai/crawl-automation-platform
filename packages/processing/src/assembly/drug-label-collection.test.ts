@@ -34,9 +34,14 @@ describe("Drug Facts collection", () => {
     const record = LabelCollectedProductSchema.parse(
       await setup.registry.read(setup.join.manifest.operationId),
     );
-    expect(record.formula.servingSize).toBeNull();
-    expect(record.formula.servingsPerContainer).toBeNull();
-    expect(record.formula.columns[0]?.rows[0]?.purpose).toMatchObject({
+    const formula = record.formula ?? {
+      servingSize: undefined,
+      servingsPerContainer: undefined,
+      columns: [],
+    };
+    expect(formula.servingSize).toBeNull();
+    expect(formula.servingsPerContainer).toBeNull();
+    expect(formula.columns[0]?.rows[0]?.purpose).toMatchObject({
       text: "Relieves muscle pain",
       sourceId: setup.entry.id,
       citation: { kind: "text" },
@@ -46,7 +51,7 @@ describe("Drug Facts collection", () => {
     expect((await setup.cold().collector.run(input, signal)).status).toBe("collected");
     expect(setup.registry.append).toHaveBeenCalledTimes(1);
     const changed = structuredClone(record);
-    const purpose = changed.formula.columns[0]?.rows[0]?.purpose;
+    const purpose = changed.formula?.columns[0]?.rows[0]?.purpose;
     if (purpose) {
       purpose.text = "Altered purpose";
     }
@@ -96,7 +101,7 @@ describe("Drug Facts collection", () => {
       await setup.registry.read(setup.join.manifest.operationId),
     );
     expect(record.schemaVersion).toBe(4);
-    expect(record.formula.servingSize).toBeNull();
+    expect(record.formula?.servingSize).toBeNull();
   });
 
   it("rejects a forged Purpose citation before assembly", async () => {

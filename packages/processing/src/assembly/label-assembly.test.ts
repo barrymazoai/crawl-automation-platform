@@ -69,7 +69,7 @@ describe("label assembly and collection", () => {
     expect(result.status).toBe("collected");
     const record = defined([...setup.collected.values()][0]);
     expect(record.codec).toBe("collected-product/3");
-    expect(defined(record.formula.columns[0]).rows).toHaveLength(18);
+    expect(defined(record.formula?.columns[0]).rows).toHaveLength(18);
     expect(record.ingredients.filter((item) => item.role === "blend_component")).toHaveLength(11);
     expect(record.ingredients.filter((item) => item.role === "other")).toHaveLength(7);
     expect(record.ingredients.find((item) => item.name.text === "Sodium")).toMatchObject({

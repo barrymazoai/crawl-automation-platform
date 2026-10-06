@@ -31,7 +31,7 @@ describe("assembly sources without labels", () => {
         { id: "source-1", code: "LABEL_PRODUCT.SOURCE_WORDING_DIFFERS" },
       ]),
     );
-    expect(record.formula.columns[0]?.rows).toHaveLength(2);
+    expect(record.formula?.columns[0]?.rows).toHaveLength(2);
     expect(record.provenance.map((entry) => entry.id)).toEqual(["source-0", "source-1"]);
     expect(setup.records.get(review.reviewId)).toEqual(review);
     expect(setup.records.size).toBe(1);

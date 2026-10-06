@@ -23,7 +23,7 @@ describe("saved label recovery", () => {
     expect(label.result.status).toBe("ready");
     const proposed = recoveredCollection(label);
     expect(
-      LabelCollectedProductSchema.parse(proposed.record).formula.columns[0]?.rows[0]?.name.text,
+      LabelCollectedProductSchema.parse(proposed.record).formula?.columns[0]?.rows[0]?.name.text,
     ).toBe("Vitamin C");
     expect(proposed.record.operationId).not.toBe(fixture.join.manifest.operationId);
     expect(label.receipts).toMatchObject([

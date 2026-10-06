@@ -72,7 +72,7 @@ describe("LabelTasks", () => {
       },
       corePolicy: "swanson-label-core/1",
       admission: "label-packaging/1",
-      evidencePolicy: "label-image-first/6",
+      evidencePolicy: "label-image-first/7",
       sourcePolicy: { version: "label-sources/1", order: "text-first" },
     });
     expect(task.input.plan.input).toEqual(sourcePlan);
@@ -98,7 +98,7 @@ describe("LabelTasks", () => {
     expect(task.input).toMatchObject({
       sourcePolicy,
       admission: "label-packaging/1",
-      evidencePolicy: "label-image-first/6",
+      evidencePolicy: "label-image-first/7",
     });
   });
 

@@ -44,7 +44,7 @@ it.each([false, true])(
     expect(await test.collector.run(input, signal)).toMatchObject({ status: "collected" });
     expect(await test.cold().collector.run(input, signal)).toMatchObject({ status: "collected" });
     const collected = defined([...test.collected.values()][0]);
-    expect(collected.formula.servingSize?.sourceId).toBe("source-0");
+    expect(collected.formula?.servingSize?.sourceId).toBe("source-0");
     expect(collected.otherIngredients?.heading.sourceId).toBe("source-1");
     expect(collected.provenance[0]?.candidate).toEqual(candidate);
     expect(LabelCollectedProductSchema.safeParse(collected).success).toBe(true);

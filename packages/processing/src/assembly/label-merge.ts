@@ -9,6 +9,7 @@ import {
 } from "@crawl-automation/v3-contracts";
 import { applyFailures, applyPackagingIssues, mergePolicy } from "./merge-policy.js";
 import { selectLabel } from "./merge-selection.js";
+import { labelTypeOf } from "./label-type.js";
 import { beginMerge, verifiedProvenance } from "./merge-sources.js";
 import {
   byText,
@@ -28,7 +29,7 @@ export function mergeLabelProduct(
   manifest: LabelProductManifest,
   verified: { entries: VerifiedLabelSource[]; failures?: MergeFailure[] },
   packaging?: PackagingFacts,
-) {
+): MergedLabel {
   const failures = verified.failures ?? [];
   const state = beginMerge(manifest, packaging);
   const { provenance, seen } = verifiedProvenance(state, verified.entries, failures);
@@ -39,7 +40,38 @@ export function mergeLabelProduct(
   if (seen.size !== state.sources.size) {
     state.codes.add("LABEL_PRODUCT.BARRIER_INCOMPLETE");
   }
-  return mergedLabel(state, provenance);
+  const merged = mergedLabel(state, provenance);
+  return policy.onePart
+    ? { ...merged, parts: partsRecord(state, { provenance, entries: verified.entries }) }
+    : merged;
+}
+
+/** /7 results carry `parts`; older policies keep their exact assembly bytes. */
+export type MergedLabel = ReturnType<typeof mergedLabel> & {
+  parts?: ReturnType<typeof partsRecord>;
+};
+
+/**
+ * collected-product/5 fields (owner 2026-10-06): which parts were found, the formula's printed panel, and the page
+ * fragment behind every page-text source.
+ */
+function partsRecord(
+  state: MergeState,
+  sources: { provenance: Provenance[]; entries: VerifiedLabelSource[] },
+) {
+  const pageEvidence = sources.entries.flatMap((entry) =>
+    entry.kind === "text" &&
+    entry.evidence &&
+    sources.provenance.some((kept) => kept.id === entry.id)
+      ? [{ sourceId: entry.id, ...entry.evidence }]
+      : [],
+  );
+  return {
+    labelType: labelTypeOf(state.formula, sources),
+    formulaFound: state.formula !== null,
+    ingredientsFound: state.otherIngredients !== null || selectedAbsence(state, sources.provenance),
+    pageEvidence: pageEvidence.sort((left, right) => byText(left.sourceId, right.sourceId)),
+  };
 }
 
 function mergedLabel(state: MergeState, provenance: Provenance[]) {
@@ -75,11 +107,14 @@ function mergedLabel(state: MergeState, provenance: Provenance[]) {
 /** A label needs a formula and ingredients; packaging counts that disagree leave the count out, with a warning. */
 function finalChecks(state: MergeState, ingredientsComplete: boolean): void {
   const { formula } = state;
+  // /7 (owner 2026-10-06): one part is a product; only a label with neither part stays in Review.
+  const onePart =
+    state.manifest.evidencePolicy === "label-image-first/7" && (!!formula || ingredientsComplete);
   if (!formula) {
-    state.codes.add(assemblyErrors.code("VALIDATION.FORMULA_MISSING"));
+    addPartCode(state, onePart, "VALIDATION.FORMULA_MISSING");
   }
   if (!ingredientsComplete) {
-    state.codes.add(assemblyErrors.code("VALIDATION.INGREDIENTS_MISSING"));
+    addPartCode(state, onePart, "VALIDATION.INGREDIENTS_MISSING");
   }
   if (!state.packaging || state.counts.size <= 1) {
     return;
@@ -90,6 +125,18 @@ function finalChecks(state: MergeState, ingredientsComplete: boolean): void {
   const code = assemblyErrors.code("PACKAGING.SERVINGS_PER_CONTAINER_CONFLICT");
   if (!state.warnings.some((warning) => warning.code === code)) {
     state.warnings.push({ id: state.manifest.operationId, code });
+  }
+}
+
+function addPartCode(
+  state: MergeState,
+  onePart: boolean,
+  code: "VALIDATION.FORMULA_MISSING" | "VALIDATION.INGREDIENTS_MISSING",
+): void {
+  if (onePart) {
+    state.warnings.push({ id: state.manifest.operationId, code: assemblyErrors.code(code) });
+  } else {
+    state.codes.add(assemblyErrors.code(code));
   }
 }
 

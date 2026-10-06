@@ -1,4 +1,5 @@
 import type {
+  ArtifactRef,
   LabelCollectedProduct,
   LabelImageCandidate,
   LabelProductManifest,
@@ -11,7 +12,14 @@ import type {
 
 /** A label source whose registered original evidence the reader has re-verified. */
 export type VerifiedLabelSource = { id: string } & (
-  | { kind: "text"; record: TextRecord; candidate: TextCandidateV3; fullText: string }
+  | {
+      kind: "text";
+      record: TextRecord;
+      candidate: TextCandidateV3;
+      fullText: string;
+      /** The prepared document and the page HTML fragment it was read from (collected-product/5 evidence). */
+      evidence?: { document: ArtifactRef; page: ArtifactRef };
+    }
   | { kind: "image"; record: VisionRecord; candidate: LabelImageCandidate }
 );
 

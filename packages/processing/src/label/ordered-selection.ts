@@ -1,3 +1,4 @@
+import { isOrderedEvidencePolicy } from "@crawl-automation/v3-contracts";
 import { orderedProgress } from "./ordered-progress.js";
 import { orderedProgressKey } from "./ordered-diagnostics.js";
 import { labelFailure } from "./label-errors.js";
@@ -29,7 +30,7 @@ export function orderedSources(loaded: LoadedPlan) {
 function orderedPolicy(loaded: LoadedPlan) {
   const policy = loaded.input.sourcePolicy;
   const preparation = loaded.labelPreparation;
-  if (!policy || !preparation || loaded.input.evidencePolicy !== "label-image-first/6") {
+  if (!policy || !preparation || !isOrderedEvidencePolicy(loaded.input.evidencePolicy)) {
     throw labelFailure("CHANNEL.LABEL_SELECTION_UNAVAILABLE");
   }
   return { policy, preparation };

@@ -160,15 +160,7 @@ function collectedCandidate(
   at: { key: string; evidence: Ready },
 ): LabelCollectedProduct {
   const result = at.evidence.output.result;
-  const version = input.manifest.admission
-    ? {
-        schemaVersion: 4,
-        codec: "collected-product/4",
-        admissionPolicy: result.admissionPolicy,
-        comparisonPolicy: result.comparisonPolicy,
-        packaging: result.packaging,
-      }
-    : { schemaVersion: 3, codec: "collected-product/3" };
+  const version = collectedVersion(input, result);
   return LabelCollectedProductSchema.parse({
     ...version,
     operationId: input.manifest.operationId,
@@ -185,4 +177,36 @@ function collectedCandidate(
     warnings: result.warnings,
     provenance: result.provenance,
   });
+}
+
+/** /5 for one-part labels (owner 2026-10-06), /4 with packaging admission, otherwise /3. */
+function collectedVersion(input: LabelProductJoin, result: Ready["output"]["result"]) {
+  const admission = input.manifest.admission
+    ? {
+        admissionPolicy: result.admissionPolicy,
+        comparisonPolicy: result.comparisonPolicy,
+        packaging: result.packaging,
+      }
+    : {};
+  const parts = result.parts;
+  const version = parts
+    ? {
+        schemaVersion: 5,
+        codec: "collected-product/5",
+        ...admission,
+        labelType: parts.labelType,
+        formulaFound: parts.formulaFound,
+        ingredientsFound: parts.ingredientsFound,
+        pageEvidence: parts.pageEvidence,
+      }
+    : input.manifest.admission
+      ? {
+          schemaVersion: 4,
+          codec: "collected-product/4",
+          admissionPolicy: result.admissionPolicy,
+          comparisonPolicy: result.comparisonPolicy,
+          packaging: result.packaging,
+        }
+      : { schemaVersion: 3, codec: "collected-product/3" };
+  return version;
 }

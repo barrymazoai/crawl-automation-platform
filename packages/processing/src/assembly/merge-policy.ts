@@ -3,12 +3,14 @@ import { assemblyErrors } from "./assembly-errors.js";
 import {
   isCompleteLabelImage,
   isCompleteLabelText,
+  isOrderedEvidencePolicy,
   labelImageIntegrityCodes,
   labelNumericSourceConflict,
 } from "@crawl-automation/v3-contracts";
 import type { MergeFailure, MergeState, LabelEvidence } from "./merge-state.js";
 import { applySourceReview, SOURCE_WITHOUT_LABEL } from "./source-without-label.js";
 import { splitLabel } from "./split-label.js";
+import { unusedPartSource } from "./one-part-source.js";
 
 /** What the manifest's evidence policy decides for this set of verified sources. */
 export interface MergePolicy {
@@ -20,8 +22,10 @@ export interface MergePolicy {
   textFallback: boolean;
   /** A complete, eligible label is available, independently of image-first policy. */
   completeLabel: boolean;
-  /** /6: compare incomplete siblings with every eligible complete label. */
+  /** /6 and /7: compare incomplete siblings with every eligible complete label. */
   sufficient: boolean;
+  /** /7 (owner 2026-10-06): a formula or ingredients alone is a label; unused partial sources only warn. */
+  onePart: boolean;
   complete: LabelEvidence[];
   /** Whole printed sections establish coverage; selectLabel still selects and compares fields. */
   split: ReturnType<typeof splitLabel>;
@@ -39,6 +43,7 @@ const FROM_3 = [
   "label-image-first/4",
   "label-image-first/5",
   "label-image-first/6",
+  "label-image-first/7",
 ];
 const SECONDARY_TEXT =
   /^TEXT\.LABEL_(?:GROUP_EMPTY|GROUP_INVALID|ROW_ORDER_INVALID|COVERAGE_UNCERTAIN|EXTRACTION_INCOMPLETE|FORMULA_INCOMPLETE|INGREDIENTS_INCOMPLETE|INVALID_OUTPUT|INGREDIENT_BOUNDARY)$/;
@@ -50,16 +55,14 @@ const QUALITY_IMAGE = /^VISION\.LABEL_(?:AMOUNT_EVIDENCE_CONFLICT|INGREDIENT_BOU
 
 export function mergePolicy(state: MergeState, provenance: LabelEvidence[]): MergePolicy {
   const policy = state.manifest.evidencePolicy ?? "";
-  const quality = ["label-image-first/4", "label-image-first/5", "label-image-first/6"].includes(
-    policy,
-  );
+  const { ordered, onePart, quality } = policyFlags(policy);
   const integrity = (entry: LabelEvidence) =>
     quality && entry.kind === "image" ? labelImageIntegrityCodes(entry.candidate) : [];
   const eligible = provenance.filter((entry) => !integrity(entry).length);
   const complete = eligible.filter(
     (entry) => isCompleteLabelImage(entry) || isCompleteLabelText(entry),
   );
-  const split = policy === "label-image-first/6" && !complete.length ? splitLabel(eligible) : null;
+  const split = ordered && !complete.length ? splitLabel(eligible, onePart) : null;
   const completeLabel = !!split || complete.length > 0;
   const imageFirst = !!policy && eligible.some(isCompleteLabelImage);
   const textFallback = FROM_3.includes(policy) && !imageFirst && eligible.some(isCompleteLabelText);
@@ -80,7 +83,17 @@ export function mergePolicy(state: MergeState, provenance: LabelEvidence[]): Mer
     integrity,
     complete,
     split,
-    sufficient: policy === "label-image-first/6",
+    sufficient: ordered,
+    onePart,
+  };
+}
+
+function policyFlags(policy: string) {
+  const ordered = isOrderedEvidencePolicy(policy);
+  return {
+    ordered,
+    onePart: policy === "label-image-first/7",
+    quality: ordered || ["label-image-first/4", "label-image-first/5"].includes(policy),
   };
 }
 
@@ -104,6 +117,7 @@ export function applyFailures(
     if (
       partialTextFallback(failure, policy) ||
       imageReplacesText(state, failure, policy) ||
+      unusedPartSource(state, failure, policy) ||
       (failure.hasFormula === undefined && excused(state, failure, policy))
     ) {
       state.warnings.push({ id: failure.id, code: failure.code });
@@ -123,7 +137,7 @@ export function applyFailures(
  */
 function imageReplacesText(state: MergeState, failure: MergeFailure, policy: MergePolicy): boolean {
   return (
-    state.manifest.evidencePolicy === "label-image-first/6" &&
+    isOrderedEvidencePolicy(state.manifest.evidencePolicy) &&
     policy.imageFirst &&
     failure.verifiedExecuted === true &&
     // A text Review proven to hold no formula keeps its existing "source without label" warning path.
@@ -186,7 +200,10 @@ function compatiblePartial(state: MergeState, failure: MergeFailure, policy: Mer
     return false;
   }
   const complete = policy.split ? [policy.split.complete] : policy.complete;
-  const conflicts = complete.flatMap((entry) => partialLabelConflicts(candidate, entry.candidate));
+  const parts = policy.split?.parts;
+  const conflicts = complete.flatMap((entry) =>
+    partialLabelConflicts(candidate, entry.candidate, parts),
+  );
   conflicts.forEach((code) => state.codes.add(code));
   return conflicts.length === 0;
 }

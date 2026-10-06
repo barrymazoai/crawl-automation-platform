@@ -228,8 +228,8 @@ describe("shared label group validation", () => {
       const setup = await mergeSetup([candidate], candidate);
       const record = await collectBoth(setup);
       expect(LabelCollectedProductSchema.safeParse(record).success).toBe(true);
-      expect(record.formula.columns[0]?.rows[2]?.parentRowIndex).toBe(parent);
-      expect(record.formula.columns[0]?.rows[1]?.amount?.text).toBe("329 mg");
+      expect(record.formula?.columns[0]?.rows[2]?.parentRowIndex).toBe(parent);
+      expect(record.formula?.columns[0]?.rows[1]?.amount?.text).toBe("329 mg");
       expect(record.warnings).toEqual(
         parent === null
           ? [

@@ -8,6 +8,7 @@ import {
   VisionRecordSchema,
   LabelProductProvenanceSchema,
   isCompleteLabelImage,
+  isOrderedEvidencePolicy,
   isCompleteLabelText,
   assertTextQuotes,
   type LabelProductManifest,
@@ -93,7 +94,7 @@ export function verifiedProvenance(
 
 function needsReviewedSections(state: MergeState, provenance: Provenance[]) {
   return (
-    state.manifest.evidencePolicy === "label-image-first/6" &&
+    isOrderedEvidencePolicy(state.manifest.evidencePolicy) &&
     !provenance.some(isCompleteLabelImage) &&
     !provenance.some(isCompleteLabelText)
   );

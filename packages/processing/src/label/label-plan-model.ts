@@ -2,6 +2,7 @@ import { z } from "zod";
 import {
   ExecutionIdSchema,
   LabelEvidencePolicySchema,
+  isOrderedEvidencePolicy,
   LabelSourcePolicySchema,
   LabelPreparationSchema,
   LabelProductManifestSchema,
@@ -45,7 +46,7 @@ export const LabelPlanInputSchema = z
     "The label task is its own operation",
   )
   .refine(
-    (input) => !input.sourcePolicy || input.evidencePolicy === "label-image-first/6",
+    (input) => !input.sourcePolicy || isOrderedEvidencePolicy(input.evidencePolicy),
     "Ordered labels retain the current merge safeguards",
   );
 export type LabelPlanInput = z.infer<typeof LabelPlanInputSchema>;

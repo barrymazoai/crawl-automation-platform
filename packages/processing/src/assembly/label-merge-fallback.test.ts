@@ -53,7 +53,7 @@ describe("label merge fallback policies", () => {
     const setup = await mergeSetup([candidate]);
     setup.join.manifest.evidencePolicy = "label-image-first/4";
     const record = await collectBoth(setup);
-    expect(record.formula.servingSize?.citation.kind).toBe("text");
+    expect(record.formula?.servingSize?.citation.kind).toBe("text");
     expect(record.provenance).toHaveLength(2);
   });
 
@@ -84,7 +84,7 @@ describe("label merge fallback policies", () => {
     );
     setup.join.manifest.evidencePolicy = "label-image-first/3";
     const record = await collectBoth(setup);
-    expect(record.formula.servingSize?.citation.kind).toBe("text");
+    expect(record.formula?.servingSize?.citation.kind).toBe("text");
     expect(record.warnings).toContainEqual({ id: source.id, code });
     expect(setup.collected.size).toBe(1);
   });

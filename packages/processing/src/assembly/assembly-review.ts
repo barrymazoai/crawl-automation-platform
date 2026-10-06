@@ -44,6 +44,7 @@ const STABLE = [
   "label-image-first/4",
   "label-image-first/5",
   "label-image-first/6",
+  "label-image-first/7",
 ];
 const unverified = () => assemblyFailure("LABEL_PRODUCT.REVIEW_UNVERIFIED");
 
@@ -88,7 +89,12 @@ function assemblyReviewRecord(review: AssemblyReviewCase, identity: string): Rev
   const observation = input.manifest.observation;
   const admission = !!input.manifest.admission;
   const assemblySchema = admission ? "label-product-assembly/2" : "label-product-assembly/1";
-  const collectedSchema = admission ? "collected-product/4" : "collected-product/3";
+  const collectedSchema =
+    input.manifest.evidencePolicy === "label-image-first/7"
+      ? "collected-product/5"
+      : admission
+        ? "collected-product/4"
+        : "collected-product/3";
   const existing = existingCollection
     ? { existingCollection, versionPolicy: "retain-first/1" }
     : {};

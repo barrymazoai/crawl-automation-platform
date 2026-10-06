@@ -27,13 +27,18 @@ export function labelSourceReader(stores: LabelStores): LabelAssemblyDeps["readS
     }
     verifyBytes(record.result, bytes, RESULT_LIMIT);
     const output = TextOutputSchema.parse(JSON.parse(Buffer.from(bytes).toString("utf8")));
-    const fullText = (await stores.textEvidence.resolve(source.task, signal)).text;
+    const resolved = await stores.textEvidence.resolve(source.task, signal);
+    const [document, page] = resolved.refs;
     return {
       id: source.id,
       kind: "text",
       record,
       candidate: TextCandidateV3Schema.parse(output.candidate),
-      fullText,
+      fullText: resolved.text,
+      // A prepared document's refs are itself and the page HTML fragment it was read from.
+      ...(source.task.source.kind === "prepared" && document && page
+        ? { evidence: { document, page } }
+        : {}),
     };
   };
 }

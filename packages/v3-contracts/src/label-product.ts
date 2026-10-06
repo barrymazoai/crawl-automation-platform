@@ -12,7 +12,15 @@ import { labelImageIntegrityCodes, labelNumericSourceConflict } from "./label-qu
 import { LabelReviewedImageRecordSchema } from "./label-reviewed-image.js";
 import { completeLabelSections } from "./label-sections.js";
 import { hasConfirmedNoOtherIngredients } from "./label-ingredient-declaration.js";
-export const LabelEvidencePolicySchema = z.enum(["label-image-first/1", "label-image-first/2", "label-image-first/3", "label-image-first/4", "label-image-first/5", "label-image-first/6"]);
+export const LabelEvidencePolicySchema = z.enum(["label-image-first/1", "label-image-first/2", "label-image-first/3", "label-image-first/4", "label-image-first/5", "label-image-first/6", "label-image-first/7"]);
+/** Ordered labels: /6 needs formula and ingredients; /7 (owner 2026-10-06) accepts either one alone. */
+export const ORDERED_EVIDENCE_POLICIES: readonly string[] = ["label-image-first/6", "label-image-first/7"];
+export const isOrderedEvidencePolicy = (policy: string | undefined) => ORDERED_EVIDENCE_POLICIES.includes(policy ?? "");
+/** The printed panel the formula came from; `none` when the product has no formula. */
+export const LabelTypeSchema = z.enum(["supplement_facts", "nutrition_facts", "drug_facts", "unknown", "none"]);
+export type LabelType = z.infer<typeof LabelTypeSchema>;
+/** A page-text source's evidence: the prepared text document and the page HTML fragment it was read from. */
+export const LabelPageEvidenceSchema = z.strictObject({ sourceId: ExecutionIdSchema, document: ArtifactRefSchema, page: ArtifactRefSchema });
 /** Priority is earned by a complete, structurally valid image, never merely its media type. */
 export function isCompleteLabelImage(p: { kind: string; candidate: LabelImageCandidate | TextCandidateV3 }) {
   return p.kind === "image" && p.candidate.formulaComplete && p.candidate.ingredientsComplete && assessLabelCandidate(p.candidate).status === "candidate";
@@ -81,10 +89,18 @@ const collectedFields = {
   warnings: z.array(z.strictObject({ id: ExecutionIdSchema, code: z.string().min(1).max(160) })).max(1000),
   provenance: z.array(LabelProductProvenanceSchema).min(1).max(100),
 };
+const ComparisonPolicySchema = z.enum(["label-typography/1", "label-typography/2"]);
+// Owner 2026-10-06: a formula, ingredients or both; the panel type and page evidence are recorded.
+const collectedV5Shape = z.strictObject({ schemaVersion: z.literal(5), codec: z.literal("collected-product/5"), ...collectedFields,
+  evidencePolicy: z.literal("label-image-first/7"), formula: LabelProductFormulaSchema.nullable(),
+  labelType: LabelTypeSchema, formulaFound: z.boolean(), ingredientsFound: z.boolean(),
+  pageEvidence: z.array(LabelPageEvidenceSchema).max(100),
+  admissionPolicy: z.literal("label-packaging/1").optional(), comparisonPolicy: ComparisonPolicySchema.optional(), packaging: PackagingFactsSchema.optional() });
 export const LabelCollectedProductSchema = z.discriminatedUnion("schemaVersion", [
   z.strictObject({ schemaVersion: z.literal(3), codec: z.literal("collected-product/3"), ...collectedFields }),
   z.strictObject({ schemaVersion: z.literal(4), codec: z.literal("collected-product/4"), ...collectedFields,
-    admissionPolicy: z.literal("label-packaging/1"), comparisonPolicy: z.enum(["label-typography/1", "label-typography/2"]).optional(), packaging: PackagingFactsSchema }),
+    admissionPolicy: z.literal("label-packaging/1"), comparisonPolicy: ComparisonPolicySchema.optional(), packaging: PackagingFactsSchema }),
+  collectedV5Shape,
 ]).superRefine((r, ctx) => {
   const invalid = () => ctx.addIssue({ code: "custom", message: "Label collected identity conflict" });
   const sources = new Map(r.provenance.map(p => [p.id, p]));
@@ -93,12 +109,12 @@ export const LabelCollectedProductSchema = z.discriminatedUnion("schemaVersion",
     const owner = p.kind === "text" ? observationIdentity(p.record.input) : p.record.input.selection.observation;
     if (JSON.stringify(owner) !== JSON.stringify(r.observation) || (p.kind === "text" ? p.record.input.resultSchemaVersion !== 3 : !p.record.input.extractionProtocol)) invalid();
   }
-  const fields = [r.formula.drugFacts, r.formula.servingSize, r.formula.servingsPerContainer,
-    ...r.formula.columns.flatMap(c => [c.heading, ...c.rows.flatMap(row => [row.name, row.amount, row.dailyValue, row.purpose])]),
+  const fields = [r.formula?.drugFacts, r.formula?.servingSize, r.formula?.servingsPerContainer,
+    ...(r.formula?.columns ?? []).flatMap(c => [c.heading, ...c.rows.flatMap(row => [row.name, row.amount, row.dailyValue, row.purpose])]),
     ...(r.otherIngredients ? [r.otherIngredients.heading, ...r.otherIngredients.items] : []), ...r.ingredients.flatMap(i => [i.name, i.amount])];
   for (const f of fields) if (f && sources.get(f.sourceId)?.kind !== f.citation.kind) invalid();
-  const quality = ["label-image-first/4", "label-image-first/5", "label-image-first/6"].includes(r.evidencePolicy??"");
-  const split = r.evidencePolicy === "label-image-first/6" && !r.provenance.some(p =>
+  const quality = ["label-image-first/4", "label-image-first/5", ...ORDERED_EVIDENCE_POLICIES].includes(r.evidencePolicy??"");
+  const split = isOrderedEvidencePolicy(r.evidencePolicy) && !r.provenance.some(p =>
     (isCompleteLabelImage(p) || isCompleteLabelText(p)) &&
     !(p.kind === "image" && labelImageIntegrityCodes(p.candidate).length));
   const accepted = r.provenance.filter(p =>
@@ -107,38 +123,69 @@ export const LabelCollectedProductSchema = z.discriminatedUnion("schemaVersion",
     !(quality && p.kind === "image" && labelImageIntegrityCodes(p.candidate).length));
   if (r.evidencePolicy === "label-image-first/4" && labelNumericSourceConflict(accepted)) invalid();
   const imageFirst = !!r.evidencePolicy && accepted.some(isCompleteLabelImage);
-  const textFallback = ["label-image-first/3","label-image-first/4", "label-image-first/5", "label-image-first/6"].includes(r.evidencePolicy??"") && !imageFirst && accepted.some(isCompleteLabelText);
+  const textFallback = ["label-image-first/3","label-image-first/4", "label-image-first/5", ...ORDERED_EVIDENCE_POLICIES].includes(r.evidencePolicy??"") && !imageFirst && accepted.some(isCompleteLabelText);
   const authoritative = accepted.filter(p => imageFirst ? p.kind === "image" : !textFallback || p.kind === "text");
   if(textFallback && !r.warnings.some(w=>w.code==="LABEL_PRODUCT.COMPLETE_TEXT_FALLBACK"))invalid();
   if(r.evidencePolicy==="label-image-first/5" && imageFirst && authoritative.length!==1)invalid();
   const projectedSources = authoritative.map(p => projectLabelProductCandidate(p.id,
     split ? (completeLabelSections(p.candidate) ?? p.candidate) : p.candidate));
-  if (!r.ingredients.length && !authoritative.some(p => isCompleteLabelImage(p) &&
+  const confirmedNone = authoritative.some(p => isCompleteLabelImage(p) &&
     hasConfirmedNoOtherIngredients(p.candidate) &&
-    p.id === r.formula.columns[0]?.rows[0]?.name.sourceId)) invalid();
+    p.id === r.formula?.columns[0]?.rows[0]?.name.sourceId);
+  if (r.schemaVersion === 5) {
+    if (!onePartRecord(r, { confirmedNone, sources })) invalid();
+  } else if (!r.ingredients.length && !confirmedNone) invalid();
   // A saved record cannot hide a real disagreement or omit the warning for normalized agreement.
   if (imageFirst && !collectedSourcesAgree(r, accepted)) invalid();
-  if (r.schemaVersion === 4) {
-    if (JSON.stringify(r.packaging.observation) !== JSON.stringify(r.observation) || (!imageFirst && r.packaging.blockingIssues.length)) invalid();
-    for (const code of r.packaging.blockingIssues) if (!r.warnings.some(w => w.code === code)) invalid();
+  const packaging = "packaging" in r ? r.packaging : undefined;
+  if (packaging) {
+    if (JSON.stringify(packaging.observation) !== JSON.stringify(r.observation) || (!imageFirst && packaging.blockingIssues.length)) invalid();
+    for (const code of packaging.blockingIssues) if (!r.warnings.some(w => w.code === code)) invalid();
     const counts = new Set(accepted.map(p => p.candidate.formula?.servingsPerContainer?.text.replace(/\s+/gu, " ").trim()).filter(Boolean));
-    for (const claim of r.packaging.servingsPerContainer.claims) counts.add(claim.value.replace(/\s+/gu, " ").trim());
+    for (const claim of packaging.servingsPerContainer.claims) counts.add(claim.value.replace(/\s+/gu, " ").trim());
     const conflict = counts.size > 1;
     if (conflict !== r.warnings.some(w => w.code === "PACKAGING.SERVINGS_PER_CONTAINER_CONFLICT")) invalid();
     if (conflict) {
-      if (r.formula.servingsPerContainer !== null) invalid();
+      if (r.formula && r.formula.servingsPerContainer !== null) invalid();
       for (const p of projectedSources) if (p.formula) p.formula.servingsPerContainer = null;
     }
-    for (const code of r.packaging.warnings) if (!r.warnings.some(w => w.code === code)) invalid();
+    for (const code of packaging.warnings) if (!r.warnings.some(w => w.code === code)) invalid();
   }
-  if (!projectedSources.some(p => p.formula && JSON.stringify(p.formula) === JSON.stringify(r.formula))) invalid();
+  if ((r.formula || r.schemaVersion !== 5) && !projectedSources.some(p => p.formula && JSON.stringify(p.formula) === JSON.stringify(r.formula))) invalid();
   if (r.otherIngredients && !projectedSources.some(p => JSON.stringify(p.otherIngredients) === JSON.stringify(r.otherIngredients))) invalid();
-  const expected: z.infer<typeof LabelProductIngredientSchema>[] = r.formula.columns.flatMap((c, columnIndex) => c.rows.flatMap((row, rowIndex) => row.kind === "blend_component" ?
+  const expected: z.infer<typeof LabelProductIngredientSchema>[] = (r.formula?.columns ?? []).flatMap((c, columnIndex) => c.rows.flatMap((row, rowIndex) => row.kind === "blend_component" ?
     [{ name: row.name, amount: row.amount, role: "blend_component" as const, columnIndex, rowIndex, parentRowIndex: row.parentRowIndex }] : []));
   expected.push(...(r.otherIngredients?.items ?? []).map(name => ({ name, amount: null, role: "other" as const, columnIndex: null, rowIndex: null, parentRowIndex: null })));
   if (JSON.stringify(r.ingredients) !== JSON.stringify(expected.map(i => ({ name: i.name, role: i.role, amount: i.amount, columnIndex: i.columnIndex, rowIndex: i.rowIndex, parentRowIndex: i.parentRowIndex })))) invalid();
 });
 export type LabelCollectedProduct = z.infer<typeof LabelCollectedProductSchema>;
+
+/**
+ * collected-product/5: the flags match the record, at least one part was found, a product without a formula has no
+ * panel type, and every page-text source behind a kept field names the page fragment it was read from.
+ */
+function onePartRecord(
+  r: z.infer<typeof collectedV5Shape>,
+  at: { confirmedNone: boolean; sources: Map<string, z.infer<typeof LabelProductProvenanceSchema>> },
+): boolean {
+  // The printed ingredient list, or a complete panel's own statement that there is none; blend rows are formula.
+  const ingredients = r.otherIngredients !== null || at.confirmedNone;
+  const cited = new Set([
+    ...(r.formula?.columns ?? []).flatMap(c => c.rows.map(row => row.name.sourceId)),
+    ...(r.otherIngredients ? [r.otherIngredients.heading.sourceId] : []),
+  ]);
+  const evidence = new Map(r.pageEvidence.map(e => [e.sourceId, e]));
+  const pagesBelong = r.pageEvidence.every(e => {
+    const source = at.sources.get(e.sourceId);
+    if (source?.kind !== "text" || source.record.input.source.kind !== "prepared") return false;
+    try { assertArtifactBelongsTo(e.page, r.observation); } catch { return false; }
+    return JSON.stringify(source.record.input.source.document) === JSON.stringify(e.document);
+  });
+  return r.formulaFound === (r.formula !== null) && r.ingredientsFound === ingredients &&
+    (r.formulaFound || r.ingredientsFound) && (r.formula === null) === (r.labelType === "none") &&
+    evidence.size === r.pageEvidence.length && pagesBelong &&
+    [...cited].every(id => at.sources.get(id)?.kind !== "text" || evidence.has(id));
+}
 export type LabelProductField = z.infer<typeof LabelProductFieldSchema>;
 export const LabelCollectionInputSchema = z.strictObject({ join: LabelProductJoinSchema, evidenceKey: ObjectKeySchema });
 export const LabelProductWorkflowInputSchema = z.strictObject({ manifest: LabelProductManifestSchema,

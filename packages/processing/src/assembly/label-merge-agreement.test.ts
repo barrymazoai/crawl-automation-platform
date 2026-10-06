@@ -199,7 +199,7 @@ describe("label source wording agreement", () => {
       const setup = await mergeSetup([first, second], first);
       const saved = await collectBoth(setup);
       expect(saved.formula).toEqual(projectLabelProductCandidate("source-0", first).formula);
-      expect(saved.formula.servingsPerContainer).toBeNull();
+      expect(saved.formula?.servingsPerContainer).toBeNull();
       expect(saved.warnings).toContainEqual(warning);
     },
   );

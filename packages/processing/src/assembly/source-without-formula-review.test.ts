@@ -73,9 +73,9 @@ describe("text coverage Reviews without a formula", () => {
       }
       const setup = await reviewed(JSON.stringify(answer));
       setup.join.manifest.evidencePolicy = policy;
-      // Owner 2026-10-05: under /6 a complete image label replaces the failed page reading.
+      // Owner 2026-10-05: under /6 (and /7) a complete image label replaces the failed page reading.
       expect(await setup.assembly.run(setup.join, signal())).toMatchObject(
-        policy === "label-image-first/6"
+        policy === "label-image-first/6" || policy === "label-image-first/7"
           ? { status: "ready" }
           : { status: "review", codes: [code] },
       );

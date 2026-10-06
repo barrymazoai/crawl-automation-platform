@@ -166,7 +166,7 @@ describe("packaging admission", () => {
 
   it("an uncontested count stays 3, with no false warning", async () => {
     const { record } = await collect(packagingSetup([labelCandidate()], ["3"]));
-    expect(record.formula.servingsPerContainer?.text).toBe("3");
+    expect(record.formula?.servingsPerContainer?.text).toBe("3");
     expect(record.warnings).toEqual([]);
   });
 
@@ -174,7 +174,7 @@ describe("packaging admission", () => {
     const setup = packagingSetup();
     setup.join.manifest.evidencePolicy = "label-image-first/1";
     const { record } = await collect(setup);
-    expect(record.formula.servingsPerContainer).toBeNull();
+    expect(record.formula?.servingsPerContainer).toBeNull();
   });
 
   it.each(["observed", "conflict"] as const)(
@@ -200,7 +200,7 @@ describe("packaging admission", () => {
       setup.join.manifest.operationId = "image-first-serving";
       setup.join.manifest.evidencePolicy = "label-image-first/1";
       const { record } = await collect(setup);
-      expect(record.formula.servingSize?.citation.kind).toBe("image");
+      expect(record.formula?.servingSize?.citation.kind).toBe("image");
       expect(
         record.warnings.some((warning) => warning.code === "PACKAGING.SERVING_SIZE_CONFLICT"),
       ).toBe(true);

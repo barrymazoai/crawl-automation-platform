@@ -11,7 +11,7 @@ import { z } from "zod";
 
 /** The part of a collected record the label check reads; the whole record was checked when it was collected. */
 const SavedFormulaSchema = z.object({
-  codec: z.enum(["collected-product/3", "collected-product/4"]),
+  codec: z.enum(["collected-product/3", "collected-product/4", "collected-product/5"]),
   formula: LabelProductFormulaSchema,
   otherIngredients: LabelProductOtherSchema,
 });
@@ -22,7 +22,7 @@ const COLLECTED = `
     FROM collected_product p
    WHERE p.record->'observation'->>'listingId' = $2
      AND %VARIANT%
-     AND p.record->>'codec' IN ('collected-product/3', 'collected-product/4')
+     AND p.record->>'codec' IN ('collected-product/3', 'collected-product/4', 'collected-product/5')
      AND p.record->'observation'->>'sourceId' IN
          (SELECT id::text FROM brand_source WHERE channel = ANY($1::text[]))`;
 
@@ -51,7 +51,7 @@ const FIND_MEMBER = `SELECT p.operation_id,
     p.record->'observation'->>'listingId' AS listing_id,
     p.record->'observation'->>'variantId' AS variant_id
   FROM collected_product p
-  WHERE p.record->>'codec' IN ('collected-product/3', 'collected-product/4')
+  WHERE p.record->>'codec' IN ('collected-product/3', 'collected-product/4', 'collected-product/5')
     AND p.record->'observation'->>'sourceId' IN
       (SELECT id::text FROM brand_source WHERE channel = ANY($1::text[]))
     AND p.record->'observation'->>'variantId' IS NOT DISTINCT FROM $3::text
@@ -69,7 +69,7 @@ const COVERAGE = `SELECT
     AND (h.record->'capture'->>'variantId' IS NOT DISTINCT FROM $3::text OR EXISTS (
       SELECT 1 FROM collected_product p WHERE ${CAPTURE_OWNER}
         AND p.record->'observation'->>'variantId' IS NOT DISTINCT FROM $3::text
-        AND p.record->>'codec' IN ('collected-product/3', 'collected-product/4')
+        AND p.record->>'codec' IN ('collected-product/3', 'collected-product/4', 'collected-product/5')
     ))) AS seen,
   EXISTS (SELECT 1 FROM queue_item q WHERE q.channel = ANY($1::text[])
     AND q.listing_id = $2 AND q.variant_id IS NOT DISTINCT FROM $3::text

@@ -61,7 +61,7 @@ export class LabelTasks {
     // Legacy /5 drops page preparation after a complete image. Packaging needs that document.
     const policy =
       sourcePlan.sourcePolicy || evidencePolicy === "label-image-first/5"
-        ? "label-image-first/6"
+        ? "label-image-first/7"
         : evidencePolicy;
     const corePolicy = this.deps.registry.get(pipeline.channel).planning?.corePolicy;
     const identity = Buffer.from(JSON.stringify([pipeline.operationId, sourcePlan.operationId]));

@@ -1,6 +1,7 @@
 import { assemblyErrors, type AssemblyErrorCode } from "./assembly-errors.js";
 import {
   isCompleteLabelImage,
+  isOrderedEvidencePolicy,
   formulaAgreement,
   ingredientsAgreement,
   labelAgreementFormula,
@@ -40,7 +41,11 @@ export function selectLabel(
 
 function selectEntry(state: MergeState, entry: LabelEvidence, policy: MergePolicy): void {
   if (policy.split) {
-    const conflicts = partialLabelConflicts(entry.candidate, policy.split.complete.candidate);
+    const conflicts = partialLabelConflicts(
+      entry.candidate,
+      policy.split.complete.candidate,
+      policy.split.parts,
+    );
     conflicts.forEach((code) => state.codes.add(code));
     const section = policy.split.sections.get(entry.id);
     if (section) {
@@ -160,7 +165,7 @@ function recordAgreement(
 ): void {
   const { agreement, conflict, secondary } = comparison;
   const secondaryText =
-    pick.secondaryText && state.manifest.evidencePolicy !== "label-image-first/6";
+    pick.secondaryText && !isOrderedEvidencePolicy(state.manifest.evidencePolicy);
   if (agreement === "exact") {
     return;
   }

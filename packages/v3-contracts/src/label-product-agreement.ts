@@ -12,15 +12,15 @@ type Source = { id: string; kind: "image" | "text"; candidate: LabelCandidate };
 interface CollectedAgreement {
   schemaVersion: number;
   comparisonPolicy?: "label-typography/1" | "label-typography/2" | undefined;
-  formula: { columns: { rows: { name: { sourceId: string } }[] }[] };
+  formula: { columns: { rows: { name: { sourceId: string } }[] }[] } | null;
   otherIngredients: { heading: { sourceId: string } } | null;
-  packaging?: { servingSize: { value: string | null } };
+  packaging?: { servingSize: { value: string | null } } | undefined;
   warnings: { id: string; code: string }[];
 }
 
 function formulaShape(source: Source | undefined, record: CollectedAgreement) {
   const shape = source ? labelAgreementFormula(source.candidate, record.comparisonPolicy) : null;
-  if (shape && record.schemaVersion === 4) {
+  if (shape && record.packaging) {
     shape.servingsPerContainer = null;
   }
   return shape;
@@ -48,7 +48,7 @@ function acceptsAgreement(
 function packagingAgrees(record: CollectedAgreement, source: Source): boolean {
   const servingSize = record.packaging?.servingSize.value;
   const shape = formulaShape(source, record);
-  if (record.schemaVersion !== 4 || !servingSize || !shape) {
+  if (!record.packaging || !servingSize || !shape) {
     return true;
   }
   return (
@@ -64,7 +64,7 @@ export function collectedSourcesAgree(record: CollectedAgreement, accepted: Sour
   const images = accepted.filter((source) => source.kind === "image");
   if (images.some(source => hasConfirmedNoOtherIngredients(source.candidate)) &&
     accepted.some(source => source.candidate.otherIngredients)) return false;
-  const formulaId = record.formula.columns[0]?.rows[0]?.name.sourceId;
+  const formulaId = record.formula?.columns[0]?.rows[0]?.name.sourceId;
   const otherId = record.otherIngredients?.heading.sourceId;
   const formula = formulaShape(
     images.find((source) => source.id === formulaId),

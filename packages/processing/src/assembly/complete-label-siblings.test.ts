@@ -50,9 +50,9 @@ describe("complete labels and incomplete siblings under /6", () => {
     const setup = await mergeSetup([drug, frontImage()], drug);
     setup.join.manifest.evidencePolicy = "label-image-first/6";
     const record = await collectBoth(setup);
-    expect(record.formula.drugFacts?.text).toBe("Drug Facts");
-    expect(record.formula.servingSize).toBeNull();
-    expect(record.formula.columns[0]?.rows[0]?.amount?.text).toBe("30C HPUS");
+    expect(record.formula?.drugFacts?.text).toBe("Drug Facts");
+    expect(record.formula?.servingSize).toBeNull();
+    expect(record.formula?.columns[0]?.rows[0]?.amount?.text).toBe("30C HPUS");
   });
   it("preserves historical /3 and /5 decisions", async () => {
     for (const version of ["label-image-first/3", "label-image-first/5"] as const) {
@@ -67,7 +67,7 @@ describe("complete labels and incomplete siblings under /6", () => {
     const setup = await mergeSetup([frontImage()], simpleImage());
     setup.join.manifest.evidencePolicy = "label-image-first/6";
     const record = await collectBoth(setup);
-    expect(record.formula.servingSize?.citation.kind).toBe("text");
+    expect(record.formula?.servingSize?.citation.kind).toBe("text");
     expect(
       record.warnings.some(
         (warning) => warning.code === "LABEL_PRODUCT.INCOMPLETE_IMAGE_NOT_SELECTED",

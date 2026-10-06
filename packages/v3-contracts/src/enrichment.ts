@@ -53,7 +53,7 @@ export type EnrichmentOutcome = z.infer<typeof EnrichmentOutcomeSchema>;
 export const ExistingFormulaSchema = z.discriminatedUnion("exists", [
   z.strictObject({ exists: z.literal(false) }),
   z.strictObject({ exists: z.literal(true), operationId: ExecutionIdSchema, observationId: ExecutionIdSchema,
-    codec: z.enum(["collected-product/3", "collected-product/4"]), evidenceKey: ObjectKeySchema, recordHash: Sha256Schema, collectedAt: z.iso.datetime() }),
+    codec: z.enum(["collected-product/3", "collected-product/4", "collected-product/5"]), evidenceKey: ObjectKeySchema, recordHash: Sha256Schema, collectedAt: z.iso.datetime() }),
 ]);
 export type ExistingFormula = z.infer<typeof ExistingFormulaSchema>;
 export const ExistingFormulaInputSchema = z.strictObject({ schemaVersion: z.literal(1), owner: ObservationSchema });
