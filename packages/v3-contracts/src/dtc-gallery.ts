@@ -16,6 +16,8 @@ export const DtcGalleryRequestSchema = z.strictObject({
 export const DtcGalleryTaskSchema = DtcGalleryRequestSchema.extend({
   websiteVariants: ChannelProductEvidenceSchema.shape.variants,
   images: z.array(z.strictObject({ url: z.url(), input: OcrInputSchema })).min(1).max(100),
+  // Gallery files OCR cannot read (e.g. SVG badges on Tally, 2026-10-06), kept out of attribution and listed here.
+  unreadable: z.array(z.strictObject({ url: z.url(), mediaType: z.string().min(1).max(200) })).max(100).optional(),
 });
 export const DtcGalleryDecisionSchema = z.strictObject({
   kind: z.enum(["facts", "other", "unresolved"]),

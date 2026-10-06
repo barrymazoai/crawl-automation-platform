@@ -5,6 +5,7 @@ import {
   DtcGalleryRequestSchema,
   fingerprintOcrInput,
   OcrInputSchema,
+  SourceImageSchema,
   type ChannelPlanInput,
   type DtcVariantHandoff,
 } from "@crawl-automation/v3-contracts";
@@ -34,11 +35,20 @@ export async function prepareGalleryTask(store: GalleryStore, raw: unknown, sign
   await verifyMembers(store, { sourcePlan, variants, parent }, signal);
   const manifest = await readImages(store, { sourcePlan, parent }, signal);
   const captureId = sourcePlan.source.producer.operationId;
-  const images = manifest.images.map((image) => imageTask(sourcePlan, image));
+  // Only raster images reach OCR; a website's SVG badges or icons are listed, never a reason to drop the gallery.
+  const readable = manifest.images.filter((image) => ocrReadable(image.mediaType));
+  if (readable.length === 0) {
+    throw new Error("DTC.GALLERY_IMAGE_UNSUPPORTED");
+  }
+  const images = readable.map((image) => imageTask(sourcePlan, image));
+  const unreadable = manifest.images
+    .filter((image) => !ocrReadable(image.mediaType))
+    .map((image) => ({ url: image.url, mediaType: image.mediaType }));
   const task = DtcGalleryTaskSchema.parse({
     ...request,
     websiteVariants: parent.variants,
     images,
+    ...(unreadable.length ? { unreadable } : {}),
   });
   return {
     task: await store.save(`v3/dtc-agent/${captureId}/mixed-gallery/task.json`, task, signal),
@@ -105,6 +115,10 @@ async function readImages(
     throw new Error("DTC.GALLERY_INCOMPLETE");
   }
   return manifest;
+}
+
+function ocrReadable(mediaType: string): boolean {
+  return SourceImageSchema.shape.mediaType.safeParse(mediaType).success;
 }
 
 function imageTask(sourcePlan: ChannelPlanInput, image: z.infer<typeof Images>["images"][number]) {
