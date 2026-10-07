@@ -99,15 +99,18 @@ describe("decodeLabelText", () => {
     expect(result.status).toBe("candidate");
   });
 
-  it("still sends other text excluded as metadata to Review", () => {
-    const lines = [...dRibose, "Made with love"];
-    const exclusion = {
-      quote: { fromLine: 19, toLine: 19, text: "Made with love" },
-      reason: "metadata",
-    };
-    const { result } = decode(lines, { ...answer, exclusions: [...answer.exclusions, exclusion] });
+  it("accepts plain text after the label as metadata, but not a line with an amount (owner 2026-10-07)", () => {
+    const after = (text: string) =>
+      decode([...dRibose, text], {
+        ...answer,
+        exclusions: [
+          ...answer.exclusions,
+          { quote: { fromLine: 19, toLine: 19, text }, reason: "metadata" },
+        ],
+      }).result.codes;
 
-    expect(result.codes).toContain("LABEL.COVERAGE_UNCERTAIN");
+    expect(after("Made with love")).not.toContain("LABEL.COVERAGE_UNCERTAIN");
+    expect(after("Supplying 300 mg")).toContain("LABEL.COVERAGE_UNCERTAIN");
   });
 
   it("flags printed words that are neither extracted nor excluded", () => {

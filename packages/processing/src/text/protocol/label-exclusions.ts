@@ -95,18 +95,22 @@ function structuralExclusion(exclusion: Exclusion, judged: Judged, value: string
   );
 }
 
+/** Page text the model may leave out around a label, whichever of these reasons it gives (owner 2026-10-07). */
+const AROUND_LABEL = new Set(["marketing", "directions", "metadata", "heading"]);
+
 function allowedExclusion(exclusion: Exclusion, judged: Judged): boolean {
   const value = exclusion.quote.text.trim();
   if (structuralExclusion(exclusion, judged, value)) {
     return true;
   }
+  if (AROUND_LABEL.has(exclusion.reason) && outsideLabel(exclusion, judged)) {
+    return true;
+  }
   switch (exclusion.reason) {
     case "allergen":
       return ALLERGEN.test(value);
-    case "marketing":
-      return outsideLabel(exclusion, judged);
     case "directions":
-      return allowedDirections(exclusion, judged) || outsideLabel(exclusion, judged);
+      return allowedDirections(exclusion, judged);
     case "noise":
       return /^[+•■|/]$/.test(value) || isBlendLinkingWord(exclusion, judged);
     default:
@@ -181,9 +185,9 @@ function labelQuotes(candidate: Candidate): Quote[] {
 }
 
 /**
- * Owner 2026-10-07: page text around a label (a product description above the Facts, Suggested Use, warnings and FAQ
- * below them) may be left out as marketing or directions, but only entirely before the label's first quoted part or
- * after its last. Anything left out inside the label still needs Review, so label content is never hidden.
+ * Owner 2026-10-07: page text around a label (a page title or panel subtitle, a product description above the Facts,
+ * Suggested Use, warnings and FAQ below them) may be left out as marketing, directions, metadata or a heading, but only
+ * entirely before the label's first quoted part or after its last. Anything left out inside the label still needs Review, so label content is never hidden.
  */
 function outsideLabel(exclusion: Exclusion, judged: Judged): boolean {
   // A line opening with a footnote marker belongs to the label and keeps the footnote rules.
@@ -196,7 +200,11 @@ function outsideLabel(exclusion: Exclusion, judged: Judged): boolean {
   }
   const first = Math.min(...quotes.map((quote) => quote.start));
   const last = Math.max(...quotes.map((quote) => quote.end));
-  return exclusion.quote.end <= first || exclusion.quote.start >= last;
+  // After the label, a line with an amount may be label content ("Supplying 300 mg"): it stays for Review.
+  return (
+    exclusion.quote.end <= first ||
+    (exclusion.quote.start >= last && !DOSE.test(exclusion.quote.text))
+  );
 }
 
 function allowedDirections(exclusion: Exclusion, judged: Judged): boolean {
