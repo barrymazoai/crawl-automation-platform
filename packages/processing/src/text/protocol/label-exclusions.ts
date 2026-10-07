@@ -103,8 +103,10 @@ function allowedExclusion(exclusion: Exclusion, judged: Judged): boolean {
   switch (exclusion.reason) {
     case "allergen":
       return ALLERGEN.test(value);
+    case "marketing":
+      return outsideLabel(exclusion, judged);
     case "directions":
-      return allowedDirections(exclusion, judged);
+      return allowedDirections(exclusion, judged) || outsideLabel(exclusion, judged);
     case "noise":
       return /^[+•■|/]$/.test(value) || isBlendLinkingWord(exclusion, judged);
     default:
@@ -156,6 +158,45 @@ function isBlendLinkingWord(exclusion: Exclusion, judged: Judged): boolean {
         ),
     ),
   );
+}
+
+type Quote = { start: number; end: number };
+const FOOTNOTE_MARKER = /^\s*[[(]?\s*[*†‡§¶#+⁺¹²³⁴⁵⁶⁷⁸⁹◇^]/u;
+
+/** Every quoted part of the label itself: Facts metadata and headings, rows, and the Other Ingredients list. */
+function labelQuotes(candidate: Candidate): Quote[] {
+  const formula = candidate.formula;
+  const quotes: (Quote | null | undefined)[] = [
+    formula?.drugFacts,
+    formula?.servingSize,
+    formula?.servingsPerContainer,
+    ...(formula?.columns ?? []).flatMap((column) => [
+      column.heading,
+      ...column.rows.flatMap((row) => [row.name, row.amount, row.dailyValue]),
+    ]),
+    candidate.otherIngredients?.heading,
+    ...(candidate.otherIngredients?.items ?? []),
+  ];
+  return quotes.filter((quote): quote is Quote => !!quote);
+}
+
+/**
+ * Owner 2026-10-07: page text around a label (a product description above the Facts, Suggested Use, warnings and FAQ
+ * below them) may be left out as marketing or directions, but only entirely before the label's first quoted part or
+ * after its last. Anything left out inside the label still needs Review, so label content is never hidden.
+ */
+function outsideLabel(exclusion: Exclusion, judged: Judged): boolean {
+  // A line opening with a footnote marker belongs to the label and keeps the footnote rules.
+  if (judged.candidate.formula?.drugFacts || FOOTNOTE_MARKER.test(exclusion.quote.text)) {
+    return false;
+  }
+  const quotes = labelQuotes(judged.candidate);
+  if (quotes.length === 0) {
+    return false;
+  }
+  const first = Math.min(...quotes.map((quote) => quote.start));
+  const last = Math.max(...quotes.map((quote) => quote.end));
+  return exclusion.quote.end <= first || exclusion.quote.start >= last;
 }
 
 function allowedDirections(exclusion: Exclusion, judged: Judged): boolean {

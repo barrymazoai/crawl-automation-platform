@@ -38,6 +38,18 @@ describe.each(["footnote", "metadata", "noise"] as const)("label notes tagged %s
     expect(withNote(note, reason).codes).toContain("LABEL.COVERAGE_UNCERTAIN");
   });
 });
-it.each(notes)("still refuses marketing exclusions: %s", (note) => {
-  expect(withNote(note, "marketing").codes).toContain("LABEL.COVERAGE_UNCERTAIN");
-});
+// A note opening with a footnote marker keeps the footnote rules even after the label; plain page text after the
+// label (an unmarked disclaimer or legend) may be left out as marketing (owner 2026-10-07).
+const MARKED = /^\s*[[(]?\s*[*†‡§¶#+⁺¹²³⁴⁵⁶⁷⁸⁹◇^]/u;
+it.each(notes.filter((note) => MARKED.test(note)))(
+  "still refuses marketing exclusions: %s",
+  (note) => {
+    expect(withNote(note, "marketing").codes).toContain("LABEL.COVERAGE_UNCERTAIN");
+  },
+);
+it.each(notes.filter((note) => !MARKED.test(note)))(
+  "accepts unmarked page text after the label as marketing: %s",
+  (note) => {
+    expect(withNote(note, "marketing").codes).not.toContain("LABEL.COVERAGE_UNCERTAIN");
+  },
+);

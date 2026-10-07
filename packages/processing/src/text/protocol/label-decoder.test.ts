@@ -67,15 +67,23 @@ describe("decodeLabelText", () => {
     expect(sugars?.name.text).toBe("Includes 5 g Added Sugars");
   });
 
-  it("sends marketing text to Review", () => {
-    const lines = [...dRibose, "Great taste, every day"];
+  it("accepts marketing text after the label; inside the label it goes to Review (owner 2026-10-07)", () => {
     const exclusion = {
       quote: { fromLine: 19, toLine: 19, text: "Great taste, every day" },
       reason: "marketing",
     };
-    const { result } = decode(lines, { ...answer, exclusions: [...answer.exclusions, exclusion] });
+    const after = decode([...dRibose, "Great taste, every day"], {
+      ...answer,
+      exclusions: [...answer.exclusions, exclusion],
+    });
+    expect(after.result.codes).not.toContain("LABEL.COVERAGE_UNCERTAIN");
 
-    expect(result.codes).toContain("LABEL.COVERAGE_UNCERTAIN");
+    // Line 16 lies between the last Facts row and Other Ingredients: called marketing, it stays for Review.
+    const inside = answer.exclusions.map((item) =>
+      item.quote.fromLine === 16 ? { ...item, reason: "marketing" } : item,
+    );
+    const within = decode(dRibose, { ...answer, exclusions: inside });
+    expect(within.result.codes).toContain("LABEL.COVERAGE_UNCERTAIN");
   });
 
   it("accepts the standard FDA footnote whether the model calls it footnote or metadata", () => {
