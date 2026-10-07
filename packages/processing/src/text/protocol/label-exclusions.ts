@@ -3,6 +3,7 @@ import { labelNoteAllowed } from "./label-notes.js";
 import { ingredientGap } from "./ingredient-boundaries.js";
 import { drugExclusionAllowed } from "./drug-label.js";
 import { labelHeadingAllowed } from "./label-headings.js";
+import { DOSE, rowExclusionAllowed } from "./label-rows.js";
 import { labelValidationErrors } from "../../label/validation-errors.js";
 import type { LabelTextCandidateSchema } from "@crawl-automation/v3-contracts";
 import type { z } from "zod";
@@ -106,6 +107,9 @@ function allowedExclusion(exclusion: Exclusion, judged: Judged): boolean {
   if (AROUND_LABEL.has(exclusion.reason) && outsideLabel(exclusion, judged)) {
     return true;
   }
+  if (rowExclusionAllowed(exclusion, judged.candidate)) {
+    return true;
+  }
   switch (exclusion.reason) {
     case "allergen":
       return ALLERGEN.test(value);
@@ -119,7 +123,6 @@ function allowedExclusion(exclusion: Exclusion, judged: Judged): boolean {
 }
 
 const LEGEND = /^([*†‡§¶#+⁺¹²³⁴⁵⁶⁷⁸⁹◇^]+)\s*([^\s*†‡§¶#+⁺¹²³⁴⁵⁶⁷⁸⁹◇^][^\n]{0,59})$/u;
-const DOSE = /\d[\d,.]*\s*(?:mg|mcg|µg|μg|g|iu|cfu|ml|%|billion|million)\b/i;
 
 /**
  * label-text/6: a short legend for a marker printed elsewhere on this label ("¹Organic", "† 2-amino ethanol

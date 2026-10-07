@@ -28,18 +28,17 @@ describe.each(["footnote", "metadata", "noise"] as const)("label notes tagged %s
     expect(result.codes).toEqual([]);
     expect(result.candidate.exclusions[0]?.quote.text).toBe(note);
   });
-  // Owner 2026-10-07: plain page text after the label may be left out as metadata or noise; an amount or a marker
-  // may not, and a footnote keeps the footnote rules.
+  // Owner 2026-10-07: plain text after the label may be left out as metadata, noise or a footnote below the rows;
+  // an amount may not.
   const plain = ["About this item", "Supports heart health"];
   it.each([
-    ...(reason === "footnote" ? plain : []),
     "Supplying 300 mg",
     "FU - enzyme activity in fibrinolytic units. Zinc 5 mg",
     "† Total Caffeine Yield: 304 mg per serving. Gives all-day energy.",
   ])("refuses %s", (note) => {
     expect(withNote(note, reason).codes).toContain("LABEL.COVERAGE_UNCERTAIN");
   });
-  it.each(reason === "metadata" ? plain : [])(
+  it.each(reason === "noise" ? [] : plain)(
     "accepts plain page text after the label: %s",
     (note) => {
       expect(withNote(note, reason).codes).not.toContain("LABEL.COVERAGE_UNCERTAIN");
