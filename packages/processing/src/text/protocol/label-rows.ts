@@ -7,7 +7,7 @@ type Exclusion = Candidate["exclusions"][number];
 /** Text left out among or below the Facts rows that carries no formula content. */
 export function rowExclusionAllowed(exclusion: Exclusion, candidate: Candidate): boolean {
   return (
-    (exclusion.reason === "footnote" && belowFactsRows(exclusion, candidate)) ||
+    (["footnote", "metadata"].includes(exclusion.reason) && belowFactsRows(exclusion, candidate)) ||
     (["noise", "footnote"].includes(exclusion.reason) && rowConnector(exclusion, candidate))
   );
 }
@@ -31,9 +31,9 @@ export const DOSE = /\d[\d,.]*\s*(?:mg|mcg|µg|μg|g|iu|cfu|ml|%|billion|million
 const EXTRACT_NOTE = /extraction\s+rate|herb\s+per|\bratio\b/i;
 
 /**
- * Owner 2026-10-07: a footnote printed below the last Facts row ("(O) Certified Organic", "Not a significant source
- * of…", "(E) Extraction rate 140 mg herb per 0.7 ml") explains the table and may be left out; the formula need not be
- * perfect. A footnote with any other amount ("Supplying 300 mg") may be a row, and one above or among the rows still
+ * Owner 2026-10-07: a footnote or note printed below the last Facts row ("(O) Certified Organic", "Not a significant
+ * source of…", "(E) Extraction rate 140 mg herb per 0.7 ml", "Fresh herb / menstruum ratio: 1 : 1.25") explains the
+ * table and may be left out; the formula need not be perfect. A footnote with any other amount ("Supplying 300 mg") may be a row, and one above or among the rows still
  * needs Review.
  */
 function belowFactsRows(exclusion: Exclusion, candidate: Candidate): boolean {
