@@ -78,7 +78,9 @@ export async function verifyCatalogDiscovery(
 
 function matchingDeclaration(proof: DiscoveryProof, expected: Expected, stable: number) {
   return (
-    proof.complete === expected.complete &&
+    // The catalog may stay more cautious than the enumerator (e.g. Energi shows 81 products, 64 reachable): its
+    // products are kept as a partial scan. It never claims a completeness the enumerator did not reach.
+    (!expected.complete || proof.complete) &&
     proof.completionProof === (expected.completionProof ?? "enumeration") &&
     proof.zeroGrowthRounds === stable &&
     expected.zeroGrowthRounds === stable
