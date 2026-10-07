@@ -6,6 +6,10 @@ export const labelValidationWarnings = defineErrors({
     category: "VALIDATION",
     message: "A printed blend amount is retained without separately listed components.",
   },
+  "LABEL.SERVING_SIZE_MISSING": {
+    category: "VALIDATION",
+    message: "The formula is kept with an empty serving size because the label prints none.",
+  },
 });
 
 /** Registered reasons retained in Reviews and source observations. */

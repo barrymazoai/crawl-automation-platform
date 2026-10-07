@@ -16,11 +16,14 @@ function drugCandidate() {
 }
 
 describe("backward-compatible Drug Facts contracts", () => {
-  it("allows missing serving metadata only for the explicitly cited Drug Facts panel", () => {
+  it("Drug Facts needs no serving metadata; a supplement without one keeps its formula with a warning", () => {
     expect(assessLabelCandidate(drugCandidate()).status).toBe("candidate");
+    expect(assessLabelCandidate(drugCandidate()).warnings.map((w) => w.code)).not.toContain("LABEL.SERVING_SIZE_MISSING");
     const supplement = gncLabelFixture();
     supplement.formula!.servingSize = null;
-    expect(assessLabelCandidate(supplement).codes).toContain("LABEL.FORMULA_INCOMPLETE");
+    const assessed = assessLabelCandidate(supplement);
+    expect(assessed.codes).not.toContain("LABEL.FORMULA_INCOMPLETE");
+    expect(assessed.warnings.map((w) => w.code)).toContain("LABEL.SERVING_SIZE_MISSING");
   });
   it("treats an absent and null Purpose identically on existing supplement rows", () => {
     const first = gncLabelFixture();

@@ -77,7 +77,10 @@ export function assessLabelCandidate(candidate: LabelCandidate) {
   }
   if (!candidate.formula && candidate.formulaComplete || !hasIngredients && candidate.ingredientsComplete) flag("LABEL.COMPLETENESS_CONFLICT", "marked complete with nothing extracted");
   if (candidate.formula?.drugFacts && !validDrugFormula(candidate)) flag("LABEL.FORMULA_INCOMPLETE", "Drug Facts requires its heading, active ingredient columns and inactive ingredients");
-  if (candidate.formula && ((!candidate.formula.servingSize && !candidate.formula.drugFacts) || !candidate.formulaComplete)) flag("LABEL.FORMULA_INCOMPLETE", !candidate.formula.servingSize ? "formula has no serving size" : "model marked the formula incomplete");
+  if (candidate.formula && !candidate.formulaComplete) flag("LABEL.FORMULA_INCOMPLETE", "model marked the formula incomplete");
+  // Owner 2026-10-07: a formula need not be perfect; a label (e.g. a website Facts block) that prints no serving
+  // size keeps its formula with an empty serving size, never one guessed from directions.
+  if (candidate.formula && !candidate.formula.servingSize && !candidate.formula.drugFacts) warnings.push({ code: "LABEL.SERVING_SIZE_MISSING", detail: "formula has no printed serving size; kept with an empty serving size" });
   if (hasIngredients && !candidate.ingredientsComplete) flag("LABEL.INGREDIENTS_INCOMPLETE", candidate.otherIngredients ? "model marked the ingredient list incomplete" : "only blend components, no Other Ingredients list");
   const uncertain = candidate.issues.find(i => ["UNREADABLE", "AMBIGUOUS", "METADATA_CONFLICT"].includes(i.code));
   if (uncertain) flag("LABEL.EVIDENCE_UNCERTAIN", `model reported ${uncertain.code}${"detail" in uncertain && uncertain.detail ? `: ${String(uncertain.detail).slice(0, 160)}` : ""}`);

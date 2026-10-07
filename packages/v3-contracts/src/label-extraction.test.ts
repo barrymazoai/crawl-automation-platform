@@ -39,10 +39,13 @@ it("a printed blend total can have undisclosed individual components without inv
   rows[4]!.amount = null; rows[4]!.amountStatus = "not_declared";
   expect(assess(c).codes).toContain("LABEL.AMOUNT_MISSING");
 });
-it("empty groups, missing serving size, and model uncertainty remain reviewable", () => {
+it("empty groups and model uncertainty remain reviewable; a missing serving size only warns (owner 2026-10-07)", () => {
   const c = gncLabelFixture(); c.formula!.columns[0]!.rows.splice(14); c.formula!.servingSize = null;
   c.issues.push({ code: "METADATA_CONFLICT", detail: "3 and 12" });
-  expect(assess(c).codes).toEqual(expect.arrayContaining(["LABEL.GROUP_EMPTY", "LABEL.FORMULA_INCOMPLETE", "LABEL.EVIDENCE_UNCERTAIN"]));
+  const assessed = assess(c);
+  expect(assessed.codes).toEqual(expect.arrayContaining(["LABEL.GROUP_EMPTY", "LABEL.EVIDENCE_UNCERTAIN"]));
+  expect(assessed.codes).not.toContain("LABEL.FORMULA_INCOMPLETE");
+  expect(assessed.warnings.map(w => w.code)).toContain("LABEL.SERVING_SIZE_MISSING");
 });
 it("partial sections cannot bypass bad doses", () => {
   const c = gncLabelFixture(); c.otherIngredients = null; c.formula!.columns[0]!.rows = [c.formula!.columns[0]!.rows[0]!];
