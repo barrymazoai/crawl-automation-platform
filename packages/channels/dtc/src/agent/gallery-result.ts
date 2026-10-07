@@ -14,7 +14,7 @@ import {
   type DtcVariantHandoff,
 } from "@crawl-automation/v3-contracts";
 import { GalleryStore, galleryEvidence as evidence } from "./gallery-store.js";
-import { sharingEvidence } from "./gallery-sharing.js";
+import { noGalleryFacts, sharingEvidence } from "./gallery-sharing.js";
 import {
   GallerySelectionProof,
   verifyGallerySelection,
@@ -115,6 +115,9 @@ async function resolveMember(
     );
   }
   const proof = [...member.evidence, ...refs.map((ref) => ref.objectKey)].slice(0, 200);
+  if (noGalleryFacts(results)) {
+    return { ...member, status: "ready", evidence: proof };
+  }
   if (unresolved || selected.length !== 1) {
     return scopeReview(member, proof, { unresolved, count: selected.length });
   }
