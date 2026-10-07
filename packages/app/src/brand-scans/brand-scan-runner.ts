@@ -72,16 +72,25 @@ export class BrandScanRunner {
    * so one slow browser channel never holds the runner and a priority change takes effect within a round.
    */
   async run(signal: AbortSignal): Promise<void> {
+    // A shutdown (deploy, restart) only stops claiming: scans keep their own signal, so they are never recorded
+    // as Review and browser workflows are never cancelled for it. Their rows stay running, and the next start's
+    // first round takes them over (the API runs one runner), reattaching browser scans to their workflows.
+    const scans = new AbortController().signal;
+    let takeover = true;
     while (!signal.aborted) {
       try {
-        this.start(await this.claimFree(), signal);
+        this.start(await this.claimFree(takeover ? 0 : this.settings.staleMs), scans);
+        takeover = false;
       } catch (error) {
         // One failed round never stops scanning; the next round starts from the table again.
         this.deps.log.error({ err: error, code: errorCodeOf(error) }, "brand scan round failed");
       }
       await delay(this.settings.intervalMs, undefined, { signal }).catch(() => undefined);
     }
-    await Promise.allSettled(this.active.values());
+    this.deps.log.info(
+      { running: this.active.size },
+      "brand scans left running for the next start",
+    );
   }
 
   /** One round that waits for the scans it started. */
@@ -89,16 +98,20 @@ export class BrandScanRunner {
     await Promise.all(this.start(await this.claimFree(), signal));
   }
 
-  private claimFree(): Promise<ScanRecord[]> {
+  private claimFree(staleMs = this.settings.staleMs): Promise<ScanRecord[]> {
     const free = this.settings.concurrent - this.active.size;
     return free > 0
-      ? this.deps.store.claim(free, this.settings.staleMs, [...this.active.keys()])
+      ? this.deps.store.claim(free, staleMs, [...this.active.keys()])
       : Promise.resolve([]);
   }
 
   private start(scans: ScanRecord[], signal: AbortSignal): Promise<void>[] {
     return scans.map((scan) => {
-      const running = this.scanOne(scan, signal).finally(() => this.active.delete(scan.scanId));
+      const running = this.scanOne(scan, signal)
+        .catch((error: unknown) => {
+          this.deps.log.error({ err: error, scanId: scan.scanId }, "brand scan not recorded");
+        })
+        .finally(() => this.active.delete(scan.scanId));
       this.active.set(scan.scanId, running);
       return running;
     });
