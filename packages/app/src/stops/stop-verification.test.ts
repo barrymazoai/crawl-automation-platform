@@ -152,3 +152,68 @@ it("wraps the bounded cursor in the same sweep so pending work is checked every 
     [20, ""],
   ]);
 });
+
+describe("permit whose gated work never started (owner 2026-10-07)", () => {
+  function unstarted(scheduled: boolean, settled = true) {
+    const test = fixture();
+    if (test.permit.cleanup) {
+      test.permit.cleanup = {
+        state: "CLEANUP_UNVERIFIED",
+        attempts: 0,
+        failure: null,
+        executions: [],
+      };
+    }
+    const workflows = Object.assign(test.workflows, {
+      permitWorkScheduled: vi.fn(async () => scheduled),
+    });
+    const journal = Object.assign(test.journal, {
+      settleUnstarted: vi.fn(async () => {
+        if (settled && test.permit.cleanup) {
+          test.permit.cleanup.state = "stopped";
+        }
+        return settled;
+      }),
+    });
+    const log = createLogger({ name: "stop-test", level: "fatal" });
+    const stopVerification = new StopVerification({
+      resources: test.resources,
+      workflows,
+      journal,
+      verifier: test.verifier,
+      log,
+    });
+    const service = new ResourceService({
+      resources: test.resources,
+      workflows,
+      log,
+      stopVerification,
+    });
+    return { ...test, workflows, journal, service };
+  }
+
+  it("releases when the closed owner's history never scheduled the work", async () => {
+    const test = unstarted(false);
+    expect(await test.service.verifyStop("permit-one")).toMatchObject({
+      released: true,
+      reason: "work_never_scheduled",
+    });
+    expect(test.journal.settleUnstarted).toHaveBeenCalledOnce();
+    expect(test.verifier.verify).not.toHaveBeenCalled();
+    expect(test.resources.release).toHaveBeenCalledWith("permit-one");
+  });
+
+  it("keeps the normal executor rules when the work may have been scheduled", async () => {
+    const test = unstarted(true);
+    await test.service.verifyStop("permit-one");
+    expect(test.journal.settleUnstarted).not.toHaveBeenCalled();
+    expect(test.verifier.verify).toHaveBeenCalledOnce();
+  });
+
+  it("falls back to the executor rules when the journal finds it began after all", async () => {
+    const test = unstarted(false, false);
+    const result = await test.service.verifyStop("permit-one");
+    expect(result).not.toMatchObject({ reason: "work_never_scheduled" });
+    expect(test.verifier.verify).toHaveBeenCalledOnce();
+  });
+});

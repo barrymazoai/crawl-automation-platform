@@ -24,6 +24,8 @@ export interface StopVerificationStore {
   exclusive<T>(work: () => Promise<T>): Promise<T | null>;
   attempted(owner: PermitOwner): Promise<void>;
   finish(owner: PermitOwner, failure: Record<string, unknown> | null): Promise<void>;
+  /** Marks a permit that never began work as stopped; false when it began or recorded any execution. */
+  settleUnstarted?(owner: PermitOwner): Promise<boolean>;
 }
 export interface PermitStopVerifier {
   verify(permit: HeldPermit): Promise<ExecutionStopResult[]>;
@@ -80,12 +82,33 @@ export class StopVerification {
     return ids;
   }
 
+  /**
+   * Owner 2026-10-07: a permit granted to a workflow that closed before its gated work was scheduled holds nothing
+   * (e.g. cancelled by a deploy right after the reservation). Temporal history is the proof; any execution or begun
+   * activity keeps the normal executor rules.
+   */
+  private async unstarted(permit: HeldPermit): Promise<boolean> {
+    const { workflows, journal } = this.deps;
+    if ((permit.cleanup?.executions.length ?? 0) > 0 || !workflows.permitWorkScheduled) {
+      return false;
+    }
+    if (await workflows.permitWorkScheduled(permit)) {
+      return false;
+    }
+    return (await journal.settleUnstarted?.(permit)) ?? false;
+  }
+
   private async verifyHeld(permitId: string, release: (id: string) => Promise<unknown>) {
     const permit = await this.deps.resources.findHeld(permitId);
     if (!permit) {
       throw appErrors.create("PERMIT.NOT_FOUND", { details: { permitId } });
     }
     await requireClosedOwner(this.deps.workflows, permit, this.deps.now?.() ?? new Date());
+    if (await this.unstarted(permit)) {
+      await release(permitId);
+      this.deps.log.info({ permitId, workflowId: permit.workflowId }, "unstarted permit released");
+      return { permitId, released: true, executions: [], reason: "work_never_scheduled" };
+    }
     this.deps.log.info(
       { permitId, workflowId: permit.workflowId, runId: permit.runId },
       "verifying permit stop",

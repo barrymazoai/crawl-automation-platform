@@ -4,7 +4,9 @@ import type {
   WorkflowMember,
   WorkflowTree,
 } from "@crawl-automation/app";
+import type { PermitOwner } from "@crawl-automation/platform";
 import { WorkflowNotFoundError, type Client } from "@temporalio/client";
+import { permitWorkScheduled } from "./permit-work-history.js";
 
 const ID_PATTERN = /^[A-Za-z0-9._:-]{1,255}$/;
 
@@ -35,6 +37,13 @@ export class TemporalWorkflowTree implements WorkflowTree, StopEvidenceReader {
 
   async cancel(workflowId: string): Promise<void> {
     await this.client.workflow.getHandle(workflowId).cancel();
+  }
+
+  async permitWorkScheduled(owner: PermitOwner): Promise<boolean> {
+    const history = await this.client.workflow
+      .getHandle(owner.workflowId, owner.runId)
+      .fetchHistory();
+    return permitWorkScheduled(history.events ?? [], owner);
   }
 
   /** Status, close time and pending Activities of one exact execution; null when Temporal cannot find it. */

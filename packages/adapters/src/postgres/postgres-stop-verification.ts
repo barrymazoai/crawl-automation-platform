@@ -10,8 +10,10 @@ export class PostgresStopVerification implements StopVerificationStore {
   async candidates(limit: number, after: string): Promise<string[]> {
     const rows = await this.database.query<{ permitId: string }>(
       `SELECT p.permit_id AS "permitId" FROM resource_permit p
-       JOIN resource_permit_stop s USING (permit_id)
-       WHERE p.released_at IS NULL AND s.state = 'CLEANUP_UNVERIFIED' AND p.permit_id > $1
+       LEFT JOIN resource_permit_stop s USING (permit_id)
+       WHERE p.released_at IS NULL AND p.permit_id > $1 AND (s.state = 'CLEANUP_UNVERIFIED'
+         -- A permit that never began work (no stop row); the verifier still requires a closed owner and history.
+         OR (s.permit_id IS NULL AND p.granted_at < now() - interval '10 minutes'))
        ORDER BY p.permit_id LIMIT $2`,
       [after, limit],
     );
@@ -37,6 +39,20 @@ export class PostgresStopVerification implements StopVerificationStore {
          WHERE permit_id = $1`,
         [owner.permitId],
       );
+    });
+  }
+
+  async settleUnstarted(owner: PermitOwner): Promise<boolean> {
+    return this.database.transaction(async (transaction) => {
+      await lockPermit(transaction, owner);
+      const rows = await transaction.query(
+        `INSERT INTO resource_permit_stop (permit_id, state, activity_ended_at, checked_at, failure)
+         SELECT $1, 'stopped', now(), now(), $2::jsonb
+         WHERE NOT EXISTS (SELECT 1 FROM resource_permit_execution WHERE permit_id = $1)
+         ON CONFLICT (permit_id) DO NOTHING RETURNING permit_id`,
+        [owner.permitId, { code: "PERMIT.WORK_NEVER_SCHEDULED" }],
+      );
+      return rows.length === 1;
     });
   }
 

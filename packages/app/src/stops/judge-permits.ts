@@ -1,8 +1,11 @@
 import type { HeldPermit } from "../runs/run-model.js";
+import type { PermitOwner } from "@crawl-automation/platform";
 import { stopVerdict, type StopEvidence, type StopVerdict } from "./stop-policy.js";
 
 export interface StopEvidenceReader {
   stopEvidence(workflowId: string, runId: string): Promise<StopEvidence | null>;
+  /** False only when the closed owner's history proves the permit's gated work was never scheduled. */
+  permitWorkScheduled?(owner: PermitOwner): Promise<boolean>;
 }
 
 export interface JudgedPermit {
