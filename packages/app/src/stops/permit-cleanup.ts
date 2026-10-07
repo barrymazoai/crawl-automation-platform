@@ -6,5 +6,6 @@ export interface PermitCleanup {
     identity: Record<string, unknown>;
     stoppedAt: string | null;
     proof: Record<string, unknown> | null;
+    recordedAt?: string | undefined;
   }>;
 }

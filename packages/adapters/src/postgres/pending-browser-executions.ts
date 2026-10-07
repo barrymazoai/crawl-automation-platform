@@ -9,7 +9,8 @@ export async function pendingBrowserExecutions(
   return database.query<BrowserRecoveryEntry>(
     `SELECT jsonb_build_object('permitId', p.permit_id, 'workflowId', p.request->>'workflowId',
       'runId', p.request->>'runId') AS owner,
-      (SELECT jsonb_agg(jsonb_build_object('identity', e.identity, 'stopped', e.stopped_at IS NOT NULL))
+      (SELECT jsonb_agg(jsonb_build_object('identity', e.identity,
+        'stopped', e.stopped_at IS NOT NULL, 'recordedAt', e.recorded_at))
        FROM resource_permit_execution e WHERE e.permit_id = p.permit_id) AS executions
      FROM resource_permit p JOIN resource_permit_stop s USING (permit_id)
      WHERE p.released_at IS NULL AND s.activity_ended_at IS NOT NULL AND EXISTS (

@@ -8,6 +8,7 @@ import {
 import { BrowserRecovery, ResourceService } from "@crawl-automation/app";
 import {
   connectTemporal,
+  egoCliAbsent,
   EgoSettingsSchema,
   ignoreAbort,
   stopEgoRound,
@@ -28,6 +29,7 @@ export async function runBrowserRecovery(parts: CoreParts, signal: AbortSignal):
     ledger: new PostgresPermitExecutions(parts.database),
     stop: (work) => stopEgoRound(settings, work),
     release: (permitId) => resources.release(permitId),
+    cliAbsent: (recordedAt) => egoCliAbsent(settings, recordedAt),
     log,
   });
   try {

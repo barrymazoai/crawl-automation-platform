@@ -1,5 +1,6 @@
 import {
   errorCodeOf,
+  provePermitExecutionStopped,
   withPermitExecution,
   type Logger,
   type PermitExecutionIdentity,
@@ -10,7 +11,7 @@ import type { EgoStoppedRound } from "@crawl-automation/platform";
 
 export interface BrowserRecoveryEntry {
   owner: PermitOwner;
-  executions: { identity: PermitExecutionIdentity; stopped: boolean }[];
+  executions: { identity: PermitExecutionIdentity; stopped: boolean; recordedAt?: string }[];
 }
 
 export interface BrowserRecoveryLedger extends PermitActivityLedger {
@@ -24,6 +25,8 @@ export class BrowserRecovery {
       ledger: BrowserRecoveryLedger;
       stop(work: EgoStoppedRound): Promise<void>;
       release(permitId: string): Promise<unknown>;
+      /** Host proof that a CLI recorded at this time has exited, when its own receipt was lost. */
+      cliAbsent?(recordedAt: Date): Promise<Record<string, unknown> | null>;
       log: Logger;
     },
   ) {}
@@ -46,6 +49,19 @@ export class BrowserRecovery {
     }
   }
 
+  /** A worker shutdown mid-round loses the CLI exit receipt; the host process list can still prove it. */
+  private async cliGone(cli: BrowserRecoveryEntry["executions"][number]): Promise<boolean> {
+    if (!this.deps.cliAbsent || !cli.recordedAt) {
+      return false;
+    }
+    const proof = await this.deps.cliAbsent(new Date(cli.recordedAt));
+    if (!proof) {
+      return false;
+    }
+    await provePermitExecutionStopped(cli.identity, proof);
+    return true;
+  }
+
   async recover(
     entry: BrowserRecoveryEntry,
     scope: { host: string; taskSpaceId: number },
@@ -62,7 +78,7 @@ export class BrowserRecovery {
           "taskSpaceId" in item.identity &&
           item.identity.taskSpaceId === scope.taskSpaceId,
       );
-      if (!cli?.stopped || cli.identity.kind !== "browser-cli") {
+      if (cli?.identity.kind !== "browser-cli" || !(cli.stopped || (await this.cliGone(cli)))) {
         continue;
       }
       const targets = entry.executions.filter(

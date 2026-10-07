@@ -135,6 +135,35 @@ describe("browser R59 recovery", () => {
     expect(test.release).not.toHaveBeenCalled();
   });
 
+  it("accepts host proof for a CLI whose exit receipt was lost, and waits while one may still run", async () => {
+    const test = fixture();
+    const cli = test.entry.executions[2];
+    if (!cli) {
+      throw new Error("missing cli");
+    }
+    cli.stopped = false;
+    cli.recordedAt = "2026-10-07T03:29:43.655Z";
+    const cliAbsent = vi.fn(async () => null as Record<string, unknown> | null);
+    const recovery = new BrowserRecovery({
+      ledger: test.ledger,
+      stop: test.stop,
+      release: (permitId) => test.resources.release(permitId),
+      cliAbsent,
+      log: createLogger({ name: "test", level: "fatal" }),
+    });
+    await recovery.tick("host", 6);
+    expect(cliAbsent).toHaveBeenCalledWith(new Date("2026-10-07T03:29:43.655Z"));
+    expect(test.stop).not.toHaveBeenCalled();
+    expect(test.release).not.toHaveBeenCalled();
+    cliAbsent.mockResolvedValueOnce({ kind: "browser-cli-absent" });
+    await recovery.tick("host", 6);
+    expect(test.ledger.prove).toHaveBeenCalledWith(test.entry.owner, cli.identity, {
+      kind: "browser-cli-absent",
+    });
+    expect(test.stop).toHaveBeenCalledOnce();
+    expect(test.release).toHaveBeenCalledExactlyOnceWith("permit-one");
+  });
+
   it("respects user control and keeps the original attempt pending without business replay", async () => {
     const test = fixture();
     test.stop.mockRejectedValue(egoErrors.create("BROWSER.USER_CONTROL"));

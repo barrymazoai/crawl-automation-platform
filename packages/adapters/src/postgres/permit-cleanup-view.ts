@@ -9,6 +9,7 @@ export const PermitCleanupSchema = z.object({
       identity: z.record(z.string(), z.unknown()),
       stoppedAt: z.string().nullable(),
       proof: z.record(z.string(), z.unknown()).nullable(),
+      recordedAt: z.string().optional(),
     }),
   ),
 });
@@ -21,6 +22,6 @@ export const permitCleanupView = `jsonb_build_object(
                        WHERE permit_id = p.permit_id), 0),
   'failure', (SELECT failure FROM resource_permit_stop WHERE permit_id = p.permit_id),
   'executions', coalesce((SELECT jsonb_agg(jsonb_build_object(
-     'identity', identity, 'stoppedAt', stopped_at, 'proof', proof) ORDER BY recorded_at)
+     'identity', identity, 'stoppedAt', stopped_at, 'proof', proof, 'recordedAt', recorded_at) ORDER BY recorded_at)
      FROM resource_permit_execution WHERE permit_id = p.permit_id), '[]'::jsonb)
 ) AS cleanup`;

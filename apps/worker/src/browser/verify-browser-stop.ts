@@ -8,6 +8,7 @@ import {
 import { assertBrowserPermit, BrowserRecovery, requireClosedOwner } from "@crawl-automation/app";
 import {
   connectTemporal,
+  egoCliAbsent,
   stopEgoRound,
   withPermitExecution,
   type PermitExecutionIdentity,
@@ -51,11 +52,13 @@ async function verifyOnHost(parts: CoreParts, input: Input): Promise<void> {
       ledger,
       stop: (work) => stopEgoRound(settings.ego, work),
       release: async () => undefined,
+      cliAbsent: (recordedAt) => egoCliAbsent(settings.ego, recordedAt),
       log: parts.log,
     });
     const executions = (permit?.cleanup?.executions ?? []).map((entry) => ({
       identity: entry.identity as PermitExecutionIdentity,
       stopped: entry.stoppedAt !== null && entry.proof !== null,
+      ...(entry.recordedAt ? { recordedAt: entry.recordedAt } : {}),
     }));
     await withPermitExecution({ owner, ledger }, () =>
       recovery.recover(
