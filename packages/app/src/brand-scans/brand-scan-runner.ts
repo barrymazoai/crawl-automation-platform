@@ -64,21 +64,44 @@ export class BrandScanRunner {
     this.settings = BrandScanRunnerSettingsSchema.parse(settings);
   }
 
+  /** Scans this runner is working on; their slots are not offered again and their rows are never re-claimed. */
+  private readonly active = new Map<string, Promise<void>>();
+
+  /**
+   * Keeps every slot busy (owner 2026-10-07, CRAWLV3-213): a finished scan's slot is refilled on the next round,
+   * so one slow browser channel never holds the runner and a priority change takes effect within a round.
+   */
   async run(signal: AbortSignal): Promise<void> {
     while (!signal.aborted) {
       try {
-        await this.tick(signal);
+        this.start(await this.claimFree(), signal);
       } catch (error) {
         // One failed round never stops scanning; the next round starts from the table again.
         this.deps.log.error({ err: error, code: errorCodeOf(error) }, "brand scan round failed");
       }
       await delay(this.settings.intervalMs, undefined, { signal }).catch(() => undefined);
     }
+    await Promise.allSettled(this.active.values());
   }
 
+  /** One round that waits for the scans it started. */
   async tick(signal: AbortSignal): Promise<void> {
-    const scans = await this.deps.store.claim(this.settings.concurrent, this.settings.staleMs);
-    await Promise.all(scans.map((scan) => this.scanOne(scan, signal)));
+    await Promise.all(this.start(await this.claimFree(), signal));
+  }
+
+  private claimFree(): Promise<ScanRecord[]> {
+    const free = this.settings.concurrent - this.active.size;
+    return free > 0
+      ? this.deps.store.claim(free, this.settings.staleMs, [...this.active.keys()])
+      : Promise.resolve([]);
+  }
+
+  private start(scans: ScanRecord[], signal: AbortSignal): Promise<void>[] {
+    return scans.map((scan) => {
+      const running = this.scanOne(scan, signal).finally(() => this.active.delete(scan.scanId));
+      this.active.set(scan.scanId, running);
+      return running;
+    });
   }
 
   /** One scan to its end: a result, or a Review-state record with the failure's own code. */

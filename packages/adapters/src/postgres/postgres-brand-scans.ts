@@ -76,9 +76,13 @@ export class PostgresBrandScans extends PostgresScanCancellation implements Bran
     return rows.map(scanOf);
   }
 
-  async claim(limit: number, staleMs: number): Promise<ScanRecord[]> {
+  async claim(
+    limit: number,
+    staleMs: number,
+    active: readonly string[] = [],
+  ): Promise<ScanRecord[]> {
     const claimed = await this.database.transaction((tx) =>
-      claimBrandScans(tx, { limit, staleMs }),
+      claimBrandScans(tx, { limit, staleMs, active }),
     );
     if (claimed.length === 0) {
       return [];
