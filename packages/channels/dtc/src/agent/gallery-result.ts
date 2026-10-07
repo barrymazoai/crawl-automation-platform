@@ -5,15 +5,13 @@ import {
 } from "./gallery-decisions.js";
 export { DtcGalleryImageResultSchema, validateGalleryDecision } from "./gallery-decisions.js";
 import { z } from "zod";
-import { sha256 } from "@crawl-automation/platform";
 import {
-  ChannelProductEvidenceSchema,
-  ChannelPlanInputSchema,
   type DtcGalleryRef,
   type DtcGalleryTask,
   type DtcVariantHandoff,
 } from "@crawl-automation/v3-contracts";
-import { GalleryStore, galleryEvidence as evidence } from "./gallery-store.js";
+import { GalleryStore } from "./gallery-store.js";
+import { scopedPlan } from "./gallery-scoped-plan.js";
 import { noGalleryFacts, sharingEvidence } from "./gallery-sharing.js";
 import {
   GallerySelectionProof,
@@ -116,7 +114,7 @@ async function resolveMember(
   }
   const proof = [...member.evidence, ...refs.map((ref) => ref.objectKey)].slice(0, 200);
   if (noGalleryFacts(results)) {
-    return { ...member, status: "ready", evidence: proof };
+    return pageFactsMember(store, { member, task, proof }, signal);
   }
   if (unresolved || selected.length !== 1) {
     return scopeReview(member, proof, { unresolved, count: selected.length });
@@ -135,43 +133,28 @@ async function resolveMember(
     },
   };
 }
-async function scopedPlan(
+/** The page's own Facts text stays; the gallery images become this variant's copy of the shared gallery. */
+async function pageFactsMember(
   store: GalleryStore,
   context: {
     member: Exclude<DtcVariantHandoff, { status: "review" }>;
-    selected: DtcGalleryTask["images"];
+    task: DtcGalleryTask;
+    proof: string[];
   },
   signal: AbortSignal,
-) {
-  const { member, selected } = context;
-  const plan = member.planned.sourcePlan;
-  const original = await store.read(plan.source, signal);
-  const scoped = ChannelProductEvidenceSchema.parse({
-    ...evidence(original),
-    factsCandidates: [],
-    imageCandidates: selected.map((image) => ({
-      url: image.url,
-      variantId: member.variant.variantId,
-      basis: "product-gallery",
-      verifiedOriginal: false,
-    })),
-  });
-  const projection =
-    original && typeof original === "object" && "evidence" in original
-      ? { ...original, evidence: scoped }
-      : scoped;
-  const ref = await store.save(
-    `v3/dtc-agent/${member.operationId}/mixed-gallery/scoped-projection.json`,
-    projection,
+): Promise<DtcVariantHandoff> {
+  const { member, task, proof } = context;
+  const sourcePlan = await scopedPlan(
+    store,
+    { member, selected: task.images, keepPageFacts: true },
     signal,
   );
-  const key = sha256(Buffer.from(JSON.stringify([plan.operationId, ref.sha256])));
-  const sourcePlan = ChannelPlanInputSchema.parse({
-    ...plan,
-    operationId: `plan-dtc-scoped-${key}`,
-    source: { ...plan.source, ...ref, artifactId: `source-dtc-scoped-${key}` },
-  });
-  return sourcePlan;
+  return {
+    ...member,
+    status: "ready",
+    evidence: proof,
+    planned: { ...member.planned, sourcePlan },
+  };
 }
 function scopeReview(
   member: DtcVariantHandoff,
