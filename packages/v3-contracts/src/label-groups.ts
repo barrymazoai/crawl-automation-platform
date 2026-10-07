@@ -29,10 +29,20 @@ function advanceGroups(openGroups: number[], row: Row, index: number): void {
   }
 }
 
+/** Kept as warnings: a printed blend amount without listed components, and a heading read as a group. */
+const RETAINED = new Set(["LABEL.BLEND_WITHOUT_COMPONENTS", "LABEL.GROUP_HEADING_ONLY"]);
+
 function emptyGroup(row: Row, index: number): LabelFinding {
   const standalone = row.kind === "blend_total" && row.amountStatus === "printed" && row.amount;
+  // Owner 2026-10-07: "One Capsule Contains:", "KEY INGREDIENTS" and similar headings read as an empty group keep
+  // the label; the rows under them are already standalone. A blend total without components stays a gap.
+  const heading = row.kind === "group_header" && !row.amount;
   return {
-    code: standalone ? "LABEL.BLEND_WITHOUT_COMPONENTS" : "LABEL.GROUP_EMPTY",
+    code: standalone
+      ? "LABEL.BLEND_WITHOUT_COMPONENTS"
+      : heading
+        ? "LABEL.GROUP_HEADING_ONLY"
+        : "LABEL.GROUP_EMPTY",
     detail: `row ${index} "${row.name.text.slice(0, 80)}": ${row.kind} has no components`,
   };
 }
@@ -59,7 +69,7 @@ export function assessLabelGroups(rows: readonly Row[]) {
       return;
     }
     const finding = emptyGroup(row, index);
-    const target = finding.code === "LABEL.BLEND_WITHOUT_COMPONENTS" ? warnings : findings;
+    const target = RETAINED.has(finding.code) ? warnings : findings;
     target.push(finding);
   });
   return { findings, warnings };

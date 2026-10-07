@@ -209,14 +209,16 @@ describe("shared label group validation", () => {
     }
   });
 
-  it("keeps empty group headers and references to closed groups in Review", () => {
+  it("keeps a heading read as an empty group as a warning; references to closed groups stay in Review", () => {
     const candidate = tocomin(null);
     Object.assign(defined(rowsOf(candidate)[1]), {
       kind: "group_header",
       amount: null,
       amountStatus: "not_applicable",
     });
-    expect(assessLabelCandidate(candidate).codes).toContain("LABEL.GROUP_EMPTY");
+    const assessed = assessLabelCandidate(candidate);
+    expect(assessed.codes).not.toContain("LABEL.GROUP_EMPTY");
+    expect(assessed.warnings.map((warning) => warning.code)).toContain("LABEL.GROUP_HEADING_ONLY");
     defined(rowsOf(candidate)[3]).parentRowIndex = 1;
     expect(assessLabelCandidate(candidate).codes).toContain("LABEL.PARENT_INVALID");
   });
