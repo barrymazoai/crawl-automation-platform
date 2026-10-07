@@ -21,6 +21,7 @@ describe.skipIf(!hasPostgres)("brand scan priority against a real PostgreSQL", (
   let database: Database;
   let scans: PostgresBrandScans;
   const costco: string[] = [];
+  const swanson: string[] = [];
   let gnc = "";
 
   beforeAll(async () => {
@@ -40,9 +41,12 @@ describe.skipIf(!hasPostgres)("brand scan priority against a real PostgreSQL", (
     for (let index = 0; index < 6; index++) {
       costco.push(await source("costco", `https://www.costco.com/brand-${index}.html`));
     }
+    for (let index = 0; index < 3; index++) {
+      swanson.push(await source("swanson", `https://www.swansonvitamins.com/brand-${index}`));
+    }
     gnc = await source("gnc", "https://www.gnc.com/brands/priority-brand/");
-    const all = await scans.sources(costco);
-    await scans.request("11111111-1111-4111-8111-111111111111", all);
+    await scans.request("11111111-1111-4111-8111-111111111111", await scans.sources(costco));
+    await scans.request("33333333-3333-4333-8333-333333333333", await scans.sources(swanson));
     const [later] = await scans.sources([gnc]);
     await scans.request("22222222-2222-4222-8222-222222222222", later ? [later] : []);
   }, 120_000);
@@ -51,10 +55,13 @@ describe.skipIf(!hasPostgres)("brand scan priority against a real PostgreSQL", (
     await postgres?.stop();
   });
 
-  it("claims no more than the limit, oldest first without a priority", async () => {
+  it("gives Costco one slot and the other channels the rest, oldest first without a priority", async () => {
     const claimed = await scans.claim(2, 60_000);
-    expect(claimed).toHaveLength(2);
-    expect(claimed.every((scan) => scan.source.channel === "costco")).toBe(true);
+    expect(claimed.map((scan) => scan.source.channel).sort()).toEqual([
+      "costco",
+      "swanson",
+      "swanson",
+    ]);
   });
 
   it("starts a prioritized source's scan before older ones", async () => {
@@ -78,6 +85,7 @@ describe.skipIf(!hasPostgres)("brand scan priority against a real PostgreSQL", (
     );
     const claimed = await scans.claim(10, 0, active);
     expect(claimed.some((scan) => active.includes(scan.scanId))).toBe(false);
-    expect(claimed).toHaveLength(4); // the 4 still-queued Costco scans; the 3 active ones stay out
+    // The last Swanson scan only: Costco has an active scan, so no second one is claimed.
+    expect(claimed.map((scan) => scan.source.channel)).toEqual(["swanson"]);
   });
 });
