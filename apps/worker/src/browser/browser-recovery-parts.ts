@@ -7,6 +7,7 @@ import {
 } from "@crawl-automation/adapters";
 import { BrowserRecovery, ResourceService } from "@crawl-automation/app";
 import {
+  codexGroupAbsent,
   connectTemporal,
   egoCliAbsent,
   EgoSettingsSchema,
@@ -30,6 +31,8 @@ export async function runBrowserRecovery(parts: CoreParts, signal: AbortSignal):
     stop: (work) => stopEgoRound(settings, work),
     release: (permitId) => resources.release(permitId),
     cliAbsent: (recordedAt) => egoCliAbsent(settings, recordedAt),
+    codexAbsent: (identity) =>
+      identity.kind === "codex" ? codexGroupAbsent(identity) : Promise.resolve(null),
     log,
   });
   try {

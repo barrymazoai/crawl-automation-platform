@@ -73,7 +73,9 @@ export class ExecutorStopVerifier implements PermitStopVerifier {
     failures: Map<string, { reason?: string; cause?: string }>,
   ) {
     const pending = (permit.cleanup?.executions ?? []).filter(
-      (entry) => entry.stoppedAt === null && String(entry.identity.kind).startsWith("browser"),
+      (entry) =>
+        entry.stoppedAt === null &&
+        (String(entry.identity.kind).startsWith("browser") || entry.identity.kind === "codex"),
     );
     if (pending.length === 0) {
       return;

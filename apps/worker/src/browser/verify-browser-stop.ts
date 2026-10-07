@@ -7,6 +7,7 @@ import {
 } from "@crawl-automation/adapters";
 import { assertBrowserPermit, BrowserRecovery, requireClosedOwner } from "@crawl-automation/app";
 import {
+  codexGroupAbsent,
   connectTemporal,
   egoCliAbsent,
   stopEgoRound,
@@ -53,6 +54,8 @@ async function verifyOnHost(parts: CoreParts, input: Input): Promise<void> {
       stop: (work) => stopEgoRound(settings.ego, work),
       release: async () => undefined,
       cliAbsent: (recordedAt) => egoCliAbsent(settings.ego, recordedAt),
+      codexAbsent: (identity) =>
+        identity.kind === "codex" ? codexGroupAbsent(identity) : Promise.resolve(null),
       log: parts.log,
     });
     const executions = (permit?.cleanup?.executions ?? []).map((entry) => ({

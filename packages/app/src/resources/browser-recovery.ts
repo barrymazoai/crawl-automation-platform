@@ -27,6 +27,8 @@ export class BrowserRecovery {
       release(permitId: string): Promise<unknown>;
       /** Host proof that a CLI recorded at this time has exited, when its own receipt was lost. */
       cliAbsent?(recordedAt: Date): Promise<Record<string, unknown> | null>;
+      /** Host proof that a Codex process group recorded here has exited, when its own receipt was lost. */
+      codexAbsent?(identity: PermitExecutionIdentity): Promise<Record<string, unknown> | null>;
       log: Logger;
     },
   ) {}
@@ -62,10 +64,29 @@ export class BrowserRecovery {
     return true;
   }
 
+  /** Codex ran on this host and its exit receipt was lost: the host process table decides. */
+  private async codexGone(
+    entry: BrowserRecoveryEntry,
+    scope: { host: string; taskSpaceId: number },
+  ): Promise<void> {
+    for (const execution of entry.executions) {
+      const identity = execution.identity;
+      if (execution.stopped || identity.kind !== "codex" || identity.host !== scope.host) {
+        continue;
+      }
+      const proof = await this.deps.codexAbsent?.(identity);
+      if (proof) {
+        await provePermitExecutionStopped(identity, proof);
+        execution.stopped = true;
+      }
+    }
+  }
+
   async recover(
     entry: BrowserRecoveryEntry,
     scope: { host: string; taskSpaceId: number },
   ): Promise<void> {
+    await this.codexGone(entry, scope);
     for (const execution of entry.executions) {
       const round = execution.identity;
       if (!localRound(execution, scope) || nativeAgentRunning(round, entry)) {

@@ -1,5 +1,6 @@
 import { hostname } from "node:os";
 import { execa } from "execa";
+import { elapsedMs } from "../execution/process-elapsed.js";
 import { EgoSettingsSchema, type EgoSettings } from "./ego-settings.js";
 
 /** A round's CLI starts right after its identity is recorded; anything started later is another round's. */
@@ -35,16 +36,4 @@ export async function egoCliAbsent(
     startedBy: new Date(startedBy).toISOString(),
     observedAt: new Date(now).toISOString(),
   };
-}
-
-/** `[[dd-]hh:]mm:ss`; an unreadable value counts as a long-running process. */
-function elapsedMs(etime: string): number {
-  const match = /^(?:(\d+)-)?(?:(\d+):)?(\d+):(\d+)$/.exec(etime);
-  if (!match) {
-    return Number.POSITIVE_INFINITY;
-  }
-  const [, days = "0", hours = "0", minutes = "0", seconds = "0"] = match;
-  return (
-    (((Number(days) * 24 + Number(hours)) * 60 + Number(minutes)) * 60 + Number(seconds)) * 1_000
-  );
 }

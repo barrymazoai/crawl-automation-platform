@@ -164,6 +164,63 @@ describe("browser R59 recovery", () => {
     expect(test.release).toHaveBeenCalledExactlyOnceWith("permit-one");
   });
 
+  it("proves a lost Codex exit on its own host before the native round is cleaned up", async () => {
+    const test = fixture();
+    const round = test.entry.executions[0];
+    if (!round) {
+      throw new Error("missing round");
+    }
+    round.identity.metadata = { ...round.identity.metadata, protocol: "ego-native-capture/1" };
+    const codex = {
+      identity: {
+        kind: "codex" as const,
+        executionId: "agent",
+        pid: 100,
+        host: "host",
+        startedAt: "2026-10-07T02:12:06.000Z",
+      },
+      stopped: false,
+    };
+    test.entry.executions.push(codex);
+    const codexAbsent = vi.fn(async () => null as Record<string, unknown> | null);
+    const recovery = new BrowserRecovery({
+      ledger: test.ledger,
+      stop: test.stop,
+      release: (permitId) => test.resources.release(permitId),
+      codexAbsent,
+      log: createLogger({ name: "test", level: "fatal" }),
+    });
+    await recovery.tick("host", 6);
+    expect(codexAbsent).toHaveBeenCalledWith(codex.identity);
+    expect(test.stop).not.toHaveBeenCalled();
+    expect(test.release).not.toHaveBeenCalled();
+    codexAbsent.mockResolvedValueOnce({ kind: "codex-process-group-absent" });
+    await recovery.tick("host", 6);
+    expect(test.ledger.prove).toHaveBeenCalledWith(test.entry.owner, codex.identity, {
+      kind: "codex-process-group-absent",
+    });
+    expect(test.stop).toHaveBeenCalledOnce();
+    expect(test.release).toHaveBeenCalledExactlyOnceWith("permit-one");
+  });
+
+  it("leaves Codex that ran on another host alone", async () => {
+    const test = fixture();
+    test.entry.executions.push({
+      identity: { kind: "codex", executionId: "agent", pid: 100, host: "other", startedAt: "x" },
+      stopped: false,
+    });
+    const codexAbsent = vi.fn(async () => ({ kind: "codex-process-group-absent" }));
+    const recovery = new BrowserRecovery({
+      ledger: test.ledger,
+      stop: test.stop,
+      release: (permitId) => test.resources.release(permitId),
+      codexAbsent,
+      log: createLogger({ name: "test", level: "fatal" }),
+    });
+    await recovery.tick("host", 6);
+    expect(codexAbsent).not.toHaveBeenCalled();
+  });
+
   it("respects user control and keeps the original attempt pending without business replay", async () => {
     const test = fixture();
     test.stop.mockRejectedValue(egoErrors.create("BROWSER.USER_CONTROL"));
