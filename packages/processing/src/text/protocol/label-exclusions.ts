@@ -96,7 +96,7 @@ function structuralExclusion(exclusion: Exclusion, judged: Judged, value: string
 }
 
 /** Page text the model may leave out around a label, whichever of these reasons it gives (owner 2026-10-07). */
-const AROUND_LABEL = new Set(["marketing", "directions", "metadata", "heading"]);
+const AROUND_LABEL = new Set(["marketing", "directions", "metadata", "heading", "noise"]);
 
 function allowedExclusion(exclusion: Exclusion, judged: Judged): boolean {
   const value = exclusion.quote.text.trim();
@@ -200,10 +200,12 @@ function outsideLabel(exclusion: Exclusion, judged: Judged): boolean {
   }
   const first = Math.min(...quotes.map((quote) => quote.start));
   const last = Math.max(...quotes.map((quote) => quote.end));
-  // After the label, a line with an amount may be label content ("Supplying 300 mg"): it stays for Review.
+  // After the label, a line with an amount may be label content ("Supplying 300 mg"): it stays for Review, except
+  // directions, whose doses ("take 2 teaspoons (10 mL)") are how to use the product.
   return (
     exclusion.quote.end <= first ||
-    (exclusion.quote.start >= last && !DOSE.test(exclusion.quote.text))
+    (exclusion.quote.start >= last &&
+      (exclusion.reason === "directions" || !DOSE.test(exclusion.quote.text)))
   );
 }
 
