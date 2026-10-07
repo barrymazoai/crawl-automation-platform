@@ -3,8 +3,12 @@ import { assemblyErrors } from "../assembly/assembly-errors.js";
 import { sourceOutcome } from "./ordered-source-outcome.js";
 import type { OrderedEvidence, OrderedProgress, SourceFailure } from "./ordered-model.js";
 
-/** Completeness and conflicts come from the same merger used by assembly and collection. */
-export function orderedProgress(request: OrderedProgress, evidence: OrderedEvidence) {
+/**
+ * Completeness and conflicts come from the same merger used by assembly and collection. A one-part label without a
+ * formula (ingredients only, collected-product/5) completes only once no source is left untried, so a Facts photo
+ * after an ingredients-only page still supplies the formula (owner 2026-10-07).
+ */
+export function orderedProgress(request: OrderedProgress, evidence: OrderedEvidence, untried = 0) {
   const merged = evidence.sources.length
     ? mergeLabelProduct(
         {
@@ -33,12 +37,17 @@ export function orderedProgress(request: OrderedProgress, evidence: OrderedEvide
   });
   const reason = primaryOrderedFailure(request.input.failurePolicy, ranked);
   return {
-    complete: !evidence.terminal && merged?.status === "ready",
+    complete: !evidence.terminal && completeLabel(merged, untried),
     terminal: evidence.terminal,
     ...(reason ? { reason, failures: ranked.map((entry) => entry.failure) } : {}),
     outcomes,
     codes: merged?.codes ?? [],
   };
+}
+
+/** Ready, and either with a formula or with every source tried. */
+function completeLabel(merged: ReturnType<typeof mergeLabelProduct> | null, untried: number) {
+  return merged?.status === "ready" && ((merged.parts?.formulaFound ?? true) || untried === 0);
 }
 
 /** Opted-in tasks prefer a real failure to an equally progressed source without a label. */

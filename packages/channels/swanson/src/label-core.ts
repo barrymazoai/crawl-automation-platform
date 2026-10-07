@@ -14,7 +14,7 @@ const INGREDIENTS = /^(?:Other Ingredients|Ingredients)[ \t]*(?::|$)/gim;
 // Allergen and trademark notes follow Other Ingredients on many Swanson pages (2026-09-30: 8 Healthy Origins
 // products); they end the ingredient list like the sections after them.
 const NEXT_SECTION =
-  /^\s*(?:Allergen Information|Trademark Information|Suggested Use|Directions|Warning|Warnings|Storage Instructions|Other Information)\s*:/im;
+  /^\s*(?:Allergen Information|Trademark Information|Certifier Information|Additional Product Information|Country of Origin|Suggested Use|Directions|Warning|Warnings|Storage Instructions|Other Information)\s*:/im;
 
 type Nodes = ReturnType<typeof parseDocument>["children"];
 
@@ -66,6 +66,10 @@ export function extractSwansonLabelCore(html: string): string {
   }
   const sections = preSections(parseDocument(html).children);
   const headings = sections.flatMap(labelFactsHeadings);
+  const [only] = sections;
+  if (headings.length === 0 && sections.length === 1 && only) {
+    return normalizeCore(ingredientsOnlyCore(only));
+  }
   if (headings.length !== 1 || sections.length > 2) {
     throw labelCoreFailure("LABEL_CORE.LABEL_SCOPE_AMBIGUOUS");
   }
@@ -90,6 +94,26 @@ function supplementCore(sections: string[]): string {
     throw labelCoreFailure("LABEL_CORE.INGREDIENT_SCOPE_AMBIGUOUS");
   }
   return facts.slice(0, after + boundary.index);
+}
+
+/**
+ * Owner 2026-10-06 (CRAWLV3-209): a product with ingredients and no Facts panel is still a label product. Swanson
+ * prints these (creams, oils, bulk herbs) as one Product Facts section holding a single Ingredients list.
+ */
+function ingredientsOnlyCore(section: string): string {
+  const all = [...section.matchAll(INGREDIENTS)];
+  const headings = ingredientHeadingIndexes(all.map((match) => match[0]));
+  const heading = all[headings[0] ?? -1];
+  if (!heading || headings.length !== 1) {
+    throw labelCoreFailure("LABEL_CORE.LABEL_SCOPE_AMBIGUOUS");
+  }
+  const list = section.slice(heading.index);
+  const boundary = NEXT_SECTION.exec(list.slice(heading[0].length));
+  const core = list.slice(0, boundary ? heading[0].length + boundary.index : list.length).trim();
+  if (core.length <= heading[0].trim().length) {
+    throw labelCoreFailure("LABEL_CORE.INGREDIENT_SCOPE_AMBIGUOUS");
+  }
+  return core;
 }
 
 function normalizeCore(raw: string): string {

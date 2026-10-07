@@ -46,12 +46,14 @@ export class LabelOrderedSelection {
   async inspect(raw: unknown, signal: AbortSignal) {
     const request = OrderedProgressSchema.parse(raw);
     const loaded = await this.plans.load(request.input, signal);
+    const order = orderedSources(loaded);
     assertPrefix(
-      orderedSources(loaded),
+      order,
       request.states.map((state) => state.id),
     );
     const evidence = await orderedEvidence(this.plans, this.deps, { request, signal });
-    const { outcomes, codes, ...progress } = orderedProgress(request, evidence);
+    const untried = order.length - request.states.length;
+    const { outcomes, codes, ...progress } = orderedProgress(request, evidence, untried);
     await this.plans.publish(
       orderedProgressKey(request.input, request.states),
       { request, outcomes, codes },
@@ -67,12 +69,13 @@ export class LabelOrderedSelection {
     const attempted = selection.states.filter((state) => state.status !== "not_started");
     const request = { input: selection.input, states: attempted };
     assertCoverage(loaded, selection.states);
+    const order = orderedSources(loaded);
     assertPrefix(
-      orderedSources(loaded),
+      order,
       attempted.map((state) => state.id),
     );
     const evidence = await orderedEvidence(this.plans, this.deps, { request, signal });
-    if (!orderedProgress(request, evidence).complete) {
+    if (!orderedProgress(request, evidence, order.length - attempted.length).complete) {
       throw labelFailure("CHANNEL.LABEL_SELECTION_UNVERIFIED");
     }
     const selected = new Set(evidence.sources.map((source) => source.id));
