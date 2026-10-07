@@ -4,6 +4,7 @@ import {
   type GetObjectCommandOutput,
   type PutObjectCommandOutput,
 } from "@aws-sdk/client-s3";
+import { setTimeout as sleep } from "node:timers/promises";
 import { ObjectKeySchema } from "@crawl-automation/v3-contracts";
 import { AppError } from "../errors/app-error.js";
 import { artifactErrors } from "./artifact-errors.js";
@@ -11,6 +12,15 @@ import type { ObjectStore } from "./object-store.js";
 import { readR2Body } from "./r2-body.js";
 import { r2Diagnostics, r2Status } from "./r2-diagnostics.js";
 import { R2ScopeSchema, type R2Scope } from "./r2-settings.js";
+import { logStorageRecovery } from "./storage-logger.js";
+
+/**
+ * Owner 2026-10-07: R2 answers an occasional write with 500 InternalError. Every write is conditional
+ * (If-None-Match), so repeating it can never overwrite; a write that did land answers "exists", and callers verify the
+ * bytes by GET. Server errors only, a few seconds in all.
+ */
+const RETRY_STATUS = new Set([500, 502, 503, 504]);
+const RETRY_DELAYS_MS = [500, 1_500, 3_000];
 
 export interface R2ClientPort {
   send(
@@ -23,7 +33,7 @@ export interface R2ClientPort {
   ): Promise<PutObjectCommandOutput>;
 }
 
-/** Fresh SigV4 request per read; no persisted presigned URLs or implicit retry. */
+/** Fresh SigV4 request per read; no persisted presigned URLs. Only conditional writes repeat, on R2 server errors. */
 export class R2Objects implements ObjectStore {
   private readonly scope: R2Scope;
 
@@ -78,15 +88,26 @@ export class R2Objects implements ObjectStore {
     mediaType: string,
     signal: AbortSignal,
   ): Promise<"created" | "exists"> {
-    try {
-      return await this.createOnce({ key, bytes, mediaType }, signal);
-    } catch (error) {
-      signal.throwIfAborted();
-      if (error instanceof AppError) {
-        throw error;
+    for (let attempt = 0; ; attempt += 1) {
+      try {
+        return await this.createOnce({ key, bytes, mediaType }, signal);
+      } catch (error) {
+        signal.throwIfAborted();
+        if (error instanceof AppError) {
+          throw error;
+        }
+        const delay = RETRY_DELAYS_MS[attempt];
+        if (delay !== undefined && RETRY_STATUS.has(r2Status(error) ?? 0)) {
+          logStorageRecovery("R2 server error on a conditional write; repeating it", null, {
+            attempt: attempt + 1,
+            ...r2Diagnostics(error),
+          });
+          await sleep(delay, undefined, { signal });
+          continue;
+        }
+        // No cause: the SDK error carries request headers (credentials). r2Diagnostics keeps the safe reason.
+        throw artifactErrors.create("ARTIFACT.UPLOAD_UNKNOWN", { details: r2Diagnostics(error) });
       }
-      // No cause: the SDK error carries request headers (credentials). r2Diagnostics keeps the safe reason.
-      throw artifactErrors.create("ARTIFACT.UPLOAD_UNKNOWN", { details: r2Diagnostics(error) });
     }
   }
 
