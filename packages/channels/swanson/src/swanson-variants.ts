@@ -58,9 +58,6 @@ function choicesOf(picker: Picker): SwansonChoice[] {
 
 /** The picker's one selected option must be this page's own selected variant. */
 function checkSelection(picker: Picker, current: { handle: string; variantId: string }): void {
-  if (picker.unmapped || new Set(picker.options.map((option) => option.group)).size !== 1) {
-    throw swansonErrors.create("SWANSON.VARIANT_OPTIONS_UNVERIFIED");
-  }
   const selected = picker.options.filter((option) => option.selected);
   const chosen = selected[0];
   const sameProduct = chosen && swansonProductAddress(chosen.url).handle === current.handle;
@@ -69,26 +66,49 @@ function checkSelection(picker: Picker, current: { handle: string; variantId: st
   }
 }
 
+/** Two option groups, or options linking a sibling page without a variant ID: the picker only links other pages. */
+function linksOnly(picker: Picker): boolean {
+  return picker.unmapped > 0 || new Set(picker.options.map((option) => option.group)).size > 1;
+}
+
+/** Every selected option the page maps must still name this page's own variant. */
+function checkLinkedSelection(
+  picker: Picker,
+  current: { handle: string; variantId: string },
+): void {
+  const wrong = picker.options.some(
+    (option) =>
+      option.selected &&
+      (option.variantId !== current.variantId ||
+        swansonProductAddress(option.url).handle !== current.handle),
+  );
+  if (wrong) {
+    throw swansonErrors.create("SWANSON.VARIANT_CONFLICT");
+  }
+}
+
 /**
  * The sizes/flavours a Swanson page offers: only explicit, directly linked choices. Never synthesises combinations
- * or copies the selected product's ID or gallery to its connected products.
+ * or copies the selected product's ID or gallery to its connected products. Owner 2026-10-07: a picker that only
+ * links sibling pages (two groups, or options without a variant ID) makes this page one product on its own; each
+ * sibling is its own Swanson product and is processed from its own queue entry.
  */
 export function swansonVariantChoices(raw: unknown) {
   const page = SwansonRenderedProductSchema.parse(raw);
   const current = swansonProductAddress(page.canonicalUrl);
   const variantId = selectedVariant(page);
   const picker = page.variantPicker;
-  if (!picker || picker.options.length === 0) {
-    if (picker?.unmapped) {
-      throw swansonErrors.create("SWANSON.VARIANT_OPTIONS_UNVERIFIED");
+  const only = {
+    url: page.url,
+    handle: current.handle,
+    variantId,
+    label: page.title,
+    available: true,
+  };
+  if (!picker || picker.options.length === 0 || linksOnly(picker)) {
+    if (picker) {
+      checkLinkedSelection(picker, { handle: current.handle, variantId });
     }
-    const only = {
-      url: page.url,
-      handle: current.handle,
-      variantId,
-      label: page.title,
-      available: true,
-    };
     return { coverage: "selected-only" as const, choices: [only] };
   }
   checkSelection(picker, { handle: current.handle, variantId });
