@@ -16,9 +16,15 @@ export function completeLabelSections<Candidate extends LabelCandidate>(
     return null;
   }
   const allowed = new Set<string>(partialLabelValidationCodes);
+  // Judge only what is kept: a defect inside an incomplete section that is left out never discards the complete one.
+  const kept = {
+    ...candidate,
+    formula: candidate.formulaComplete ? candidate.formula : null,
+    otherIngredients: candidate.ingredientsComplete ? candidate.otherIngredients : null,
+  };
   if (
     candidate.issues.some((issue) => ["AMBIGUOUS", "METADATA_CONFLICT"].includes(issue.code)) ||
-    assessLabelCandidate(candidate).codes.some((code) => !allowed.has(code))
+    assessLabelCandidate(kept).codes.some((code) => !allowed.has(code))
   ) {
     return null;
   }

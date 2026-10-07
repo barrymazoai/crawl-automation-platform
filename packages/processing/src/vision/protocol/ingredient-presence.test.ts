@@ -31,14 +31,15 @@ describe("explicit absence of a separately printed ingredients section", () => {
       "1e41b52ed05b2c01ea54ca569ea6c1caef65a20407a62f262994c6737ef6bc4a",
     );
   });
-  it("keeps the saved B08QDNPQPK /1 answer and its original Review under current decoding", () => {
+  it("keeps the saved B08QDNPQPK /1 answer in Review; its complete formula is a usable part (owner 2026-10-07)", () => {
     const label = savedOreganoLabel();
     const raw = JSON.stringify(label);
     const { source } = imageSource(label, 0);
+    // "No Other Ingredients section is visible" on an incomplete list is not a contradiction of the Facts rows.
     expect(decodeLabelImage(raw)).toMatchObject({
       candidate: label,
       status: "review",
-      codes: ["LABEL.INGREDIENTS_INCOMPLETE", "LABEL.COMPLETENESS_CONFLICT"],
+      codes: ["LABEL.INGREDIENTS_INCOMPLETE"],
     });
     expect(decodeVisionResult(source.task.input, raw)).toMatchObject({
       candidate: label,
@@ -46,7 +47,10 @@ describe("explicit absence of a separately printed ingredients section", () => {
       code: "VISION.LABEL_INGREDIENTS_INCOMPLETE",
     });
     expect(isCompleteLabelImage({ kind: "image", candidate: label })).toBe(false);
-    expect(completeLabelSections(label)).toBeNull();
+    expect(completeLabelSections(label)).toMatchObject({
+      formula: label.formula,
+      otherIngredients: null,
+    });
   });
 
   it("does not promote a null /2 section or an old answer wrapped without new observations", () => {

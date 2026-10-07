@@ -84,8 +84,10 @@ export function assessLabelCandidate(candidate: LabelCandidate) {
   if (hasIngredients && !candidate.ingredientsComplete) flag("LABEL.INGREDIENTS_INCOMPLETE", candidate.otherIngredients ? "model marked the ingredient list incomplete" : "only blend components, no Other Ingredients list");
   const uncertain = candidate.issues.find(i => ["UNREADABLE", "AMBIGUOUS", "METADATA_CONFLICT"].includes(i.code));
   if (uncertain) flag("LABEL.EVIDENCE_UNCERTAIN", `model reported ${uncertain.code}${"detail" in uncertain && uncertain.detail ? `: ${String(uncertain.detail).slice(0, 160)}` : ""}`);
-  if (candidate.formula && candidate.issues.some(i => i.code === "FORMULA_MISSING") ||
-      hasIngredients && candidate.issues.some(i => i.code === "INGREDIENTS_MISSING")) flag("LABEL.COMPLETENESS_CONFLICT", "extracted content contradicts a reported missing section");
+  // A contradiction is a section marked complete and also reported missing. A partly visible section reported
+  // missing is only incomplete (owner 2026-10-07): it is left out, and the label's complete sections still count.
+  if (candidate.formula && candidate.formulaComplete && candidate.issues.some(i => i.code === "FORMULA_MISSING") ||
+      hasIngredients && candidate.ingredientsComplete && candidate.issues.some(i => i.code === "INGREDIENTS_MISSING")) flag("LABEL.COMPLETENESS_CONFLICT", "a section marked complete is also reported missing");
   if (!candidate.formula && !hasIngredients) flag("LABEL.CORE_MISSING", `no formula and no ingredients${candidate.issues[0] && "detail" in candidate.issues[0] && candidate.issues[0].detail ? `; model: ${String(candidate.issues[0].detail).slice(0, 160)}` : ""}`);
   return { status: codes.size ? "review" as const : candidate.formula && hasIngredients ? "candidate" as const : "partial" as const,
     codes: [...codes], findings, warnings };
