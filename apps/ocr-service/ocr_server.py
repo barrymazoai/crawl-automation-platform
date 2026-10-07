@@ -72,7 +72,9 @@ def _build_params() -> dict[str, Any]:
     det_lang = LangDet.CH if OCR_VERSION == "PP-OCRv5" else {"en": LangDet.EN, "ch": LangDet.CH}[LANG]
     params: dict[str, Any] = {
         "Global.text_score": 0.0,  # filtering happens per request via min_score
-        "Global.use_cls": False,
+        # Lines printed sideways are turned 90 degrees one fixed way before recognition; the 0/180 line classifier
+        # flips the ones that end up upside down (a sideways Facts panel read as "%33333", owner 2026-10-07).
+        "Global.use_cls": True,
         "Global.model_root_dir": os.path.join(os.environ.get("OCR_HOME", "D:\\ocr"), "models"),
         "Det.engine_type": EngineType.ONNXRUNTIME,
         "Det.lang_type": det_lang,
