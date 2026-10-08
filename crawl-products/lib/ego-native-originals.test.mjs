@@ -59,8 +59,10 @@ it("retains native HTML, platform data, image and attempt before returning them"
   const page = { targetId: "owned", url: async () => url,
     evaluate: vi.fn().mockResolvedValueOnce("<main>Original HTML</main>")
       .mockResolvedValueOnce({ status: 200, ok: true, type: "application/json", text: productText }),
-    fetch: async (_url, {saveAs}) => { await writeFile(saveAs, png); return { status: 200 }; },
+    fetch: vi.fn(),
   };
+  // Images are downloaded directly, not through the page (owner 2026-10-08).
+  vi.stubGlobal("fetch", vi.fn(async () => new Response(png, { status: 200, headers: { "content-type": "image/png" } })));
   const browser = createEgoBrowser({ workDir: root, page, productUrl: url,
     task: { spaceId: 6, tabs: async () => [{ targetId: "owned", openedBy: "agent" }] },
     listTaskSpaces: async () => [{ id: 6, ownership: "agent" }],
@@ -68,6 +70,9 @@ it("retains native HTML, platform data, image and attempt before returning them"
   expect(await browser.harvestHooks.fetchPageHtml(url)).toBe("<main>Original HTML</main>");
   expect(await browser.harvestHooks.fetchProductData(url)).toMatchObject({ vendor: "Website brand" });
   expect((await browser.harvestHooks.fetchImage("https://shop.test/image.png")).bytes).toEqual(png);
+  expect(page.fetch).not.toHaveBeenCalled();
+  expect(globalThis.fetch).toHaveBeenCalledWith("https://shop.test/image.png", expect.objectContaining({ redirect: "follow" }));
+  vi.unstubAllGlobals();
   await browser.harvestHooks.retainAttempt({ result: { status: "complete" }, records: [{ productUrl: url }] });
   const files = await readdir(join(root, "native-originals"));
   const receipts = await Promise.all(files.filter(f => f.endsWith(".receipt.json")).map(async f => JSON.parse(await readFile(join(root, "native-originals", f)))));

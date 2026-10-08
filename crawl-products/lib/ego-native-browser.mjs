@@ -1,8 +1,9 @@
 import { randomUUID } from "node:crypto";
-import { readFile, unlink, writeFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { egoLocator } from "./ego-native-locator.mjs";
 import { retainNativeOriginal } from "./ego-native-originals.mjs";
+import { defaultFetchImage } from "./run-harvest.mjs";
 
 /** Adapts the existing harvest primitives inside Ego's native Node runtime. No CDP server or Playwright. */
 export function createEgoBrowser({ task, page, targetId = page.targetId, listTaskSpaces, workDir, productUrl = null, captureMode = process.env.CRAWL_DTC_CAPTURE_MODE }) {
@@ -131,14 +132,15 @@ function createEventReader(page, guard) {
   };
 }
 
-async function readImage({ page, guard, workDir }, url) {
+/**
+ * Owner 2026-10-08: images are downloaded directly, as before the native Ego change (defaultFetchImage). page.fetch
+ * ran window.fetch inside the product page, where browser CORS blocks images on another host without
+ * Access-Control-Allow-Origin (PureTrim on cdn.awccloud.com) although the page displays them.
+ */
+async function readImage({ guard, workDir }, url) {
   await guard();
-  const path = join(workDir, `image-${randomUUID()}.bin`);
-  const response = await page.fetch(url, { saveAs: path, timeout: 30000 });
-  if (!response || response.status < 200 || response.status >= 300) throw new Error(`SOURCE.IMAGE_HTTP:${response?.status}`);
-  const bytes = await readFile(path);
+  const { bytes } = await defaultFetchImage(url);
   await retainNativeOriginal(workDir, { url, kind: "image", bytes });
-  await unlink(path);
   if (!bytes.length) throw new Error("SOURCE.IMAGE_EMPTY");
   const mime = bytes.subarray(0, 8).equals(Buffer.from([137,80,78,71,13,10,26,10])) ? "image/png"
     : bytes[0] === 255 && bytes[1] === 216 ? "image/jpeg"
