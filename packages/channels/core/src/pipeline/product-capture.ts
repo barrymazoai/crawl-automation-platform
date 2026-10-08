@@ -11,6 +11,7 @@ import type {
   DiscoveredVariant,
 } from "./capture-request.js";
 import { capturedPage } from "./captured-page.js";
+import { nonSupplementPath } from "../product-scope.js";
 import type { ProductSourcePlans } from "./source-plans.js";
 import type { CaptureMode } from "../capture.js";
 
@@ -60,6 +61,7 @@ export class ProductCapture {
       family: adapter.productFamily?.(parsed) ?? null,
       page: capturedPage(adapter, address, captured),
       ...discoveredVariants(adapter, address, parsed),
+      ...nonSupplement(adapter, parsed.categories),
     };
   }
 
@@ -144,6 +146,11 @@ function discoveredVariants(
           .map(({ url, listingId, variantId }) => ({ url, listingId, variantId })),
       }
     : {};
+}
+
+function nonSupplement(adapter: ChannelAdapter, categories: string[] | undefined) {
+  const path = nonSupplementPath(categories, adapter.nonSupplementCategories);
+  return path ? { nonSupplement: path } : {};
 }
 
 function key(address: { listingId: string; variantId: string | null }) {

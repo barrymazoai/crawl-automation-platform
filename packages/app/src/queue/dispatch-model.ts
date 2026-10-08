@@ -2,7 +2,7 @@ import { z } from "zod";
 import type { appErrors } from "../errors.js";
 import type { ProductRun } from "../runs/run-model.js";
 import type { QueueChannel, QueueMode } from "./queue-model.js";
-import { DtcScopeExcludedSchema } from "@crawl-automation/v3-contracts";
+import { DtcScopeExcludedSchema, NotSupplementSchema } from "@crawl-automation/v3-contracts";
 
 export interface QueueControl {
   channel: QueueChannel;
@@ -92,11 +92,21 @@ export function settledOutcome(execution: RunExecution): SettledOutcome | null {
   return ended ? { state: "review", reason: ended } : null;
 }
 
-/** A completed run: collected or unlisted is done; a Review keeps its own code; anything else is unrecognized. */
-function completedOutcome(raw: unknown): SettledOutcome {
+/** A run done without a formula on purpose: a DTC bundle, or a product filed outside supplements (owner 2026-10-08). */
+function exclusionReason(raw: unknown): string | null {
   const excluded = DtcScopeExcludedSchema.safeParse(raw);
   if (excluded.success) {
-    return { state: "completed", reason: excluded.data.reason };
+    return excluded.data.reason;
+  }
+  const outside = NotSupplementSchema.safeParse(raw);
+  return outside.success ? outside.data.reason : null;
+}
+
+/** A completed run: collected or unlisted is done; a Review keeps its own code; anything else is unrecognized. */
+function completedOutcome(raw: unknown): SettledOutcome {
+  const excluded = exclusionReason(raw);
+  if (excluded) {
+    return { state: "completed", reason: excluded };
   }
   const result = PipelineResultSchema.safeParse(raw);
   if (!result.success) {

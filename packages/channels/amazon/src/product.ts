@@ -114,5 +114,9 @@ export function parseAmazonProduct(page: FetchedPage): ParsedProduct<AmazonRende
     commerce: amazonCommerce(root, evidence.listingId),
     variants: evidence.variants.map(({ title: _title, ...address }) => address),
     facts: amazonFacts(evidence.factsCandidates[0]?.html ?? null),
+    categories: [...document.querySelectorAll("#wayfinding-breadcrumbs_feature_div a")]
+      .map((link) => textOf(link))
+      .filter(Boolean)
+      .slice(0, 20),
   };
 }

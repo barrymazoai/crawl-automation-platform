@@ -11,6 +11,7 @@ export * from "./capture/browser-pages.js";
 export * from "./capture/read-html.js";
 export * from "./page-text.js";
 export * from "./product-family.js";
+export * from "./product-scope.js";
 export * from "./pipeline/index.js";
 export * from "./label-core-errors.js";
 export * from "./facts/label-sections.js";

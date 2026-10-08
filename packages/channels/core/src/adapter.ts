@@ -60,6 +60,8 @@ export interface ParsedProduct<Rendered = unknown> {
   /** The product's sizes or options, each as its own address. */
   variants: ProductAddress[];
   facts: FactsText;
+  /** The store's own breadcrumb for the product, top level first; absent when the page states none. */
+  categories?: string[];
 }
 
 /** How a channel's pages may be fetched over HTTP: only from these origins, within these limits. */
@@ -152,4 +154,9 @@ export interface ChannelAdapter<Rendered = unknown> {
   discoversVariants?: boolean;
   /** The product ID the metrics history keys this listing by; the address's listing ID when absent. */
   externalId?(parsed: ParsedProduct<Rendered>): string;
+  /**
+   * Store categories (breadcrumb names) this channel files outside supplements; a product under one of them whose
+   * label step would go to Review finishes as "not a supplement" (owner 2026-10-08). Absent: never applied.
+   */
+  readonly nonSupplementCategories?: readonly string[];
 }

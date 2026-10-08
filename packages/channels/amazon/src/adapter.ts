@@ -70,6 +70,22 @@ export const amazonAdapter: ChannelAdapter<AmazonRendered> = {
     variantId: null,
   }),
   parseProduct: parseAmazonProduct,
+  // Owner 2026-10-08: Amazon departments outside supplements (supplements sit under Health & Household).
+  nonSupplementCategories: [
+    "Baby Products",
+    "Beauty & Personal Care",
+    "Home & Kitchen",
+    "Arts, Crafts & Sewing",
+    "Industrial & Scientific",
+    "Tools & Home Improvement",
+    "Office Products",
+    "Toys & Games",
+    "Clothing, Shoes & Jewelry",
+    "Electronics",
+    "Patio, Lawn & Garden",
+    "Automotive",
+    "Pet Supplies",
+  ],
   externalId: (parsed) => parsed.identity.listingId,
   productFamily: (parsed) => amazonProductFamily(parsed.rendered.family, parsed.identity.listingId),
   planning: {

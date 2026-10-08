@@ -23,6 +23,7 @@ export * from "./scraperapi.js";
 export * from "./channel-evidence.js";
 export * from "./dtc-variants.js";
 export * from "./dtc-product-scope.js";
+export * from "./not-supplement.js";
 export * from "./dtc-gallery.js";
 export * from "./gnc-acquisition.js";
 export * from "./gnc-product.js";

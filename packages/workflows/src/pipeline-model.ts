@@ -97,6 +97,8 @@ export const CaptureResultSchema = z.discriminatedUnion("status", [
     /** The product's family as the adapter read it; checked by the reuse activity (absent in earlier histories). */
     family: z.unknown().optional(),
     discovered: DiscoveredVariantsSchema.optional(),
+    /** The store's breadcrumb when it files the product outside supplements (absent in earlier histories). */
+    nonSupplement: z.array(z.string().min(1).max(200)).min(1).max(20).optional(),
   }),
   z.strictObject({
     status: z.literal("captured-family"),

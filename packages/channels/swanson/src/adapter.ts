@@ -10,6 +10,7 @@ import {
   type ProductIdentity,
 } from "@crawl-automation/channels-core";
 import { swansonFamily } from "./family.js";
+import { swansonBreadcrumb } from "./swanson-breadcrumb.js";
 import { swansonExternalId } from "./history-id.js";
 import { swansonBrandScan } from "./brand-scan.js";
 import { swansonLabelCore } from "./label-core.js";
@@ -115,6 +116,9 @@ export const swansonAdapter: ChannelAdapter<SwansonRenderedProduct> = {
       commerce: rendered.commerce ?? null,
       variants,
       facts: factsOf(evidence),
+      categories: swansonBreadcrumb(page.html),
     };
   },
+  // Owner 2026-10-08: Swanson departments outside supplements.
+  nonSupplementCategories: ["Beauty and Personal Care", "Home and Pet"],
 };

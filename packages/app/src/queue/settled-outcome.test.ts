@@ -21,6 +21,27 @@ describe("settledOutcome remaining terminal and malformed cases", () => {
       reason: "QUEUE.OUTCOME_UNRECOGNIZED",
     });
   });
+  it("completes a product its store files outside supplements (owner 2026-10-08)", () => {
+    const result = {
+      status: "not-supplement",
+      operationId: "product-1",
+      listingId: "B0GF3DSQCJ",
+      variantId: null,
+      reason: "PRODUCT.NOT_SUPPLEMENT",
+      policy: "store-category/1",
+      categories: ["Baby Products", "Diapering"],
+      reviewCode: "CHANNEL.LABEL_NO_SOURCE",
+    };
+    expect(settledOutcome({ status: "COMPLETED", result })).toEqual({
+      state: "completed",
+      reason: "PRODUCT.NOT_SUPPLEMENT",
+    });
+    expect(settledOutcome({ status: "COMPLETED", result: { ...result, categories: [] } })).toEqual({
+      state: "review",
+      reason: "QUEUE.OUTCOME_UNRECOGNIZED",
+    });
+  });
+
   it.each([
     ["FAILED", "QUEUE.RUN_FAILED"],
     ["TERMINATED", "QUEUE.RUN_TERMINATED"],

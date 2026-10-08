@@ -20,6 +20,7 @@ import { gncPageIdentity } from "./gnc-identity.js";
 import { gncLabelCore } from "./label-core.js";
 import { gncBrandScan } from "./gnc-brand-scan.js";
 import { gncCommerce } from "./gnc-commerce.js";
+import { gncBreadcrumb } from "./gnc-breadcrumb.js";
 import { gncProductFamily, readGncOptions, type GncRendered } from "./gnc-options.js";
 
 /**
@@ -103,6 +104,7 @@ function parseProduct(page: FetchedPage): ParsedProduct<GncRendered> {
     commerce: gncCommerce(page.html, product.sku),
     variants: product.variantUrls.map(gncProductAddress),
     facts: factsOf(product.factsHtml),
+    categories: gncBreadcrumb(page.html),
   };
 }
 
@@ -129,4 +131,6 @@ export const gncAdapter: ChannelAdapter<GncRendered> = {
   pageIdentity: gncPageIdentity,
   parseProduct,
   productFamily: gncProductFamily,
+  // Owner 2026-10-08: shaker bottles, apparel and other gear.
+  nonSupplementCategories: ["Equipment & Accessories", "Apparel"],
 };

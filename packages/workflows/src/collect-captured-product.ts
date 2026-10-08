@@ -28,6 +28,7 @@ import {
 } from "./pipeline-model.js";
 import { reuseSiblingFormula } from "./sibling-reuse.js";
 import { streamLabel } from "./stream-label.js";
+import { notSupplement } from "./not-supplement.js";
 
 /** The same formula planning, reuse and Label steps follow HTTP and browser captures. */
 export async function collectCapturedProduct(
@@ -66,10 +67,10 @@ export async function collectCapturedProduct(
     return withEnrichmentSource(reused, sourcePlan);
   }
   if (outcome.status === "review") {
-    return outcome;
+    return notSupplement(input, captured, outcome) ?? outcome;
   }
   const result = await streamLabel({ input, pipeline, sourcePlan, manifest: outcome.manifest });
-  return withEnrichmentSource(result, sourcePlan);
+  return withEnrichmentSource(notSupplement(input, captured, result) ?? result, sourcePlan);
 }
 
 /** The verified projection carries the selected product's title even before history projection repair. */

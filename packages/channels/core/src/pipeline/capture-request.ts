@@ -59,6 +59,8 @@ export type ProductCaptureResult =
       page: CapturedPage;
       /** The page's other variants, for adapters that discover them. */
       discovered?: DiscoveredVariant[];
+      /** The store's breadcrumb, when it files the product outside supplements (owner 2026-10-08). */
+      nonSupplement?: string[];
     }
   | {
       /** The revisit showed the listing is unlisted (the reason is recorded); nothing was parsed or planned. */
