@@ -10,6 +10,20 @@ export const PackagingClaimSchema = z.strictObject({
   quote: LabelQuoteSchema,
 });
 export type PackagingClaim = z.infer<typeof PackagingClaimSchema>;
+const words = (text: string) => text.replace(/\s+/gu, " ").trim();
+/**
+ * Owner 2026-10-08: serving sizes that differ only in format are one value ("5 g" / "5g", "2 Drops" / "2 drops",
+ * "approx." / "approx", "2.0 grams" / "2 grams").
+ */
+export function servingSizeKey(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/(\d)\.0+(?!\d)/gu, "$1")
+    .replace(/(?<!\d)[.,;:()[\]]|[.,;:()[\]](?!\d)/gu, " ")
+    .replace(/(\d)\s+(?=[a-zµμ])/gu, "$1")
+    .replace(/\s+/gu, " ")
+    .trim();
+}
 const resolvedField = z.strictObject({ status: z.enum(["unknown", "observed", "conflict"]),
   value: z.string().min(1).max(500).nullable(), claims: z.array(PackagingClaimSchema).max(500) });
 export const PackagingFactsSchema = z.strictObject({
@@ -23,9 +37,17 @@ export const PackagingFactsSchema = z.strictObject({
 }).superRefine((facts, ctx) => {
   const invalid = () => ctx.addIssue({ code: "custom", message: "Inconsistent packaging evidence" });
   for (const field of ["servingSize", "servingsPerContainer"] as const) {
-    const resolved = facts[field], values = [...new Set(resolved.claims.map(c => c.value.replace(/\s+/gu, " ").trim()))];
-    if (resolved.status !== (values.length === 0 ? "unknown" : values.length === 1 ? "observed" : "conflict") ||
-        resolved.value !== (values.length === 1 ? values[0] : null) || resolved.claims.some(c => c.field !== field)) invalid();
+    const resolved = facts[field];
+    // Facts written before 2026-10-08 grouped serving sizes by exact words; newer ones by servingSizeKey.
+    const keys = field === "servingSize" ? [words, servingSizeKey] : [words];
+    const consistent = keys.some((key) => {
+      const first = new Map<string, string>();
+      for (const claim of resolved.claims) if (!first.has(key(claim.value))) first.set(key(claim.value), words(claim.value));
+      const values = [...first.values()];
+      return resolved.status === (values.length === 0 ? "unknown" : values.length === 1 ? "observed" : "conflict") &&
+        resolved.value === (values.length === 1 ? values[0] : null);
+    });
+    if (!consistent || resolved.claims.some(c => c.field !== field)) invalid();
   }
   for (const claim of [...facts.servingSize.claims, ...facts.servingsPerContainer.claims, ...facts.unresolvedPackMentions]) {
     try { assertArtifactBelongsTo(claim.document, facts.observation); } catch { invalid(); }

@@ -322,6 +322,20 @@ describe("packaging facts", () => {
     expect(facts.warnings).toEqual(["PACKAGING.PACK_MEANING_UNRESOLVED"]);
   });
 
+  it("a unitless serving size is no claim, and format-only differences agree (GNC/Swanson, owner 2026-10-08)", () => {
+    const gnc = extractPackagingFacts(owner, [
+      document(
+        "Serving Size\u00a0 1 Scoop (22g)\n\nServing Size\n\n1\n\nServings Per Container\n\n20",
+      ),
+    ]);
+    expect(gnc.servingSize).toMatchObject({ status: "observed", value: "1 Scoop (22g)" });
+    expect(gnc.blockingIssues).toEqual([]);
+    const spaced = extractPackagingFacts(owner, [
+      document("Serving Size: 1 Scoop (22g)\nServing Size: 1 scoop (22 g)"),
+    ]);
+    expect(spaced.servingSize).toMatchObject({ status: "observed", value: "1 Scoop (22g)" });
+  });
+
   it("different serving sizes are a blocking conflict; no documents or a duplicate are refused", () => {
     const facts = extractPackagingFacts(owner, [
       document("Serving Size: 1 capsule\nServing Size: 2 capsules"),

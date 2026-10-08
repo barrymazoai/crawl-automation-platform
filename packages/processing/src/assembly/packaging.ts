@@ -6,6 +6,7 @@ import {
   ObservationSchema,
   PackagingClaimSchema,
   PackagingFactsSchema,
+  servingSizeKey,
   TextDocumentSchema,
   assertArtifactBelongsTo,
   textObservation,
@@ -18,6 +19,7 @@ import {
 import { decodeJson } from "../results/result-record.js";
 import { assemblyFailure } from "./assembly-errors.js";
 import { byText, words } from "./merge-state.js";
+import { UNITLESS } from "./serving-size.js";
 
 type Line = { text: string; start: number };
 type Field = PackagingClaim["field"];
@@ -146,9 +148,14 @@ function labelClaim(
     : "servingsPerContainer";
   const found = labelValue(lines, { index, inline: (label[2] ?? "").trim() });
   // The next section's title is never turned into a quantity; unknown stays unknown.
-  if (found && QUANTITY.test(found.value)) {
+  if (found && quantityFor(field, found.value)) {
     add(field, found.value, { start: line.start, end: found.end });
   }
+}
+
+/** A quantity, and for a serving size one that names its unit. */
+function quantityFor(field: Field, value: string): boolean {
+  return QUANTITY.test(value) && !(field === "servingSize" && UNITLESS.test(value));
 }
 
 /** The value on the label's own line, else on the next non-empty line, with where its quote ends. */
@@ -166,7 +173,14 @@ function labelValue(lines: Line[], at: { index: number; inline: string }) {
 
 function resolved(claims: PackagingClaim[], field: "servingSize" | "servingsPerContainer") {
   const selected = claims.filter((claim) => claim.field === field);
-  const values = [...new Set(selected.map((claim) => words(claim.value)))];
+  const key = (value: string) => (field === "servingSize" ? servingSizeKey(value) : words(value));
+  const byKey = new Map<string, string>();
+  for (const claim of selected) {
+    if (!byKey.has(key(claim.value))) {
+      byKey.set(key(claim.value), words(claim.value));
+    }
+  }
+  const values = [...byKey.values()];
   const status = values.length === 0 ? "unknown" : values.length === 1 ? "observed" : "conflict";
   return { status, value: values.length === 1 ? values[0] : null, claims: selected };
 }

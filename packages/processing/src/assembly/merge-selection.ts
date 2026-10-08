@@ -10,8 +10,9 @@ import {
   type LabelAgreement,
 } from "@crawl-automation/v3-contracts";
 import type { MergePolicy } from "./merge-policy.js";
-import { byText, words, type MergeState, type LabelEvidence } from "./merge-state.js";
+import { byText, type MergeState, type LabelEvidence } from "./merge-state.js";
 import { reviewEntry } from "./merge-entry-review.js";
+import { sameServingSize } from "./serving-size.js";
 import { partialLabelConflicts } from "./partial-label.js";
 type Candidate = LabelEvidence["candidate"];
 type Projected = ReturnType<typeof projectLabelProductCandidate>;
@@ -120,7 +121,7 @@ function checkAgainstPackaging(state: MergeState, shape: Shape, pick: Pick): voi
   if (
     !servingSize ||
     (shape.drugFacts && !shape.servingSize) ||
-    shape.servingSize === words(servingSize)
+    (shape.servingSize && sameServingSize(shape.servingSize, servingSize))
   ) {
     return;
   }
