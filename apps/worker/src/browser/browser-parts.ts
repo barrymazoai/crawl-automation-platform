@@ -60,7 +60,7 @@ export function buildBrowserParts(parts: CoreParts): BrowserParts {
   });
   const registry = parts.registry;
   const sourcePlans = browserSourcePlans(parts);
-  const dtc = dtcAgentParts(parts, dtcSites, sourcePlans);
+  const dtc = dtcAgentParts(parts, dtcSites, { sourcePlans, pages: ego });
   const capture = new BrowserProductCapture({
     registry,
     http: new HttpCapture(pages),

@@ -11,6 +11,7 @@ export * from "./brand-source.js";
 export * from "./brand-evidence.js";
 export * from "./analysis/analyzer.js";
 export * from "./analysis/pages.js";
+export * from "./analysis/site-nutrition.js";
 export * from "./stored-settings.js";
 export * from "./agent/settings.js";
 export * from "./agent/runner.js";

@@ -1,6 +1,5 @@
 import { resolve } from "node:path";
-import { PostgresSiteAnalyses, PostgresResourceStore } from "@crawl-automation/adapters";
-import { currentPermitExecution } from "@crawl-automation/platform";
+import { PostgresSiteAnalyses } from "@crawl-automation/adapters";
 import { SiteAnalysisRunner } from "@crawl-automation/app";
 import {
   analyzeWithDtcAgent,
@@ -10,18 +9,22 @@ import {
   dtcAgentErrors,
   type DtcSitePolicy,
 } from "@crawl-automation/channel-dtc";
-import type { ProductSourcePlans } from "@crawl-automation/channels-core";
+import type { BrowserReader, ProductSourcePlans } from "@crawl-automation/channels-core";
 import type { CoreParts } from "../core-parts.js";
 import { dtcProductScope } from "./dtc-product-scope.js";
+import { verifyDtcModelPermit } from "./dtc-model.js";
+import { dtcSiteCheck } from "./dtc-site-check.js";
 
 /** The same capture agent drives analysis, catalog discovery and per-product harvest. */
 export function dtcAgentParts(
   parts: CoreParts,
   sites: readonly DtcSitePolicy[],
-  sourcePlans: ProductSourcePlans,
+  inputs: { sourcePlans: ProductSourcePlans; pages: BrowserReader },
 ) {
+  const { sourcePlans, pages } = inputs;
   const browser = parts.config.browser;
   const capture = captureAgent(parts);
+  const siteCheck = dtcSiteCheck(parts, pages);
   return {
     product: new DtcAgentProductCapture({
       agent: capture,
@@ -36,6 +39,10 @@ export function dtcAgentParts(
     analysis: new SiteAnalysisRunner({
       store: new PostgresSiteAnalyses(parts.database),
       analyze: async (input, progress, signal) => {
+        const skipped = await siteCheck(input, progress, signal);
+        if (skipped) {
+          return skipped;
+        }
         const result = await analyzeWithDtcAgent(capture, input, signal);
         for (const key of result.archiveKeys) {
           await progress(key);
@@ -73,27 +80,8 @@ function captureAgent(parts: CoreParts) {
       if (!agent) {
         throw dtcAgentErrors.create("DTC.AGENT_REQUIRED");
       }
-      await verifyCaptureModelPermit(parts);
+      await verifyDtcModelPermit(parts);
       return agent.capture(request, signal);
     },
   };
-}
-
-async function verifyCaptureModelPermit(parts: CoreParts): Promise<void> {
-  const owner = currentPermitExecution();
-  const resource = parts.config.browser?.dtcAgent?.modelResourceId;
-  const held = owner
-    ? await new PostgresResourceStore(parts.database).findHeld(owner.permitId)
-    : null;
-  if (
-    !owner ||
-    !resource ||
-    !held?.resources.includes(resource) ||
-    held.workflowId !== owner.workflowId ||
-    held.runId !== owner.runId
-  ) {
-    throw dtcAgentErrors.create("DTC.AGENT_REQUIRED", {
-      details: { reason: "capture_model_permit_required" },
-    });
-  }
 }

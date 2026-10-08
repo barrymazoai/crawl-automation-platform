@@ -25,7 +25,8 @@ export const AnalyzedBrandSchema = z.object({
   reason: z.string().nullable(),
 });
 export const SiteAnalysisResultSchema = z.object({
-  state: z.enum(["completed", "needs-review", "failed"]),
+  // skipped (owner 2026-10-08): the site sells no nutrition products; nothing may be applied.
+  state: z.enum(["completed", "needs-review", "failed", "skipped"]),
   brands: z.array(AnalyzedBrandSchema),
   archiveKeys: z.array(z.string()),
   reasons: z.array(z.string()),
@@ -33,7 +34,7 @@ export const SiteAnalysisResultSchema = z.object({
 export const SiteAnalysisSchema = SiteAnalysisResultSchema.extend({
   analysisId: z.uuid(),
   url: SiteUrlSchema,
-  state: z.enum(["queued", "running", "completed", "needs-review", "failed"]),
+  state: z.enum(["queued", "running", "completed", "needs-review", "failed", "skipped"]),
   limits: SiteAnalysisLimitsSchema,
 });
 export type AnalyzedBrand = z.infer<typeof AnalyzedBrandSchema>;
