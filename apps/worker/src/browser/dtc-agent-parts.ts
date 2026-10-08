@@ -9,7 +9,8 @@ import {
   dtcAgentErrors,
   type DtcSitePolicy,
 } from "@crawl-automation/channel-dtc";
-import type { BrowserReader, ProductSourcePlans } from "@crawl-automation/channels-core";
+import type { ProductSourcePlans } from "@crawl-automation/channels-core";
+import type { EgoPages } from "@crawl-automation/platform";
 import type { CoreParts } from "../core-parts.js";
 import { dtcProductScope } from "./dtc-product-scope.js";
 import { verifyDtcModelPermit } from "./dtc-model.js";
@@ -19,7 +20,7 @@ import { dtcSiteCheck } from "./dtc-site-check.js";
 export function dtcAgentParts(
   parts: CoreParts,
   sites: readonly DtcSitePolicy[],
-  inputs: { sourcePlans: ProductSourcePlans; pages: BrowserReader },
+  inputs: { sourcePlans: ProductSourcePlans; pages: Pick<EgoPages, "round"> },
 ) {
   const { sourcePlans, pages } = inputs;
   const browser = parts.config.browser;

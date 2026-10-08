@@ -30,8 +30,6 @@ export class SiteAnalysisPages implements AnalysisPages {
       analysisId: string;
       maxPages: number;
       evidence(key: string): Promise<void>;
-      /** The nutrition-site check reads a home page that may redirect to its www or locale host (owner 2026-10-08). */
-      anyOrigin?: boolean;
     },
   ) {
     if (deps.browser.provider !== "ego-lite/2") {
@@ -68,7 +66,7 @@ export class SiteAnalysisPages implements AnalysisPages {
     const saved = await this.capture(url, archive, signal);
     await this.deps.evidence(saved.source.objectKey);
     const finalUrl = saved.finalUrl ?? url;
-    if (!this.deps.anyOrigin && new URL(finalUrl).origin !== new URL(url).origin) {
+    if (new URL(finalUrl).origin !== new URL(url).origin) {
       throw analysisErrors.create("DTC.ANALYSIS_REDIRECT", { details: { url, finalUrl } });
     }
     const page = {
