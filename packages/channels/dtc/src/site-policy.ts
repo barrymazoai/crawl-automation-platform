@@ -76,6 +76,14 @@ function catalogItemSelector(policy: DtcSitePolicy["catalog"]): string {
     .join(", ");
 }
 
+const STORE_PRODUCT_PATH = /^\/(?:collections\/[^/]+\/)?products?\/[^/]+\/?$/;
+/**
+ * Owner 2026-10-08: a custom-built store (JSON-LD platform) names product pages freely (PureTrim: /cardio9.cfm,
+ * /starterpaks/30-day-cleanse.cfm). Any non-root path on the site may be a product; the catalog evidence and the
+ * product page's own JSON-LD Product still decide.
+ */
+const CUSTOM_PRODUCT_PATH = /^\/[^/?#][^?#]*$/;
+
 /** An unverified site is addressable, but reading waits for its browser-checked policy. */
 export function dtcSitePolicy(site: SiteInput): DtcSitePolicy {
   const origins = site.origins ?? [`https://${site.siteKey}`];
@@ -86,7 +94,7 @@ export function dtcSitePolicy(site: SiteInput): DtcSitePolicy {
     brands: [],
     origins,
     imageOrigins: [...origins, "https://cdn.shopify.com"],
-    productPath: /^\/(?:collections\/[^/]+\/)?products?\/[^/]+\/?$/,
+    productPath: site.platform === "jsonld" ? CUSTOM_PRODUCT_PATH : STORE_PRODUCT_PATH,
     ...site,
     catalog: listing,
     scroll: site.scroll ?? { ...scroll, itemSelector: catalogItemSelector(listing) },
