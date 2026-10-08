@@ -29,6 +29,10 @@ it.each([
   ["<p>Our supplement supports your nutrition. Premium ingredients for life.</p>", false],
   ["<p>Pick the serving size that suits you.</p>", false],
   ["<script>Ingredients: not visible</script><p>Great product</p>", false],
+  // Owner 2026-10-08: PureTrim's ingredient list sits under a descriptive heading.
+  ["<h3>Plant-Based Ingredients</h3><p>Organic Beet Root Powder, Ribose</p>", true],
+  ["<p>Key Ingredients:</p><p>Ashwagandha</p>", true],
+  ["<p>Made with clean ingredients</p>", false],
 ])("detects a label section without claiming completeness: %s", (html, expected) => {
   expect(hasLabelSection(html)).toBe(expected);
 });

@@ -1,4 +1,4 @@
-import type { ChannelRegistry } from "@crawl-automation/channels-core";
+import { pageText, type ChannelRegistry } from "@crawl-automation/channels-core";
 import type { ArtifactResolver } from "@crawl-automation/platform";
 import { enrichmentErrors } from "@crawl-automation/processing";
 import type {
@@ -44,6 +44,7 @@ export class EnrichmentTitleReader {
       ...subject,
       title: product.evidence.title,
       titleEvidence: evidence,
+      description: description(product.evidence.detailsHtml),
     };
     if (variant) {
       result.websiteVariant = { ...variant, evidence };
@@ -52,6 +53,12 @@ export class EnrichmentTitleReader {
     }
     return result;
   }
+}
+
+/** Owner 2026-10-08: the page's description/bullets (from the same projection) let printed functions and form be read. */
+function description(html: string | null): string | null {
+  const text = html ? pageText(html).replace(/\s+/gu, " ").trim() : "";
+  return text ? text.slice(0, 12000) : null;
 }
 
 function websiteVariant(product: ChannelProductEvidence, subject: EnrichmentSubject) {

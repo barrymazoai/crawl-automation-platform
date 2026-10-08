@@ -13,6 +13,7 @@ export function groundedCandidate(
   const printed = printedStrings({
     title: input.title,
     label: input.label,
+    description: input.description ?? null,
     websiteVariant: input.websiteVariant && {
       title: input.websiteVariant.title,
       options: input.websiteVariant.options,
@@ -37,9 +38,10 @@ export function groundedCandidate(
   warnings.push(
     ...groundQuantities(candidate, quantities, Boolean(input.websiteVariant)),
     ...groundForm(candidate, source),
+    ...groundIngredients(candidate, printedStrings(input.label)),
   );
   if (warnings.length) {
-    candidate.warnings = warnings;
+    candidate.warnings = warnings.slice(0, 10);
   }
   return candidate;
 }
@@ -61,6 +63,30 @@ function requireHealthFunctions(
       });
     }
   }
+}
+
+/**
+ * Owner 2026-10-08: main ingredients must be copied from the label's own names (anything else is dropped with a
+ * warning); inferred health functions only stand in when none is printed and main ingredients exist.
+ */
+function groundIngredients(candidate: EnrichmentCandidate, label: string[]) {
+  const warnings: string[] = [];
+  const kept: string[] = [];
+  for (const name of candidate.functionalIngredients ?? []) {
+    const printed = label.some((text) => text.includes(normalizedText(name)));
+    if (!printed) {
+      warnings.push(`ingredient-not-on-label:${name.slice(0, 80)}`);
+    } else if (!kept.some((entry) => normalizedText(entry) === normalizedText(name))) {
+      kept.push(name);
+    }
+  }
+  candidate.functionalIngredients = kept;
+  const inferred = candidate.inferredHealthFunctions ?? [];
+  if (inferred.length && (candidate.healthFunctions.length || !kept.length)) {
+    warnings.push("inferred-health-function-dropped");
+    candidate.inferredHealthFunctions = [];
+  }
+  return warnings;
 }
 
 function groundOptionalText(candidate: EnrichmentCandidate, source: Set<string>) {

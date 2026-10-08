@@ -23,13 +23,24 @@ export const EnrichmentCandidateSchema = z.strictObject({
     strength: z.string().trim().min(1).max(100).nullable(),
   }),
   healthFunctions: z.array(z.string().trim().min(1).max(100)).max(12),
+  /**
+   * product-enrichment/3 (owner 2026-10-08): the main ingredients that matter for the product, copied from its own
+   * formula/ingredient names, without ordinary items (panel basics, fillers, capsule materials, sweeteners...).
+   * Absent on earlier candidates.
+   */
+  functionalIngredients: z.array(z.string().trim().min(1).max(300)).max(60).optional(),
+  /** Health functions the model attributes to those ingredients, only when none is printed. Absent earlier. */
+  inferredHealthFunctions: z.array(z.string().trim().min(1).max(100)).max(12).optional(),
   confidence: z.number().min(0).max(1),
   notes: z.string().max(1000).nullable(),
   /** Decoder diagnostics; absent on previously stored candidates. Never supplied by the model. */
   warnings: z.array(z.string().min(1).max(500)).max(10).optional(),
 });
 export type EnrichmentCandidate = z.infer<typeof EnrichmentCandidateSchema>;
-export const EnrichmentModelOutputSchema = EnrichmentCandidateSchema.omit({ warnings: true });
+export const EnrichmentModelOutputSchema = EnrichmentCandidateSchema.omit({ warnings: true }).extend({
+  functionalIngredients: z.array(z.string().trim().min(1).max(300)).max(60),
+  inferredHealthFunctions: z.array(z.string().trim().min(1).max(100)).max(12),
+});
 
 export const EnrichmentRecordSchema = z.strictObject({
   schemaVersion: z.literal(1), codec: z.literal("product-enrichment/1"),
@@ -63,7 +74,7 @@ export const RecentAttemptSchema = z.strictObject({ schemaVersion: z.literal(1),
 export type RecentAttempt = z.infer<typeof RecentAttemptSchema>;
 
 /** Shared pipeline protocol: hashes the actual title and label, independently of provenance. */
-export const SHARED_ENRICHMENT_PROTOCOL = "product-enrichment/2";
+export const SHARED_ENRICHMENT_PROTOCOL = "product-enrichment/3";
 export const EnrichmentRequestSchema = z.strictObject({
   collectionOperationId: ExecutionIdSchema,
   channel: ChannelIdSchema,
@@ -93,11 +104,14 @@ export const EnrichmentSubjectSchema = z.strictObject({
   title: z.string().max(4000).nullable(),
   titleEvidence: z.strictObject({ sourceId: z.string(), sha256: Sha256Schema }).nullable(),
   websiteVariant: EnrichmentWebsiteVariantSchema.optional(),
+  /** The page's description/bullets as text (same projection as the title); absent on earlier subjects. */
+  description: z.string().max(12000).nullable().optional(),
 });
 export type EnrichmentSubject = z.infer<typeof EnrichmentSubjectSchema>;
 
 export const SharedEnrichmentRecordSchema = z.strictObject({
-  codec: z.literal(SHARED_ENRICHMENT_PROTOCOL),
+  // /2 records stay readable; /3 adds the page description, main ingredients and inferred health functions.
+  codec: z.enum(["product-enrichment/2", SHARED_ENRICHMENT_PROTOCOL]),
   enrichmentId: Sha256Schema,
   formulaHash: Sha256Schema,
   inputHash: Sha256Schema,

@@ -49,8 +49,11 @@ it.skipIf(!directory)(
     );
     expect(subject.websiteVariant).toMatchObject({ variantId: "32703815778364", title: "100 ct" });
     expect(subject.websiteVariant?.evidence.sha256).toBe(request.sourcePlan?.source.sha256);
-    const old = enrichmentInput(collection, original.title);
-    const current = enrichmentInput(collection, subject.title, subject.websiteVariant);
+    const old = enrichmentInput(collection, { title: original.title });
+    const current = enrichmentInput(collection, {
+      title: subject.title,
+      websiteVariant: subject.websiteVariant,
+    });
     expect(current.formulaHash).toBe(old.formulaHash);
     expect(current.inputHash).not.toBe(old.inputHash);
     expect(

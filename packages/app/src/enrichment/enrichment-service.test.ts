@@ -20,6 +20,8 @@ const answer = {
   form: "capsule",
   variant: { count: 60, size: null, flavor: null, strength: null },
   healthFunctions: [],
+  functionalIngredients: [],
+  inferredHealthFunctions: [],
   confidence: 1,
   notes: null,
 };
@@ -187,7 +189,7 @@ it("keeps the refused answer and exact reason, so it can be decoded without anot
   const result = await state.service.run(request, signal());
   expect(result.status).toBe("review");
   const review = [...state.reviews.values()][0];
-  const prepared = enrichmentInput(state.source.collection, state.source.subject.title);
+  const prepared = enrichmentInput(state.source.collection, { title: state.source.subject.title });
   expect(review?.rawError.details).toMatchObject({
     reason: "unsupported-word:baseName:miracle",
     inputKey: `v3/product-enrichment/${prepared.inputHash}/input.json`,

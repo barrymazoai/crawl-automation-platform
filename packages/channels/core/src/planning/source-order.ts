@@ -34,8 +34,16 @@ const LABEL_HEADING = new RegExp(
   "im",
 );
 
+/**
+ * Owner 2026-10-08: an ingredient list may sit under a descriptive heading of its own ("Plant-Based Ingredients" on
+ * PureTrim, "Key Ingredients"): one to three capitalised words, then "Ingredients", alone on its line.
+ */
+const NAMED_INGREDIENTS_HEADING =
+  /(?:^|\n)[ \t]*(?:\p{Lu}[\p{L}-]*[ \t]+){1,3}(?:Ingredients|INGREDIENTS)[ \t]*:?[ \t]*(?=\n|$)/u;
+
 export function hasLabelSection(html: string): boolean {
-  return LABEL_HEADING.test(convert(html, { wordwrap: false }));
+  const text = convert(html, { wordwrap: false });
+  return LABEL_HEADING.test(text) || NAMED_INGREDIENTS_HEADING.test(text);
 }
 
 const INGREDIENTS_HEADING = /(?:^|\n)\s*(?:(?:Other|Inactive)\s+)?Ingredients\s*(?::|$)/im;

@@ -37,7 +37,7 @@ export class EnrichmentService {
     const prepared = {
       ...source,
       request,
-      ...enrichmentInput(source.collection, source.subject.title, source.subject.websiteVariant),
+      ...enrichmentInput(source.collection, source.subject),
     };
     const { inputHash, subject } = prepared;
     const attempt: Attempt = { executionFact: "not_executed", candidate: null, inputKey: null };
@@ -69,11 +69,7 @@ export class EnrichmentService {
   /** Infrastructure failures after collection are separate enrichment Reviews as well. */
   async review(request: EnrichmentRequest, error: unknown) {
     const source = await this.source(request, AbortSignal.timeout(20_000));
-    const { inputHash } = enrichmentInput(
-      source.collection,
-      source.subject.title,
-      source.subject.websiteVariant,
-    );
+    const { inputHash } = enrichmentInput(source.collection, source.subject);
     return enrichmentReview(this.deps, {
       subject: source.subject,
       inputHash,

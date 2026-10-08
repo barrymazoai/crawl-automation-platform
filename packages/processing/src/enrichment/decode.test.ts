@@ -14,6 +14,8 @@ const candidate: EnrichmentCandidate = {
   form: "capsule",
   variant: { count: 60, size: null, flavor: null, strength: "25 mcg" },
   healthFunctions: [],
+  functionalIngredients: [],
+  inferredHealthFunctions: [],
   confidence: 0.95,
   notes: null,
 };
@@ -275,5 +277,57 @@ describe("dosage form", () => {
     ["unknown", ""],
   ])("retains supported forms and unknown values: %s", (form, label) => {
     expect(decode({ ...candidate, form }, { ...input, label }).form).toBe(form);
+  });
+});
+
+describe("main ingredients and health functions (product-enrichment/3, owner 2026-10-08)", () => {
+  const label = {
+    ...input,
+    label: {
+      formula: [{ name: "Glucosamine Sulfate" }, { name: "Calories" }],
+      ingredients: ["Rice flour"],
+    },
+  };
+
+  it("keeps only main ingredients printed on the label, once each", () => {
+    const value = {
+      ...candidate,
+      functionalIngredients: ["Glucosamine Sulfate", "glucosamine sulfate", "Turmeric"],
+    };
+    const decoded = decode(value, label);
+    expect(decoded.functionalIngredients).toEqual(["Glucosamine Sulfate"]);
+    expect(decoded.warnings).toContain("ingredient-not-on-label:Turmeric");
+  });
+
+  it("uses inferred health functions only when none is printed and main ingredients exist", () => {
+    const inferred = {
+      ...candidate,
+      functionalIngredients: ["Glucosamine Sulfate"],
+      inferredHealthFunctions: ["joint health"],
+    };
+    expect(decode(inferred, label).inferredHealthFunctions).toEqual(["joint health"]);
+    const none = decode({ ...inferred, functionalIngredients: [] }, label);
+    expect(none.inferredHealthFunctions).toEqual([]);
+  });
+
+  it("reads printed health functions and form from the page description", () => {
+    const described = {
+      ...label,
+      title: "Joint Formula",
+      description: "Supports joint health. 90 tablets.",
+    };
+    const decoded = decode(
+      {
+        ...candidate,
+        unifiedName: "Joint Formula",
+        baseName: "Joint Formula",
+        variant: { count: null, size: null, flavor: null, strength: null },
+        form: "tablet",
+        healthFunctions: ["Supports joint health"],
+      },
+      described,
+    );
+    expect(decoded.healthFunctions).toEqual(["Supports joint health"]);
+    expect(decoded.form).toBe("tablet");
   });
 });
