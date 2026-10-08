@@ -5,9 +5,12 @@ import { DtcVariantHandoffsSchema } from "./dtc-variants.js";
 import { OcrInputSchema } from "./processing.js";
 import { ChannelProductEvidenceSchema } from "./channel-evidence.js";
 
-/** DTC-only prepass. It never changes the shared Facts or OCR result contracts. */
+/**
+ * DTC-only prepass. It never changes the shared Facts or OCR result contracts. A retained ref may be as large as a DTC
+ * page (6 MiB, DTC_PAGE_LIMITS; owner 2026-10-08: PureTrim pages are ~2.08 MB, over the earlier 2 MB).
+ */
 export const DtcGalleryRefSchema = z.strictObject({
-  objectKey: ObjectKeySchema, sha256: Sha256Schema, byteSize: z.number().int().positive().max(2_000_000),
+  objectKey: ObjectKeySchema, sha256: Sha256Schema, byteSize: z.number().int().positive().max(6 * 1024 * 1024),
 });
 export const DtcGalleryRequestSchema = z.strictObject({
   sourcePlan: ChannelPlanInputSchema,

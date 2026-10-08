@@ -15,6 +15,13 @@ export function publicAddress(raw: string): boolean {
   );
 }
 
+/**
+ * An allowed-origins entry that admits any public HTTPS host (owner 2026-10-08: DTC product images may sit on any
+ * image server, e.g. PureTrim's cdn.awccloud.com). HTTPS, no credentials, port or IP literal, and the public-address
+ * pin still apply.
+ */
+export const ANY_HTTPS_ORIGIN = "https://*";
+
 export function permittedUrl(raw: string, allowedOrigins: readonly string[]): URL {
   let url: URL;
   try {
@@ -30,7 +37,7 @@ export function permittedUrl(raw: string, allowedOrigins: readonly string[]): UR
     url.port,
     url.hostname.endsWith("."),
     isIP(url.hostname.replace(/^\[|\]$/g, "")),
-    !allowedOrigins.includes(url.origin),
+    !allowedOrigins.includes(url.origin) && !allowedOrigins.includes(ANY_HTTPS_ORIGIN),
   ];
   if (unsafe.some(Boolean)) {
     throw fileErrors.create("SOURCE.ORIGIN_BLOCKED");

@@ -1,4 +1,5 @@
 import {
+  ANY_HTTPS_ORIGIN,
   completeFacts,
   channelErrors,
   type ChannelAdapter,
@@ -87,7 +88,8 @@ export function createDtcAdapter(
       origins: [...new Set(scopedSites.flatMap((site) => site.origins))],
       ...DTC_PAGE_LIMITS,
     },
-    fileOrigins: [...new Set(scopedSites.flatMap((site) => site.imageOrigins))],
+    // Owner 2026-10-08: DTC product images may be downloaded from any image server, no host allowlist.
+    fileOrigins: [ANY_HTTPS_ORIGIN],
     productAddress: (url) => dtcProductAddress(url, scopedSites),
     pageIdentity: (page) => dtcPageIdentity(page, scopedSites),
     pageSighting: (page) => dtcBrandSighting(page, scope),
