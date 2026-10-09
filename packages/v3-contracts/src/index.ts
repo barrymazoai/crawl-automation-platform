@@ -61,3 +61,4 @@ export * from "./enrichment.js";
 export * from "./commerce.js";
 export * from "./label-drug.js";
 export * from "./site-analysis.js";
+export * from "./brand-enrichment.js";

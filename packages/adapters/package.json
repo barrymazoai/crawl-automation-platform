@@ -24,12 +24,14 @@
     "@crawl-automation/processing": "workspace:*",
     "@crawl-automation/v3-contracts": "workspace:*",
     "@crawl-automation/workflows": "workspace:*",
+    "@orpc/client": "catalog:",
     "@temporalio/client": "1.23.0",
     "@temporalio/common": "1.23.0",
     "@temporalio/proto": "1.23.0",
     "date-fns": "^4.1.0",
     "pm2": "7.0.4",
     "umzug": "3.8.3",
+    "undici": "catalog:",
     "zod": "catalog:"
   },
   "devDependencies": {
