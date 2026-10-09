@@ -22,10 +22,12 @@ export async function verifyAgentResult(
   result: AgentResult,
   at: { mode: AgentCaptureRequest["mode"]; outDir: string; prefix: string },
 ): Promise<AgentWarning | null> {
-  // Partial site analyses still pass the full analysis/evidence validation after archiving.
+  // Partial site analyses still pass the full analysis/evidence validation after archiving. The model's own doubt does
+  // not overrule an analysis it wrote as completed (Sambucol, 2026-10-09: "2 regional links not verified separately",
+  // analysis.json state completed with the brand verified); the host's analysis checks decide.
   if (at.mode === "analysis" && result.status === "needs_review") {
     const analysis = JSON.parse(await readFile(join(at.outDir, "analysis.json"), "utf8"));
-    z.object({ state: z.literal("needs-review") }).parse(analysis);
+    z.object({ state: z.enum(["needs-review", "completed"]) }).parse(analysis);
     return null;
   }
   // A product capture with doubts continues when host verification of its retained materials passes
