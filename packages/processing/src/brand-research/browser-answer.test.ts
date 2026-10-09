@@ -21,6 +21,27 @@ describe("browser answers require retained citations", () => {
     expect(answer.subBrands).toHaveLength(21);
     expect(answer.archiveKeys).toEqual(pages.archiveKeys);
   });
+  it("gives an absorbed brand no sub-brands: the owner's brands are its siblings (MANTRA Labs)", () => {
+    const quote = "Chapter One Gummies are attractive for children";
+    const answer = checkFamilyAnswer(
+      {
+        ...family,
+        landedUrl: "https://garden.example/",
+        redirect: { fromDomain: "sprout.example", toDomain: "garden.example", sameBrand: false },
+        shape: "shared_site",
+        subBrands: [
+          {
+            name: "Chapter One",
+            url: null,
+            isNutrition: true,
+            evidence: { quote, url: "https://garden.example/" },
+          },
+        ],
+      },
+      archive([page("https://garden.example/", quote)]),
+    );
+    expect(answer).toMatchObject({ shape: "single", subBrands: [] });
+  });
   it("drops categories whose evidence does not name them (Kate Farms, 2026-10-09)", () => {
     const quote = "Daily nutrition for everyday enjoyment";
     const answer = checkFamilyAnswer(

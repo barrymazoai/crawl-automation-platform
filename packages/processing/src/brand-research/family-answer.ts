@@ -16,9 +16,14 @@ export function checkFamilyAnswer(raw: unknown, archive: ResearchArchive, subjec
   checkRedirect(result, subject);
   // A sub-brand whose evidence quote is not on its page, or does not name it, is dropped (owner 2026-10-09: Kate Farms'
   // shop collections "Everyday Adult" / "Everyday Kids" / "Medical Nutrition" were reported as sub-brands).
-  const subBrands = result.subBrands.filter(
-    (brand) => namesBrand(brand) && groundedPage(archive.pages, brand.evidence),
-  );
+  // An absorbed brand (it forwards to another company) has no family of its own: brands on the owner's site are the
+  // owner's, i.e. its siblings (MANTRA Labs, 2026-10-09: Zahler's "Chapter One" was reported as its sub-brand).
+  const absorbed = !!result.redirect && !result.redirect.sameBrand;
+  const subBrands = absorbed
+    ? []
+    : result.subBrands.filter(
+        (brand) => namesBrand(brand) && groundedPage(archive.pages, brand.evidence),
+      );
   const shape = subBrands.length === 0 && result.shape !== "holding" ? "single" : result.shape;
   const clues = withObservedRedirect(
     retainedClues({
