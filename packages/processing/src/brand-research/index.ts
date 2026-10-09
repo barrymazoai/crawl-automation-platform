@@ -5,14 +5,24 @@ import { familyPrompt } from "./family-prompt.js";
 import type { BrandSubject } from "./inputs.js";
 import { checkResearchAnswer } from "./research-answer.js";
 import { researchPrompt } from "./research-prompt.js";
-import { checkedDependencies, type BrandResearchDeps } from "./settings.js";
+import {
+  checkedDependencies,
+  checkedTextDependencies,
+  type BrandResearchDeps,
+  type BrandTextDeps,
+} from "./settings.js";
 import { textTasks } from "./text-tasks.js";
 
-export type { BrandResearchDeps } from "./settings.js";
+export type { BrandResearchDeps, BrandTextDeps } from "./settings.js";
 export { brandResearchErrors } from "./errors.js";
 
-/** Composition factory: five structural adapters for the application's frozen task ports. */
-export function createBrandResearchTasks(deps: BrandResearchDeps) {
+/** The three tool-free text turns (Apollo judge, ownership reviewer, titles); they need only the text model. */
+export function createBrandTextTasks(deps: BrandTextDeps) {
+  return textTasks(checkedTextDependencies(deps));
+}
+
+/** The two browser tasks (family check, research), each in its own Ego page. */
+export function createBrandBrowserTasks(deps: BrandResearchDeps) {
   const settings = checkedDependencies(deps);
   const capture = new BrandCaptureRunner(settings);
   return {
@@ -34,6 +44,10 @@ export function createBrandResearchTasks(deps: BrandResearchDeps) {
         return checkResearchAnswer(saved.result, saved);
       },
     },
-    ...textTasks(settings),
   };
+}
+
+/** Composition factory: all five structural adapters for the application's frozen task ports. */
+export function createBrandResearchTasks(deps: BrandResearchDeps) {
+  return { ...createBrandBrowserTasks(deps), ...createBrandTextTasks(deps) };
 }

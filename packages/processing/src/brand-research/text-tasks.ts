@@ -7,10 +7,10 @@ import { titlePrompt } from "./title-prompt.js";
 import { checkTitleAnswer, TitlesAnswerSchema } from "./title-answer.js";
 import { textAnswer } from "./text-runner.js";
 import type { ApolloInput, ReviewerInput, TitlesInput } from "./inputs.js";
-import type { BrandResearchDeps } from "./settings.js";
+import type { BrandTextDeps } from "./settings.js";
 
 /** Factory of port adapters sharing the existing text-model execution template. */
-export function textTasks(deps: BrandResearchDeps) {
+export function textTasks(deps: BrandTextDeps) {
   return {
     apolloJudge: {
       async next(input: ApolloInput, signal: AbortSignal) {

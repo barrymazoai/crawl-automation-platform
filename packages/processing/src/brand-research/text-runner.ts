@@ -2,11 +2,11 @@ import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { CodexTextModel } from "../text/model/codex-text-model.js";
 import { checkedAnswer } from "./answer.js";
-import type { BrandResearchDeps } from "./settings.js";
+import type { BrandTextDeps } from "./settings.js";
 
 /** Adapter: each task gets a fresh, tool-free app-server turn and closes its client in all outcomes. */
 export async function textAnswer<Answer>(
-  deps: BrandResearchDeps,
+  deps: BrandTextDeps,
   request: { task: string; prompt: string; schema: z.ZodType<Answer> },
   signal: AbortSignal,
 ): Promise<Answer> {

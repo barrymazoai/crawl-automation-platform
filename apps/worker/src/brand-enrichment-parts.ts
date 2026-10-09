@@ -14,7 +14,11 @@ import {
   TemporalBrandEnrichmentProducts,
   SupplySmartProductDelivery,
 } from "@crawl-automation/adapters";
-import { CodexTextConfigSchema, createBrandResearchTasks } from "@crawl-automation/processing";
+import {
+  CodexTextConfigSchema,
+  createBrandBrowserTasks,
+  createBrandTextTasks,
+} from "@crawl-automation/processing";
 import { SiteAnalysisService, brandEnrichmentErrors } from "@crawl-automation/app";
 import { connectTemporal, type TemporalClient } from "@crawl-automation/platform";
 import { browserResources } from "@crawl-automation/platform/browser-routing";
@@ -23,43 +27,66 @@ import type { CoreParts } from "./core-parts.js";
 import { buildBrandStepServices, type BrandEnrichmentTasks } from "./brand-enrichment-services.js";
 
 /**
- * The Codex tasks (Luna medium through `processing.codex.text`, browser tasks in the DTC agent's Ego space) and product
- * delivery. A process that hosts brand enrichment activities needs `processing.codex.text` and `browser.dtcAgent`.
+ * The Codex tasks and product delivery, built per kind on first use. Text turns (Apollo judge, reviewer, titles)
+ * need `processing.codex.text` (Server 一, Luna medium); browser tasks (family, research) need `browser.dtcAgent`
+ * (the Ego workers on Server 二), whose Codex settings they run with.
  */
 export function brandEnrichmentTaskImplementations(
   parts: CoreParts,
   rpc: SupplySmartRpc,
 ): BrandEnrichmentTasks {
+  const text = once(() =>
+    createBrandTextTasks({ text: textSettings(parts), environment: process.env }),
+  );
+  const browser = once(() => createBrandBrowserTasks(browserSettings(parts)));
+  const delivery = once(
+    () =>
+      new SupplySmartProductDelivery({ database: parts.database, rpc, objects: parts.r2.store }),
+  );
+  return {
+    family: { check: (input, signal) => browser().familyCheck.check(input, signal) },
+    researcher: { research: (input, signal) => browser().researcher.research(input, signal) },
+    judge: { next: (input, signal) => text().apolloJudge.next(input, signal) },
+    reviewer: { review: (input, signal) => text().reviewer.review(input, signal) },
+    classifier: { classify: (input, signal) => text().titles.classify(input, signal) },
+    delivery: { deliver: (input, signal) => delivery().deliver(input, signal) },
+  };
+}
+
+function textSettings(parts: CoreParts) {
   const text = parts.config.processing?.codex?.text;
-  const browser = parts.config.browser;
-  const agent = browser?.dtcAgent;
-  if (!text || !browser || !agent) {
+  if (!text) {
     throw brandEnrichmentErrors.create("BRAND_ENRICHMENT.NOT_WIRED", {
-      details: { needs: ["processing.codex.text", "browser.dtcAgent"] },
+      details: { needs: "processing.codex.text" },
     });
   }
-  const research = createBrandResearchTasks({
-    text: CodexTextConfigSchema.parse(text),
+  return CodexTextConfigSchema.parse(text);
+}
+
+function browserSettings(parts: CoreParts) {
+  const browser = parts.config.browser;
+  const agent = browser?.dtcAgent;
+  if (!browser || !agent) {
+    throw brandEnrichmentErrors.create("BRAND_ENRICHMENT.NOT_WIRED", {
+      details: { needs: "browser.dtcAgent" },
+    });
+  }
+  return {
+    text: CodexTextConfigSchema.parse(agent.codex),
     capture: agent.codex,
     ego: browser.ego,
     publication: parts.publication,
     workRoot: agent.codex.workRoot,
     skillPaths: { ego: agent.egoSkillPath, research: [] },
     environment: process.env,
-  });
-  return {
-    family: research.familyCheck,
-    researcher: research.researcher,
-    judge: research.apolloJudge,
-    reviewer: research.reviewer,
-    classifier: research.titles,
-    delivery: new SupplySmartProductDelivery({
-      database: parts.database,
-      rpc,
-      objects: parts.r2.store,
-    }),
   };
 }
+
+function once<Value>(build: () => Value): () => Value {
+  let built: Value | undefined;
+  return () => (built ??= build());
+}
+
 /** Composition root. Lazy construction does not start intake or poll any business requests. */
 export async function buildBrandEnrichmentParts(parts: CoreParts) {
   const config = parts.config.brandEnrichment;
@@ -68,7 +95,7 @@ export async function buildBrandEnrichmentParts(parts: CoreParts) {
   }
   const secrets = await loadBrandEnrichmentSecrets(config.secretsFile);
   const rpc = new SupplySmartRpc(secrets.supplySmart);
-  const tasks = lazyTasks(() => brandEnrichmentTaskImplementations(parts, rpc));
+  const tasks = brandEnrichmentTaskImplementations(parts, rpc);
   const runs = new PostgresBrandEnrichmentRuns(parts.database);
   const temporal = await connectTemporal(parts.config.temporal);
   const services = buildBrandStepServices({
@@ -113,20 +140,6 @@ function siteAnalyses(parts: CoreParts, temporal: TemporalClient) {
   });
 }
 export type BrandEnrichmentParts = Awaited<ReturnType<typeof buildBrandEnrichmentParts>>;
-
-/** Built on first use and kept: a process that never runs a Codex task never needs its settings. */
-function lazyTasks(build: () => BrandEnrichmentTasks): BrandEnrichmentTasks {
-  let built: BrandEnrichmentTasks | undefined;
-  const tasks = () => (built ??= build());
-  return {
-    family: { check: (input, signal) => tasks().family.check(input, signal) },
-    researcher: { research: (input, signal) => tasks().researcher.research(input, signal) },
-    judge: { next: (input, signal) => tasks().judge.next(input, signal) },
-    reviewer: { review: (input, signal) => tasks().reviewer.review(input, signal) },
-    classifier: { classify: (input, signal) => tasks().classifier.classify(input, signal) },
-    delivery: { deliver: (input, signal) => tasks().delivery.deliver(input, signal) },
-  };
-}
 
 export async function closeBrandEnrichmentParts(parts: Promise<BrandEnrichmentParts>) {
   await (await parts).closeConnection();
