@@ -8,9 +8,9 @@ import {
 } from "../site-analysis/site-analysis-service.js";
 import type { BrandEnrichmentRuns } from "./ports.js";
 import type { ProductDelivery } from "./task-ports.js";
-import { domainOf, requireCompanyRun, saveOutput } from "./run-records.js";
-import { brandEnrichmentErrors } from "./errors.js";
+import { requireCompanyRun, saveOutput } from "./run-records.js";
 import { savedFamily } from "./saved-family.js";
+import { deliverBrandProducts } from "./product-delivery-step.js";
 
 /** Cancellation of the exact site-analysis workflow and scans this run submitted, never a whole browser/queue. */
 export interface BrandProductExecution {
@@ -71,24 +71,8 @@ export class BrandProductsService {
     input: { runId: string; companyId: string; url: string; applied: SiteAnalysisApplyResult },
     signal: AbortSignal,
   ) {
-    const { runId, companyId, url, applied } = input;
-    const sourceIds = sourceIdsOf(applied);
-    const siteKey = domainOf(url);
-    if (!siteKey) {
-      throw brandEnrichmentErrors.create("BRAND_ENRICHMENT.IDENTITY_UNRESOLVED");
-    }
-    const result = sourceIds.length
-      ? await this.deps.delivery.deliver(
-          {
-            companyId,
-            siteKey,
-            sourceIds,
-            ingestRunId: `brand-enrichment-${runId}`,
-          },
-          signal,
-        )
-      : { captured: 0, review: 0, reason: "No verified DTC sources", skipped: applied.skipped };
-    await saveOutput(this.deps.runs, { runId, step: "products", output: result });
+    const result = await deliverBrandProducts(this.deps.delivery, input, signal);
+    await saveOutput(this.deps.runs, { runId: input.runId, step: "products", output: result });
   }
   private async analysis(runId: string, url: string) {
     const reference = analysisReference.safeParse(
@@ -145,10 +129,6 @@ export class BrandProductsService {
       scanIds: progress.tasks.map((task) => task.scanId),
     });
   }
-}
-
-function sourceIdsOf(applied: SiteAnalysisApplyResult) {
-  return [...new Set((applied.tasks ?? []).map((task) => task.sourceId))];
 }
 
 /** A stable request ID per operation of a run: the same run retries with the same ID, never another operation's. */

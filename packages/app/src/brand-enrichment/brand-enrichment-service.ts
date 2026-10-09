@@ -11,6 +11,7 @@ import { brandEnrichmentErrors } from "./errors.js";
 import { requireRun } from "./run-records.js";
 import { BrandQuestionService } from "./question-service.js";
 import * as inputs from "./api-model.js";
+import type { BrandProductRedelivery } from "./product-redelivery.js";
 
 /** Facade: the API's only entry point. Intake is explicitly requested, never a polling loop. */
 export class BrandEnrichmentService {
@@ -21,6 +22,8 @@ export class BrandEnrichmentService {
       reviews: BrandEnrichmentReviews;
       companies: SupplySmartCompanies;
       gateway: BrandEnrichmentGateway;
+      /** Absent when this process cannot reach the saved products (no storage configured). */
+      redelivery?: BrandProductRedelivery;
     },
   ) {}
 
@@ -143,6 +146,14 @@ export class BrandEnrichmentService {
   }
   unlink(raw: unknown, signal = new AbortController().signal) {
     return this.deps.companies.unlink(inputs.UnlinkBrandCompanySchema.parse(raw), signal);
+  }
+  /** Sends a closed run's products to Supply Smart again, e.g. after its Review products finished (owner 2026-10-09). */
+  deliverProducts(raw: unknown, signal = new AbortController().signal) {
+    const { runId } = inputs.BrandRunIdSchema.parse(raw);
+    if (!this.deps.redelivery) {
+      throw brandEnrichmentErrors.create("BRAND_ENRICHMENT.NOT_CONFIGURED");
+    }
+    return this.deps.redelivery.deliver(runId, signal);
   }
   spotCheck(raw: unknown) {
     const { decisionId, ...check } = inputs.SpotCheckBrandDecisionSchema.parse(raw);

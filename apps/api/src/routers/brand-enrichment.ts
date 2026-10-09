@@ -41,6 +41,10 @@ export const brandEnrichmentRouter = router({
   answerQuestion: procedure
     .input(AnswerBrandQuestionSchema)
     .mutation(async ({ ctx, input }) => (await service(ctx)).answerQuestion(input)),
+  /** Sends a closed run's settled products to Supply Smart again (same sources, same ingest run). */
+  deliverProducts: procedure
+    .input(BrandRunIdSchema)
+    .mutation(async ({ ctx, input }) => (await service(ctx)).deliverProducts(input)),
   unlink: procedure
     .input(UnlinkBrandCompanySchema)
     .mutation(async ({ ctx, input }) => (await service(ctx)).unlink(input)),

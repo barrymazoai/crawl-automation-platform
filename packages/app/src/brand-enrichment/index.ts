@@ -15,3 +15,5 @@ export * from "./ownership-write-service.js";
 export * from "./products-service.js";
 export * from "./close-service.js";
 export * from "./resource-settings.js";
+export * from "./product-redelivery.js";
+export * from "./product-delivery-step.js";
