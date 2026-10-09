@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { z } from "zod";
 import type { BrandProductProgress } from "@crawl-automation/v3-contracts";
 import {
@@ -108,7 +109,8 @@ export class BrandProductsService {
       return applied.data;
     }
     const result = await this.deps.analyses.apply({
-      requestId: runId,
+      // One receipt per request ID: analyze already used the run ID (MANTRA Labs, 2026-10-09: REQUEST.ID_CONFLICT).
+      requestId: operationRequestId(runId, "apply"),
       analysisId,
       enqueue: true,
       ...(catalogUrl ? { catalogUrl } : {}),
@@ -147,4 +149,11 @@ export class BrandProductsService {
 
 function sourceIdsOf(applied: SiteAnalysisApplyResult) {
   return [...new Set((applied.tasks ?? []).map((task) => task.sourceId))];
+}
+
+/** A stable request ID per operation of a run: the same run retries with the same ID, never another operation's. */
+export function operationRequestId(runId: string, operation: string): string {
+  const hex = createHash("sha256").update(`${runId}:${operation}`).digest("hex");
+  const variant = ((Number.parseInt(hex[16] ?? "0", 16) & 0x3) | 0x8).toString(16);
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-5${hex.slice(13, 16)}-${variant}${hex.slice(17, 20)}-${hex.slice(20, 32)}`;
 }

@@ -1,3 +1,4 @@
+import { operationRequestId } from "./products-service.js";
 import { expect, it } from "vitest";
 import { BrandSummaryService } from "./summary-service.js";
 import { family, signal } from "./testing/fakes.js";
@@ -27,7 +28,8 @@ it.each([null, true, false])(
       test.analysis.limits,
     );
     expect(test.apply).toHaveBeenCalledWith({
-      requestId: test.runId,
+      // Analyze and apply each have their own receipt (one row per request ID).
+      requestId: operationRequestId(test.runId, "apply"),
       analysisId: test.analysis.analysisId,
       enqueue: true,
       ...(sameBrand === false ? { catalogUrl } : {}),
