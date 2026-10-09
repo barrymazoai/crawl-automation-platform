@@ -82,7 +82,7 @@ describe("Supply Smart product delivery with real answer codecs and fake RPC", (
     async (condition) => {
       const state = setup();
       if (condition === "verifyProblems") {
-        state.rpc.verifyProblems = ["run_not_completed"];
+        state.rpc.verifyProblems = ["readback_mismatch"];
       } else {
         state.rpc[condition] = true;
       }
@@ -93,6 +93,12 @@ describe("Supply Smart product delivery with real answer codecs and fake RPC", (
       expect(state.rpc.calls.some((call) => call.path === "product.completeCrawlRun")).toBe(false);
     },
   );
+
+  it("delivers into a still-open partial run: run_not_completed is not a product problem (Kate Farms)", async () => {
+    const state = setup();
+    state.rpc.verifyProblems = ["run_not_completed"];
+    expect(await state.run()).toMatchObject({ delivered: 1, refused: [] });
+  });
 
   it("isolates item-level verification problems", async () => {
     const state = setup(deliverySnapshot([deliveryProduct("1"), deliveryProduct("2")]));

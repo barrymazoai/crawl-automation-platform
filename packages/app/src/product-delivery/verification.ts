@@ -45,7 +45,10 @@ export function verificationProblems(
     answer.items.every((item) => refs.includes(item.clientRef));
   return input.products.map((product) => {
     const item = answer.items.find((entry) => entry.clientRef === product.item.clientRef);
-    const problems = [...answer.problems, ...itemProblems(item)];
+    // "run_not_completed" only says the ingest run is still open, which a partial run stays (completeCrawlRun is called
+    // for a full run only). It is not a problem of this product (Kate Farms, 2026-10-09: all 3 were refused for it).
+    const runProblems = answer.problems.filter((problem) => problem !== "run_not_completed");
+    const problems = [...runProblems, ...itemProblems(item)];
     if (!exact) {
       problems.push("PRODUCT_DELIVERY.VERIFY_FAILED");
     }
