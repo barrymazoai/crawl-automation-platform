@@ -45,3 +45,25 @@ it("rejects a relative secret-file path", () => {
     BrandEnrichmentSettingsSchema.safeParse({ ...settings(), secretsFile: "private.env" }).success,
   ).toBe(false);
 });
+
+it("defaults redelivery to every 15 minutes for 30 days and allows disabling with zero", () => {
+  expect(BrandEnrichmentSettingsSchema.parse(settings()).limits).toMatchObject({
+    redeliverySweepMinutes: 15,
+    redeliveryLookbackDays: 30,
+  });
+  expect(
+    BrandEnrichmentSettingsSchema.parse({
+      ...settings(),
+      limits: { redeliverySweepMinutes: 0, redeliveryLookbackDays: 7 },
+    }).limits,
+  ).toMatchObject({ redeliverySweepMinutes: 0, redeliveryLookbackDays: 7 });
+});
+
+it.each([
+  { redeliverySweepMinutes: -1 },
+  { redeliverySweepMinutes: 0.5 },
+  { redeliveryLookbackDays: 0 },
+  { redeliveryLookbackDays: 1.5 },
+])("rejects invalid redelivery limits %j", (limits) => {
+  expect(BrandEnrichmentSettingsSchema.safeParse({ ...settings(), limits }).success).toBe(false);
+});

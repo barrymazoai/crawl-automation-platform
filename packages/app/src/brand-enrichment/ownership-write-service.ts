@@ -2,6 +2,7 @@ import { CompanyLinkSchema, ReviewerVerdictSchema } from "@crawl-automation/v3-c
 import { z } from "zod";
 import type { BrandEnrichmentRuns, BrandEnrichmentReviews, SupplySmartCompanies } from "./ports.js";
 import { saveOutput } from "./run-records.js";
+import { saveOwnershipConflict } from "./ownership-conflict.js";
 
 export class BrandOwnershipWriteService {
   constructor(
@@ -22,8 +23,7 @@ export class BrandOwnershipWriteService {
       .parse(await this.deps.runs.step(runId, "verdict"));
     const outcome = await this.deps.companies.link(link, signal);
     if (outcome.status === "conflict") {
-      await this.deps.reviews.addQuestion(runId, "link_conflict", { link, detail: outcome.detail });
-      await saveOutput(this.deps.runs, { runId, step: "ownership", output: "waiting_for_person" });
+      await saveOwnershipConflict(this.deps.runs, { runId, link, detail: outcome.detail });
       return;
     }
     await this.deps.companies.recordOwnershipCheck(

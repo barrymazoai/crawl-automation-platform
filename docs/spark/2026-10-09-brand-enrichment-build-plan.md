@@ -80,3 +80,21 @@ Crawler V3 does not send products to Supply Smart today. This phase maps settled
 
 Commit to `main`, `git pull` on Server 一, migration, worker role. Server 一 must reach the test server (Tailscale
 address of this MacBook, or the production API once released). First one real single brand, then one group.
+
+## Owner rules 2026-10-09: found or not found, never merge
+
+Only two cases (owner: "要么找到，要么没找到。找到了就不管了，没找到就迁移"):
+
+1. **Found** — Supply Smart already has this company (the brand's domain resolves to it). Stop: no research, no
+   Apollo, no products, no changes to it. Updating existing companies is another process's job; this pipeline only
+   adds new companies. The request completes with the existing company id and the summary says it already existed.
+   An existing sub-brand is only linked, never run.
+2. **Not found** — create the company and run the full pipeline.
+   - **Link**: when its parent is found (or created when missing), the new brand is linked under it
+     (`brand_of` / `subsidiary_of`). Linking moves nothing.
+   - **Contacts follow Apollo**: if Apollo has the brand's OWN organization, the organization and its people stay on
+     the brand (no migration). Only when Apollo has no organization for the brand and only the parent's organization
+     is found, the organization and its people go to the parent — that is the migration. If the parent already holds
+     that organization, nothing is imported again; the brand page shows the parent's people.
+   - **Products** always stay on the brand: they come from the brand's own site.
+3. **Never merge companies.** No merge detection, no merge record, never call `mergeCompany`.

@@ -7,6 +7,7 @@ import type { BrandEnrichmentRuns, BrandEnrichmentReviews, SupplySmartCompanies 
 import { childRun, domainOf, saveOutput } from "./run-records.js";
 import { resolvedCompany } from "./company-resolution.js";
 import { brandEnrichmentErrors } from "./errors.js";
+import { saveOwnershipConflict } from "./ownership-conflict.js";
 
 type Parent = BrandEnrichmentRun & { companyId: string };
 type SubBrand = FamilyFinding["subBrands"][number];
@@ -73,13 +74,6 @@ export class BrandFamilyChildren {
       confidence: 1,
     };
     const linked = await this.deps.companies.link(link, signal);
-    if (linked.status === "conflict") {
-      await this.deps.reviews.addQuestion(run.runId, "link_conflict", {
-        link,
-        detail: linked.detail,
-      });
-      throw brandEnrichmentErrors.create("BRAND_ENRICHMENT.IDENTITY_UNRESOLVED");
-    }
     const child = await childRun(this.deps.runs, {
       parent: run,
       role: "sub_brand",
@@ -87,6 +81,19 @@ export class BrandFamilyChildren {
       url: shared ? null : brand.url,
       companyId: company.id,
     });
+    if (linked.status === "conflict") {
+      await saveOwnershipConflict(this.deps.runs, {
+        runId: child.runId,
+        link,
+        detail: linked.detail,
+      });
+      await saveOutput(this.deps.runs, {
+        runId: run.runId,
+        step: `ownership-conflict-${company.id}`,
+        output: { childRunId: child.runId, link, detail: linked.detail },
+      });
+      return child;
+    }
     await this.recordLink({ child, run, brand }, signal);
     return child;
   }

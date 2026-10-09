@@ -34,7 +34,10 @@ export async function deliverBrandProducts(
       skipped: input.applied.skipped,
     };
   }
-  return delivery.deliver(
+  // The reader takes a snapshot before the network delivery finishes. Keep that lower bound so a
+  // product completing during delivery remains eligible for the next sweep.
+  const deliveryStartedAt = new Date().toISOString();
+  const result = await delivery.deliver(
     {
       companyId: input.companyId,
       siteKey,
@@ -43,4 +46,5 @@ export async function deliverBrandProducts(
     },
     signal,
   );
+  return { ...result, deliveryStartedAt };
 }

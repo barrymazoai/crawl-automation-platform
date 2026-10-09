@@ -1,5 +1,5 @@
 import type { BrandEnrichmentRun, ReviewerVerdict, Company } from "@crawl-automation/v3-contracts";
-import type { BrandEnrichmentRuns, BrandEnrichmentReviews, SupplySmartCompanies } from "./ports.js";
+import type { BrandEnrichmentRuns, SupplySmartCompanies } from "./ports.js";
 import { resolveOwnerCompany, resolvedCompany } from "./company-resolution.js";
 import { childRun, domainOf, saveOutput } from "./run-records.js";
 type OwnerVerdict = Extract<ReviewerVerdict, { verdict: "owner" }>;
@@ -7,7 +7,6 @@ export class BrandOwnerService {
   constructor(
     private readonly deps: {
       runs: BrandEnrichmentRuns;
-      reviews: BrandEnrichmentReviews;
       companies: SupplySmartCompanies;
     },
   ) {}
@@ -79,10 +78,14 @@ export class BrandOwnerService {
         clue.ownerCompanyId !== company.id,
     );
     if (holder) {
-      await this.deps.reviews.addQuestion(run.runId, "merge", {
-        holderCompanyId: holder.ownerCompanyId,
-        ownerCompanyId: company.id,
-        reason: verdict.reason,
+      await saveOutput(this.deps.runs, {
+        runId: run.runId,
+        step: "merge-suggestion",
+        output: {
+          holderCompanyId: holder.ownerCompanyId,
+          ownerCompanyId: company.id,
+          reason: verdict.reason,
+        },
       });
     }
   }

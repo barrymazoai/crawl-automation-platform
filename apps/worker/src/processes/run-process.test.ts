@@ -4,11 +4,15 @@ import type { WorkerParts } from "../container.js";
 import { runProcess } from "./run-process.js";
 import type { WorkerRole } from "./process-config.js";
 
-const { runWorkers, runStopSweep } = vi.hoisted(() => ({
+const { runWorkers, runStopSweep, runBrandRedeliverySweep } = vi.hoisted(() => ({
   runWorkers: vi.fn(),
   runStopSweep: vi.fn(async (_parts: unknown, _signal: AbortSignal) => undefined),
+  runBrandRedeliverySweep: vi.fn(
+    async (_parts: unknown, _signal: AbortSignal): Promise<void> => undefined,
+  ),
 }));
 vi.mock("../resources/stop-sweep.js", () => ({ runStopSweep }));
+vi.mock("../brand-redelivery-sweep.js", () => ({ runBrandRedeliverySweep }));
 vi.mock("@crawl-automation/platform/temporal-worker", () => ({ runWorkers }));
 vi.mock("./role-workers.js", () => ({ roleWorkers: vi.fn(() => []) }));
 
@@ -136,4 +140,34 @@ it("starts API stop sweep only with the resources process and aborts it on shutd
   await running;
   expect(signal?.aborted).toBe(true);
   expect(test.run).toHaveBeenCalledOnce();
+});
+
+it.each(["pipeline", "browser", "resources", "label-model"] as const)(
+  "does not start brand redelivery in the %s role",
+  async (role) => {
+    const test = fixture(role);
+    const running = test.start();
+    test.stopped.resolve();
+    await running;
+    expect(runBrandRedeliverySweep).not.toHaveBeenCalled();
+  },
+);
+
+it("starts and joins brand redelivery only with its role, aborting it on shutdown", async () => {
+  const test = fixture("brand-enrichment");
+  const cleanup = pendingStop();
+  runBrandRedeliverySweep.mockImplementationOnce(async () => cleanup.promise);
+  const running = test.start();
+  let finished = false;
+  void running.then(() => {
+    finished = true;
+  });
+  await vi.waitFor(() => expect(runBrandRedeliverySweep).toHaveBeenCalledOnce());
+  const signal = runBrandRedeliverySweep.mock.calls[0]?.[1];
+  test.stopped.resolve();
+  await vi.waitFor(() => expect(signal?.aborted).toBe(true));
+  expect(finished).toBe(false);
+  cleanup.resolve();
+  await running;
+  expect(finished).toBe(true);
 });

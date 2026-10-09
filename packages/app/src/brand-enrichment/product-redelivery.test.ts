@@ -1,10 +1,11 @@
 import { randomUUID } from "node:crypto";
-import { expect, it, vi } from "vitest";
+import { afterEach, expect, it, vi } from "vitest";
 import { BrandProductRedelivery } from "./product-redelivery.js";
 import type { ProductDelivery } from "./task-ports.js";
 import { seededRuns } from "./testing/memory-runs.js";
 
 const signal = new AbortController().signal;
+afterEach(() => vi.useRealTimers());
 
 async function fixture(state: "running" | "completed") {
   const test = await seededRuns();
@@ -72,4 +73,17 @@ it("refuses a run that still delivers its own products, and a run without produc
     code: "BRAND_ENRICHMENT.INVALID_STATE",
   });
   expect(running.delivery.deliver).not.toHaveBeenCalled();
+});
+
+it("saves the delivery start time so products completing during delivery are not missed", async () => {
+  vi.useFakeTimers().setSystemTime(new Date("2026-10-09T00:00:00Z"));
+  const test = await fixture("completed");
+  test.delivery.deliver.mockImplementationOnce(async () => {
+    vi.setSystemTime(new Date("2026-10-09T00:05:00Z"));
+    return { captured: 3, review: 1, delivered: 3, refused: [] };
+  });
+  await test.service.deliver(test.runId, signal);
+  expect(
+    await test.runs.step(test.runId, "products-redelivery-2026-10-09T00:05:00.000Z"),
+  ).toMatchObject({ deliveryStartedAt: "2026-10-09T00:00:00.000Z" });
 });

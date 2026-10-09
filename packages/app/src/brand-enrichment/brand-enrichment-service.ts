@@ -116,6 +116,9 @@ export class BrandEnrichmentService {
           "write",
           "ownership-status",
           "reviewer-answer",
+          "ownership-unresolved",
+          "ownership-conflict",
+          "merge-suggestion",
         ].map(async (step) => [step, await this.deps.runs.step(runId, step)]),
       ),
     );

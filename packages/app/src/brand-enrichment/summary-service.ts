@@ -34,7 +34,7 @@ export class BrandSummaryService {
       summary.contacts = contacts.data.total;
     }
     const ownership = z
-      .enum(["has_parent", "independent", "waiting_for_person"])
+      .enum(["has_parent", "independent"])
       .safeParse(await runs.step(runId, "ownership"));
     if (ownership.success) {
       summary.ownership = ownership.data;

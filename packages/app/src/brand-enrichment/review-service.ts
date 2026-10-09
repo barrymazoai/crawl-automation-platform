@@ -48,11 +48,11 @@ export class BrandReviewService {
       );
     }
     if (verdict.verdict !== "owner" || !owner?.company || owner.company.id === run.companyId) {
-      await this.deps.reviews.addQuestion(runId, "ownership", {
-        verdict,
-        resolution: owner ? owner.resolution : null,
+      await saveOutput(this.deps.runs, {
+        runId,
+        step: "ownership-unresolved",
+        output: { verdict, resolution: owner ? owner.resolution : null },
       });
-      await saveOutput(this.deps.runs, { runId, step: "ownership", output: "waiting_for_person" });
       return {};
     }
     return owners.prepare({ run, company: owner.company, created: owner.created, verdict });

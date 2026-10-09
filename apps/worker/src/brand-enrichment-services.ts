@@ -9,6 +9,7 @@ import {
   BrandOwnershipWriteService,
   BrandProductsService,
   BrandCloseService,
+  BrandProductRedelivery,
   type BrandEnrichmentRuns,
   type BrandEnrichmentReviews,
   type SupplySmartCompanies,
@@ -82,6 +83,7 @@ export function buildBrandStepServices(deps: StepDependencies) {
       execution: deps.execution,
     }),
     close: new BrandCloseService({ runs, companies, requests: deps.requests }),
+    redelivery: new BrandProductRedelivery({ runs, delivery: tasks.delivery }),
   };
 }
 

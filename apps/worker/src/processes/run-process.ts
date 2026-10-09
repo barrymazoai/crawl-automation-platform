@@ -1,11 +1,12 @@
 import { runStopSweep } from "../resources/stop-sweep.js";
+import { runBrandRedeliverySweep } from "../brand-redelivery-sweep.js";
 import { startHeartbeat } from "@crawl-automation/platform";
 import { runWorkers, type RunningWorker } from "@crawl-automation/platform/temporal-worker";
 import type { WorkerParts } from "../container.js";
 import { roleWorkers } from "./role-workers.js";
 import type { SelectedProcess } from "./select-process.js";
 
-/** The health loop has exactly the lifetime of the worker process hosting resource activities. */
+/** Background loops have exactly the lifetime of the worker process hosting their role. */
 export async function runProcess(chosen: SelectedProcess, parts: WorkerParts): Promise<void> {
   const worker = await runWorkers(parts.config.temporal, roleWorkers(chosen.roles, parts));
   const controller = new AbortController();
@@ -42,13 +43,16 @@ async function runWithHealth(context: {
   const recovery = chosen.roles.some((entry) => entry.role === "resources")
     ? runStopSweep(parts, signal)
     : Promise.resolve();
+  const redelivery = chosen.roles.some((entry) => entry.role === "brand-enrichment")
+    ? runBrandRedeliverySweep(parts, signal)
+    : Promise.resolve();
   const queues = chosen.roles.map((entry) => `${entry.role}:${entry.taskQueue}`);
   parts.log.info({ process: chosen.name, queues }, "worker process running");
   try {
-    await Promise.all([done, monitor, heartbeat, recovery]);
+    await Promise.all([done, monitor, heartbeat, recovery, redelivery]);
   } finally {
     shutdown();
-    await Promise.allSettled([done, monitor, recovery]);
+    await Promise.allSettled([done, monitor, recovery, redelivery]);
     parts.log.info({ process: chosen.name }, "worker process stopping");
     await (await heartbeat)?.stop();
   }

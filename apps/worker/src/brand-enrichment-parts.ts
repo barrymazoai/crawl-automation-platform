@@ -25,6 +25,7 @@ import { browserResources } from "@crawl-automation/platform/browser-routing";
 import { SiteAnalysisLimitsSchema } from "@crawl-automation/v3-contracts";
 import type { CoreParts } from "./core-parts.js";
 import { buildBrandStepServices, type BrandEnrichmentTasks } from "./brand-enrichment-services.js";
+import { buildBrandRedeliverySweep } from "./brand-redelivery-parts.js";
 
 /**
  * The Codex tasks and product delivery, built per kind on first use. Text turns (Apollo judge, reviewer, titles)
@@ -114,7 +115,11 @@ export async function buildBrandEnrichmentParts(parts: CoreParts) {
       permits: new PostgresResourceStore(parts.database),
     }),
   });
-  return { runs, ...services, closeConnection: () => temporal.close() };
+  const redeliverySweep = buildBrandRedeliverySweep(parts, {
+    redelivery: services.redelivery,
+    lookbackDays: config.limits.redeliveryLookbackDays,
+  });
+  return { runs, ...services, redeliverySweep, closeConnection: () => temporal.close() };
 }
 function siteAnalyses(parts: CoreParts, temporal: TemporalClient) {
   const config = parts.config.brandEnrichment;

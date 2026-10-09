@@ -41,7 +41,7 @@ export interface BrandRequests {
 
 export type LinkOutcome =
   | { status: "linked"; result: CompanyLinkResult }
-  /** 409: the brand already has an owner of that kind. Kept as a question for a person, never overwritten. */
+  /** 409: the brand already has an owner of that kind. Kept in the run's steps, never overwritten. */
   | { status: "conflict"; detail: unknown };
 
 /** Companies on the product database API. */

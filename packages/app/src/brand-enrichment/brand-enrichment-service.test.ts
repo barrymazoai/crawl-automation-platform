@@ -119,3 +119,45 @@ it("a requested merge stays open with an explicit missing-port error", async () 
   expect(question.state).toBe("open");
   expect(company.link).not.toHaveBeenCalled();
 });
+
+it("exposes automatic ownership records through get without creating questions", async () => {
+  const store = await seededRuns();
+  const retained = {
+    "ownership-unresolved": { verdict: "cannot_tell" },
+    "ownership-conflict": { detail: "existing owner" },
+    "merge-suggestion": { reason: "same Apollo org" },
+  };
+  for (const [step, output] of Object.entries(retained)) {
+    await store.runs.saveStep({ runId: store.runId, step, output, archiveKeys: [] });
+  }
+  const service = new BrandEnrichmentService({
+    ...store,
+    requests: requests(),
+    reviews: reviews(),
+    companies: companies(),
+    gateway: { start: vi.fn(), cancel: vi.fn(), describe: vi.fn(async () => null) },
+  });
+  expect(await service.get({ runId: store.runId })).toMatchObject({
+    steps: retained,
+    questions: [],
+  });
+});
+
+it("omits old waiting_for_person ownership from the outgoing completion summary", async () => {
+  const store = await seededRuns();
+  await store.runs.saveStep({
+    runId: store.runId,
+    step: "ownership",
+    output: "waiting_for_person",
+    archiveKeys: [],
+  });
+  const request = requests();
+  await new BrandCloseService({ ...store, requests: request, companies: companies() }).close(
+    { runId: store.runId, state: "completed" },
+    signal,
+  );
+  expect(request.update).toHaveBeenCalledWith(
+    expect.objectContaining({ summary: { profile: "missing" }, status: "completed" }),
+    signal,
+  );
+});
