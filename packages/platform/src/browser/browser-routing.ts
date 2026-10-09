@@ -8,6 +8,8 @@ export const BROWSER_RESOURCE_SPACES = {
   "server2-ego-space-14": 14,
   "server2-ego-space-15": 15,
   "server2-ego-space-16": 16,
+  // Brand enrichment only (owner 2026-10-09): family check and research.
+  "server2-ego-space-17": 17,
 } as const;
 export const BrowserResourceIdSchema = z.enum([
   "mini-ego-space-1",
@@ -15,6 +17,7 @@ export const BrowserResourceIdSchema = z.enum([
   "server2-ego-space-14",
   "server2-ego-space-15",
   "server2-ego-space-16",
+  "server2-ego-space-17",
 ]);
 export type BrowserResourceId = z.infer<typeof BrowserResourceIdSchema>;
 export const LEGACY_BROWSER_QUEUE = "v3.browser.wholefoods.v1";
