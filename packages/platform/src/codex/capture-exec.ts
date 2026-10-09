@@ -20,6 +20,8 @@ export interface CodexCaptureInput {
   outputSchema: object;
   environment: NodeJS.ProcessEnv;
   captureMode?: "product" | "catalog" | "analysis";
+  /** Codex's own web search; off unless a task asks for it (brand research, owner 2026-10-09). */
+  webSearch?: "live" | "disabled";
   writableDirectories?: string[];
   profileDir?: string;
   /** Waits before each new attempt after a capacity refusal; defaults to CAPACITY_RETRY_DELAYS_MS. */

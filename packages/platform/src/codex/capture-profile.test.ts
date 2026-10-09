@@ -30,3 +30,20 @@ it("enables capture tools while retaining explicit model, no-retry provider and 
   expect(args.join(" ")).not.toContain("--disable view_image");
   expect(args.join(" ")).not.toContain("--disable code_mode");
 });
+
+it("keeps web search off unless the task asks for it", () => {
+  const config = CodexExecutionConfigSchema.parse({
+    executable: "/tmp/codex",
+    codexHome: "/tmp/private-auth",
+    workRoot: "/tmp/capture",
+    runtimeProfileVersion: "capture/1",
+    timeoutMs: 60000,
+    settings: { model: "gpt-5.6-luna", provider: "openai", reasoningEffort: "medium" },
+  });
+  const paths = { cwd: "/tmp/capture/one", schema: "/tmp/schema.json", output: "/tmp/result.json" };
+  const searches = (args: string[]) => args.filter((arg) => arg.startsWith("web_search="));
+  expect(searches(captureArguments(config, paths))).toEqual(['web_search="disabled"']);
+  expect(searches(captureArguments(config, { ...paths, webSearch: "live" }))).toEqual([
+    'web_search="live"',
+  ]);
+});
