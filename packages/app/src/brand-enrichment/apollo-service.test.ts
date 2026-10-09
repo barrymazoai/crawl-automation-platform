@@ -14,6 +14,8 @@ async function fixture() {
     people: vi.fn<Apollo["people"]>(async () => [
       { id: "good", organization_id: "found" },
       { id: "wrong", organization_id: "parent" },
+      // Apollo's free people search omits organization_id (2026-10-09); scoped to "found", so kept.
+      { id: "unlabelled" },
     ]),
   };
   const judge = { next: vi.fn<ApolloJudge["next"]>() };
@@ -78,6 +80,9 @@ it("accepts a verified domain and drops people belonging to another organization
     });
   const result = await test.service.match(test.runId, signal);
   expect(result.status).toBe("matched");
-  expect(result.apollo?.people).toEqual([{ id: "good", organization_id: "found" }]);
+  expect(result.apollo?.people).toEqual([
+    { id: "good", organization_id: "found" },
+    { id: "unlabelled" },
+  ]);
   expect(test.apollo.people).toHaveBeenCalledWith("found", signal);
 });

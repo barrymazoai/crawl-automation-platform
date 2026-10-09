@@ -97,7 +97,9 @@ export class BrandApolloService {
       return noMatch("The proposed domain tie is not present on the returned organization");
     }
     const people = (await this.deps.apollo.people(organization.id, signal)).filter(
-      (person) => person.organization_id === organization.id,
+      // Apollo's free people search omits organization_id (seen 2026-10-09); the search is already scoped to this
+      // organization, so only a person who names a different organization is dropped.
+      (person) => !person.organization_id || person.organization_id === organization.id,
     );
     return {
       status: "matched",

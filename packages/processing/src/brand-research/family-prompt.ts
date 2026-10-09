@@ -8,6 +8,10 @@ from a redirect to ANOTHER company. Only the latter produces a domain_redirect o
 quote from the landing company's page and that actual URL. A shared domain or redirect alone must not invent an owner.
 Determine isNutrition from the actual business. shape is exactly single (one brand), separate_sites (group with
 sub-brands on their own sites), shared_site (several brand lines on this site), or holding (group without own products).
+A sub-brand is a DISTINCT BRAND NAME that products are sold under (printed on their packaging, or the shop's vendor/
+brand field), not a product category, collection, line descriptor, age group or use case of this brand (e.g.
+"Everyday Kids", "Medical Nutrition", "Protein Shakes", "Women's Health" are categories, not sub-brands). Its
+evidence quote must contain the sub-brand's name. When unsure, report shape single with no sub-brands.
 List the directly observed sub-brands with name, their own URL or null, isNutrition, and verbatim quote + page URL.
 Report what you see, including non-nutrition sub-brands; do not impose the application's 20-brand admission limit.
 Do not run products or recursively investigate a sub-brand's family. The application owns fan-out and admission.

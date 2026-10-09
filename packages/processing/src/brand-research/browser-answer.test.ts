@@ -9,14 +9,36 @@ describe("browser answers require retained citations", () => {
       name: `Line ${index}`,
       url: null,
       isNutrition: false,
-      evidence: { quote: "Sprout makes nutritional supplements.", url: subject.brandUrl },
+      evidence: { quote: `Line ${index} by Sprout`, url: subject.brandUrl },
     }));
+    const pages = archive([
+      page(subject.brandUrl, subBrands.map((brand) => brand.evidence.quote).join(". ")),
+    ]);
     const answer = checkFamilyAnswer(
       { ...family, shape: "shared_site", subBrands, archiveKeys: ["fabricated"] },
-      archive(),
+      pages,
     );
     expect(answer.subBrands).toHaveLength(21);
-    expect(answer.archiveKeys).toEqual(archive().archiveKeys);
+    expect(answer.archiveKeys).toEqual(pages.archiveKeys);
+  });
+  it("drops categories whose evidence does not name them (Kate Farms, 2026-10-09)", () => {
+    const quote = "Daily nutrition for everyday enjoyment";
+    const answer = checkFamilyAnswer(
+      {
+        ...family,
+        shape: "shared_site",
+        subBrands: [
+          {
+            name: "Everyday Adult",
+            url: "https://shop.sprout.example/collections/everyday",
+            isNutrition: true,
+            evidence: { quote, url: subject.brandUrl },
+          },
+        ],
+      },
+      archive([page(subject.brandUrl, quote)]),
+    );
+    expect(answer).toMatchObject({ shape: "single", subBrands: [] });
   });
   it("links a cited clue to a published page and drops unretained or invented quotations", () => {
     const pages = archive([page(subject.brandUrl), page(clue.url ?? "", clue.quote)]);

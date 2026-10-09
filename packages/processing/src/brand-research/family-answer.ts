@@ -10,8 +10,12 @@ export function checkFamilyAnswer(raw: unknown, archive: ResearchArchive, subjec
   const result = checkedAnswer(FamilyFindingSchema, raw, "family");
   citedPage(archive.pages, result.landedUrl);
   checkRedirect(result, subject);
-  // A sub-brand whose evidence quote is not on its page is dropped, like an unverified clue (owner 2026-10-09).
-  const subBrands = result.subBrands.filter((brand) => groundedPage(archive.pages, brand.evidence));
+  // A sub-brand whose evidence quote is not on its page, or does not name it, is dropped (owner 2026-10-09: Kate Farms'
+  // shop collections "Everyday Adult" / "Everyday Kids" / "Medical Nutrition" were reported as sub-brands).
+  const subBrands = result.subBrands.filter(
+    (brand) => namesBrand(brand) && groundedPage(archive.pages, brand.evidence),
+  );
+  const shape = subBrands.length === 0 && result.shape !== "holding" ? "single" : result.shape;
   const clues = withObservedRedirect(
     retainedClues({
       clues: result.clues,
@@ -37,7 +41,7 @@ export function checkFamilyAnswer(raw: unknown, archive: ResearchArchive, subjec
   }
   return checkedAnswer(
     FamilyFindingSchema,
-    { ...result, subBrands, clues, archiveKeys: archive.archiveKeys },
+    { ...result, shape, subBrands, clues, archiveKeys: archive.archiveKeys },
     "family",
   );
 }
@@ -85,4 +89,10 @@ function withObservedRedirect(
       archiveKey: landing.archiveKey,
     },
   ];
+}
+
+/** The evidence must name the sub-brand; a category blurb ("Daily nutrition for everyday enjoyment") does not. */
+function namesBrand(brand: { name: string; evidence: { quote: string } }): boolean {
+  const normalize = (value: string) => value.toLowerCase().replace(/\s+/gu, " ").trim();
+  return normalize(brand.evidence.quote).includes(normalize(brand.name));
 }
