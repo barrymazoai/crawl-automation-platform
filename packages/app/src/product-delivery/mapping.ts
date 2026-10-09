@@ -14,7 +14,10 @@ export function mapDeliveryProduct(
 ): MappedDelivery {
   const ready = readyDeliveryProduct(input);
   const hostname = new URL(ready.product.url).hostname.toLowerCase();
-  if (hostname !== request.siteKey && !hostname.endsWith(`.${request.siteKey}`)) {
+  if (
+    !request.sourceIds.includes(ready.sourceId) ||
+    (hostname !== request.siteKey && !hostname.endsWith(`.${request.siteKey}`))
+  ) {
     throw productDeliveryErrors.create("PRODUCT_DELIVERY.INTEGRITY");
   }
   const { collection } = ready;

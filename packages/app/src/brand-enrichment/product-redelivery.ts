@@ -3,7 +3,6 @@ import type { BrandEnrichmentRuns } from "./ports.js";
 import type { ProductDelivery } from "./task-ports.js";
 import { requireCompanyRun, saveOutput } from "./run-records.js";
 import { brandEnrichmentErrors } from "./errors.js";
-import { savedFamily } from "./saved-family.js";
 import { productStep } from "./product-attempt.js";
 import { deliverBrandProducts } from "./product-delivery-step.js";
 
@@ -25,16 +24,14 @@ export class BrandProductRedelivery {
     const applied = SiteAnalysisApplyResultSchema.safeParse(
       await this.deps.runs.step(runId, productStep("product-sources", attempt)),
     );
-    const family = await savedFamily(this.deps.runs, runId);
-    const url = family.absorbed ? family.catalogUrl : run.brandUrl;
-    if (!applied.success || !url) {
+    if (!applied.success) {
       throw brandEnrichmentErrors.create("BRAND_ENRICHMENT.INVALID_STATE", {
         details: { runId, reason: "The run has no product sources to deliver" },
       });
     }
     const result = await deliverBrandProducts(
       this.deps.delivery,
-      { runId, companyId: run.companyId, url, applied: applied.data },
+      { runId, companyId: run.companyId, applied: applied.data },
       signal,
     );
     await saveOutput(this.deps.runs, {

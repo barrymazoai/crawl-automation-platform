@@ -1,5 +1,6 @@
 import { cancelledScanResult } from "@crawl-automation/app";
 import { PostgresScanCancellation } from "./postgres-scan-cancellation.js";
+import { PostgresBrandSources } from "./postgres-brand-sources.js";
 import type {
   BrandScanStore,
   QueuedProduct,
@@ -37,12 +38,7 @@ export class PostgresBrandScans extends PostgresScanCancellation implements Bran
   }
 
   async sources(sourceIds: readonly string[]): Promise<ScanSource[]> {
-    const rows = await this.database.query(
-      `SELECT ${SOURCE_COLUMNS} FROM brand_source s JOIN brand b ON b.id = s.brand_id
-       WHERE s.id = ANY($1::uuid[])`,
-      [sourceIds],
-    );
-    return rows.map(sourceOf);
+    return new PostgresBrandSources(this.database).byIds(sourceIds);
   }
 
   async enabledSources(channel: ScanChannel): Promise<ScanSource[]> {

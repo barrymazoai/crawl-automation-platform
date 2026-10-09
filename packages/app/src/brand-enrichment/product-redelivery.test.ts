@@ -31,6 +31,9 @@ async function fixture(state: "running" | "completed") {
     archiveKeys: [],
   });
   const delivery = {
+    catalogs: vi.fn<ProductDelivery["catalogs"]>(async (sourceIds) =>
+      sourceIds.map((sourceId) => ({ sourceId, catalogUrl: "https://example.test/all" })),
+    ),
     deliver: vi.fn<ProductDelivery["deliver"]>(async () => ({
       captured: 3,
       review: 1,

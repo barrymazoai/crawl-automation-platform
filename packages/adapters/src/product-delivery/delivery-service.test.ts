@@ -7,7 +7,7 @@ import { SupplySmartObservationWriter } from "./product-observation-writer.js";
 function setup(snapshot: DeliverySnapshot = deliverySnapshot()) {
   const rpc = new DeliveryRpcFake();
   const service = new ProductDeliveryService({
-    reader: { read: async () => snapshot },
+    reader: { read: async () => snapshot, catalogs: async () => [] },
     writer: new SupplySmartObservationWriter(rpc),
   });
   return { rpc, run: () => service.deliver(deliveryRequest, new AbortController().signal) };

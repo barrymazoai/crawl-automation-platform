@@ -65,7 +65,7 @@ export interface TitleClassifier {
 export interface ProductDeliveryRequest {
   /** The Supply Smart company the brand's products belong to. */
   companyId: string;
-  /** The brand's site, e.g. `katefarms.com`; the ingest's `siteKey` and `companyDomain`. */
+  /** The sources' catalog domain; the ingest's `siteKey` and `companyDomain`. */
   siteKey: string;
   /** Crawler brand sources whose settled DTC products are sent. */
   sourceIds: string[];
@@ -83,5 +83,12 @@ export interface ProductDeliveryResult {
 
 /** Sends a brand's settled DTC products to Supply Smart (`ingestObservationBatch` → verify → complete, labels). */
 export interface ProductDelivery {
+  /** Verified DTC catalog URLs stored per source, independent of the brand's entry URL. */
+  catalogs(sourceIds: string[], signal: AbortSignal): Promise<ProductDeliveryCatalog[]>;
   deliver(request: ProductDeliveryRequest, signal: AbortSignal): Promise<ProductDeliveryResult>;
+}
+
+export interface ProductDeliveryCatalog {
+  sourceId: string;
+  catalogUrl: string;
 }

@@ -5,6 +5,7 @@ import type {
   ProductDeliveryReader,
   ProductDeliveryRequest,
   ProductDeliveryHold,
+  ProductDeliveryCatalog,
 } from "@crawl-automation/app";
 import { selectDeliverySettlement } from "@crawl-automation/app";
 import { errorCodeOf, type ObjectStore, type Queryable } from "@crawl-automation/platform";
@@ -16,6 +17,7 @@ import {
   DELIVERY_HOLDS,
 } from "./delivery-queries.js";
 import { DeliveryMaterials } from "./delivery-materials.js";
+import { PostgresBrandSources } from "../postgres/postgres-brand-sources.js";
 
 interface QueueRow {
   item_id: string;
@@ -49,6 +51,15 @@ export class PostgresDeliveryReader implements ProductDeliveryReader {
   private readonly materials: DeliveryMaterials;
   constructor(private readonly deps: { database: Queryable; objects: Pick<ObjectStore, "read"> }) {
     this.materials = new DeliveryMaterials(deps);
+  }
+
+  /** Site analysis saves the verified catalog in brand_source.url; scans copy that same URL. */
+  async catalogs(sourceIds: string[], signal: AbortSignal): Promise<ProductDeliveryCatalog[]> {
+    signal.throwIfAborted();
+    const sources = await new PostgresBrandSources(this.deps.database).byIds(sourceIds);
+    return sources
+      .filter((source) => source.channel === "dtc")
+      .map((source) => ({ sourceId: source.sourceId, catalogUrl: source.url }));
   }
 
   async read(request: ProductDeliveryRequest, signal: AbortSignal): Promise<DeliverySnapshot> {

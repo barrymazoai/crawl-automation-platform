@@ -15,6 +15,7 @@ it.skipIf(!connectionString)(
     const schema = `product_delivery_${randomUUID().replaceAll("-", "")}`;
     const source = randomUUID();
     const other = randomUUID();
+    const unrelated = randomUUID();
     const runId = randomUUID();
     const batch = randomUUID();
     try {
@@ -22,7 +23,8 @@ it.skipIf(!connectionString)(
       await client.query(`CREATE SCHEMA ${schema}`);
       await client.query(`SET LOCAL search_path=${schema}`);
       await client.query(`
-      CREATE TABLE brand_source(id uuid, channel text);
+      CREATE TABLE brand(id uuid, name text);
+      CREATE TABLE brand_source(id uuid, channel text, url text, enabled boolean, brand_id uuid);
       CREATE TABLE dtc_source_settings(source_id uuid, settings jsonb);
       CREATE TABLE review_record(record jsonb);
       CREATE TABLE product_enrichment_attempt(subject jsonb);
@@ -33,7 +35,13 @@ it.skipIf(!connectionString)(
       CREATE TABLE brand_scan(source_id uuid, scan_id uuid, state text, started_at timestamptz,
         requested_at timestamptz, result jsonb, channel text);
       CREATE TABLE collected_product(operation_id text, record jsonb, collected_at timestamptz);`);
-      await client.query("INSERT INTO brand_source VALUES ($1,'dtc'),($2,'dtc')", [source, other]);
+      await client.query("INSERT INTO brand VALUES ($1,'Sambucol'),($2,'Other')", [source, other]);
+      const catalogUrl = "https://sambucolusa.com/collections/shop-all";
+      await client.query(
+        `INSERT INTO brand_source VALUES ($1,'dtc',$3,false,$1),($2,'dtc','https://foreign.test',true,$2),
+          ($4,'amazon','https://amazon.com',true,$2)`,
+        [source, other, catalogUrl, unrelated],
+      );
       await client.query("INSERT INTO queue_attempt VALUES ($1,now(),'completed')", [runId]);
       await client.query(
         `INSERT INTO queue_item VALUES
@@ -50,6 +58,9 @@ it.skipIf(!connectionString)(
         database: { query },
         objects: { read: async () => null },
       });
+      expect(await reader.catalogs([source, unrelated], new AbortController().signal)).toEqual([
+        { sourceId: source, catalogUrl },
+      ]);
       const result = await reader.read(
         { ...deliveryRequest, sourceIds: [source] },
         new AbortController().signal,

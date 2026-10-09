@@ -50,7 +50,10 @@ export function brandEnrichmentTaskImplementations(
     judge: { next: (input, signal) => text().apolloJudge.next(input, signal) },
     reviewer: { review: (input, signal) => text().reviewer.review(input, signal) },
     classifier: { classify: (input, signal) => text().titles.classify(input, signal) },
-    delivery: { deliver: (input, signal) => delivery().deliver(input, signal) },
+    delivery: {
+      catalogs: (sourceIds, signal) => delivery().catalogs(sourceIds, signal),
+      deliver: (input, signal) => delivery().deliver(input, signal),
+    },
   };
 }
 

@@ -1,12 +1,26 @@
-import { SourceScanViewSchema, type ListSourcesSchema } from "@crawl-automation/app";
+import {
+  SourceScanViewSchema,
+  type ListSourcesSchema,
+  type ScanSource,
+} from "@crawl-automation/app";
 import type { Queryable } from "@crawl-automation/platform";
 import type { z } from "zod";
+import { SOURCE_COLUMNS, sourceOf } from "./brand-scan-queries.js";
 
 const iso = (value: unknown) => (value instanceof Date ? value.toISOString() : value);
 
 /** Paged source configuration with latest-request facts and all-time queue-row counts. */
 export class PostgresBrandSources {
   constructor(private readonly database: Queryable) {}
+
+  async byIds(sourceIds: readonly string[]): Promise<ScanSource[]> {
+    const rows = await this.database.query(
+      `SELECT ${SOURCE_COLUMNS} FROM brand_source s JOIN brand b ON b.id = s.brand_id
+       WHERE s.id = ANY($1::uuid[])`,
+      [sourceIds],
+    );
+    return rows.map(sourceOf);
+  }
 
   async sources(query: z.infer<typeof ListSourcesSchema>) {
     const rows = await this.database.query<Record<string, unknown>>(

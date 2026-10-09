@@ -36,6 +36,9 @@ async function fixture() {
     findPending: vi.fn<BrandRedeliveryCandidates["findPending"]>(async () => late),
   };
   const delivery = {
+    catalogs: vi.fn<ProductDelivery["catalogs"]>(async (sourceIds) =>
+      sourceIds.map((sourceId) => ({ sourceId, catalogUrl: "https://example.test/all" })),
+    ),
     deliver: vi.fn<ProductDelivery["deliver"]>(async () => ({
       captured: 1,
       delivered: 1,
@@ -86,6 +89,27 @@ it("logs a failed run and still delivers the next run", async () => {
     "brand product redelivery failed",
   );
   expect(test.info).toHaveBeenCalledOnce();
+});
+
+it("uses the stored catalog domain when the sweep redelivers a brand on another domain", async () => {
+  const test = await fixture();
+  for (const runId of test.late) {
+    test.records.set(runId, {
+      ...(await requireRun(test.runs, runId)),
+      brandUrl: "https://sambucol.com/",
+    });
+  }
+  test.delivery.catalogs.mockImplementation(async (sourceIds) =>
+    sourceIds.map((sourceId) => ({
+      sourceId,
+      catalogUrl: "https://sambucolusa.com/collections/shop-all",
+    })),
+  );
+  await test.sweep.sweep(signal);
+  expect(test.delivery.deliver.mock.calls.map(([request]) => request.siteKey)).toEqual([
+    "sambucolusa.com",
+    "sambucolusa.com",
+  ]);
 });
 
 it("does no work for an empty selection or an already aborted sweep", async () => {

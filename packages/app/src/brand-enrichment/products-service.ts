@@ -61,7 +61,7 @@ export class BrandProductsService {
     if (!(await this.settled(analysis.analysisId, applied))) {
       return { done: false };
     }
-    await this.deliver({ runId, attempt, companyId: run.companyId, url, applied }, signal);
+    await this.deliver({ runId, attempt, companyId: run.companyId, applied }, signal);
     return { done: true };
   }
   private async missingCatalog({ runId, attempt }: Attempt, absorbed: boolean) {
@@ -80,7 +80,6 @@ export class BrandProductsService {
       runId: string;
       attempt: number;
       companyId: string;
-      url: string;
       applied: SiteAnalysisApplyResult;
     },
     signal: AbortSignal,

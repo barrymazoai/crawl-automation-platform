@@ -17,6 +17,10 @@ export class ProductDeliveryService implements ProductDelivery {
     private readonly deps: { reader: ProductDeliveryReader; writer: ProductObservationWriter },
   ) {}
 
+  catalogs(...args: Parameters<ProductDelivery["catalogs"]>) {
+    return this.deps.reader.catalogs(...args);
+  }
+
   async deliver(
     request: ProductDeliveryRequest,
     signal: AbortSignal,

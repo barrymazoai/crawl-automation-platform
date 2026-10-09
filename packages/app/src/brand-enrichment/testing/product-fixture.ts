@@ -67,6 +67,9 @@ export async function productFixture() {
   const state = analysisState();
   const analysis = analysisPort(state);
   const delivery = {
+    catalogs: vi.fn<ProductDelivery["catalogs"]>(async () => [
+      { sourceId: state.task.sourceId, catalogUrl: state.progress.catalogUrl },
+    ]),
     deliver: vi.fn<ProductDelivery["deliver"]>(async () => ({
       captured: 2,
       review: 1,

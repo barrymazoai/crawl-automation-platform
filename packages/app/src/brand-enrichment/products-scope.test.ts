@@ -4,19 +4,20 @@ import { BrandSummaryService } from "./summary-service.js";
 import { family, signal } from "./testing/fakes.js";
 import { productFixture } from "./testing/product-fixture.js";
 
-const catalogUrl = "https://owner.test/collections/example";
+const catalogUrl = "https://zahlers.com/collections/example";
 
 it.each([null, true, false])(
   "selects the product entry from saved family (sameBrand=%s)",
   async (sameBrand) => {
     const test = await productFixture();
+    test.progress.catalogUrl = sameBrand === false ? catalogUrl : "https://example.test/all";
     test.steps.set(`${test.runId}/family`, {
       ...family,
       catalogUrl,
       redirect:
         sameBrand === null
           ? null
-          : { fromDomain: "example.test", toDomain: "owner.test", sameBrand },
+          : { fromDomain: "example.test", toDomain: "zahlers.com", sameBrand },
     });
     test.progress.products.running = 0;
     expect(await test.service.tick(test.runId, signal)).toEqual({ done: true });
@@ -37,7 +38,7 @@ it.each([null, true, false])(
     expect(test.delivery.deliver).toHaveBeenCalledWith(
       expect.objectContaining({
         companyId: test.companyId,
-        siteKey: sameBrand === false ? "owner.test" : "example.test",
+        siteKey: sameBrand === false ? "zahlers.com" : "example.test",
         sourceIds: [test.task.sourceId],
       }),
       signal,
@@ -55,7 +56,7 @@ it.each([null, undefined])(
     test.steps.set(`${test.runId}/family`, {
       ...family,
       catalogUrl: catalog,
-      redirect: { fromDomain: "example.test", toDomain: "owner.test", sameBrand: false },
+      redirect: { fromDomain: "example.test", toDomain: "zahlers.com", sameBrand: false },
     });
     expect(await test.service.tick(test.runId, signal)).toEqual({ done: true });
     expect(await test.runs.step(test.runId, "products")).toEqual({
@@ -77,7 +78,7 @@ it("retains zero products when no verified catalog can be applied", async () => 
   test.steps.set(`${test.runId}/family`, {
     ...family,
     catalogUrl,
-    redirect: { fromDomain: "example.test", toDomain: "owner.test", sameBrand: false },
+    redirect: { fromDomain: "example.test", toDomain: "zahlers.com", sameBrand: false },
   });
   test.progress.products.running = 0;
   test.apply.mockResolvedValue({

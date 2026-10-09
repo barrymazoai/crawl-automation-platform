@@ -18,6 +18,9 @@ export class SupplySmartProductDelivery implements ProductDelivery {
       writer: new SupplySmartObservationWriter(deps.rpc),
     });
   }
+  catalogs(...args: Parameters<ProductDelivery["catalogs"]>) {
+    return this.service.catalogs(...args);
+  }
   deliver(...args: Parameters<ProductDelivery["deliver"]>) {
     return this.service.deliver(...args);
   }

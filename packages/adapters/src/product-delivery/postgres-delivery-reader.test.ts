@@ -10,6 +10,34 @@ import {
 import { deliveryRequest } from "./product.fixture.js";
 
 describe("settled DTC repository selection", () => {
+  it("reads the stored source catalog without filtering out disabled sources awaiting redelivery", async () => {
+    const catalogs = [
+      { sourceId: "source", catalogUrl: "https://sambucolusa.com/collections/shop-all" },
+    ];
+    const source = {
+      sourceId: "source",
+      brandId: "brand",
+      brandName: "Sambucol",
+      channel: "dtc",
+      url: catalogs[0]?.catalogUrl,
+      enabled: false,
+    };
+    const query = vi.fn(async () => [source, { ...source, sourceId: "amazon", channel: "amazon" }]);
+    const reader = new PostgresDeliveryReader({
+      database: { query } as Queryable,
+      objects: { read: vi.fn() },
+    });
+    expect(await reader.catalogs(["source", "amazon"], new AbortController().signal)).toEqual(
+      catalogs,
+    );
+    expect(query).toHaveBeenCalledExactlyOnceWith(
+      expect.stringContaining("s.id = ANY($1::uuid[])"),
+      [["source", "amazon"]],
+    );
+    await expect(reader.catalogs(["source"], AbortSignal.abort())).rejects.toThrow();
+    expect(query).toHaveBeenCalledOnce();
+  });
+
   it("never reads collected material for Review, pending or unconfirmed completion", async () => {
     const query = vi.fn(async (sql: string) =>
       sql === DELIVERY_QUEUE

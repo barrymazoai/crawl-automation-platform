@@ -8,7 +8,7 @@ import type {
   ProductLabelIngestAnswer,
   ProductLabelReadAnswer,
 } from "@crawl-automation/v3-contracts";
-import type { ProductDeliveryRequest } from "../brand-enrichment/task-ports.js";
+import type { ProductDelivery, ProductDeliveryRequest } from "../brand-enrichment/task-ports.js";
 import type { DeliveryItem, DeliveryLabel, DeliveryRun } from "./wire.js";
 
 export interface DeliveryHistory {
@@ -51,7 +51,7 @@ export interface DeliverySnapshot {
   pending: number;
   scans: ProductDeliveryScan[];
 }
-export interface ProductDeliveryReader {
+export interface ProductDeliveryReader extends Pick<ProductDelivery, "catalogs"> {
   read(request: ProductDeliveryRequest, signal: AbortSignal): Promise<DeliverySnapshot>;
 }
 export interface ProductDeliveryHold {
