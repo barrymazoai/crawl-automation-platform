@@ -1,6 +1,6 @@
 import { DomUtils, parseDocument } from "htmlparser2";
 import type { OwnershipClue, OwnershipSignal } from "@crawl-automation/v3-contracts";
-import { brandResearchErrors, invalidAnswer } from "./errors.js";
+import { brandResearchErrors } from "./errors.js";
 import { makerOnly } from "./ownership-answer.js";
 import type { RetainedPage } from "./archive.js";
 
@@ -40,13 +40,15 @@ export function retainedClues(input: {
   allowed: OwnershipSignal[];
 }): OwnershipClue[] {
   return input.clues.flatMap((clue) => {
+    // An unsupported clue (wrong signal for this task, a maker rather than an owner, no URL or quote) is dropped like a
+    // misquote, never fatal (MANTRA Labs research, 2026-10-09).
     if (
       !clue.url ||
       !clue.quote.trim() ||
       !input.allowed.includes(clue.signal) ||
       makerOnly(clue)
     ) {
-      invalidAnswer("browser", "unsupported_ownership_clue");
+      return [];
     }
     const page = groundedPage(input.pages, { url: clue.url, quote: clue.quote });
     return page ? [{ ...clue, ownerCompanyId: null, archiveKey: page.archiveKey }] : [];

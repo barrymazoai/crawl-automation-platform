@@ -139,18 +139,18 @@ describe("browser answers require retained citations", () => {
     expect(() => checkResearchAnswer({ ...research, ...change }, archive())).toThrow();
   });
   it.each(["Manufactured by Garden Group", "Distributed by Garden Group"])(
-    "refuses maker-only clues",
+    "drops maker-only clues (a maker is not an owner)",
     (quote) => {
       const observed = archive([page(subject.brandUrl, quote)]);
-      expect(() =>
+      expect(
         checkResearchAnswer(
           {
             ...research,
             clues: [{ ...clue, signal: "website_footer", url: subject.brandUrl, quote }],
           },
           observed,
-        ),
-      ).toThrow();
+        ).clues,
+      ).toEqual([]);
     },
   );
 });
