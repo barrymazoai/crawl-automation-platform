@@ -463,3 +463,101 @@ export const StoredDecisionSchema = z.object({
   createdAt: z.coerce.date(),
 });
 export type StoredDecision = z.infer<typeof StoredDecisionSchema>;
+
+// ── What the Codex tasks return (checked by code before anything is used) ───
+
+export const QuotedEvidenceSchema = z.object({
+  quote: z.string().trim().min(1).max(2000),
+  url: z.string().trim().min(1).max(2000),
+});
+
+/** Stage 2: where the brand URL really lands, and whether it is one brand or a group. */
+export const FamilyFindingSchema = z.object({
+  landedUrl: z.string().trim().min(1).max(2000),
+  /** The brand URL forwarded to another domain; `sameBrand` false means another company (an ownership clue). */
+  redirect: z
+    .object({
+      fromDomain: z.string().min(1),
+      toDomain: z.string().min(1),
+      sameBrand: z.boolean(),
+    })
+    .nullable(),
+  isNutrition: z.boolean(),
+  shape: FamilyShapeSchema,
+  subBrands: z
+    .array(
+      z.object({
+        name: z.string().trim().min(1).max(200),
+        /** Own site, or null for a brand line sold only on the group's site. */
+        url: z.string().trim().min(1).max(2000).nullable(),
+        isNutrition: z.boolean(),
+        evidence: QuotedEvidenceSchema,
+      }),
+    )
+    .max(100),
+  /** The brand's own other domains (regional, former) seen on its site. */
+  otherDomains: z
+    .array(z.object({ domain: z.string().min(1), status: z.enum(["current", "former"]) }))
+    .max(50),
+  clues: z.array(OwnershipClueSchema).max(50),
+  archiveKeys: z.array(z.string()),
+});
+export type FamilyFinding = z.infer<typeof FamilyFindingSchema>;
+
+/** Stage 3b: the brand's profile and who may own it. */
+export const BrandResearchSchema = z.object({
+  description: z.string().trim().min(1).max(4000).nullable(),
+  category: CompanyCategorySchema.nullable(),
+  keywords: z.array(z.string().trim().min(1).max(100)).max(30),
+  /** As printed on the site (footer, terms, contact page), for Apollo matching. */
+  legalName: z.string().trim().min(1).max(500).nullable(),
+  address: z.string().trim().min(1).max(1000).nullable(),
+  linkedinUrl: z.string().trim().min(1).max(2000).nullable(),
+  clues: z.array(OwnershipClueSchema).max(50),
+  /** Pages checked when no owner was found, so "independent" has evidence. */
+  checkedUrls: z.array(z.string().min(1)).max(50),
+  evidence: z.array(EvidencePageSchema).max(50),
+  archiveKeys: z.array(z.string()),
+});
+export type BrandResearch = z.infer<typeof BrandResearchSchema>;
+
+/** What the Apollo-match task knows about the brand. */
+export const ApolloBrandFactsSchema = z.object({
+  name: z.string().min(1),
+  domains: z.array(z.string().min(1)),
+  formerDomains: z.array(z.string().min(1)),
+  legalName: z.string().nullable(),
+  address: z.string().nullable(),
+  linkedinUrl: z.string().nullable(),
+});
+export type ApolloBrandFacts = z.infer<typeof ApolloBrandFactsSchema>;
+
+export const ApolloQuerySchema = z.discriminatedUnion("by", [
+  z.object({ by: z.literal("domain"), domain: z.string().trim().min(1).max(500) }),
+  z.object({ by: z.literal("name"), name: z.string().trim().min(1).max(500) }),
+]);
+
+/** One round of the Apollo-match task: search again, or stop with an answer. Code enforces three searches. */
+export const ApolloStepSchema = z.discriminatedUnion("action", [
+  z.object({ action: z.literal("search"), query: ApolloQuerySchema }),
+  z.object({
+    action: z.literal("accept"),
+    organizationId: z.string().min(1),
+    tie: ApolloTieSchema,
+    note: z.string().trim().min(1).max(2000),
+  }),
+  z.object({
+    action: z.literal("parent_only"),
+    organizationId: z.string().min(1),
+    note: z.string().trim().min(1).max(2000),
+  }),
+  z.object({ action: z.literal("give_up"), note: z.string().trim().min(1).max(2000) }),
+]);
+export type ApolloStep = z.infer<typeof ApolloStepSchema>;
+
+export const TitleClassificationSchema = z.object({
+  title: z.string().min(1),
+  function: z.string().min(1),
+  level: z.string().min(1),
+});
+export type TitleClassification = z.infer<typeof TitleClassificationSchema>;

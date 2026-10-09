@@ -13,3 +13,4 @@ export * from "./publication/index.js";
 export * from "./formula/index.js";
 export * from "./recheck/index.js";
 export * from "./enrichment/index.js";
+export * from "./brand-research/index.js";
