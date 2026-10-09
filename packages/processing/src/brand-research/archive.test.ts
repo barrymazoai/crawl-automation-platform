@@ -40,6 +40,19 @@ describe("brand evidence publication", () => {
     );
     expect(result.archiveKeys).toContain("brand/fixture/archive.json");
   });
+  it("skips an empty record such as a clean run's stderr (R2 refuses a zero-byte read-back)", async () => {
+    const { workspace } = await fixture();
+    await writeFile(join(workspace.cwd, "stderr.txt"), "");
+    const publish = vi.fn(async () => undefined);
+    const result = await archiveWorkspace({ publish }, workspace, AbortSignal.timeout(3000));
+    expect(publish).not.toHaveBeenCalledWith(
+      "brand/fixture/records/stderr.txt",
+      expect.anything(),
+      expect.anything(),
+      expect.anything(),
+    );
+    expect(result.archiveKeys).not.toContain("brand/fixture/records/stderr.txt");
+  });
   it("refuses changed bytes and keeps the original receipt", async () => {
     const { workspace, saved } = await fixture();
     await writeFile(join(workspace.cwd, saved.path), "changed");

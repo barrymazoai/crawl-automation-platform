@@ -37,7 +37,8 @@ export async function archiveWorkspace(
   const files = [];
   for (const name of diagnostics) {
     const bytes = await evidenceFile(workspace.cwd, name);
-    if (bytes) {
+    // An empty record (e.g. stderr of a clean run) holds nothing; R2 read-back refuses a zero-byte bound.
+    if (bytes?.length) {
       const file = {
         archiveKey: `${workspace.prefix}/records/${name}`,
         sha256: sha256(bytes),
