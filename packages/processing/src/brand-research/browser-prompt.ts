@@ -21,6 +21,15 @@ Use only native Ego ${JSON.stringify(input.cliPath)} nodejs for browser work. Th
 TaskSpace ${input.taskSpaceId}, label ${JSON.stringify(input.label)}, targetId ${JSON.stringify(input.targetId)}.
 Every Ego invocation must import ${JSON.stringify(module)} and call
 const {page,navigate,savePage}=await openEvidencePage({taskSpace,listTaskSpaces});
+taskSpace and listTaskSpaces are GLOBALS inside \`${input.cliPath} nodejs\`; never import the ego-browser program
+itself (it is a binary, not a module). Run each round exactly like this, changing only the lines inside:
+${input.cliPath} nodejs <<'EGO'
+const {openEvidencePage}=await import(${JSON.stringify(module)});
+const {page,navigate,savePage}=await openEvidencePage({taskSpace,listTaskSpaces});
+await navigate("https://example.com/");
+console.log(JSON.stringify(await savePage()));
+EGO
+A failing round is a script error to fix, not proof the browser is unavailable; read its output and retry once.
 Use navigate(url), inspect this exact page, then await savePage() BEFORE navigating elsewhere.
 savePage writes the original rendered HTML and a URL/time/hash receipt; cite the returned actual URL and observedAt.
 Do not alter these host modules, saved originals or receipts. Do not invent quotes, evidence, hashes or archive keys.
