@@ -132,6 +132,8 @@ function siteAnalyses(parts: CoreParts, temporal: TemporalClient) {
       taskQueue: config.queues.browser,
       resourceQueue: config.resources.queue,
       resourceId,
+      // The DTC site analysis runs Codex too, so it also takes the family check's model permit (2026-10-09).
+      additionalResources: needs.filter((need) => need.resourceId !== resourceId),
       maxWaitSeconds: config.resources.maxWaitSeconds,
       gapAfterSeconds: 0,
     }),
