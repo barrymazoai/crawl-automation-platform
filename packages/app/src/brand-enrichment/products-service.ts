@@ -9,6 +9,7 @@ import type { BrandEnrichmentRuns } from "./ports.js";
 import type { ProductDelivery } from "./task-ports.js";
 import { domainOf, requireCompanyRun, saveOutput } from "./run-records.js";
 import { brandEnrichmentErrors } from "./errors.js";
+import { savedFamily } from "./saved-family.js";
 
 /** Cancellation of the exact site-analysis workflow and scans this run submitted, never a whole browser/queue. */
 export interface BrandProductExecution {
@@ -29,10 +30,24 @@ export class BrandProductsService {
   ) {}
   async tick(runId: string, signal: AbortSignal): Promise<BrandProductProgress> {
     const run = await requireCompanyRun(this.deps.runs, runId);
-    if ((await this.deps.runs.step(runId, "products")) || !run.brandUrl) {
+    if (await this.deps.runs.step(runId, "products")) {
       return { done: true };
     }
-    const analysis = await this.analysis(runId, run.brandUrl);
+    const family = await savedFamily(this.deps.runs, runId);
+    const url = family.absorbed ? family.catalogUrl : run.brandUrl;
+    if (!url) {
+      await saveOutput(this.deps.runs, {
+        runId,
+        step: "products",
+        output: {
+          captured: 0,
+          review: 0,
+          reason: family.absorbed ? "absorbed_brand_without_catalog" : "missing_brand_url",
+        },
+      });
+      return { done: true };
+    }
+    const analysis = await this.analysis(runId, url);
     if (analysis.state === "queued" || analysis.state === "running") {
       return { done: false };
     }
@@ -44,19 +59,27 @@ export class BrandProductsService {
       });
       return { done: true };
     }
-    const applied = await this.apply(runId, analysis.analysisId);
+    const applied = await this.apply(runId, analysis.analysisId, family.absorbed ? url : undefined);
     if (!(await this.settled(analysis.analysisId, applied))) {
       return { done: false };
     }
+    await this.deliver({ runId, companyId: run.companyId, url, applied }, signal);
+    return { done: true };
+  }
+  private async deliver(
+    input: { runId: string; companyId: string; url: string; applied: SiteAnalysisApplyResult },
+    signal: AbortSignal,
+  ) {
+    const { runId, companyId, url, applied } = input;
     const sourceIds = sourceIdsOf(applied);
-    const siteKey = domainOf(run.brandUrl);
+    const siteKey = domainOf(url);
     if (!siteKey) {
       throw brandEnrichmentErrors.create("BRAND_ENRICHMENT.IDENTITY_UNRESOLVED");
     }
     const result = sourceIds.length
       ? await this.deps.delivery.deliver(
           {
-            companyId: run.companyId,
+            companyId,
             siteKey,
             sourceIds,
             ingestRunId: `brand-enrichment-${runId}`,
@@ -65,7 +88,6 @@ export class BrandProductsService {
         )
       : { captured: 0, review: 0, reason: "No verified DTC sources", skipped: applied.skipped };
     await saveOutput(this.deps.runs, { runId, step: "products", output: result });
-    return { done: true };
   }
   private async analysis(runId: string, url: string) {
     const reference = analysisReference.safeParse(
@@ -78,14 +100,19 @@ export class BrandProductsService {
     await saveOutput(this.deps.runs, { runId, step: "product-analysis", output: started });
     return this.deps.analyses.get(started.analysisId);
   }
-  private async apply(runId: string, analysisId: string) {
+  private async apply(runId: string, analysisId: string, catalogUrl?: string) {
     const applied = SiteAnalysisApplyResultSchema.safeParse(
       await this.deps.runs.step(runId, "product-sources"),
     );
     if (applied.success) {
       return applied.data;
     }
-    const result = await this.deps.analyses.apply({ requestId: runId, analysisId, enqueue: true });
+    const result = await this.deps.analyses.apply({
+      requestId: runId,
+      analysisId,
+      enqueue: true,
+      ...(catalogUrl ? { catalogUrl } : {}),
+    });
     await saveOutput(this.deps.runs, { runId, step: "product-sources", output: result });
     return result;
   }

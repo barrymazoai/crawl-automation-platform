@@ -1,4 +1,8 @@
-import { FamilyFindingSchema, type OwnershipClue } from "@crawl-automation/v3-contracts";
+import {
+  FamilyFindingSchema,
+  type FamilyFinding,
+  type OwnershipClue,
+} from "@crawl-automation/v3-contracts";
 import { checkedAnswer } from "./answer.js";
 import type { ResearchArchive } from "./archive.js";
 import { invalidAnswer } from "./errors.js";
@@ -24,6 +28,22 @@ export function checkFamilyAnswer(raw: unknown, archive: ResearchArchive, subjec
     }),
     { result, archive },
   );
+  checkRedirectClues(result, clues);
+  return checkedAnswer(
+    FamilyFindingSchema,
+    {
+      ...result,
+      shape,
+      subBrands,
+      clues,
+      catalogUrl: retainedCatalog(result, archive),
+      archiveKeys: archive.archiveKeys,
+    },
+    "family",
+  );
+}
+
+function checkRedirectClues(result: FamilyFinding, clues: OwnershipClue[]) {
   const redirectClues = clues.filter((clue) => clue.signal === "domain_redirect");
   if ((!result.redirect || result.redirect.sameBrand) && redirectClues.length) {
     invalidAnswer("family", "same_brand_redirect_is_not_ownership");
@@ -39,11 +59,22 @@ export function checkFamilyAnswer(raw: unknown, archive: ResearchArchive, subjec
   ) {
     invalidAnswer("family", "cross_company_redirect_missing_clue");
   }
-  return checkedAnswer(
-    FamilyFindingSchema,
-    { ...result, shape, subBrands, clues, archiveKeys: archive.archiveKeys },
-    "family",
-  );
+}
+
+/** Optional catalog evidence is dropped, like an ungrounded clue; the raw answer stays archived. */
+function retainedCatalog(result: FamilyFinding, archive: ResearchArchive): string | null {
+  const url = result.catalogUrl;
+  if (!url || !domainOf(url) || domainOf(url) !== domainOf(result.landedUrl)) {
+    return null;
+  }
+  try {
+    return citedPage(archive.pages, url).url;
+  } catch (error) {
+    if ((error as { code?: string }).code === "BRAND_RESEARCH.EVIDENCE_INVALID") {
+      return null;
+    }
+    throw error;
+  }
 }
 
 function checkRedirect(

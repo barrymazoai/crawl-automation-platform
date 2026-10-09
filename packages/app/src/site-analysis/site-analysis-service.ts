@@ -13,6 +13,8 @@ export const ApplySiteAnalysisSchema = z.strictObject({
   requestId: z.uuid(),
   analysisId: z.uuid(),
   brands: z.array(z.string().trim().min(1)).min(1).max(500).optional(),
+  /** Apply only this exact catalog; discovery of the wider site cannot widen a collection task. */
+  catalogUrl: SiteUrlSchema.optional(),
   /** Explicitly persist one queued brand task per verified source; old callers only save sources. */
   enqueue: z.boolean().optional(),
 });

@@ -24,6 +24,7 @@ export const research: BrandResearch = {
 };
 export const family: FamilyFinding = {
   landedUrl: "https://example.test",
+  catalogUrl: null,
   redirect: null,
   isNutrition: true,
   shape: "single",

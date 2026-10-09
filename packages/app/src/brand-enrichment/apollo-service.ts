@@ -10,12 +10,14 @@ import type { Apollo, BrandEnrichmentRuns } from "./ports.js";
 import type { ApolloJudge, ApolloRound } from "./task-ports.js";
 import { brandFacts } from "./brand-facts.js";
 import { domainOf, saveOutput } from "./run-records.js";
+import { savedFamily } from "./saved-family.js";
 
 export const BrandApolloResultSchema = z.object({
   status: z.enum(["matched", "parent_only", "no_match"]),
   attempts: z.number().int().min(0).max(3),
   apollo: CompanyEnrichmentSchema.shape.apollo,
   note: z.string(),
+  peopleSkipped: z.literal("absorbed_brand").optional(),
 });
 export type BrandApolloResult = z.infer<typeof BrandApolloResultSchema>;
 
@@ -96,17 +98,22 @@ export class BrandApolloService {
     if (!verifiedTie({ step, brand: input.brand, organization })) {
       return noMatch("The proposed domain tie is not present on the returned organization");
     }
-    const people = (await this.deps.apollo.people(organization.id, signal)).filter(
-      // Apollo's free people search omits organization_id (seen 2026-10-09); the search is already scoped to this
-      // organization, so only a person who names a different organization is dropped.
-      (person) => !person.organization_id || person.organization_id === organization.id,
-    );
+    const family = await savedFamily(this.deps.runs, input.runId);
+    const people = family.absorbed ? [] : await this.people(organization.id, signal);
     return {
       status: "matched",
       attempts,
       note: step.note,
+      ...(family.absorbed ? { peopleSkipped: "absorbed_brand" as const } : {}),
       apollo: { organization, match: { by: step.tie, attempts, note: step.note }, people },
     };
+  }
+  private async people(organizationId: string, signal: AbortSignal) {
+    return (await this.deps.apollo.people(organizationId, signal)).filter(
+      // Apollo's free people search omits organization_id (seen 2026-10-09); the search is already scoped to this
+      // organization, so only a person who names a different organization is dropped.
+      (person) => !person.organization_id || person.organization_id === organizationId,
+    );
   }
   private parentClue(input: { runId: string; organization: ApolloOrganization; note: string }) {
     const { organization, runId, note } = input;

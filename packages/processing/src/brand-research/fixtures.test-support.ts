@@ -28,6 +28,7 @@ export const clue: OwnershipClue = {
 };
 export const family: FamilyFinding = {
   landedUrl: subject.brandUrl,
+  catalogUrl: null,
   redirect: null,
   isNutrition: true,
   shape: "single",

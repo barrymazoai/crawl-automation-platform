@@ -13,6 +13,13 @@ import type { Queryable } from "@crawl-automation/platform";
 import { AnalyzedBrandSchema, type AnalyzedBrand } from "@crawl-automation/v3-contracts";
 import { z } from "zod";
 
+type BrandApplication = {
+  analysisId: string;
+  brand: AnalyzedBrand;
+  analysed: readonly AnalyzedBrand[];
+  scoped: boolean;
+};
+
 export async function applySiteAnalysis(
   tx: Queryable,
   input: Omit<z.infer<typeof ApplySiteAnalysisSchema>, "requestId">,
@@ -28,22 +35,37 @@ export async function applySiteAnalysis(
   const result: SiteAnalysisApplyResult = { created: [], matched: [], skipped: [] };
   const selected = input.brands?.map((name) => name.toLowerCase());
   skippedSelections(brands, input.brands ?? [], result);
-  for (const brand of brands.sort((left, right) =>
+  const catalogs = selectCatalog(brands, input.catalogUrl, result);
+  for (const brand of catalogs.sort((left, right) =>
     left.name.toLowerCase().localeCompare(right.name.toLowerCase()),
   )) {
     if (selected && !selected.includes(brand.name.toLowerCase())) {
       continue;
     }
-    await applyBrand(tx, { analysisId: input.analysisId, brand, analysed: brands }, result);
+    await applyBrand(
+      tx,
+      { analysisId: input.analysisId, brand, analysed: brands, scoped: !!input.catalogUrl },
+      result,
+    );
   }
   return result;
 }
 
-async function applyBrand(
-  tx: Queryable,
-  input: { analysisId: string; brand: AnalyzedBrand; analysed: readonly AnalyzedBrand[] },
+function selectCatalog(
+  brands: AnalyzedBrand[],
+  url: string | undefined,
   result: SiteAnalysisApplyResult,
 ) {
+  return brands.filter((brand) => {
+    if (url && brand.catalogUrl !== url) {
+      result.skipped.push({ name: brand.name, reason: "Outside requested catalog" });
+      return false;
+    }
+    return true;
+  });
+}
+
+async function applyBrand(tx: Queryable, input: BrandApplication, result: SiteAnalysisApplyResult) {
   const { analysisId, brand: found } = input;
   if (found.status !== "verified" || !found.catalogUrl || found.name.length > 80) {
     result.skipped.push({
@@ -57,7 +79,8 @@ async function applyBrand(
     "SELECT pg_advisory_xact_lock(hashtextextended(lower($1), 74))",
     [found.name],
   );
-  const singleBrand = await singleBrandSite(tx, input);
+  // A collection-scoped analysis does not establish that the entire store belongs to this brand.
+  const singleBrand = !input.scoped && (await singleBrandSite(tx, input));
   const brand = storeCatalog(found, singleBrand);
   const conflict = await conflictingCatalog(tx, brand);
   if (conflict) {

@@ -474,6 +474,7 @@ export const QuotedEvidenceSchema = z.object({
 /** Stage 2: where the brand URL really lands, and whether it is one brand or a group. */
 export const FamilyFindingSchema = z.object({
   landedUrl: z.string().trim().min(1).max(2000),
+  catalogUrl: z.string().trim().min(1).max(2000).nullable(),
   /** The brand URL forwarded to another domain; `sameBrand` false means another company (an ownership clue). */
   redirect: z
     .object({

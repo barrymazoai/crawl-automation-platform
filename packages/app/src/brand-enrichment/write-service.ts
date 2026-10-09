@@ -3,6 +3,7 @@ import type { BrandEnrichmentRuns, SupplySmartCompanies } from "./ports.js";
 import { BrandApolloResultSchema } from "./apollo-service.js";
 import { requireCompanyRun, saveOutput, domainOf } from "./run-records.js";
 import { brandEnrichmentErrors } from "./errors.js";
+import { savedFamily } from "./saved-family.js";
 
 /** One decided enrichment write per run; fill-empty policy belongs to the Supply Smart adapter. */
 export class BrandWriteService {
@@ -12,7 +13,7 @@ export class BrandWriteService {
   async write(runId: string, signal: AbortSignal) {
     const run = await requireCompanyRun(this.deps.runs, runId);
     const research = BrandResearchSchema.parse(await this.deps.runs.step(runId, "research"));
-    const match = BrandApolloResultSchema.parse(await this.deps.runs.step(runId, "apollo"));
+    const match = await this.apollo(runId);
     const result = CompanyEnrichmentResultSchema.parse(
       await this.deps.companies.enrich(
         {
@@ -45,5 +46,18 @@ export class BrandWriteService {
       ]);
     }
     return result;
+  }
+  private async apollo(runId: string) {
+    const match = BrandApolloResultSchema.parse(await this.deps.runs.step(runId, "apollo"));
+    if (!match.apollo || !(await savedFamily(this.deps.runs, runId)).absorbed) {
+      return match;
+    }
+    // An older saved match may already contain people. Keep that evidence immutable and guard the write too.
+    await saveOutput(this.deps.runs, {
+      runId,
+      step: "apollo-people-policy",
+      output: { peopleSkipped: "absorbed_brand" },
+    });
+    return { ...match, apollo: { ...match.apollo, people: [] } };
   }
 }

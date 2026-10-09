@@ -6,6 +6,10 @@ TASK: Inspect the supplied brand URL and its actual landing page, navigation, Ab
 Report where it really lands. Distinguish a redirect to another domain of the SAME brand (regional/renamed/former)
 from a redirect to ANOTHER company. Only the latter produces a domain_redirect ownership clue, with a verbatim
 quote from the landing company's page and that actual URL. A shared domain or redirect alone must not invent an owner.
+For an absorbed brand (redirect.sameBrand false) or a shared retailer, find the collection/brand page on the landed
+site listing ONLY this subject brand's products. Visit and save that page as evidence and return its URL as catalogUrl.
+Never use the owner's whole store as catalogUrl. Use null if no such page is verified, or the landed site is wholly
+this brand's own. A collection's products, not the site's navigation or recommendations, determine its scope.
 Determine isNutrition from the actual business. shape is exactly single (one brand), separate_sites (group with
 sub-brands on their own sites), shared_site (several brand lines on this site), or holding (group without own products).
 A sub-brand is a DISTINCT BRAND NAME that products are sold under (printed on their packaging, or the shop's vendor/
