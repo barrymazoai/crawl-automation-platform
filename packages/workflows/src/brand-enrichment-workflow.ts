@@ -9,10 +9,9 @@ import {
   isCancellation,
   ParentClosePolicy,
   patched,
-  sleep,
 } from "@temporalio/workflow";
 import { brandEnrichmentActivities } from "./brand-enrichment-routing.js";
-import { settleBrandTracks } from "./brand-enrichment-tracks.js";
+import { runBrandProducts, settleBrandTracks } from "./brand-enrichment-tracks.js";
 import type { BrandEnrichmentActivities } from "./brand-enrichment-activities.js";
 
 /** Explicit saga with one close path and no automatic retries. */
@@ -35,7 +34,7 @@ export async function BrandEnrichmentWorkflow(raw: BrandEnrichmentWorkflowInput)
       ...family.children.map((childRunId) => () => child(input, childRunId)),
       () => gated("brandResearch", { runId }),
       () => gated("brandApollo", { runId }),
-      ...(family.products ? [() => products(input, plain)] : []),
+      ...(family.products ? [() => runBrandProducts(input, plain)] : []),
     ];
     // Failure must not let a sibling activity keep using pages/permits after parent close.
     await settleBrandTracks(tasks);
@@ -70,28 +69,6 @@ async function child(input: BrandEnrichmentWorkflowInput, runId: string) {
       throw error;
     }
     // Its own close step retained the child's failure. Other brands continue.
-  }
-}
-async function products(
-  input: BrandEnrichmentWorkflowInput,
-  activities: BrandEnrichmentActivities,
-) {
-  const { runId, settings } = input;
-  try {
-    for (let poll = 0; poll < settings.limits.productMaxPolls; poll++) {
-      if ((await activities.brandProducts({ runId })).done) {
-        return;
-      }
-      await sleep(settings.limits.productPollSeconds * 1000);
-    }
-    await activities.brandProductsStop({ runId });
-    await activities.brandProductFailure({ runId, reason: "BRAND_ENRICHMENT.PRODUCTS_TIMEOUT" });
-  } catch (error) {
-    if (isCancellation(error)) {
-      throw error;
-    }
-    await activities.brandProductsStop({ runId });
-    await activities.brandProductFailure({ runId, reason: String(error).slice(0, 1000) });
   }
 }
 

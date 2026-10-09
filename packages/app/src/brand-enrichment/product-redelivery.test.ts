@@ -87,3 +87,45 @@ it("saves the delivery start time so products completing during delivery are not
     await test.runs.step(test.runId, "products-redelivery-2026-10-09T00:05:00.000Z"),
   ).toMatchObject({ deliveryStartedAt: "2026-10-09T00:00:00.000Z" });
 });
+
+it("delivers only the latest attempt's sources and tags the redelivery snapshot", async () => {
+  vi.useFakeTimers().setSystemTime(new Date("2026-10-09T00:00:00Z"));
+  const test = await fixture("completed");
+  const sourceId = randomUUID();
+  await test.runs.saveStep({
+    runId: test.runId,
+    step: "product-sources@2",
+    archiveKeys: [],
+    output: {
+      created: [],
+      matched: [],
+      skipped: [],
+      tasks: [{ name: "Retry", sourceId, brandId: randomUUID(), scanId: randomUUID() }],
+    },
+  });
+  await test.service.deliver(test.runId, signal);
+  expect(test.delivery.deliver).toHaveBeenCalledExactlyOnceWith(
+    expect.objectContaining({
+      sourceIds: [sourceId],
+      ingestRunId: `brand-enrichment-${test.runId}`,
+    }),
+    signal,
+  );
+  expect(
+    await test.runs.step(test.runId, "products-redelivery-2026-10-09T00:00:00.000Z"),
+  ).toMatchObject({ attempt: 2 });
+});
+
+it("never falls back to old sources while a newly reserved attempt has no sources", async () => {
+  const test = await fixture("completed");
+  await test.runs.saveStep({
+    runId: test.runId,
+    step: "products-retry@2",
+    output: { requestedAt: new Date().toISOString() },
+    archiveKeys: [],
+  });
+  await expect(test.service.deliver(test.runId, signal)).rejects.toMatchObject({
+    code: "BRAND_ENRICHMENT.INVALID_STATE",
+  });
+  expect(test.delivery.deliver).not.toHaveBeenCalled();
+});

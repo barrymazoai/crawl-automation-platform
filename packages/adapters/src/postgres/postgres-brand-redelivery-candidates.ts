@@ -1,5 +1,6 @@
 import type { BrandRedeliveryCandidates } from "@crawl-automation/app";
 import type { Queryable } from "@crawl-automation/platform";
+import { latestProductAttemptSql } from "./brand-product-attempt-sql.js";
 
 export class PostgresBrandRedeliveryCandidates implements BrandRedeliveryCandidates {
   constructor(private readonly database: Queryable) {}
@@ -9,11 +10,17 @@ export class PostgresBrandRedeliveryCandidates implements BrandRedeliveryCandida
     const rows = await this.database.query<{ runId: string }>(
       `SELECT run.id AS "runId"
        FROM brand_enrichment_run run
-       JOIN brand_enrichment_step sources ON sources.run_id = run.id AND sources.step = 'product-sources'
+       CROSS JOIN LATERAL (${latestProductAttemptSql}run.id) latest
+       JOIN brand_enrichment_step sources ON sources.run_id = run.id
+         AND sources.step = CASE WHEN latest.attempt = 1 THEN 'product-sources'
+           ELSE 'product-sources@' || latest.attempt END
        CROSS JOIN LATERAL (
          SELECT max(COALESCE((output->>'deliveryStartedAt')::timestamptz, created_at)) AS delivered_at
          FROM brand_enrichment_step
-         WHERE run_id = run.id AND (step = 'products' OR step LIKE 'products-redelivery-%')
+         WHERE run_id = run.id AND (
+           step = CASE WHEN latest.attempt = 1 THEN 'products' ELSE 'products@' || latest.attempt END
+           OR (step LIKE 'products-redelivery-%' AND COALESCE((output->>'attempt')::int, 1) = latest.attempt)
+         )
        ) delivery
        WHERE run.state = 'completed' AND run.updated_at >= $1
          AND EXISTS (

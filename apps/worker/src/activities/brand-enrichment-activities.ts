@@ -1,4 +1,4 @@
-import { z } from "zod";
+import { brandProductsActivities } from "./brand-products-activities.js";
 import {
   BrandRunIdSchema,
   CloseBrandRunSchema,
@@ -28,12 +28,7 @@ export function brandEnrichmentActivities(parts: WorkerParts) {
       }
       return { role: run.role, hasWebsite: !!run.brandUrl, existing };
     }),
-    brandProducts: step(parts, "brandProducts", (services, runId, signal) =>
-      services.products.tick(runId, signal),
-    ),
-    brandProductsStop: step(parts, "brandProductsStop", (services, runId) =>
-      services.products.stop(runId),
-    ),
+    ...brandProductsActivities(parts),
     brandWrite: step(parts, "brandWrite", (services, runId, signal) =>
       services.write.write(runId, signal),
     ),
@@ -44,16 +39,6 @@ export function brandEnrichmentActivities(parts: WorkerParts) {
       "brandClose",
       async (raw, signal) =>
         (await parts.brandEnrichment).close.close(CloseBrandRunSchema.parse(raw), signal),
-      parts.log,
-    ),
-    brandProductFailure: guarded(
-      "brandProductFailure",
-      async (raw) => {
-        const { runId, reason } = z.object({ runId: z.uuid(), reason: z.string() }).parse(raw);
-        await (
-          await parts.brandEnrichment
-        ).runs.saveStep({ runId, step: "products-failure", output: { reason }, archiveKeys: [] });
-      },
       parts.log,
     ),
   };

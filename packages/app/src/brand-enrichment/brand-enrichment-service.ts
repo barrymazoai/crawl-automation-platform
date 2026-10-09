@@ -11,6 +11,7 @@ import { brandEnrichmentErrors } from "./errors.js";
 import { requireRun } from "./run-records.js";
 import { BrandQuestionService } from "./question-service.js";
 import * as inputs from "./api-model.js";
+import { BrandProductsRetry } from "./products-retry.js";
 import type { BrandProductRedelivery } from "./product-redelivery.js";
 
 /** Facade: the API's only entry point. Intake is explicitly requested, never a polling loop. */
@@ -157,6 +158,10 @@ export class BrandEnrichmentService {
       throw brandEnrichmentErrors.create("BRAND_ENRICHMENT.NOT_CONFIGURED");
     }
     return this.deps.redelivery.deliver(runId, signal);
+  }
+  retryProducts(raw: unknown) {
+    const { runId } = inputs.BrandRunIdSchema.parse(raw);
+    return new BrandProductsRetry(this.deps).retry(runId);
   }
   spotCheck(raw: unknown) {
     const { decisionId, ...check } = inputs.SpotCheckBrandDecisionSchema.parse(raw);

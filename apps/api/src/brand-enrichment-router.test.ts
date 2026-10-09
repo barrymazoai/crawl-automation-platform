@@ -1,6 +1,26 @@
 import { expect, it, vi } from "vitest";
 import { appWith, post, query } from "./testing/app-with.js";
 const requestId = "11111111-1111-4111-8111-111111111111";
+it("retries only products through the unauthenticated facade", async () => {
+  const result = {
+    runId: requestId,
+    attempt: 2,
+    workflowId: `brand-products-retry-${requestId}-2`,
+  };
+  const retryProducts = vi.fn(async () => result);
+  const app = appWith({ brandEnrichment: { retryProducts } });
+  const response = await app.request(
+    "/trpc/brandEnrichment.retryProducts",
+    post({ runId: requestId }),
+  );
+  expect(response.status).toBe(200);
+  expect(await response.json()).toMatchObject({ result: { data: result } });
+  expect(retryProducts).toHaveBeenCalledExactlyOnceWith({ runId: requestId });
+  expect(
+    (await app.request("/trpc/brandEnrichment.retryProducts", post({ runId: "invalid" }))).status,
+  ).toBe(400);
+  expect(retryProducts).toHaveBeenCalledOnce();
+});
 it("starts brand enrichment through the unauthenticated facade", async () => {
   const start = vi.fn(async () => ({ runId: requestId }));
   const response = await appWith({ brandEnrichment: { start } }).request(

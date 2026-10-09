@@ -12,6 +12,7 @@ import {
   OwnershipClueSchema,
   type OwnershipClue,
 } from "@crawl-automation/v3-contracts";
+import { latestProductAttemptSql } from "./brand-product-attempt-sql.js";
 import { storeErrors } from "../errors.js";
 
 const runColumns = `id AS "runId", request_id AS "requestId", parent_run_id AS "parentRunId", role,
@@ -112,6 +113,13 @@ export class PostgresBrandEnrichmentRuns implements BrandEnrichmentRuns {
       [runId, step],
     );
     return rows[0]?.output ?? null;
+  }
+
+  async latestProductAttempt(runId: string) {
+    const rows = await this.database.query<{ attempt: number }>(`${latestProductAttemptSql}$1`, [
+      runId,
+    ]);
+    return rows[0]?.attempt ?? 1;
   }
 
   async addClues(runId: string, clues: OwnershipClue[]) {

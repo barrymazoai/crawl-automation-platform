@@ -68,6 +68,17 @@ beforeEach(() => {
   );
   mocks.plain.brandProducts.mockResolvedValue({ done: true });
 });
+it("preserves products activity payloads for histories without an attempt", async () => {
+  const request = input();
+  mocks.plain.brandProducts.mockRejectedValue(new Error("failed"));
+  await BrandEnrichmentWorkflow(request);
+  expect(mocks.plain.brandProducts).toHaveBeenCalledExactlyOnceWith({ runId: request.runId });
+  expect(mocks.plain.brandProductsStop).toHaveBeenCalledExactlyOnceWith({ runId: request.runId });
+  expect(mocks.plain.brandProductFailure).toHaveBeenCalledExactlyOnceWith({
+    runId: request.runId,
+    reason: "Error: failed",
+  });
+});
 it("a product track failure is retained and the brand still writes its profile and completes", async () => {
   mocks.plain.brandProducts.mockRejectedValue(new Error("one delivery failed"));
   await BrandEnrichmentWorkflow(input());

@@ -1,5 +1,9 @@
 import type { BrandEnrichmentGateway } from "@crawl-automation/app";
-import type { BrandEnrichmentWorkflowSettings } from "@crawl-automation/v3-contracts";
+import {
+  brandProductsRetryWorkflowId,
+  type BrandProductsRetryRequest,
+  type BrandEnrichmentWorkflowSettings,
+} from "@crawl-automation/v3-contracts";
 import {
   WorkflowExecutionAlreadyStartedError,
   WorkflowNotFoundError,
@@ -28,14 +32,29 @@ export class TemporalBrandEnrichment implements BrandEnrichmentGateway {
       }
     }
   }
+  async startProductsRetry(input: BrandProductsRetryRequest): Promise<void> {
+    await this.client.workflow.start("BrandProductsRetryWorkflow", {
+      workflowId: brandProductsRetryWorkflowId(input),
+      taskQueue: this.settings.taskQueue,
+      workflowIdReusePolicy: "REJECT_DUPLICATE",
+      workflowIdConflictPolicy: "FAIL",
+      retry: { maximumAttempts: 1 },
+      args: [{ ...input, settings: this.settings }],
+    });
+  }
+  describeProductsRetry(input: BrandProductsRetryRequest) {
+    return this.describeWorkflow(brandProductsRetryWorkflowId(input));
+  }
   async cancel(runId: string): Promise<void> {
     await this.client.workflow.getHandle(`brand-enrichment-${runId}`).cancel();
   }
-  async describe(runId: string): Promise<{ status: string } | null> {
+  describe(runId: string): Promise<{ status: string } | null> {
+    return this.describeWorkflow(`brand-enrichment-${runId}`);
+  }
+  private async describeWorkflow(workflowId: string): Promise<{ status: string } | null> {
     try {
       return {
-        status: (await this.client.workflow.getHandle(`brand-enrichment-${runId}`).describe())
-          .status.name,
+        status: (await this.client.workflow.getHandle(workflowId).describe()).status.name,
       };
     } catch (error) {
       if (error instanceof WorkflowNotFoundError) {

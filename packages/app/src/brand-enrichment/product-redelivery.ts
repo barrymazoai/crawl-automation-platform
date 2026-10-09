@@ -4,6 +4,7 @@ import type { ProductDelivery } from "./task-ports.js";
 import { requireCompanyRun, saveOutput } from "./run-records.js";
 import { brandEnrichmentErrors } from "./errors.js";
 import { savedFamily } from "./saved-family.js";
+import { productStep } from "./product-attempt.js";
 import { deliverBrandProducts } from "./product-delivery-step.js";
 
 /**
@@ -20,8 +21,9 @@ export class BrandProductRedelivery {
         details: { runId, reason: "The run still delivers its own products" },
       });
     }
+    const attempt = await this.deps.runs.latestProductAttempt(runId);
     const applied = SiteAnalysisApplyResultSchema.safeParse(
-      await this.deps.runs.step(runId, "product-sources"),
+      await this.deps.runs.step(runId, productStep("product-sources", attempt)),
     );
     const family = await savedFamily(this.deps.runs, runId);
     const url = family.absorbed ? family.catalogUrl : run.brandUrl;
@@ -38,7 +40,7 @@ export class BrandProductRedelivery {
     await saveOutput(this.deps.runs, {
       runId,
       step: `products-redelivery-${new Date().toISOString()}`,
-      output: result,
+      output: { ...result, attempt },
     });
     return { runId, ...result };
   }

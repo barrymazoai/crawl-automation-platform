@@ -45,6 +45,9 @@ export const brandEnrichmentRouter = router({
   deliverProducts: procedure
     .input(BrandRunIdSchema)
     .mutation(async ({ ctx, input }) => (await service(ctx)).deliverProducts(input)),
+  retryProducts: procedure
+    .input(BrandRunIdSchema)
+    .mutation(async ({ ctx, input }) => (await service(ctx)).retryProducts(input)),
   unlink: procedure
     .input(UnlinkBrandCompanySchema)
     .mutation(async ({ ctx, input }) => (await service(ctx)).unlink(input)),

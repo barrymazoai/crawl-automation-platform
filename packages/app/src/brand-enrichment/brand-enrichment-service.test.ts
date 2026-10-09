@@ -24,7 +24,13 @@ it("a Supply Smart 409 cannot create or start a local run", async () => {
     },
   ]);
   request.update.mockResolvedValue({ claimed: false });
-  const gateway = { start: vi.fn(), cancel: vi.fn(), describe: vi.fn() };
+  const gateway = {
+    startProductsRetry: vi.fn(),
+    describeProductsRetry: vi.fn(),
+    start: vi.fn(),
+    cancel: vi.fn(),
+    describe: vi.fn(),
+  };
   const service = new BrandEnrichmentService({
     runs: store.runs,
     requests: request,
@@ -141,7 +147,13 @@ it("exposes automatic ownership records through get without creating questions",
     requests: requests(),
     reviews: reviews(),
     companies: companies(),
-    gateway: { start: vi.fn(), cancel: vi.fn(), describe: vi.fn(async () => null) },
+    gateway: {
+      startProductsRetry: vi.fn(),
+      describeProductsRetry: vi.fn(),
+      start: vi.fn(),
+      cancel: vi.fn(),
+      describe: vi.fn(async () => null),
+    },
   });
   expect(await service.get({ runId: store.runId })).toMatchObject({
     steps: retained,

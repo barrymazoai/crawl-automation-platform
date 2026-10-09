@@ -64,12 +64,19 @@ describe.skipIf(!connectionString)("brand product redelivery selection", () => {
     },
   );
 
-  it("uses the latest redelivery time, not the original products step", async () => {
+  it.each([1, 2, 10])("uses the latest attempt %s and its delivery time", async (attempt) => {
     const { runId, sourceId } = await seed();
+    if (attempt > 1) {
+      await client.query("UPDATE brand_enrichment_step SET step = step || $2 WHERE run_id = $1", [
+        runId,
+        `@${attempt}`,
+      ]);
+    }
     for (const time of ["2026-10-08T00:00:00Z", "2026-10-07T12:00:00Z"]) {
-      await client.query("INSERT INTO brand_enrichment_step VALUES ($1, $2, '{}', $3)", [
+      await client.query("INSERT INTO brand_enrichment_step VALUES ($1, $2, $3, $4)", [
         runId,
         `products-redelivery-${time}`,
+        { attempt },
         time,
       ]);
     }
@@ -99,11 +106,17 @@ describe.skipIf(!connectionString)("brand product redelivery selection", () => {
     expect(await repository.findPending(cutoff)).toEqual([]);
   });
 
-  it("requires saved product sources", async () => {
+  it.each([1, 2])("requires saved sources for the latest attempt %s", async (attempt) => {
     const { runId } = await seed();
+    if (attempt > 1) {
+      await client.query(
+        "INSERT INTO brand_enrichment_step VALUES ($1, 'products-retry@2', '{}', now())",
+        [runId],
+      );
+    }
     await client.query("DELETE FROM brand_enrichment_step WHERE run_id = $1 AND step = $2", [
       runId,
-      "product-sources",
+      attempt === 1 ? "product-sources" : `product-sources@${attempt}`,
     ]);
     expect(await repository.findPending(cutoff)).toEqual([]);
   });

@@ -126,6 +126,8 @@ export interface BrandEnrichmentRuns {
   /** A step's checked output, saved once; the first saved output wins and is returned. */
   saveStep(step: StepOutput): Promise<unknown>;
   step(runId: string, step: string): Promise<unknown>;
+  /** Highest saved products attempt, including reservations; legacy runs return one. */
+  latestProductAttempt(runId: string): Promise<number>;
 
   addClues(runId: string, clues: OwnershipClue[]): Promise<void>;
   clues(runId: string): Promise<OwnershipClue[]>;

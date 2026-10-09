@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import { z } from "zod";
 import type { BrandProductProgress } from "@crawl-automation/v3-contracts";
 import {
@@ -11,6 +10,9 @@ import type { ProductDelivery } from "./task-ports.js";
 import { requireCompanyRun, saveOutput } from "./run-records.js";
 import { savedFamily } from "./saved-family.js";
 import { deliverBrandProducts } from "./product-delivery-step.js";
+import { productStep, productAnalysisRequestId, operationRequestId } from "./product-attempt.js";
+export { operationRequestId } from "./product-attempt.js";
+type Attempt = { runId: string; attempt: number };
 
 /** Cancellation of the exact site-analysis workflow and scans this run submitted, never a whole browser/queue. */
 export interface BrandProductExecution {
@@ -29,77 +31,107 @@ export class BrandProductsService {
       execution: BrandProductExecution;
     },
   ) {}
-  async tick(runId: string, signal: AbortSignal): Promise<BrandProductProgress> {
+  async tick(runId: string, signal: AbortSignal, attempt = 1): Promise<BrandProductProgress> {
     const run = await requireCompanyRun(this.deps.runs, runId);
-    if (await this.deps.runs.step(runId, "products")) {
+    if (await this.deps.runs.step(runId, productStep("products", attempt))) {
       return { done: true };
     }
     const family = await savedFamily(this.deps.runs, runId);
     const url = family.absorbed ? family.catalogUrl : run.brandUrl;
     if (!url) {
-      await saveOutput(this.deps.runs, {
-        runId,
-        step: "products",
-        output: {
-          captured: 0,
-          review: 0,
-          reason: family.absorbed ? "absorbed_brand_without_catalog" : "missing_brand_url",
-        },
-      });
+      await this.missingCatalog({ runId, attempt }, family.absorbed);
       return { done: true };
     }
-    const analysis = await this.analysis(runId, url);
+    const analysis = await this.analysis({ runId, attempt }, url);
     if (analysis.state === "queued" || analysis.state === "running") {
       return { done: false };
     }
     if (analysis.state !== "completed") {
       await saveOutput(this.deps.runs, {
         runId,
-        step: "products",
+        step: productStep("products", attempt),
         output: { captured: 0, review: 0, state: analysis.state, reasons: analysis.reasons },
       });
       return { done: true };
     }
-    const applied = await this.apply(runId, analysis.analysisId, family.absorbed ? url : undefined);
+    const applied = await this.apply(
+      { runId, attempt },
+      { analysisId: analysis.analysisId, catalogUrl: family.absorbed ? url : undefined },
+    );
     if (!(await this.settled(analysis.analysisId, applied))) {
       return { done: false };
     }
-    await this.deliver({ runId, companyId: run.companyId, url, applied }, signal);
+    await this.deliver({ runId, attempt, companyId: run.companyId, url, applied }, signal);
     return { done: true };
   }
+  private async missingCatalog({ runId, attempt }: Attempt, absorbed: boolean) {
+    await saveOutput(this.deps.runs, {
+      runId,
+      step: productStep("products", attempt),
+      output: {
+        captured: 0,
+        review: 0,
+        reason: absorbed ? "absorbed_brand_without_catalog" : "missing_brand_url",
+      },
+    });
+  }
   private async deliver(
-    input: { runId: string; companyId: string; url: string; applied: SiteAnalysisApplyResult },
+    input: {
+      runId: string;
+      attempt: number;
+      companyId: string;
+      url: string;
+      applied: SiteAnalysisApplyResult;
+    },
     signal: AbortSignal,
   ) {
     const result = await deliverBrandProducts(this.deps.delivery, input, signal);
-    await saveOutput(this.deps.runs, { runId: input.runId, step: "products", output: result });
+    await saveOutput(this.deps.runs, {
+      runId: input.runId,
+      step: productStep("products", input.attempt),
+      output: result,
+    });
   }
-  private async analysis(runId: string, url: string) {
+  private async analysis({ runId, attempt }: Attempt, url: string) {
     const reference = analysisReference.safeParse(
-      await this.deps.runs.step(runId, "product-analysis"),
+      await this.deps.runs.step(runId, productStep("product-analysis", attempt)),
     );
     if (reference.success) {
       return this.deps.analyses.get(reference.data.analysisId);
     }
-    const started = await this.deps.analyses.analyze({ requestId: runId, url });
-    await saveOutput(this.deps.runs, { runId, step: "product-analysis", output: started });
+    const started = await this.deps.analyses.analyze({
+      requestId: productAnalysisRequestId(runId, attempt),
+      url,
+    });
+    await saveOutput(this.deps.runs, {
+      runId,
+      step: productStep("product-analysis", attempt),
+      output: started,
+    });
     return this.deps.analyses.get(started.analysisId);
   }
-  private async apply(runId: string, analysisId: string, catalogUrl?: string) {
+  private async apply(
+    { runId, attempt }: Attempt,
+    { analysisId, catalogUrl }: { analysisId: string; catalogUrl: string | undefined },
+  ) {
     const applied = SiteAnalysisApplyResultSchema.safeParse(
-      await this.deps.runs.step(runId, "product-sources"),
+      await this.deps.runs.step(runId, productStep("product-sources", attempt)),
     );
     if (applied.success) {
       return applied.data;
     }
     const result = await this.deps.analyses.apply({
       // One receipt per request ID: analyze already used the run ID (MANTRA Labs, 2026-10-09: REQUEST.ID_CONFLICT).
-      requestId: operationRequestId(runId, "apply"),
+      requestId: operationRequestId(runId, attempt === 1 ? "apply" : `apply@${attempt}`),
       analysisId,
       enqueue: true,
       ...(catalogUrl ? { catalogUrl } : {}),
     });
-    await saveOutput(this.deps.runs, { runId, step: "product-sources", output: result });
+    await saveOutput(this.deps.runs, {
+      runId,
+      step: productStep("product-sources", attempt),
+      output: result,
+    });
     return result;
   }
   private async settled(analysisId: string, applied: SiteAnalysisApplyResult) {
@@ -116,9 +148,9 @@ export class BrandProductsService {
         ),
     );
   }
-  async stop(runId: string) {
+  async stop(runId: string, attempt = 1) {
     const reference = analysisReference.safeParse(
-      await this.deps.runs.step(runId, "product-analysis"),
+      await this.deps.runs.step(runId, productStep("product-analysis", attempt)),
     );
     if (!reference.success) {
       return;
@@ -129,11 +161,4 @@ export class BrandProductsService {
       scanIds: progress.tasks.map((task) => task.scanId),
     });
   }
-}
-
-/** A stable request ID per operation of a run: the same run retries with the same ID, never another operation's. */
-export function operationRequestId(runId: string, operation: string): string {
-  const hex = createHash("sha256").update(`${runId}:${operation}`).digest("hex");
-  const variant = ((Number.parseInt(hex[16] ?? "0", 16) & 0x3) | 0x8).toString(16);
-  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-5${hex.slice(13, 16)}-${variant}${hex.slice(17, 20)}-${hex.slice(20, 32)}`;
 }

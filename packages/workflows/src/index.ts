@@ -7,3 +7,4 @@ export { BrowserScanInputSchema, type BrowserScanInput } from "./browser-scan-wo
 export * from "./site-analysis-workflow.js";
 export { BrowserStopInputSchema } from "./verify-browser-stop-workflow.js";
 export type { BrandEnrichmentActivities } from "./brand-enrichment-activities.js";
+export { BrandProductsRetryWorkflow } from "./brand-products-retry-workflow.js";

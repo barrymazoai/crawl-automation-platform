@@ -31,6 +31,9 @@ export function memoryRuns() {
       return updated;
     }),
     ...stepLedger({ steps, clues, tries }),
+    latestProductAttempt: vi.fn<BrandEnrichmentRuns["latestProductAttempt"]>(async (runId) =>
+      latestProductAttempt(steps, runId),
+    ),
   } satisfies BrandEnrichmentRuns;
   return { runs, records, steps };
 }
@@ -103,4 +106,19 @@ export async function seededRuns(role: BrandEnrichmentRun["role"] = "request") {
   });
   await memory.runs.update(runId, { companyId });
   return { ...memory, runId, companyId };
+}
+
+function latestProductAttempt(steps: Map<string, unknown>, runId: string) {
+  return Math.max(
+    1,
+    ...[...steps.keys()]
+      .filter((key) => key.startsWith(`${runId}/`))
+      .map((key) =>
+        Number(
+          key.match(
+            /\/(?:product-analysis|product-sources|products|products-failure|products-retry)@([1-9][0-9]*)$/,
+          )?.[1] ?? 1,
+        ),
+      ),
+  );
 }
