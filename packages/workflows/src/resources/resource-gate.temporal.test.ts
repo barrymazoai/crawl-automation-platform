@@ -148,7 +148,7 @@ describe("ResourceGate in Temporal", () => {
       ).rejects.toThrow();
       expect(reserve).toHaveBeenCalledOnce();
       expect(fixture.calls.work).toBe(0);
-      expect(fixture.calls.released).toBe(0);
+      expect(fixture.calls.released).toBe(1);
     });
   });
 

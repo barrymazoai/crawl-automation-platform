@@ -8,27 +8,64 @@ const AFTER_RESERVE = new Set(["releaseResources", "stopResourceExecution"]);
 type HistoryEvent = temporal.api.history.v1.IHistoryEvent;
 
 /**
- * Owner 2026-10-07: whether a closed owner may have run work under this permit. The reservation is found by its
- * exact permit id; after it, any Activity scheduled with the permit id or of any type other than release/stop counts
- * as work. A history without that reservation is unknown and also counts as work, so the permit stays held.
+ * Owner 2026-10-09: use the LAST reservation for this exact permit id, matching its outcome by scheduledEventId.
+ * A timed-out, failed or canceled reservation, or one without completion in a closed run, never delivered the grant.
+ * After a completed reservation, any Activity with the permit id or a type other than release/stop counts as work.
+ * Unknown history without a matching reservation still counts as work; unfinished open histories keep the old rules.
  */
 export function permitWorkScheduled(events: HistoryEvent[], owner: PermitOwner): boolean {
-  let reserved = false;
-  for (const event of events) {
+  const reservation = events.findLastIndex((event) => {
     const scheduled = event.activityTaskScheduledEventAttributes;
-    if (!scheduled) {
-      continue;
-    }
-    const type = scheduled.activityType?.name ?? "";
-    if (!reserved) {
-      reserved = type === "reserveResources" && reservedPermit(scheduled) === owner.permitId;
-      continue;
-    }
-    if (scheduled.activityId === owner.permitId || !AFTER_RESERVE.has(type)) {
-      return true;
-    }
+    return (
+      scheduled?.activityType?.name === "reserveResources" &&
+      reservedPermit(scheduled) === owner.permitId
+    );
+  });
+  if (reservation < 0) {
+    return true;
   }
-  return !reserved;
+  const following = events.slice(reservation + 1);
+  const outcome = following.findIndex((event) =>
+    reservationOutcome(event, events[reservation]?.eventId),
+  );
+  if (outcome >= 0) {
+    return (
+      Boolean(following[outcome]?.activityTaskCompletedEventAttributes) &&
+      following.slice(outcome + 1).some((event) => workScheduled(event, owner.permitId))
+    );
+  }
+  return (
+    !following.some(workflowClosed) &&
+    following.some((event) => workScheduled(event, owner.permitId))
+  );
+}
+
+function reservationOutcome(event: HistoryEvent, eventId: HistoryEvent["eventId"]): boolean {
+  const outcome =
+    event.activityTaskCompletedEventAttributes ??
+    event.activityTaskTimedOutEventAttributes ??
+    event.activityTaskFailedEventAttributes ??
+    event.activityTaskCanceledEventAttributes;
+  return eventId != null && outcome?.scheduledEventId?.toString() === eventId.toString();
+}
+
+function workflowClosed(event: HistoryEvent): boolean {
+  return Boolean(
+    event.workflowExecutionCompletedEventAttributes ??
+    event.workflowExecutionFailedEventAttributes ??
+    event.workflowExecutionCanceledEventAttributes ??
+    event.workflowExecutionTimedOutEventAttributes ??
+    event.workflowExecutionTerminatedEventAttributes ??
+    event.workflowExecutionContinuedAsNewEventAttributes,
+  );
+}
+
+function workScheduled(event: HistoryEvent, permitId: string): boolean {
+  const scheduled = event.activityTaskScheduledEventAttributes;
+  return Boolean(
+    scheduled &&
+    (scheduled.activityId === permitId || !AFTER_RESERVE.has(scheduled.activityType?.name ?? "")),
+  );
 }
 
 function reservedPermit(

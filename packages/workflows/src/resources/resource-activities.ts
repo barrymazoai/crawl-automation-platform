@@ -2,9 +2,11 @@ import { ResourceDecisionSchema, type ResourceRequest } from "@crawl-automation/
 import { log, proxyActivities } from "@temporalio/workflow";
 import { resourceFailure } from "./resource-failure.js";
 
+type ReleaseRequest = ResourceRequest & { reserveFailed?: true };
+
 export interface ResourceActivities {
   reserveResources(request: ResourceRequest): Promise<unknown>;
-  releaseResources(request: ResourceRequest): Promise<unknown>;
+  releaseResources(request: ReleaseRequest): Promise<unknown>;
   prepareResourceExecution(request: ResourceRequest): Promise<unknown>;
   stopResourceExecution(
     request: ResourceRequest & {
@@ -36,7 +38,7 @@ export function resourceActivities(queue: string): ResourceActivities {
   };
 }
 
-export async function releasePermit(ports: ResourceActivities, request: ResourceRequest) {
+export async function releasePermit(ports: ResourceActivities, request: ReleaseRequest) {
   const result = ResourceDecisionSchema.safeParse(await ports.releaseResources(request));
   if (
     !result.success ||

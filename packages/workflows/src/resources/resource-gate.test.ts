@@ -7,13 +7,14 @@ const state = vi.hoisted(() => ({
   stop: vi.fn(),
   patched: true,
   log: vi.fn(),
+  warn: vi.fn(),
   options: [] as Array<Record<string, unknown>>,
   protected: 0,
   now: 0,
 }));
 
 vi.mock("@temporalio/workflow", () => ({
-  log: { info: state.log },
+  log: { info: state.log, warn: state.warn },
   ApplicationFailure: class extends Error {
     constructor(
       message: string,
@@ -73,6 +74,7 @@ beforeEach(() => {
   state.stop.mockReset();
   state.patched = true;
   state.log.mockReset();
+  state.warn.mockReset();
   state.options = [];
   state.protected = 0;
   state.now = 0;
@@ -344,4 +346,41 @@ it("retains the old browser wait expiry for histories without the outage marker"
   });
   expect(work).not.toHaveBeenCalled();
   expect(state.now).toBe(10_000);
+});
+
+it.each(["timeout", "activity failure", "release failure"])(
+  "releases a failed reserve (%s) before rethrowing its original error",
+  async (mode) => {
+    const failure = new Error(mode);
+    state.reserve.mockRejectedValue(failure);
+    if (mode === "release failure") {
+      state.release.mockRejectedValue(new Error("release unavailable"));
+    }
+    const work = vi.fn();
+    await expect(resourceGate(config)("work", work)).rejects.toBe(failure);
+    expect(state.reserve).toHaveBeenCalledOnce();
+    expect(state.release).toHaveBeenCalledExactlyOnceWith({
+      ...state.reserve.mock.calls[0]?.[0],
+      reserveFailed: true,
+    });
+    expect(work).not.toHaveBeenCalled();
+    expect(state.stop).not.toHaveBeenCalled();
+    expect(state.warn).toHaveBeenCalledTimes(mode === "release failure" ? 1 : 0);
+    if (mode === "release failure") {
+      expect(state.warn).toHaveBeenCalledWith(
+        "resource reserve failure cleanup failed",
+        expect.objectContaining({ error: "Error: release unavailable" }),
+      );
+    }
+  },
+);
+
+it("keeps the old reserve-error path when the failure-release patch is absent", async () => {
+  state.patched = false;
+  const failure = new Error("reserve timed out");
+  state.reserve.mockRejectedValue(failure);
+  const work = vi.fn();
+  await expect(resourceGate(config)("work", work)).rejects.toBe(failure);
+  expect(state.release).not.toHaveBeenCalled();
+  expect(work).not.toHaveBeenCalled();
 });

@@ -28,7 +28,7 @@ function database(answers: object[][]) {
 
 describe("permit stop journal", () => {
   it("also blocks legacy release commands when no executor proof exists", async () => {
-    const { db, query } = database([[{ request }], []]);
+    const { db, query } = database([[], [{ request }], []]);
     await expect(new PostgresResourceAdmission(db).release(request)).rejects.toMatchObject({
       code: "RESOURCE.CLEANUP_UNVERIFIED",
     });
@@ -36,13 +36,13 @@ describe("permit stop journal", () => {
   });
 
   it("releases the exact permit after the locked ledger verifies every stop receipt", async () => {
-    const { db, query } = database([[{ request }], [{ permit_id: request.permitId }], []]);
+    const { db, query } = database([[], [{ request }], [{ permit_id: request.permitId }], []]);
     expect(await new PostgresResourceAdmission(db).release(request)).toMatchObject({
       permitId: request.permitId,
       status: "released",
     });
-    expect(query.mock.calls[2]?.[0]).toContain("SET released_at");
-    expect(query.mock.calls[2]?.[1]).toEqual([request.permitId]);
+    expect(query.mock.calls[3]?.[0]).toContain("SET released_at");
+    expect(query.mock.calls[3]?.[1]).toEqual([request.permitId]);
   });
   it("arms only an exact held owner and never starts external work", async () => {
     const { db, query } = database([[{ permit_id: request.permitId }], []]);

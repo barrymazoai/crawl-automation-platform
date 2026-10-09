@@ -1,6 +1,7 @@
 import { isDeepStrictEqual } from "node:util";
 import type { Database, Queryable } from "@crawl-automation/platform";
 import { ResourceRequestSchema, type ResourceRequest } from "@crawl-automation/v3-contracts";
+import { z } from "zod";
 import { storeErrors } from "../errors.js";
 import { recordPermitRequest } from "./permit-events.js";
 import { assertPermitStopped } from "./permit-stop-proof.js";
@@ -57,17 +58,30 @@ export class PostgresResourceAdmission {
   }
 
   async release(raw: unknown): Promise<Decision> {
-    const request = ResourceRequestSchema.parse(raw);
+    const { reserveFailed, ...request } = ResourceRequestSchema.safeExtend({
+      reserveFailed: z.literal(true).optional(),
+    }).parse(raw);
     return this.database.transaction(async (tx) => {
+      // Serialize with a reserve transaction that may still be committing after its timeout.
+      await tx.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [
+        `permit:${request.permitId}`,
+      ]);
       const rows = await tx.query<{ request: unknown }>(
         "SELECT request FROM resource_permit WHERE permit_id = $1 FOR UPDATE",
         [request.permitId],
       );
       const prior = rows[0];
-      if (!prior || !isDeepStrictEqual(ResourceRequestSchema.parse(prior.request), request)) {
+      if (!prior) {
+        // Only the reserve-failure cleanup may find no grant: the reserve never committed one.
+        if (reserveFailed) {
+          return { permitId: request.permitId, status: "released", reason: "released" };
+        }
         throw conflict();
       }
-      await assertPermitStopped(tx, request.permitId);
+      if (!isDeepStrictEqual(ResourceRequestSchema.parse(prior.request), request)) {
+        throw conflict();
+      }
+      await assertPermitStopped(tx, request.permitId, reserveFailed);
       await tx.query(
         "UPDATE resource_permit SET released_at = coalesce(released_at, now()) WHERE permit_id = $1",
         [request.permitId],

@@ -4,7 +4,7 @@ import {
   type ResourceRequest,
 } from "@crawl-automation/v3-contracts";
 import { CancellationScope, log, patched, sleep } from "@temporalio/workflow";
-import type { ResourceActivities } from "./resource-activities.js";
+import { releasePermit, type ResourceActivities } from "./resource-activities.js";
 import type { ResourceGrant } from "./resource-binding.js";
 import { resourceFailure } from "./resource-failure.js";
 
@@ -19,9 +19,7 @@ export async function waitForResource(at: {
   const deadline = requestedAt + at.config.maxWaitSeconds * 1000;
   log.info("resource permit requested", { ...at.request, requestedAt });
   for (;;) {
-    const result = ResourceDecisionSchema.safeParse(
-      await CancellationScope.nonCancellable(() => at.ports.reserveResources(at.request)),
-    );
+    const result = ResourceDecisionSchema.safeParse(await reserveResources(at.ports, at.request));
     if (!result.success || invalidDecision(result.data, at.request.permitId)) {
       throw resourceFailure("RESOURCE.IDENTITY_CONFLICT", { request: at.request });
     }
@@ -49,6 +47,27 @@ export async function waitForResource(at: {
       });
     }
     await sleep(pollDelay(at.waiting.polls));
+  }
+}
+
+/** A failed reply can hide a committed grant; no gated work has started yet. */
+async function reserveResources(ports: ResourceActivities, request: ResourceRequest) {
+  try {
+    return await CancellationScope.nonCancellable(() => ports.reserveResources(request));
+  } catch (error) {
+    if (patched("resource-reserve-failure-release-v1")) {
+      try {
+        await CancellationScope.nonCancellable(() =>
+          releasePermit(ports, { ...request, reserveFailed: true }),
+        );
+      } catch (releaseError) {
+        log.warn("resource reserve failure cleanup failed", {
+          ...request,
+          error: String(releaseError),
+        });
+      }
+    }
+    throw error;
   }
 }
 
