@@ -2,44 +2,14 @@ import { randomUUID } from "node:crypto";
 import { expect, it, vi } from "vitest";
 import { BrandReviewService } from "./review-service.js";
 import { BrandOwnershipWriteService } from "./ownership-write-service.js";
-import type { OwnershipReviewer } from "./task-ports.js";
-import { companies, reviews, research, signal } from "./testing/fakes.js";
+import { research, signal } from "./testing/fakes.js";
 import { seededRuns } from "./testing/memory-runs.js";
 import { BrandSummaryService } from "./summary-service.js";
 import { BrandResearchService } from "./research-service.js";
+import { ownershipFixture } from "./testing/ownership-fixture.js";
 
-async function fixture() {
-  const store = await seededRuns();
-  const company = companies();
-  const review = reviews();
-  const reviewer = {
-    review: vi.fn<OwnershipReviewer["review"]>(async () => ({
-      verdict: "owner",
-      ownerName: "Parent",
-      ownerDomain: "parent.test",
-      kind: "brand_of",
-      confidence: 0.9,
-      reason: "Our brands page",
-      signals: ["website_our_brands"],
-    })),
-  };
-  await store.runs.saveStep({
-    runId: store.runId,
-    step: "research",
-    output: research,
-    archiveKeys: [],
-  });
-  await store.runs.saveStep({
-    runId: store.runId,
-    step: "ownership-status",
-    output: { owners: [], latestCheck: null },
-    archiveKeys: [],
-  });
-  const deps = { ...store, companies: company, reviews: review, reviewer, model: "test-model" };
-  return { ...deps, service: new BrandReviewService(deps) };
-}
 it("creates a visible owner and its profile-only child, deferring the link until the child phase finishes", async () => {
-  const test = await fixture();
+  const test = await ownershipFixture();
   const result = await test.service.review(test.runId, signal);
   expect(result.ownerRunId).toBeDefined();
   expect(test.companies.create).toHaveBeenCalledWith(
@@ -61,7 +31,7 @@ it("creates a visible owner and its profile-only child, deferring the link until
   );
 });
 it("retains ambiguous owners without a question or a Supply Smart write", async () => {
-  const test = await fixture();
+  const test = await ownershipFixture();
   test.companies.resolve.mockResolvedValue({
     status: "ambiguous",
     companyId: null,
@@ -79,7 +49,7 @@ it("retains ambiguous owners without a question or a Supply Smart write", async 
   });
 });
 it("retains link conflicts, keeps the existing owner and summarizes has_parent without a question", async () => {
-  const test = await fixture();
+  const test = await ownershipFixture();
   test.companies.resolve.mockResolvedValue({
     status: "matched",
     companyId: randomUUID(),
@@ -107,7 +77,7 @@ it("retains link conflicts, keeps the existing owner and summarizes has_parent w
   expect(test.reviews.markDecisionSent).not.toHaveBeenCalled();
 });
 it("an existing ownership check skips a second reviewer decision", async () => {
-  const test = await fixture();
+  const test = await ownershipFixture();
   test.steps.set(`${test.runId}/ownership-status`, {
     latestCheck: { checkedAt: "2026-10-09", result: "independent", signals: [] },
     owners: [],
@@ -118,7 +88,7 @@ it("an existing ownership check skips a second reviewer decision", async () => {
 });
 
 it("records cannot_tell locally, sends no ownership and creates no question", async () => {
-  const test = await fixture();
+  const test = await ownershipFixture();
   test.reviewer.review.mockResolvedValue({ verdict: "cannot_tell", reason: "No evidence" });
   expect(await test.service.review(test.runId, signal)).toEqual({});
   await new BrandOwnershipWriteService(test).write(test.runId, signal);
@@ -148,8 +118,8 @@ it("records cannot_tell locally, sends no ownership and creates no question", as
   expect(test.reviews.addQuestion).not.toHaveBeenCalled();
 });
 
-it("retains a merge suggestion without a question, unlink or automatic merge", async () => {
-  const test = await fixture();
+it("never detects or records a merge even when the Apollo holder differs from the parent", async () => {
+  const test = await ownershipFixture();
   const holderCompanyId = randomUUID();
   await test.runs.addClues(test.runId, [
     {
@@ -165,13 +135,7 @@ it("retains a merge suggestion without a question, unlink or automatic merge", a
   const mergeCompany = vi.fn();
   Object.assign(test.companies, { mergeCompany });
   await test.service.review(test.runId, signal);
-  expect(await test.runs.step(test.runId, "merge-suggestion")).toEqual({
-    holderCompanyId,
-    ownerCompanyId: test.companies.create.mock.results[0]
-      ? (await test.companies.create.mock.results[0].value).id
-      : undefined,
-    reason: "Our brands page",
-  });
+  expect(await test.runs.step(test.runId, "merge-suggestion")).toBeNull();
   expect(test.reviews.addQuestion).not.toHaveBeenCalled();
   expect(test.companies.unlink).not.toHaveBeenCalled();
   expect(mergeCompany).not.toHaveBeenCalled();

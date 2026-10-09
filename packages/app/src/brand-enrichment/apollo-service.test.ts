@@ -56,18 +56,26 @@ it.each(["invented", "found"])(
     expect(test.apollo.people).not.toHaveBeenCalled();
   },
 );
-it("keeps parent matches as local clues and never fetches the parent's contacts", async () => {
+it("retains the parent organization, judge tie and filtered people for the ownership write", async () => {
   const test = await fixture();
   test.judge.next
     .mockResolvedValueOnce({ action: "search", query: { by: "domain", domain: "example.test" } })
     .mockResolvedValueOnce({
       action: "parent_only",
       organizationId: "found",
+      tie: "linkedin",
       note: "Parent organization",
     });
-  expect(await test.service.match(test.runId, signal)).toMatchObject({ status: "parent_only" });
+  expect(await test.service.match(test.runId, signal)).toMatchObject({
+    status: "parent_only",
+    apollo: {
+      organization: { id: "found" },
+      match: { by: "linkedin", attempts: 1, note: "Parent organization" },
+      people: [{ id: "good", organization_id: "found" }, { id: "unlabelled" }],
+    },
+  });
   expect(await test.runs.clues(test.runId)).toMatchObject([{ signal: "apollo_parent" }]);
-  expect(test.apollo.people).not.toHaveBeenCalled();
+  expect(test.apollo.people).toHaveBeenCalledWith("found", signal);
 });
 it("accepts a verified domain and drops people belonging to another organization", async () => {
   const test = await fixture();
@@ -89,7 +97,7 @@ it("accepts a verified domain and drops people belonging to another organization
 });
 
 it.each([null, true, false])(
-  "writes people only for non-absorbed brands (sameBrand=%s)",
+  "keeps the brand's own organization and people regardless of redirects (sameBrand=%s)",
   async (sameBrand) => {
     const test = await fixture();
     test.steps.set(`${test.runId}/family`, {
@@ -114,9 +122,8 @@ it.each([null, true, false])(
       });
     const result = await test.service.match(test.runId, signal);
     expect(result.status).toBe("matched");
-    expect(result.peopleSkipped).toBe(sameBrand === false ? "absorbed_brand" : undefined);
-    expect(test.apollo.people).toHaveBeenCalledTimes(sameBrand === false ? 0 : 1);
-    expect(result.apollo?.people).toHaveLength(sameBrand === false ? 0 : 2);
+    expect(test.apollo.people).toHaveBeenCalledOnce();
+    expect(result.apollo?.people).toHaveLength(2);
     expect(await test.runs.step(test.runId, "apollo")).toEqual(result);
     const companyPort = companies();
     await new BrandWriteService({ runs: test.runs, companies: companyPort }).write(
@@ -131,7 +138,7 @@ it.each([null, true, false])(
   },
 );
 
-it("suppresses people for an absorbed family saved before catalogUrl existed", async () => {
+it("keeps own people with a family saved before catalogUrl existed", async () => {
   const test = await fixture();
   test.steps.set(`${test.runId}/family`, {
     redirect: { fromDomain: "example.test", toDomain: "owner.test", sameBrand: false },
@@ -146,8 +153,7 @@ it("suppresses people for an absorbed family saved before catalogUrl existed", a
     });
   expect(await test.service.match(test.runId, signal)).toMatchObject({
     status: "matched",
-    peopleSkipped: "absorbed_brand",
-    apollo: { people: [] },
+    apollo: { people: [{ id: "good", organization_id: "found" }, { id: "unlabelled" }] },
   });
-  expect(test.apollo.people).not.toHaveBeenCalled();
+  expect(test.apollo.people).toHaveBeenCalledWith("found", signal);
 });

@@ -8,13 +8,14 @@ import {
   executeChild,
   isCancellation,
   ParentClosePolicy,
+  patched,
   sleep,
 } from "@temporalio/workflow";
 import { brandEnrichmentActivities } from "./brand-enrichment-routing.js";
 import { settleBrandTracks } from "./brand-enrichment-tracks.js";
 import type { BrandEnrichmentActivities } from "./brand-enrichment-activities.js";
 
-/** New workflow: explicit saga with one close path, no automatic retries and no compatibility patch. */
+/** Explicit saga with one close path and no automatic retries. */
 export async function BrandEnrichmentWorkflow(raw: BrandEnrichmentWorkflowInput): Promise<void> {
   const input = BrandEnrichmentWorkflowInputSchema.parse(raw);
   const { runId, settings } = input;
@@ -23,6 +24,9 @@ export async function BrandEnrichmentWorkflow(raw: BrandEnrichmentWorkflowInput)
   let reason: string | undefined;
   try {
     const identity = await plain.brandIdentity({ runId });
+    if (patched("brand-enrichment-found-stops-v1") && identity.existing) {
+      return;
+    }
     const family =
       identity.role === "request" && identity.hasWebsite
         ? await gated("brandFamily", { runId })

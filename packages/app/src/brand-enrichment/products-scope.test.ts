@@ -36,6 +36,7 @@ it.each([null, true, false])(
     });
     expect(test.delivery.deliver).toHaveBeenCalledWith(
       expect.objectContaining({
+        companyId: test.companyId,
         siteKey: sameBrand === false ? "owner.test" : "example.test",
         sourceIds: [test.task.sourceId],
       }),

@@ -37,8 +37,4 @@ export const brandEnrichmentErrors = defineErrors({
     category: "RUNTIME",
     message: "The bounded wait for DTC products expired.",
   },
-  "BRAND_ENRICHMENT.MERGE_NOT_WIRED": {
-    category: "RUNTIME",
-    message: "The company merge port is unavailable; the question remains open.",
-  },
 });

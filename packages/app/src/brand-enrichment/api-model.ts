@@ -30,12 +30,6 @@ export const AnswerBrandQuestionSchema = z.strictObject({
       link: CompanyLinkSchema,
       reason: z.string().trim().min(1),
     }),
-    z.strictObject({
-      action: z.literal("merge"),
-      fromCompanyId: z.uuid(),
-      toCompanyId: z.uuid(),
-      reason: z.string().trim().min(1),
-    }),
   ]),
 });
 export const SpotCheckBrandDecisionSchema = z.strictObject({

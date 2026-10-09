@@ -41,7 +41,6 @@ export class BrandOwnerService {
     verdict: OwnerVerdict;
   }) {
     const { run, company, verdict } = input;
-    await this.possibleMerge(input);
     await saveOutput(this.deps.runs, {
       runId: run.runId,
       step: "ownership-link",
@@ -63,30 +62,5 @@ export class BrandOwnerService {
       companyId: company.id,
     });
     return { ownerRunId: child.runId };
-  }
-  private async possibleMerge(input: {
-    run: BrandEnrichmentRun;
-    company: Company;
-    verdict: OwnerVerdict;
-  }) {
-    const { run, company, verdict } = input;
-    const clues = await this.deps.runs.clues(run.runId);
-    const holder = clues.find(
-      (clue) =>
-        clue.signal === "shared_apollo_org" &&
-        clue.ownerCompanyId &&
-        clue.ownerCompanyId !== company.id,
-    );
-    if (holder) {
-      await saveOutput(this.deps.runs, {
-        runId: run.runId,
-        step: "merge-suggestion",
-        output: {
-          holderCompanyId: holder.ownerCompanyId,
-          ownerCompanyId: company.id,
-          reason: verdict.reason,
-        },
-      });
-    }
   }
 }

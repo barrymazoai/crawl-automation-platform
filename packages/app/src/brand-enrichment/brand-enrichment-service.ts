@@ -118,7 +118,7 @@ export class BrandEnrichmentService {
           "reviewer-answer",
           "ownership-unresolved",
           "ownership-conflict",
-          "merge-suggestion",
+          "parent-apollo-write",
         ].map(async (step) => [step, await this.deps.runs.step(runId, step)]),
       ),
     );

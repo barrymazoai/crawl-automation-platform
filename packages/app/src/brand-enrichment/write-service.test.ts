@@ -4,7 +4,7 @@ import { seededRuns } from "./testing/memory-runs.js";
 import { companies, family, research, signal } from "./testing/fakes.js";
 
 it.each([null, true, false])(
-  "guards previously saved Apollo people at write (sameBrand=%s)",
+  "keeps the brand's own saved Apollo people at write (sameBrand=%s)",
   async (sameBrand) => {
     const test = await seededRuns();
     const companyPort = companies();
@@ -29,12 +29,10 @@ it.each([null, true, false])(
     );
     expect(companyPort.enrich.mock.lastCall?.[0].apollo).toEqual({
       ...apollo,
-      people: sameBrand === false ? [] : apollo.people,
+      people: apollo.people,
     });
     expect(await test.runs.step(test.runId, "apollo")).toEqual(saved);
     expect(saved.apollo.people).toHaveLength(1);
-    expect(await test.runs.step(test.runId, "apollo-people-policy")).toEqual(
-      sameBrand === false ? { peopleSkipped: "absorbed_brand" } : null,
-    );
+    expect(await test.runs.step(test.runId, "apollo-people-policy")).toBeNull();
   },
 );

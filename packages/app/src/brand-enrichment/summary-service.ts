@@ -7,10 +7,14 @@ import {
 } from "@crawl-automation/v3-contracts";
 import type { BrandEnrichmentRuns } from "./ports.js";
 import { BrandApolloResultSchema } from "./apollo-service.js";
+import { existingBrandCompany } from "./identity-status.js";
 export class BrandSummaryService {
   constructor(private readonly deps: { runs: BrandEnrichmentRuns }) {}
   async build(runId: string) {
     const runs = this.deps.runs;
+    if (await existingBrandCompany(runs, runId)) {
+      return BrandEnrichmentSummarySchema.parse({ existing: true });
+    }
     const summary = BrandEnrichmentSummarySchema.parse({});
     const product = z
       .object({ captured: z.number(), review: z.number() })

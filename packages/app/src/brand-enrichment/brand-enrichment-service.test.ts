@@ -4,6 +4,7 @@ import { BrandEnrichmentService } from "./brand-enrichment-service.js";
 import { BrandIdentityService } from "./identity-service.js";
 import { BrandCloseService } from "./close-service.js";
 import { BrandQuestionService } from "./question-service.js";
+import { AnswerBrandQuestionSchema } from "./api-model.js";
 import { companies, reviews, requests, signal } from "./testing/fakes.js";
 import { memoryRuns, seededRuns } from "./testing/memory-runs.js";
 
@@ -96,28 +97,34 @@ it("a human ownership answer writes exactly the chosen link and does not choose 
   );
   expect(question.state).toBe("answered");
 });
-it("a requested merge stays open with an explicit missing-port error", async () => {
+it("rejects merge commands while old merge questions remain dismissible", async () => {
   const store = await seededRuns();
   const review = reviews();
   const company = companies();
   const question = await review.addQuestion(store.runId, "merge", {});
-  await expect(
-    new BrandQuestionService({ ...store, reviews: review, companies: company }).answer(
-      {
-        runId: store.runId,
-        questionId: question.questionId,
-        answer: {
-          action: "merge",
-          fromCompanyId: store.companyId,
-          toCompanyId: randomUUID(),
-          reason: "duplicate",
-        },
+  expect(() =>
+    AnswerBrandQuestionSchema.parse({
+      runId: store.runId,
+      questionId: question.questionId,
+      answer: {
+        action: "merge",
+        fromCompanyId: store.companyId,
+        toCompanyId: randomUUID(),
+        reason: "duplicate",
       },
-      signal,
-    ),
-  ).rejects.toMatchObject({ code: "BRAND_ENRICHMENT.MERGE_NOT_WIRED" });
-  expect(question.state).toBe("open");
+    }),
+  ).toThrow();
+  await new BrandQuestionService({ ...store, reviews: review, companies: company }).answer(
+    {
+      runId: store.runId,
+      questionId: question.questionId,
+      answer: { action: "dismiss", reason: "Never merge" },
+    },
+    signal,
+  );
+  expect(question.state).toBe("dismissed");
   expect(company.link).not.toHaveBeenCalled();
+  expect(company.enrich).not.toHaveBeenCalled();
 });
 
 it("exposes automatic ownership records through get without creating questions", async () => {
@@ -125,7 +132,6 @@ it("exposes automatic ownership records through get without creating questions",
   const retained = {
     "ownership-unresolved": { verdict: "cannot_tell" },
     "ownership-conflict": { detail: "existing owner" },
-    "merge-suggestion": { reason: "same Apollo org" },
   };
   for (const [step, output] of Object.entries(retained)) {
     await store.runs.saveStep({ runId: store.runId, step, output, archiveKeys: [] });

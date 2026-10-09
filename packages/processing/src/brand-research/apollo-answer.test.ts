@@ -53,6 +53,7 @@ describe("Apollo answer hard ties", () => {
     const answer = {
       action: "parent_only",
       organizationId: "parent-id",
+      tie: "domain",
       note: "Only Garden Group was found.",
     };
     expect(
@@ -67,6 +68,18 @@ describe("Apollo answer hard ties", () => {
     ]) {
       expect(checkApolloAnswer({ action: "search", query }, input()).action).toBe("search");
     }
+  });
+  it("requires the judge's tie for parent-only material instead of inventing one", () => {
+    expect(() =>
+      checkApolloAnswer(
+        {
+          action: "parent_only",
+          organizationId: "parent-id",
+          note: "Only the parent was found",
+        },
+        input([{ id: "parent-id", primary_domain: "garden.example" }]),
+      ),
+    ).toThrow(expect.objectContaining({ code: "BRAND_RESEARCH.ANSWER_INVALID" }));
   });
   it("refuses exhausted, repeated and invented searches", () => {
     const search = { action: "search", query: { by: "name", name: "Sprout" } };

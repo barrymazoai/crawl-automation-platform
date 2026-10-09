@@ -12,7 +12,8 @@ To accept, organizationId MUST come from organizations actually returned in a pr
 - linkedin: its LinkedIn is the exact company page linked from the brand's own site;
 - name_address: BOTH its name and address match the legal name and address printed on the brand site.
 A similar name, shared industry, city alone or a parent's domain is insufficient. Never accept a parent company's
-organization for the brand. If only the parent is present, return parent_only with its returned organizationId.
+organization for the brand. If only the parent is present, return parent_only with its returned organizationId
+and tie (domain, former_domain, linkedin or name_address) describing the evidence tying that organization to the parent.
 Explain the actual tie or the parent-only finding in note. Otherwise search a supported alternative or give_up.
 DATA: ${JSON.stringify(input)}`;
 }

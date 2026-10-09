@@ -6,7 +6,7 @@ import { brandEnrichmentErrors } from "./errors.js";
 import { requireRun, requireCompanyRun } from "./run-records.js";
 
 type Answer = z.infer<typeof AnswerBrandQuestionSchema>;
-/** Human commands: only the explicitly selected link/check is written; merge never runs implicitly. */
+/** Human commands: only the explicitly selected link/check is written. Old questions can be dismissed. */
 export class BrandQuestionService {
   constructor(
     private readonly deps: {
@@ -18,9 +18,6 @@ export class BrandQuestionService {
   async answer(input: Answer, signal: AbortSignal) {
     const question = await this.question(input);
     const { answer } = input;
-    if (answer.action === "merge") {
-      throw brandEnrichmentErrors.create("BRAND_ENRICHMENT.MERGE_NOT_WIRED");
-    }
     if (answer.action !== "dismiss" && question.kind === "identity") {
       throw brandEnrichmentErrors.create("BRAND_ENRICHMENT.INVALID_STATE");
     }

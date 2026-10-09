@@ -7,7 +7,7 @@ import type {
 export interface BrandEnrichmentActivities {
   brandIdentity(input: {
     runId: string;
-  }): Promise<{ role: BrandEnrichmentRole; hasWebsite: boolean }>;
+  }): Promise<{ role: BrandEnrichmentRole; hasWebsite: boolean; existing?: boolean }>;
   brandFamily(input: { runId: string }): Promise<BrandFamilyPlan>;
   brandResearch(input: { runId: string }): Promise<unknown>;
   brandApollo(input: { runId: string }): Promise<unknown>;

@@ -10,14 +10,12 @@ import type { Apollo, BrandEnrichmentRuns } from "./ports.js";
 import type { ApolloJudge, ApolloRound } from "./task-ports.js";
 import { brandFacts } from "./brand-facts.js";
 import { domainOf, saveOutput } from "./run-records.js";
-import { savedFamily } from "./saved-family.js";
 
 export const BrandApolloResultSchema = z.object({
   status: z.enum(["matched", "parent_only", "no_match"]),
   attempts: z.number().int().min(0).max(3),
   apollo: CompanyEnrichmentSchema.shape.apollo,
   note: z.string(),
-  peopleSkipped: z.literal("absorbed_brand").optional(),
 });
 export type BrandApolloResult = z.infer<typeof BrandApolloResultSchema>;
 
@@ -93,18 +91,14 @@ export class BrandApolloService {
     }
     if (step.action === "parent_only") {
       await this.parentClue({ runId: input.runId, organization, note: step.note });
-      return { status: "parent_only", attempts, note: step.note };
-    }
-    if (!verifiedTie({ step, brand: input.brand, organization })) {
+    } else if (!verifiedTie({ step, brand: input.brand, organization })) {
       return noMatch("The proposed domain tie is not present on the returned organization");
     }
-    const family = await savedFamily(this.deps.runs, input.runId);
-    const people = family.absorbed ? [] : await this.people(organization.id, signal);
+    const people = await this.people(organization.id, signal);
     return {
-      status: "matched",
+      status: step.action === "parent_only" ? "parent_only" : "matched",
       attempts,
       note: step.note,
-      ...(family.absorbed ? { peopleSkipped: "absorbed_brand" as const } : {}),
       apollo: { organization, match: { by: step.tie, attempts, note: step.note }, people },
     };
   }

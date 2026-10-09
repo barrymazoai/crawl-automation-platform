@@ -3,7 +3,6 @@ import type { BrandEnrichmentRuns, SupplySmartCompanies } from "./ports.js";
 import { BrandApolloResultSchema } from "./apollo-service.js";
 import { requireCompanyRun, saveOutput, domainOf } from "./run-records.js";
 import { brandEnrichmentErrors } from "./errors.js";
-import { savedFamily } from "./saved-family.js";
 
 /** One decided enrichment write per run; fill-empty policy belongs to the Supply Smart adapter. */
 export class BrandWriteService {
@@ -13,7 +12,7 @@ export class BrandWriteService {
   async write(runId: string, signal: AbortSignal) {
     const run = await requireCompanyRun(this.deps.runs, runId);
     const research = BrandResearchSchema.parse(await this.deps.runs.step(runId, "research"));
-    const match = await this.apollo(runId);
+    const match = BrandApolloResultSchema.parse(await this.deps.runs.step(runId, "apollo"));
     const result = CompanyEnrichmentResultSchema.parse(
       await this.deps.companies.enrich(
         {
@@ -22,7 +21,7 @@ export class BrandWriteService {
           keywords: research.keywords,
           ...(research.category ? { categories: [research.category] } : {}),
           evidence: research.evidence,
-          ...(match.apollo ? { apollo: match.apollo } : {}),
+          ...(match.status === "matched" && match.apollo ? { apollo: match.apollo } : {}),
         },
         signal,
       ),
@@ -47,17 +46,32 @@ export class BrandWriteService {
     }
     return result;
   }
-  private async apollo(runId: string) {
-    const match = BrandApolloResultSchema.parse(await this.deps.runs.step(runId, "apollo"));
-    if (!match.apollo || !(await savedFamily(this.deps.runs, runId)).absorbed) {
-      return match;
+  /** Only a confirmed parent's organization is written here; the brand write never borrows it. */
+  async writeParent(input: { runId: string; companyId: string }, signal: AbortSignal) {
+    const { runId, companyId } = input;
+    const match = BrandApolloResultSchema.safeParse(await this.deps.runs.step(runId, "apollo"));
+    if (!match.success || match.data.status !== "parent_only" || !match.data.apollo) {
+      return;
     }
-    // An older saved match may already contain people. Keep that evidence immutable and guard the write too.
+    const company = await this.deps.companies.get(companyId, signal);
+    if (company.apolloOrganizationId === match.data.apollo.organization.id) {
+      await saveOutput(this.deps.runs, {
+        runId,
+        step: "parent-apollo-write",
+        output: { companyId, status: "already_held" },
+      });
+      return;
+    }
+    const result = CompanyEnrichmentResultSchema.parse(
+      await this.deps.companies.enrich({ companyId, apollo: match.data.apollo }, signal),
+    );
     await saveOutput(this.deps.runs, {
       runId,
-      step: "apollo-people-policy",
-      output: { peopleSkipped: "absorbed_brand" },
+      step: "parent-apollo-write",
+      output: result,
     });
-    return { ...match, apollo: { ...match.apollo, people: [] } };
+    if (!result.matched) {
+      throw brandEnrichmentErrors.create("BRAND_ENRICHMENT.IDENTITY_UNRESOLVED");
+    }
   }
 }

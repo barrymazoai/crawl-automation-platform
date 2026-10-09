@@ -21,12 +21,12 @@ function step(parts: WorkerParts, name: string, handler: Step) {
 export function brandEnrichmentActivities(parts: WorkerParts) {
   return {
     brandIdentity: step(parts, "brandIdentity", async (services, runId, signal) => {
-      await services.identity.resolve(runId, signal);
+      const { existing } = await services.identity.resolve(runId, signal);
       const run = await services.runs.get(runId);
       if (!run) {
         throw brandEnrichmentErrors.create("BRAND_ENRICHMENT.NOT_FOUND");
       }
-      return { role: run.role, hasWebsite: !!run.brandUrl };
+      return { role: run.role, hasWebsite: !!run.brandUrl, existing };
     }),
     brandProducts: step(parts, "brandProducts", (services, runId, signal) =>
       services.products.tick(runId, signal),

@@ -42,6 +42,7 @@ export const SubBrandOutcomeSchema = z.enum([
 
 /** What the run did; stored on the request and shown on the admin page (spec §2.9). */
 export const BrandEnrichmentSummarySchema = z.object({
+  existing: z.literal(true).optional(),
   products: z
     .object({ captured: z.number().int().min(0), review: z.number().int().min(0) })
     .partial()
@@ -550,6 +551,7 @@ export const ApolloStepSchema = z.discriminatedUnion("action", [
   z.object({
     action: z.literal("parent_only"),
     organizationId: z.string().min(1),
+    tie: ApolloTieSchema,
     note: z.string().trim().min(1).max(2000),
   }),
   z.object({ action: z.literal("give_up"), note: z.string().trim().min(1).max(2000) }),
