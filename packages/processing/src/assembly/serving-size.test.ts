@@ -14,6 +14,21 @@ describe("serving sizes (owner 2026-10-08)", () => {
     }
   });
 
+  it("treats a (s) plural marker, plural units and spelled-out counts as the same (GNC, owner 2026-10-09)", () => {
+    for (const [page, label] of [
+      ["2 Caplet(s)", "Two Caplets"],
+      ["1 Scoop(s)", "1 Scoop (22g)"],
+      ["2 Capsule(s)", "2 capsules"],
+      ["1 Gummy", "1 gummies"],
+      ["1 box", "1 boxes"],
+      ["1 glass", "1 glasses"],
+      ["2 doses", "2 dose"],
+    ] as const) {
+      expect(sameServingSize(page, label)).toBe(true);
+    }
+    expect(sameServingSize("2 Caplet(s)", "Three Caplets")).toBe(false);
+  });
+
   it("keeps a different count or amount as a difference", () => {
     expect(sameServingSize("1 capsule", "2 capsules")).toBe(false);
     expect(sameServingSize("1 Scoop (Approx. 1 g)", "1 Scoop (Approx. 19g)")).toBe(false);

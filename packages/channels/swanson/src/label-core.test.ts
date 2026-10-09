@@ -11,7 +11,6 @@ const label =
 const ambiguous: Record<string, string> = {
   duplicate: escape(label) + escape(label),
   nested: escape(label).replace("Blend", "<b>Blend</b>"),
-  "no boundary": escape(label.split("Suggested Use")[0] ?? ""),
   empty: escape(label.replace("Gelatin, water.", "")),
   script: escape(label) + "<script>ignored?</script>",
 };
@@ -54,6 +53,35 @@ describe("Swanson label core", () => {
       expect(core).not.toContain(note);
     },
   );
+
+  // Owner 2026-10-09 (CRAWLV3-214): complete labels the core used to refuse.
+  it("takes an ingredient list that ends the facts section", () => {
+    const core = extractSwansonLabelCore(escape(label.split("\n\nSuggested Use")[0] ?? ""));
+    expect(core).toMatch(/Other Ingredients: Gelatin, water\.$/);
+  });
+
+  it("ends the list at a heading printed alone on its line, without a colon", () => {
+    const food =
+      "Nutrition Facts\nServing Size 1 oz (28 g)\nAmount Per Serving\nCalories\n140\nIngredients\n" +
+      "Semi-sweet chocolate (unsweetened chocolate, sugar).\nAllergen Information\nContains: Soy.\nCountry of Origin:\nUSA";
+    const core = extractSwansonLabelCore(escape(food));
+    expect(core).toMatch(/Semi-sweet chocolate \(unsweetened chocolate, sugar\)\.$/);
+    expect(core).not.toContain("Allergen");
+  });
+
+  it("does not end a list at a bare one-word heading line", () => {
+    const list = label.replace("Gelatin, water.", "Gelatin,\nWarning\nwater.");
+    expect(extractSwansonLabelCore(escape(list))).toMatch(/Gelatin,\nWarning\nwater\.$/);
+  });
+
+  it("keeps a facts table without an ingredient list as a formula-only label", () => {
+    const tea =
+      "Supplement Facts\nServing Size 1 infusion bag\nAmount Per Serving\nOrganic Tulsi Blend\n2.1 g\n" +
+      "†Daily Value not established.\nSuggested Use: Use 1 bag per cup.\nWarning: consult a physician.";
+    const core = extractSwansonLabelCore(escape(tea));
+    expect(core).toMatch(/Daily Value not established\.$/);
+    expect(core).not.toMatch(/Suggested Use|Warning/);
+  });
 
   it.each(Object.keys(ambiguous))("refuses an ambiguous page (%s)", (kind) => {
     expect(() => extractSwansonLabelCore(ambiguous[kind] ?? "")).toThrow(

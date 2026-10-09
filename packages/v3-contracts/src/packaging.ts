@@ -11,13 +11,23 @@ export const PackagingClaimSchema = z.strictObject({
 });
 export type PackagingClaim = z.infer<typeof PackagingClaimSchema>;
 const words = (text: string) => text.replace(/\s+/gu, " ").trim();
+const NUMBER_WORDS: Record<string, string> = {
+  one: "1", two: "2", three: "3", four: "4", five: "5", six: "6",
+  seven: "7", eight: "8", nine: "9", ten: "10", eleven: "11", twelve: "12",
+};
 /**
  * Owner 2026-10-08: serving sizes that differ only in format are one value ("5 g" / "5g", "2 Drops" / "2 drops",
- * "approx." / "approx", "2.0 grams" / "2 grams").
+ * "approx." / "approx", "2.0 grams" / "2 grams"). Owner 2026-10-09: so are a "(s)" plural marker, singular/plural
+ * unit words and a spelled-out count ("2 Caplet(s)" / "Two Caplets", "1 Scoop(s)" / "1 Scoop (22g)" on GNC).
  */
 export function servingSizeKey(text: string): string {
   return text
     .toLowerCase()
+    .replace(/\((?:e?s)\)/gu, "")
+    .replace(/\b(?:one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\b/gu, (word) => NUMBER_WORDS[word] ?? word)
+    .replace(/\b([a-z]{2,})ies\b/gu, "$1y")
+    .replace(/\b([a-z]*(?:x|ss|sh|ch))es\b/gu, "$1")
+    .replace(/\b([a-z]{2,}[^\W\ds])s\b/gu, "$1")
     .replace(/(\d)\.0+(?!\d)/gu, "$1")
     .replace(/(?<!\d)[.,;:()[\]]|[.,;:()[\]](?!\d)/gu, " ")
     .replace(/(\d)\s+(?=[a-zµμ])/gu, "$1")

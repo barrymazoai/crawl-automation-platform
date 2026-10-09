@@ -13,8 +13,21 @@ const FACTS_HEADING = /^(?:Supplement|Nutrition) Facts\s*\n/i;
 const INGREDIENTS = /^(?:Other Ingredients|Ingredients)[ \t]*(?::|$)/gim;
 // Allergen and trademark notes follow Other Ingredients on many Swanson pages (2026-09-30: 8 Healthy Origins
 // products); they end the ingredient list like the sections after them.
-const NEXT_SECTION =
-  /^\s*(?:Allergen Information|Trademark Information|Certifier Information|Additional Product Information|Country of Origin|Suggested Use|Directions|Warning|Warnings|Storage Instructions|Other Information)\s*:/im;
+// Owner 2026-10-09: food labels print these headings alone on their line, without a colon ("Allergen Information");
+// "Certifier:", "Typical Amino Acids Profile:" and "Sku:" also follow the list on saved Swanson pages.
+const COLON_SECTION =
+  /^[ \t]*(?:Allergen Information|Trademark Information|Certifier(?: Information)?|Typical Amino Acids? Profile|Sku|Additional Product Information|Country of Origin|Suggested Use|Directions|Warning|Warnings|Storage Instructions|Other Information)[ \t]*:/im;
+// Without a colon only multi-word headings count: a bare "Directions" or "Warning" line could be part of a list.
+const BARE_SECTION =
+  /^[ \t]*(?:Allergen Information|Trademark Information|Certifier Information|Typical Amino Acids? Profile|Additional Product Information|Country of Origin|Suggested Use|Storage Instructions|Other Information)[ \t]*$/im;
+const NEXT_SECTION = {
+  exec(text: string): { index: number } | null {
+    const found = [COLON_SECTION.exec(text), BARE_SECTION.exec(text)].filter(
+      (match): match is RegExpExecArray => match !== null,
+    );
+    return found.length ? { index: Math.min(...found.map((match) => match.index)) } : null;
+  },
+};
 
 type Nodes = ReturnType<typeof parseDocument>["children"];
 
@@ -35,25 +48,31 @@ function preSections(children: Nodes): string[] {
   return sections;
 }
 
-/** The one facts section, with its serving headings and exactly one other-ingredients heading. */
-function factsSection(sections: string[]): { facts: string; heading: RegExpExecArray } {
+/**
+ * The one facts section, with its serving headings and at most one other-ingredients heading. Owner 2026-10-09
+ * (CRAWLV3-214): a facts table without an ingredient list (teas, honey) is a formula-only label, not a refusal.
+ */
+function factsSection(sections: string[]): { facts: string; heading: RegExpExecArray | null } {
   const candidates = sections.filter((section) => FACTS_HEADING.test(section));
   const [facts] = candidates;
   if (sections.length < 1 || sections.length > 2 || !facts || candidates.length !== 1) {
     throw labelCoreFailure("LABEL_CORE.LABEL_SCOPE_AMBIGUOUS");
   }
+  if (!/^Serving Size\b/im.test(facts) || !/^Amount Per Serving\b/im.test(facts)) {
+    throw labelCoreFailure("LABEL_CORE.TABLE_UNVERIFIED");
+  }
+  return { facts, heading: ingredientsHeading(facts) };
+}
+
+/** The facts section's one other-ingredients heading; null when it prints none, refused when it prints several. */
+function ingredientsHeading(facts: string): RegExpExecArray | null {
   const all = [...facts.matchAll(INGREDIENTS)];
   const headings = ingredientHeadingIndexes(all.map((match) => match[0]));
   const heading = all[headings[0] ?? -1];
-  if (
-    !heading ||
-    headings.length !== 1 ||
-    !/^Serving Size\b/im.test(facts) ||
-    !/^Amount Per Serving\b/im.test(facts)
-  ) {
+  if (headings.length > 1 || (headings.length === 1 && !heading)) {
     throw labelCoreFailure("LABEL_CORE.TABLE_UNVERIFIED");
   }
-  return { facts, heading: heading as RegExpExecArray };
+  return (heading as RegExpExecArray | undefined) ?? null;
 }
 
 /**
@@ -79,13 +98,15 @@ export function extractSwansonLabelCore(html: string): string {
 
 function supplementCore(sections: string[]): string {
   const { facts, heading } = factsSection(sections);
+  if (!heading) {
+    const boundary = NEXT_SECTION.exec(facts);
+    return boundary ? facts.slice(0, boundary.index) : facts;
+  }
   const after = heading.index + heading[0].length;
   const tail = facts.slice(after);
-  const boundary = NEXT_SECTION.exec(tail);
-  if (!boundary) {
-    throw labelCoreFailure("LABEL_CORE.INGREDIENT_SCOPE_AMBIGUOUS");
-  }
-  const ingredients = tail.slice(0, boundary.index).trim();
+  // The list may also end the facts section (owner 2026-10-09); a blank line inside it is still refused below.
+  const end = NEXT_SECTION.exec(tail)?.index ?? tail.length;
+  const ingredients = tail.slice(0, end).trim();
   if (
     !ingredients ||
     ingredients.includes("\n\n") ||
@@ -93,7 +114,7 @@ function supplementCore(sections: string[]): string {
   ) {
     throw labelCoreFailure("LABEL_CORE.INGREDIENT_SCOPE_AMBIGUOUS");
   }
-  return facts.slice(0, after + boundary.index);
+  return facts.slice(0, after + end);
 }
 
 /**

@@ -85,6 +85,15 @@ export const amazonAdapter: ChannelAdapter<AmazonRendered> = {
     "Patio, Lawn & Garden",
     "Automotive",
     "Pet Supplies",
+    // Owner 2026-10-09 (CRAWLV3-214): Health & Household subcategories that hold no supplements, seen on the
+    // 301 "no label source" Reviews: essential oils, mists and diffusers; toothpaste and mouthwash; bags and foil;
+    // massage tools; gift wrap; pill organizers.
+    "Aromatherapy",
+    "Oral Care",
+    "Household Supplies",
+    "Wellness & Relaxation",
+    "Stationery & Gift Wrapping Supplies",
+    "Medication Aids",
   ],
   externalId: (parsed) => parsed.identity.listingId,
   productFamily: (parsed) => amazonProductFamily(parsed.rendered.family, parsed.identity.listingId),

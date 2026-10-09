@@ -183,20 +183,36 @@ const ingredient = (value: string) =>
     "",
   );
 
+/**
+ * One ingredient item for comparison only (never stored): case, spacing, ™/® and footnote marks (*, †, ‡, §) and
+ * punctuation around the item do not change it. Owner 2026-10-09 (CRAWLV3-214): "Dry Roasted Almonds" on the page
+ * and "DRY ROASTED ALMONDS." on the label are one item.
+ */
+export function ingredientWordingKey(value: string): string {
+  return ingredient(labelNameForComparison(value))
+    .replace(/(?<=^|[\s(,;:])[*†‡§]+|[*†‡§]+(?=$|[\s),.;:!?])/gu, "")
+    .replace(/^[\s.,;:!?]+|[\s.,;:!?]+$/gu, "")
+    .replace(/\s+/gu, " ")
+    .trim();
+}
+
 /** Only a leading low-percentage qualifier is ignored; item boundaries and order stay intact. */
 export function ingredientsAgreement(
   left: string[] | null,
   right: string[] | null,
-  comparison?: Comparison,
+  // The comparison version once chose whether ™/® counted; wording never makes a conflict (owner 2026-10-09).
+  _comparison?: Comparison,
 ): LabelAgreement {
   if (dequal(left, right)) {
     return "exact";
   }
-  const normalized = (value: string) =>
-    ingredient(comparison ? labelNameForComparison(value) : value);
   const agrees =
     left !== null &&
     right !== null &&
-    orderedAgreement(left, right, (first, second) => normalized(first) === normalized(second));
+    orderedAgreement(
+      left,
+      right,
+      (first, second) => ingredientWordingKey(first) === ingredientWordingKey(second),
+    );
   return agrees ? "wording" : "conflict";
 }

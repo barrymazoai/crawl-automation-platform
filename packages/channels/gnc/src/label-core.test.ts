@@ -15,7 +15,6 @@ const html =
 const altered: Record<string, string> = {
   "missing label": other,
   "duplicate label": wrap(facts + other) + wrap(facts + other),
-  "missing other ingredients": wrap(facts),
   "duplicate other ingredients": wrap(facts + other + other),
   "several tables": wrap(
     facts.replace("</table>", "</table><table><tr><td>another variant</td></tr></table>") + other,
@@ -37,6 +36,12 @@ describe("GNC label core", () => {
     expect(() => extractGncLabelCore(altered[kind] ?? "")).toThrow(
       expect.objectContaining({ code: expect.stringMatching(/^LABEL_CORE\./) }),
     );
+  });
+
+  it("keeps a facts table without an Other Ingredients section as a formula-only label (CRAWLV3-214)", () => {
+    const core = extractGncLabelCore(wrap(facts));
+    expect(core).toContain("Vitamin B12\n\n2.4mcg");
+    expect(core).not.toContain("Other Ingredients");
   });
 
   it('accepts a table headed "Per Serving" (2026-09-30, Bucked Up 500953)', () => {

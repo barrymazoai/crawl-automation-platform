@@ -1,5 +1,6 @@
 import {
   assessLabelCandidate,
+  ingredientWordingKey,
   partialLabelValidationCodes,
   type LabelCandidate,
 } from "@crawl-automation/v3-contracts";
@@ -91,8 +92,10 @@ function parentName(row: Row, rows: Row[]) {
 }
 
 function ingredientsFit(partial: LabelCandidate, complete: LabelCandidate): boolean {
-  const wanted = partial.otherIngredients?.items.map(words) ?? [];
-  const available = complete.otherIngredients?.items.map(words) ?? [];
+  // Wording-only differences are one item, as in the full-label comparison (owner 2026-10-09, CRAWLV3-214).
+  const key = (item: { text: string }) => ingredientWordingKey(item.text);
+  const wanted = partial.otherIngredients?.items.map(key) ?? [];
+  const available = complete.otherIngredients?.items.map(key) ?? [];
   let offset = 0;
   if (partial.ingredientsComplete && wanted.length !== available.length) {
     return false;

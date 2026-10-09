@@ -165,6 +165,20 @@ describe("shared label agreement boundaries", () => {
     ).toBe("wording");
   });
 
+  it("treats case, trailing punctuation and footnote or trademark marks as wording (CRAWLV3-214)", () => {
+    expect(ingredientsAgreement(["Dry Roasted Almonds"], ["DRY ROASTED ALMONDS."])).toBe("wording");
+    expect(
+      ingredientsAgreement(
+        ["Natural wild raspberry flavor‡", "Enhanced Collagen™ hydrolyzed bovine collagen"],
+        ["Natural Wild Raspberry Flavor", "Enhanced Collagen hydrolyzed bovine collagen"],
+      ),
+    ).toBe("wording");
+    expect(ingredientsAgreement(["Organic cane sugar*"], ["organic cane sugar"])).toBe("wording");
+    expect(ingredientsAgreement(["Almonds!"], ["almonds"])).toBe("wording");
+    expect(ingredientsAgreement(["almonds"], ["cashews"])).toBe("conflict");
+    expect(ingredientsAgreement(["A*B"], ["AB"])).toBe("conflict");
+  });
+
   it("does not erase ingredient punctuation or item boundaries", () => {
     expect(
       ingredientsAgreement(["casein, potassium citrate"], ["casein", "potassium citrate"]),

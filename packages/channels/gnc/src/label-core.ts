@@ -83,8 +83,11 @@ function factsTable(label: PageNode): string {
   return facts;
 }
 
-/** The one accordion section headed "Other ingredients", with its content. */
-function otherIngredients(label: PageNode): string {
+/**
+ * The one accordion section headed "Other ingredients", with its content; null when the label has none. Owner
+ * 2026-10-09 (CRAWLV3-214): a facts table without an ingredient list is a formula-only label, not a refusal.
+ */
+function otherIngredients(label: PageNode): string | null {
   const sections = find(label.children ?? [], (node) =>
     hasClass(node, "pdp-details-accordion__section"),
   );
@@ -98,6 +101,9 @@ function otherIngredients(label: PageNode): string {
     (index) => headings[index]?.section,
   );
   const [section] = headed;
+  if (headed.length === 0) {
+    return null;
+  }
   const content = section
     ? find(section.children ?? [], (node) =>
         hasClass(node, "pdp-details-accordion__section-content"),
@@ -140,7 +146,7 @@ export function extractGncLabelCore(html: string): string {
   }
   const result = /^Drug Facts[ \t]*:?[ \t]*$/im.test(text)
     ? extractDrugFactsCore(text)
-    : `${factsTable(label)}\n\n${otherIngredients(label)}`;
+    : [factsTable(label), otherIngredients(label)].filter((part) => part !== null).join("\n\n");
   if (result.length > MAX_TEXT_LENGTH) {
     throw labelCoreFailure("LABEL_CORE.OUTPUT_LIMIT");
   }
