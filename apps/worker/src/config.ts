@@ -1,3 +1,7 @@
+import {
+  BrandEnrichmentSettingsSchema,
+  validateBrandEnrichmentSettings,
+} from "./brand-enrichment-settings.js";
 import { StopSweepSettingsSchema } from "./resources/stop-sweep-settings.js";
 import { isAbsolute } from "node:path";
 import type { LabelSettings } from "@crawl-automation/app";
@@ -140,6 +144,7 @@ export const WorkerConfigSchema = z
     resourceKinds: ResourceKindsSchema.default({}),
     /** Refreshed only by the process hosting the resources role. */
     resourceHealth: ResourceHealthConfigSchema.optional(),
+    brandEnrichment: BrandEnrichmentSettingsSchema.optional(),
     stopSweep: StopSweepSettingsSchema.optional(),
     /** Listing-only route/options for permit-gated HTTP brand scans; uses storage.r2 for originals. */
     brandScans: ListingFetchSettingsSchema.extend({
@@ -154,5 +159,6 @@ export const WorkerConfigSchema = z
     message: "Browser stop verification needs one lock connection and one journal connection",
     path: ["database", "maxConnections"],
   })
-  .superRefine(validateBrowserWorker);
+  .superRefine(validateBrowserWorker)
+  .superRefine(validateBrandEnrichmentSettings);
 export type WorkerConfig = z.infer<typeof WorkerConfigSchema>;

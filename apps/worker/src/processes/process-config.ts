@@ -6,6 +6,7 @@ import { z } from "zod";
  */
 export const WORKER_ROLES = [
   "pipeline",
+  "brand-enrichment",
   "label",
   "label-ocr",
   "label-model",

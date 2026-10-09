@@ -1,3 +1,4 @@
+import { brandEnrichmentRouter } from "./brand-enrichment.js";
 import { procedure, router } from "../trpc.js";
 import { brandsRouter } from "./brands.js";
 import { evidenceRouter } from "./evidence.js";
@@ -11,6 +12,7 @@ import { usageRouter } from "./usage.js";
 import { enrichmentRouter } from "./enrichment.js";
 
 export const appRouter = router({
+  brandEnrichment: brandEnrichmentRouter,
   usage: usageRouter,
   enrichment: enrichmentRouter,
   evidence: evidenceRouter,

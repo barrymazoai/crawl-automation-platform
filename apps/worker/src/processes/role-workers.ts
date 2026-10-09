@@ -1,3 +1,8 @@
+import {
+  brandEnrichmentActivities,
+  brandEnrichmentModelActivities,
+  brandEnrichmentBrowserActivities,
+} from "../activities/brand-enrichment-activities.js";
 import type { WorkerSpec } from "@crawl-automation/platform/temporal-worker";
 import { browserTaskQueue, LEGACY_BROWSER_QUEUE } from "@crawl-automation/platform/browser-routing";
 import { browserActivities } from "../activities/browser-activities.js";
@@ -24,6 +29,10 @@ const workflowBundlePath = new URL("./workflows.cjs", import.meta.url).pathname;
 
 const roleWork: Record<WorkerRole, (parts: WorkerParts) => RoleWork> = {
   // Product runs, and brand runs (CollectionWorkflow) waiting for their brand scan.
+  "brand-enrichment": (parts) => ({
+    activities: { ...brandEnrichmentActivities(parts), ...brandEnrichmentModelActivities(parts) },
+    workflowBundlePath,
+  }),
   pipeline: (parts) => ({
     activities: {
       ...pipelineActivities(parts),
@@ -40,6 +49,7 @@ const roleWork: Record<WorkerRole, (parts: WorkerParts) => RoleWork> = {
   "label-model": (parts) => ({
     activities: {
       ...modelActivities(parts),
+      ...brandEnrichmentModelActivities(parts),
       ...enrichmentModelActivities(parts),
       ...dtcGalleryModelActivities(parts),
     },
@@ -48,7 +58,11 @@ const roleWork: Record<WorkerRole, (parts: WorkerParts) => RoleWork> = {
   // Browser workers run on each Mac mini with Ego for DTC and Amazon Store-page brands.
   // Whole Foods waits on its fetch test. The role also hosts the API's browser brand-scan workflow.
   browser: (parts) => ({
-    activities: { ...browserActivities(parts), ...brandListingActivities(parts) },
+    activities: {
+      ...browserActivities(parts),
+      ...brandListingActivities(parts),
+      ...brandEnrichmentBrowserActivities(parts),
+    },
     workflowBundlePath,
   }),
 };
@@ -69,6 +83,9 @@ export function roleWorkers(roles: readonly ProcessRole[], parts: WorkerParts): 
 }
 
 function roleQueues(entry: ProcessRole, parts: WorkerParts): string[] {
+  if (entry.role === "brand-enrichment" && parts.config.brandEnrichment) {
+    return [...new Set([entry.taskQueue, parts.config.brandEnrichment.queues.activities])];
+  }
   if (entry.role !== "browser") {
     return [entry.taskQueue];
   }

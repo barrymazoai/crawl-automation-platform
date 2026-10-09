@@ -90,9 +90,9 @@ const legacyMigrations = [
 ];
 
 describe("release SQL catalog", () => {
-  it("pins all 001–056 names and hashes in order", async () => {
+  it("pins all 001–058 names and hashes in order", async () => {
     const catalog = await loadSqlCatalog(release);
-    expect(catalog).toHaveLength(56);
+    expect(catalog).toHaveLength(58);
     expect(catalog.map(({ name, sha256 }) => [name, sha256])).toEqual([
       ...legacyMigrations,
       [
@@ -192,8 +192,16 @@ describe("release SQL catalog", () => {
         "056_server2_product_browser_pool.sql",
         "e2adef1017261c9cb5d114183a16977414149df39d42640859c64695ef07c67c",
       ],
+      [
+        "057_dtc_site_analysis_skipped.sql",
+        "f90ea9e57eb5899128e39f4da0016e3e643e41dc18babe4c1192c12aa1b1c5e1",
+      ],
+      [
+        "058_brand_enrichment.sql",
+        "1c7811dd050afd717133f1031d1ab9d9027292611ea2eb39e2c3b95c1bc0e596",
+      ],
     ]);
-    expect(catalog.at(-1)?.name).toBe("056_server2_product_browser_pool.sql");
+    expect(catalog.at(-1)?.name).toBe("058_brand_enrichment.sql");
   });
 
   it("preserves bytes and hashes exactly like the old UTF-8 tool", async () => {

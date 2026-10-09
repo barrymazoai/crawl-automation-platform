@@ -1,3 +1,4 @@
+import { brandEnrichmentService } from "./brand-enrichment-parts.js";
 import { resourceService } from "./resources/resource-parts.js";
 import { siteAnalysisService } from "./site-analysis-parts.js";
 import type { UsageService, EvidenceService } from "@crawl-automation/app";
@@ -52,6 +53,7 @@ import { fleetService } from "./routers/fleet-parts.js";
 
 /** Everything the API is built from. Adapters are created once and shared. */
 export interface ApiParts {
+  brandEnrichment: ReturnType<typeof brandEnrichmentService>;
   siteAnalyses: ReturnType<typeof siteAnalysisService>;
   usage: UsageService;
   enrichment: EnrichmentBackfill;
@@ -87,7 +89,9 @@ type Parts = AwilixContainer<ApiParts>;
 export async function buildContainer(config: ApiConfig): Promise<Parts> {
   const log = createLogger({ name: "api", level: config.log.level });
   const temporal = await connectTemporal(config.temporal);
-  return assembleContainer({ config, log, temporal });
+  const container = assembleContainer({ config, log, temporal });
+  await container.cradle.brandEnrichment;
+  return container;
 }
 
 /** Every part of the API, registered around its already-open connections (tests pass stand-ins). */
@@ -130,6 +134,7 @@ function registerServices(container: Parts): void {
     queue: asFunction(queueService).singleton(),
     brands: asFunction(brandService).singleton(),
     siteAnalyses: asFunction(siteAnalysisService).singleton(),
+    brandEnrichment: asFunction(brandEnrichmentService).singleton(),
     reviews: asFunction(reviewService).singleton(),
     products: asFunction(productService).singleton(),
     history: asFunction(historyService).singleton(),

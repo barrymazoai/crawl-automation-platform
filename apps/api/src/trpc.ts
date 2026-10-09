@@ -1,4 +1,5 @@
 import type {
+  BrandEnrichmentService,
   UsageService,
   EnrichmentBackfill,
   BrandScanService,
@@ -19,6 +20,8 @@ import { isAppError, type AppError } from "@crawl-automation/platform";
 import { initTRPC, TRPCError } from "@trpc/server";
 
 export interface ApiContext {
+  brandEnrichment?:
+    BrandEnrichmentService | Promise<BrandEnrichmentService | undefined> | undefined;
   siteAnalyses?: SiteAnalysisService | undefined;
   usage?: UsageService | undefined;
   enrichment?: EnrichmentBackfill;
@@ -40,6 +43,7 @@ type TrpcCode = TRPCError["code"];
 
 const conflictCodes = new Set([
   "RUN.SOURCE_BUSY",
+  "BRAND_ENRICHMENT.CLAIM_CONFLICT",
   "RUN.REVISION_CONFLICT",
   "REQUEST.ID_CONFLICT",
   "BRAND.REVISION_CONFLICT",

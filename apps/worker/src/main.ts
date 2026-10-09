@@ -16,6 +16,7 @@ async function main(): Promise<void> {
   try {
     await runProcess(chosen, container.cradle);
   } finally {
+    await container.dispose();
     r2.close();
     await database.close();
   }

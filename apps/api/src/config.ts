@@ -1,7 +1,9 @@
+import { ApiBrandEnrichmentSchema } from "./brand-enrichment-parts.js";
 import { DtcSettingsSchema } from "@crawl-automation/channel-dtc";
 import { isIP } from "node:net";
 import { isAbsolute } from "node:path";
 import {
+  validateBrandEnrichmentSettings,
   DeliveryRunnerOptionsSchema,
   EvidenceTestPrefixSchema,
   QueueDispatcherOptionsSchema,
@@ -34,101 +36,107 @@ const absolutePath = z.string().refine(isAbsolute, "Must be an absolute path");
 /** Where a brand run's CollectionWorkflow starts; the old per-channel brand workflows are refused. */
 const BrandRunTarget = DeliveryTarget.extend({ workflowType: z.literal(COLLECTION_WORKFLOW) });
 
-export const ApiConfigSchema = z.strictObject({
-  api: z.strictObject({
-    /** Loopback, RFC 1918 or CGNAT; the API has no login, so never a public address. */
-    host: z
-      .string()
-      .refine(
-        (host) =>
-          isIP(host) !== 0 &&
-          ["loopback", "private", "carrierGradeNat"].includes(ipaddr.process(host).range()),
-        "Must be a loopback, RFC 1918 or CGNAT IP address",
-      ),
-    port: z.number().int().min(1024).max(65535),
-  }),
-  log: LogConfigSchema.default({ level: "info" }),
-  database: DatabaseConfigSchema.refine((config) => config.maxConnections >= 2, {
-    message: "Stop verification needs one lock connection and one journal connection",
-  }),
-  temporal: TemporalConfigSchema,
-  delivery: z.strictObject({
-    clusterId: z.string().min(1),
-    channels: z.partialRecord(ChannelIdSchema, BrandRunTarget),
-    /** While this file exists, no new run is started. */
-    pauseFile: absolutePath,
-    runner: DeliveryRunnerOptionsSchema.default({
-      batchSize: 20,
-      concurrency: 4,
-      intervalMs: 1_000,
+export const ApiConfigSchema = z
+  .strictObject({
+    api: z.strictObject({
+      /** Loopback, RFC 1918 or CGNAT; the API has no login, so never a public address. */
+      host: z
+        .string()
+        .refine(
+          (host) =>
+            isIP(host) !== 0 &&
+            ["loopback", "private", "carrierGradeNat"].includes(ipaddr.process(host).range()),
+          "Must be a loopback, RFC 1918 or CGNAT IP address",
+        ),
+      port: z.number().int().min(1024).max(65535),
     }),
-  }),
-  /** Product runs: the pipeline's task queues, and the permits each channel's capture takes. */
-  pipeline: z
-    .strictObject({
-      queues: ProductPipelineInputSchema.shape.queues,
-      channels: z.partialRecord(ChannelIdSchema, z.strictObject({ resources: ResourceGateSchema })),
-    })
-    .default({ queues: { activities: "none", plan: "none", label: "none" }, channels: {} }),
-  /** Resource kinds checked against capture modes at startup; overrides the shared known kinds. */
-  resourceKinds: ResourceKindsSchema.default({}),
-  fleet: z
-    .strictObject({
-      /** Ignored compatibility keys; fleet.status never reads the old monitor or Amazon gate. */
-      monitorStatus: absolutePath.optional(),
-      queueHealth: absolutePath.optional(),
-      /** Additional remote queues, including model/OCR queues absent from this API's routes. */
-      taskQueues: z.array(z.string().min(1).max(200)).default([]),
-      /** The same OCR API settings used by the processing workers. */
-      ocrApi: z.looseObject({ baseUrl: z.url() }).pipe(OcrApiSettingsSchema).optional(),
-    })
-    .default({ taskQueues: [] }),
-  /**
-   * R2 access for Review reads and manual test captures. Reviews stay read-only; evidence.capture writes only
-   * under evidence.testPrefix. Missing storage refuses both operations with their registered config errors.
-   */
-  storage: z
-    .strictObject({
-      r2: R2ScopeSchema,
-      r2Credentials: z.strictObject({
-        accessKeyId: z.string().min(1),
-        secretAccessKey: z.string().min(1),
+    log: LogConfigSchema.default({ level: "info" }),
+    database: DatabaseConfigSchema.refine((config) => config.maxConnections >= 2, {
+      message: "Stop verification needs one lock connection and one journal connection",
+    }),
+    temporal: TemporalConfigSchema,
+    delivery: z.strictObject({
+      clusterId: z.string().min(1),
+      channels: z.partialRecord(ChannelIdSchema, BrandRunTarget),
+      /** While this file exists, no new run is started. */
+      pauseFile: absolutePath,
+      runner: DeliveryRunnerOptionsSchema.default({
+        batchSize: 20,
+        concurrency: 4,
+        intervalMs: 1_000,
       }),
-      /** The storage ID results were stored under (the workers' `storageId`). */
-      storageId: z.string().min(1),
-    })
-    .optional(),
-  /**
-   * Brand scans: listing pages through ScraperAPI, archived in R2. Without this section
-   * scan requests answer BRAND_SCAN.NOT_CONFIGURED; brand-source import works either way.
-   * Whole Foods defaults to HTTP; its mode and browserQueue select the retained browser fallback.
-   */
-  brandScans: BrandScanSettingsSchema.optional(),
-  siteAnalysis: SiteAnalysisLimitsSchema.optional(),
-  /** The same browser-verified site list configured on the pipeline and browser workers. */
-  browser: z.strictObject({ dtc: DtcSettingsSchema.default({ sites: [] }) }).optional(),
-  /** Manual test captures use their own bucket-level tests/ prefix, never storage.r2.prefix. */
-  evidence: z
-    .strictObject({
-      testPrefix: EvidenceTestPrefixSchema.optional(),
-      /** Copy the normal product worker's capture settings; this does not enable a scan runner. */
-      capture: BrandScanSettingsSchema.out
-        .pick({ route: true, scraperApi: true })
-        .extend({
-          channels: z.partialRecord(ChannelIdSchema, ScraperApiOptionChoicesSchema).default({}),
-        })
-        .optional(),
-    })
-    .optional(),
-  /** Shared queue dispatch and the recent-terminal window for brand discoveries on every channel. */
-  queue: ScanAdmissionSettingsSchema.extend({
-    dispatcher: QueueDispatcherOptionsSchema.default({ intervalMs: 5_000 }),
-  }).prefault({}),
-  /** How often ended work is checked: permits of stopped owners released, ended runs settled. */
-  cleanup: z.strictObject({ intervalMs: z.number().int().min(10_000).max(3_600_000) }).default({
-    intervalMs: 60_000,
-  }),
-});
+    }),
+    /** Product runs: the pipeline's task queues, and the permits each channel's capture takes. */
+    pipeline: z
+      .strictObject({
+        queues: ProductPipelineInputSchema.shape.queues,
+        channels: z.partialRecord(
+          ChannelIdSchema,
+          z.strictObject({ resources: ResourceGateSchema }),
+        ),
+      })
+      .default({ queues: { activities: "none", plan: "none", label: "none" }, channels: {} }),
+    /** Resource kinds checked against capture modes at startup; overrides the shared known kinds. */
+    resourceKinds: ResourceKindsSchema.default({}),
+    fleet: z
+      .strictObject({
+        /** Ignored compatibility keys; fleet.status never reads the old monitor or Amazon gate. */
+        monitorStatus: absolutePath.optional(),
+        queueHealth: absolutePath.optional(),
+        /** Additional remote queues, including model/OCR queues absent from this API's routes. */
+        taskQueues: z.array(z.string().min(1).max(200)).default([]),
+        /** The same OCR API settings used by the processing workers. */
+        ocrApi: z.looseObject({ baseUrl: z.url() }).pipe(OcrApiSettingsSchema).optional(),
+      })
+      .default({ taskQueues: [] }),
+    /**
+     * R2 access for Review reads and manual test captures. Reviews stay read-only; evidence.capture writes only
+     * under evidence.testPrefix. Missing storage refuses both operations with their registered config errors.
+     */
+    storage: z
+      .strictObject({
+        r2: R2ScopeSchema,
+        r2Credentials: z.strictObject({
+          accessKeyId: z.string().min(1),
+          secretAccessKey: z.string().min(1),
+        }),
+        /** The storage ID results were stored under (the workers' `storageId`). */
+        storageId: z.string().min(1),
+      })
+      .optional(),
+    /**
+     * Brand scans: listing pages through ScraperAPI, archived in R2. Without this section
+     * scan requests answer BRAND_SCAN.NOT_CONFIGURED; brand-source import works either way.
+     * Whole Foods defaults to HTTP; its mode and browserQueue select the retained browser fallback.
+     */
+    brandScans: BrandScanSettingsSchema.optional(),
+    siteAnalysis: SiteAnalysisLimitsSchema.optional(),
+    brandEnrichment: ApiBrandEnrichmentSchema.optional(),
+    /** The same browser-verified site list configured on the pipeline and browser workers. */
+    browser: z.strictObject({ dtc: DtcSettingsSchema.default({ sites: [] }) }).optional(),
+    /** Manual test captures use their own bucket-level tests/ prefix, never storage.r2.prefix. */
+    evidence: z
+      .strictObject({
+        testPrefix: EvidenceTestPrefixSchema.optional(),
+        /** Copy the normal product worker's capture settings; this does not enable a scan runner. */
+        capture: BrandScanSettingsSchema.out
+          .pick({ route: true, scraperApi: true })
+          .extend({
+            channels: z.partialRecord(ChannelIdSchema, ScraperApiOptionChoicesSchema).default({}),
+          })
+          .optional(),
+      })
+      .optional(),
+    /** Shared queue dispatch and the recent-terminal window for brand discoveries on every channel. */
+    queue: ScanAdmissionSettingsSchema.extend({
+      dispatcher: QueueDispatcherOptionsSchema.default({ intervalMs: 5_000 }),
+    }).prefault({}),
+    /** How often ended work is checked: permits of stopped owners released, ended runs settled. */
+    cleanup: z.strictObject({ intervalMs: z.number().int().min(10_000).max(3_600_000) }).default({
+      intervalMs: 60_000,
+    }),
+  })
+  .superRefine(validateBrandEnrichmentSettings);
 export type ApiConfig = z.infer<typeof ApiConfigSchema>;
 
 /** Reads the private `V3_API_CONFIG` file and checks capture permits before the API starts. */

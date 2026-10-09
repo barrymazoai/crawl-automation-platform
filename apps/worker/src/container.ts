@@ -1,3 +1,8 @@
+import {
+  buildBrandEnrichmentParts,
+  closeBrandEnrichmentParts,
+  type BrandEnrichmentParts,
+} from "./brand-enrichment-parts.js";
 import { siblingReuseService } from "./sibling-reuse-parts.js";
 import { filesService } from "./product-files-parts.js";
 import { registerActivityPolicies } from "./activities/activity-policies.js";
@@ -60,6 +65,7 @@ import {
 
 /** Everything the pipeline worker is built from: the base services, then the parts built from them. */
 export interface WorkerParts extends CoreParts {
+  brandEnrichment: Promise<BrandEnrichmentParts>;
   resourceHealth: ResourceHealthRunner;
   /** The label steps (only built when a label role first uses them). */
   label: LabelParts;
@@ -106,6 +112,9 @@ export async function buildContainer(config: WorkerConfig): Promise<Parts> {
     labelReviews: asFunction(buildLabelReviews).singleton(),
     admission: asFunction(buildAdmission).singleton(),
     browser: asFunction(buildBrowserParts).singleton(),
+    brandEnrichment: asFunction(buildBrandEnrichmentParts)
+      .singleton()
+      .disposer(closeBrandEnrichmentParts),
     resourceHealth: asFunction(buildResourceHealth).singleton(),
   });
   return container;

@@ -2,10 +2,11 @@ import type { WorkerConfig } from "../config.js";
 import { resourceErrors } from "../resources/resource-errors.js";
 import type { WorkerRole } from "./process-config.js";
 
-type RoleSection = "capture" | "plan" | "label" | "processing" | "brandScans";
+type RoleSection = "capture" | "plan" | "label" | "processing" | "brandScans" | "brandEnrichment";
 
 /** Required sections follow the activities a role exposes, regardless of its process name. */
 const REQUIRED: Record<WorkerRole, readonly RoleSection[]> = {
+  "brand-enrichment": ["brandEnrichment"],
   pipeline: ["capture", "plan", "label"],
   browser: ["plan"],
   label: ["processing"],

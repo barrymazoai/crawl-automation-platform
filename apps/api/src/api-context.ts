@@ -6,6 +6,7 @@ export function apiContext(parts: ApiParts): ApiContext {
   return {
     usage: parts.usage,
     enrichment: parts.enrichment,
+    brandEnrichment: parts.brandEnrichment,
     evidence: parts.evidence,
     originals: parts.originals,
     runs: parts.runs,
