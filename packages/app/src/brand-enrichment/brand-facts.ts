@@ -18,12 +18,10 @@ export async function brandFacts(
   const additions = DomainAdditionResultSchema.safeParse(
     await runs.step(runId, "domain-additions"),
   );
+  // Only a domain live on another company is withheld. A skipped domain is still ours: Supply Smart skips the
+  // company's own primary domain (MANTRA Labs, 2026-10-09: its primary was withheld and Apollo had nothing to match).
   const blocked = new Set(
-    additions.success
-      ? [...additions.data.conflicts, ...additions.data.skipped].map((item) =>
-          domainOf(item.domain),
-        )
-      : [],
+    additions.success ? additions.data.conflicts.map((item) => domainOf(item.domain)) : [],
   );
   const domains = brandDomains(family.success ? family.data : undefined);
   const current = [
