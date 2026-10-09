@@ -65,3 +65,4 @@ export * from "./supply-smart/supply-smart-contacts.js";
 export * from "./apollo/apollo-client.js";
 export * from "./postgres/postgres-brand-enrichment-runs.js";
 export * from "./postgres/postgres-brand-enrichment-reviews.js";
+export * from "./supply-smart/brand-enrichment-secrets.js";
