@@ -147,6 +147,9 @@ function selectOtherIngredients(state: MergeState, pick: Pick): void {
       agreement: ingredientsAgreement(state.otherShape, shape, comparison),
       conflict: "LABEL_PRODUCT.INGREDIENTS_CONFLICT",
       secondary: "LABEL_PRODUCT.SECONDARY_TEXT_INGREDIENTS_CONFLICT",
+      // Owner 2026-10-09: a complete image's ingredient list wins over page text listing others. An image that
+      // confirms there are none still blocks page text that lists some.
+      imageWins: !!state.otherIngredients,
     });
   }
   if (state.otherShape === null && !secondaryText) {
@@ -162,11 +165,12 @@ function recordAgreement(
     agreement: LabelAgreement;
     conflict: AssemblyErrorCode;
     secondary: AssemblyErrorCode;
+    imageWins?: boolean;
   },
 ): void {
-  const { agreement, conflict, secondary } = comparison;
+  const { agreement, conflict, secondary, imageWins = false } = comparison;
   const secondaryText =
-    pick.secondaryText && !isOrderedEvidencePolicy(state.manifest.evidencePolicy);
+    pick.secondaryText && (imageWins || !isOrderedEvidencePolicy(state.manifest.evidencePolicy));
   if (agreement === "exact") {
     return;
   }
