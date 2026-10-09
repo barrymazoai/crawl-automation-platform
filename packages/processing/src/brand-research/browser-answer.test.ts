@@ -18,14 +18,17 @@ describe("browser answers require retained citations", () => {
     expect(answer.subBrands).toHaveLength(21);
     expect(answer.archiveKeys).toEqual(archive().archiveKeys);
   });
-  it("links a cited clue to a published page and refuses unretained or invented quotations", () => {
+  it("links a cited clue to a published page and drops unretained or invented quotations", () => {
     const pages = archive([page(subject.brandUrl), page(clue.url ?? "", clue.quote)]);
     const answer = checkFamilyAnswer({ ...family, clues: [clue] }, pages);
     expect(answer.clues[0]?.archiveKey).toBe(pages.pages[1]?.archiveKey);
-    expect(() => checkFamilyAnswer({ ...family, clues: [clue] }, archive())).toThrow();
-    expect(() =>
-      checkFamilyAnswer({ ...family, clues: [{ ...clue, quote: "Unprinted claim" }] }, pages),
-    ).toThrow();
+    // Owner 2026-10-09: an unverifiable clue is dropped; the rest of the answer is kept.
+    expect(
+      checkFamilyAnswer({ ...family, clues: [clue] }, archive([page(subject.brandUrl)])).clues,
+    ).toEqual([]);
+    expect(
+      checkFamilyAnswer({ ...family, clues: [{ ...clue, quote: "Unprinted claim" }] }, pages).clues,
+    ).toEqual([]);
   });
   it("requires the actual landing page and evidence for a cross-company redirect", () => {
     const redirected = {
@@ -34,7 +37,11 @@ describe("browser answers require retained citations", () => {
       redirect: { fromDomain: "sprout.example", toDomain: "garden.example", sameBrand: false },
     };
     expect(() => checkFamilyAnswer(redirected, archive())).toThrow();
-    expect(() => checkFamilyAnswer(redirected, archive([page(redirected.landedUrl)]))).toThrow();
+    // The observed forward to a saved landing page is the evidence when Codex gave no usable clue.
+    const observed = checkFamilyAnswer(redirected, archive([page(redirected.landedUrl)]));
+    expect(observed.clues).toMatchObject([
+      { signal: "domain_redirect", ownerDomain: "garden.example", url: redirected.landedUrl },
+    ]);
     const redirectClue = { ...clue, signal: "domain_redirect", url: redirected.landedUrl };
     expect(
       checkFamilyAnswer(

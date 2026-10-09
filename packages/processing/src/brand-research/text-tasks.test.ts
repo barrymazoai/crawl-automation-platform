@@ -11,7 +11,15 @@ afterEach(() => {
 
 function fixture(response: string) {
   const close = vi.fn(async () => undefined);
-  const interpret = vi.fn(async () => response);
+  // The runner asks for `{ answer }` (object root, see output-schema.ts); invalid JSON stays as sent.
+  const wrapped = (() => {
+    try {
+      return JSON.stringify({ answer: JSON.parse(response) as unknown });
+    } catch {
+      return response;
+    }
+  })();
+  const interpret = vi.fn(async () => wrapped);
   const model = { close, interpret } as unknown as CodexTextModel;
   const open = vi.spyOn(CodexTextModel, "open").mockResolvedValue(model);
   const settings = deps(tmpdir());

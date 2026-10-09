@@ -1,23 +1,25 @@
-import { FamilyFindingSchema } from "@crawl-automation/v3-contracts";
+import { FamilyFindingSchema, type OwnershipClue } from "@crawl-automation/v3-contracts";
 import { checkedAnswer } from "./answer.js";
 import type { ResearchArchive } from "./archive.js";
 import { invalidAnswer } from "./errors.js";
 import { domainOf } from "./identity.js";
 import type { BrandSubject } from "./inputs.js";
-import { citedPage, quotedPage, retainedClues } from "./page-grounding.js";
+import { citedPage, groundedPage, retainedClues } from "./page-grounding.js";
 
 export function checkFamilyAnswer(raw: unknown, archive: ResearchArchive, subject?: BrandSubject) {
   const result = checkedAnswer(FamilyFindingSchema, raw, "family");
   citedPage(archive.pages, result.landedUrl);
   checkRedirect(result, subject);
-  for (const brand of result.subBrands) {
-    quotedPage(archive.pages, brand.evidence);
-  }
-  const clues = retainedClues({
-    clues: result.clues,
-    pages: archive.pages,
-    allowed: ["domain_redirect", "website_our_brands"],
-  });
+  // A sub-brand whose evidence quote is not on its page is dropped, like an unverified clue (owner 2026-10-09).
+  const subBrands = result.subBrands.filter((brand) => groundedPage(archive.pages, brand.evidence));
+  const clues = withObservedRedirect(
+    retainedClues({
+      clues: result.clues,
+      pages: archive.pages,
+      allowed: ["domain_redirect", "website_our_brands"],
+    }),
+    { result, archive },
+  );
   const redirectClues = clues.filter((clue) => clue.signal === "domain_redirect");
   if ((!result.redirect || result.redirect.sameBrand) && redirectClues.length) {
     invalidAnswer("family", "same_brand_redirect_is_not_ownership");
@@ -35,7 +37,7 @@ export function checkFamilyAnswer(raw: unknown, archive: ResearchArchive, subjec
   }
   return checkedAnswer(
     FamilyFindingSchema,
-    { ...result, clues, archiveKeys: archive.archiveKeys },
+    { ...result, subBrands, clues, archiveKeys: archive.archiveKeys },
     "family",
   );
 }
@@ -55,4 +57,32 @@ function checkRedirect(
   if (subject?.brandUrl && from !== domainOf(subject.brandUrl)) {
     invalidAnswer("family", "redirect_does_not_start_at_subject_domain");
   }
+}
+
+/**
+ * A cross-company forward the browser observed is itself the evidence: when Codex's own redirect clue was dropped
+ * (misquoted), the clue is rebuilt from the observed forward and the saved landing page.
+ */
+function withObservedRedirect(
+  clues: OwnershipClue[],
+  at: { result: ReturnType<typeof FamilyFindingSchema.parse>; archive: ResearchArchive },
+): OwnershipClue[] {
+  const redirect = at.result.redirect;
+  if (!redirect || redirect.sameBrand || clues.some((clue) => clue.signal === "domain_redirect")) {
+    return clues;
+  }
+  const landing = citedPage(at.archive.pages, at.result.landedUrl);
+  const owner = at.result.clues.find((clue) => clue.signal === "domain_redirect");
+  return [
+    ...clues,
+    {
+      signal: "domain_redirect",
+      ownerName: owner?.ownerName ?? redirect.toDomain,
+      ownerDomain: redirect.toDomain,
+      ownerCompanyId: null,
+      quote: `${redirect.fromDomain} forwards to ${at.result.landedUrl}`,
+      url: at.result.landedUrl,
+      archiveKey: landing.archiveKey,
+    },
+  ];
 }
