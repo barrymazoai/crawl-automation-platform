@@ -1,4 +1,3 @@
-import { canonicalHash } from "../history/canonical.js";
 import type { ProductObservationWriter } from "./ports.js";
 import type { MappedDelivery } from "./wire.js";
 import type { ProductLabelReadAnswer } from "@crawl-automation/v3-contracts";
@@ -22,13 +21,13 @@ export async function deliverLabel(
   ) {
     return `PRODUCT_DELIVERY.LABEL_VERIFY_FAILED: ${answer.outcome}`;
   }
-  const labelHash = canonicalHash(product.label.label.content);
-  const requestFingerprint = canonicalHash(product.label);
+  // Read back against the hashes Supply Smart computed when it accepted this label. Ours differ by design: the history
+  // canonical form keeps `undefined` keys and the server hashes the parsed request (Kate Farms, 2026-10-09).
   const read = await writer.readLabel(
     {
       submitterNamespace: product.label.submitter.namespace,
       operationId,
-      expect: { labelHash, requestFingerprint },
+      expect: { labelHash: answer.labelHash, requestFingerprint: answer.requestFingerprint },
     },
     signal,
   );
@@ -50,6 +49,5 @@ function matchesLabel(read: ProductLabelReadAnswer, product: MappedDelivery) {
     record.operationId === product.label.submitter.operationId,
     record.submitterNamespace === product.label.submitter.namespace,
     record.externalObservationId === product.label.observation.observationId,
-    canonicalHash(record.label) === canonicalHash(product.label.label.content),
   ].every(Boolean);
 }

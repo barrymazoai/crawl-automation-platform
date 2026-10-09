@@ -39,7 +39,7 @@ export class DeliveryRpcFake implements Pick<SupplySmartRpc, "call"> {
       return this.label(raw as DeliveryLabel);
     }
     if (path === "product.getLabelObservation") {
-      return this.readLabel(raw as { operationId: string });
+      return this.readLabel(raw as LabelRead);
     }
     if (path === "product.verifyObservationBatch") {
       return this.verify(raw as Verify);
@@ -97,9 +97,9 @@ export class DeliveryRpcFake implements Pick<SupplySmartRpc, "call"> {
       outcome: this.labelFailure ? "conflict" : replayed ? "replayed" : "created",
       operationId: input.submitter.operationId,
       ingestRequestId: "request",
-      requestFingerprint: canonicalHash(input),
+      requestFingerprint: serverHash(input),
       labelObservationId: input.observation.observationId,
-      labelHash: canonicalHash(input.label.content),
+      labelHash: serverHash(input.label.content),
       productId: input.listing.externalId,
       listingId: input.listing.externalId,
       companyId: "company",
@@ -121,7 +121,7 @@ export class DeliveryRpcFake implements Pick<SupplySmartRpc, "call"> {
     };
   }
 
-  private readLabel(input: { operationId: string }) {
+  private readLabel(input: LabelRead) {
     const label = this.labels.get(input.operationId);
     if (!label) {
       return { found: false };
@@ -131,7 +131,7 @@ export class DeliveryRpcFake implements Pick<SupplySmartRpc, "call"> {
       request: {
         id: "request",
         state: "completed",
-        fingerprint: canonicalHash(label),
+        fingerprint: serverHash(label),
         startedAt: "2026-10-09T01:00:00Z",
         finishedAt: "2026-10-09T02:00:00Z",
         attempts: 1,
@@ -145,10 +145,16 @@ export class DeliveryRpcFake implements Pick<SupplySmartRpc, "call"> {
         productId: label.listing.externalId,
         listingId: label.listing.externalId,
         label: label.label.content,
-        labelHash: canonicalHash(label.label.content),
-        requestFingerprint: canonicalHash(label),
+        labelHash: serverHash(label.label.content),
+        requestFingerprint: serverHash(label),
       },
-      matches: { labelHash: !this.readMismatch, requestFingerprint: !this.readMismatch },
+      // Like Supply Smart: compare the caller's expected values with the server's own hashes.
+      matches: {
+        labelHash:
+          !this.readMismatch && input.expect?.labelHash === serverHash(label.label.content),
+        requestFingerprint:
+          !this.readMismatch && input.expect?.requestFingerprint === serverHash(label),
+      },
       problems: [],
     };
   }
@@ -167,4 +173,14 @@ export class DeliveryRpcFake implements Pick<SupplySmartRpc, "call"> {
       ),
     };
   }
+}
+
+type LabelRead = {
+  operationId: string;
+  expect?: { labelHash?: string; requestFingerprint?: string };
+};
+
+/** Supply Smart hashes its parsed request its own way; the crawler must never assume it equals its own canonical hash. */
+function serverHash(value: unknown): string {
+  return `server-${canonicalHash(value)}`;
 }
