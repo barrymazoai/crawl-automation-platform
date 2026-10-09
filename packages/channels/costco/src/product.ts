@@ -1,5 +1,6 @@
 import {
   completeFacts,
+  jsonLdBreadcrumbs,
   string,
   type CommerceEvidence,
   type FetchedPage,
@@ -26,6 +27,8 @@ export interface CostcoProduct {
   warehouseId: string;
   warehouseVerified: boolean;
   prices: CostcoPrice[];
+  /** The store's own breadcrumb from the page's JSON-LD, top level first (owner 2026-10-09). */
+  categories: string[];
 }
 
 /** Parse only the selected product; the original HTML has already been verified in R2. */
@@ -48,6 +51,11 @@ export function parseCostcoProduct(page: FetchedPage, store: CostcoStore): Costc
     warehouseId: store.storeId,
     warehouseVerified: warehouse.verified,
     prices,
+    categories: jsonLdBreadcrumbs(
+      [...document.querySelectorAll('script[type="application/ld+json"]')].map(
+        (script) => script.textContent ?? "",
+      ),
+    ),
     commerce: costcoCommerce({
       product,
       listingId,

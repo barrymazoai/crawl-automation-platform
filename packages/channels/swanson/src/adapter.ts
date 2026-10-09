@@ -120,5 +120,6 @@ export const swansonAdapter: ChannelAdapter<SwansonRenderedProduct> = {
     };
   },
   // Owner 2026-10-08: Swanson departments outside supplements.
-  nonSupplementCategories: ["Beauty and Personal Care", "Home and Pet"],
+  // Owner 2026-10-09: groceries are not supplements either (teas, coffee, snacks, cooking, sweeteners).
+  nonSupplementCategories: ["Beauty and Personal Care", "Home and Pet", "Health Food and Grocery"],
 };

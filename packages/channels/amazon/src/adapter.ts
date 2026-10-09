@@ -94,6 +94,8 @@ export const amazonAdapter: ChannelAdapter<AmazonRendered> = {
     "Wellness & Relaxation",
     "Stationery & Gift Wrapping Supplies",
     "Medication Aids",
+    // Owner 2026-10-09: groceries are not supplements either.
+    "Grocery & Gourmet Food",
   ],
   externalId: (parsed) => parsed.identity.listingId,
   productFamily: (parsed) => amazonProductFamily(parsed.rendered.family, parsed.identity.listingId),

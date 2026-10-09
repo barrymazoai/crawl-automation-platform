@@ -108,3 +108,24 @@ it("keeps incomplete facts for image fallback", () => {
       .facts.complete,
   ).toBe(false);
 });
+
+it("reads the store's breadcrumb, and files a grocery product outside supplements (owner 2026-10-09)", () => {
+  const crumb = JSON.stringify({
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: [
+      { "@type": "ListItem", position: 1, name: "Home" },
+      { "@type": "ListItem", position: 2, name: "Grocery & Household Essentials" },
+      { "@type": "ListItem", position: 3, name: "Snacks" },
+    ],
+  });
+  const grocery = html.replace(
+    "</head>",
+    `<script type="application/ld+json">${crumb}</script></head>`,
+  );
+  expect(grocery).not.toBe(html);
+  const parsed = adapter.parseProduct({ ...page, html: grocery });
+  expect(parsed.categories).toEqual(["Home", "Grocery & Household Essentials", "Snacks"]);
+  expect(adapter.nonSupplementCategories).toContain("Grocery & Household Essentials");
+  expect(adapter.parseProduct(page).categories).toEqual([]);
+});

@@ -58,8 +58,11 @@ export function costcoAdapter(store: CostcoStore = COSTCO_STORE): ChannelAdapter
         commerce: rendered.commerce,
         variants: costcoChildVariants(rendered),
         facts: costcoFacts(rendered.evidence),
+        categories: rendered.categories,
       };
     },
+    // Owner 2026-10-09: groceries are not supplements (Costco files snacks, drinks and pantry food here).
+    nonSupplementCategories: ["Grocery & Household Essentials"],
   };
 }
 

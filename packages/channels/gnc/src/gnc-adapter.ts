@@ -132,5 +132,6 @@ export const gncAdapter: ChannelAdapter<GncRendered> = {
   parseProduct,
   productFamily: gncProductFamily,
   // Owner 2026-10-08: shaker bottles, apparel and other gear.
-  nonSupplementCategories: ["Equipment & Accessories", "Apparel"],
+  // Owner 2026-10-09: groceries are not supplements either (GNC's Food & Drink department).
+  nonSupplementCategories: ["Equipment & Accessories", "Apparel", "Food & Drink"],
 };
