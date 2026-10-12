@@ -66,21 +66,19 @@ export const MARKETPLACE_COLLECTION = `
   ORDER BY record->'observation'->>'listingId', record->'observation'->>'variantId',
     collected_at DESC, operation_id DESC LIMIT 2`;
 
-// Same ASIN only, through an Amazon source and a completed, settled latest queue attempt.
-export const MARKETPLACE_AMAZON_LABEL = `
-  WITH latest AS (
-    SELECT * FROM queue_item WHERE channel='amazon' AND listing_id=$1
-      AND (variant_id IS NULL OR variant_id=$1)
-    ORDER BY created_at DESC, item_id DESC LIMIT 1
-  )
-  SELECT p.operation_id, p.observation_id, p.record_hash, p.record, q.url,
-    q.run_id::text, q.source_id::text, q.variant_id
-  FROM latest q JOIN queue_attempt a ON a.run_id=q.run_id AND a.channel=q.channel
-  JOIN brand_source s ON s.id=q.source_id AND s.channel='amazon'
-  JOIN collected_product p ON p.record->'observation'->>'requestId'=q.run_id::text
-    AND p.record->'observation'->>'sourceId'=q.source_id::text
-    AND p.record->'observation'->>'listingId'=$1
-    AND p.record->'observation'->>'variantId' IS NOT DISTINCT FROM q.variant_id
-  WHERE q.state='completed' AND a.settled_at IS NOT NULL AND a.outcome='completed'
-    AND p.record->>'codec' IN ('collected-product/3','collected-product/4','collected-product/5')
-  ORDER BY p.collected_at DESC, p.operation_id DESC LIMIT 1`;
+/** Read the exact operation returned by FormulaLookup, including its actual owning channel. */
+export const MARKETPLACE_LINKED_COLLECTION = `
+  SELECT p.operation_id, p.observation_id, p.record_hash, p.record, s.channel
+  FROM collected_product p JOIN brand_source s
+    ON s.id::text=p.record->'observation'->>'sourceId'
+    AND s.brand_id::text=p.record->'observation'->>'brandId'
+  WHERE p.operation_id=$1`;
+
+/** A donor's capture is selected by its own run/source, never by the target's queue handle. */
+export const MARKETPLACE_LABEL_HISTORY = `
+  SELECT record, body_hash FROM product_history_source
+  WHERE record->>'codec'='v3-capture-history/1'
+    AND record->'listing'->>'channel'=$1
+    AND record->'owner'->>'runId'=$2 AND record->'owner'->>'sourceId'=$3
+    AND (record->'capture'->>'variantId' IS NULL OR record->'capture'->>'variantId'=$4::text)
+  ORDER BY record->>'capturedAt' DESC, source_record_id DESC LIMIT 2`;

@@ -10,6 +10,7 @@ import {
 } from "@crawl-automation/app/marketplace-mapping";
 import { PostgresMarketplaceReader } from "./marketplace-reader.js";
 import {
+  readerChannels,
   readerSamples,
   readerSamplesPath,
   readerTables,
@@ -41,11 +42,7 @@ it.skipIf(!connectionString || !readerSamplesPath)(
       const reader = new PostgresMarketplaceReader({
         database: { query },
         objects: { read: async (key) => objects.get(key) ?? null },
-        channels: {
-          get: () => {
-            throw new Error("Fixture projections should decode without invoking a channel parser");
-          },
-        },
+        channels: readerChannels,
       });
       for (const channel of MARKETPLACE_CHANNELS) {
         const first = await reader.read({ channel, limit: 2 }, signal());
@@ -103,7 +100,8 @@ async function pendingOnly(client: Client, reader: PostgresMarketplaceReader) {
   // The watermark round-trips exactly: an outcome recorded with the reader's materialAt hides that very capture.
   const [first] = (await reader.read({ channel: "gnc", limit: 1, pending: true }, signal()))
     .products;
-  expect(required(first).materialAt).toMatch(/\.\d{6}/u);
+  // PostgreSQL trims trailing zeros (.242410 -> .24241); what matters is the exact round trip below.
+  expect(required(first).materialAt).toMatch(/\.\d+/u);
   await client.query(
     `INSERT INTO product_sync VALUES ('gnc', $1, '', 'verified', $2::timestamptz)`,
     [required(first).listingId, required(first).materialAt],
@@ -214,7 +212,7 @@ async function wholeFoodsJoin(
   const linked = required(page.products.find((entry) => entry.listingId === donor.listingId));
   expect(linked.collection?.operationId).toBe(donor.collection?.operationId);
   expect(linked.history?.listing.channel).toBe("wholefoods");
-  expect(linked.labelHistory?.listing.channel).toBe("amazon");
+  expect(linked.linkedLabel?.history.listing.channel).toBe("amazon");
   expect(linked.product?.channel).toBe("wholefoods");
   expect(marketplaceItem(linked, mapping).inStock).toBe(false);
   expect(marketplaceLabel(linked, mapping)?.observation.capturedAt).toBe(donor.history?.capturedAt);

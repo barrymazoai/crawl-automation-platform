@@ -33,16 +33,21 @@ function assertCollection(
   collection: NonNullable<MarketplaceProduct["collection"]>,
 ) {
   const owner = collection.observation;
-  if (input.channel === "wholefoods") {
-    const donor = input.labelHistory;
+  if (input.linkedLabel) {
+    const { history: donor, product, target, operationId } = input.linkedLabel;
     assertMarketplaceOwner([
-      donor?.listing.channel === "amazon",
-      donor?.listing.externalId === input.listingId,
-      donor?.owner.runId === owner.requestId,
-      donor?.owner.sourceId === owner.sourceId,
-      donor?.capture.variantId === owner.variantId,
-      owner.listingId === input.listingId,
-      owner.variantId === null || owner.variantId === input.listingId,
+      operationId === collection.operationId,
+      target.listingId === input.product.listingId,
+      target.variantId === input.product.variantId,
+      donor.owner.runId === owner.requestId,
+      donor.owner.sourceId === owner.sourceId,
+      donor.owner.brandId === owner.brandId,
+      donor.capture.variantId === null || donor.capture.variantId === owner.variantId,
+      donor.listing.channel === product.channel,
+      product.channel === "swanson" || donor.listing.externalId === owner.listingId,
+      samePage(donor.listing.url, product.url),
+      product.listingId === owner.listingId,
+      product.variantId === owner.variantId,
     ]);
     return;
   }
@@ -76,7 +81,7 @@ function assertEnrichment(input: MarketplaceProduct) {
       canonicalHash(input.enrichment.subject.observation) ===
         canonicalHash(input.collection?.observation),
       input.enrichment.subject.channel ===
-        (input.channel === "wholefoods" ? "amazon" : input.channel),
+        (input.linkedLabel?.history.listing.channel ?? input.channel),
     ]);
   }
 }

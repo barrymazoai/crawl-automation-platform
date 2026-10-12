@@ -3,7 +3,9 @@ import type { FormulaKey } from "@crawl-automation/workflows";
 import type { FormulaFamilies, FormulaIndex } from "./ports.js";
 
 /** Channels share formulas only when their adapters declare the same listing-ID namespace. */
-export function formulaFamilies(registry: ChannelRegistry): FormulaFamilies {
+export function formulaFamilies(
+  registry: Pick<ChannelRegistry, "get" | "channels">,
+): FormulaFamilies {
   return {
     channels(channel) {
       const registered = registry.channels();

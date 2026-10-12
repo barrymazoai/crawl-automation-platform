@@ -4,6 +4,7 @@ import { z } from "zod";
 import type { Client } from "pg";
 import { canonicalHash } from "@crawl-automation/app";
 import type {
+  MarketplaceChannels,
   MarketplaceHistory,
   MarketplaceProduct,
 } from "@crawl-automation/app/marketplace-mapping";
@@ -68,6 +69,7 @@ export const readerTables = `
   CREATE TABLE queue_item(item_id text PRIMARY KEY, source_id uuid, channel text, listing_id text,
     variant_id text, url text, state text, run_id uuid, created_at timestamptz, follows_item_id text);
   CREATE TABLE queue_attempt(run_id uuid PRIMARY KEY, item_id text, channel text, settled_at timestamptz, outcome text);
+  CREATE TABLE formula_link(channel text, listing_id text, variant_id text, formula_operation_id text, created_at timestamptz);
   CREATE TABLE collected_product(operation_id text, observation_id text, record_hash text, record jsonb, collected_at timestamptz);
   CREATE TABLE product_history_source(source_record_id text, record jsonb, body_hash text);
   CREATE TABLE product_enrichment_subject(subject_id text, enrichment_id text, collection_operation_id text,
@@ -177,3 +179,20 @@ async function seedEnrichment(
     ],
   );
 }
+
+/** Explicit registry double: projections are scaffolded from real records, no parser output is claimed. */
+export const readerChannels: MarketplaceChannels = {
+  channels: () => ["amazon", "wholefoods", "gnc", "swanson", "costco"],
+  get: (channel) => ({
+    id: channel,
+    ...(channel === "amazon" || channel === "wholefoods" ? { formulaFamily: "amazon-asin" } : {}),
+    captureModes: ["http"],
+    httpPolicy: { origins: [], maxBytes: 1024, timeoutMs: 1000 },
+    productAddress: () => {
+      throw new Error("Fixture projections should not parse a URL");
+    },
+    parseProduct: () => {
+      throw new Error("Fixture projections should not call a channel parser");
+    },
+  }),
+};

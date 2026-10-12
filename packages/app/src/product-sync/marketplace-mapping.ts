@@ -46,32 +46,38 @@ export function marketplaceLabel(
       ...(options.companyId ? { expectedCompanyId: options.companyId } : {}),
     },
   });
-  return input.channel === "wholefoods" ? wholeFoodsLabel(input, label) : label;
+  return input.linkedLabel ? linkedLabel(input, label, input.linkedLabel) : label;
 }
 
-function wholeFoodsLabel(input: MarketplaceProduct, label: DeliveryLabel): DeliveryLabel {
-  // Distinct from Amazon's observation/operation even when both submit the same assembly.
+function linkedLabel(
+  input: MarketplaceProduct,
+  label: DeliveryLabel,
+  link: NonNullable<MarketplaceProduct["linkedLabel"]>,
+): DeliveryLabel {
+  // Distinct from the donor and other target captures, even when they submit the same assembly.
   const identity = canonicalHash([
     input.channel,
     input.history?.observationId,
     input.collection?.operationId,
   ]);
-  const capturedAt = z.iso.datetime({ offset: true }).parse(input.labelHistory?.capturedAt);
+  const capturedAt = z.iso.datetime({ offset: true }).parse(link.history.capturedAt);
   const listing = labelListingWithoutCommerce(label);
   return {
     ...label,
     submitter: { namespace: "crawler-v3", operationId: `label-${identity}` },
     observation: {
       ...label.observation,
-      observationId: `wholefoods-label-${identity}`,
+      observationId: `${input.channel}-label-${identity}`,
+      listingId: link.target.listingId,
+      variantId: link.target.variantId,
       capturedAt,
     },
-    // The label's time is Amazon's original time, so do not backdate Whole Foods commerce to it.
+    // The label keeps its original capture time; current commerce belongs to the batch item.
     listing: {
       ...listing,
       extras: {
         labelSource: {
-          channel: "amazon",
+          channel: link.history.listing.channel,
           observation: input.collection?.observation,
           capturedAt,
           targetCapture: input.history?.observationId,

@@ -9,8 +9,8 @@ import type { MarketplaceChannel } from "./ledger.js";
 export type { MarketplaceChannel } from "./ledger.js";
 
 export const MARKETPLACE_CHANNELS = ["amazon", "gnc", "swanson", "wholefoods", "costco"] as const;
-/** Inject the existing channel registry; only its pure retained-page parsers are used. */
-export type MarketplaceChannels = Pick<ChannelRegistry, "get">;
+/** Inject the existing registry for retained-page parsing and declared formula families. */
+export type MarketplaceChannels = Pick<ChannelRegistry, "get" | "channels">;
 export interface MarketplaceHistory extends DeliveryHistory {
   codec: "v3-capture-history/1";
   observationId: string;
@@ -35,8 +35,13 @@ export interface MarketplaceProduct {
   product: ChannelProductEvidence | null;
   collection: LabelCollectedProduct | null;
   enrichment: SharedEnrichmentRecord | null;
-  /** Whole Foods only: verified Amazon capture provenance for the collection of the same ASIN. */
-  labelHistory?: MarketplaceHistory | null;
+  /** FormulaLookup resolved this target to the collection; the donor keeps its own verified capture. */
+  linkedLabel?: {
+    target: Pick<ChannelProductEvidence, "listingId" | "variantId">;
+    operationId: string;
+    history: MarketplaceHistory;
+    product: ChannelProductEvidence;
+  };
   /** Retained, selected-product structured identifiers/options, when available. */
   attributes?: Record<string, unknown>;
   problem?: string;
