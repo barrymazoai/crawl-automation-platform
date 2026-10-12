@@ -4,6 +4,7 @@ import { isCancellation, log, patched, proxyActivities } from "@temporalio/workf
 import { legacyBrowserCapture } from "./legacy-capture.js";
 import { collectFamilyProduct } from "./family-product.js";
 import { failureCode } from "./failure-code.js";
+import { failureDetails } from "./review-details.js";
 import {
   ProductPipelineInputSchema,
   type CaptureResult,
@@ -51,6 +52,7 @@ export async function ProductPipelineWorkflow(raw: unknown): Promise<unknown> {
       pipeline: input,
       code: pipelineErrors.code("PIPELINE.PRODUCT_UNRESOLVED"),
       causeCode,
+      details: failureDetails(error),
       ...(patched("resource-gate-v1") && causeCode === resourceGateCodes.waitLimit
         ? { executionFact: "not_executed" as const }
         : {}),

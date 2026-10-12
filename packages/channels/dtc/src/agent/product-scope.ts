@@ -121,7 +121,12 @@ export function scopeProductOutcome(input: {
 }) {
   const { scope, operationId, identity } = input;
   if (scope.decision.kind === "unresolved") {
-    throw dtcAgentErrors.create("DTC.PRODUCT_SCOPE_UNRESOLVED", { details: scope });
+    throw dtcAgentErrors.create("DTC.PRODUCT_SCOPE_UNRESOLVED", {
+      details: {
+        reason: scope.decision.reason.slice(0, 200),
+        evidenceKeys: [scope.evidence.objectKey],
+      },
+    });
   }
   return scope.decision.kind === "multi_product_bundle"
     ? DtcScopeExcludedSchema.parse({
@@ -144,13 +149,17 @@ export function validateProductScope(raw: unknown, fields: Record<string, string
     });
   }
   if (decision.kind !== "unresolved" && !decision.evidence.length) {
-    throw dtcAgentErrors.create("DTC.PRODUCT_SCOPE_UNRESOLVED");
+    throw dtcAgentErrors.create("DTC.PRODUCT_SCOPE_UNRESOLVED", {
+      details: { reason: "missing_citations" },
+    });
   }
   if (
     decision.kind === "multi_product_bundle" &&
     new Set(decision.components.map((part) => part.name.trim().toLowerCase())).size < 2
   ) {
-    throw dtcAgentErrors.create("DTC.PRODUCT_SCOPE_UNRESOLVED");
+    throw dtcAgentErrors.create("DTC.PRODUCT_SCOPE_UNRESOLVED", {
+      details: { reason: "missing_distinct_component_citations" },
+    });
   }
   return decision;
 }

@@ -74,6 +74,7 @@ describe("LabelTasks", () => {
       admission: "label-packaging/1",
       evidencePolicy: "label-image-first/7",
       sourcePolicy: { version: "label-sources/1", order: "text-first" },
+      failurePolicy: "source-failure-first/2",
     });
     expect(task.input.plan.input).toEqual(sourcePlan);
     expect(saved.has("v3/product-runs/pipeline-capture-1/label-task.json")).toBe(true);

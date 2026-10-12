@@ -63,6 +63,7 @@ describe("capture execution facts", () => {
     const { service, reviews } = fixture();
     await service.review(ReviewRequestSchema.parse(request), AbortSignal.timeout(5000));
     expect(reviews.append.mock.calls[0]?.[0]?.failure.executionFact).toBe("unknown");
+    expect(reviews.append.mock.calls[0]?.[0]?.rawError.details).not.toHaveProperty("details");
   });
 
   it("rejects unsupported execution facts at the activity boundary", () => {
@@ -70,4 +71,65 @@ describe("capture execution facts", () => {
       false,
     );
   });
+});
+
+it.each([
+  {
+    causeCode: "DTC.VARIANT_EVIDENCE",
+    details: {
+      variantId: "website-22",
+      code: "DTC.VARIANT_EVIDENCE",
+      reason: "Own retained materials missing",
+      evidenceKeys: ["retained/variant-22.html"],
+    },
+  },
+  {
+    causeCode: "DTC.PRODUCT_SCOPE_UNRESOLVED",
+    details: { reason: "citation_not_in_retained_field" },
+  },
+  {
+    causeCode: "DTC.CAPTURE_REVIEW",
+    details: { reason: "capture_download_failed", flags: ["image_download_failed: facts.png"] },
+  },
+])(
+  "persists bounded $causeCode details in both the ledger and published JSON",
+  async (diagnostics) => {
+    const { service, reviews, evidence } = fixture();
+    const parsed = ReviewRequestSchema.parse({ ...request, ...diagnostics });
+    const receipt = await service.review(parsed, AbortSignal.timeout(5000));
+    const record = reviews.append.mock.calls[0]?.[0];
+    expect(record?.rawError.details).toMatchObject(diagnostics);
+    expect(record?.failure).toMatchObject({ code: diagnostics.causeCode, automaticRetry: false });
+    expect(evidence.publish).toHaveBeenCalledExactlyOnceWith(
+      receipt.evidenceKey,
+      Buffer.from(JSON.stringify(record)),
+      "application/json",
+      expect.anything(),
+    );
+    expect(Buffer.byteLength(JSON.stringify(record))).toBeLessThan(3000);
+  },
+);
+
+it("rejects oversized or arbitrary diagnostics at the Review request boundary", () => {
+  const maximum = {
+    variantId: "v".repeat(200),
+    reason: "r".repeat(200),
+    code: "c".repeat(200),
+    verification: "v".repeat(200),
+    evidenceKeys: Array(20).fill("e".repeat(200)),
+    flags: Array(20).fill("f".repeat(200)),
+  };
+  expect(ReviewRequestSchema.safeParse({ ...request, details: maximum }).success).toBe(true);
+  for (const details of [
+    { reason: "r".repeat(201) },
+    { variantId: "v".repeat(201) },
+    { code: "c".repeat(201) },
+    { verification: "v".repeat(201) },
+    { evidenceKeys: Array(21).fill("e") },
+    { evidenceKeys: ["e".repeat(201)] },
+    { flags: Array(21).fill("f") },
+    { html: "full capture" },
+  ]) {
+    expect(ReviewRequestSchema.safeParse({ ...request, details }).success).toBe(false);
+  }
 });

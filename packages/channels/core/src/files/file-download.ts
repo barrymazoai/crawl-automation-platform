@@ -2,6 +2,7 @@ import { isAppError } from "@crawl-automation/platform";
 import { ArtifactRefSchema, type FileAcquireInput } from "@crawl-automation/v3-contracts";
 import { abortable } from "./abortable.js";
 import { readFileBody } from "./file-body.js";
+import { responseDiagnostics } from "./file-diagnostics.js";
 import { fileErrors } from "./file-errors.js";
 import { inspectMedia } from "./file-media.js";
 import { permittedUrl, transportAddress } from "./file-network.js";
@@ -45,12 +46,30 @@ async function responseOf(pending: Promise<Response>, signal: AbortSignal): Prom
   return abortable(guarded, signal);
 }
 
-function acquired(input: FileAcquireInput, response: Response, bytes: Buffer) {
+function inspectDownloadedMedia(
+  bytes: Buffer,
+  diagnostics: ReturnType<typeof responseDiagnostics>,
+) {
+  try {
+    return inspectMedia(bytes, diagnostics.contentType ?? undefined, FILE_POLICY.maxPixels);
+  } catch (error) {
+    if (fileErrors.is(error, "ARTIFACT.MEDIA_TYPE")) {
+      Object.assign(error.details, diagnostics, { byteSize: bytes.length });
+    }
+    throw error;
+  }
+}
+
+function acquired(
+  input: FileAcquireInput,
+  diagnostics: ReturnType<typeof responseDiagnostics>,
+  bytes: Buffer,
+) {
   const digest = fileHash(bytes);
   if (input.expectedSha256 !== null && input.expectedSha256 !== digest) {
     throw fileErrors.create("ARTIFACT.INTEGRITY");
   }
-  const media = inspectMedia(bytes, response.headers["content-type"], FILE_POLICY.maxPixels);
+  const media = inspectDownloadedMedia(bytes, diagnostics);
   const file = ArtifactRefSchema.parse({
     schemaVersion: 1,
     artifactId: acquiredImageId(input.operationId),
@@ -113,10 +132,11 @@ export async function downloadFile(request: Download, signal: AbortSignal) {
         url = permittedUrl(redirectedUrl(response, url, redirects), origins);
         continue;
       }
+      const diagnostics = responseDiagnostics(response, { initial, url, redirects });
       if (response.status !== 200) {
-        throw fileErrors.create("SOURCE.HTTP_STATUS");
+        throw fileErrors.create("SOURCE.HTTP_STATUS", { details: diagnostics });
       }
-      const result = acquired(input, response, await readFileBody(response, signal, active));
+      const result = acquired(input, diagnostics, await readFileBody(response, signal, active));
       active();
       signal.throwIfAborted();
       return {

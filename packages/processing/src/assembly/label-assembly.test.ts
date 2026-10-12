@@ -4,6 +4,7 @@ import { assemblySetup, labelCandidate, visionFingerprint } from "../testing/ass
 import { defined } from "../testing/defined.js";
 import { assemblyFailure } from "./assembly-errors.js";
 import { labelAssemblyKey } from "./assembly-files.js";
+import { AppError } from "@crawl-automation/platform";
 
 const signal = () => new AbortController().signal;
 afterEach(() => vi.restoreAllMocks());
@@ -147,12 +148,26 @@ describe("label assembly and collection", () => {
       reviewId: "source-review",
       code: "VISION.UNCERTAIN",
     });
+    const cause = {
+      code: null,
+      name: "ZodError",
+      message: "Validation failed",
+      issues: [
+        { path: ["formula", "servingSize"], code: "custom", message: "Serving size conflict" },
+      ],
+    };
+    review.rawError.details = { cause };
     setup.records.set(review.reviewId, review);
     setup.join.states[1] = { id: source.id, status: "review", reviewId: review.reviewId };
     expect(await setup.assembly.run(setup.join, signal())).toMatchObject({
       status: "review",
       codes: ["VISION.UNCERTAIN"],
     });
+    expect(
+      [...setup.records.values()].find(
+        (record) => record.failure.stage === "product.label.assembly",
+      )?.rawError.details,
+    ).toMatchObject({ cause });
     const optional = structuredClone(setup.join);
     optional.manifest.operationId = "optional-product";
     defined(optional.manifest.sources[1]).required = false;
@@ -297,4 +312,27 @@ describe("label assembly and collection", () => {
       code: "LABEL_PRODUCT.REVIEW_UNVERIFIED",
     });
   });
+});
+
+it("keeps a failed source read's original cause while retaining the assembly wrapper", async () => {
+  const setup = assemblySetup();
+  setup.deps.readSource.mockRejectedValue(
+    new AppError("ARTIFACT.INTEGRITY", "ARTIFACT", {
+      message: "Stored source hash mismatch",
+      details: { document: "private" },
+    }),
+  );
+  const out = await setup.assembly.run(setup.join, signal());
+  expect(out).toMatchObject({
+    status: "review",
+    codes: expect.arrayContaining(["LABEL_PRODUCT.EVIDENCE_UNRESOLVED"]),
+    automaticRetry: false,
+  });
+  expect(defined([...setup.records.values()][0]).rawError.details).toMatchObject({
+    cause: { code: "ARTIFACT.INTEGRITY", name: "AppError", message: "Stored source hash mismatch" },
+    sourceCauses: [
+      { sourceId: defined(setup.join.states[0]).id, cause: { code: "ARTIFACT.INTEGRITY" } },
+    ],
+  });
+  expect(setup.deps.readSource).toHaveBeenCalledOnce();
 });

@@ -14,6 +14,7 @@ import {
   type ReviewRecord,
 } from "@crawl-automation/v3-contracts";
 import { fileErrors } from "./file-errors.js";
+import { fileDiagnostics } from "./file-diagnostics.js";
 import { fileHash } from "./file-policy.js";
 
 export interface FileEvidenceStores {
@@ -58,13 +59,18 @@ function fileReview(failure: FileFailure): ReviewRecord {
       automaticRetry: false,
     },
     observation: observationIdentity(input),
-    rawError: { name: "AcquisitionFailure", message: code, stack: null, details: { input } },
+    rawError: {
+      name: "AcquisitionFailure",
+      message: code,
+      stack: null,
+      details: { input, ...fileDiagnostics(error) },
+    },
     candidate: candidate ? { schema: "acquisition-evidence/1", value: candidate } : null,
     inspection: { kind: "none" },
   });
 }
 
-/** Same persisted Review shape; private source URLs, credentials and transport errors stay out of it. */
+/** Same persisted Review shape; URL queries/fragments, credentials and transport errors stay out of it. */
 export async function recordFileReview(
   stores: FileEvidenceStores,
   failure: FileFailure,

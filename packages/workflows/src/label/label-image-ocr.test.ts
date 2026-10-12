@@ -26,6 +26,7 @@ import { orderedLabel } from "./label-ordered.js";
 import { LabelWorkflow } from "./label-workflow.js";
 import { ocrWalkFixture, type OcrWalkMode } from "./ocr-walk-fixture.js";
 import type { SourceWork } from "./label-source.js";
+import { ocrImage } from "./label-image-ocr.js";
 
 async function setup(mode: OcrWalkMode = "timeout") {
   const fixture = await ocrWalkFixture("ocr-walk", mode);
@@ -124,3 +125,32 @@ it("retains the OCR cause when all images fail definitively", async () => {
     }),
   );
 });
+
+it.each([undefined, "source-failure-first/1", "source-failure-first/2"] as const)(
+  "keeps the PDF skip reason only for %s without adding OCR commands",
+  async (failurePolicy) => {
+    const test = await setup();
+    test.work.run.entry.input.failurePolicy = failurePolicy;
+    const source = test.loaded.manifest.sources[0];
+    if (!source) {
+      throw new Error("Missing image fixture");
+    }
+    test.activities["prepareImageOcr"]?.mockResolvedValue({
+      status: "skipped",
+      operationId: source.plan.acquire.operationId,
+      reason: "pdf",
+    });
+    expect(await ocrImage(test.work.run, source)).toEqual({
+      kind: "state",
+      ready: true,
+      state: {
+        id: source.id,
+        status: "not_matched",
+        ...(failurePolicy === "source-failure-first/2" ? { reason: "pdf" } : {}),
+      },
+    });
+    expect(env.call.mock.calls.map(([kind, name]) => [kind, name])).toEqual([
+      ["activities", "prepareImageOcr"],
+    ]);
+  },
+);

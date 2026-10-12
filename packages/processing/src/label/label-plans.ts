@@ -2,7 +2,8 @@ import { isDeepStrictEqual } from "node:util";
 import type { RetainedPublication } from "@crawl-automation/platform";
 import type { ArtifactRef, SavedEvidenceSource } from "@crawl-automation/v3-contracts";
 import { decodeJson, encodeJson } from "../results/result-record.js";
-import { labelFailure } from "./label-errors.js";
+import { labelErrors, labelFailure } from "./label-errors.js";
+import { safeErrorSummary } from "@crawl-automation/platform/errors/summary";
 import {
   LabelManifestResultSchema,
   LabelPlanInputSchema,
@@ -97,7 +98,15 @@ export class LabelPlans {
     }
     const resolution = await this.deps.resolve(source, signal);
     if (resolution.status === "review") {
-      throw labelFailure("CHANNEL.LABEL_PREPARATION_UNVERIFIED");
+      const cause = safeErrorSummary({
+        ...resolution,
+        name: "SourceReview",
+        message: resolution.code,
+      });
+      throw labelErrors.create("CHANNEL.LABEL_PREPARATION_UNVERIFIED", {
+        cause,
+        details: { cause },
+      });
     }
     let result: LabelSourceResult;
     if (resolution.status === "not_matched") {

@@ -116,6 +116,8 @@ describe("label plans", () => {
     setup.resolutions.set("image-1", { status: "review", code: "OCR.EMPTY" });
     await expect(setup.labelPlans.manifest(setup.input, signal())).rejects.toMatchObject({
       code: "CHANNEL.LABEL_PREPARATION_UNVERIFIED",
+      cause: { code: "OCR.EMPTY", name: "SourceReview", message: "OCR.EMPTY" },
+      details: { cause: { code: "OCR.EMPTY", name: "SourceReview", message: "OCR.EMPTY" } },
     });
     const foreignOwner = { ...setup.input, owner: { ...setup.input.owner, listingId: "other" } };
     await expect(setup.labelPlans.manifest(foreignOwner, signal())).rejects.toMatchObject({

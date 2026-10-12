@@ -27,6 +27,10 @@
     "./errors/activity": {
       "types": "./src/errors/activity-errors.ts",
       "import": "./src/errors/activity-errors.ts"
+    },
+    "./errors/summary": {
+      "types": "./src/errors/error-summary.ts",
+      "import": "./src/errors/error-summary.ts"
     }
   },
   "scripts": {

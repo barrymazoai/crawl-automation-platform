@@ -35,7 +35,13 @@ export const hidden = (element: AmazonElement): boolean =>
 export function productRoot(document: AmazonDocument): AmazonElement {
   const roots = [...document.querySelectorAll("#ppd")];
   if (roots.length !== 1 || !roots[0]) {
-    throw amazonErrors.create("AMAZON.PRODUCT_UNVERIFIED");
+    throw amazonErrors.create("AMAZON.PRODUCT_UNVERIFIED", {
+      details: {
+        check: roots.length === 0 ? "ppd-missing" : "ppd-not-unique",
+        ppdCount: roots.length,
+        pageTitleLength: textOf(document.querySelector("title")).length,
+      },
+    });
   }
   return roots[0];
 }
@@ -48,11 +54,21 @@ export function pageAsin(root: AmazonElement): string {
   const values = [...root.querySelectorAll('input#ASIN, input[name="ASIN"]')].map(
     (element) => element.getAttribute("value") ?? "",
   );
+  const asinSource = values.length ? "input" : "metadata";
   if (!values.length) {
     values.push(...fallbackAsins(root));
   }
-  if (!values.length || values.some((value) => !isAsin(value))) {
-    throw amazonErrors.create("AMAZON.PRODUCT_UNVERIFIED");
+  const invalidAsinCount = values.filter((value) => !isAsin(value)).length;
+  if (!values.length || invalidAsinCount) {
+    throw amazonErrors.create("AMAZON.PRODUCT_UNVERIFIED", {
+      details: {
+        check: values.length === 0 ? "asin-unavailable" : "asin-invalid",
+        asinSource,
+        asinCount: values.length,
+        invalidAsinCount,
+        pageTitleLength: textOf(root.ownerDocument.querySelector("title")).length,
+      },
+    });
   }
   if (new Set(values).size !== 1) {
     throw amazonErrors.create("AMAZON.ASIN_CONFLICT");

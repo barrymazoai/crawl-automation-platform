@@ -168,7 +168,15 @@ function verifyGallery(
     throw dtcAgentErrors.create("DTC.CAPTURE_EVIDENCE");
   }
   if (record.flags.some((flag) => /image_download_failed|page_html_failed/.test(flag))) {
-    throw dtcAgentErrors.create("DTC.CAPTURE_REVIEW", { details: { flags: record.flags } });
+    throw dtcAgentErrors.create("DTC.CAPTURE_REVIEW", {
+      details: {
+        reason: "capture_download_failed",
+        flags: record.flags
+          .filter((flag) => /image_download_failed|page_html_failed/.test(flag))
+          .slice(0, 20)
+          .map((flag) => flag.slice(0, 200)),
+      },
+    });
   }
 }
 

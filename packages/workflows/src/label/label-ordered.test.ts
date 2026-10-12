@@ -5,12 +5,14 @@ vi.mock("@temporalio/workflow", async () => ({
   isCancellation: () => false,
   patched: () => true,
   log: { info: mocks.log, warn: vi.fn() },
+  workflowInfo: () => ({ runId: "test-run" }),
 }));
 vi.mock("./label-source.js", () => ({ processSource: mocks.process }));
 import { orderedLabel } from "./label-ordered.js";
 import { LabelWorkflowInputSchema, type Source } from "./label-model.js";
 import { entry, manifest } from "./label-fixture.js";
 import type { SourceWork } from "./label-source.js";
+import { orderedReviewFailures } from "./label-finish.js";
 
 function fixture(order: "text-first" | "images-first", options = { hasLabel: true }) {
   const input = LabelWorkflowInputSchema.parse({
@@ -152,4 +154,40 @@ it("keeps the reason chosen from the furthest source", async () => {
     reason,
   }));
   expect((await orderedLabel(test.work, test.loaded)).reason).toEqual(reason);
+});
+
+it("retains an inspection schema failure in the existing Review data without advancing", async () => {
+  const test = fixture("images-first");
+  test.check.mockResolvedValue({ input: undefined, complete: "bad", terminal: false } as never);
+  const walk = await orderedLabel(test.work, test.loaded);
+  expect(orderedReviewFailures(walk)).toMatchObject({
+    primaryFailure: {
+      code: "CHANNEL.LABEL_PREPARATION_UNVERIFIED",
+      cause: { name: "ZodError", issues: [{ path: ["complete"], code: "invalid_type" }] },
+    },
+  });
+  expect(walk.states).toEqual([{ id: "facts", status: "unresolved" }]);
+  expect(mocks.process).toHaveBeenCalledOnce();
+  expect(test.check.mock.calls.map(([, name]) => name)).toEqual(["inspectLabelImage"]);
+});
+
+it("retains the coded activity cause without changing preparation failure classification", async () => {
+  const test = fixture("images-first");
+  test.check.mockRejectedValue({
+    name: "ActivityFailure",
+    message: "Activity failed",
+    cause: {
+      name: "ApplicationFailure",
+      type: "ARTIFACT.INTEGRITY",
+      message: "Stored image hash mismatch",
+    },
+  });
+  const walk = await orderedLabel(test.work, test.loaded);
+  expect(orderedReviewFailures(walk)).toMatchObject({
+    primaryFailure: {
+      code: "CHANNEL.LABEL_PREPARATION_UNVERIFIED",
+      cause: { code: "ARTIFACT.INTEGRITY", message: "Stored image hash mismatch" },
+    },
+  });
+  expect(test.check.mock.calls.map(([, name]) => name)).toEqual(["inspectLabelImage"]);
 });

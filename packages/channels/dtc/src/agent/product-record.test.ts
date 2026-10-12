@@ -97,6 +97,18 @@ it("rejects path traversal and symlink evidence", async () => {
   });
 });
 
+it("keeps bounded capture download reasons without changing the Review outcome", async () => {
+  const failure = `image_download_failed: ${"x".repeat(300)}`;
+  await writeFile(
+    join(root, "evidence/records.json"),
+    JSON.stringify([{ ...record, flags: ["optional warning", ...Array(25).fill(failure)] }]),
+  );
+  await expect(readCapturedProduct({ root, files, url })).rejects.toMatchObject({
+    code: "DTC.CAPTURE_REVIEW",
+    details: { reason: "capture_download_failed", flags: Array(20).fill(failure.slice(0, 200)) },
+  });
+});
+
 it("classifies a field-mapping object in review.method as invalid capture evidence", async () => {
   await writeFile(
     join(root, "capture-review.json"),

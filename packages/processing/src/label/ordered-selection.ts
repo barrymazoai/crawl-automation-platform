@@ -53,12 +53,18 @@ export class LabelOrderedSelection {
     );
     const evidence = await orderedEvidence(this.plans, this.deps, { request, signal });
     const untried = order.length - request.states.length;
-    const { outcomes, codes, ...progress } = orderedProgress(request, evidence, untried);
+    const { outcomes, codes, sourceOutcomes, ...progress } = orderedProgress(
+      request,
+      evidence,
+      untried,
+    );
     await this.plans.publish(
       orderedProgressKey(request.input, request.states),
-      { request, outcomes, codes },
+      { request, outcomes, codes, ...(sourceOutcomes ? { sourceOutcomes } : {}) },
       signal,
     );
+    // Keep the existing strict workflow response compatible. Review reads the summary from
+    // this immutable report; it needs no extra workflow command or response field.
     return { input: request, ...progress };
   }
 

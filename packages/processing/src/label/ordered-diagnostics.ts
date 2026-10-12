@@ -1,6 +1,7 @@
 import { sha256 } from "@crawl-automation/platform";
 import { z } from "zod";
 import { OrderedProgressSchema } from "./ordered-model.js";
+import { SourceOutcomesSchema } from "@crawl-automation/v3-contracts";
 
 /** Immutable per-prefix report: no workflow input/result change and no mutable latest pointer. */
 export function orderedProgressKey(input: { operationId: string }, states: unknown[]) {
@@ -28,4 +29,5 @@ export const OrderedDiagnosticsSchema = z.object({
     )
     .max(100),
   codes: z.array(z.string()),
+  sourceOutcomes: SourceOutcomesSchema.optional(),
 });

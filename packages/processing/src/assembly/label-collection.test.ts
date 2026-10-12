@@ -77,3 +77,47 @@ describe("collection of an already collected observation", () => {
     });
   });
 });
+
+it.each(["field", "refinement"])(
+  "retains a collected-product schema %s failure with a null candidate",
+  async (kind) => {
+    const setup = assemblySetup();
+    const assembled = await setup.assembly.run(setup.join, signal());
+    const evidence = await setup.assembly.inspectReady(setup.join, assembled.evidenceKey, signal());
+    if (kind === "field") {
+      Object.assign(defined(evidence.output.result.formula?.servingSize), { text: 123 });
+    } else {
+      evidence.output.result.ingredients = [];
+    }
+    const collection = new LabelCollection({
+      ...setup.deps,
+      registry: setup.registry,
+      assembly: { inspectReady: vi.fn(async () => evidence) },
+    });
+    const out = await collection.run(
+      { join: setup.join, evidenceKey: assembled.evidenceKey },
+      signal(),
+    );
+    expect(out).toMatchObject({
+      status: "review",
+      codes: ["LABEL_PRODUCT.EVIDENCE_UNRESOLVED"],
+      automaticRetry: false,
+    });
+    const record = defined([...setup.records.values()][0]);
+    expect(record.candidate).toBeNull();
+    expect(record.rawError.details).toMatchObject({
+      cause: {
+        code: null,
+        name: "ZodError",
+        issues: expect.arrayContaining([
+          expect.objectContaining(
+            kind === "field"
+              ? { path: ["formula", "servingSize", "text"], code: "invalid_type" }
+              : { path: [], code: "custom", message: "Label collected identity conflict" },
+          ),
+        ]),
+      },
+    });
+    expect(setup.registry.append).not.toHaveBeenCalled();
+  },
+);

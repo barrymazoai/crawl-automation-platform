@@ -1,5 +1,4 @@
-import { recordRecovery } from "@crawl-automation/platform";
-import { sha256 } from "@crawl-automation/platform";
+import { recordRecovery, sha256 } from "@crawl-automation/platform";
 import {
   type LabelProductJoin,
   type PackagingFacts,
@@ -7,6 +6,7 @@ import {
   type VisionTask,
 } from "@crawl-automation/v3-contracts";
 import { encodeJson } from "../results/result-record.js";
+import { safeErrorSummary, type SafeErrorSummary } from "@crawl-automation/platform/errors/summary";
 import { assemblyFailure } from "./assembly-errors.js";
 import {
   ASSEMBLY_LIMIT,
@@ -18,11 +18,23 @@ import {
   labelAssemblyKey,
 } from "./assembly-files.js";
 import { recordAssemblyReview, type AssemblyStores } from "./assembly-review.js";
-import { sourceReviewFailure, type ReviewedImageReader } from "./source-review.js";
+import {
+  sourceReviewFailure,
+  rememberCause,
+  type SourceCause,
+  type ReviewedImageReader,
+} from "./source-review.js";
 import { mergeLabelProduct, type MergeFailure, type VerifiedLabelSource } from "./label-merge.js";
 
 type Source = LabelProductJoin["manifest"]["sources"][number];
-type State = LabelProductJoin["states"][number];
+interface Collecting {
+  input: LabelProductJoin;
+  state: LabelProductJoin["states"][number] | undefined;
+  entries: VerifiedLabelSource[];
+  failures: MergeFailure[];
+  signal: AbortSignal;
+  sourceCauses: SourceCause[];
+}
 
 export interface LabelAssemblyDeps extends AssemblyStores {
   readReviewedImage?: ReviewedImageReader;
@@ -47,9 +59,10 @@ export class LabelAssembly {
   /** Read-only: the published assembly of a ready product, recomputed and compared byte for byte. */
   async inspectReady(raw: unknown, key: string, signal: AbortSignal) {
     const input = canonicalJoin(raw);
-    const output = await this.compute(input, signal);
+    const causes: SourceCause[] = [];
+    const output = await this.compute(input, signal, causes);
     if (key !== labelAssemblyKey(input) || output.result.status !== "ready") {
-      throw assemblyFailure("LABEL_PRODUCT.NOT_READY");
+      throw assemblyFailure("LABEL_PRODUCT.NOT_READY", causes[0]?.cause);
     }
     const bytes = await this.deps.remote.read(key, ASSEMBLY_LIMIT, signal);
     assertSameBytes(bytes, encodeJson(output));
@@ -60,8 +73,9 @@ export class LabelAssembly {
     const input = canonicalJoin(raw);
     const key = labelAssemblyKey(input);
     let output: AssemblyOutput | null = null;
+    const sourceCauses: SourceCause[] = [];
     try {
-      output = await this.compute(input, signal);
+      output = await this.compute(input, signal, sourceCauses);
       await this.publish(input, { key, bytes: encodeJson(output) }, signal);
       signal.throwIfAborted();
     } catch (error) {
@@ -74,18 +88,21 @@ export class LabelAssembly {
         key,
         stage: "assembly",
         candidate: output,
+        cause: safeErrorSummary(error),
+        sourceCauses,
       });
     }
     if (output.result.status === "ready") {
       return { status: "ready", evidenceKey: key };
     }
-    const { codes } = output.result;
     return recordAssemblyReview(this.deps, {
       input,
-      codes,
+      codes: output.result.codes,
       key,
       stage: "assembly",
       candidate: output,
+      cause: sourceCauses[0]?.cause,
+      sourceCauses,
     });
   }
 
@@ -122,7 +139,11 @@ export class LabelAssembly {
     assertSameBytes(await remote.read(file.key, ASSEMBLY_LIMIT, signal), file.bytes);
   }
 
-  private async compute(input: LabelProductJoin, signal: AbortSignal): Promise<AssemblyOutput> {
+  private async compute(
+    input: LabelProductJoin,
+    signal: AbortSignal,
+    sourceCauses: SourceCause[] = [],
+  ): Promise<AssemblyOutput> {
     const states = new Map(input.states.map((state) => [state.id, state]));
     const known = input.states.every((state) =>
       input.manifest.sources.some((source) => source.id === state.id),
@@ -143,6 +164,7 @@ export class LabelAssembly {
         entries,
         failures,
         signal,
+        sourceCauses,
       });
     }
     let packaging: PackagingFacts | undefined;
@@ -155,16 +177,7 @@ export class LabelAssembly {
     return { input, result: mergeLabelProduct(input.manifest, { entries, failures }, packaging) };
   }
 
-  private async collectSource(
-    source: Source,
-    at: {
-      input: LabelProductJoin;
-      state: State | undefined;
-      entries: VerifiedLabelSource[];
-      failures: MergeFailure[];
-      signal: AbortSignal;
-    },
-  ): Promise<void> {
+  private async collectSource(source: Source, at: Collecting): Promise<void> {
     const { state, signal } = at;
     if (!state || state.status === "rejected" || state.status === "not_matched") {
       throw assemblyFailure("LABEL_PRODUCT.RECEIPT_INVALID");
@@ -175,6 +188,8 @@ export class LabelAssembly {
         reviewId: state.reviewId,
         readImage: this.deps.readReviewedImage,
         signal,
+        rememberCause: (cause: SafeErrorSummary) =>
+          rememberCause(at.sourceCauses, source.id, cause),
       };
       at.failures.push(await sourceReviewFailure(this.deps, source, reviewed));
       return;
@@ -193,6 +208,7 @@ export class LabelAssembly {
         throw error;
       }
       at.failures.push({ id: source.id, code });
+      rememberCause(at.sourceCauses, source.id, safeErrorSummary(error));
     }
   }
 }

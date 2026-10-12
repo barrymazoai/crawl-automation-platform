@@ -18,6 +18,26 @@ function mediaTypeOf(bytes: Buffer) {
   throw fileErrors.create("ARTIFACT.MEDIA_TYPE");
 }
 
+/** Diagnostic signatures only: these formats remain rejected by mediaTypeOf. */
+function rejectedMediaTypeOf(bytes: Buffer): string | null {
+  if (/^GIF8[79]a/.test(bytes.toString("ascii", 0, 6))) {
+    return "image/gif";
+  }
+  if (bytes.toString("ascii", 4, 8) === "ftyp") {
+    const end = Math.min(bytes.readUInt32BE(0), bytes.length, 256);
+    for (let offset = 8; offset + 4 <= end; offset += 4) {
+      if (offset !== 12 && /^(avif|avis)$/.test(bytes.toString("ascii", offset, offset + 4))) {
+        return "image/avif";
+      }
+    }
+  }
+  const prefix = bytes
+    .toString("utf8", 0, 512)
+    .replace(/^\uFEFF/, "")
+    .trimStart();
+  return /^(?:<!doctype\s+html\b|<html\b|<head\b|<body\b)/i.test(prefix) ? "text/html" : null;
+}
+
 function checkContainer(bytes: Buffer, mediaType: string) {
   const complete = {
     "image/png": () => bytes.subarray(-12).equals(Buffer.from("0000000049454e44ae426082", "hex")),
@@ -59,19 +79,36 @@ function imageDimensions(
   }
 }
 
-export function inspectMedia(raw: Uint8Array, contentType: string | undefined, maxPixels: number) {
-  const bytes = Buffer.from(raw);
+function assertContentType(contentType: string | undefined, mediaType: string) {
   const declared = contentType?.split(";")[0]?.trim().toLowerCase();
-  const mediaType = mediaTypeOf(bytes);
   if (declared && declared !== "application/octet-stream" && declared !== mediaType) {
     throw fileErrors.create("ARTIFACT.MEDIA_TYPE");
   }
-  if (mediaType === "application/pdf") {
-    // Preserve legacy download receipts; this is container screening, not a PDF processing route.
-    if (!/%%EOF\s*$/.test(bytes.subarray(Math.max(0, bytes.length - 1024)).toString("ascii"))) {
-      throw fileErrors.create("ARTIFACT.INTEGRITY");
+}
+
+export function inspectMedia(raw: Uint8Array, contentType: string | undefined, maxPixels: number) {
+  const bytes = Buffer.from(raw);
+  let sniffedMediaType: string | null = null;
+  try {
+    const mediaType = mediaTypeOf(bytes);
+    sniffedMediaType = mediaType;
+    assertContentType(contentType, mediaType);
+    if (mediaType === "application/pdf") {
+      // Preserve legacy download receipts; this is container screening, not a PDF processing route.
+      if (!/%%EOF\s*$/.test(bytes.subarray(Math.max(0, bytes.length - 1024)).toString("ascii"))) {
+        throw fileErrors.create("ARTIFACT.INTEGRITY");
+      }
+      return { mediaType, dimensions: null };
     }
-    return { mediaType, dimensions: null };
+    return { mediaType, dimensions: imageDimensions(bytes, mediaType, maxPixels) };
+  } catch (error) {
+    if (fileErrors.is(error, "ARTIFACT.MEDIA_TYPE")) {
+      Object.assign(error.details, {
+        contentType: contentType ?? null,
+        sniffedMediaType: sniffedMediaType ?? rejectedMediaTypeOf(bytes),
+        byteSize: bytes.length,
+      });
+    }
+    throw error;
   }
-  return { mediaType, dimensions: imageDimensions(bytes, mediaType, maxPixels) };
 }

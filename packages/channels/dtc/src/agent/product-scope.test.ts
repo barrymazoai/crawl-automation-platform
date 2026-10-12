@@ -3,6 +3,7 @@ import { RetainedPublication, type ObjectStore } from "@crawl-automation/platfor
 import {
   DtcProductScope,
   productScopeFields,
+  scopeProductOutcome,
   validateProductScope,
   type ProductScopeInput,
   type ProductScopeModel,
@@ -107,9 +108,15 @@ it("preserves the answer and blocks a second provider call after invalid citatio
     ...bundle,
     evidence: [{ field: "description", quote: "invented bundle" }],
   });
-  await expect(context.review.review(context.input, signal)).rejects.toThrow("processing scope");
+  await expect(context.review.review(context.input, signal)).rejects.toMatchObject({
+    code: "DTC.PRODUCT_SCOPE_UNRESOLVED",
+    details: { reason: "citation_not_in_retained_field" },
+  });
   expect([...context.data.keys()].some((key) => key.endsWith("/answer.json"))).toBe(true);
-  await expect(context.review.review(context.input, signal)).rejects.toThrow("processing scope");
+  await expect(context.review.review(context.input, signal)).rejects.toMatchObject({
+    code: "DTC.PRODUCT_SCOPE_UNRESOLVED",
+    details: { reason: "execution_unknown" },
+  });
   expect(context.model).toHaveBeenCalledOnce();
 });
 
@@ -136,6 +143,40 @@ it("keeps insufficient or mixed-option scope unresolved", () => {
       fields,
     ).kind,
   ).toBe("unresolved");
+});
+
+it("keeps the model's specific mixed-offer reason and evidence key on the scope failure", async () => {
+  const context = fixture({
+    kind: "unresolved",
+    reason: "Some offers contain multiple products, others one",
+    evidence: [],
+    components: [],
+  });
+  const scope = await context.review.review(context.input, signal);
+  expect(() =>
+    scopeProductOutcome({
+      scope,
+      operationId: context.input.operationId,
+      identity: { listingId: "daily", variantId: null },
+    }),
+  ).toThrow(
+    expect.objectContaining({
+      code: "DTC.PRODUCT_SCOPE_UNRESOLVED",
+      details: { reason: scope.decision.reason, evidenceKeys: [scope.evidence.objectKey] },
+    }),
+  );
+});
+
+it.each([
+  { decision: { ...bundle, evidence: [] }, reason: "missing_citations" },
+  {
+    decision: { ...bundle, components: bundle.components.slice(0, 1) },
+    reason: "missing_distinct_component_citations",
+  },
+])("keeps $reason as the scope failure reason", ({ decision, reason }) => {
+  expect(() => validateProductScope(decision, fields)).toThrow(
+    expect.objectContaining({ code: "DTC.PRODUCT_SCOPE_UNRESOLVED", details: { reason } }),
+  );
 });
 
 it("refuses a bundle without two distinct cited components", () => {

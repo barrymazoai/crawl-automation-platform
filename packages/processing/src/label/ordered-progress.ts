@@ -1,14 +1,24 @@
 import { mergeLabelProduct } from "../assembly/label-merge.js";
 import { assemblyErrors } from "../assembly/assembly-errors.js";
-import { sourceOutcome } from "./ordered-source-outcome.js";
-import type { OrderedEvidence, OrderedProgress, SourceFailure } from "./ordered-model.js";
+import {
+  noSourceSummary,
+  sourceOutcome,
+  type DiagnosedOrderedEvidence,
+} from "./ordered-source-outcome.js";
+import type { OrderedProgress, SourceFailure } from "./ordered-model.js";
+
+export type OrderedFailurePolicy = NonNullable<OrderedProgress["input"]["failurePolicy"]>;
 
 /**
  * Completeness and conflicts come from the same merger used by assembly and collection. A one-part label without a
  * formula (ingredients only, collected-product/5) completes only once no source is left untried, so a Facts photo
  * after an ingredients-only page still supplies the formula (owner 2026-10-07).
  */
-export function orderedProgress(request: OrderedProgress, evidence: OrderedEvidence, untried = 0) {
+export function orderedProgress(
+  request: OrderedProgress,
+  evidence: DiagnosedOrderedEvidence,
+  untried = 0,
+) {
   const merged = evidence.sources.length
     ? mergeLabelProduct(
         {
@@ -22,7 +32,30 @@ export function orderedProgress(request: OrderedProgress, evidence: OrderedEvide
     : null;
   const outcomes = request.states.map((state) => sourceOutcome(state, evidence));
   const conflicts = merged?.codes.filter((code) => code.endsWith("_CONFLICT")) ?? [];
-  const ranked = outcomes.flatMap((outcome, index) => {
+  const ranked = rankedFailures(outcomes, conflicts);
+  const reason = primaryOrderedFailure(request.input.failurePolicy, ranked);
+  return {
+    complete: !evidence.terminal && completeLabel(merged, untried),
+    terminal: evidence.terminal,
+    ...(reason ? { reason, failures: ranked.map((entry) => entry.failure) } : {}),
+    ...noSourceDiagnostics(request.input.failurePolicy, evidence, reason),
+    outcomes,
+    codes: merged?.codes ?? [],
+  };
+}
+
+function noSourceDiagnostics(
+  policy: OrderedFailurePolicy | undefined,
+  evidence: DiagnosedOrderedEvidence,
+  reason: SourceFailure | undefined,
+) {
+  return policy === "source-failure-first/2" && reason?.code === "CHANNEL.LABEL_NO_SOURCE"
+    ? { sourceOutcomes: noSourceSummary(evidence) }
+    : {};
+}
+
+function rankedFailures(outcomes: ReturnType<typeof sourceOutcome>[], conflicts: string[]) {
+  return outcomes.flatMap((outcome, index) => {
     const conflict = sourceConflict(outcome.sections, conflicts);
     const code = conflict ?? outcome.code;
     if (!code) {
@@ -35,14 +68,6 @@ export function orderedProgress(request: OrderedProgress, evidence: OrderedEvide
     };
     return [{ failure, progress: outcome.progress + (conflict ? 10 : 0), index }];
   });
-  const reason = primaryOrderedFailure(request.input.failurePolicy, ranked);
-  return {
-    complete: !evidence.terminal && completeLabel(merged, untried),
-    terminal: evidence.terminal,
-    ...(reason ? { reason, failures: ranked.map((entry) => entry.failure) } : {}),
-    outcomes,
-    codes: merged?.codes ?? [],
-  };
 }
 
 /** Ready, and either with a formula or with every source tried. */
@@ -50,15 +75,17 @@ function completeLabel(merged: ReturnType<typeof mergeLabelProduct> | null, untr
   return merged?.status === "ready" && ((merged.parts?.formulaFound ?? true) || untried === 0);
 }
 
-/** Opted-in tasks prefer a real failure to an equally progressed source without a label. */
+/** /1 breaks equal-progress ties; /2 always ranks a real failure above an absent label. */
 export function primaryOrderedFailure(
-  policy: "source-failure-first/1" | undefined,
+  policy: OrderedFailurePolicy | undefined,
   ranked: { failure: SourceFailure; progress: number; index: number }[],
 ) {
-  const useful = (code: string) =>
-    policy === "source-failure-first/1" && code !== "CHANNEL.LABEL_NO_SOURCE" ? 1 : 0;
+  const useful = (code: string) => (policy && code !== "CHANNEL.LABEL_NO_SOURCE" ? 1 : 0);
   return [...ranked].sort(
     (left, right) =>
+      (policy === "source-failure-first/2"
+        ? useful(right.failure.code) - useful(left.failure.code)
+        : 0) ||
       right.progress - left.progress ||
       useful(right.failure.code) - useful(left.failure.code) ||
       right.index - left.index,

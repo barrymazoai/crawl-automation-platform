@@ -12,6 +12,7 @@ import {
   type PreparedPageRecord,
 } from "@crawl-automation/v3-contracts";
 import { claimedPublish } from "../publication/claimed-publication.js";
+import { safeErrorSummary } from "@crawl-automation/platform/errors/summary";
 import { decodeJson, encodeJson, hashString } from "../results/result-record.js";
 import { keepAndRecordReview, type ReviewLedger } from "../step/kept-review.js";
 import { buildStepReview, newReviewId } from "../step/step-review.js";
@@ -109,7 +110,7 @@ export class PageEvidence {
       fact: "unknown",
       evidenceKey,
       blockedBy: null,
-      error: { name: "PageFailure", details: { input } },
+      error: { name: "PageFailure", details: { input, cause: safeErrorSummary(error) } },
       candidate: null,
       inspection: { kind: "none" },
     });

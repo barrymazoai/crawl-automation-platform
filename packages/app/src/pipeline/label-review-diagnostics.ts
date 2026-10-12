@@ -35,6 +35,7 @@ export async function labelReviewDiagnostics(
     progressEvidenceKey: key,
     outcomes: [...saved.outcomes, ...remaining],
     mergeCodes: saved.codes,
+    ...(saved.sourceOutcomes ? { sourceOutcomes: saved.sourceOutcomes } : {}),
   };
 }
 

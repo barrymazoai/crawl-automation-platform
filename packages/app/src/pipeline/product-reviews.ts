@@ -6,7 +6,11 @@ import {
   type ReviewRecord,
 } from "@crawl-automation/v3-contracts";
 import type { ErrorCategory } from "@crawl-automation/platform";
-import type { ProductPipelineInput } from "@crawl-automation/workflows";
+import {
+  ReviewRequestSchema,
+  type ReviewRequest as PipelineReviewRequest,
+  type ProductPipelineInput,
+} from "@crawl-automation/workflows";
 import type { EvidencePublisher, ReviewLedger } from "./ports.js";
 
 export interface ReviewRequest {
@@ -16,6 +20,7 @@ export interface ReviewRequest {
   /** The error code that caused it, when the failure carried one. */
   causeCode: string | null;
   executionFact?: ReviewRecord["failure"]["executionFact"] | undefined;
+  details?: PipelineReviewRequest["details"];
 }
 
 export interface ProductReview {
@@ -105,9 +110,19 @@ export class ProductReviews {
         blockedBy: null,
         automaticRetry: false,
       },
-      rawError: { name: "ProductPipeline", message: code, stack: null, details: target.request },
+      rawError: reviewError(code, target.request),
       candidate: null,
       inspection: { kind: "none" },
     });
   }
+}
+
+function reviewError(code: string | null, request: ReviewRequest) {
+  const details = ReviewRequestSchema.shape.details.parse(request.details);
+  return {
+    name: "ProductPipeline",
+    message: code,
+    stack: null,
+    details: { ...request, ...(details ? { details } : {}) },
+  };
 }

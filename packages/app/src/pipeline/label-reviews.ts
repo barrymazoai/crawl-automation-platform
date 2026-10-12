@@ -1,5 +1,6 @@
 import { recordRecovery } from "@crawl-automation/platform";
 import { pipelineErrors } from "@crawl-automation/platform";
+import { SafeErrorSummarySchema } from "@crawl-automation/platform/errors/summary";
 import { LabelPlanInputSchema, type LabelPlanInput } from "@crawl-automation/processing";
 import { sha256 } from "@crawl-automation/platform";
 import { ReviewRecordSchema, type ReviewRecord } from "@crawl-automation/v3-contracts";
@@ -20,10 +21,22 @@ export const LabelReviewRequestSchema = z.strictObject({
   ]),
   states: z.array(z.unknown()).max(100),
   primaryFailure: z
-    .strictObject({ sourceId: z.string(), code: z.string(), executionFact: z.string() })
+    .strictObject({
+      sourceId: z.string(),
+      code: z.string(),
+      executionFact: z.string(),
+      cause: SafeErrorSummarySchema.optional(),
+    })
     .optional(),
   failures: z
-    .array(z.strictObject({ sourceId: z.string(), code: z.string(), executionFact: z.string() }))
+    .array(
+      z.strictObject({
+        sourceId: z.string(),
+        code: z.string(),
+        executionFact: z.string(),
+        cause: SafeErrorSummarySchema.optional(),
+      }),
+    )
     .max(100)
     .optional(),
 });

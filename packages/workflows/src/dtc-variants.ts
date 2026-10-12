@@ -18,6 +18,8 @@ import {
 import { collectCapturedProduct, enrichCollectedResult } from "./collect-captured-product.js";
 import { once } from "./activity-options.js";
 import { failureCode } from "./failure-code.js";
+import { safeDiagnosticText } from "@crawl-automation/platform/errors/summary";
+import { failureDetails, objectKeys } from "./review-details.js";
 import { pipelineErrors } from "@crawl-automation/platform/errors/activity";
 
 /** Browser capture has ended. Each website variant gets an isolated, non-retrying downstream run. */
@@ -33,13 +35,14 @@ export async function collectDtcVariants(
     try {
       result =
         member.status === "review"
-          ? await variantReview(pipeline, variantInput, member.code)
+          ? await variantReview(pipeline, variantInput, { member, causeCode: member.code })
           : await variantChild(variantInput, member);
     } catch (error) {
       if (isCancellation(error)) {
         throw error;
       }
-      result = await variantReview(pipeline, variantInput, failureCode(error));
+      const failure = { member, causeCode: failureCode(error), error };
+      result = await variantReview(pipeline, variantInput, failure);
     }
     results.push({
       operationId: member.operationId,
@@ -110,20 +113,28 @@ export async function DtcVariantWorkflow(raw: unknown) {
     if (isCancellation(error)) {
       throw error;
     }
-    return variantReview(pipeline, input, failureCode(error));
+    return variantReview(pipeline, input, { member, causeCode: failureCode(error), error });
   }
 }
 
 async function variantReview(
   pipeline: PipelineActivities,
   input: ProductPipelineInput,
-  causeCode: string | null,
+  failure: { member: DtcVariantHandoff; causeCode: string | null; error?: unknown },
 ) {
+  const { member, causeCode, error: cause } = failure;
   try {
     return await pipeline.reviewProduct({
       pipeline: input,
       code: pipelineErrors.code("PIPELINE.PRODUCT_UNRESOLVED"),
       causeCode,
+      details: {
+        ...failureDetails(cause),
+        variantId: member.variant.variantId?.slice(0, 200) ?? null,
+        code: causeCode?.slice(0, 200),
+        ...(member.status === "review" ? { reason: safeDiagnosticText(member.reason) } : {}),
+        evidenceKeys: objectKeys(member.evidence),
+      },
     });
   } catch (error) {
     if (isCancellation(error)) {

@@ -5,6 +5,52 @@ import type { OrderedEvidence, OrderedState } from "./ordered-model.js";
 type Record = OrderedEvidence["entries"][number]["record"];
 type Reviewed = NonNullable<OrderedEvidence["failures"][number]["reviewed"]>["record"];
 
+export interface SourceDiagnostic {
+  sourceId: string;
+  kind: "page" | "image" | "text";
+  status: string;
+  reason: string;
+  detail?: string;
+  matchedKeywords?: string[];
+}
+
+export interface DiagnosedOrderedEvidence extends OrderedEvidence {
+  sourceDiagnostics?: SourceDiagnostic[];
+}
+
+/** Small Review payload: the full originals and model answers remain in retained evidence. */
+export function noSourceSummary(evidence: DiagnosedOrderedEvidence) {
+  const sources = evidence.sourceDiagnostics ?? [];
+  return {
+    total: sources.length,
+    omitted: Math.max(0, sources.length - 20),
+    sources: sources.slice(0, 20).map((source) => compactDiagnostic(source, evidence)),
+  };
+}
+
+function compactDiagnostic(source: SourceDiagnostic, evidence: OrderedEvidence) {
+  const candidate = diagnosticCandidate(source.sourceId, evidence);
+  const noLabel = candidate && !candidate.formula && !candidate.otherIngredients;
+  const detail = noLabel ? candidate.issues[0]?.detail : source.detail;
+  return {
+    sourceId: source.sourceId.slice(0, 128),
+    kind: source.kind,
+    status: source.status.slice(0, 24),
+    reason: noLabel ? "model_no_label" : source.reason.slice(0, 120),
+    ...(detail ? { detail: detail.slice(0, 240) } : {}),
+    ...(source.matchedKeywords
+      ? { matchedKeywords: source.matchedKeywords.slice(0, 6).map((word) => word.slice(0, 48)) }
+      : {}),
+  };
+}
+
+function diagnosticCandidate(sourceId: string, evidence: OrderedEvidence) {
+  return (
+    evidence.entries.find((entry) => entry.id === sourceId)?.candidate ??
+    evidence.failures.find((failure) => failure.id === sourceId)?.candidate
+  );
+}
+
 /** One source's own assessment; product conflicts are reported separately. */
 export function sourceOutcome(state: OrderedState, evidence: OrderedEvidence) {
   const entry = evidence.entries.find((entry) => entry.id === state.id);

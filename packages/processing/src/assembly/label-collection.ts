@@ -8,6 +8,7 @@ import {
   type ProductWorkflowOutcome,
 } from "@crawl-automation/v3-contracts";
 import { encodeJson } from "../results/result-record.js";
+import { safeErrorSummary } from "@crawl-automation/platform/errors/summary";
 import { assemblyFailure } from "./assembly-errors.js";
 import {
   ASSEMBLY_LIMIT,
@@ -75,6 +76,7 @@ export class LabelCollection {
         ...review,
         candidate: attempt.candidate,
         existingCollection: attempt.existing,
+        cause: safeErrorSummary(error),
       });
       if (result.status !== "review") {
         throw assemblyFailure("LABEL_PRODUCT.REVIEW_UNVERIFIED");

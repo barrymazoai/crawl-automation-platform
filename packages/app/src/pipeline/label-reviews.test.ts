@@ -247,3 +247,41 @@ it("links every ordered source outcome and registered result through reviews.evi
   ]);
   expect(evidence.find((file) => file.key.endsWith("response.json"))?.status).toBe("missing");
 });
+
+it("persists optional bounded causes in the existing failure details", async () => {
+  const test = setup();
+  const primaryFailure = {
+    sourceId: "page",
+    code: request.code,
+    executionFact: "unknown",
+    cause: {
+      code: null,
+      name: "ZodError",
+      message: "Validation failed",
+      issues: [{ path: ["complete"], code: "invalid_type", message: "Expected boolean" }],
+    },
+  };
+  const result = await test.service.review(
+    { ...request, primaryFailure, failures: [primaryFailure] },
+    new AbortController().signal,
+  );
+  expect(test.rows.get(result.reviewId)?.rawError.details).toMatchObject({
+    primaryFailure,
+    failures: [primaryFailure],
+  });
+  expect(result).toMatchObject({ code: request.code, automaticRetry: false });
+});
+
+it("rejects unbounded causes before writing", async () => {
+  const test = setup();
+  const primaryFailure = {
+    sourceId: "page",
+    code: request.code,
+    executionFact: "unknown",
+    cause: { code: null, name: "Error", message: "x".repeat(301) },
+  };
+  await expect(
+    test.service.review({ ...request, primaryFailure }, new AbortController().signal),
+  ).rejects.toMatchObject({ name: "ZodError" });
+  expect(test.evidence.publish).not.toHaveBeenCalled();
+});

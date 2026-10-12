@@ -3,6 +3,68 @@ import { amazonAdapter, type AmazonRendered } from "./index.js";
 import type { ParsedProduct } from "@crawl-automation/channels-core";
 import { savedPage, savedPaths } from "./testing/saved-pages.js";
 
+const titlePage = (content: string) => ({
+  url: "https://www.amazon.com/dp/B002CQU532",
+  capturedAt: "2026-10-12T00:00:00.000Z",
+  html:
+    '<html><head><title>Amazon.com</title></head><body><div id="ppd">' +
+    `<input id="ASIN" value="B002CQU532">${content}</div></body></html>`,
+});
+
+describe("product title diagnostics", () => {
+  it.each([
+    { content: "", count: 0 },
+    { content: '<span id="productTitle"> \n </span>', count: 1 },
+    { content: '<span id="productTitle"></span>'.repeat(2), count: 2 },
+  ])("reports missing title text for $count elements", ({ content, count }) => {
+    expect(() => amazonAdapter.parseProduct(titlePage(content))).toThrow(
+      expect.objectContaining({
+        code: "AMAZON.PRODUCT_UNVERIFIED",
+        details: {
+          check: "title-missing",
+          titleElementCount: count,
+          distinctTitleCount: 0,
+          pageTitleLength: 10,
+        },
+      }),
+    );
+  });
+
+  it("reports distinct titles without retaining title text or markup", () => {
+    const content =
+      '<span id="productTitle">First</span>'.repeat(2) +
+      `<span id="productTitle"><b>${"Private title".repeat(1000)}</b></span>` +
+      '<span id="productTitle"></span>';
+    expect(() => amazonAdapter.parseProduct(titlePage(content))).toThrow(
+      expect.objectContaining({
+        code: "AMAZON.PRODUCT_UNVERIFIED",
+        details: {
+          check: "title-not-unique",
+          titleElementCount: 4,
+          distinctTitleCount: 2,
+          pageTitleLength: 10,
+        },
+      }),
+    );
+  });
+
+  it("keeps accepting repeated identical titles and ignoring empty title elements", () => {
+    const page = titlePage(
+      '<span id="productTitle">Example supplement</span>' +
+        '<span id="productTitle"> Example\n supplement </span><span id="productTitle"></span>',
+    );
+    expect(amazonAdapter.parseProduct(page).evidence.title).toBe("Example supplement");
+  });
+
+  it("keeps reporting the observed ASIN when the request names another product", () => {
+    const page = {
+      ...titlePage('<span id="productTitle">Example supplement</span>'),
+      url: "https://www.amazon.com/dp/B079LWRRNM",
+    };
+    expect(amazonAdapter.parseProduct(page).identity.listingId).toBe("B002CQU532");
+  });
+});
+
 const cases = [
   {
     path: savedPaths.fish,

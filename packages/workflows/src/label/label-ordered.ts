@@ -1,22 +1,16 @@
 import { isCancellation, log, patched } from "@temporalio/workflow";
 import { z } from "zod";
+import { safeErrorSummary } from "@crawl-automation/platform/errors/summary";
 import { processSource, type SourceWork } from "./label-source.js";
 import { type LoadedPlanSchema, type Source, type State } from "./label-model.js";
 import { identityConflict } from "./identity-conflict.js";
 import { sameJson } from "./same.js";
 import { noteSourceFailure } from "./label-run.js";
-import { SourceFailureSchema, type OrderedWalk } from "./label-ordered-model.js";
+import { LabelProgressSchema as ProgressSchema, type OrderedWalk } from "./label-ordered-model.js";
 export type { OrderedWalk } from "./label-ordered-model.js";
 import { admissionDocuments } from "./label-admission.js";
 
 type Loaded = z.infer<typeof LoadedPlanSchema>;
-const ProgressSchema = z.strictObject({
-  input: z.unknown(),
-  complete: z.boolean(),
-  terminal: z.boolean(),
-  reason: SourceFailureSchema.optional(),
-  failures: z.array(SourceFailureSchema).max(100).optional(),
-});
 
 /** One source at a time, including acquisition and OCR; only verified completeness stops fallback. */
 export async function orderedLabel(work: SourceWork, loaded: Loaded): Promise<OrderedWalk> {
@@ -105,11 +99,14 @@ async function checkProgress(work: SourceWork, walk: OrderedWalk): Promise<boole
     const last = walk.states.at(-1) as State;
     walk.states[walk.states.length - 1] = { id: last.id, status: "unresolved" };
     noteSourceFailure(work.run, last.id, error);
-    walk.reason = {
+    const reason = {
       sourceId: last.id,
       code: "CHANNEL.LABEL_PREPARATION_UNVERIFIED",
       executionFact: "unknown",
+      cause: safeErrorSummary(error),
     };
+    // Only existing Review activity data changes; command order and failure decisions stay identical.
+    walk.reason = reason;
     return false;
   }
 }

@@ -36,7 +36,7 @@ export const LabelTaskSchema = z
     corePolicy: z.string().min(1).max(120).optional(),
     evidencePolicy: LabelEvidencePolicySchema.optional(),
     sourcePolicy: LabelSourcePolicySchema.optional(),
-    failurePolicy: z.literal("source-failure-first/1").optional(),
+    failurePolicy: z.enum(["source-failure-first/1", "source-failure-first/2"]).optional(),
     admission: z.literal("label-packaging/1").optional(),
   })
   .refine(

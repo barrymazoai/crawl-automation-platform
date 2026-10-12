@@ -9,8 +9,20 @@ import {
 import { assemblyFailure } from "./assembly-errors.js";
 import type { MergeFailure } from "./merge-state.js";
 import { textReviewHasFormula, textReviewIsPartial } from "./source-without-label.js";
+import {
+  safeErrorSummary,
+  SafeErrorSummarySchema,
+  type SafeErrorSummary,
+} from "@crawl-automation/platform/errors/summary";
 
 type Source = LabelProductJoin["manifest"]["sources"][number];
+export type SourceCause = { sourceId: string; cause: SafeErrorSummary };
+
+export function rememberCause(causes: SourceCause[], sourceId: string, cause: SafeErrorSummary) {
+  if (causes.length < 10) {
+    causes.push({ sourceId, cause });
+  }
+}
 
 interface ReviewReader {
   reviews: { read(reviewId: string): Promise<ReviewRecord | null> };
@@ -31,6 +43,7 @@ export async function sourceReviewFailure(
     reviewId: string;
     readImage?: ReviewedImageReader | undefined;
     signal?: AbortSignal;
+    rememberCause?: (cause: SafeErrorSummary) => void;
   },
 ): Promise<MergeFailure> {
   const raw = await deps.reviews.read(at.reviewId);
@@ -39,7 +52,17 @@ export async function sourceReviewFailure(
   }
   const review = ReviewRecordSchema.parse(raw);
   assertOwnReview(deps, source, { input: at.input, reviewId: at.reviewId, review });
+  at.rememberCause?.(reviewCause(review));
   return reviewFailure(source, review, at);
+}
+
+function reviewCause(review: ReviewRecord): SafeErrorSummary {
+  const details = review.rawError.details;
+  const cause = details && typeof details === "object" ? Reflect.get(details, "cause") : null;
+  const parsed = SafeErrorSummarySchema.safeParse(cause);
+  return safeErrorSummary(
+    parsed.success ? parsed.data : { code: review.failure.code, ...review.rawError },
+  );
 }
 
 function assertOwnReview(

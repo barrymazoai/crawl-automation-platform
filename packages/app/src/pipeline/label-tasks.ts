@@ -76,8 +76,8 @@ export class LabelTasks {
       text,
       visionConfigFingerprint,
       admission: "label-packaging/1",
-      // Owner 2026-10-08: every channel reports a source's real failure ahead of "no label" on another source.
-      failurePolicy: "source-failure-first/1",
+      // Owner 2026-10-12: a real source failure wins even when another no-label source progressed further.
+      failurePolicy: "source-failure-first/2",
       ...(policy ? { evidencePolicy: policy } : {}),
       ...(sourcePlan.sourcePolicy ? { sourcePolicy: sourcePlan.sourcePolicy } : {}),
       ...(corePolicy ? { corePolicy } : {}),

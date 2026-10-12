@@ -41,7 +41,7 @@ export async function ocrImage(run: LabelRun, source: ImageSource): Promise<OcrO
     );
     if (prepared.status === "skipped") {
       // A PDF is not processed: like an image without a label, it is simply not a label source.
-      return stateOf(source, "not_matched");
+      return skippedImage(run, source, prepared.reason);
     }
     if (prepared.status === "review") {
       return prepared.operationId === source.plan.acquire.operationId
@@ -60,6 +60,18 @@ export async function ocrImage(run: LabelRun, source: ImageSource): Promise<OcrO
     noteSourceFailure(run, source.id, error);
     return stateOf(source, "unresolved");
   }
+}
+
+function skippedImage(run: LabelRun, source: ImageSource, reason: "pdf"): OcrOutcome {
+  return {
+    kind: "state",
+    state: {
+      id: source.id,
+      status: "not_matched",
+      ...(run.entry.input.failurePolicy === "source-failure-first/2" ? { reason } : {}),
+    },
+    ready: true,
+  };
 }
 
 async function recognized(

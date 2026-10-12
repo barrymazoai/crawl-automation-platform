@@ -4,6 +4,7 @@ import {
   buildPlan,
   ChannelRegistry,
   HttpCapture,
+  OriginalHtmlArchive,
   ProductCapture,
   ProductSourcePlans,
   ScraperApiPages,
@@ -106,8 +107,50 @@ function captureSetup(page: FetchedPage, response: { status?: number; finalUrl?:
     publication,
     sourcePlans: new ProductSourcePlans(publication, settings),
   });
-  return { capture, remote, client };
+  return { capture, remote, client, publication };
 }
+
+const identityInput = '<input id="ASIN" value="B0013LAQS6">';
+it.each([
+  ["ppd-missing", "<main>Unavailable</main>"],
+  ["ppd-not-unique", '<div id="ppd"></div><div id="ppd"></div>'],
+  ["asin-unavailable", '<div id="ppd"></div>'],
+  ["asin-invalid", '<div id="ppd"><input id="ASIN" value="invalid"></div>'],
+  ["title-missing", `<div id="ppd">${identityInput}</div>`],
+  [
+    "title-not-unique",
+    `<div id="ppd">${identityInput}<span id="productTitle">First</span>` +
+      '<span id="productTitle">Second</span></div>',
+  ],
+])("preserves %s details through capture using only archived bytes", async (check, html) => {
+  const page = { url: request.url, html, capturedAt: "2026-10-12T00:00:00.000Z" };
+  const setup = captureSetup(page);
+  const archive = new OriginalHtmlArchive(setup.publication, {
+    channel: "amazon",
+    maxBytes: amazonAdapter.httpPolicy.maxBytes,
+    capture: {
+      operationId: request.operationId,
+      sessionId: request.operationId,
+      url: request.url,
+      sourceId: request.sourceId,
+      listingId: "B0013LAQS6",
+      variantId: null,
+    },
+  });
+  const signal = AbortSignal.timeout(10_000);
+  const saved = await archive.save(
+    Buffer.from(html),
+    { mode: "http", routeId: "test-route", egressId: settings.egressId, provider: "test/1" },
+    signal,
+  );
+  await expect(setup.capture.capture(request, signal)).rejects.toMatchObject({
+    code: "AMAZON.PRODUCT_UNVERIFIED",
+    details: { check, pageTitleLength: 0 },
+  });
+  expect(setup.client.get).not.toHaveBeenCalled();
+  expect(await archive.inspect(signal)).toEqual(saved);
+  expect(setup.remote.data.get(saved.source.objectKey)).toEqual(Buffer.from(html));
+});
 
 function withCompleteFacts() {
   const page = fixture.read();

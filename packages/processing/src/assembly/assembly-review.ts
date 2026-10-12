@@ -15,6 +15,7 @@ import { buildStepReview } from "../step/step-review.js";
 import { assemblyFailure } from "./assembly-errors.js";
 import { ASSEMBLY_LIMIT, keepLocally } from "./assembly-files.js";
 import { retentionSignal } from "../step/retention.js";
+import type { SafeErrorSummary } from "@crawl-automation/platform/errors/summary";
 
 export interface AssemblyStores {
   local: ObjectStore;
@@ -35,6 +36,8 @@ export interface AssemblyReviewCase {
   stage: "assembly" | "collect";
   candidate: unknown;
   existingCollection?: ExistingCollection | undefined;
+  cause?: SafeErrorSummary | undefined;
+  sourceCauses?: { sourceId: string; cause: SafeErrorSummary }[];
 }
 
 /** Policies whose Reviews are immutable results: a cold worker returns the existing Review, never a second one. */
@@ -85,7 +88,7 @@ const stableReviewKey = (review: AssemblyReviewCase, identity: string) =>
   `v3/label-products/${review.input.manifest.operationId}/reviews/${identity}.json`;
 
 function assemblyReviewRecord(review: AssemblyReviewCase, identity: string): ReviewRecord {
-  const { input, codes, stage, candidate, existingCollection } = review;
+  const { input, codes, stage, candidate } = review;
   const observation = input.manifest.observation;
   const admission = !!input.manifest.admission;
   const assemblySchema = admission ? "label-product-assembly/2" : "label-product-assembly/1";
@@ -95,9 +98,6 @@ function assemblyReviewRecord(review: AssemblyReviewCase, identity: string): Rev
       : admission
         ? "collected-product/4"
         : "collected-product/3";
-  const existing = existingCollection
-    ? { existingCollection, versionPolicy: "retain-first/1" }
-    : {};
   const code = codes[0] ?? "LABEL_PRODUCT.EVIDENCE_UNRESOLVED";
   return buildStepReview({
     reviewId: `label-${identity}`,
@@ -114,12 +114,23 @@ function assemblyReviewRecord(review: AssemblyReviewCase, identity: string): Rev
     fact: "unknown",
     evidenceKey: review.key,
     blockedBy: null,
-    error: { name: "LabelProductReview", details: { input, codes, ...existing } },
+    error: { name: "LabelProductReview", details: reviewDetails(review) },
     candidate: candidate
       ? { schema: stage === "assembly" ? assemblySchema : collectedSchema, value: candidate }
       : null,
     inspection: { kind: "none" },
   });
+}
+
+function reviewDetails(review: AssemblyReviewCase) {
+  const { input, codes, existingCollection, cause, sourceCauses } = review;
+  return {
+    input,
+    codes,
+    ...(existingCollection ? { existingCollection, versionPolicy: "retain-first/1" } : {}),
+    ...(cause ? { cause } : {}),
+    ...(sourceCauses?.length ? { sourceCauses } : {}),
+  };
 }
 
 /** The one shared copy of a stable Review in R2: written once, and the copy that exists is the one used. */
@@ -142,8 +153,23 @@ async function sharedReview(
     throw unverified();
   }
   const saved = ReviewRecordSchema.parse(decodeJson(bytes));
-  if (!isDeepStrictEqual(saved, { ...shared.record, occurredAt: saved.occurredAt })) {
+  if (
+    !isDeepStrictEqual(
+      withoutCauses(saved),
+      withoutCauses({ ...shared.record, occurredAt: saved.occurredAt }),
+    )
+  ) {
     throw unverified();
   }
   return saved;
+}
+
+/** Diagnostics never change stable identity; an existing immutable Review keeps its first cause. */
+function withoutCauses(record: ReviewRecord): ReviewRecord {
+  const details = record.rawError.details;
+  if (!details || typeof details !== "object" || Array.isArray(details)) {
+    return record;
+  }
+  const { cause: _cause, sourceCauses: _sources, ...rest } = details;
+  return { ...record, rawError: { ...record.rawError, details: rest } };
 }

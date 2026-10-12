@@ -26,11 +26,17 @@ export interface AmazonRendered {
 }
 
 function titleOf(root: AmazonElement): string {
-  const titles = [
-    ...new Set([...root.querySelectorAll("#productTitle")].map(textOf).filter(Boolean)),
-  ];
+  const elements = [...root.querySelectorAll("#productTitle")];
+  const titles = [...new Set(elements.map(textOf).filter(Boolean))];
   if (titles.length !== 1 || !titles[0]) {
-    throw amazonErrors.create("AMAZON.PRODUCT_UNVERIFIED");
+    throw amazonErrors.create("AMAZON.PRODUCT_UNVERIFIED", {
+      details: {
+        check: titles.length === 0 ? "title-missing" : "title-not-unique",
+        titleElementCount: elements.length,
+        distinctTitleCount: titles.length,
+        pageTitleLength: textOf(root.ownerDocument.querySelector("title")).length,
+      },
+    });
   }
   return titles[0];
 }

@@ -1,4 +1,5 @@
-import { readSourceState } from "./ordered-source-state.js";
+import { readSourceState, sourceStateDiagnostic } from "./ordered-source-state.js";
+import type { DiagnosedOrderedEvidence } from "./ordered-source-outcome.js";
 import { isDeepStrictEqual } from "node:util";
 import {
   ReviewRecordSchema,
@@ -9,12 +10,7 @@ import { sourceReviewFailure } from "../assembly/source-review.js";
 import { labelFailure } from "./label-errors.js";
 import type { LabelPlans } from "./label-plans.js";
 import type { LabelInspection } from "./selection-model.js";
-import type {
-  OrderedEvidence,
-  OrderedProgress,
-  OrderedSource,
-  OrderedState,
-} from "./ordered-model.js";
+import type { OrderedProgress, OrderedSource, OrderedState } from "./ordered-model.js";
 
 export interface OrderedDeps {
   inspection: LabelInspection;
@@ -26,14 +22,21 @@ export async function orderedEvidence(
   plans: LabelPlans,
   deps: OrderedDeps,
   at: { request: OrderedProgress; signal: AbortSignal },
-): Promise<OrderedEvidence> {
+): Promise<DiagnosedOrderedEvidence> {
   const loaded = await plans.load(at.request.input, at.signal);
-  const evidence: OrderedEvidence = {
+  const evidence: DiagnosedOrderedEvidence = {
     sources: [],
     entries: [],
     failures: [],
     reasons: [],
     terminal: false,
+    sourceDiagnostics: loaded.manifest.sources.map((source) =>
+      sourceStateDiagnostic(
+        source,
+        at.request.states.find((state) => state.id === source.id),
+        loaded.labelPreparation?.pageHasLabelSection,
+      ),
+    ),
   };
   for (const state of at.request.states) {
     const source = loaded.manifest.sources.find((entry) => entry.id === state.id);
@@ -48,7 +51,7 @@ export async function orderedEvidence(
 interface Reading {
   plans: LabelPlans;
   deps: OrderedDeps;
-  evidence: OrderedEvidence;
+  evidence: DiagnosedOrderedEvidence;
   request: OrderedProgress;
   signal: AbortSignal;
 }
@@ -75,6 +78,7 @@ async function readState(
       progress: 1,
       failure: { sourceId: source.id, code: "CHANNEL.LABEL_NO_SOURCE", executionFact: "executed" },
     });
+    unmatchedDiagnostic(evidence, source, result.reason);
     return;
   }
   evidence.sources.push(result.source);
@@ -85,6 +89,25 @@ async function readState(
     return modelReview(reading, { source: result.source, state });
   }
   evidence.entries.push(await registeredSource(deps.inspection, result.source, signal));
+}
+
+function unmatchedDiagnostic(
+  evidence: DiagnosedOrderedEvidence,
+  source: SavedEvidenceSource,
+  reason: "no_text" | undefined,
+) {
+  const diagnostic = evidence.sourceDiagnostics?.find((entry) => entry.sourceId === source.id);
+  if (!diagnostic || diagnostic.reason === "skipped") {
+    return;
+  }
+  if (source.kind === "file-image") {
+    // SavedSourceEvidence verifies the screen before returning not_matched. Its contract
+    // guarantees zero matched keywords; an empty OCR document has its own explicit reason.
+    diagnostic.reason = reason === "no_text" ? "no_text" : "keyword_screen_missed";
+    diagnostic.matchedKeywords = [];
+  } else {
+    diagnostic.reason = reason ?? "source_not_matched";
+  }
 }
 
 function registeredSource(inspection: LabelInspection, source: OrderedSource, signal: AbortSignal) {
@@ -187,6 +210,6 @@ async function modelReview(reading: Reading, at: ReviewedSource) {
 }
 
 interface ReviewedSource {
-  source: OrderedEvidence["sources"][number];
+  source: DiagnosedOrderedEvidence["sources"][number];
   state: Extract<OrderedState, { status: "review" }>;
 }

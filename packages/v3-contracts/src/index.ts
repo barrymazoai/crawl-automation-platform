@@ -33,6 +33,7 @@ export * from "./label-product.js";
 export * from "./label-sections.js";
 export * from "./label-reviewed-image.js";
 export * from "./label-quality.js";
+export * from "./label-source-outcomes.js";
 export * from "./gnc-label.js";
 export * from "./packaging.js";
 export * from "./label-typography.js";

@@ -177,6 +177,19 @@ export const ReviewRequestSchema = z.strictObject({
   causeCode: z.string().max(120).nullable(),
   /** Absent in old histories; wait expiry proves that capture never started. */
   executionFact: ReviewSchema.shape.executionFact.optional(),
+  /** Optional diagnostics only; bounded so retained Reviews cannot embed entire captures. */
+  details: z
+    .strictObject({
+      variantId: z.string().max(200).nullable().optional(),
+      /** The channel check that failed, e.g. Amazon "ppd-missing" (2026-10-12). */
+      check: z.string().max(200).optional(),
+      reason: z.string().max(200).optional(),
+      code: z.string().max(200).optional(),
+      evidenceKeys: z.array(z.string().max(200)).max(20).optional(),
+      flags: z.array(z.string().max(200)).max(20).optional(),
+      verification: z.string().max(200).optional(),
+    })
+    .optional(),
 });
 export type ReviewRequest = z.infer<typeof ReviewRequestSchema>;
 
