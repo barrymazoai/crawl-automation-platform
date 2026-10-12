@@ -1,4 +1,5 @@
 import type { Logger } from "@crawl-automation/platform";
+import type { ListingStateDelivery } from "../listings/listing-delivery.js";
 import type { MarketplaceChannel } from "./ledger.js";
 import type { ProductSyncResult, ProductSyncService } from "./sync-service.js";
 
@@ -12,15 +13,17 @@ export interface ProductSyncSweepSettings {
 
 /**
  * One automatic round (owner 2026-10-12: completed marketplace products go to Supply Smart test automatically): for
- * each channel, send pending products (matched brand, new or settled again since their last send) in bounded batches.
- * A channel's failure is logged and never stops the other channels.
+ * each channel, send pending products (matched brand, new or settled again since their last send) in bounded batches,
+ * then the delistings recorded since the last round. A channel's failure is logged and never stops the others.
  */
 export class ProductSyncSweep {
   constructor(
     private readonly deps: {
       sync: Pick<ProductSyncService, "sync">;
+      listings: Pick<ListingStateDelivery, "deliverPending">;
       settings: ProductSyncSweepSettings;
       log: Logger;
+      now?: () => Date;
     },
   ) {}
 
@@ -35,7 +38,19 @@ export class ProductSyncSweep {
         this.deps.log.warn({ err: error, channel }, "product sync channel failed");
       }
     }
+    await this.delistings(signal);
     return results;
+  }
+
+  private async delistings(signal: AbortSignal) {
+    try {
+      const startedAt = (this.deps.now?.() ?? new Date()).toISOString();
+      const result = await this.deps.listings.deliverPending(startedAt, signal);
+      this.deps.log.info(result, "listing states sent");
+    } catch (error) {
+      signal.throwIfAborted();
+      this.deps.log.warn({ err: error }, "listing states failed");
+    }
   }
 
   private async channel(channel: MarketplaceChannel, signal: AbortSignal) {

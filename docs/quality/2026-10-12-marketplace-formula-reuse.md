@@ -197,3 +197,20 @@ a full window with no accepted call, so a continuous stream at 300/min reaches t
 - ~~`SupplySmartRpc`: a 429 holds every call for 65 s~~ — reverted the same day: the owner switched off
   "Better Auth per-key rate limit" for the crawler's service key, so the client keeps its earlier pacing/retry.
 - `productSync.reopen({ unfinished: true })` re-pends rows left `sent` for over 10 minutes; ingest is idempotent.
+
+## Delistings go with the marketplace sync (owner 2026-10-12)
+
+Since the 2026-09-30 rewrite no delisting reached Supply Smart: `ListingStateDelivery` existed but nothing called it
+(0 of 54 unlisted sightings delivered; the 206 inactive Amazon listings in the test database are the old pipeline's
+2026-09-18 send). Supply Smart's `product.ingestListingStateBatch` (SUPPLYSMAR-380, commit 09a24620 on `dev`/`test`,
+unchanged since; **not on `main`**) is used as is: partial only, exact channel + external ID, `unknown_listing`
+creates nothing, one sighting is enough (threshold 1).
+
+- Each sweep, after the products, sends undelivered **unlisted** sightings of the synced channels (DTC excluded). Live
+  sightings stay stored: product sync already reports a listing on sale.
+- A sighting covers every ID its listing was synced under (`PostgresListingTargets`, from the ledger): one item per
+  variant row, else its own variant/listing ID. A sighting is marked delivered only when all its items are `ok` or
+  `unknown_listing`; `failed` items are resent next round. A null `artifactKey` is omitted (Supply Smart rejects null).
+- The marketplace selection skips a latest run that recorded the page unlisted; it is a delisting, not a product.
+- Known limit: Swanson listings were synced under Shopify IDs while sightings carry the page handle, so a Swanson
+  delisting of a never-ledgered page is answered `unknown_listing` (1 Swanson sighting, a test URL).

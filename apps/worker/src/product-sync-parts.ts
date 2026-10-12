@@ -1,11 +1,14 @@
 import {
   PostgresBrandCompany,
+  PostgresListingStates,
+  PostgresListingTargets,
   PostgresMarketplaceReader,
   PostgresProductSync,
+  SupplySmartListingStates,
   SupplySmartObservationWriter,
   type SupplySmartRpc,
 } from "@crawl-automation/adapters";
-import { ProductSyncService, ProductSyncSweep } from "@crawl-automation/app";
+import { ListingStateDelivery, ProductSyncService, ProductSyncSweep } from "@crawl-automation/app";
 import type { CoreParts } from "./core-parts.js";
 import type { BrandEnrichmentSettings } from "./brand-enrichment-settings.js";
 
@@ -26,6 +29,13 @@ export function buildProductSyncSweep(
   });
   return new ProductSyncSweep({
     sync: service,
+    // Delistings of the synced channels only; DTC keeps its own path.
+    listings: new ListingStateDelivery({
+      store: new PostgresListingStates(parts.database),
+      sender: new SupplySmartListingStates(input.rpc),
+      targets: new PostgresListingTargets(parts.database),
+      channels: input.settings.channels,
+    }),
     settings: input.settings,
     log: parts.log.child({ service: "product-sync" }),
   });

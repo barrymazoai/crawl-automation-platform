@@ -125,8 +125,12 @@ describe.skipIf(!hasPostgres)("listing states against a real PostgreSQL", () => 
     await store.markDelivered([
       { observationId: redirected.observationId, status: "ok", response: { events: [] } },
     ]);
-    const pending = await store.undelivered(10);
+    const pending = await store.undelivered({ limit: 10, channels: ["gnc"], state: "unlisted" });
     expect(pending.map((row) => row.listingId)).toEqual(["877080"]);
+    expect(await store.undelivered({ limit: 10, channels: ["amazon"], state: "unlisted" })).toEqual(
+      [],
+    );
+    expect(await store.undelivered({ limit: 10, channels: ["gnc"], state: "live" })).toEqual([]);
     const delivered = await store.list({
       channel: "gnc",
       reason: "redirected_to_other_product",

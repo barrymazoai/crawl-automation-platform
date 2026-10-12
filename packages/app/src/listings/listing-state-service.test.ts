@@ -2,7 +2,13 @@ import { describe, expect, it, vi } from "vitest";
 import { ListingStateDelivery, listingStateBatches } from "./listing-delivery.js";
 import type { ListingObservation } from "./listing-model.js";
 import { ListingStateService } from "./listing-state-service.js";
-import type { DeliveredSighting, ListingStateStore, NewListingObservation } from "./ports.js";
+import type {
+  DeliveredSighting,
+  ListingStateBatch,
+  ListingStateStore,
+  NewListingObservation,
+  UndeliveredFilter,
+} from "./ports.js";
 
 const brandId = "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d";
 const sourceId = "1a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d";
@@ -33,9 +39,14 @@ class MemoryListingStates implements ListingStateStore {
     },
     undelivered: 0,
   }));
-  async undelivered() {
+  async undelivered(filter: UndeliveredFilter) {
     const done = new Set(this.delivered.map((result) => result.observationId));
-    return [...this.rows.values()].filter((row) => !done.has(row.observationId));
+    return [...this.rows.values()].filter(
+      (row) =>
+        !done.has(row.observationId) &&
+        filter.channels.includes(row.channel) &&
+        row.state === filter.state,
+    );
   }
   async markDelivered(results: DeliveredSighting[]) {
     this.delivered.push(...results);
@@ -159,12 +170,49 @@ describe("ListingStateService", () => {
 });
 
 describe("listing state delivery", () => {
-  it("holds every sighting while no product database sender is configured", async () => {
+  const startedAt = "2026-09-29T12:00:00.000Z";
+  const signal = new AbortController().signal;
+  const targets = { externalIds: async () => new Map<string, string[]>() };
+  const okSend = () =>
+    vi.fn(async (batch: ListingStateBatch) =>
+      batch.items.map((item) => ({
+        clientRef: item.clientRef,
+        status: "ok" as const,
+        response: {},
+      })),
+    );
+
+  it("sends only unlisted sightings of the synced channels", async () => {
     const { store, service } = setup();
     await service.record(sighting());
-    const delivery = new ListingStateDelivery({ store, sender: null });
-    expect(await delivery.deliverPending("2026-09-29T12:00:00.000Z")).toEqual({ sent: 0, held: 1 });
-    expect(store.delivered).toHaveLength(0);
+    await service.record(sighting({ channel: "dtc", listingId: "dtc-page" }));
+    await service.record(
+      sighting({
+        listingId: "live-handle",
+        state: "live",
+        reason: null,
+        evidence: {
+          probe: "direct-revisit",
+          causeCode: "LISTING.LIVE",
+          httpStatus: 200,
+          observedExternalId: null,
+          finalUrl: null,
+          artifactKey: null,
+        },
+      }),
+    );
+    const send = okSend();
+    const delivery = new ListingStateDelivery({
+      store,
+      sender: { send },
+      targets,
+      channels: ["swanson", "gnc"],
+    });
+    expect(await delivery.deliverPending(startedAt, signal)).toEqual({ sent: 1, held: 0 });
+    expect(send).toHaveBeenCalledOnce();
+    expect(send.mock.calls[0]?.[0].items.map((item) => item.listing.externalId)).toEqual([
+      "old-handle",
+    ]);
   });
 
   it("sends every unlisted reason as the product database's gone, with the reason as evidence", async () => {
@@ -173,22 +221,22 @@ describe("listing state delivery", () => {
     await service.record(
       sighting({ channel: "gnc", listingId: "877080", source: "crawler-v3:product-run:gnc-1" }),
     );
-    const send = vi.fn(async (batch: { items: Array<{ evidence: { observationId: string } }> }) =>
-      batch.items.map((item) => ({
-        observationId: item.evidence.observationId,
-        status: "ok" as const,
-        response: {},
-      })),
-    );
-    const delivery = new ListingStateDelivery({ store, sender: { send } });
-    expect(await delivery.deliverPending("2026-09-29T12:00:00.000Z")).toEqual({ sent: 2, held: 0 });
+    const send = okSend();
+    const delivery = new ListingStateDelivery({
+      store,
+      sender: { send },
+      targets,
+      channels: ["swanson", "gnc"],
+    });
+    expect(await delivery.deliverPending(startedAt, signal)).toEqual({ sent: 2, held: 0 });
     expect(send).toHaveBeenCalledTimes(2);
-    const [batch] = listingStateBatches([gone], "2026-09-29T12:00:00.000Z");
-    expect(batch?.run).toMatchObject({ channel: "swanson", scope: "partial" });
-    expect(batch?.items[0]).toMatchObject({
+    const [planned] = listingStateBatches([gone], new Map(), startedAt);
+    expect(planned?.batch.run).toMatchObject({ channel: "swanson", scope: "partial" });
+    expect(planned?.batch.items[0]).toMatchObject({
       listing: { channel: "swanson", externalId: "old-handle" },
       state: "gone",
       evidence: { reason: "not_found", httpStatus: 404, observationId: gone.observationId },
     });
+    expect(planned?.batch.items[0]?.evidence).not.toHaveProperty("artifactKey");
   });
 });

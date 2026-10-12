@@ -2,7 +2,9 @@ import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { Client } from "pg";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import type { ListingObservation } from "@crawl-automation/app";
 import type { Queryable } from "@crawl-automation/platform";
+import { PostgresListingTargets } from "./postgres-listing-targets.js";
 import { PostgresProductSync } from "./postgres-product-sync.js";
 
 // Runs against CRAWL_TEST_DATABASE_URL; all DDL/data live in a rolled-back private schema.
@@ -97,7 +99,8 @@ describe.skipIf(!connectionString)("product sync ledger and migration 061", () =
       CREATE TABLE queue_item(item_id text PRIMARY KEY, channel text, listing_id text, variant_id text,
         source_id uuid, state text, run_id uuid, created_at timestamptz, url text, follows_item_id text);
       CREATE TABLE queue_attempt(run_id uuid, item_id text, channel text, settled_at timestamptz, outcome text);
-      CREATE TABLE supply_smart_brand_company(brand_id uuid PRIMARY KEY, status text);`);
+      CREATE TABLE supply_smart_brand_company(brand_id uuid PRIMARY KEY, status text);
+      CREATE TABLE listing_state_observation(run_id uuid, state text);`);
     const [matched, waiting] = [randomUUID(), randomUUID()];
     const sources = { matched: randomUUID(), waiting: randomUUID() };
     await client.query(`INSERT INTO brand VALUES ($1, 'Matched'), ($2, 'Waiting')`, [
@@ -221,6 +224,40 @@ describe.skipIf(!connectionString)("product sync ledger and migration 061", () =
       { listing_id: asin.listingId, reopened: true },
       { listing_id: variant.listingId, reopened: false },
     ]);
+  });
+
+  it("a delisting covers every ID its listing was synced under", async () => {
+    const sent = {
+      status: "verified" as const,
+      materialAt,
+      payloadHash: "d".repeat(64),
+      ingestRunId: "run-4",
+    };
+    await ledger.record([
+      { channel: "costco", listingId: "100018793", variantId: "382521", ...sent },
+      { channel: "costco", listingId: "100018793", variantId: "1155942", ...sent },
+      { ...asin, ...sent },
+    ]);
+    const page = { channel: "costco" as const, listingId: "100018793" };
+    const sightings = [
+      { observationId: "costco-page", ...page, variantId: null },
+      { observationId: "costco-variant", ...page, variantId: "382521" },
+      { observationId: "amazon", ...asin },
+      {
+        observationId: "never-synced",
+        channel: "gnc" as const,
+        listingId: "444776",
+        variantId: null,
+      },
+    ] as ListingObservation[];
+    const targets = new PostgresListingTargets({
+      query: async (sql, values) => (await client.query(sql, [...(values ?? [])])).rows,
+    });
+    const ids = await targets.externalIds(sightings);
+    expect(ids.get("costco-page")?.toSorted()).toEqual(["1155942", "382521"]);
+    expect(ids.get("costco-variant")).toEqual(["382521"]);
+    expect(ids.get("amazon")).toEqual([asin.listingId]);
+    expect(ids.get("never-synced")).toEqual(["444776"]);
   });
 
   it("refuses a verified row without its payload and run", async () => {

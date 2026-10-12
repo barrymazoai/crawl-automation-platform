@@ -8,6 +8,7 @@ import {
   type ListingQuery,
   type ListingStateStore,
   type NewListingObservation,
+  type UndeliveredFilter,
 } from "@crawl-automation/app";
 import type { Database } from "@crawl-automation/platform";
 import {
@@ -74,12 +75,13 @@ export class PostgresListingStates implements ListingStateStore {
     return listingCounts(this.database, query);
   }
 
-  async undelivered(limit: number): Promise<ListingObservation[]> {
+  async undelivered(filter: UndeliveredFilter): Promise<ListingObservation[]> {
     const rows = await this.database.query<ObservationRow>(
       `SELECT ${COLUMNS} FROM listing_state_observation o
        LEFT JOIN listing_state_delivery d USING (observation_id)
-       WHERE d.observation_id IS NULL ORDER BY o.registered_at, o.observation_id LIMIT $1`,
-      [limit],
+       WHERE d.observation_id IS NULL AND o.channel = ANY($2::text[]) AND o.state = $3
+       ORDER BY o.registered_at, o.observation_id LIMIT $1`,
+      [filter.limit, [...filter.channels], filter.state],
     );
     return rows.map(toObservation);
   }

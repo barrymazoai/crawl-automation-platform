@@ -61,6 +61,7 @@ it.skipIf(!connectionString || !readerSamplesPath)(
         }
       }
       await pendingOnly(client, reader);
+      await unlistedIsNotSent(client, reader);
       await followerUsesLeaderMaterial(client, reader);
       await rejectsLatestStates(client, reader);
       await wholeFoodsJoin(client, reader, { inputs, objects });
@@ -142,6 +143,24 @@ function verifyRealMaterial(product: MarketplaceProduct) {
     );
   }
 }
+/** A revisit that found the page gone completes, but it is a delisting, not a product (2026-10-12). */
+async function unlistedIsNotSent(client: Client, reader: PostgresMarketplaceReader) {
+  const listings = async () =>
+    (await reader.read({ channel: "gnc", limit: 200 }, signal())).products.map(
+      (entry) => entry.listingId,
+    );
+  const before = await listings();
+  const gone = required(before[0]);
+  await client.query(
+    `INSERT INTO listing_state_observation
+     SELECT run_id, 'unlisted' FROM queue_item WHERE channel = 'gnc' AND listing_id = $1`,
+    [gone],
+  );
+  expect(await listings()).toEqual(before.filter((listingId) => listingId !== gone));
+  await client.query("UPDATE listing_state_observation SET state = 'live'");
+  expect(await listings()).toEqual(before);
+}
+
 /** A follower on another source shares its leader's run; the archives are the leader's (review 2026-10-12). */
 async function followerUsesLeaderMaterial(client: Client, reader: PostgresMarketplaceReader) {
   const leader = (

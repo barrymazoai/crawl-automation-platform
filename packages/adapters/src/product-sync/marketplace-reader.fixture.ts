@@ -76,7 +76,8 @@ export const readerTables = `
     channel text, listing_id text, variant_id text, subject jsonb, registered_at timestamptz);
   CREATE TABLE product_enrichment(enrichment_id text, record_hash text, record jsonb);
   CREATE TABLE supply_smart_brand_company(brand_id uuid PRIMARY KEY, status text);
-  CREATE TABLE product_sync(channel text, listing_id text, variant_key text, status text, material_at timestamptz);`;
+  CREATE TABLE product_sync(channel text, listing_id text, variant_key text, status text, material_at timestamptz);
+  CREATE TABLE listing_state_observation(run_id uuid, state text);`;
 
 /** Fixture hashes are recomputed after documented trimming/scaffolding; production hashes are never rewritten. */
 export async function seedReaderSample(
