@@ -164,3 +164,24 @@ Follow-up validation completed locally:
   `git diff --check` passed.
 - No commits, branches, file deletions, deployments, database changes, fetches or Supply Smart calls were made.
   Existing/concurrent edits elsewhere in the workspace were left untouched.
+
+## Owner decision 2026-10-12: the formula index is the link; no donor capture page
+
+The second smoke (08a38a4) sent both A.C. Grace products without a label. Their formula (operation
+`label-8572156346506-channel-label-bf6da32a-…` and 6 others) was collected 2026-09-10…13 by runs that wrote no
+`v3-capture-history/1` record. Across marketplace channels, collections without capture history: Amazon 13,430 of
+18,094 (collected 2026-09-14…09-28), GNC 2, Swanson 12, Costco 0. The reader therefore dropped the label of every
+product whose one formula came from those runs.
+
+Owner: the database association already says which formula belongs to which product; always send the product's one
+formula. The reader no longer reads the donor's capture history or retained page:
+
+- `FormulaLookup` (unchanged) resolves the operation; `MARKETPLACE_LINKED_COLLECTION` reads it with its channel and
+  `collected_at`. The record hash (`checkedCollectedProduct`) and family-channel checks remain.
+- `linkedLabel` carries `{ target, operationId, channel, capturedAt }`; the label's `capturedAt` and
+  `extras.labelSource.capturedAt` are the formula's `collected_at`.
+- Ownership rechecks only the exact operation and the target listing/variant. The removed checks compared the donor
+  page against the same association the index already provides.
+- `unavailableLabel` and `MARKETPLACE_LABEL_HISTORY` are removed (no remaining path).
+- `productSync.reopen({ withoutLabel: true, channel?, limit })` re-pends verified rows with no
+  `collected_operation_id` (sent without a formula). Products with no formula anywhere are re-sent once, harmlessly.

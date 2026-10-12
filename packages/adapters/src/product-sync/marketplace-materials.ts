@@ -19,7 +19,6 @@ import { marketplaceProjection } from "./marketplace-projection.js";
 import {
   MARKETPLACE_COLLECTION,
   MARKETPLACE_HISTORY,
-  MARKETPLACE_LABEL_HISTORY,
   MARKETPLACE_LINKED_COLLECTION,
 } from "./marketplace-queries.js";
 
@@ -71,7 +70,7 @@ export class MarketplaceMaterials {
       signal,
     );
     const own = { ...input, history, collection, enrichment, product };
-    return collection ? own : this.withKnownFormula(own, signal);
+    return collection ? own : this.withKnownFormula(own);
   }
 
   private async withKnownFormula(
@@ -79,7 +78,6 @@ export class MarketplaceMaterials {
       history: MarketplaceHistory;
       product: NonNullable<MarketplaceProduct["product"]>;
     },
-    signal: AbortSignal,
   ): Promise<MarketplaceProduct> {
     // ProductSourcePlans takes parsed.identity: these IDs come from this capture's retained page,
     // not the queue handle or commerce externalId (both differ from the owner for Swanson).
@@ -92,14 +90,7 @@ export class MarketplaceMaterials {
     if (!known) {
       return input;
     }
-    const donor = await this.optionalDonor(
-      known.operationId,
-      families.channels(input.channel),
-      signal,
-    );
-    if (!donor) {
-      return withoutLabel(input, known.operationId);
-    }
+    const donor = await this.donor(known.operationId, families.channels(input.channel));
     const owner = donor.collection.observation;
     // A sibling formula must not supply the target's name, size, gallery or selected options.
     const enrichment =
@@ -111,51 +102,30 @@ export class MarketplaceMaterials {
       linkedLabel: {
         target: { listingId, variantId },
         operationId: known.operationId,
-        history: donor.history,
-        product: donor.product,
+        channel: donor.channel,
+        capturedAt: donor.collectedAt,
       },
     };
   }
 
-  private async optionalDonor(operationId: string, channels: string[], signal: AbortSignal) {
-    try {
-      return await this.donor(operationId, channels, signal);
-    } catch (error) {
-      signal.throwIfAborted();
-      // Missing donor material prevents a label, not the target's independently verified observation.
-      // Hash/ownership errors and infrastructure failures still fail explicitly.
-      if (!productDeliveryErrors.is(error, "PRODUCT_DELIVERY.MATERIAL_MISSING")) {
-        throw error;
-      }
-      return null;
-    }
-  }
-
-  private async donor(operationId: string, channels: string[], signal: AbortSignal) {
-    const rows = await this.deps.database.query<CollectedRow & { channel: string }>(
-      MARKETPLACE_LINKED_COLLECTION,
-      [operationId],
-    );
+  /**
+   * The formula index already ties this formula to the product; the formula record's own hash is still checked.
+   * Its capture page is not needed: formulas from before capture history (Amazon 09-14…09-28) have none
+   * (owner 2026-10-12: always send the product's one formula).
+   */
+  private async donor(operationId: string, channels: string[]) {
+    const rows = await this.deps.database.query<
+      CollectedRow & { channel: string; collected_at: Date | string }
+    >(MARKETPLACE_LINKED_COLLECTION, [operationId]);
     const row = rows[0];
     if (!row || !channels.includes(row.channel)) {
       throw productDeliveryErrors.create("PRODUCT_DELIVERY.INTEGRITY");
     }
     const collection = checkedCollectedProduct(row, operationId);
     const channel = z.enum(MARKETPLACE_CHANNELS).parse(row.channel);
-    const owner = collection.observation;
-    const history = await this.history(MARKETPLACE_LABEL_HISTORY, [
-      channel,
-      owner.requestId,
-      owner.sourceId,
-      owner.variantId,
-    ]);
-    const product = await marketplaceProjection(
-      this.deps,
-      { history, collection, enrichment: null, channel },
-      signal,
-    );
     const enrichment = await deliveryEnrichment(this.deps.database, collection, channel);
-    return { collection, history, product, enrichment };
+    const collectedAt = new Date(row.collected_at).toISOString();
+    return { collection, channel, collectedAt, enrichment };
   }
 
   private async collected(input: MarketplaceProduct) {
@@ -190,14 +160,4 @@ export class MarketplaceMaterials {
     }
     return History.parse(row.record);
   }
-}
-
-function withoutLabel(input: MarketplaceProduct, operationId: string): MarketplaceProduct {
-  return {
-    ...input,
-    unavailableLabel: {
-      operationId,
-      reason: productDeliveryErrors.code("PRODUCT_DELIVERY.MATERIAL_MISSING"),
-    },
-  };
 }

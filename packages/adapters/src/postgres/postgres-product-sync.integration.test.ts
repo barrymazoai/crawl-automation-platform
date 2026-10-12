@@ -172,6 +172,30 @@ describe.skipIf(!connectionString)("product sync ledger and migration 061", () =
     expect(rows[0].error).toEqual({ reason: "PRODUCT_DELIVERY.MATERIAL_MISSING" });
   });
 
+  it("reopen withoutLabel picks verified products sent without a formula", async () => {
+    const hash = "b".repeat(64);
+    const sent = {
+      status: "verified" as const,
+      materialAt,
+      payloadHash: hash,
+      ingestRunId: "run-2",
+    };
+    await ledger.record([
+      { ...asin, ...sent },
+      { ...variant, ...sent, collectedOperationId: "op-with-formula" },
+    ]);
+    expect(await ledger.reopen({ withoutLabel: true, limit: 10 })).toEqual({ reopened: 1 });
+    const rows = (
+      await client.query(
+        "SELECT listing_id, material_at = '-infinity' AS reopened FROM product_sync ORDER BY listing_id",
+      )
+    ).rows;
+    expect(rows).toEqual([
+      { listing_id: asin.listingId, reopened: true },
+      { listing_id: variant.listingId, reopened: false },
+    ]);
+  });
+
   it("refuses a verified row without its payload and run", async () => {
     await expect(ledger.record([{ ...asin, status: "verified", materialAt }])).rejects.toThrow();
   });

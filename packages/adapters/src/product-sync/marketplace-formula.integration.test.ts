@@ -59,8 +59,13 @@ it.skipIf(!connectionString || !readerSamplesPath)(
           listingId: required(donor.product).listingId,
           variantId: required(donor.product).variantId,
         });
+        // The formula's collection time, not its capture page (owner 2026-10-12).
+        const collected = await client.query<{ at: Date }>(
+          "SELECT collected_at AS at FROM collected_product WHERE operation_id = $1",
+          [donor.collection?.operationId],
+        );
         expect(marketplaceLabel(input, mapping)?.observation.capturedAt).toBe(
-          donor.history?.capturedAt,
+          required(collected.rows[0]).at.toISOString(),
         );
         expect(marketplaceItem(input, mapping).price).toBe("9.99");
         if (channel === "swanson") {

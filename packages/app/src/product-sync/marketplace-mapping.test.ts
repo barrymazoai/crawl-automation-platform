@@ -212,8 +212,8 @@ function linkedWholeFoods(amazon: MarketplaceProduct): MarketplaceProduct {
   input.linkedLabel = {
     target: { listingId: input.listingId, variantId: input.variantId },
     operationId: required(amazon.collection).operationId,
-    history: required(amazon.history),
-    product: required(amazon.product),
+    channel: "amazon",
+    capturedAt: required(amazon.history).capturedAt,
   };
   return input;
 }

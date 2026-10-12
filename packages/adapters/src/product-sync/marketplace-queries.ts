@@ -68,17 +68,8 @@ export const MARKETPLACE_COLLECTION = `
 
 /** Read the exact operation returned by FormulaLookup, including its actual owning channel. */
 export const MARKETPLACE_LINKED_COLLECTION = `
-  SELECT p.operation_id, p.observation_id, p.record_hash, p.record, s.channel
+  SELECT p.operation_id, p.observation_id, p.record_hash, p.record, s.channel, p.collected_at
   FROM collected_product p JOIN brand_source s
     ON s.id::text=p.record->'observation'->>'sourceId'
     AND s.brand_id::text=p.record->'observation'->>'brandId'
   WHERE p.operation_id=$1`;
-
-/** A donor's capture is selected by its own run/source, never by the target's queue handle. */
-export const MARKETPLACE_LABEL_HISTORY = `
-  SELECT record, body_hash FROM product_history_source
-  WHERE record->>'codec'='v3-capture-history/1'
-    AND record->'listing'->>'channel'=$1
-    AND record->'owner'->>'runId'=$2 AND record->'owner'->>'sourceId'=$3
-    AND (record->'capture'->>'variantId' IS NULL OR record->'capture'->>'variantId'=$4::text)
-  ORDER BY record->>'capturedAt' DESC, source_record_id DESC LIMIT 2`;

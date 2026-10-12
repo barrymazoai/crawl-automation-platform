@@ -54,14 +54,11 @@ export interface ProductSyncLedger {
   markPresent(keys: SyncKey[]): Promise<{ marked: number; skipped: number }>;
   counts(): Promise<{ channel: MarketplaceChannel; status: SyncStatus; count: number }[]>;
   /**
-   * Failed rows with this reason become pending again (their material time moves before every capture); nothing is
-   * deleted and the failure stays on record until the next attempt overwrites it.
+   * Rows become pending again (their material time moves before every capture): failures with this reason, or
+   * verified products that were sent without a formula. Nothing is deleted; the old outcome stays on record until
+   * the next attempt overwrites it.
    */
-  reopen(filter: {
-    channel?: MarketplaceChannel;
-    reason: string;
-    limit: number;
-  }): Promise<{ reopened: number }>;
+  reopen(filter: ReopenFilter): Promise<{ reopened: number }>;
   /** Per channel: completed products, those whose brand has a matched company, and those still to send. */
   overview(): Promise<SyncOverview[]>;
 }
@@ -74,3 +71,7 @@ export interface SyncOverview {
 }
 
 export const variantKey = (variantId: string | null) => variantId ?? "";
+
+export type ReopenFilter = { channel?: MarketplaceChannel; limit: number } & (
+  { reason: string } | { withoutLabel: true }
+);

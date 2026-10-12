@@ -35,15 +35,17 @@ export interface MarketplaceProduct {
   product: ChannelProductEvidence | null;
   collection: LabelCollectedProduct | null;
   enrichment: SharedEnrichmentRecord | null;
-  /** FormulaLookup resolved this target to the collection; the donor keeps its own verified capture. */
+  /**
+   * FormulaLookup resolved this target to the collection (formula once): the product's one formula, from the channel
+   * that collected it, timed by when it was collected. Its capture page is not required (owner 2026-10-12).
+   */
   linkedLabel?: {
     target: Pick<ChannelProductEvidence, "listingId" | "variantId">;
     operationId: string;
-    history: MarketplaceHistory;
-    product: ChannelProductEvidence;
+    channel: MarketplaceChannel;
+    /** ISO time the formula was collected. */
+    capturedAt: string;
   };
-  /** An indexed formula lacks retained donor material; the verified target can still send without a label. */
-  unavailableLabel?: { operationId: string; reason: string };
   /** Retained, selected-product structured identifiers/options, when available. */
   attributes?: Record<string, unknown>;
   problem?: string;

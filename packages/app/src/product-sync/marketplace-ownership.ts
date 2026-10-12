@@ -34,20 +34,12 @@ function assertCollection(
 ) {
   const owner = collection.observation;
   if (input.linkedLabel) {
-    const { history: donor, product, target, operationId } = input.linkedLabel;
+    // The formula index tied this collection to the target; only the exact operation and target are rechecked.
+    const { target, operationId } = input.linkedLabel;
     assertMarketplaceOwner([
       operationId === collection.operationId,
       target.listingId === input.product.listingId,
       target.variantId === input.product.variantId,
-      donor.owner.runId === owner.requestId,
-      donor.owner.sourceId === owner.sourceId,
-      donor.owner.brandId === owner.brandId,
-      donor.capture.variantId === null || donor.capture.variantId === owner.variantId,
-      donor.listing.channel === product.channel,
-      product.channel === "swanson" || donor.listing.externalId === owner.listingId,
-      samePage(donor.listing.url, product.url),
-      product.listingId === owner.listingId,
-      product.variantId === owner.variantId,
     ]);
     return;
   }
@@ -80,8 +72,7 @@ function assertEnrichment(input: MarketplaceProduct) {
       input.enrichment.subject.variantId === input.collection?.observation.variantId,
       canonicalHash(input.enrichment.subject.observation) ===
         canonicalHash(input.collection?.observation),
-      input.enrichment.subject.channel ===
-        (input.linkedLabel?.history.listing.channel ?? input.channel),
+      input.enrichment.subject.channel === (input.linkedLabel?.channel ?? input.channel),
     ]);
   }
 }

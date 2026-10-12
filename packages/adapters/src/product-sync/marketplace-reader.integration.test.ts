@@ -212,10 +212,12 @@ async function wholeFoodsJoin(
   const linked = required(page.products.find((entry) => entry.listingId === donor.listingId));
   expect(linked.collection?.operationId).toBe(donor.collection?.operationId);
   expect(linked.history?.listing.channel).toBe("wholefoods");
-  expect(linked.linkedLabel?.history.listing.channel).toBe("amazon");
+  expect(linked.linkedLabel?.channel).toBe("amazon");
   expect(linked.product?.channel).toBe("wholefoods");
   expect(marketplaceItem(linked, mapping).inStock).toBe(false);
-  expect(marketplaceLabel(linked, mapping)?.observation.capturedAt).toBe(donor.history?.capturedAt);
+  // The formula's own collection time; its capture page is not required.
+  const capturedAt = required(linked.linkedLabel).capturedAt;
+  expect(marketplaceLabel(linked, mapping)?.observation.capturedAt).toBe(capturedAt);
 }
 function required<Value>(value: Value | null | undefined): Value {
   if (value == null) {

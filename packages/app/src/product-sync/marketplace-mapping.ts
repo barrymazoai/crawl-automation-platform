@@ -25,9 +25,6 @@ export function marketplaceItem(
   if (!item.brandName && input.brand.trim()) {
     item.brandName = input.brand.trim();
   }
-  if (input.unavailableLabel) {
-    item.extras = { ...item.extras, unavailableLabel: input.unavailableLabel };
-  }
   return marketplaceAttributes(ready, item);
 }
 
@@ -63,7 +60,7 @@ function linkedLabel(
     input.history?.observationId,
     input.collection?.operationId,
   ]);
-  const capturedAt = z.iso.datetime({ offset: true }).parse(link.history.capturedAt);
+  const capturedAt = z.iso.datetime({ offset: true }).parse(link.capturedAt);
   const listing = labelListingWithoutCommerce(label);
   return {
     ...label,
@@ -80,7 +77,7 @@ function linkedLabel(
       ...listing,
       extras: {
         labelSource: {
-          channel: link.history.listing.channel,
+          channel: link.channel,
           observation: input.collection?.observation,
           capturedAt,
           targetCapture: input.history?.observationId,

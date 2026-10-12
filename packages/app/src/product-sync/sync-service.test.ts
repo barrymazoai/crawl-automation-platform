@@ -250,22 +250,6 @@ describe("marketplace sync without a formula (unit material doubles)", () => {
     },
   );
 
-  it("keeps unavailable donor material in the payload while sending without a label", async () => {
-    const product = withoutFormula("swanson");
-    product.unavailableLabel = {
-      operationId: "old-formula",
-      reason: "PRODUCT_DELIVERY.MATERIAL_MISSING",
-    };
-    const { service, writer } = setup({ products: [product] });
-    expect(
-      await service.sync({ channel: "swanson", limit: 50, dryRun: false }, signal()),
-    ).toMatchObject({ verified: 1, material: 0, failed: [] });
-    expect(writer.ingest.mock.calls[0]?.[0].items[0].extras.unavailableLabel).toEqual(
-      product.unavailableLabel,
-    );
-    expect(writer.label).not.toHaveBeenCalled();
-  });
-
   it.each(["missing", "foreign"])(
     "does not send %s own material just because there is no formula",
     async (kind) => {

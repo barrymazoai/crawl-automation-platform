@@ -6,6 +6,7 @@ import type {
   SyncStatus,
   SyncOverview,
   MarketplaceChannel,
+  ReopenFilter,
 } from "@crawl-automation/app";
 import type { Queryable } from "@crawl-automation/platform";
 import { PENDING_SYNC, settledMarketplace } from "../product-sync/marketplace-queries.js";
@@ -140,15 +141,14 @@ export class PostgresProductSync implements ProductSyncLedger {
     };
   }
 
-  async reopen(filter: {
-    channel?: MarketplaceChannel;
-    reason: string;
-    limit: number;
-  }): Promise<{ reopened: number }> {
+  async reopen(filter: ReopenFilter): Promise<{ reopened: number }> {
     const rows = await this.database.query<{ reopened: number }>(
       `WITH picked AS (
          SELECT channel, listing_id, variant_key FROM product_sync
-         WHERE status = 'failed' AND error->>'reason' = $2 AND ($1::text IS NULL OR channel = $1)
+         WHERE ($1::text IS NULL OR channel = $1) AND (
+           (status = 'failed' AND error->>'reason' = $2)
+           -- Sent without a formula: the ledger keeps the formula's operation for every product that carried one.
+           OR ($4::boolean AND status = 'verified' AND collected_operation_id IS NULL))
          ORDER BY updated_at LIMIT $3),
        moved AS (
          UPDATE product_sync ps SET material_at = '-infinity', updated_at = clock_timestamp()
@@ -156,7 +156,12 @@ export class PostgresProductSync implements ProductSyncLedger {
            AND ps.variant_key = picked.variant_key
          RETURNING 1)
        SELECT count(*)::int AS reopened FROM moved`,
-      [filter.channel ?? null, filter.reason, filter.limit],
+      [
+        filter.channel ?? null,
+        "reason" in filter ? filter.reason : null,
+        filter.limit,
+        "withoutLabel" in filter,
+      ],
     );
     return { reopened: rows[0]?.reopened ?? 0 };
   }

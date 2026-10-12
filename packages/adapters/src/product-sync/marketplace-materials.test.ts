@@ -12,7 +12,6 @@ import { MarketplaceMaterials } from "./marketplace-materials.js";
 import {
   MARKETPLACE_COLLECTION,
   MARKETPLACE_HISTORY,
-  MARKETPLACE_LABEL_HISTORY,
   MARKETPLACE_LINKED_COLLECTION,
 } from "./marketplace-queries.js";
 import { readerChannels, readerSamples, readerSamplesPath } from "./marketplace-reader.fixture.js";
@@ -20,6 +19,8 @@ import { readerChannels, readerSamples, readerSamplesPath } from "./marketplace-
 const samples = readerSamples();
 const options = { domain: "matched-brand.example", runId: "partial-sync" };
 const signal = () => new AbortController().signal;
+/** When the donor formula was collected (collected_product.collected_at). */
+const COLLECTED_AT = "2026-09-20T10:00:00.000Z";
 const sample = (channel: MarketplaceProduct["channel"]) =>
   structuredClone(required(samples.find((entry) => entry.channel === channel)));
 
@@ -61,7 +62,6 @@ function setup(channel: MarketplaceProduct["channel"] = "gnc") {
     own: false,
     collectionHash: labelCollectedHash(collection),
     historyHash: null as string | null,
-    missingDonorHistory: false,
   };
   const query = vi.fn(async (sql: string, values?: readonly unknown[]) =>
     rows(sql, values, { donor, target, state }),
@@ -93,7 +93,6 @@ function rows(
       own: boolean;
       collectionHash: string;
       historyHash: string | null;
-      missingDonorHistory: boolean;
     };
   },
 ) {
@@ -105,9 +104,11 @@ function rows(
     record_hash: state.collectionHash,
     record: collection,
     channel: donor.channel,
+    collected_at: new Date(COLLECTED_AT),
   };
-  if (sql === MARKETPLACE_HISTORY || sql === MARKETPLACE_LABEL_HISTORY) {
-    return historyRows(sql, fixture);
+  if (sql === MARKETPLACE_HISTORY) {
+    const record = required(target.history);
+    return [{ record, body_hash: state.historyHash ?? canonicalHash(record) }];
   }
   if (sql === MARKETPLACE_COLLECTION) {
     return state.own ? [row] : [];
@@ -123,13 +124,6 @@ function rows(
     return [];
   }
   throw new Error(`Unexpected SQL: ${sql}`);
-}
-function historyRows(sql: string, { donor, target, state }: Parameters<typeof rows>[2]) {
-  if (sql === MARKETPLACE_LABEL_HISTORY && state.missingDonorHistory) {
-    return [];
-  }
-  const record = required(sql === MARKETPLACE_HISTORY ? target.history : donor.history);
-  return [{ record, body_hash: state.historyHash ?? canonicalHash(record) }];
 }
 function assertLookup(values: readonly unknown[] | undefined, target: MarketplaceProduct) {
   const product = required(target.product);
@@ -157,8 +151,12 @@ describe.skipIf(!readerSamplesPath)(
         const input = await fixture.read();
         const label = required(marketplaceLabel(input, options));
         expect(input.collection).toEqual(fixture.donor.collection);
-        expect(input.linkedLabel?.history.owner.runId).toBe(fixture.donor.runId);
-        expect(label.observation.capturedAt).toBe(fixture.donor.history?.capturedAt);
+        expect(input.linkedLabel?.channel).toBe(fixture.donor.channel);
+        expect(label.observation.capturedAt).toBe(COLLECTED_AT);
+        // The formula index is the link: the donor's capture history is never read.
+        expect(
+          fixture.query.mock.calls.filter(([sql]) => sql === MARKETPLACE_HISTORY),
+        ).toHaveLength(1);
         expect(label.listing).not.toHaveProperty("price");
         expect(label.listing).not.toHaveProperty("inStock");
         expect(marketplaceItem(input, options)).toMatchObject({
@@ -243,53 +241,31 @@ describe.skipIf(!readerSamplesPath)(
       );
       expect(own.query.mock.calls.some(([sql]) => sql.includes(") known"))).toBe(false);
     });
-    it.each(["history", "page"])(
-      "a missing donor %s does not discard the target's verified page",
-      async (kind) => {
-        const fixture = setup("swanson");
-        if (kind === "history") {
-          fixture.state.missingDonorHistory = true;
-        } else {
-          fixture.objects.delete(required(required(fixture.donor.history).evidence[0]).objectKey);
-        }
-        const input = await fixture.read();
-        expect(input.product).toEqual(fixture.target.product);
-        expect(input.collection).toBeNull();
-        expect(input.unavailableLabel).toEqual({
-          operationId: fixture.donor.collection?.operationId,
-          reason: "PRODUCT_DELIVERY.MATERIAL_MISSING",
-        });
-        expect(marketplaceLabel(input, options)).toBeNull();
-        expect(marketplaceItem(input, options)).toMatchObject({
-          titleRaw: "Current capture title",
-          price: "9.99",
-          inStock: false,
-          extras: { unavailableLabel: input.unavailableLabel },
-        });
-      },
-    );
-    it("still refuses a missing own page and a corrupt donor page", async () => {
+    it("sends the formula when it predates capture history and its page is gone", async () => {
+      const fixture = setup("swanson");
+      fixture.objects.delete(required(required(fixture.donor.history).evidence[0]).objectKey);
+      const input = await fixture.read();
+      expect(input.product).toEqual(fixture.target.product);
+      expect(input.collection).toEqual(fixture.donor.collection);
+      expect(required(marketplaceLabel(input, options)).observation.capturedAt).toBe(COLLECTED_AT);
+      expect(marketplaceItem(input, options)).toMatchObject({
+        titleRaw: "Current capture title",
+        price: "9.99",
+        inStock: false,
+      });
+    });
+    it("still refuses a missing own page", async () => {
       const missing = setup("swanson");
       missing.objects.delete(required(required(missing.target.history).evidence[0]).objectKey);
       await expect(missing.read()).rejects.toMatchObject({
         code: "PRODUCT_DELIVERY.MATERIAL_MISSING",
       });
       expect(missing.query.mock.calls.some(([sql]) => sql.includes(") known"))).toBe(false);
-      const corrupt = setup("swanson");
-      corrupt.objects.set(
-        required(required(corrupt.donor.history).evidence[0]).objectKey,
-        Buffer.from("corrupt"),
-      );
-      await expect(corrupt.read()).rejects.toMatchObject({ code: "PRODUCT_DELIVERY.INTEGRITY" });
     });
-    it("rejects corrupt donor records, donor histories and target retained bytes", async () => {
+    it("rejects corrupt donor records, target histories and target retained bytes", async () => {
       const corruptCollection = setup();
       corruptCollection.state.collectionHash = "bad";
       await expect(corruptCollection.read()).rejects.toThrow();
-      const corruptHistory = setup();
-      required(corruptHistory.donor.history).owner.runId = "foreign";
-      const input = await corruptHistory.read();
-      expect(() => marketplaceLabel(input, options)).toThrow(/hash or SKU owner/u);
       const badHistoryHash = setup();
       badHistoryHash.state.historyHash = "bad";
       await expect(badHistoryHash.read()).rejects.toThrow(/hash or SKU owner/u);
@@ -300,16 +276,7 @@ describe.skipIf(!readerSamplesPath)(
       );
       await expect(corruptBytes.read()).rejects.toThrow(/hash or SKU owner/u);
     });
-    it("rejects donor page identity and a relinked target even when record hashes are valid", async () => {
-      const fixture = setup();
-      required(fixture.donor.product).listingId = "foreign";
-      fixture.retained(fixture.donor);
-      const input = await fixture.read();
-      expect(() => marketplaceLabel(input, options)).toThrow(/hash or SKU owner/u);
-      const wrongHistory = setup();
-      required(wrongHistory.donor.history).listing.externalId = "foreign";
-      const wrongHistoryInput = await wrongHistory.read();
-      expect(() => marketplaceLabel(wrongHistoryInput, options)).toThrow(/hash or SKU owner/u);
+    it("rejects a relinked target even when record hashes are valid", async () => {
       const valid = await setup().read();
       required(valid.linkedLabel).target.variantId = "foreign";
       expect(() => marketplaceLabel(valid, options)).toThrow(/hash or SKU owner/u);

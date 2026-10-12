@@ -18,12 +18,22 @@ export const MarkPresentSchema = z.strictObject({
 });
 export type MarkPresent = z.infer<typeof MarkPresentSchema>;
 
-/** Failed products to try again after a fix, e.g. `PRODUCT_DELIVERY.MATERIAL_MISSING` (2026-10-12). */
-export const ReopenSyncSchema = z.strictObject({
-  channel: channel.optional(),
-  reason: z.string().trim().min(1).max(500),
-  limit: z.number().int().min(1).max(20_000),
-});
+/**
+ * Products to send again after a fix: failures with a reason, e.g. `PRODUCT_DELIVERY.MATERIAL_MISSING`, or verified
+ * products sent without a formula (`withoutLabel`, 2026-10-12). Exactly one of the two.
+ */
+export const ReopenSyncSchema = z.union([
+  z.strictObject({
+    channel: channel.optional(),
+    reason: z.string().trim().min(1).max(500),
+    limit: z.number().int().min(1).max(20_000),
+  }),
+  z.strictObject({
+    channel: channel.optional(),
+    withoutLabel: z.literal(true),
+    limit: z.number().int().min(1).max(20_000),
+  }),
+]);
 export type ReopenSync = z.infer<typeof ReopenSyncSchema>;
 
 /** Database-only controls for the API; sending runs in the brand-enrichment worker's sweep. */
@@ -40,11 +50,8 @@ export class ProductSyncControl {
 
   reopen(raw: ReopenSync) {
     const input = ReopenSyncSchema.parse(raw);
-    return this.deps.ledger.reopen({
-      ...(input.channel ? { channel: input.channel } : {}),
-      reason: input.reason,
-      limit: input.limit,
-    });
+    const { channel: only, ...which } = input;
+    return this.deps.ledger.reopen({ ...(only ? { channel: only } : {}), ...which });
   }
 
   markPresent(raw: MarkPresent) {
