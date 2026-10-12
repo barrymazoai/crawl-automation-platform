@@ -1,5 +1,6 @@
 import type { LabelCandidate } from "./label-extraction.js";
 import { hasConfirmedNoOtherIngredients } from "./label-ingredient-declaration.js";
+import { sameServingSize } from "./packaging.js";
 import {
   formulaAgreement,
   ingredientsAgreement,
@@ -52,7 +53,9 @@ function packagingAgrees(record: CollectedAgreement, source: Source): boolean {
     return true;
   }
   return (
-    shape.servingSize === servingSize.replace(/\s+/gu, " ").trim() ||
+    // Same acceptance as assembly (mergeSelection): a Drug Facts label without a serving size adds no conflict.
+    (Boolean(shape.drugFacts) && !shape.servingSize) ||
+    (shape.servingSize !== null && sameServingSize(shape.servingSize, servingSize)) ||
     record.warnings.some(
       (warning) => warning.id === source.id && warning.code === "PACKAGING.SERVING_SIZE_CONFLICT",
     )

@@ -34,6 +34,20 @@ export function servingSizeKey(text: string): string {
     .replace(/\s+/gu, " ")
     .trim();
 }
+/**
+ * A shorter wording that the longer one starts with adds no conflict ("1 Level Scoop" / "1 level scoop (5 g)"); a
+ * different count or amount still differs. Format-only differences are one value (servingSizeKey). Assembly and the
+ * collected record's recheck both use this one comparison.
+ */
+export function sameServingSize(one: string, other: string): boolean {
+  const [shorter, longer] = [servingSizeKey(one), servingSizeKey(other)].sort(
+    (left, right) => left.length - right.length,
+  );
+  if (shorter === undefined || longer === undefined) {
+    return false;
+  }
+  return shorter === longer || (/[a-z]/u.test(shorter) && longer.startsWith(`${shorter} `));
+}
 const resolvedField = z.strictObject({ status: z.enum(["unknown", "observed", "conflict"]),
   value: z.string().min(1).max(500).nullable(), claims: z.array(PackagingClaimSchema).max(500) });
 export const PackagingFactsSchema = z.strictObject({

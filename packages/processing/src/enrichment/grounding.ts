@@ -28,8 +28,8 @@ export function groundedCandidate(
       });
     }
   }
-  requireHealthFunctions(candidate, { printed, source });
-  const warnings = groundOptionalText(candidate, source);
+  const warnings = groundHealthFunctions(candidate, { printed, source });
+  warnings.push(...groundOptionalText(candidate, source));
   const quantities = input.websiteVariant
     ? [input.title, input.websiteVariant.title, ...input.websiteVariant.options]
         .filter(Boolean)
@@ -46,23 +46,28 @@ export function groundedCandidate(
   return candidate;
 }
 
-function requireHealthFunctions(
+/**
+ * A health function must be printed word for word; any other claim is optional data that is dropped with a warning
+ * instead of refusing the whole product (2026-10-12: 7 DTC products sat in Review over one unprinted claim).
+ */
+function groundHealthFunctions(
   candidate: EnrichmentCandidate,
   evidence: { printed: string[]; source: Set<string> },
 ) {
-  for (const claim of candidate.healthFunctions) {
+  const warnings: string[] = [];
+  candidate.healthFunctions = candidate.healthFunctions.filter((claim) => {
     const word = unsupportedWord(claim, evidence.source);
-    if (word) {
-      throw enrichmentErrors.create("ENRICH.OUTPUT_INVALID", {
-        details: { reason: `unsupported-word:healthFunctions:${word}` },
-      });
+    const reason = word
+      ? `unsupported-word:healthFunctions:${word}`
+      : evidence.printed.some((text) => text.includes(normalizedText(claim)))
+        ? null
+        : `health-function-not-printed:${claim.slice(0, 80)}`;
+    if (reason) {
+      warnings.push(reason);
     }
-    if (!evidence.printed.some((text) => text.includes(normalizedText(claim)))) {
-      throw enrichmentErrors.create("ENRICH.OUTPUT_INVALID", {
-        details: { reason: "health-function-not-printed" },
-      });
-    }
-  }
+    return !reason;
+  });
+  return warnings;
 }
 
 /**

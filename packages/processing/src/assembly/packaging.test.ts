@@ -214,6 +214,33 @@ describe("packaging admission", () => {
     },
   );
 
+  it("a page serving size that differs only in format is collected without a warning (GNC 2026-10-12)", async () => {
+    const label = labelCandidate();
+    defined(label.formula).servingSize = { text: "1 Capsule", evidence: "Serving Size: 1 Capsule" };
+    const setup = packagingSetup([label], ["3"]);
+    setup.join.manifest.evidencePolicy = "label-image-first/7";
+    const value = "1 Capsule(s)";
+    setup.deps.readPackaging.mockResolvedValue(
+      PackagingFactsSchema.parse({
+        ...setup.packaging,
+        servingSize: {
+          status: "observed",
+          value,
+          claims: [
+            {
+              document: setup.ref,
+              field: "servingSize",
+              value,
+              quote: { text: value, start: 0, end: value.length },
+            },
+          ],
+        },
+      }),
+    );
+    const { record } = await collect(setup);
+    expect(record.warnings).toEqual([]);
+  });
+
   it("the typography policy tolerates only harmless typography and keeps both originals", async () => {
     const second = labelCandidate();
     defined(second.formula?.columns[0]?.heading).text = "Amount Per Serving";

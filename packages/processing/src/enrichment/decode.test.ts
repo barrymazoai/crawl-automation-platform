@@ -73,12 +73,13 @@ describe("enrichment refusals", () => {
   });
   it.each([
     ["Cures cancer", "unsupported-word:healthFunctions:cures"],
-    ["no sugar", "health-function-not-printed"],
-  ])("refuses an unsupported health claim: %s", (claim, reason) => {
+    ["no sugar", "health-function-not-printed:no sugar"],
+  ])("drops an unsupported health claim and keeps the product: %s", (claim, warning) => {
     const evidence = { ...input, label: ["Supports bones", "no artificial color", "sugar"] };
-    expect(() => decode({ ...candidate, healthFunctions: [claim] }, evidence)).toThrow(
-      expect.objectContaining({ code: "ENRICH.OUTPUT_INVALID", details: { reason } }),
-    );
+    const result = decode({ ...candidate, healthFunctions: ["Supports bones", claim] }, evidence);
+    expect(result.healthFunctions).toEqual(["Supports bones"]);
+    expect(result.warnings).toContain(warning);
+    expect(result.unifiedName).toBe(candidate.unifiedName);
   });
   it("preserves an explicitly printed health claim", () => {
     const value = { ...candidate, healthFunctions: ["Supports BONES"] };

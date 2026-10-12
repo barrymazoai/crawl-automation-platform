@@ -9,15 +9,37 @@ export function labelImageIntegrityFindings(candidate: LabelImageCandidate): Lab
   const findings: LabelFinding[] = [];
   for (const column of candidate.formula?.columns ?? []) column.rows.forEach((row, index) => {
     if (row.kind !== "blend_component") return;
-    const percentages = row.name.evidence.match(/\d+(?:\.\d+)?\s*%/g) ?? [];
-    // A percentage explicitly quoted on this component cannot disappear from its amount.
-    if (percentages.length && (percentages.length !== 1 || !row.amount ||
-      row.amountStatus !== "printed" || row.amount.text.replace(/\s/g, "") !== percentages[0]!.replace(/\s/g, "")))
+    const percentages = row.name.evidence.match(PERCENT) ?? [];
+    if (!percentages.length) return;
+    // A printed percentage amount must be one the name quotes. Without a printed amount, only a proportion of the
+    // blend ("90% Whey", "EPA 18%") must move to the amount; "(95% curcuminoids)" or "standardized to 1% Nitrate"
+    // describes the extract and stays in the name (2026-10-12 Review analysis: 166 standardization rows were rejected).
+    const printed = row.amount && row.amountStatus === "printed" ? row.amount.text : null;
+    const quoted = new Set(percentages.map(percentKey));
+    const conflict = printed
+      ? (printed.match(PERCENT) ?? []).some((p) => !quoted.has(percentKey(p)))
+      : blendProportion(row.name.evidence);
+    if (conflict)
       findings.push({ code: "LABEL.AMOUNT_EVIDENCE_CONFLICT", detail: `row ${index} "${row.name.text.slice(0, 80)}": name quotes ${percentages.join(", ")} but amount is ${row.amount ? `"${row.amount.text.slice(0, 30)}"` : row.amountStatus}` });
   });
   const bad = candidate.otherIngredients?.items.find(i => /^\s*\([^()]+\)\s*$/.test(i.text));
   if (bad) findings.push({ code: "LABEL.INGREDIENT_BOUNDARY", detail: `ingredient item "${bad.text.slice(0, 80)}" is only a parenthesis` });
   return findings;
+}
+
+const PERCENT = /\d+(?:\.\d+)?(?:\s*[-–]\s*\d+(?:\.\d+)?)?\s*%/g;
+const percentKey = (text: string) => text.replace(/\s/g, "").replace("–", "-");
+/** A percentage outside parentheses/brackets that opens or closes the component's text is its share of the blend. */
+function blendProportion(evidence: string): boolean {
+  let depth = 0, outside = "";
+  for (const c of evidence) {
+    if (c === "(" || c === "[") depth++;
+    outside += depth ? " " : c;
+    if ((c === ")" || c === "]") && depth) depth--;
+  }
+  const text = outside.trim().replace(/^[\s,;:.]+|[\s,;:.]+$/g, "");
+  const percent = PERCENT.source;
+  return new RegExp(`^${percent}`).test(text) || new RegExp(`${percent}$`).test(text);
 }
 
 /** Split the original IMAGE transcription only, retaining parenthesized subingredients. */

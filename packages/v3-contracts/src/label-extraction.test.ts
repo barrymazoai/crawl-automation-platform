@@ -3,6 +3,7 @@ import { z } from "zod";
 import { LabelImageCandidateSchema, LabelTextWireSchema, assessLabelCandidate, labelFormulaStructure } from "./label-extraction.js";
 import { VisionCandidateSchema } from "./vision.js";
 import { gncLabelFixture } from "./label.fixture.js";
+import { labelImageIntegrityCodes } from "./label-quality.js";
 const assess = (c = gncLabelFixture()) => assessLabelCandidate(LabelImageCandidateSchema.parse(c));
 it("keeps 3 dose-free headers, 15 numerical rows and 11 components without duplicated ingredient records", () => {
   const c = gncLabelFixture(), rows = c.formula!.columns[0]!.rows;
@@ -68,4 +69,21 @@ it("blank fields, nonexistent complete sections, and allergen headings cannot co
   for (const ok of ["Ingredients:", "Inactive Ingredients", "Other Ingredients (Capsule):", "Capsule ingredients:; Other ingredients:", "Oher Ingredients:", "Non-medicinal ingredients"]) { c.otherIngredients!.heading.text = ok; expect(assess(c).codes).not.toContain("LABEL.INGREDIENT_HEADING_INVALID"); }
   c.formula = null; expect(assess(c).codes).toContain("LABEL.COMPLETENESS_CONFLICT");
   c.otherIngredients!.items[0]!.text = " "; expect(LabelImageCandidateSchema.safeParse(c).success).toBe(false);
+});
+it.each([
+  ["Turmeric root extract (95% curcuminoids)", "500 mg", false],
+  ["Green Tea Extract (std. to 50% EGCG)", null, false],
+  ["Organic Kale (leaf), Standardized to 1% Nitrate", null, false],
+  ["Linolenic Acid (Omega 3) 31-36%", "31-36%", false],
+  ["Eicosapentaenoic acid (EPA) 18%", "18% equal to 180 mg", false],
+  ["90% Whey", null, true],
+  ["EPA 18%", null, true],
+  ["EPA 18%", "20%", true],
+] as const)("a component percentage is a dose only as its share of the blend: %s / %s", (evidence, amount, conflict) => {
+  const c = gncLabelFixture(), row = c.formula!.columns[0]!.rows[5]!;
+  row.name.evidence = evidence;
+  row.amount = amount ? { text: amount, evidence: amount } : null;
+  row.amountStatus = amount ? "printed" : "not_declared";
+  const codes = labelImageIntegrityCodes(LabelImageCandidateSchema.parse(c));
+  expect(codes.includes("LABEL.AMOUNT_EVIDENCE_CONFLICT")).toBe(conflict);
 });
