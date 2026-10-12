@@ -20,6 +20,8 @@ packages:
   - '!archive/**'
 
 catalog:
+  p-retry: ^8.0.1
+  p-throttle: ^8.1.1
   '@ant-design/icons': ^5.6.1
   '@hono/node-server': ^1.19.1
   '@aws-sdk/client-s3': ^3.864.0
