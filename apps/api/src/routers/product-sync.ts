@@ -3,6 +3,7 @@ import {
   ListSyncBrandsSchema,
   MarkPresentSchema,
   MatchBrandsSchema,
+  ReopenSyncSchema,
 } from "@crawl-automation/app";
 import { procedure, router, type ApiContext } from "../trpc.js";
 
@@ -24,6 +25,10 @@ export const productSyncRouter = router({
     .query(async ({ ctx, input }) => (await service(ctx)).brands(input)),
   /** Per channel: completed, matched-brand and pending products, and the sync ledger's statuses. */
   status: procedure.query(async ({ ctx }) => (await service(ctx)).status()),
+  /** Failed products with this reason become pending again (after a fix); nothing is deleted. */
+  reopen: procedure
+    .input(ReopenSyncSchema)
+    .mutation(async ({ ctx, input }) => (await service(ctx)).reopen(input)),
   /** Records listings already in Supply Smart so the sweep does not send them again. */
   markPresent: procedure
     .input(MarkPresentSchema)

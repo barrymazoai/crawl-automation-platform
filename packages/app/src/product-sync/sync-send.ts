@@ -75,7 +75,7 @@ async function ingestWithLabels(batch: Batch, tally: SyncTally, signal: AbortSig
   return accepted;
 }
 
-/** Whole Foods without a same-ASIN Amazon collection has no label: the observation goes without one. */
+/** A verified marketplace observation without a usable formula is sent without a label. */
 function labelOf(writer: ProductObservationWriter, entry: PlannedSync, signal: AbortSignal) {
   return entry.label
     ? deliverLabel({ writer, product: { item: entry.item, label: entry.label } }, signal)

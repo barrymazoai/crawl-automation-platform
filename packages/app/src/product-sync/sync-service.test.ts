@@ -55,6 +55,7 @@ function memoryLedger(): ProductSyncLedger & { rows: Map<string, SyncRecord> } {
     markPresent: async () => ({ marked: 0, skipped: 0 }),
     counts: async () => [],
     overview: async () => [],
+    reopen: async () => ({ reopened: 0 }),
   };
 }
 
@@ -156,11 +157,12 @@ function setup(
     match?: BrandCompanyMatch | null;
     writer?: ReturnType<typeof supplySmart>;
     ids?: string[];
+    products?: MarketplaceProduct[];
   } = {},
 ) {
   const ledger = memoryLedger();
   const writer = input.writer ?? supplySmart();
-  const page = products(input.ids);
+  const page = input.products ?? products(input.ids);
   const reader = {
     read: vi.fn(async (_request: MarketplaceReadRequest) => ({
       products: structuredClone(page),
@@ -176,6 +178,113 @@ function setup(
   });
   return { service, ledger, writer, reader };
 }
+
+/** Explicit observation-only unit fixture; no retained/live record is claimed. */
+function withoutFormula(channel: MarketplaceProduct["channel"]): MarketplaceProduct {
+  const url = `https://retailer.example/${channel}/unit-product`;
+  return {
+    channel,
+    listingId: "unit-product",
+    variantId: null,
+    url,
+    runId: "unit-run",
+    sourceId: "unit-source",
+    brandId,
+    brand: "Unit brand",
+    collection: null,
+    enrichment: null,
+    history: {
+      codec: "v3-capture-history/1",
+      observationId: "unit-capture",
+      capturedAt: "2026-10-12T00:00:00.000Z",
+      owner: { runId: "unit-run", sourceId: "unit-source", brandId, operationId: "unit-capture" },
+      listing: { channel, externalId: "unit-product", url },
+      capture: { variantId: null },
+      metrics: { price: "0", inStock: false },
+      evidence: [],
+    },
+    product: {
+      codec: "channel-product/1",
+      channel,
+      listingId: "unit-product",
+      variantId: null,
+      url,
+      title: "Title from own page",
+      brandRaw: null,
+      variantOptions: [],
+      variants: [],
+      detailsHtml: null,
+      factsCandidates: [],
+      imageCandidates: [],
+      warnings: [],
+    },
+  };
+}
+
+describe("marketplace sync without a formula (unit material doubles)", () => {
+  it.each(["amazon", "gnc", "swanson", "wholefoods", "costco"] as const)(
+    "%s sends and verifies the own listing and commerce without calling the label endpoint",
+    async (channel) => {
+      const { service, writer, ledger } = setup({ products: [withoutFormula(channel)] });
+      const result = await service.sync({ channel, limit: 50, dryRun: false }, signal());
+      expect(result).toMatchObject({
+        toSend: 1,
+        verified: 1,
+        material: 0,
+        failed: [],
+        runCompleted: true,
+      });
+      expect(writer.ingest.mock.calls[0]?.[0].items[0]).toMatchObject({
+        externalId: "unit-product",
+        titleRaw: "Title from own page",
+        productName: "Title from own page",
+        price: "0",
+        inStock: false,
+      });
+      expect(writer.label).not.toHaveBeenCalled();
+      expect(writer.readLabel).not.toHaveBeenCalled();
+      expect([...ledger.rows.values()][0]).toMatchObject({
+        status: "verified",
+        collectedOperationId: null,
+      });
+    },
+  );
+
+  it("keeps unavailable donor material in the payload while sending without a label", async () => {
+    const product = withoutFormula("swanson");
+    product.unavailableLabel = {
+      operationId: "old-formula",
+      reason: "PRODUCT_DELIVERY.MATERIAL_MISSING",
+    };
+    const { service, writer } = setup({ products: [product] });
+    expect(
+      await service.sync({ channel: "swanson", limit: 50, dryRun: false }, signal()),
+    ).toMatchObject({ verified: 1, material: 0, failed: [] });
+    expect(writer.ingest.mock.calls[0]?.[0].items[0].extras.unavailableLabel).toEqual(
+      product.unavailableLabel,
+    );
+    expect(writer.label).not.toHaveBeenCalled();
+  });
+
+  it.each(["missing", "foreign"])(
+    "does not send %s own material just because there is no formula",
+    async (kind) => {
+      const product = withoutFormula("swanson");
+      if (kind === "missing") {
+        product.product = null;
+      } else {
+        required(product.history).owner.sourceId = "foreign-source";
+      }
+      const { service, writer } = setup({ products: [product] });
+      const result = await service.sync({ channel: "swanson", limit: 50, dryRun: false }, signal());
+      expect(result).toMatchObject({ toSend: 0, verified: 0, material: 1 });
+      expect(result.failed[0]?.reason).toBe(
+        kind === "missing" ? "PRODUCT_DELIVERY.MATERIAL_MISSING" : "PRODUCT_DELIVERY.INTEGRITY",
+      );
+      expect(writer.ingest).not.toHaveBeenCalled();
+    },
+  );
+});
 
 describe.skipIf(!marketplaceSamplesPath)("marketplace product sync", () => {
   it("dry run counts what would be sent and writes nothing", async () => {

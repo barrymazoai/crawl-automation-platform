@@ -147,6 +147,31 @@ describe.skipIf(!connectionString)("product sync ledger and migration 061", () =
     ]);
   });
 
+  it("reopen moves matching failures before every capture and keeps the failure on record", async () => {
+    await ledger.record([
+      {
+        ...asin,
+        status: "failed",
+        materialAt,
+        error: { reason: "PRODUCT_DELIVERY.MATERIAL_MISSING" },
+      },
+      { ...variant, status: "failed", materialAt, error: { reason: "company_not_found: x" } },
+    ]);
+    expect(await ledger.reopen({ reason: "PRODUCT_DELIVERY.MATERIAL_MISSING", limit: 10 })).toEqual(
+      { reopened: 1 },
+    );
+    const rows = (
+      await client.query(
+        "SELECT listing_id, material_at = '-infinity' AS reopened, error FROM product_sync ORDER BY listing_id",
+      )
+    ).rows;
+    expect(rows).toEqual([
+      expect.objectContaining({ listing_id: asin.listingId, reopened: true }),
+      expect.objectContaining({ listing_id: variant.listingId, reopened: false }),
+    ]);
+    expect(rows[0].error).toEqual({ reason: "PRODUCT_DELIVERY.MATERIAL_MISSING" });
+  });
+
   it("refuses a verified row without its payload and run", async () => {
     await expect(ledger.record([{ ...asin, status: "verified", materialAt }])).rejects.toThrow();
   });

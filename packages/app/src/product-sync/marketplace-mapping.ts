@@ -25,6 +25,9 @@ export function marketplaceItem(
   if (!item.brandName && input.brand.trim()) {
     item.brandName = input.brand.trim();
   }
+  if (input.unavailableLabel) {
+    item.extras = { ...item.extras, unavailableLabel: input.unavailableLabel };
+  }
   return marketplaceAttributes(ready, item);
 }
 

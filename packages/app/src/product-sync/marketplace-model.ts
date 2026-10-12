@@ -42,6 +42,8 @@ export interface MarketplaceProduct {
     history: MarketplaceHistory;
     product: ChannelProductEvidence;
   };
+  /** An indexed formula lacks retained donor material; the verified target can still send without a label. */
+  unavailableLabel?: { operationId: string; reason: string };
   /** Retained, selected-product structured identifiers/options, when available. */
   attributes?: Record<string, unknown>;
   problem?: string;

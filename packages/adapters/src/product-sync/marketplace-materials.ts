@@ -15,7 +15,7 @@ import { z } from "zod";
 import { checkedCollectedProduct } from "../postgres/postgres-collected-products.js";
 import { PostgresFormulaIndex } from "../postgres/postgres-formula-index.js";
 import { deliveryEnrichment } from "../product-delivery/delivery-enrichment.js";
-import { retainedProjection } from "../product-delivery/retained-projection.js";
+import { marketplaceProjection } from "./marketplace-projection.js";
 import {
   MARKETPLACE_COLLECTION,
   MARKETPLACE_HISTORY,
@@ -50,10 +50,6 @@ interface CollectedRow {
   record: unknown;
 }
 
-type ProjectionInput = Pick<MarketplaceProduct, "collection" | "enrichment" | "channel"> & {
-  history: MarketplaceHistory;
-};
-
 export class MarketplaceMaterials {
   constructor(private readonly deps: MarketplaceReaderDependencies) {}
 
@@ -69,7 +65,8 @@ export class MarketplaceMaterials {
     const enrichment = collection
       ? await deliveryEnrichment(this.deps.database, collection, input.channel)
       : null;
-    const product = await this.projection(
+    const product = await marketplaceProjection(
+      this.deps,
       { history, collection, enrichment, channel: input.channel },
       signal,
     );
@@ -95,7 +92,14 @@ export class MarketplaceMaterials {
     if (!known) {
       return input;
     }
-    const donor = await this.donor(known.operationId, families.channels(input.channel), signal);
+    const donor = await this.optionalDonor(
+      known.operationId,
+      families.channels(input.channel),
+      signal,
+    );
+    if (!donor) {
+      return withoutLabel(input, known.operationId);
+    }
     const owner = donor.collection.observation;
     // A sibling formula must not supply the target's name, size, gallery or selected options.
     const enrichment =
@@ -111,6 +115,20 @@ export class MarketplaceMaterials {
         product: donor.product,
       },
     };
+  }
+
+  private async optionalDonor(operationId: string, channels: string[], signal: AbortSignal) {
+    try {
+      return await this.donor(operationId, channels, signal);
+    } catch (error) {
+      signal.throwIfAborted();
+      // Missing donor material prevents a label, not the target's independently verified observation.
+      // Hash/ownership errors and infrastructure failures still fail explicitly.
+      if (!productDeliveryErrors.is(error, "PRODUCT_DELIVERY.MATERIAL_MISSING")) {
+        throw error;
+      }
+      return null;
+    }
   }
 
   private async donor(operationId: string, channels: string[], signal: AbortSignal) {
@@ -131,51 +149,13 @@ export class MarketplaceMaterials {
       owner.sourceId,
       owner.variantId,
     ]);
-    const product = await this.projection(
+    const product = await marketplaceProjection(
+      this.deps,
       { history, collection, enrichment: null, channel },
       signal,
     );
     const enrichment = await deliveryEnrichment(this.deps.database, collection, channel);
     return { collection, history, product, enrichment };
-  }
-
-  private async projection(input: ProjectionInput, signal: AbortSignal) {
-    const title = input.enrichment?.subject.titleEvidence;
-    const product = await retainedProjection(
-      {
-        objects: this.deps.objects,
-        references: [
-          ...(title ? [{ objectKey: title.sourceId, sha256: title.sha256 }] : []),
-          ...input.history.evidence,
-        ],
-        decode: (raw) => {
-          const adapter = this.deps.channels.get(input.channel);
-          if (typeof raw === "string") {
-            const parsed = adapter.parseProduct({
-              html: raw,
-              url: input.history.listing.url,
-              capturedAt: input.history.capturedAt,
-            });
-            if (
-              parsed.identity.listingId !== parsed.evidence.listingId ||
-              parsed.identity.variantId !== parsed.evidence.variantId
-            ) {
-              throw productDeliveryErrors.create("PRODUCT_DELIVERY.INTEGRITY");
-            }
-            return parsed.evidence;
-          }
-          const owner = input.collection?.observation;
-          return owner && adapter.planning
-            ? adapter.planning.read(raw, input.history.listing.url, owner).evidence
-            : null;
-        },
-      },
-      signal,
-    );
-    if (!product) {
-      throw productDeliveryErrors.create("PRODUCT_DELIVERY.MATERIAL_MISSING");
-    }
-    return product;
   }
 
   private async collected(input: MarketplaceProduct) {
@@ -210,4 +190,14 @@ export class MarketplaceMaterials {
     }
     return History.parse(row.record);
   }
+}
+
+function withoutLabel(input: MarketplaceProduct, operationId: string): MarketplaceProduct {
+  return {
+    ...input,
+    unavailableLabel: {
+      operationId,
+      reason: productDeliveryErrors.code("PRODUCT_DELIVERY.MATERIAL_MISSING"),
+    },
+  };
 }

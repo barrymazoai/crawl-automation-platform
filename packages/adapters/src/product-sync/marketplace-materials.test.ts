@@ -61,6 +61,7 @@ function setup(channel: MarketplaceProduct["channel"] = "gnc") {
     own: false,
     collectionHash: labelCollectedHash(collection),
     historyHash: null as string | null,
+    missingDonorHistory: false,
   };
   const query = vi.fn(async (sql: string, values?: readonly unknown[]) =>
     rows(sql, values, { donor, target, state }),
@@ -87,7 +88,13 @@ function rows(
   fixture: {
     donor: MarketplaceProduct;
     target: MarketplaceProduct;
-    state: { known: boolean; own: boolean; collectionHash: string; historyHash: string | null };
+    state: {
+      known: boolean;
+      own: boolean;
+      collectionHash: string;
+      historyHash: string | null;
+      missingDonorHistory: boolean;
+    };
   },
 ) {
   const { donor, target, state } = fixture;
@@ -100,8 +107,7 @@ function rows(
     channel: donor.channel,
   };
   if (sql === MARKETPLACE_HISTORY || sql === MARKETPLACE_LABEL_HISTORY) {
-    const history = required(sql === MARKETPLACE_HISTORY ? target.history : donor.history);
-    return historyRow(history, state.historyHash);
+    return historyRows(sql, fixture);
   }
   if (sql === MARKETPLACE_COLLECTION) {
     return state.own ? [row] : [];
@@ -118,8 +124,12 @@ function rows(
   }
   throw new Error(`Unexpected SQL: ${sql}`);
 }
-function historyRow(record: MarketplaceProduct["history"], hash: string | null) {
-  return [{ record, body_hash: hash ?? canonicalHash(record) }];
+function historyRows(sql: string, { donor, target, state }: Parameters<typeof rows>[2]) {
+  if (sql === MARKETPLACE_LABEL_HISTORY && state.missingDonorHistory) {
+    return [];
+  }
+  const record = required(sql === MARKETPLACE_HISTORY ? target.history : donor.history);
+  return [{ record, body_hash: state.historyHash ?? canonicalHash(record) }];
 }
 function assertLookup(values: readonly unknown[] | undefined, target: MarketplaceProduct) {
   const product = required(target.product);
@@ -232,6 +242,45 @@ describe.skipIf(!readerSamplesPath)(
         own.donor.collection?.observation.observationId,
       );
       expect(own.query.mock.calls.some(([sql]) => sql.includes(") known"))).toBe(false);
+    });
+    it.each(["history", "page"])(
+      "a missing donor %s does not discard the target's verified page",
+      async (kind) => {
+        const fixture = setup("swanson");
+        if (kind === "history") {
+          fixture.state.missingDonorHistory = true;
+        } else {
+          fixture.objects.delete(required(required(fixture.donor.history).evidence[0]).objectKey);
+        }
+        const input = await fixture.read();
+        expect(input.product).toEqual(fixture.target.product);
+        expect(input.collection).toBeNull();
+        expect(input.unavailableLabel).toEqual({
+          operationId: fixture.donor.collection?.operationId,
+          reason: "PRODUCT_DELIVERY.MATERIAL_MISSING",
+        });
+        expect(marketplaceLabel(input, options)).toBeNull();
+        expect(marketplaceItem(input, options)).toMatchObject({
+          titleRaw: "Current capture title",
+          price: "9.99",
+          inStock: false,
+          extras: { unavailableLabel: input.unavailableLabel },
+        });
+      },
+    );
+    it("still refuses a missing own page and a corrupt donor page", async () => {
+      const missing = setup("swanson");
+      missing.objects.delete(required(required(missing.target.history).evidence[0]).objectKey);
+      await expect(missing.read()).rejects.toMatchObject({
+        code: "PRODUCT_DELIVERY.MATERIAL_MISSING",
+      });
+      expect(missing.query.mock.calls.some(([sql]) => sql.includes(") known"))).toBe(false);
+      const corrupt = setup("swanson");
+      corrupt.objects.set(
+        required(required(corrupt.donor.history).evidence[0]).objectKey,
+        Buffer.from("corrupt"),
+      );
+      await expect(corrupt.read()).rejects.toMatchObject({ code: "PRODUCT_DELIVERY.INTEGRITY" });
     });
     it("rejects corrupt donor records, donor histories and target retained bytes", async () => {
       const corruptCollection = setup();

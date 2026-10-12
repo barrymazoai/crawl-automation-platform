@@ -140,6 +140,27 @@ export class PostgresProductSync implements ProductSyncLedger {
     };
   }
 
+  async reopen(filter: {
+    channel?: MarketplaceChannel;
+    reason: string;
+    limit: number;
+  }): Promise<{ reopened: number }> {
+    const rows = await this.database.query<{ reopened: number }>(
+      `WITH picked AS (
+         SELECT channel, listing_id, variant_key FROM product_sync
+         WHERE status = 'failed' AND error->>'reason' = $2 AND ($1::text IS NULL OR channel = $1)
+         ORDER BY updated_at LIMIT $3),
+       moved AS (
+         UPDATE product_sync ps SET material_at = '-infinity', updated_at = clock_timestamp()
+         FROM picked WHERE ps.channel = picked.channel AND ps.listing_id = picked.listing_id
+           AND ps.variant_key = picked.variant_key
+         RETURNING 1)
+       SELECT count(*)::int AS reopened FROM moved`,
+      [filter.channel ?? null, filter.reason, filter.limit],
+    );
+    return { reopened: rows[0]?.reopened ?? 0 };
+  }
+
   async counts(): Promise<{ channel: MarketplaceChannel; status: SyncStatus; count: number }[]> {
     return this.database.query(
       `SELECT channel, status, count(*)::int AS count FROM product_sync GROUP BY 1, 2 ORDER BY 1, 2`,

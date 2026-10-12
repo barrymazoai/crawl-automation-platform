@@ -29,5 +29,6 @@ export async function productSyncService(parts: {
     brands: brands.brands.bind(brands),
     status: () => control.status(),
     markPresent: control.markPresent.bind(control),
+    reopen: control.reopen.bind(control),
   };
 }

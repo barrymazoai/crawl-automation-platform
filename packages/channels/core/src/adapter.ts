@@ -89,6 +89,8 @@ export interface ChannelPlanning<Rendered = unknown> {
   projectionModule: string;
   /** The part of the rendered page the planner reads. */
   projection(rendered: Rendered): unknown;
+  /** Page-owned formula identity for nonstandard projections that lack ChannelProductEvidence fields. */
+  identity?(projection: unknown): ProductIdentity;
   /**
    * Reads a retained projection back for the planner, checked against the expected URL and the observation's own
    * identity: the product evidence and the adapter's facts judgement.

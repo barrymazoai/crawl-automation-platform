@@ -19,9 +19,10 @@ import { swansonIdentityMapping } from "./identity-map.js";
 import { parseSwansonRenderedProduct } from "./swanson-evidence.js";
 import { swansonVariantChoices } from "./swanson-variants.js";
 import { parseSwansonStaticHtml, parseSwansonStaticIdentity } from "./swanson-static-html.js";
-import type {
-  ChannelProductEvidence,
-  SwansonRenderedProduct,
+import {
+  SwansonRenderedProductSchema,
+  type ChannelProductEvidence,
+  type SwansonRenderedProduct,
 } from "@crawl-automation/v3-contracts";
 
 /** A Swanson product URL: `/p/<handle>`, optionally with `?variant=<id>`. The listing ID is the handle. */
@@ -93,6 +94,7 @@ export const swansonAdapter: ChannelAdapter<SwansonRenderedProduct> = {
     parserVersion: "swanson-rendered/1",
     projectionModule: "swanson.http-projection",
     projection,
+    identity: (raw) => selectedIdentity(SwansonRenderedProductSchema.parse(raw)),
     read: readProjection,
     corePolicy: "swanson-label-core/1",
     labelCore: swansonLabelCore,

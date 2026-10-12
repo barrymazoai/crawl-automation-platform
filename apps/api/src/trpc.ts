@@ -23,7 +23,7 @@ import { initTRPC, TRPCError } from "@trpc/server";
 
 /** Brand matching plus the database-only sync controls; sending runs in the worker's sweep. */
 export type ProductSyncApi = Pick<BrandCompanyService, "matchBrands" | "brands"> &
-  Pick<ProductSyncControl, "status" | "markPresent">;
+  Pick<ProductSyncControl, "status" | "markPresent" | "reopen">;
 
 export interface ApiContext {
   productSync?: ProductSyncApi | Promise<ProductSyncApi | undefined> | undefined;

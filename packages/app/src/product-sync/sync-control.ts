@@ -18,6 +18,14 @@ export const MarkPresentSchema = z.strictObject({
 });
 export type MarkPresent = z.infer<typeof MarkPresentSchema>;
 
+/** Failed products to try again after a fix, e.g. `PRODUCT_DELIVERY.MATERIAL_MISSING` (2026-10-12). */
+export const ReopenSyncSchema = z.strictObject({
+  channel: channel.optional(),
+  reason: z.string().trim().min(1).max(500),
+  limit: z.number().int().min(1).max(20_000),
+});
+export type ReopenSync = z.infer<typeof ReopenSyncSchema>;
+
 /** Database-only controls for the API; sending runs in the brand-enrichment worker's sweep. */
 export class ProductSyncControl {
   constructor(private readonly deps: { ledger: ProductSyncLedger }) {}
@@ -28,6 +36,15 @@ export class ProductSyncControl {
       this.deps.ledger.counts(),
     ]);
     return { overview, ledger };
+  }
+
+  reopen(raw: ReopenSync) {
+    const input = ReopenSyncSchema.parse(raw);
+    return this.deps.ledger.reopen({
+      ...(input.channel ? { channel: input.channel } : {}),
+      reason: input.reason,
+      limit: input.limit,
+    });
   }
 
   markPresent(raw: MarkPresent) {

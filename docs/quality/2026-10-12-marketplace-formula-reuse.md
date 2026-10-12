@@ -81,3 +81,86 @@ pnpm --filter @crawl-automation/adapters exec vitest run \
 The added integration case uses the actual formula SQL for prior-run collections, distinct donor/target sources,
 Swanson numeric owner resolution, exact variant misses, and a persisted `formula_link`. The existing case retains
 Whole Foods coverage. No commit, branch, deletion, production query, database mutation or Supply Smart call was made.
+
+## Smoke follow-up against f8e957b: retained Swanson owner and observation-only delivery
+
+The reported smoke failed two Swanson products with `PRODUCT_DELIVERY.MATERIAL_MISSING`. The supplied A.C. Grace
+original HTML was read locally, without a fetch. Its 1,007,089 bytes match the accompanying metadata's SHA-256
+`460d0e880930b13b1a691a7f31a749aeeb8e04fbd074b41fc4bdb260fec6b8f7`.
+
+The suspected cause needs a correction: **before this follow-up's changes**, `swansonAdapter.parseProduct` already
+parsed this HTML to Shopify owner `8572156346506 / 46318677426314`, title
+“Unique E High Gamma Mixed Tocopherol Concentrate” and commerce SKU `ACG002`. The HTML branch of the marketplace
+reader already called this parser without a collection. The collection-dependent branch was only for nonstandard
+JSON projections, so that branch cannot explain failure on these exact HTML bytes.
+
+Two concrete material-handling gaps are addressed:
+
+- A saved Swanson JSON projection could not be decoded without a collection. `ChannelPlanning.identity` is now an
+  optional hook, implemented by Swanson using the same `selectedIdentity` → `swansonIdentityMapping` as capture.
+  It validates the existing `SwansonRenderedProductSchema`; `planning.read` still checks the expected URL and
+  selected owner. No new HTML parser, numeric-ID regex or queue-handle/SKU substitution was introduced.
+- A formula-index hit followed by missing **donor** history or retained page used to throw the same
+  `MATERIAL_MISSING` as a missing **target** page. Only that explicit donor absence now leaves the target's own
+  verified product/history intact, with no label or borrowed enrichment. `unavailableLabel` preserves the indexed
+  operation and error code in the mapped item's extras. Hash/ownership conflicts, ambiguity, parser failures,
+  infrastructure errors and cancellation still fail explicitly; no invalid label is sent. A genuine index miss
+  remains an ordinary observation-only item.
+
+The live donor histories/objects and deployed process were not queried in this follow-up, so the exact live failing
+stage is **not confirmed**. Donor-material absence is a demonstrated code path, not a claimed production finding.
+The second failed Swanson page was not supplied and has not been independently reproduced.
+
+Owner recovery without a collection remains channel-owned:
+
+| Channel | Original HTML | Retained projection |
+| --- | --- | --- |
+| Swanson | `parseProduct` → `parseSwansonStaticHtml` → `selectedIdentity` → `swansonIdentityMapping`; Shopify product/selected variant | New optional planning hook calls that same identity function, then existing `planning.read` validates it |
+| Amazon | Existing `parseAmazonProduct`; page ASIN/null variant | Existing standard evidence listing/variant |
+| GNC | Existing parser and `gncPageIdentity`; SKU/null variant | Existing standard evidence listing/variant |
+| Costco | Existing parser; online listing and selected child/null variant | Existing standard evidence listing/variant |
+| Whole Foods | Existing parser; own page ASIN/null variant | Existing standard evidence if supplied; no new planning hook |
+
+`FormulaLookup` and `PostgresFormulaIndex.findKnown` are still the only formula lookup path. No SQL changed or was
+duplicated. DTC implementation is unchanged; no queue or sync ledger is reopened by this change.
+
+Changed files for this follow-up:
+
+- `packages/channels/core/src/adapter.ts`, `packages/channels/swanson/src/adapter.ts`: optional projection identity
+  hook and Swanson implementation.
+- `packages/adapters/src/product-sync/marketplace-projection.ts` (new), `marketplace-materials.ts`: retained decoding
+  and bounded handling of unavailable donor material; `marketplace-materials.test.ts`: absence/integrity regression cases.
+- `packages/app/src/product-sync/marketplace-model.ts`, `marketplace-mapping.ts`, `sync-send.ts`,
+  `sync-service.test.ts`: retain the missing-donor reason, clarify observation-only sending, exercise real service
+  ingest/verify calls against a fake writer for all five marketplace channels.
+- `apps/worker/src/marketplace-retained-swanson.test.ts` (new): composition-level offline tests with the actual
+  Swanson adapter and marketplace reader. Located in the composition package, which already depends on both;
+  no dependency or layer exception was added.
+- This report.
+
+Real-page test inputs stay outside git. Set `CRAWLER_SWANSON_ACGRACE_PAGE` to the supplied `.html`; the test reads
+the adjacent `.json` metadata and verifies byte size/hash. It tests both the original bytes and a projection
+generated by the production parser, asserts the exact formula lookup parameters, verifies a lookup miss maps the
+own title and price `47.29` without a label, and rejects missing/corrupt bytes or the wrong requested variant.
+Database rows and formula misses in these tests are explicit doubles; no live database/formula claim is made.
+
+```sh
+CRAWLER_SWANSON_ACGRACE_PAGE=/path/to/swanson-acgrace-original.html \
+  pnpm --filter @crawl-automation/worker exec vitest run src/marketplace-retained-swanson.test.ts
+```
+
+The real-page suite skips when this variable is absent. The eight new observation-only service unit cases run
+without either sample environment variable. PostgreSQL integration checks remain assigned to the main session.
+
+Follow-up validation completed locally:
+
+- 174 tests passed across 18 suites, including the six actual-page cases, 13 marketplace-material cases,
+  15 sync-service cases, formula lookup/index and mapping regressions, Swanson capture/planning regressions,
+  and all 42 unchanged DTC delivery cases.
+- With both sample variables absent: eight synthetic service cases passed; 26 sample-dependent cases skipped.
+- `pnpm --filter <pkg> exec tsc --noEmit` passed for `@crawl-automation/app`, `@crawl-automation/adapters`,
+  `@crawl-automation/worker`, `@crawl-automation/channels-core`, and `@crawl-automation/channel-swanson`.
+- Changed TypeScript passed ESLint and Prettier. `pnpm check:deps` passed (two existing baseline violations ignored);
+  `git diff --check` passed.
+- No commits, branches, file deletions, deployments, database changes, fetches or Supply Smart calls were made.
+  Existing/concurrent edits elsewhere in the workspace were left untouched.
