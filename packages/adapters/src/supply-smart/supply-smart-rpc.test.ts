@@ -63,28 +63,3 @@ it("gives up after the configured retries and reports the 429", async () => {
   expect(supplySmartStatus(error)).toBe(429);
   expect(fetch).toHaveBeenCalledTimes(4);
 });
-
-it("a 429 holds every call of the client for the whole wait, not just the refused one", async () => {
-  const started: number[] = [];
-  const fetch = vi.fn<typeof globalThis.fetch>().mockImplementation(async () => {
-    started.push(Date.now());
-    return started.length === 1 ? rateLimited() : answer();
-  });
-  const rpc = new SupplySmartRpc({ ...settings, rateLimitBackoffMs: 200 }, fetch);
-  const signal = new AbortController().signal;
-  const first = rpc.call(call, signal);
-  await vi.waitFor(() => expect(started).toHaveLength(1));
-  await new Promise((resolve) => setTimeout(resolve, 20));
-  await Promise.all([first, rpc.call(call, signal)]);
-  expect(started).toHaveLength(3);
-  for (const at of started.slice(1)) {
-    expect(at - required(started[0])).toBeGreaterThanOrEqual(190);
-  }
-});
-
-function required<Value>(value: Value | undefined): Value {
-  if (value === undefined) {
-    throw new Error("Missing test value");
-  }
-  return value;
-}

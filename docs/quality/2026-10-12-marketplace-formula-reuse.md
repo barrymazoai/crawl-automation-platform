@@ -194,6 +194,6 @@ key, via better-auth's api-key `isRateLimited` (jakarta, better-auth 1.3.32, rea
 a full window with no accepted call, so a continuous stream at 300/min reaches the 600 cap after ~2 minutes and a
 5 s…60 s backoff is refused again.
 
-- `SupplySmartRpc`: a 429 holds every call of the client for `rateLimitBackoffMs` (default 65 s, a window plus margin);
-  p-retry only counts attempts (6).
+- ~~`SupplySmartRpc`: a 429 holds every call for 65 s~~ — reverted the same day: the owner switched off
+  "Better Auth per-key rate limit" for the crawler's service key, so the client keeps its earlier pacing/retry.
 - `productSync.reopen({ unfinished: true })` re-pends rows left `sent` for over 10 minutes; ingest is idempotent.
