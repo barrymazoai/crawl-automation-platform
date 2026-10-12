@@ -25,9 +25,10 @@ export function settledMarketplace(channelFilter: string) {
     JOIN queue_attempt a ON a.run_id = q.run_id AND a.channel = q.channel
     LEFT JOIN queue_item leader ON leader.item_id = q.follows_item_id AND leader.run_id = q.run_id
     WHERE q.state = 'completed' AND a.settled_at IS NOT NULL AND a.outcome = 'completed'
-      -- A revisit that found the page gone completes too; it is a delisting, never a product to send.
-      AND NOT EXISTS (SELECT 1 FROM listing_state_observation o
-        WHERE o.run_id = q.run_id AND o.state = 'unlisted'))`;
+      -- A revisit that found the page gone completes too; it is a delisting, never a product to send. A hashed
+      -- NOT IN: a correlated NOT EXISTS was planned as a sequential scan per queue item (status timed out).
+      AND q.run_id NOT IN (SELECT o.run_id FROM listing_state_observation o
+        WHERE o.state = 'unlisted' AND o.run_id IS NOT NULL))`;
 }
 
 /**
