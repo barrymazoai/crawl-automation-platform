@@ -219,7 +219,14 @@ it("a source held up by its model permit ends in a dependency Review naming it",
 
   expect(steps["reviewLabelProduct"]).toHaveBeenCalledWith(
     expect.objectContaining({
-      failures: [{ sourceId: "page", code: "RESOURCE.WAIT_LIMIT", executionFact: "not_executed" }],
+      failures: [
+        {
+          sourceId: "page",
+          code: "RESOURCE.WAIT_LIMIT",
+          executionFact: "not_executed",
+          cause: { code: "RESOURCE.WAIT_LIMIT", name: "Error", message: "waited too long" },
+        },
+      ],
     }),
   );
   expect(steps["resolveTextReceipt"]).not.toHaveBeenCalled();

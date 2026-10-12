@@ -1,4 +1,4 @@
-import { recordRecovery } from "@crawl-automation/platform";
+import { readBackAfterWrite, recordRecovery, withCause } from "@crawl-automation/platform";
 import { sha256 } from "@crawl-automation/platform";
 import type { AppError, ObjectStore } from "@crawl-automation/platform";
 
@@ -13,14 +13,21 @@ export async function writeOnce(
 ): Promise<void> {
   const { key, bytes } = entry;
   const { signal } = options;
+  let publicationCause: unknown;
   try {
     await store.create(key, bytes, "application/json", signal);
   } catch (error) {
     recordRecovery(error, { operation: "results/write-once" });
+    publicationCause = error;
     // The read-back below decides.
   }
-  const saved = await store.read(key, bytes.length, signal);
+  const saved = await readBackAfterWrite(
+    () => store.read(key, bytes.length, signal),
+    publicationCause,
+  );
   if (!saved || sha256(saved) !== sha256(bytes)) {
-    throw options.mismatch();
+    throw publicationCause === undefined
+      ? options.mismatch()
+      : withCause(options.mismatch(), publicationCause);
   }
 }

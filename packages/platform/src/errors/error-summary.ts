@@ -47,6 +47,31 @@ export function safeDiagnosticText(value: unknown, limit = 200): string | undefi
   return safeText(value, limit) || undefined;
 }
 
+/**
+ * Printed label text in a Review finding (row names keep their quotes and brackets), with URLs, credentials, markup
+ * and long tokens removed: model-written issue details can quote anything.
+ */
+export function safeLabelText(value: unknown, limit = 240): string {
+  if (typeof value !== "string") {
+    return "";
+  }
+  return value
+    .slice(0, 4096)
+    .replace(/<[^>]*>?/gu, " ")
+    .replace(/(?:[a-z][a-z\d+.-]*:\/\/|www\.|data:)\S*/giu, "[url]")
+    .replace(/\S*\?\S*=\S*/gu, "[url]")
+    .replace(/\b(?:bearer|basic)\s+\S+/giu, "[credential]")
+    .replace(
+      /\b(?:authorization|cookie|password|passwd|(?:client[_-]?)?secret|(?:access[_-]?|refresh[_-]?)?token|api[_-]?key|credential)\b\s*[=:]?\s*\S+/giu,
+      "[redacted]",
+    )
+    .replace(/\b[A-Za-z\d_+/=-]{48,}\b/gu, "[data]")
+    .replace(/\p{Cc}/gu, " ")
+    .replace(/\s{2,}/gu, " ")
+    .trim()
+    .slice(0, limit);
+}
+
 /** An object-store key as written by this system: path characters only, so no query string, markup or spaces. */
 export function safeObjectKey(value: unknown): string | undefined {
   return typeof value === "string" && /^[\w.\-/]{1,200}$/u.test(value) ? value : undefined;

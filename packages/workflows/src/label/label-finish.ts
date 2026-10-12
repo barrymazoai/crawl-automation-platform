@@ -15,6 +15,7 @@ import type { Walk } from "./label-image-first.js";
 import { identityConflict } from "./identity-conflict.js";
 import { sameJson } from "./same.js";
 import { isHeartbeatFailure } from "./activity-heartbeat.js";
+import { reviewFailureDetails } from "./label-review-causes.js";
 
 type ReviewCode =
   | "CHANNEL.LABEL_PREPARATION_UNVERIFIED"
@@ -32,8 +33,7 @@ export async function reviewLabel(
     input,
     states: at.states,
     code: at.code,
-    ...(at.failures ? { failures: at.failures } : {}),
-    ...(at.primaryFailure ? { primaryFailure: at.primaryFailure } : {}),
+    ...reviewFailureDetails(run, at),
   };
   const review = AcquisitionReviewSchema.parse(
     await run.call("activities", "reviewLabelProduct", request),

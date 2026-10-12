@@ -216,11 +216,20 @@ describe("label assembly and collection", () => {
     const create = setup.remote.create.bind(setup.remote);
     const writes = vi.spyOn(setup.remote, "create").mockImplementation(async (objectKey, bytes) => {
       if (objectKey === key) {
-        throw new Error("secret");
+        throw new AppError("ARTIFACT.UPLOAD_UNVERIFIED", "ARTIFACT", {
+          message: "Upload disconnected token=secret",
+        });
       }
       return create(objectKey, bytes);
     });
     expect((await setup.assembly.run(setup.join, signal())).status).toBe("review");
+    expect(defined([...setup.records.values()][0]).rawError.details).toMatchObject({
+      cause: {
+        code: "ARTIFACT.UPLOAD_UNVERIFIED",
+        name: "AppError",
+        message: "Upload disconnected [redacted]",
+      },
+    });
     const count = writes.mock.calls.length;
     expect(await setup.cold().assembly.run(setup.join, signal())).toMatchObject({
       codes: ["LABEL_PRODUCT.HANDOFF_PENDING"],

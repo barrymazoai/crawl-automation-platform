@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import { AppError } from "@crawl-automation/platform";
-import { safeErrorSummary, SafeErrorSummarySchema } from "./error-summary.js";
+import { safeErrorSummary, SafeErrorSummarySchema, safeLabelText } from "./error-summary.js";
 
 describe("safe error summaries", () => {
   it("keeps the original code and message through wrappers, without their details or stack", () => {
@@ -120,4 +120,17 @@ describe("safe error summaries", () => {
     };
     expect(safeErrorSummary(error)).toEqual({ code: null, name: "UnknownError", message: "" });
   });
+});
+
+it("label text keeps quotes and brackets but drops URLs, credentials and markup", () => {
+  expect(safeLabelText('row 3 "Huperzine A [1%]": invalid parent 3')).toBe(
+    'row 3 "Huperzine A [1%]": invalid parent 3',
+  );
+  const text = safeLabelText(
+    "model reported AMBIGUOUS: <html><b>x</b></html> see https://cdn.test/a.jpg?X-Amz-Signature=abc token=t0k3n",
+  );
+  for (const leaked of ["<html", "X-Amz-Signature", "cdn.test", "t0k3n"]) {
+    expect(text).not.toContain(leaked);
+  }
+  expect(text).toMatch(/^model reported AMBIGUOUS:/u);
 });

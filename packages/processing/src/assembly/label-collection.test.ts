@@ -2,8 +2,39 @@ import { describe, expect, it, vi } from "vitest";
 import { assemblySetup } from "../testing/assembly-fixture.js";
 import { defined } from "../testing/defined.js";
 import { LabelCollection, labelCollectedHash } from "./label-collection.js";
+import { AppError } from "@crawl-automation/platform";
 
 const signal = () => new AbortController().signal;
+
+it("keeps the original insert failure when read-back is empty, with one insert only", async () => {
+  const setup = assemblySetup();
+  const assembled = await setup.assembly.run(setup.join, signal());
+  setup.registry.append.mockRejectedValue(
+    new AppError("DATABASE.UNAVAILABLE", "INGEST", {
+      message: "Insert disconnected at https://database.example/?password=private",
+      details: { payload: "private-record" },
+    }),
+  );
+  const result = await setup.collector.run(
+    { join: setup.join, evidenceKey: assembled.evidenceKey },
+    signal(),
+  );
+  expect(result).toMatchObject({
+    status: "review",
+    codes: ["LABEL_COLLECTION.REGISTRATION_UNKNOWN"],
+    automaticRetry: false,
+  });
+  expect(defined([...setup.records.values()][0]).rawError.details).toMatchObject({
+    cause: {
+      code: "DATABASE.UNAVAILABLE",
+      name: "AppError",
+      message: "Insert disconnected at [redacted]",
+    },
+  });
+  expect(setup.registry.append).toHaveBeenCalledOnce();
+  expect(setup.registry.read).toHaveBeenCalledTimes(2);
+  expect(JSON.stringify([...setup.records.values()])).not.toContain("private");
+});
 
 /** An observation already collected under one operation, and a newer operation for the same observation. */
 async function secondVersionSetup() {

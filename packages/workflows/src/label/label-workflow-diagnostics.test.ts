@@ -240,3 +240,24 @@ it("a true /2 no-source Review retains the bounded summary from the exact inspec
   expect(decodeJson(bytes)).toMatchObject({ sourceOutcomes: summary });
   expect(JSON.stringify(summary).length).toBeLessThan(1_000);
 });
+
+it("a zero-attempt no-source Review adds no inspection or progress-publication command", async () => {
+  const fixture = await setup({ policy: "source-failure-first/2", pageHasLabelSection: false });
+  fixture.loaded.manifest.sources = fixture.loaded.manifest.sources.filter(
+    (source) => source.kind === "page",
+  );
+  fixture.loaded.imageOrder = [];
+  expect(await fixture.run()).toMatchObject({
+    status: "review",
+    code: "CHANNEL.LABEL_NO_SOURCE",
+    automaticRetry: false,
+  });
+  expect(fixture.requests).toEqual([
+    expect.objectContaining({ states: [{ id: "a-text", status: "not_started" }] }),
+  ]);
+  expect(env.call.mock.calls.map(([, name]) => name)).toEqual([
+    "loadLabelPlan",
+    "reviewLabelProduct",
+  ]);
+  expect(fixture.files.size).toBe(0);
+});

@@ -4,7 +4,7 @@ import type { CoreParts } from "../core-parts.js";
 import { workerErrors } from "../errors.js";
 import { requireRoleSection } from "../processes/role-settings.js";
 import { labelModels, type LabelModels } from "./label-models.js";
-import { labelSteps, type LabelSteps } from "./label-steps.js";
+import { labelPlanReader, labelSteps, type LabelSteps } from "./label-steps.js";
 import { labelStores, type LabelStores } from "./label-stores.js";
 
 /** Everything the label roles run on: stores, steps, and the model and OCR clients. */
@@ -40,6 +40,7 @@ export function buildLabelReviews(parts: CoreParts): LabelReviews {
     evidence: parts.publication,
     reviews: parts.reviewLedger,
     diagnostics: parts.publication.remote,
+    plans: labelPlanReader(parts),
   });
 }
 

@@ -1,6 +1,14 @@
 import { isAppError } from "@crawl-automation/platform";
+import { safeLabelText } from "@crawl-automation/platform/errors/summary";
 import { codexDetailOf } from "../codex/codex-errors.js";
-import type { ReviewRecord, VisionTask } from "@crawl-automation/v3-contracts";
+import {
+  assessLabelCandidate,
+  LabelImageCandidateSchema,
+  labelImageIntegrityFindings,
+  type LabelFinding,
+  type ReviewRecord,
+  type VisionTask,
+} from "@crawl-automation/v3-contracts";
 import type { StepAttempt, StepFailure } from "../step/processing-step.js";
 import { buildStepReview, newReviewId } from "../step/step-review.js";
 import { visionKeys, visionTaskFingerprint } from "./vision-files.js";
@@ -38,9 +46,38 @@ export function visionReview(attempt: StepAttempt<VisionTask>, failure: StepFail
     blockedBy: null,
     error: {
       name: "VisionReview",
-      details: { task, evidenceKey: key, ...(typeof cause === "string" && cause ? { cause } : {}) },
+      details: {
+        task,
+        evidenceKey: key,
+        ...(typeof cause === "string" && cause ? { cause } : {}),
+        ...labelFindings(attempt.candidate?.value),
+      },
     },
     candidate: attempt.candidate,
     inspection: { kind: "none" },
   });
+}
+
+/**
+ * Which label rule rejected the answer and on which row (plan 2026-10-12, part C), recomputed from the kept answer
+ * with the rule table at the time of the Review. Details quote label rows and model issues, so they are redacted.
+ */
+function labelFindings(candidate: unknown): { findings?: LabelFinding[] } {
+  const parsed = LabelImageCandidateSchema.safeParse(candidate);
+  if (!parsed.success) {
+    return {};
+  }
+  const findings = [
+    ...assessLabelCandidate(parsed.data).findings,
+    ...labelImageIntegrityFindings(parsed.data),
+  ].slice(0, 10);
+  return findings.length
+    ? {
+        findings: findings.map(({ code, detail, rule }) => ({
+          code,
+          detail: safeLabelText(detail),
+          ...(rule ? { rule } : {}),
+        })),
+      }
+    : {};
 }

@@ -1,7 +1,11 @@
 import { recordRecovery } from "@crawl-automation/platform";
 import { pipelineErrors } from "@crawl-automation/platform";
 import { SafeErrorSummarySchema } from "@crawl-automation/platform/errors/summary";
-import { LabelPlanInputSchema, type LabelPlanInput } from "@crawl-automation/processing";
+import {
+  LabelPlanInputSchema,
+  type LabelPlanInput,
+  type ProductPlanReader,
+} from "@crawl-automation/processing";
 import { sha256 } from "@crawl-automation/platform";
 import { ReviewRecordSchema, type ReviewRecord } from "@crawl-automation/v3-contracts";
 import { z } from "zod";
@@ -51,6 +55,7 @@ export class LabelReviews {
       evidence: EvidencePublisher;
       reviews: ReviewLedger;
       diagnostics?: Pick<ObjectStore, "read">;
+      plans?: ProductPlanReader;
     },
   ) {}
 
@@ -66,7 +71,12 @@ export class LabelReviews {
     }
     const diagnostics = await labelReviewDiagnostics(
       this.deps.diagnostics,
-      { input, states: request.states },
+      {
+        input,
+        states: request.states,
+        code: request.primaryFailure?.code ?? request.code,
+        ...(this.deps.plans ? { plans: this.deps.plans } : {}),
+      },
       signal,
     );
     const record = labelReview({ input, request, fingerprint, reviewId, evidenceKey, diagnostics });

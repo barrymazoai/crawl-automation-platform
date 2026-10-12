@@ -1,4 +1,4 @@
-import { recordRecovery } from "@crawl-automation/platform";
+import { readBackAfterWrite, recordRecovery, withCause } from "@crawl-automation/platform";
 import { randomUUID } from "node:crypto";
 import { sha256 } from "@crawl-automation/platform";
 import type { AppError, ObjectStore } from "@crawl-automation/platform";
@@ -35,9 +35,9 @@ export async function claimedPublish(
   const { local, remote } = stores;
   const { key, bytes, limit } = entry;
   const { signal } = options;
-  const verify = (saved: Uint8Array | null) => {
+  const verify = (saved: Uint8Array | null, cause?: unknown) => {
     if (!saved || sha256(saved) !== sha256(bytes)) {
-      throw options.mismatch();
+      throw cause === undefined ? options.mismatch() : withCause(options.mismatch(), cause);
     }
   };
   const prior = await remote.read(key, limit, signal);
@@ -49,13 +49,18 @@ export async function claimedPublish(
   const marker = Buffer.from(JSON.stringify({ key, sha256: sha256(bytes), nonce: randomUUID() }));
   await claimLocally(local, { key: markerKey, bytes: marker }, options);
   await claimShared(remote, { key: markerKey, bytes: marker }, options);
+  let publicationCause: unknown;
   try {
     await remote.create(key, bytes, "application/json", signal);
   } catch (error) {
     recordRecovery(error, { operation: "publication/claimed-publication" });
+    publicationCause = error;
     // The read-back below decides; never a second write.
   }
-  verify(await remote.read(key, limit, signal));
+  verify(
+    await readBackAfterWrite(() => remote.read(key, limit, signal), publicationCause),
+    publicationCause,
+  );
 }
 
 function claimLocally(

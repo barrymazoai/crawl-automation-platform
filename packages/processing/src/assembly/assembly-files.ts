@@ -1,5 +1,10 @@
 import { randomUUID } from "node:crypto";
-import { errorCodeOf, type ObjectStore } from "@crawl-automation/platform";
+import {
+  type ObjectStore,
+  readBackAfterWrite,
+  recordRecovery,
+  errorCodeOf,
+} from "@crawl-automation/platform";
 import { sha256 } from "@crawl-automation/platform";
 import { LabelProductJoinSchema, type LabelProductJoin } from "@crawl-automation/v3-contracts";
 import { encodeJson } from "../results/result-record.js";
@@ -49,10 +54,34 @@ export async function keepLocally(
 }
 
 /** The stored bytes are exactly the expected ones. */
-export function assertSameBytes(saved: Uint8Array | null, expected: Uint8Array): void {
+export function assertSameBytes(
+  saved: Uint8Array | null,
+  expected: Uint8Array,
+  cause?: unknown,
+): void {
   if (!saved || sha256(saved) !== sha256(expected)) {
-    throw assemblyFailure("LABEL_PRODUCT.HANDOFF_UNVERIFIED");
+    throw assemblyFailure("LABEL_PRODUCT.HANDOFF_UNVERIFIED", cause);
   }
+}
+
+/** A lost upload acknowledgement is settled only by read-back, retaining the original write cause. */
+export async function writeAssembly(
+  remote: ObjectStore,
+  file: { key: string; bytes: Uint8Array },
+  signal: AbortSignal,
+) {
+  let publicationCause: unknown;
+  try {
+    await remote.create(file.key, file.bytes, "application/json", signal);
+  } catch (error) {
+    recordRecovery(error, { operation: "assembly/label-assembly" });
+    publicationCause = error;
+  }
+  assertSameBytes(
+    await readBackAfterWrite(() => remote.read(file.key, ASSEMBLY_LIMIT, signal), publicationCause),
+    file.bytes,
+    publicationCause,
+  );
 }
 
 /** A shared write-ahead claim. An existing or unconfirmed claim is never taken over automatically. */

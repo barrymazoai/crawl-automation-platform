@@ -236,7 +236,13 @@ describe("ResourceGate in Temporal", () => {
       expect(reviewLabelProduct).toHaveBeenCalledWith(
         expect.objectContaining({
           failures: [
-            { sourceId: "page", code: "RESOURCE.WAIT_LIMIT", executionFact: "not_executed" },
+            // The wait failure keeps its own cause for the Review (2026-10-12 diagnostics).
+            expect.objectContaining({
+              sourceId: "page",
+              code: "RESOURCE.WAIT_LIMIT",
+              executionFact: "not_executed",
+              cause: expect.objectContaining({ code: "RESOURCE.WAIT_LIMIT" }),
+            }),
           ],
         }),
       );

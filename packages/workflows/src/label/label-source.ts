@@ -8,6 +8,7 @@ import { noteSourceFailure, type LabelRun } from "./label-run.js";
 import { runText } from "./label-text.js";
 import { SourceResultSchema, type Source, type State, type Status } from "./label-model.js";
 import { sameJson } from "./same.js";
+import { safeErrorSummary } from "@crawl-automation/platform/errors/summary";
 
 /** What a source's own preparation produced: a page's text document, or an image's keyword selection. */
 type Evidence =
@@ -48,6 +49,7 @@ export async function processSource(work: SourceWork, source: Source): Promise<S
     ) {
       return { id: source.id, status: "not_matched", reason: code };
     }
+    (work.run.sourceCauses ??= new Map()).set(source.id, safeErrorSummary(error));
     return stateOf(source, "unresolved");
   }
 }

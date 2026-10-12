@@ -39,7 +39,7 @@ export interface LabelSteps {
 }
 
 /** The channel's saved formula plan, as the label plans read it. */
-function planReader(parts: CoreParts): ProductPlanReader {
+export function labelPlanReader(parts: CoreParts): ProductPlanReader {
   return {
     async inspect(plan, signal) {
       const saved = await parts.channelPlans.inspect(plan.input, signal);
@@ -67,7 +67,7 @@ export function labelSteps(parts: CoreParts, stores: LabelStores): LabelSteps {
     saved.resolve(source, { id: source.id, status: "unresolved" }, signal);
   const plans = measuredLabelPlans(
     new LabelPlans({
-      plans: planReader(parts),
+      plans: labelPlanReader(parts),
       publication: parts.publication,
       resolve,
       core: labelCore,

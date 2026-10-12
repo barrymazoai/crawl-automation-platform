@@ -1,6 +1,6 @@
 import type { LabelCandidate } from "./label-extraction.js";
 import { hasConfirmedNoOtherIngredients } from "./label-ingredient-declaration.js";
-import { sameServingSize } from "./packaging.js";
+import { sameServingSize } from "./label-rules/serving-size.js";
 import {
   formulaAgreement,
   ingredientsAgreement,

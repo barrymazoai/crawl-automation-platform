@@ -55,17 +55,17 @@ export function isIngredientHeading(raw: string): boolean {
   if (/\b(?:supplement|nutrition|drug)\s+facts\b|amount\s+per\s+serving|daily\s+value|contains\s*:|may\s+contain|allergen/i.test(text)) return false;
   return text.length <= 80;
 }
-/** The rule that fired and where: row index and printed name, or the section concerned. */
-export type LabelFinding = { code: string; detail: string };
+/** The rule that fired and where: row index and printed name, or the section concerned; `rule` names its table entry. */
+export type LabelFinding = { code: string; detail: string; rule?: string };
 export function assessLabelCandidate(candidate: LabelCandidate) {
   const codes = new Set<string>(), findings: LabelFinding[] = [];
   const warnings: LabelFinding[] = [];
   // Every code keeps the first place that raised it, so a Review can say which row broke which rule.
-  const flag = (code: string, detail: string) => { if (!codes.has(code)) findings.push({ code, detail }); codes.add(code); };
+  const flag = (code: string, detail: string, rule?: string) => { if (!codes.has(code)) findings.push({ code, detail, ...(rule ? { rule } : {}) }); codes.add(code); };
   let componentCount = 0;
   for (const column of candidate.formula?.columns ?? []) {
     const rows = assessLabelRows(column.rows);
-    rows.findings.forEach(finding => flag(finding.code, finding.detail));
+    rows.findings.forEach(finding => flag(finding.code, finding.detail, finding.rule));
     warnings.push(...rows.warnings);
     componentCount += column.rows.filter(row => row.kind === "blend_component").length;
   }

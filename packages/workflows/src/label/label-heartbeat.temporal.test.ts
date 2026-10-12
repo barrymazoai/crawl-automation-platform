@@ -100,7 +100,12 @@ it.each([false, true])(
         expect(reviewLabelProduct).toHaveBeenCalledWith(
           expect.objectContaining({
             failures: [
-              { sourceId: "page", code: activityCodes.heartbeatTimeout, executionFact: "unknown" },
+              expect.objectContaining({
+                sourceId: "page",
+                code: activityCodes.heartbeatTimeout,
+                executionFact: "unknown",
+                cause: expect.objectContaining({ code: activityCodes.heartbeatTimeout }),
+              }),
             ],
           }),
         );

@@ -1,4 +1,4 @@
-import { recordRecovery } from "@crawl-automation/platform";
+import { readBackAfterWrite, recordRecovery } from "@crawl-automation/platform";
 import { sha256 } from "@crawl-automation/platform";
 import {
   LabelCollectedProductSchema,
@@ -92,18 +92,22 @@ export class LabelCollection {
   ): Promise<string> {
     const candidate = attempt.candidate as LabelCollectedProduct;
     const hash = labelCollectedHash(candidate);
+    let registrationCause: unknown;
     const prior = await this.deps.registry.read(candidate.operationId);
     if (prior && labelCollectedHash(prior) !== hash) {
       throw assemblyFailure("LABEL_COLLECTION.CONFLICT");
     }
     if (!prior) {
       await this.assertObservationFree(attempt);
-      await this.append(candidate, { hash, signal });
+      registrationCause = await this.append(candidate, { hash, signal });
     }
-    const saved = await this.deps.registry.read(candidate.operationId);
+    const saved = await readBackAfterWrite(
+      () => this.deps.registry.read(candidate.operationId),
+      registrationCause,
+    );
     if (!saved) {
       await this.assertObservationFree(attempt);
-      throw assemblyFailure("LABEL_COLLECTION.REGISTRATION_UNKNOWN");
+      throw assemblyFailure("LABEL_COLLECTION.REGISTRATION_UNKNOWN", registrationCause);
     }
     if (labelCollectedHash(saved) !== hash) {
       throw assemblyFailure("LABEL_COLLECTION.CONFLICT");
@@ -132,6 +136,7 @@ export class LabelCollection {
     } catch (error) {
       recordRecovery(error, { operation: "assembly/label-collection" });
       // Settled by the read-back; the insert is never repeated.
+      return error;
     }
   }
 

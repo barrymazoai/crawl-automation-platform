@@ -5,13 +5,15 @@ import {
   OrderedDiagnosticsSchema,
   orderedProgressKey,
   type LabelPlanInput,
+  type ProductPlanReader,
 } from "@crawl-automation/processing";
 import { appErrors } from "../errors.js";
+import { unattemptedLabelDiagnostics } from "./label-unattempted-diagnostics.js";
 
-/** Read the exact inspected prefix; older histories without a report keep their original Review. */
+/** Read the exact inspected prefix, or diagnose a zero-attempt no-source Review from its retained plan. */
 export async function labelReviewDiagnostics(
   objects: Pick<ObjectStore, "read"> | undefined,
-  at: { input: LabelPlanInput; states: unknown[] },
+  at: { input: LabelPlanInput; states: unknown[]; code?: string; plans?: ProductPlanReader },
   signal: AbortSignal,
 ) {
   if (!objects || !at.input.sourcePolicy) {
@@ -20,7 +22,7 @@ export async function labelReviewDiagnostics(
   const key = orderedProgressKey(at.input, at.states);
   const bytes = await objects.read(key, 2 * 1024 * 1024, signal);
   if (!bytes) {
-    return {};
+    return unattemptedLabelDiagnostics(at, signal);
   }
   const saved = OrderedDiagnosticsSchema.parse(decodeJson(bytes));
   if (

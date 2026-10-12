@@ -52,3 +52,17 @@ bracket-depth logic these need; a typed TypeScript table is used instead.
    need a new extraction protocol version still need model calls.
 
 Not in this plan: re-running models or touching existing Review records.
+
+## Status 2026-10-12
+
+- `ed591f2` three shared rule fixes; of 162 requeued products 133 completed (percentage 60/68, collection 51/57,
+  health functions 7/7, transient 15/30).
+- `e508c13` Part B diagnostics (no-source cause and per-source summary under `source-failure-first/2`, swallowed
+  error causes, Amazon check names, download status, DTC variant/scope/capture reasons, redacted Review details).
+- Part C: rule table in `packages/v3-contracts/src/label-rules/` (parent, blend percentage, parenthesis-only
+  ingredient, serving-size equivalences), real examples in `examples/`, vision Reviews record `findings` with rule
+  IDs. One rule narrowed: a dose-free sub-heading inside a printed blend keeps the blend open — 175 of 411 stored
+  parent-invalid answers newly pass that check (strictly more permissive; checked against all 411). The remaining
+  parent failures are mostly model index errors (46 self-links, 90 links to the previous component) and need a new
+  extraction protocol version (step 3). Also closed: preparation causes, write+read-back causes, zero-attempt
+  no-source summaries; a failed diagnostic lookup never stops a Review.

@@ -16,6 +16,7 @@ import {
   claimHandoff,
   keepLocally,
   labelAssemblyKey,
+  writeAssembly,
 } from "./assembly-files.js";
 import { recordAssemblyReview, type AssemblyStores } from "./assembly-review.js";
 import {
@@ -130,13 +131,7 @@ export class LabelAssembly {
     }
     await keepLocally(local, file, signal);
     await claimHandoff(remote, { key: intent, hash: sha256(file.bytes) }, signal);
-    try {
-      await remote.create(file.key, file.bytes, "application/json", signal);
-    } catch (error) {
-      recordRecovery(error, { operation: "assembly/label-assembly" });
-      // The read-back below decides; never a second write.
-    }
-    assertSameBytes(await remote.read(file.key, ASSEMBLY_LIMIT, signal), file.bytes);
+    await writeAssembly(remote, file, signal);
   }
 
   private async compute(

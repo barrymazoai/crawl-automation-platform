@@ -127,6 +127,23 @@ describe("vision step", () => {
     expect(fixture.registry.writes).toBe(0);
   });
 
+  it("a label Review names the rule and row that rejected the answer (rule table, 2026-10-12)", async () => {
+    const label = JSON.parse(labelAnswer());
+    label.formula.columns[0].rows[14].parentRowIndex = 14;
+    const fixture = visionSetup({ answer: JSON.stringify(label) });
+    const outcome = await fixture.step.run(fixture.task, signal());
+    expect(outcome).toMatchObject({ status: "review", code: "VISION.LABEL_PARENT_INVALID" });
+    expect(reviewOf(fixture, outcome)?.rawError.details).toMatchObject({
+      findings: [
+        expect.objectContaining({
+          code: "LABEL.PARENT_INVALID",
+          rule: "parent-is-open-earlier-group",
+          detail: expect.stringMatching(/^row 14 /u),
+        }),
+      ],
+    });
+  });
+
   it("an old-format answer is never read as a label answer", async () => {
     const fixture = visionSetup({ answer: JSON.stringify(legacyCandidate) });
     expect(await fixture.step.run(fixture.task, signal())).toMatchObject({

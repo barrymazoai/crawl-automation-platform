@@ -8,6 +8,7 @@ import { labelActivityOptions } from "./label-activity-options.js";
 import { isHeartbeatFailure, withHeartbeatFailure } from "./activity-heartbeat.js";
 import type { LabelWorkflowInput, QueueKind } from "./label-model.js";
 import type { LabelStream } from "./label-stream.js";
+import type { SafeErrorSummary } from "@crawl-automation/platform/errors/summary";
 
 type Activity = (value: unknown) => Promise<unknown>;
 
@@ -28,6 +29,8 @@ export interface LabelRun {
   waiting: string[];
   quarantined: string[];
   heartbeatFailures: { sourceId: string; code: string; executionFact: "unknown" }[];
+  /** Diagnostic data only, forwarded by the existing Review activity. */
+  sourceCauses?: Map<string, SafeErrorSummary>;
 }
 
 export function labelRun(entry: LabelWorkflowInput, stream: LabelStream): LabelRun {
