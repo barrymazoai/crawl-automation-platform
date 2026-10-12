@@ -54,6 +54,30 @@ describe.skipIf(!hasPostgres)("listing states against a real PostgreSQL", () => 
     await postgres?.stop();
   });
 
+  it("accepts a variant removed from a live page (migration 062)", async () => {
+    const removed = await recordSighting(
+      store,
+      sighting({
+        channel: "costco",
+        listingId: "100018793",
+        variantId: "1792684",
+        reason: "variant_removed",
+        evidence: {
+          probe: "direct-revisit",
+          causeCode: "LISTING.VARIANT_REMOVED",
+          httpStatus: null,
+          observedExternalId: null,
+          finalUrl: "https://www.costco.com/p/-/item/100018793",
+          artifactKey: "v3/costco-html/run/original.html",
+        },
+      }),
+    );
+    expect(removed).toMatchObject({ reason: "variant_removed", variantId: "1792684" });
+    expect(await store.undelivered({ limit: 10, channels: ["costco"], state: "unlisted" })).toEqual(
+      [expect.objectContaining({ observationId: removed.observationId })],
+    );
+  });
+
   it("records once, keeps the first record, and refuses a different sighting under the same key", async () => {
     const first = await recordSighting(store, sighting());
     const again = await recordSighting(store, sighting({ capturedAt: "2026-09-29T11:00:00.000Z" }));
@@ -119,6 +143,7 @@ describe.skipIf(!hasPostgres)("listing states against a real PostgreSQL", () => 
         redirected_to_other_product: 1,
         redirected_away: 0,
         identity_conflict: 0,
+        variant_removed: 0,
       },
       undelivered: 2,
     });

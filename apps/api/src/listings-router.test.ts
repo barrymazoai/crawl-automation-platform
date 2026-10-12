@@ -33,6 +33,7 @@ describe("listing state procedures", () => {
         redirected_to_other_product: 1,
         redirected_away: 0,
         identity_conflict: 0,
+        variant_removed: 0,
       },
       undelivered: 3,
     };

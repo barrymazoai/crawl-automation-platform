@@ -1,12 +1,14 @@
 /**
  * Why a revisited listing is unlisted (owner rule 2026-09-29, every channel): its page no longer exists, it redirects
- * to a different product, it redirects to a page that is no product, or the page shows another product's ID.
+ * to a different product, it redirects to a page that is no product, or the page shows another product's ID; or
+ * (2026-10-12) the shared page is still live but no longer offers this variant.
  */
 export const UNLISTED_REASONS = [
   "not_found",
   "redirected_to_other_product",
   "redirected_away",
   "identity_conflict",
+  "variant_removed",
 ] as const;
 export type UnlistedReason = (typeof UNLISTED_REASONS)[number];
 

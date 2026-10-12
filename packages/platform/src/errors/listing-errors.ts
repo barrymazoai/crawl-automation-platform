@@ -6,6 +6,10 @@ export const listingErrors = defineErrors({
   "LISTING.LIVE": { category: "SOURCE", message: "The listing was observed live at capture time." },
   "LISTING.NOT_FOUND": { category: "SOURCE", message: "Not found." },
   "LISTING.REDIRECTED_AWAY": { category: "SOURCE", message: "Redirected away." },
+  "LISTING.VARIANT_REMOVED": {
+    category: "SOURCE",
+    message: "The page is live but no longer offers this variant.",
+  },
   "LISTING.REDIRECTED_TO_OTHER_PRODUCT": {
     category: "SOURCE",
     message: "Redirected to other product.",

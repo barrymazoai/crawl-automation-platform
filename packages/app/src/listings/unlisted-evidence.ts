@@ -6,6 +6,8 @@ const REQUIRED_EVIDENCE: Record<UnlistedReasonName, readonly (keyof ListingEvide
   redirected_to_other_product: ["observedExternalId", "finalUrl"],
   redirected_away: ["finalUrl"],
   identity_conflict: ["observedExternalId"],
+  // The live page that no longer offers the variant.
+  variant_removed: ["finalUrl", "artifactKey"],
 };
 
 /**

@@ -1,6 +1,7 @@
 import { historyErrors, PipelineCapture } from "@crawl-automation/app";
 import {
   PostgresHtmlCaptureRecords,
+  PostgresKnownVariants,
   PostgresListingStates,
   PostgresProductHistory,
 } from "@crawl-automation/adapters";
@@ -9,6 +10,7 @@ import {
   HttpCapture,
   type PageFetcher,
   type CapturedPage,
+  type ChannelId,
   type ChannelRegistry,
 } from "@crawl-automation/channels-core";
 import { errorCodeOf, type Database, type Logger } from "@crawl-automation/platform";
@@ -40,6 +42,7 @@ export function captureRecords(parts: {
   const listingStates = new PostgresListingStates(parts.database);
   return {
     listings: { record: (raw: unknown) => recordSighting(listingStates, raw) },
+    variants: knownVariants(parts),
     history: new MetricsHistory(
       new PostgresProductHistory(parts.database),
       listingIdentityResolver(parts.registry),
@@ -64,6 +67,18 @@ export function captureRecords(parts: {
         "live sighting not stored yet",
       );
     },
+  };
+}
+
+/** Channels whose page lists every variant it offers (adapter `discoversVariants`, e.g. Costco). */
+function knownVariants(parts: { database: Database; registry: ChannelRegistry }) {
+  const listing = new Set(
+    parts.registry.channels().filter((channel) => parts.registry.get(channel).discoversVariants),
+  );
+  const known = new PostgresKnownVariants(parts.database);
+  return {
+    listsVariants: (channel: string) => listing.has(channel as ChannelId),
+    known: (channel: string, listingId: string) => known.known(channel, listingId),
   };
 }
 

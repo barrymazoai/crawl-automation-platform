@@ -2,6 +2,7 @@ import { recordRecovery } from "@crawl-automation/platform";
 import type {
   CapturedPage,
   CaptureRequest,
+  DiscoveredVariant,
   ListingSighting,
   ProductCapture,
   UnlistedReason,
@@ -9,6 +10,11 @@ import type {
 import type { CaptureRun } from "../history/capture-history.js";
 import type { ListingObservation } from "../listings/listing-model.js";
 import { liveSighting, productRunSource } from "./live-sighting.js";
+import {
+  removedVariantSightings,
+  type KnownVariants,
+  type OfferedVariants,
+} from "./removed-variants.js";
 
 /** The listing a revisit found unlisted (and why), as the pipeline returns it instead of a Review. */
 export interface SightedProduct {
@@ -50,6 +56,8 @@ export class PipelineCapture<
       onHistoryPending?(error: unknown, page: CapturedPage): void;
       /** Told when a live sighting could not be stored (the capture itself still counts). */
       onListingPending?(error: unknown, page: CapturedPage): void;
+      /** Shared pages that list their variants: a variant offered before and gone now is recorded unlisted. */
+      variants?: KnownVariants;
     },
   ) {}
 
@@ -105,10 +113,12 @@ export class PipelineCapture<
     const { page, variantPages, ...rest } = captured as Result & {
       page?: CapturedPage;
       variantPages?: { operationId: string; page: CapturedPage }[];
+      discovered?: DiscoveredVariant[];
     };
     if (page) {
       await this.recordLive(request, page);
       await this.recordMetrics(request, page);
+      await this.recordRemoved(request, { page, variantPages, discovered: rest.discovered });
     }
     for (const variant of variantPages ?? []) {
       const member = { ...request, operationId: variant.operationId, url: variant.page.url };
@@ -124,6 +134,20 @@ export class PipelineCapture<
     } catch (error) {
       recordRecovery(error, { operation: "pipeline.listing" });
       this.deps.onListingPending?.(error, page);
+    }
+  }
+
+  private async recordRemoved(request: CaptureRequest, offered: OfferedVariants): Promise<void> {
+    if (!this.deps.variants) {
+      return;
+    }
+    try {
+      for (const sighting of await removedVariantSightings(this.deps.variants, request, offered)) {
+        await this.deps.listings.record(sighting);
+      }
+    } catch (error) {
+      recordRecovery(error, { operation: "pipeline.removed-variants" });
+      this.deps.onListingPending?.(error, offered.page);
     }
   }
 

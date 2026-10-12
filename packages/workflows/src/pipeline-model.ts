@@ -52,7 +52,7 @@ export type ProductPipelineInput = z.infer<typeof ProductPipelineInputSchema>;
 export const ListingResultSchema = z.strictObject({
   status: z.literal("listing"),
   state: z.literal("unlisted"),
-  // The same reasons as channels-core's UNLISTED_REASONS (this package does not depend on channels-core).
+  // channels-core's UNLISTED_REASONS a capture can end with (variant_removed is recorded beside a live page).
   reason: z.enum([
     "not_found",
     "redirected_to_other_product",

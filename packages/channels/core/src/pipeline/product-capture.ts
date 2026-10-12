@@ -123,7 +123,8 @@ export class ProductCapture {
   }
 }
 
-const MAX_DISCOVERED = 200;
+/** At most this many discovered variants are handed back; a list this long may be cut short. */
+export const MAX_DISCOVERED = 200;
 
 /** The page's variants other than the captured one, only for adapters that opt in. */
 function discoveredVariants(

@@ -214,3 +214,19 @@ creates nothing, one sighting is enough (threshold 1).
 - The marketplace selection skips a latest run that recorded the page unlisted; it is a delisting, not a product.
 - Known limit: Swanson listings were synced under Shopify IDs while sightings carry the page handle, so a Swanson
   delisting of a never-ledgered page is answered `unknown_listing` (1 Swanson sighting, a test URL).
+
+## A variant removed from a live shared page (owner 2026-10-12, Plane SUPPLYSMAR-431)
+
+Amazon, Whole Foods and GNC give every variant its own page, so a removed variant is a 404/redirect and already a
+delisting. Costco variants share one page: a variant can disappear from a page that stays live. Supply Smart keeps one
+listing per variant ID (`06-cross-channel-identity.md`), so a `gone` for that ID delists only that variant.
+
+- New unlisted reason `variant_removed` (migration 062 widens the reason check; evidence: the live page URL and its
+  archive). Supply Smart has no separate state; it is sent as `gone` with the reason in evidence. How Supply Smart
+  shows it is tracked in SUPPLYSMAR-431.
+- `PipelineCapture` (capture activity; no workflow change): for channels whose page lists its variants
+  (`discoversVariants`), variants ever queued for the listing that are absent from this capture's page variants,
+  discovered variants and variant member pages are recorded unlisted. Nothing is judged when the page lists no
+  variant or the discovered list reached its cap (200). A recording failure never fails the capture.
+- Out of stock is not removal: a variant still listed but unavailable stays live (Supply Smart contract §3).
+- Swanson queues one item per page and syncs its selected variant only, so there is no per-variant listing to delist yet.
