@@ -7,6 +7,10 @@
     ".": {
       "types": "./src/index.ts",
       "import": "./src/index.ts"
+    },
+    "./marketplace-mapping": {
+      "types": "./src/product-sync/marketplace-mapping.ts",
+      "import": "./src/product-sync/marketplace-mapping.ts"
     }
   },
   "scripts": {

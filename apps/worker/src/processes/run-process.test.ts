@@ -4,15 +4,20 @@ import type { WorkerParts } from "../container.js";
 import { runProcess } from "./run-process.js";
 import type { WorkerRole } from "./process-config.js";
 
-const { runWorkers, runStopSweep, runBrandRedeliverySweep } = vi.hoisted(() => ({
-  runWorkers: vi.fn(),
-  runStopSweep: vi.fn(async (_parts: unknown, _signal: AbortSignal) => undefined),
-  runBrandRedeliverySweep: vi.fn(
-    async (_parts: unknown, _signal: AbortSignal): Promise<void> => undefined,
-  ),
-}));
+const { runWorkers, runStopSweep, runBrandRedeliverySweep, runProductSyncSweep } = vi.hoisted(
+  () => ({
+    runWorkers: vi.fn(),
+    runStopSweep: vi.fn(async (_parts: unknown, _signal: AbortSignal) => undefined),
+    runBrandRedeliverySweep: vi.fn(
+      async (_parts: unknown, _signal: AbortSignal): Promise<void> => undefined,
+    ),
+    runProductSyncSweep: vi.fn(
+      async (_parts: unknown, _signal: AbortSignal): Promise<void> => undefined,
+    ),
+  }),
+);
 vi.mock("../resources/stop-sweep.js", () => ({ runStopSweep }));
-vi.mock("../brand-redelivery-sweep.js", () => ({ runBrandRedeliverySweep }));
+vi.mock("../brand-redelivery-sweep.js", () => ({ runBrandRedeliverySweep, runProductSyncSweep }));
 vi.mock("@crawl-automation/platform/temporal-worker", () => ({ runWorkers }));
 vi.mock("./role-workers.js", () => ({ roleWorkers: vi.fn(() => []) }));
 

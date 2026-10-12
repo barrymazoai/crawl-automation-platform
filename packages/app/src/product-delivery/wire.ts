@@ -2,10 +2,10 @@ import type { LabelCollectedProduct } from "@crawl-automation/v3-contracts";
 
 export interface DeliveryRun {
   runId: string;
-  channel: "dtc";
+  channel: "dtc" | "amazon" | "gnc" | "swanson" | "wholefoods" | "costco";
   scope: "full" | "partial";
-  siteKey: string;
-  companyDomain: string;
+  siteKey?: string;
+  companyDomain?: string;
   startedAt: string;
   source: string;
 }
@@ -18,7 +18,7 @@ export interface DeliveryListing {
   externalId: string;
   sourceUrl: string;
   productUrl: string;
-  siteKey: string;
+  siteKey?: string;
   productName: string;
   titleRaw: string;
   brandName?: string;
@@ -28,7 +28,8 @@ export interface DeliveryListing {
   mainIngredients?: string[];
   variant?: Record<string, string | { value: number; unit: string }>;
   variantConfidence?: number;
-  variantSource?: "ai_extract";
+  variantSource?: "ai_extract" | "channel_attrs" | "manual";
+  gtin?: string;
   price?: string | undefined;
   currency?: string | undefined;
   inStock?: boolean | undefined;
@@ -61,8 +62,8 @@ export interface DeliveryLabel {
   schemaVersion: 1;
   submitter: { namespace: string; operationId: string };
   observation: Omit<LabelCollectedProduct["observation"], "schemaVersion"> & { capturedAt: string };
-  company: { domain: string; expectedCompanyId: string };
-  channel: "dtc";
+  company: { domain: string; expectedCompanyId?: string };
+  channel: "dtc" | "amazon" | "gnc" | "swanson" | "wholefoods" | "costco";
   source: string;
   listing: DeliveryListing;
   images: DeliveryImage[];

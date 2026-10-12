@@ -1,5 +1,5 @@
 import { runStopSweep } from "../resources/stop-sweep.js";
-import { runBrandRedeliverySweep } from "../brand-redelivery-sweep.js";
+import { runBrandRedeliverySweep, runProductSyncSweep } from "../brand-redelivery-sweep.js";
 import { startHeartbeat } from "@crawl-automation/platform";
 import { runWorkers, type RunningWorker } from "@crawl-automation/platform/temporal-worker";
 import type { WorkerParts } from "../container.js";
@@ -43,16 +43,16 @@ async function runWithHealth(context: {
   const recovery = chosen.roles.some((entry) => entry.role === "resources")
     ? runStopSweep(parts, signal)
     : Promise.resolve();
-  const redelivery = chosen.roles.some((entry) => entry.role === "brand-enrichment")
-    ? runBrandRedeliverySweep(parts, signal)
-    : Promise.resolve();
+  const brandRole = chosen.roles.some((entry) => entry.role === "brand-enrichment");
+  const redelivery = brandRole ? runBrandRedeliverySweep(parts, signal) : Promise.resolve();
+  const productSync = brandRole ? runProductSyncSweep(parts, signal) : Promise.resolve();
   const queues = chosen.roles.map((entry) => `${entry.role}:${entry.taskQueue}`);
   parts.log.info({ process: chosen.name, queues }, "worker process running");
   try {
-    await Promise.all([done, monitor, heartbeat, recovery, redelivery]);
+    await Promise.all([done, monitor, heartbeat, recovery, redelivery, productSync]);
   } finally {
     shutdown();
-    await Promise.allSettled([done, monitor, recovery, redelivery]);
+    await Promise.allSettled([done, monitor, recovery, redelivery, productSync]);
     parts.log.info({ process: chosen.name }, "worker process stopping");
     await (await heartbeat)?.stop();
   }

@@ -7,7 +7,11 @@ import {
 } from "@crawl-automation/v3-contracts";
 import { PostgresEnrichmentRepository } from "../postgres/enrichment-repository.js";
 
-export async function deliveryEnrichment(database: Queryable, collection: LabelCollectedProduct) {
+export async function deliveryEnrichment(
+  database: Queryable,
+  collection: LabelCollectedProduct,
+  channel = "dtc",
+) {
   const owner = collection.observation;
   const rows = await database.query<{
     subject_id: string;
@@ -16,10 +20,10 @@ export async function deliveryEnrichment(database: Queryable, collection: LabelC
   }>(
     `
     SELECT subject_id, enrichment_id, subject FROM product_enrichment_subject
-    WHERE collection_operation_id=$1 AND channel='dtc'
+    WHERE collection_operation_id=$1 AND channel=$4
       AND listing_id=$2 AND variant_id IS NOT DISTINCT FROM $3::text
     ORDER BY registered_at DESC, subject_id DESC LIMIT 1`,
-    [collection.operationId, owner.listingId, owner.variantId],
+    [collection.operationId, owner.listingId, owner.variantId, channel],
   );
   const row = rows[0];
   if (!row) {

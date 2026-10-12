@@ -28,15 +28,7 @@ export class PostgresCollectedProducts implements LabelCollectedRegistry {
     if (!row) {
       return null;
     }
-    const record = LabelCollectedProductSchema.parse(row.record);
-    const intact =
-      record.operationId === operationId &&
-      record.observation.observationId === row.observation_id &&
-      labelCollectedHash(record) === row.record_hash;
-    if (!intact) {
-      throw assemblyFailure("LABEL_COLLECTION.INTEGRITY");
-    }
-    return record;
+    return checkedCollectedProduct(row, operationId);
   }
 
   /** The product collected for an observation, whichever operation collected it. */
@@ -69,4 +61,20 @@ export class PostgresCollectedProducts implements LabelCollectedRegistry {
       throw assemblyFailure("LABEL_COLLECTION.CONFLICT");
     }
   }
+}
+
+/** Shared decoding of an immutable collected row (also used by bounded delivery readers). */
+export function checkedCollectedProduct(
+  row: CollectedRow,
+  operationId: string,
+): LabelCollectedProduct {
+  const record = LabelCollectedProductSchema.parse(row.record);
+  const intact =
+    record.operationId === operationId &&
+    record.observation.observationId === row.observation_id &&
+    labelCollectedHash(record) === row.record_hash;
+  if (!intact) {
+    throw assemblyFailure("LABEL_COLLECTION.INTEGRITY");
+  }
+  return record;
 }

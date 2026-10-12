@@ -1,4 +1,6 @@
 import { brandEnrichmentService } from "./brand-enrichment-parts.js";
+import { productSyncService } from "./product-sync-parts.js";
+import { enrichmentService } from "./enrichment-parts.js";
 import { resourceService } from "./resources/resource-parts.js";
 import { siteAnalysisService } from "./site-analysis-parts.js";
 import type { UsageService, EvidenceService } from "@crawl-automation/app";
@@ -7,8 +9,6 @@ import { brandService } from "./brand-parts.js";
 import { usageService } from "./usage-parts.js";
 import { pathAccessible } from "@crawl-automation/platform";
 import {
-  PostgresEnrichmentRepository,
-  EnrichmentWorkflowStarter,
   PostgresDeliveryJournal,
   PostgresDeliveryScan,
   PostgresResourceStore,
@@ -17,7 +17,7 @@ import {
   TemporalWorkflowTree,
 } from "@crawl-automation/adapters";
 import {
-  EnrichmentBackfill,
+  type EnrichmentBackfill,
   BrandService,
   CleanupService,
   DeliveryCoordinator,
@@ -54,6 +54,7 @@ import { fleetService } from "./routers/fleet-parts.js";
 /** Everything the API is built from. Adapters are created once and shared. */
 export interface ApiParts {
   brandEnrichment: ReturnType<typeof brandEnrichmentService>;
+  productSync: ReturnType<typeof productSyncService>;
   siteAnalyses: ReturnType<typeof siteAnalysisService>;
   usage: UsageService;
   enrichment: EnrichmentBackfill;
@@ -91,6 +92,7 @@ export async function buildContainer(config: ApiConfig): Promise<Parts> {
   const temporal = await connectTemporal(config.temporal);
   const container = assembleContainer({ config, log, temporal });
   await container.cradle.brandEnrichment;
+  await container.cradle.productSync;
   return container;
 }
 
@@ -135,6 +137,7 @@ function registerServices(container: Parts): void {
     brands: asFunction(brandService).singleton(),
     siteAnalyses: asFunction(siteAnalysisService).singleton(),
     brandEnrichment: asFunction(brandEnrichmentService).singleton(),
+    productSync: asFunction(productSyncService).singleton(),
     reviews: asFunction(reviewService).singleton(),
     products: asFunction(productService).singleton(),
     history: asFunction(historyService).singleton(),
@@ -208,9 +211,3 @@ function deliveryRunner(parts: ApiParts): DeliveryRunner {
     parts.config.delivery.runner,
   );
 }
-
-const enrichmentService = (parts: ApiParts) =>
-  new EnrichmentBackfill(
-    new PostgresEnrichmentRepository(parts.database),
-    new EnrichmentWorkflowStarter(parts.temporal.client, parts.config.pipeline.queues.activities),
-  );

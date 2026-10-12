@@ -1,7 +1,10 @@
 import { createHash } from "node:crypto";
 import { productDeliveryErrors } from "@crawl-automation/app";
 import type { ObjectStore } from "@crawl-automation/platform";
-import { ChannelProductEvidenceSchema } from "@crawl-automation/v3-contracts";
+import {
+  ChannelProductEvidenceSchema,
+  type ChannelProductEvidence,
+} from "@crawl-automation/v3-contracts";
 import { z } from "zod";
 
 const WrappedProjection = z.object({
@@ -13,6 +16,8 @@ export async function retainedProjection(
   input: {
     objects: Pick<ObjectStore, "read">;
     references: { objectKey: string; sha256: string }[];
+    /** Existing channel parsers for retained nonstandard projections and original HTML. */
+    decode?: (raw: unknown) => ChannelProductEvidence | null;
   },
   signal: AbortSignal,
 ) {
@@ -26,16 +31,17 @@ export async function retainedProjection(
       throw productDeliveryErrors.create("PRODUCT_DELIVERY.INTEGRITY");
     }
     const text = Buffer.from(bytes).toString("utf8").trimStart();
-    if (!text.startsWith("{")) {
-      continue;
-    }
-    const raw: unknown = JSON.parse(text);
+    const raw: unknown = text.startsWith("{") ? JSON.parse(text) : text;
     const wrapped = WrappedProjection.safeParse(raw);
     const product = ChannelProductEvidenceSchema.safeParse(
       wrapped.success ? wrapped.data.evidence : raw,
     );
     if (product.success) {
       return product.data;
+    }
+    const decoded = input.decode?.(raw);
+    if (decoded) {
+      return ChannelProductEvidenceSchema.parse(decoded);
     }
   }
   return null;

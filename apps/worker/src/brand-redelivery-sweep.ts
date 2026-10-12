@@ -1,5 +1,4 @@
 import { setTimeout } from "node:timers/promises";
-import type { BrandRedeliverySweep } from "@crawl-automation/app";
 import { ignoreAbort, type Logger } from "@crawl-automation/platform";
 import type { WorkerParts } from "./container.js";
 
@@ -17,8 +16,24 @@ export async function runBrandRedeliverySweep(parts: WorkerParts, signal: AbortS
   });
 }
 
+/** Marketplace products to Supply Smart on the same role and lifetime (owner 2026-10-12); zero minutes disables it. */
+export async function runProductSyncSweep(parts: WorkerParts, signal: AbortSignal) {
+  const settings = parts.config.brandEnrichment?.productSync;
+  if (!settings || settings.sweepMinutes === 0) {
+    return;
+  }
+  await brandRedeliverySweepLoop({
+    sweep: async (signal) => {
+      await (await parts.brandEnrichment).productSync.sweep(signal);
+    },
+    log: parts.log.child({ service: "product-sync" }),
+    intervalMs: settings.sweepMinutes * 60_000,
+    signal,
+  });
+}
+
 export async function brandRedeliverySweepLoop(input: {
-  sweep: BrandRedeliverySweep["sweep"];
+  sweep: (signal: AbortSignal) => Promise<unknown>;
   log: Logger;
   intervalMs: number;
   signal: AbortSignal;

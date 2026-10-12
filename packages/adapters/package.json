@@ -11,6 +11,10 @@
     "./text-registry": {
       "types": "./src/postgres/postgres-text-registry.ts",
       "import": "./src/postgres/postgres-text-registry.ts"
+    },
+    "./marketplace-reader": {
+      "types": "./src/product-sync/marketplace-reader.ts",
+      "import": "./src/product-sync/marketplace-reader.ts"
     }
   },
   "scripts": {

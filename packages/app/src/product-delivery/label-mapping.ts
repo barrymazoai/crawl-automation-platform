@@ -1,6 +1,7 @@
 import type { LabelCollectedProduct } from "@crawl-automation/v3-contracts";
 import { productDeliveryErrors } from "./errors.js";
-import type { DeliveryLabelContent } from "./wire.js";
+import { canonicalHash } from "../history/canonical.js";
+import type { DeliveryItem, DeliveryLabel, DeliveryLabelContent } from "./wire.js";
 
 export function deliveryLabelContent(record: LabelCollectedProduct): DeliveryLabelContent {
   const columns = record.formula?.columns ?? [];
@@ -55,5 +56,34 @@ export function deliveryLabelEvidence(record: LabelCollectedProduct) {
       kind: source.kind,
       operationId: source.record.input.operationId,
     })),
+  };
+}
+
+/** Full label wire payload shared by DTC and marketplace delivery. No run-dependent identity. */
+export function deliveryLabel(input: {
+  item: DeliveryItem;
+  collection: LabelCollectedProduct;
+  company: DeliveryLabel["company"];
+  channel: DeliveryLabel["channel"];
+}): DeliveryLabel {
+  const { item, collection, company, channel } = input;
+  const { clientRef: _clientRef, domain: _domain, capturedAt, images, ...listing } = item;
+  const { schemaVersion: _schemaVersion, ...observation } = collection.observation;
+  return {
+    schemaVersion: 1,
+    submitter: {
+      namespace: "crawler-v3",
+      operationId: `label-${canonicalHash(collection.operationId)}`,
+    },
+    observation: { ...observation, capturedAt },
+    company,
+    channel,
+    source: "crawler-v3:product-delivery",
+    listing,
+    images: images.slice(0, 50),
+    label: {
+      content: deliveryLabelContent(collection),
+      evidence: deliveryLabelEvidence(collection),
+    },
   };
 }

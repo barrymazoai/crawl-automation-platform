@@ -5,9 +5,10 @@ import type {
 import type { MappedDelivery } from "./wire.js";
 import { productDeliveryErrors } from "./errors.js";
 
-export function acceptedItems(
+/** Generic over the caller's entry so marketplace sync can keep its own fields (only `item` is read). */
+export function acceptedItems<P extends Pick<MappedDelivery, "item">>(
   answer: ProductIngestBatchAnswer,
-  input: { runId: string; products: MappedDelivery[] },
+  input: { runId: string; products: P[] },
 ) {
   const refs = input.products.map(({ item }) => item.clientRef);
   if (
@@ -30,9 +31,9 @@ export function acceptedItems(
   });
 }
 
-export function verificationProblems(
+export function verificationProblems<P extends Pick<MappedDelivery, "item">>(
   answer: ProductVerifyBatchAnswer,
-  input: { runId: string; products: MappedDelivery[] },
+  input: { runId: string; products: P[] },
 ) {
   const refs = input.products.map(({ item }) => item.clientRef);
   const exact =
@@ -56,7 +57,7 @@ export function verificationProblems(
   });
 }
 
-function itemProblems(item: ProductVerifyBatchAnswer["items"][number] | undefined) {
+export function itemProblems(item: ProductVerifyBatchAnswer["items"][number] | undefined) {
   if (!item) {
     return ["PRODUCT_DELIVERY.VERIFY_FAILED"];
   }
@@ -73,7 +74,7 @@ function itemProblems(item: ProductVerifyBatchAnswer["items"][number] | undefine
   return problems;
 }
 
-export function verificationExpectation({ item }: MappedDelivery) {
+export function verificationExpectation({ item }: Pick<MappedDelivery, "item">) {
   return {
     clientRef: item.clientRef,
     ...(item.price === undefined ? {} : { price: item.price }),

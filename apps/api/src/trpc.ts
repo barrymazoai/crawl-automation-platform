@@ -1,4 +1,6 @@
 import type {
+  BrandCompanyService,
+  ProductSyncControl,
   BrandEnrichmentService,
   UsageService,
   EnrichmentBackfill,
@@ -19,7 +21,12 @@ import type {
 import { isAppError, type AppError } from "@crawl-automation/platform";
 import { initTRPC, TRPCError } from "@trpc/server";
 
+/** Brand matching plus the database-only sync controls; sending runs in the worker's sweep. */
+export type ProductSyncApi = Pick<BrandCompanyService, "matchBrands" | "brands"> &
+  Pick<ProductSyncControl, "status" | "markPresent">;
+
 export interface ApiContext {
+  productSync?: ProductSyncApi | Promise<ProductSyncApi | undefined> | undefined;
   brandEnrichment?:
     BrandEnrichmentService | Promise<BrandEnrichmentService | undefined> | undefined;
   siteAnalyses?: SiteAnalysisService | undefined;
