@@ -196,6 +196,33 @@ describe.skipIf(!connectionString)("product sync ledger and migration 061", () =
     ]);
   });
 
+  it("reopen unfinished picks only attempts left sent for over 10 minutes", async () => {
+    const sent = {
+      status: "sent" as const,
+      materialAt,
+      payloadHash: "c".repeat(64),
+      ingestRunId: "run-3",
+    };
+    await ledger.record([
+      { ...asin, ...sent },
+      { ...variant, ...sent },
+    ]);
+    await client.query(
+      "UPDATE product_sync SET updated_at = now() - interval '11 minutes' WHERE listing_id = $1",
+      [asin.listingId],
+    );
+    expect(await ledger.reopen({ unfinished: true, limit: 10 })).toEqual({ reopened: 1 });
+    const rows = (
+      await client.query(
+        "SELECT listing_id, material_at = '-infinity' AS reopened FROM product_sync ORDER BY listing_id",
+      )
+    ).rows;
+    expect(rows).toEqual([
+      { listing_id: asin.listingId, reopened: true },
+      { listing_id: variant.listingId, reopened: false },
+    ]);
+  });
+
   it("refuses a verified row without its payload and run", async () => {
     await expect(ledger.record([{ ...asin, status: "verified", materialAt }])).rejects.toThrow();
   });

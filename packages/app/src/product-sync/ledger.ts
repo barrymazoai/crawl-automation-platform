@@ -54,9 +54,10 @@ export interface ProductSyncLedger {
   markPresent(keys: SyncKey[]): Promise<{ marked: number; skipped: number }>;
   counts(): Promise<{ channel: MarketplaceChannel; status: SyncStatus; count: number }[]>;
   /**
-   * Rows become pending again (their material time moves before every capture): failures with this reason, or
-   * verified products that were sent without a formula. Nothing is deleted; the old outcome stays on record until
-   * the next attempt overwrites it.
+   * Rows become pending again (their material time moves before every capture): failures with this reason,
+   * verified products that were sent without a formula, or attempts left `sent` (outcome unknown, e.g. a batch cut
+   * off by a 429) for over 10 minutes. Ingest is idempotent, so a resend is safe. Nothing is deleted; the old
+   * outcome stays on record until the next attempt overwrites it.
    */
   reopen(filter: ReopenFilter): Promise<{ reopened: number }>;
   /** Per channel: completed products, those whose brand has a matched company, and those still to send. */
@@ -73,5 +74,5 @@ export interface SyncOverview {
 export const variantKey = (variantId: string | null) => variantId ?? "";
 
 export type ReopenFilter = { channel?: MarketplaceChannel; limit: number } & (
-  { reason: string } | { withoutLabel: true }
+  { reason: string } | { withoutLabel: true } | { unfinished: true }
 );

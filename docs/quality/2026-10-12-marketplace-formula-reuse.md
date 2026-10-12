@@ -185,3 +185,15 @@ formula. The reader no longer reads the donor's capture history or retained page
 - `unavailableLabel` and `MARKETPLACE_LABEL_HISTORY` are removed (no remaining path).
 - `productSync.reopen({ withoutLabel: true, channel?, limit })` re-pends verified rows with no
   `collected_operation_id` (sent without a formula). Products with no formula anywhere are re-sent once, harmlessly.
+
+## Full sync stopped by Supply Smart 429 (2026-10-12 08:54 UTC) and the client fix
+
+The first full sweep (batch 200) gave up on GNC after six 429 retries; 197 GNC and 195 Swanson rows were left
+`sent` (outcome unknown) and the sweep was switched off. Only the product-database gateway answers 429 for a service
+key, via better-auth's api-key `isRateLimited` (jakarta, better-auth 1.3.32, read only): the counter resets only after
+a full window with no accepted call, so a continuous stream at 300/min reaches the 600 cap after ~2 minutes and a
+5 s…60 s backoff is refused again.
+
+- `SupplySmartRpc`: a 429 holds every call of the client for `rateLimitBackoffMs` (default 65 s, a window plus margin);
+  p-retry only counts attempts (6).
+- `productSync.reopen({ unfinished: true })` re-pends rows left `sent` for over 10 minutes; ingest is idempotent.
