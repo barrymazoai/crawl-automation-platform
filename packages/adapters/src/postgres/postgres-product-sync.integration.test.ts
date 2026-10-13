@@ -226,6 +226,27 @@ describe.skipIf(!connectionString)("product sync ledger and migration 061", () =
     ]);
   });
 
+  it("reopen present re-pends the baseline of listings Supply Smart already had", async () => {
+    await ledger.markPresent([asin]);
+    const sent = {
+      status: "verified" as const,
+      materialAt,
+      payloadHash: "e".repeat(64),
+      ingestRunId: "run-5",
+    };
+    await ledger.record([{ ...variant, ...sent }]);
+    expect(await ledger.reopen({ present: true, limit: 10 })).toEqual({ reopened: 1 });
+    const rows = (
+      await client.query(
+        "SELECT listing_id, status, material_at = '-infinity' AS reopened FROM product_sync ORDER BY listing_id",
+      )
+    ).rows;
+    expect(rows).toEqual([
+      { listing_id: asin.listingId, status: "present", reopened: true },
+      { listing_id: variant.listingId, status: "verified", reopened: false },
+    ]);
+  });
+
   it("a delisting covers every ID its listing was synced under", async () => {
     const sent = {
       status: "verified" as const,

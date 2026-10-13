@@ -56,8 +56,9 @@ export interface ProductSyncLedger {
   /**
    * Rows become pending again (their material time moves before every capture): failures with this reason,
    * verified products that were sent without a formula, or attempts left `sent` (outcome unknown, e.g. a batch cut
-   * off by a 429) for over 10 minutes. Ingest is idempotent, so a resend is safe. Nothing is deleted; the old
-   * outcome stays on record until the next attempt overwrites it.
+   * off by a 429) for over 10 minutes, or the `present` baseline (a listing Supply Smart already had, usually without
+   * our formula; owner 2026-10-13). Ingest is idempotent, so a resend is safe. Nothing is deleted; the old outcome
+   * stays on record until the next attempt overwrites it.
    */
   reopen(filter: ReopenFilter): Promise<{ reopened: number }>;
   /** Per channel: completed products, those whose brand has a matched company, and those still to send. */
@@ -74,5 +75,5 @@ export interface SyncOverview {
 export const variantKey = (variantId: string | null) => variantId ?? "";
 
 export type ReopenFilter = { channel?: MarketplaceChannel; limit: number } & (
-  { reason: string } | { withoutLabel: true } | { unfinished: true }
+  { reason: string } | { withoutLabel: true } | { unfinished: true } | { present: true }
 );

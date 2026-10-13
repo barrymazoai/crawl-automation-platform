@@ -21,7 +21,8 @@ export type MarkPresent = z.infer<typeof MarkPresentSchema>;
 /**
  * Products to send again after a fix: failures with a reason, e.g. `PRODUCT_DELIVERY.MATERIAL_MISSING`, verified
  * products sent without a formula (`withoutLabel`), or attempts whose outcome never arrived (`unfinished`, a batch
- * cut off by a 429), 2026-10-12. Exactly one of them.
+ * cut off by a 429), 2026-10-12, or the `present` baseline (listings Supply Smart had without our formula, 2026-10-13).
+ * Exactly one of them.
  */
 export const ReopenSyncSchema = z.union([
   z.strictObject({
@@ -37,6 +38,11 @@ export const ReopenSyncSchema = z.union([
   z.strictObject({
     channel: channel.optional(),
     unfinished: z.literal(true),
+    limit: z.number().int().min(1).max(20_000),
+  }),
+  z.strictObject({
+    channel: channel.optional(),
+    present: z.literal(true),
     limit: z.number().int().min(1).max(20_000),
   }),
 ]);

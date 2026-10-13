@@ -230,3 +230,12 @@ listing per variant ID (`06-cross-channel-identity.md`), so a `gone` for that ID
   variant or the discovered list reached its cap (200). A recording failure never fails the capture.
 - Out of stock is not removal: a variant still listed but unavailable stays live (Supply Smart contract §3).
 - Swanson queues one item per page and syncs its selected variant only, so there is no per-variant listing to delist yet.
+
+## The `present` baseline hid our formulas (2026-10-13)
+
+Before the first sync, 1,362 Amazon listings found in the Supply Smart test database were marked `present` (material
+time 2026-10-12 06:45 UTC), so no capture settled before then was sent. In the test database only 6 of them carry a
+crawler label observation, 451 have a formula from the old import and ~905 have none. Among them were 20 of the 45
+Amazon products re-run successfully on 2026-10-12 after the Review fixes. "Listing exists" was the wrong test for
+"already ingested". `productSync.reopen({ present: true })` re-pends that baseline; ingest matches the existing listings
+by external ID, so the resend updates them and adds the label.
