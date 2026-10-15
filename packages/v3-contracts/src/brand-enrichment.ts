@@ -526,12 +526,25 @@ export const BrandResearchSchema = z.object({
 });
 export type BrandResearch = z.infer<typeof BrandResearchSchema>;
 
+/**
+ * The company that owns a brand without a site of its own (owner 2026-10-15: "只能找到母公司的也行"). Its quote is
+ * verbatim on a saved page that names the brand, and names this owner.
+ */
+export const BrandWebsiteOwnerSchema = z.object({
+  name: z.string().trim().min(1).max(300),
+  url: z.string().trim().min(1).max(2000),
+  quote: z.string().trim().min(1).max(500),
+});
+export type BrandWebsiteOwner = z.infer<typeof BrandWebsiteOwnerSchema>;
+
 /** The official website of a brand we only know from marketplace listings (owner 2026-10-15). */
 export const BrandWebsiteSchema = z.object({
-  /** The brand's own homepage as saved, or null when no official website was found. */
+  /** The brand's own homepage as saved (or its owner's, with `owner`), or null when none was found. */
   url: z.string().trim().min(1).max(2000).nullable(),
-  /** Verbatim text on that saved page naming the brand or one of its listed products. */
+  /** Verbatim text on that saved page naming the brand or one of its listed products (the owner, with `owner`). */
   quote: z.string().trim().min(1).max(500).nullable(),
+  /** Set only when the brand has no site of its own and `url` is its owner's homepage. */
+  owner: BrandWebsiteOwnerSchema.nullable().default(null),
   reason: z.string().trim().min(1).max(2000),
   evidence: z.array(EvidencePageSchema).max(20),
   archiveKeys: z.array(z.string()),

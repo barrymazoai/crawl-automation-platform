@@ -1,3 +1,4 @@
+import { BrandWebsiteSchema, type BrandEnrichmentRun } from "@crawl-automation/v3-contracts";
 import type { SupplySmartCompanies, BrandEnrichmentRuns } from "./ports.js";
 import { domainOf, requireRun, saveOutput } from "./run-records.js";
 import { resolvedCompany } from "./company-resolution.js";
@@ -25,7 +26,7 @@ export class BrandIdentityService {
       {
         resolution,
         create: {
-          name: run.brandName,
+          name: (await this.websiteOwner(run)) ?? run.brandName,
           ...(domain ? { website: `https://${domain}` } : {}),
           isNutrition: run.role !== "owner",
         },
@@ -35,5 +36,14 @@ export class BrandIdentityService {
     await this.deps.runs.update(runId, { companyId: company.id });
     await saveOutput(this.deps.runs, { runId, step: "identity-company", output: company });
     return { company, existing: resolution.status === "matched" };
+  }
+
+  /** A marketplace brand found only through its owner's site creates the owner's company (owner 2026-10-15). */
+  private async websiteOwner(run: BrandEnrichmentRun): Promise<string | undefined> {
+    if (run.role !== "marketplace") {
+      return undefined;
+    }
+    const website = BrandWebsiteSchema.safeParse(await this.deps.runs.step(run.runId, "website"));
+    return website.success ? website.data.owner?.name : undefined;
   }
 }
