@@ -25,6 +25,11 @@ export const brandEnrichmentErrors = defineErrors({
     category: "VALIDATION",
     message: "Company identity is ambiguous or conflicting.",
   },
+  "BRAND_ENRICHMENT.IDENTITY_CANDIDATES": {
+    category: "VALIDATION",
+    message:
+      "Existing companies look like this brand; a person decides before a company is created.",
+  },
   "BRAND_ENRICHMENT.INVALID_STATE": {
     category: "VALIDATION",
     message: "This operation is not allowed in the current state.",

@@ -106,6 +106,15 @@ export class PostgresBrandEnrichmentRuns implements BrandEnrichmentRuns {
     return toRun(rows[0]);
   }
 
+  async moveCompany(fromCompanyId: string, toCompanyId: string) {
+    const rows = await this.database.query(
+      `UPDATE brand_enrichment_run SET company_id = $2::uuid, updated_at = clock_timestamp()
+       WHERE company_id = $1::uuid RETURNING id`,
+      [fromCompanyId, toCompanyId],
+    );
+    return rows.length;
+  }
+
   async saveStep(step: StepOutput) {
     await this.database.query(
       `INSERT INTO brand_enrichment_step (run_id, step, output, archive_keys) VALUES ($1, $2, $3::jsonb, $4::jsonb)

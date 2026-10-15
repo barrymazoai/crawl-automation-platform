@@ -1,34 +1,16 @@
 import { randomUUID } from "node:crypto";
 import type { BrandRequest } from "@crawl-automation/v3-contracts";
-import type {
-  BrandRequests,
-  BrandEnrichmentRuns,
-  BrandEnrichmentReviews,
-  MarketplaceBrands,
-  SupplySmartCompanies,
-} from "./ports.js";
-import type { BrandEnrichmentGateway } from "./service-ports.js";
+import type { BrandEnrichmentFacadeDeps } from "./service-ports.js";
+import { CompanyCorrectionService } from "./company-corrections.js";
 import { brandEnrichmentErrors } from "./errors.js";
 import { requireRun } from "./run-records.js";
 import { BrandQuestionService } from "./question-service.js";
 import * as inputs from "./api-model.js";
 import { BrandProductsRetry } from "./products-retry.js";
-import type { BrandProductRedelivery } from "./product-redelivery.js";
 
 /** Facade: the API's only entry point. Intake is explicitly requested, never a polling loop. */
 export class BrandEnrichmentService {
-  constructor(
-    private readonly deps: {
-      requests: BrandRequests;
-      runs: BrandEnrichmentRuns;
-      reviews: BrandEnrichmentReviews;
-      companies: SupplySmartCompanies;
-      gateway: BrandEnrichmentGateway;
-      /** Absent when this process cannot reach the saved products (no storage configured). */
-      redelivery?: BrandProductRedelivery;
-      marketplace?: MarketplaceBrands;
-    },
-  ) {}
+  constructor(private readonly deps: BrandEnrichmentFacadeDeps) {}
 
   async start(raw: unknown, signal = new AbortController().signal) {
     const { requestId } = inputs.StartBrandEnrichmentSchema.parse(raw);
@@ -193,6 +175,10 @@ export class BrandEnrichmentService {
       inputs.AnswerBrandQuestionSchema.parse(raw),
       signal,
     );
+  }
+  /** Owner-approved company corrections (2026-10-15); never called by a workflow. */
+  get corrections() {
+    return new CompanyCorrectionService(this.deps);
   }
   unlink(raw: unknown, signal = new AbortController().signal) {
     return this.deps.companies.unlink(inputs.UnlinkBrandCompanySchema.parse(raw), signal);

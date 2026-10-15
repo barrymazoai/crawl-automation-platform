@@ -59,6 +59,15 @@ export class PostgresBrandCompany implements BrandCompanyRepository {
     ]);
   }
 
+  async moveCompany(fromCompanyId: string, toCompanyId: string): Promise<number> {
+    const rows = await this.database.query(
+      `UPDATE supply_smart_brand_company SET company_id = $2::uuid, checked_at = clock_timestamp()
+       WHERE company_id = $1::uuid RETURNING brand_id`,
+      [fromCompanyId, toCompanyId],
+    );
+    return rows.length;
+  }
+
   async matches(brandIds: string[]): Promise<BrandCompanyMatch[]> {
     if (!brandIds.length) {
       return [];

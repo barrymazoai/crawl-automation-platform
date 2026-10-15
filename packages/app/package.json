@@ -24,6 +24,7 @@
     "@crawl-automation/v3-contracts": "workspace:*",
     "@crawl-automation/workflows": "workspace:*",
     "date-fns": "^4.1.0",
+    "tldts": "7.4.16",
     "zod": "catalog:"
   },
   "devDependencies": {

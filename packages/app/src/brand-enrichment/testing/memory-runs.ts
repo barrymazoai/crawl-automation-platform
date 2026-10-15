@@ -30,6 +30,11 @@ export function memoryRuns() {
       records.set(id, updated);
       return updated;
     }),
+    moveCompany: vi.fn<BrandEnrichmentRuns["moveCompany"]>(async (from, to) => {
+      const moved = [...records.values()].filter((run) => run.companyId === from);
+      moved.forEach((run) => records.set(run.runId, { ...run, companyId: to }));
+      return moved.length;
+    }),
     ...stepLedger({ steps, clues, tries }),
     latestProductAttempt: vi.fn<BrandEnrichmentRuns["latestProductAttempt"]>(async (runId) =>
       latestProductAttempt(steps, runId),

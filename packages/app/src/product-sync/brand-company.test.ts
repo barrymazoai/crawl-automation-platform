@@ -39,6 +39,7 @@ function setup(items = [brand()]) {
     list: vi.fn(async () => items),
     upsert: vi.fn(async (_match: BrandCompanyMatch) => undefined),
     matches: vi.fn(async () => [] as BrandCompanyMatch[]),
+    moveCompany: vi.fn(async () => 0),
   };
   const companies = {
     resolve: vi.fn(async (): Promise<CompanyResolution> => ({

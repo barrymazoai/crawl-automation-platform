@@ -61,7 +61,7 @@ type StepDependencies = {
 export function buildBrandStepServices(deps: StepDependencies) {
   const { runs, companies, reviews, tasks, config } = deps;
   return {
-    identity: new BrandIdentityService({ runs, companies }),
+    identity: new BrandIdentityService({ runs, companies, reviews }),
     website: new BrandWebsiteService({ runs, brands: deps.marketplace, finder: tasks.website }),
     marketplaceMatch: new MarketplaceMatchService({ runs, matches: deps.matches }),
     family: new BrandFamilyService({

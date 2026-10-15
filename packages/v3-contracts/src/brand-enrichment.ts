@@ -57,6 +57,8 @@ export const BrandEnrichmentSummarySchema = z.object({
     .optional(),
   contacts: z.number().int().min(0).optional(),
   ownership: z.enum(["has_parent", "independent", "waiting_for_person"]).optional(),
+  /** A marketplace brand whose look-alike companies a person resolved (owner 2026-10-15). */
+  identity: z.enum(["person_same", "person_new"]).optional(),
   family: z
     .object({
       shape: FamilyShapeSchema,
@@ -141,6 +143,41 @@ export const CompanySchema = z.looseObject({
   apolloOrganizationId: z.string().nullable().optional(),
 });
 export type Company = z.infer<typeof CompanySchema>;
+
+/** `company/quickSearch`: names, domains, subdomains and sub-brands, best hits first (at most 10). */
+export const CompanySearchHitSchema = z.looseObject({
+  id: z.string(),
+  name: z.string(),
+  domain: z.string().nullable(),
+  productCount: z.number(),
+  matchedField: z.string(),
+  matchedValue: z.string().nullable(),
+});
+export type CompanySearchHit = z.infer<typeof CompanySearchHitSchema>;
+
+/** `company/mergeCompany`: the source's products, contacts and domains move to the survivor; the source is deleted. */
+export const CompanyMergeSchema = z.object({
+  survivorId: z.uuid(),
+  sourceId: z.uuid(),
+  /** Counts only; nothing changes. */
+  dryRun: z.boolean().default(true),
+});
+export type CompanyMerge = z.infer<typeof CompanyMergeSchema>;
+
+export const CompanyMergeResultSchema = z.looseObject({
+  dryRun: z.boolean(),
+  sources: z.number(),
+  products: z.number(),
+  contacts: z.number(),
+  sourcesDeleted: z.number(),
+});
+export type CompanyMergeResult = z.infer<typeof CompanyMergeResultSchema>;
+
+export const CompanyRenameSchema = z.object({
+  companyId: z.uuid(),
+  name: z.string().trim().min(1).max(500),
+});
+export type CompanyRename = z.infer<typeof CompanyRenameSchema>;
 
 export const DomainAdditionSchema = z.object({
   companyId: z.uuid(),

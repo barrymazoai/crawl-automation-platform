@@ -34,6 +34,25 @@ export const family: FamilyFinding = {
   archiveKeys: [],
 };
 
+/** Look-alike search and the owner-approved corrections (2026-10-15). */
+function companyCorrections() {
+  return {
+    search: vi.fn<SupplySmartCompanies["search"]>(async () => []),
+    rename: vi.fn<SupplySmartCompanies["rename"]>(async (input) => ({
+      id: input.companyId,
+      name: input.name,
+      website: null,
+    })),
+    merge: vi.fn<SupplySmartCompanies["merge"]>(async (input) => ({
+      dryRun: input.dryRun,
+      sources: 1,
+      products: 1,
+      contacts: 0,
+      sourcesDeleted: input.dryRun ? 0 : 1,
+    })),
+  };
+}
+
 export function companies() {
   const records = new Map<string, Company>();
   return {
@@ -66,6 +85,7 @@ export function companies() {
       latestCheck: null,
       owners: [],
     })),
+    ...companyCorrections(),
   } satisfies SupplySmartCompanies;
 }
 function companyIdentity(records: Map<string, Company>) {

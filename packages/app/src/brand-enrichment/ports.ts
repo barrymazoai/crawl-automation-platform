@@ -13,7 +13,11 @@ import type {
   CompanyFacts,
   CompanyLink,
   CompanyLinkResult,
+  CompanyMerge,
+  CompanyMergeResult,
+  CompanyRename,
   CompanyResolution,
+  CompanySearchHit,
   CompanyUnlink,
   Contact,
   DomainAddition,
@@ -57,6 +61,11 @@ export interface SupplySmartCompanies {
   unlink(unlink: CompanyUnlink, signal: AbortSignal): Promise<{ status: "removed" | "missing" }>;
   recordOwnershipCheck(check: OwnershipCheck, signal: AbortSignal): Promise<void>;
   ownershipStatus(companyId: string, signal: AbortSignal): Promise<OwnershipStatus>;
+  /** Supply Smart's quick search: names, domains, subdomains and sub-brands (owner 2026-10-15). */
+  search(query: string, signal: AbortSignal): Promise<CompanySearchHit[]>;
+  /** Owner-approved corrections only; nothing calls these automatically. */
+  rename(rename: CompanyRename, signal: AbortSignal): Promise<Company>;
+  merge(merge: CompanyMerge, signal: AbortSignal): Promise<CompanyMergeResult>;
 }
 
 /** Contacts and their position classification on the product database API. */
@@ -126,6 +135,8 @@ export interface BrandEnrichmentRuns {
     limit: number;
   }): Promise<BrandEnrichmentRun[]>;
   update(runId: string, change: BrandEnrichmentRunChange): Promise<BrandEnrichmentRun>;
+  /** After an owner-approved merge: runs that point at the merged company point at the survivor. */
+  moveCompany(fromCompanyId: string, toCompanyId: string): Promise<number>;
 
   /** A step's checked output, saved once; the first saved output wins and is returned. */
   saveStep(step: StepOutput): Promise<unknown>;

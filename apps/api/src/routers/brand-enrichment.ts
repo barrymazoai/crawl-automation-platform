@@ -8,6 +8,8 @@ import {
   AnswerBrandQuestionSchema,
   UnlinkBrandCompanySchema,
   SpotCheckBrandDecisionSchema,
+  RenameCompanySchema,
+  MergeCompanySchema,
   brandEnrichmentErrors,
 } from "@crawl-automation/app";
 import { procedure, router, type ApiContext } from "../trpc.js";
@@ -56,6 +58,14 @@ export const brandEnrichmentRouter = router({
   unlink: procedure
     .input(UnlinkBrandCompanySchema)
     .mutation(async ({ ctx, input }) => (await service(ctx)).unlink(input)),
+  /** Owner-approved corrections in Supply Smart (2026-10-15); never called by a workflow. */
+  renameCompany: procedure
+    .input(RenameCompanySchema)
+    .mutation(async ({ ctx, input }) => (await service(ctx)).corrections.rename(input)),
+  /** Dry run by default; `dryRun: false` merges and repoints our brand matches and runs to the survivor. */
+  mergeCompany: procedure
+    .input(MergeCompanySchema)
+    .mutation(async ({ ctx, input }) => (await service(ctx)).corrections.merge(input)),
   spotCheck: procedure
     .input(SpotCheckBrandDecisionSchema)
     .mutation(async ({ ctx, input }) => (await service(ctx)).spotCheck(input)),

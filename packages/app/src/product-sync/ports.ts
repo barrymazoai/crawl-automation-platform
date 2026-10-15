@@ -2,6 +2,8 @@ import type { BrandCompanyMatch, BrandCompanyStatus, SyncBrand } from "./brand-c
 
 export interface BrandCompanyRepository {
   upsert(result: BrandCompanyMatch): Promise<void>;
+  /** After an owner-approved merge: brands matched to the merged company are matched to the survivor. */
+  moveCompany(fromCompanyId: string, toCompanyId: string): Promise<number>;
   /** Stored matches for these brands (unchecked brands are absent). */
   matches(brandIds: string[]): Promise<BrandCompanyMatch[]>;
   list(filter: { status?: BrandCompanyStatus; limit: number }): Promise<SyncBrand[]>;

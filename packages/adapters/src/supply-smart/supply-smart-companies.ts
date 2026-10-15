@@ -3,14 +3,18 @@ import {
   BRAND_ENRICHMENT_SOURCE,
   CompanyEnrichmentResultSchema,
   CompanyLinkResultSchema,
+  CompanyMergeResultSchema,
   CompanyResolutionSchema,
   CompanySchema,
+  CompanySearchHitSchema,
   DomainAdditionResultSchema,
   DomainResolutionSchema,
   OwnershipStatusSchema,
   type CompanyEnrichment,
   type CompanyFacts,
   type CompanyLink,
+  type CompanyMerge,
+  type CompanyRename,
   type CompanyUnlink,
   type DomainAddition,
   type NewCompany,
@@ -105,6 +109,29 @@ export class SupplySmartCompaniesClient implements SupplySmartCompanies {
   ownershipStatus(companyId: string, signal: AbortSignal) {
     return this.database(
       { path: "company.ownershipStatus", input: { companyId }, answer: OwnershipStatusSchema },
+      signal,
+    );
+  }
+
+  async search(query: string, signal: AbortSignal) {
+    const answer = z.object({ data: z.array(CompanySearchHitSchema) });
+    const input = { query: query.slice(0, 200), limit: 10 };
+    return (await this.database({ path: "company.quickSearch", input, answer }, signal)).data;
+  }
+
+  rename(rename: CompanyRename, signal: AbortSignal) {
+    const input = { id: rename.companyId, name: rename.name };
+    return this.database({ path: "company.update", input, answer: CompanySchema }, signal);
+  }
+
+  merge(merge: CompanyMerge, signal: AbortSignal) {
+    const input = {
+      survivorId: merge.survivorId,
+      sourceIds: [merge.sourceId],
+      dryRun: merge.dryRun,
+    };
+    return this.database(
+      { path: "company.mergeCompany", input, answer: CompanyMergeResultSchema },
       signal,
     );
   }

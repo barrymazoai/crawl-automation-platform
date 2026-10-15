@@ -1,11 +1,21 @@
 import type { z } from "zod";
 import type { BrandEnrichmentReviews, BrandEnrichmentRuns, SupplySmartCompanies } from "./ports.js";
+import type { BrandCompanyRepository } from "../product-sync/ports.js";
+import { IdentityAnswerService } from "./identity-answer.js";
 import type { AnswerBrandQuestionSchema } from "./api-model.js";
-import type { CompanyLink } from "@crawl-automation/v3-contracts";
+import type { BrandEnrichmentQuestion, CompanyLink } from "@crawl-automation/v3-contracts";
 import { brandEnrichmentErrors } from "./errors.js";
 import { requireRun, requireCompanyRun } from "./run-records.js";
 
 type Answer = z.infer<typeof AnswerBrandQuestionSchema>;
+
+/** Identity questions take "same"/"new"; the others "link"/"independent"; any question can be dismissed. */
+function requireAnswerKind(question: BrandEnrichmentQuestion, action: Answer["answer"]["action"]) {
+  const identity = action === "same" || action === "new";
+  if (action !== "dismiss" && identity !== (question.kind === "identity")) {
+    throw brandEnrichmentErrors.create("BRAND_ENRICHMENT.INVALID_STATE");
+  }
+}
 /** Human commands: only the explicitly selected link/check is written. Old questions can be dismissed. */
 export class BrandQuestionService {
   constructor(
@@ -13,13 +23,15 @@ export class BrandQuestionService {
       runs: BrandEnrichmentRuns;
       reviews: BrandEnrichmentReviews;
       companies: SupplySmartCompanies;
+      matches?: Pick<BrandCompanyRepository, "upsert">;
     },
   ) {}
   async answer(input: Answer, signal: AbortSignal) {
     const question = await this.question(input);
     const { answer } = input;
-    if (answer.action !== "dismiss" && question.kind === "identity") {
-      throw brandEnrichmentErrors.create("BRAND_ENRICHMENT.INVALID_STATE");
+    requireAnswerKind(question, answer.action);
+    if (answer.action === "same" || answer.action === "new") {
+      return this.answerIdentity(question, answer, signal);
     }
     if (answer.action !== "dismiss" && !(await this.apply(input, signal))) {
       return { applied: false, conflict: true };
@@ -38,6 +50,18 @@ export class BrandQuestionService {
         },
       });
     }
+    return { applied: true, question: answered };
+  }
+  private async answerIdentity(
+    question: BrandEnrichmentQuestion,
+    answer: Extract<Answer["answer"], { action: "same" | "new" }>,
+    signal: AbortSignal,
+  ) {
+    const applied = await new IdentityAnswerService(this.deps).apply(question, answer, signal);
+    const answered = await this.deps.reviews.answerQuestion(question.questionId, "answered", {
+      ...answer,
+      ...applied,
+    });
     return { applied: true, question: answered };
   }
   private async question(input: Answer) {
