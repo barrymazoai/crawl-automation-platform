@@ -2,9 +2,10 @@ import { BrandWebsiteSchema } from "@crawl-automation/v3-contracts";
 import { checkedAnswer } from "./answer.js";
 import type { ResearchArchive } from "./archive.js";
 import { invalidAnswer } from "./errors.js";
-import { citedPage, quotedPage } from "./page-grounding.js";
+import { citedPage, pageTexts, quotedPage } from "./page-grounding.js";
 import type { WebsiteSubject } from "./inputs.js";
-import { domainOf } from "./identity.js";
+import { domainOf, normalizedText } from "./identity.js";
+import type { RetainedPage } from "./archive.js";
 
 /** Marketplaces and resellers are never a brand's official website (owner 2026-10-15). */
 const MARKETPLACES = [
@@ -49,6 +50,38 @@ function refuseMarketplace(url: string, brandName: string) {
   }
 }
 
+/** "Country Life, LLC (Iron Tek)" is printed as "Country Life": also try the name without notes and company forms. */
+function brandNames(brandName: string): string[] {
+  const plain = brandName
+    .replace(/\([^)]*\)/gu, " ")
+    .replace(/[,.]?\s+(llc|inc|corp|corporation|co|company|ltd|limited)\.?\s*$/iu, " ");
+  return [...new Set([brandName, plain].map(normalizedText).filter(Boolean))];
+}
+
+/**
+ * Owner 2026-10-15: the homepage is proven by Codex's verbatim quote, or, when the quote is not found on the saved
+ * page, by the brand's own name on that page. The stored quote is then the name actually found.
+ */
+function provenHomepage(
+  pages: RetainedPage[],
+  answer: { url: string; quote: string },
+  brandName: string,
+): { page: RetainedPage; quote: string } {
+  try {
+    return { page: quotedPage(pages, answer), quote: answer.quote };
+  } catch (error) {
+    const page = citedPage(pages, answer.url);
+    const texts = pageTexts(page).map(normalizedText);
+    const name = brandNames(brandName).find((candidate) =>
+      texts.some((text) => ` ${text} `.includes(` ${candidate} `)),
+    );
+    if (!name) {
+      throw error;
+    }
+    return { page, quote: name };
+  }
+}
+
 export function checkWebsiteAnswer(
   raw: unknown,
   archive: ResearchArchive,
@@ -69,13 +102,18 @@ export function checkWebsiteAnswer(
   if (!result.quote) {
     invalidAnswer("website", "quote_missing");
   }
-  const page = quotedPage(archive.pages, { url: result.url, quote: result.quote });
+  const { page, quote } = provenHomepage(
+    archive.pages,
+    { url: result.url, quote: result.quote },
+    subject.brandName,
+  );
   refuseMarketplace(page.url, subject.brandName);
   return checkedAnswer(
     BrandWebsiteSchema,
     {
       ...result,
       url: page.url,
+      quote,
       evidence: evidence.some((item) => item.url === page.url)
         ? evidence
         : [...evidence, { url: page.url, observedAt: page.observedAt }],

@@ -14,14 +14,18 @@ export function citedPage(pages: RetainedPage[], url: string): RetainedPage {
   return page;
 }
 
+/** The saved page's visible text, as both DOM views (innerText and textContent). */
+export function pageTexts(page: RetainedPage): string[] {
+  const document = parseDocument(page.html);
+  return [DomUtils.innerText(document), DomUtils.textContent(document)];
+}
+
 export function quotedPage(pages: RetainedPage[], citation: { url: string; quote: string }) {
   const page = citedPage(pages, citation.url);
-  const document = parseDocument(page.html);
-  const texts = [DomUtils.innerText(document), DomUtils.textContent(document)];
   const normalize = (value: string) => value.replace(/\s+/gu, " ").trim();
   if (
     !normalize(citation.quote) ||
-    !texts.some((text) => normalize(text).includes(normalize(citation.quote)))
+    !pageTexts(page).some((text) => normalize(text).includes(normalize(citation.quote)))
   ) {
     throw brandResearchErrors.create("BRAND_RESEARCH.EVIDENCE_INVALID", {
       details: { url: citation.url, reason: "quote_not_in_page" },
