@@ -4,6 +4,7 @@ import type {
   BrandRequests,
   BrandEnrichmentRuns,
   BrandEnrichmentReviews,
+  MarketplaceBrands,
   SupplySmartCompanies,
 } from "./ports.js";
 import type { BrandEnrichmentGateway } from "./service-ports.js";
@@ -25,6 +26,7 @@ export class BrandEnrichmentService {
       gateway: BrandEnrichmentGateway;
       /** Absent when this process cannot reach the saved products (no storage configured). */
       redelivery?: BrandProductRedelivery;
+      marketplace?: MarketplaceBrands;
     },
   ) {}
 
@@ -57,6 +59,44 @@ export class BrandEnrichmentService {
     return results;
   }
 
+  /**
+   * Owner 2026-10-15: our brands whose marketplace products wait for a Supply Smart company, most products first.
+   * Each run finds the official website, then finds or creates the company; it never merges.
+   */
+  async startMarketplace(raw: unknown) {
+    const { limit, brandIds } = inputs.StartMarketplaceBrandsSchema.parse(raw);
+    if (!this.deps.marketplace) {
+      throw brandEnrichmentErrors.create("BRAND_ENRICHMENT.NOT_CONFIGURED");
+    }
+    const brands = await this.deps.marketplace.waiting({
+      limit,
+      ...(brandIds ? { brandIds } : {}),
+    });
+    const results = [];
+    for (const brand of brands) {
+      const runId = randomUUID();
+      try {
+        const { run, created } = await this.deps.runs.create({
+          runId,
+          requestId: null,
+          parentRunId: null,
+          role: "marketplace",
+          brandId: brand.brandId,
+          brandName: brand.name,
+          brandUrl: null,
+          workflowId: `brand-enrichment-${runId}`,
+        });
+        if (created) {
+          await this.startOrRetain(run.runId, () => this.deps.gateway.startMarketplace(run.runId));
+        }
+        results.push({ ...brand, runId: run.runId, created });
+      } catch (error) {
+        results.push({ ...brand, error: String(error).slice(0, 1000) });
+      }
+    }
+    return results;
+  }
+
   private async claim(request: BrandRequest, signal: AbortSignal) {
     const claim = await this.deps.requests.update(
       { id: request.id, status: "in_progress" },
@@ -75,17 +115,21 @@ export class BrandEnrichmentService {
       brandUrl: request.brandUrl,
       workflowId: `brand-enrichment-${runId}`,
     });
-    // Unknown start publication is retained as running: never pretend the workflow did not start or retry business work.
+    await this.startOrRetain(result.run.runId, () => this.deps.gateway.start(result.run.runId));
+    return result.run;
+  }
+
+  // Unknown start publication is retained as running: never pretend the workflow did not start or retry business work.
+  private async startOrRetain(runId: string, start: () => Promise<void>) {
     try {
-      await this.deps.gateway.start(result.run.runId);
+      await start();
     } catch (error) {
-      await this.deps.runs.update(result.run.runId, {
+      await this.deps.runs.update(runId, {
         stage: "start_unconfirmed",
         failureReason: String(error).slice(0, 1000),
       });
       throw error;
     }
-    return result.run;
   }
 
   list(raw: unknown) {
@@ -109,6 +153,8 @@ export class BrandEnrichmentService {
     const steps = Object.fromEntries(
       await Promise.all(
         [
+          "website",
+          "marketplace-match",
           "family",
           "domain-additions",
           "products",

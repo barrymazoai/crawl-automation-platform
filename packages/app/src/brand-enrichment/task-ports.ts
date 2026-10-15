@@ -3,6 +3,7 @@ import type {
   ApolloOrganization,
   ApolloStep,
   BrandResearch,
+  BrandWebsite,
   FamilyFinding,
   OwnershipClue,
   PositionTaxonomy,
@@ -20,6 +21,16 @@ export interface BrandSubject {
 
 // Codex tasks (implemented in `packages/processing/src/brand-research`). Each answer is checked against its schema
 // before it is returned; code, not Codex, enforces limits and makes every Supply Smart and Apollo call.
+
+/** A `marketplace` run's brand with some of its completed product pages as hints. */
+export interface WebsiteSubject extends BrandSubject {
+  listings: { channel: string; url: string }[];
+}
+
+/** First step of a `marketplace` run, in its own Ego page plus web search: the brand's official website, or none. */
+export interface WebsiteFinder {
+  find(subject: WebsiteSubject, signal: AbortSignal): Promise<BrandWebsite>;
+}
 
 /** Stage 2, in its own Ego page: where the URL lands, one brand or a group, and the sub-brands with evidence. */
 export interface FamilyCheck {

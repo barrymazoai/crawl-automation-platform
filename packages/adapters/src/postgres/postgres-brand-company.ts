@@ -2,10 +2,17 @@ import {
   brandCompanyDomain,
   type BrandCompanyMatch,
   type BrandCompanyRepository,
+  type MarketplaceBrands,
   type SyncBrand,
+  type WaitingMarketplaceBrand,
 } from "@crawl-automation/app";
 import type { Queryable } from "@crawl-automation/platform";
-import { completedMarketplaceBrands, upsertBrandCompany } from "./brand-company-queries.js";
+import {
+  completedMarketplaceBrands,
+  marketplaceBrandListings,
+  upsertBrandCompany,
+  waitingMarketplaceBrands,
+} from "./brand-company-queries.js";
 
 type BrandRow = Omit<SyncBrand, "match" | "dtcDomain"> &
   Omit<BrandCompanyMatch, "status" | "checkedAt"> & {
@@ -101,5 +108,24 @@ export class PostgresBrandCompany implements BrandCompanyRepository {
       [filter.checkedBefore, filter.recheckUnmatched, filter.limit],
     );
     return rows.map(toBrand);
+  }
+}
+
+/** Migration 063: our brands still waiting for a company, and hints for their website lookup. */
+export class PostgresMarketplaceBrands implements MarketplaceBrands {
+  constructor(private readonly database: Queryable) {}
+
+  waiting(filter: { limit: number; brandIds?: string[] }): Promise<WaitingMarketplaceBrand[]> {
+    return this.database.query<WaitingMarketplaceBrand>(waitingMarketplaceBrands, [
+      filter.limit,
+      filter.brandIds ?? null,
+    ]);
+  }
+
+  listings(brandId: string, limit: number) {
+    return this.database.query<{ channel: string; url: string }>(marketplaceBrandListings, [
+      brandId,
+      limit,
+    ]);
   }
 }

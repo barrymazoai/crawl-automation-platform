@@ -5,6 +5,7 @@ export * from "./api-model.js";
 export * from "./service-ports.js";
 export * from "./brand-enrichment-service.js";
 export * from "./identity-service.js";
+export * from "./marketplace-brand.js";
 export * from "./family-service.js";
 export * from "./research-service.js";
 export * from "./apollo-service.js";

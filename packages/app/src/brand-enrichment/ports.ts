@@ -85,6 +85,8 @@ export interface NewBrandEnrichmentRun {
   requestId: string | null;
   parentRunId: string | null;
   role: BrandEnrichmentRole;
+  /** Our brand, for a `marketplace` run only; one live run per brand. */
+  brandId?: string | null;
   brandName: string;
   brandUrl: string | null;
   workflowId: string;
@@ -92,6 +94,8 @@ export interface NewBrandEnrichmentRun {
 
 export interface BrandEnrichmentRunChange {
   state?: BrandEnrichmentRun["state"];
+  /** Set once, by a `marketplace` run's website lookup. */
+  brandUrl?: string;
   stage?: string;
   companyId?: string;
   summary?: BrandEnrichmentSummary;
@@ -161,4 +165,22 @@ export interface BrandEnrichmentReviews {
     state: "answered" | "dismissed",
     answer: Record<string, unknown>,
   ): Promise<BrandEnrichmentQuestion>;
+}
+
+/** A brand whose completed marketplace products wait for a Supply Smart company (owner 2026-10-15). */
+export interface WaitingMarketplaceBrand {
+  brandId: string;
+  name: string;
+  products: number;
+}
+
+/** Our brands and their completed marketplace product pages, for `marketplace` runs. */
+export interface MarketplaceBrands {
+  /**
+   * Unmatched or ambiguous brands, most products first. Without `brandIds`, brands that already had a marketplace
+   * run are left out (one attempt each unless named); with them, only a live run excludes a brand.
+   */
+  waiting(filter: { limit: number; brandIds?: string[] }): Promise<WaitingMarketplaceBrand[]>;
+  /** A few completed product pages of the brand, as hints for the website lookup. */
+  listings(brandId: string, limit: number): Promise<{ channel: string; url: string }[]>;
 }

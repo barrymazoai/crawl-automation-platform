@@ -1,5 +1,6 @@
 import {
   StartBrandEnrichmentSchema,
+  StartMarketplaceBrandsSchema,
   ClaimBrandEnrichmentSchema,
   BrandRunIdSchema,
   ListBrandEnrichmentSchema,
@@ -23,6 +24,10 @@ export const brandEnrichmentRouter = router({
   start: procedure
     .input(StartBrandEnrichmentSchema)
     .mutation(async ({ ctx, input }) => (await service(ctx)).start(input)),
+  /** Owner 2026-10-15: our brands whose marketplace products wait for a company; website → find or create. */
+  startMarketplaceBrands: procedure
+    .input(StartMarketplaceBrandsSchema)
+    .mutation(async ({ ctx, input }) => (await service(ctx)).startMarketplace(input)),
   claimPending: procedure
     .input(ClaimBrandEnrichmentSchema)
     .mutation(async ({ ctx, input }) => (await service(ctx)).claimPending(input)),

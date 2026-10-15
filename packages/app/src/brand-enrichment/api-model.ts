@@ -8,6 +8,11 @@ export const StartBrandEnrichmentSchema = z.strictObject({ requestId: z.uuid() }
 export const ClaimBrandEnrichmentSchema = z.strictObject({
   limit: z.number().int().min(1).max(100).default(10),
 });
+export const StartMarketplaceBrandsSchema = z.strictObject({
+  limit: z.number().int().min(1).max(100).default(10),
+  /** Named brands are started even after an earlier marketplace run; otherwise each brand gets one attempt. */
+  brandIds: z.array(z.uuid()).min(1).max(100).optional(),
+});
 export const BrandRunIdSchema = z.strictObject({ runId: z.uuid() });
 export const ListBrandEnrichmentSchema = z.strictObject({
   state: BrandEnrichmentStateSchema.optional(),

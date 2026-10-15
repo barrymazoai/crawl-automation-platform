@@ -11,29 +11,43 @@ const options = {
   retry: { maximumAttempts: 1 },
   cancellationType: ActivityCancellationType.WAIT_CANCELLATION_COMPLETED,
 } as const;
-type GatedName = "brandFamily" | "brandResearch" | "brandApollo" | "brandContacts" | "brandReview";
+type GatedName =
+  | "brandWebsite"
+  | "brandFamily"
+  | "brandResearch"
+  | "brandApollo"
+  | "brandContacts"
+  | "brandReview";
+const BROWSER_ACTIVITIES = ["brandWebsite", "brandFamily", "brandResearch"];
+
+/** The website lookup takes the research permits (same Ego space and model) unless configured on its own. */
+function withWebsitePermits(
+  resources: BrandEnrichmentWorkflowSettings["resources"],
+): BrandEnrichmentWorkflowSettings["resources"] {
+  const research = resources.activities.brandResearch;
+  return {
+    ...resources,
+    activities: { ...(research ? { brandWebsite: research } : {}), ...resources.activities },
+  };
+}
 
 /** One gate sequence per workflow, including both browser routes, prevents duplicate permit IDs. */
 export function brandEnrichmentActivities(settings: BrandEnrichmentWorkflowSettings) {
+  const resources = withWebsitePermits(settings.resources);
   const routes = Object.fromEntries(
-    ["brandFamily", "brandResearch"].map((activity) => [
+    BROWSER_ACTIVITIES.map((activity) => [
       activity,
-      browserRoute({
-        activity,
-        resources: settings.resources,
-        queue: settings.queues.browser,
-        required: true,
-      }),
+      browserRoute({ activity, resources, queue: settings.queues.browser, required: true }),
     ]),
   );
-  const activities = { ...settings.resources.activities };
+  const activities = { ...resources.activities };
   for (const [name, route] of Object.entries(routes)) {
     const needs = route.resources?.activities[name];
     if (needs) {
       activities[name] = needs;
     }
   }
-  const gate = resourceGate({ ...settings.resources, activities });
+  const gate = resourceGate({ ...resources, activities });
   const plain = proxyActivities<BrandEnrichmentActivities>({
     ...options,
     taskQueue: settings.queues.activities,

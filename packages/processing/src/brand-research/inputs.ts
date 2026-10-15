@@ -9,6 +9,7 @@ import type {
 
 // Structural adapters implement the application's task ports without importing the upper application layer.
 export type BrandSubject = Pick<BrandEnrichmentRun, "runId" | "brandName" | "brandUrl">;
+export type WebsiteSubject = BrandSubject & { listings: { channel: string; url: string }[] };
 export type ApolloQuery = Extract<ApolloStep, { action: "search" }>["query"];
 export interface ApolloInput {
   brand: ApolloBrandFacts;

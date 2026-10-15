@@ -5,6 +5,8 @@ export interface BrandEnrichmentGateway {
   startProductsRetry(input: BrandProductsRetryRequest): Promise<void>;
   describeProductsRetry(input: BrandProductsRetryRequest): Promise<{ status: string } | null>;
   start(runId: string): Promise<void>;
+  /** A `marketplace` run: website lookup → identity → match for the product sync. */
+  startMarketplace(runId: string): Promise<void>;
   cancel(runId: string): Promise<void>;
   describe(runId: string): Promise<{ status: string } | null>;
 }

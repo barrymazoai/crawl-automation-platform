@@ -8,6 +8,7 @@ async function fixture() {
   await store.runs.update(store.runId, { state: "completed" });
   const gateway = {
     start: vi.fn(),
+    startMarketplace: vi.fn(),
     cancel: vi.fn(),
     describe: vi.fn(),
     startProductsRetry: vi.fn(),

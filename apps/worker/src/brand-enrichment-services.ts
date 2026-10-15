@@ -1,5 +1,7 @@
 import {
   BrandIdentityService,
+  BrandWebsiteService,
+  MarketplaceMatchService,
   BrandFamilyService,
   BrandResearchService,
   BrandApolloService,
@@ -18,11 +20,14 @@ import {
   type Apollo,
   type SiteAnalysisService,
   type BrandProductExecution,
+  type BrandCompanyRepository,
+  type MarketplaceBrands,
 } from "@crawl-automation/app";
 import type { BrandEnrichmentWorkflowSettings } from "@crawl-automation/v3-contracts";
 import type {
   FamilyCheck,
   BrandResearcher,
+  WebsiteFinder,
   ApolloJudge,
   OwnershipReviewer,
   TitleClassifier,
@@ -31,6 +36,7 @@ import type {
 export interface BrandEnrichmentTasks {
   family: FamilyCheck;
   researcher: BrandResearcher;
+  website: WebsiteFinder;
   judge: ApolloJudge;
   reviewer: OwnershipReviewer;
   classifier: TitleClassifier;
@@ -44,6 +50,8 @@ type StepDependencies = {
   contacts: SupplySmartContacts;
   requests: BrandRequests;
   apollo: Apollo;
+  marketplace: MarketplaceBrands;
+  matches: BrandCompanyRepository;
   tasks: BrandEnrichmentTasks;
   analyses: SiteAnalysisService;
   execution: BrandProductExecution;
@@ -54,6 +62,8 @@ export function buildBrandStepServices(deps: StepDependencies) {
   const { runs, companies, reviews, tasks, config } = deps;
   return {
     identity: new BrandIdentityService({ runs, companies }),
+    website: new BrandWebsiteService({ runs, brands: deps.marketplace, finder: tasks.website }),
+    marketplaceMatch: new MarketplaceMatchService({ runs, matches: deps.matches }),
     family: new BrandFamilyService({
       runs,
       companies,

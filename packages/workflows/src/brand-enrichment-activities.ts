@@ -9,6 +9,8 @@ export interface BrandEnrichmentActivities {
   brandIdentity(input: {
     runId: string;
   }): Promise<{ role: BrandEnrichmentRole; hasWebsite: boolean; existing?: boolean }>;
+  brandWebsite(input: { runId: string }): Promise<{ url: string }>;
+  brandMarketplaceMatch(input: { runId: string }): Promise<unknown>;
   brandFamily(input: { runId: string }): Promise<BrandFamilyPlan>;
   brandResearch(input: { runId: string }): Promise<unknown>;
   brandApollo(input: { runId: string }): Promise<unknown>;

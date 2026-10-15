@@ -10,7 +10,7 @@ import type { BrandResearchDeps } from "./settings.js";
 import { preparePage, prepareWorkspace, type ResearchWorkspace } from "./workspace.js";
 
 interface CaptureTask<Answer> {
-  task: "family" | "research";
+  task: "family" | "research" | "website";
   subject: BrandSubject;
   schema: z.ZodType<Answer>;
   prompt(input: BrowserPromptInput): string;
@@ -76,7 +76,7 @@ export class BrandCaptureRunner {
       outputSchema: z.toJSONSchema(envelope(task.schema)),
       environment: this.deps.environment,
       captureMode: "analysis",
-      webSearch: task.task === "research" ? "live" : "disabled",
+      webSearch: task.task === "family" ? "disabled" : "live",
     };
     return runCodexCapture(this.deps.capture, capture, signal);
   }

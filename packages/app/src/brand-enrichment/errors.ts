@@ -33,6 +33,10 @@ export const brandEnrichmentErrors = defineErrors({
     category: "VALIDATION",
     message: "The proposed classification or match is not supported by its evidence.",
   },
+  "BRAND_ENRICHMENT.WEBSITE_NOT_FOUND": {
+    category: "VALIDATION",
+    message: "No official website was found for this brand; it keeps waiting for a company.",
+  },
   "BRAND_ENRICHMENT.PRODUCTS_TIMEOUT": {
     category: "RUNTIME",
     message: "The bounded wait for DTC products expired.",

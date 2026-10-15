@@ -16,7 +16,7 @@ import { latestProductAttemptSql } from "./brand-product-attempt-sql.js";
 import { storeErrors } from "../errors.js";
 
 const runColumns = `id AS "runId", request_id AS "requestId", parent_run_id AS "parentRunId", role,
-  brand_name AS "brandName", brand_url AS "brandUrl", company_id AS "companyId", workflow_id AS "workflowId",
+  brand_id AS "brandId", brand_name AS "brandName", brand_url AS "brandUrl", company_id AS "companyId", workflow_id AS "workflowId",
   state, stage, summary, failure_reason AS "failureReason", created_at AS "createdAt", updated_at AS "updatedAt"`;
 
 const toRun = (row: unknown) => BrandEnrichmentRunSchema.parse(row);
@@ -26,16 +26,22 @@ export class PostgresBrandEnrichmentRuns implements BrandEnrichmentRuns {
   constructor(private readonly database: Database) {}
 
   async create(run: NewBrandEnrichmentRun) {
+    // One live run per Supply Smart request, or per brand for a marketplace run (migrations 058, 063).
+    const live = run.brandId
+      ? { conflict: "(brand_id)", column: "brand_id", key: run.brandId }
+      : { conflict: "(request_id)", column: "request_id", key: run.requestId };
     const inserted = await this.database.query(
-      `INSERT INTO brand_enrichment_run (id, request_id, parent_run_id, role, brand_name, brand_url, workflow_id)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
-       ON CONFLICT (request_id) WHERE state IN ('running', 'waiting_for_person') DO NOTHING
+      `INSERT INTO brand_enrichment_run
+         (id, request_id, parent_run_id, role, brand_id, brand_name, brand_url, workflow_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+       ON CONFLICT ${live.conflict} WHERE state IN ('running', 'waiting_for_person') DO NOTHING
        RETURNING ${runColumns}`,
       [
         run.runId,
         run.requestId,
         run.parentRunId,
         run.role,
+        run.brandId ?? null,
         run.brandName,
         run.brandUrl,
         run.workflowId,
@@ -44,15 +50,15 @@ export class PostgresBrandEnrichmentRuns implements BrandEnrichmentRuns {
     if (inserted[0]) {
       return { run: toRun(inserted[0]), created: true };
     }
-    const live = await this.database.query(
+    const existing = await this.database.query(
       `SELECT ${runColumns} FROM brand_enrichment_run
-       WHERE request_id = $1 AND state IN ('running', 'waiting_for_person')`,
-      [run.requestId],
+       WHERE ${live.column} = $1 AND state IN ('running', 'waiting_for_person')`,
+      [live.key],
     );
-    if (!live[0]) {
+    if (!existing[0]) {
       throw storeErrors.create("STORE.UNEXPECTED_ROW", { details: { runId: run.runId } });
     }
-    return { run: toRun(live[0]), created: false };
+    return { run: toRun(existing[0]), created: false };
   }
 
   async get(runId: string) {
@@ -81,6 +87,7 @@ export class PostgresBrandEnrichmentRuns implements BrandEnrichmentRuns {
          company_id = COALESCE($4::uuid, company_id),
          summary = COALESCE($5::jsonb, summary),
          failure_reason = COALESCE($6, failure_reason),
+         brand_url = COALESCE($7, brand_url),
          updated_at = clock_timestamp()
        WHERE id = $1 RETURNING ${runColumns}`,
       [
@@ -90,6 +97,7 @@ export class PostgresBrandEnrichmentRuns implements BrandEnrichmentRuns {
         change.companyId ?? null,
         change.summary ? JSON.stringify(change.summary) : null,
         change.failureReason ?? null,
+        change.brandUrl ?? null,
       ],
     );
     if (!rows[0]) {

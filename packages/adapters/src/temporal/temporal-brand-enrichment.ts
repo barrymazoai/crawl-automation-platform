@@ -16,9 +16,16 @@ export class TemporalBrandEnrichment implements BrandEnrichmentGateway {
     private readonly client: Client,
     private readonly settings: BrandEnrichmentWorkflowSettings,
   ) {}
-  async start(runId: string): Promise<void> {
+  start(runId: string): Promise<void> {
+    return this.startRun("BrandEnrichmentWorkflow", runId);
+  }
+  /** Same workflow ID scheme, so `get`, `cancel` and `describe` work for marketplace runs too. */
+  startMarketplace(runId: string): Promise<void> {
+    return this.startRun("MarketplaceBrandWorkflow", runId);
+  }
+  private async startRun(workflowType: string, runId: string): Promise<void> {
     try {
-      await this.client.workflow.start("BrandEnrichmentWorkflow", {
+      await this.client.workflow.start(workflowType, {
         workflowId: `brand-enrichment-${runId}`,
         taskQueue: this.settings.taskQueue,
         workflowIdReusePolicy: "REJECT_DUPLICATE",

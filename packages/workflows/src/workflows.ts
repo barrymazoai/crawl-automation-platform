@@ -8,4 +8,5 @@ export { BrandListingWorkflow } from "./collection/brand-listing-workflow.js";
 export { SiteAnalysisWorkflow } from "./site-analysis-workflow.js";
 export { VerifyBrowserStopWorkflow } from "./verify-browser-stop-workflow.js";
 export { BrandEnrichmentWorkflow } from "./brand-enrichment-workflow.js";
+export { MarketplaceBrandWorkflow } from "./marketplace-brand-workflow.js";
 export { BrandProductsRetryWorkflow } from "./brand-products-retry-workflow.js";

@@ -7,6 +7,7 @@ import {
   SupplySmartCompaniesClient,
   PostgresBrandEnrichmentRuns,
   PostgresBrandEnrichmentReviews,
+  PostgresMarketplaceBrands,
   TemporalBrandEnrichment,
   SupplySmartProductDelivery,
 } from "@crawl-automation/adapters";
@@ -45,6 +46,7 @@ export async function brandEnrichmentService(parts: {
         }
       : {}),
     runs,
+    marketplace: new PostgresMarketplaceBrands(parts.database),
     reviews: new PostgresBrandEnrichmentReviews(parts.database),
     requests: new SupplySmartBrandRequests(rpc),
     companies: new SupplySmartCompaniesClient(rpc),

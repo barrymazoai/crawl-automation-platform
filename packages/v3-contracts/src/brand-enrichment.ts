@@ -402,7 +402,8 @@ export type ReviewerVerdict = z.infer<typeof ReviewerVerdictSchema>;
 
 // ── Runs as the crawler stores them ─────────────────────────────────────────
 
-export const BrandEnrichmentRoleSchema = z.enum(["request", "sub_brand", "owner"]);
+/** `marketplace`: started from one of our own brands whose marketplace products wait for a company (owner 2026-10-15). */
+export const BrandEnrichmentRoleSchema = z.enum(["request", "sub_brand", "owner", "marketplace"]);
 export type BrandEnrichmentRole = z.infer<typeof BrandEnrichmentRoleSchema>;
 
 export const BrandEnrichmentStateSchema = z.enum([
@@ -418,6 +419,8 @@ export const BrandEnrichmentRunSchema = z.object({
   requestId: z.uuid().nullable(),
   parentRunId: z.uuid().nullable(),
   role: BrandEnrichmentRoleSchema,
+  /** Our brand, for a `marketplace` run only (migration 063). */
+  brandId: z.uuid().nullish(),
   brandName: z.string(),
   brandUrl: z.string().nullable(),
   companyId: z.uuid().nullable(),
@@ -522,6 +525,18 @@ export const BrandResearchSchema = z.object({
   archiveKeys: z.array(z.string()),
 });
 export type BrandResearch = z.infer<typeof BrandResearchSchema>;
+
+/** The official website of a brand we only know from marketplace listings (owner 2026-10-15). */
+export const BrandWebsiteSchema = z.object({
+  /** The brand's own homepage as saved, or null when no official website was found. */
+  url: z.string().trim().min(1).max(2000).nullable(),
+  /** Verbatim text on that saved page naming the brand or one of its listed products. */
+  quote: z.string().trim().min(1).max(500).nullable(),
+  reason: z.string().trim().min(1).max(2000),
+  evidence: z.array(EvidencePageSchema).max(20),
+  archiveKeys: z.array(z.string()),
+});
+export type BrandWebsite = z.infer<typeof BrandWebsiteSchema>;
 
 /** What the Apollo-match task knows about the brand. */
 export const ApolloBrandFactsSchema = z.object({

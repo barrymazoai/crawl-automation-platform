@@ -3,6 +3,8 @@ import {
   loadBrandEnrichmentSecrets,
   PostgresBrandEnrichmentRuns,
   PostgresBrandEnrichmentReviews,
+  PostgresBrandCompany,
+  PostgresMarketplaceBrands,
   SupplySmartRpc,
   SupplySmartBrandRequests,
   SupplySmartCompaniesClient,
@@ -48,6 +50,7 @@ export function brandEnrichmentTaskImplementations(
   return {
     family: { check: (input, signal) => browser().familyCheck.check(input, signal) },
     researcher: { research: (input, signal) => browser().researcher.research(input, signal) },
+    website: { find: (input, signal) => browser().websiteFinder.find(input, signal) },
     judge: { next: (input, signal) => text().apolloJudge.next(input, signal) },
     reviewer: { review: (input, signal) => text().reviewer.review(input, signal) },
     classifier: { classify: (input, signal) => text().titles.classify(input, signal) },
@@ -113,6 +116,7 @@ export async function buildBrandEnrichmentParts(parts: CoreParts) {
     contacts: new SupplySmartContactsClient(rpc),
     requests: new SupplySmartBrandRequests(rpc),
     apollo: new ApolloClient(secrets.apollo),
+    ...marketplaceStores(parts),
     execution: new TemporalBrandEnrichmentProducts({
       client: temporal.client,
       scans: new PostgresBrandScans(parts.database),
@@ -130,6 +134,13 @@ export async function buildBrandEnrichmentParts(parts: CoreParts) {
     redeliverySweep,
     productSync,
     closeConnection: () => temporal.close(),
+  };
+}
+/** Our waiting brands and their company matches, for marketplace runs (owner 2026-10-15). */
+function marketplaceStores(parts: CoreParts) {
+  return {
+    marketplace: new PostgresMarketplaceBrands(parts.database),
+    matches: new PostgresBrandCompany(parts.database),
   };
 }
 function siteAnalyses(parts: CoreParts, temporal: TemporalClient) {

@@ -28,6 +28,9 @@ export function brandEnrichmentActivities(parts: WorkerParts) {
       }
       return { role: run.role, hasWebsite: !!run.brandUrl, existing };
     }),
+    brandMarketplaceMatch: step(parts, "brandMarketplaceMatch", (services, runId) =>
+      services.marketplaceMatch.record(runId),
+    ),
     ...brandProductsActivities(parts),
     brandWrite: step(parts, "brandWrite", (services, runId, signal) =>
       services.write.write(runId, signal),
@@ -74,6 +77,9 @@ export function brandEnrichmentBrowserActivities(parts: WorkerParts) {
       parts.log,
     );
   return {
+    brandWebsite: browserStep("brandWebsite", (services, runId, signal) =>
+      services.website.find(runId, signal),
+    ),
     brandFamily: browserStep("brandFamily", (services, runId, signal) =>
       services.family.check(runId, signal),
     ),

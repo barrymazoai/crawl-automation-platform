@@ -1,8 +1,12 @@
-import { BrandResearchSchema, FamilyFindingSchema } from "@crawl-automation/v3-contracts";
+import {
+  BrandResearchSchema,
+  BrandWebsiteSchema,
+  FamilyFindingSchema,
+} from "@crawl-automation/v3-contracts";
 import { BrandCaptureRunner } from "./capture-runner.js";
 import { checkFamilyAnswer } from "./family-answer.js";
 import { familyPrompt } from "./family-prompt.js";
-import type { BrandSubject } from "./inputs.js";
+import type { BrandSubject, WebsiteSubject } from "./inputs.js";
 import { checkResearchAnswer } from "./research-answer.js";
 import { researchPrompt } from "./research-prompt.js";
 import {
@@ -12,6 +16,8 @@ import {
   type BrandTextDeps,
 } from "./settings.js";
 import { textTasks } from "./text-tasks.js";
+import { checkWebsiteAnswer } from "./website-answer.js";
+import { websitePrompt } from "./website-prompt.js";
 
 export type { BrandResearchDeps, BrandTextDeps } from "./settings.js";
 export { brandResearchErrors } from "./errors.js";
@@ -21,7 +27,7 @@ export function createBrandTextTasks(deps: BrandTextDeps) {
   return textTasks(checkedTextDependencies(deps));
 }
 
-/** The two browser tasks (family check, research), each in its own Ego page. */
+/** The browser tasks (family check, research, website lookup), each in its own Ego page. */
 export function createBrandBrowserTasks(deps: BrandResearchDeps) {
   const settings = checkedDependencies(deps);
   const capture = new BrandCaptureRunner(settings);
@@ -44,10 +50,19 @@ export function createBrandBrowserTasks(deps: BrandResearchDeps) {
         return checkResearchAnswer(saved.result, saved);
       },
     },
+    websiteFinder: {
+      async find(subject: WebsiteSubject, signal: AbortSignal) {
+        const saved = await capture.run(
+          { task: "website", subject, schema: BrandWebsiteSchema, prompt: websitePrompt },
+          signal,
+        );
+        return checkWebsiteAnswer(saved.result, saved, subject);
+      },
+    },
   };
 }
 
-/** Composition factory: all five structural adapters for the application's frozen task ports. */
+/** Composition factory: all structural adapters for the application's frozen task ports. */
 export function createBrandResearchTasks(deps: BrandResearchDeps) {
   return { ...createBrandBrowserTasks(deps), ...createBrandTextTasks(deps) };
 }
