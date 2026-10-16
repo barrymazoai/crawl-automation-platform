@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { canonicalHash } from "../history/canonical.js";
 import { deliveryItem } from "../product-delivery/mapping.js";
-import { deliveryLabel } from "../product-delivery/label-mapping.js";
+import { deliveryLabel, LABEL_SUBMISSION } from "../product-delivery/label-mapping.js";
 import type { DeliveryItem, DeliveryLabel } from "../product-delivery/wire.js";
 import { marketplaceReady } from "./marketplace-ownership.js";
 import { marketplaceAttributes } from "./marketplace-attributes.js";
@@ -59,6 +59,7 @@ function linkedLabel(
     input.channel,
     input.history?.observationId,
     input.collection?.operationId,
+    LABEL_SUBMISSION,
   ]);
   const capturedAt = z.iso.datetime({ offset: true }).parse(link.capturedAt);
   const listing = labelListingWithoutCommerce(label);

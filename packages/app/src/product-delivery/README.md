@@ -75,7 +75,10 @@ completion is domain-scoped and could otherwise deactivate another sub-brand. On
 ## Deliberate omissions / rollout questions
 
 - No identity resolution, variant key generation, company creation, listing state transitions or direct events.
-- No invented GTIN, currency, stock, form, flavor, pack count, serving count, listed date, or label confidence.
+- No invented GTIN, currency, stock, form, flavor, pack count, serving count or listed date.
+- Label confidence is a fixed 100 for every label that passed our checks (owner 2026-10-16): Supply Smart makes a
+  formula the current one only with a confidence of at least 70. `LABEL_SUBMISSION` in the label's IDs makes the
+  resend with confidence a new submission there.
 - Inferred (not printed) health functions are not submitted as observations.
 - Full labels do not use the lossy v1 `facts.rows` endpoint. Drug Facts extensions unsupported by the copied
   Supply Smart label schema are refused rather than silently removed. Ingredients-only v5 labels remain valid.

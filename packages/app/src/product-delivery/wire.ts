@@ -70,6 +70,7 @@ export interface DeliveryLabel {
   label: {
     content: DeliveryLabelContent;
     evidence: Record<string, unknown>;
+    confidence: number;
   };
 }
 export interface MappedDelivery {

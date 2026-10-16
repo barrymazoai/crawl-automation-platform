@@ -151,7 +151,8 @@ export class PostgresProductSync implements ProductSyncLedger {
            OR ($4::boolean AND status = 'verified' AND collected_operation_id IS NULL)
            -- Outcome never recorded; old enough that no batch is still sending it.
            OR ($5::boolean AND status = 'sent' AND updated_at < now() - interval '10 minutes')
-           OR ($6::boolean AND status = 'present'))
+           OR ($6::boolean AND status = 'present')
+           OR ($7::boolean AND status = 'verified' AND collected_operation_id IS NOT NULL))
          ORDER BY updated_at LIMIT $3),
        moved AS (
          UPDATE product_sync ps SET material_at = '-infinity', updated_at = clock_timestamp()
@@ -166,6 +167,7 @@ export class PostgresProductSync implements ProductSyncLedger {
         "withoutLabel" in filter,
         "unfinished" in filter,
         "present" in filter,
+        "withLabel" in filter,
       ],
     );
     return { reopened: rows[0]?.reopened ?? 0 };

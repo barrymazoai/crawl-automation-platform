@@ -75,5 +75,9 @@ export interface SyncOverview {
 export const variantKey = (variantId: string | null) => variantId ?? "";
 
 export type ReopenFilter = { channel?: MarketplaceChannel; limit: number } & (
-  { reason: string } | { withoutLabel: true } | { unfinished: true } | { present: true }
+  | { reason: string }
+  | { withoutLabel: true }
+  | { unfinished: true }
+  | { present: true }
+  | { withLabel: true }
 );

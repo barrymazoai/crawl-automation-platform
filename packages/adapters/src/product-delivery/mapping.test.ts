@@ -25,7 +25,7 @@ describe("settled DTC observation mapping", () => {
     expect(item.healthFunctions).not.toContain("Sleep");
   });
 
-  it("keeps a valid ingredients-only result without inventing Facts or label confidence", () => {
+  it("keeps a valid ingredients-only result without inventing Facts", () => {
     const source = deliveryProduct();
     if (!source.collection) {
       throw new Error("fixture");
@@ -80,7 +80,7 @@ describe("settled DTC observation mapping", () => {
     expect(mapped.item).not.toHaveProperty("facts");
     expect(mapped.item).not.toHaveProperty("variantKey");
     expect(mapped.label).not.toHaveProperty("runId");
-    expect(mapped.label.label).not.toHaveProperty("confidence");
+    expect(mapped.label.label.confidence).toBe(100);
   });
 
   it("does not infer defaults from absent metadata or the site domain", () => {

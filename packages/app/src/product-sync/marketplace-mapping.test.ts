@@ -42,7 +42,7 @@ describe.skipIf(!marketplaceSamplesPath)("mapping the 15 supplied marketplace ru
       );
       expect(label.label.evidence.assembly).toEqual(required(input.collection).assembly);
       expect(label.observation.observationId).toBe(
-        required(input.collection).observation.observationId,
+        `${required(input.collection).observation.observationId}-confidence-1`,
       );
       expect(label.listing.externalId).toBe(item.externalId);
       expect(item).not.toHaveProperty("siteKey");
@@ -50,7 +50,7 @@ describe.skipIf(!marketplaceSamplesPath)("mapping the 15 supplied marketplace ru
       expect(item).not.toHaveProperty("variantKey");
       expect(label.listing).not.toHaveProperty("siteKey");
       expect(label).not.toHaveProperty("runId");
-      expect(label.label).not.toHaveProperty("confidence");
+      expect(label.label.confidence).toBe(100);
     });
   }
   it("converts real string metrics and preserves absent values and false stock", () => {

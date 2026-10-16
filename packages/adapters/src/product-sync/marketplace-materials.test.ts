@@ -237,7 +237,7 @@ describe.skipIf(!readerSamplesPath)(
       const input = await own.read();
       expect(input.linkedLabel).toBeUndefined();
       expect(marketplaceLabel(input, options)?.observation.observationId).toBe(
-        own.donor.collection?.observation.observationId,
+        `${own.donor.collection?.observation.observationId}-confidence-1`,
       );
       expect(own.query.mock.calls.some(([sql]) => sql.includes(") known"))).toBe(false);
     });

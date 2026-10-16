@@ -59,6 +59,18 @@ export function deliveryLabelEvidence(record: LabelCollectedProduct) {
   };
 }
 
+/**
+ * Owner 2026-10-16: a label that passed our checks goes out with confidence 100. Supply Smart makes a formula the
+ * product's current formula only with a confidence of at least 70, and never fills one in itself.
+ */
+export const LABEL_CONFIDENCE = 100;
+
+/**
+ * Part of every label's operation and observation IDs. Supply Smart refuses a known ID with a different body, so the
+ * same capture sent again with its confidence is a new submission there (2026-10-16).
+ */
+export const LABEL_SUBMISSION = "confidence-1";
+
 /** Full label wire payload shared by DTC and marketplace delivery. No run-dependent identity. */
 export function deliveryLabel(input: {
   item: DeliveryItem;
@@ -73,9 +85,13 @@ export function deliveryLabel(input: {
     schemaVersion: 1,
     submitter: {
       namespace: "crawler-v3",
-      operationId: `label-${canonicalHash(collection.operationId)}`,
+      operationId: `label-${canonicalHash([collection.operationId, LABEL_SUBMISSION])}`,
     },
-    observation: { ...observation, capturedAt },
+    observation: {
+      ...observation,
+      observationId: `${observation.observationId}-${LABEL_SUBMISSION}`,
+      capturedAt,
+    },
     company,
     channel,
     source: "crawler-v3:product-delivery",
@@ -84,6 +100,7 @@ export function deliveryLabel(input: {
     label: {
       content: deliveryLabelContent(collection),
       evidence: deliveryLabelEvidence(collection),
+      confidence: LABEL_CONFIDENCE,
     },
   };
 }
