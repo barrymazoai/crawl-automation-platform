@@ -4,7 +4,10 @@ import type { MatchBrandsResult } from "./brand-company-model.js";
 export interface MarketplaceBrandSweepSettings {
   /** Brands checked against Supply Smart per round: never checked, or unmatched for a day. */
   matchLimit: number;
-  /** Marketplace website runs alive at once (2026-10-15: 267 at once ran the worker out of memory). */
+  /**
+   * Marketplace website runs alive at once (2026-10-15: 267 at once ran the worker out of memory). Codex load is
+   * bounded by the runs' permits (one Ego space, the shared model account), not by this number.
+   */
   maxLiveRuns: number;
 }
 

@@ -35,7 +35,11 @@ export const BrandEnrichmentSettingsSchema = BrandEnrichmentWorkflowSettingsSche
           enabled: z.boolean().default(true),
           apiUrl: z.url().optional(),
           matchLimit: z.number().int().min(1).max(500).default(200),
-          maxLiveRuns: z.number().int().min(0).max(100).default(50),
+          /**
+           * Website lookups run one per Ego space; a run waits for its permits at most ~5.5 h (400 polls) and gets
+           * one automatic attempt, so only a short line of waiting runs is kept.
+           */
+          maxLiveRuns: z.number().int().min(0).max(100).default(20),
         })
         .prefault({}),
     })
