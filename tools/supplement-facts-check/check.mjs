@@ -49,7 +49,8 @@ function readResults() {
 function detect(text) {
   const letters = text.toLowerCase().replace(/[^a-z]/g, "");
   return {
-    supplementFacts: /supp?l?[eiy]?ments?facts?/.test(letters),
+    // A cropped heading still reads "...plement Facts".
+    supplementFacts: /(supp?l?[eiy]?|ple)ments?facts?/.test(letters),
     nutritionFacts: /nutritionfacts?/.test(letters),
     drugFacts: /drugfacts?/.test(letters),
     servingSize: /servingsize/.test(letters),
