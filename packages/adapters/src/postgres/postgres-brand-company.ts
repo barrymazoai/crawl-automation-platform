@@ -9,6 +9,7 @@ import {
 import type { Queryable } from "@crawl-automation/platform";
 import {
   completedMarketplaceBrands,
+  liveMarketplaceRuns,
   marketplaceBrandListings,
   upsertBrandCompany,
   waitingMarketplaceBrands,
@@ -136,5 +137,10 @@ export class PostgresMarketplaceBrands implements MarketplaceBrands {
       brandId,
       limit,
     ]);
+  }
+
+  async live(): Promise<number> {
+    const rows = await this.database.query<{ live: number }>(liveMarketplaceRuns);
+    return rows[0]?.live ?? 0;
   }
 }

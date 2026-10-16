@@ -2,6 +2,7 @@ import type { Logger } from "@crawl-automation/platform";
 import type { ListingStateDelivery } from "../listings/listing-delivery.js";
 import type { MarketplaceChannel } from "./ledger.js";
 import type { ProductSyncResult, ProductSyncService } from "./sync-service.js";
+import type { MarketplaceBrandSweep } from "./brand-sweep.js";
 
 export interface ProductSyncSweepSettings {
   channels: MarketplaceChannel[];
@@ -12,15 +13,17 @@ export interface ProductSyncSweepSettings {
 }
 
 /**
- * One automatic round (owner 2026-10-12: completed marketplace products go to Supply Smart test automatically): for
- * each channel, send pending products (matched brand, new or settled again since their last send) in bounded batches,
- * then the delistings recorded since the last round. A channel's failure is logged and never stops the others.
+ * One automatic round (owner 2026-10-12: completed marketplace products go to Supply Smart test automatically): new
+ * brands are matched to companies first (owner 2026-10-16), then for each channel, send pending products (matched
+ * brand, new or settled again since their last send) in bounded batches, then the delistings recorded since the last
+ * round. A failing step is logged and never stops the others.
  */
 export class ProductSyncSweep {
   constructor(
     private readonly deps: {
       sync: Pick<ProductSyncService, "sync">;
       listings: Pick<ListingStateDelivery, "deliverPending">;
+      brands?: Pick<MarketplaceBrandSweep, "sweep">;
       settings: ProductSyncSweepSettings;
       log: Logger;
       now?: () => Date;
@@ -28,6 +31,7 @@ export class ProductSyncSweep {
   ) {}
 
   async sweep(signal: AbortSignal): Promise<ProductSyncResult[]> {
+    await this.brands(signal);
     const results: ProductSyncResult[] = [];
     for (const channel of this.deps.settings.channels) {
       signal.throwIfAborted();
@@ -40,6 +44,15 @@ export class ProductSyncSweep {
     }
     await this.delistings(signal);
     return results;
+  }
+
+  private async brands(signal: AbortSignal) {
+    try {
+      await this.deps.brands?.sweep(signal);
+    } catch (error) {
+      signal.throwIfAborted();
+      this.deps.log.warn({ err: error }, "marketplace brands failed");
+    }
   }
 
   private async delistings(signal: AbortSignal) {

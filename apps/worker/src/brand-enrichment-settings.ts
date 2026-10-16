@@ -26,6 +26,18 @@ export const BrandEnrichmentSettingsSchema = BrandEnrichmentWorkflowSettingsSche
         .default(["amazon", "gnc", "swanson", "wholefoods", "costco"]),
       batchLimit: z.number().int().min(1).max(200).default(200),
       maxBatchesPerChannel: z.number().int().min(1).max(50).default(5),
+      /**
+       * Owner 2026-10-16: new brands are matched and, if unmatched, get their website run automatically each round.
+       * Calls go through the API (`apiUrl`, else `stopSweep.apiUrl`); without either the step is skipped.
+       */
+      brands: z
+        .strictObject({
+          enabled: z.boolean().default(true),
+          apiUrl: z.url().optional(),
+          matchLimit: z.number().int().min(1).max(500).default(200),
+          maxLiveRuns: z.number().int().min(0).max(100).default(50),
+        })
+        .prefault({}),
     })
     .prefault({}),
 });

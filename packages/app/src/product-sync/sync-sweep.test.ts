@@ -45,3 +45,26 @@ it("a delisting failure is logged and never fails the round", async () => {
   fake.deliverPending.mockRejectedValue(new Error("Supply Smart down"));
   await expect(fake.sweep.sweep(signal)).resolves.toHaveLength(2);
 });
+
+it("runs the brand step before any channel, and its failure never stops the products", async () => {
+  const order: string[] = [];
+  const sweep = new ProductSyncSweep({
+    sync: {
+      sync: vi.fn(async (request: { channel: string }) => {
+        order.push(request.channel);
+        return result;
+      }),
+    },
+    listings: { deliverPending: vi.fn(async () => ({ sent: 0, held: 0 })) },
+    brands: {
+      sweep: vi.fn(async () => {
+        order.push("brands");
+        throw new Error("API down");
+      }),
+    },
+    settings: { channels: ["gnc"], batchLimit: 5, maxBatchesPerChannel: 1 },
+    log,
+  });
+  await expect(sweep.sweep(signal)).resolves.toHaveLength(1);
+  expect(order).toEqual(["brands", "gnc"]);
+});

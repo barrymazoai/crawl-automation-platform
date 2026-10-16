@@ -60,6 +60,7 @@ export * from "./postgres/postgres-stop-verification.js";
 export * from "./permit-stop-verifier.js";
 export * from "./temporal/temporal-browser-stop.js";
 export * from "./resources-api.js";
+export * from "./marketplace-brands-api.js";
 export * from "./supply-smart/supply-smart-rpc.js";
 export * from "./supply-smart/supply-smart-brand-requests.js";
 export * from "./supply-smart/supply-smart-companies.js";

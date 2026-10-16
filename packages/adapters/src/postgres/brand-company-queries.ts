@@ -74,3 +74,8 @@ export const marketplaceBrandListings = `
   ) ranked
   ORDER BY rank, channel, url
   LIMIT $2`;
+
+/** Marketplace runs still alive; the automatic sweep keeps their number bounded (owner 2026-10-16). */
+export const liveMarketplaceRuns = `
+  SELECT count(*)::int AS live FROM brand_enrichment_run
+  WHERE role = 'marketplace' AND state NOT IN ('completed', 'failed', 'cancelled')`;

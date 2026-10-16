@@ -194,4 +194,6 @@ export interface MarketplaceBrands {
   waiting(filter: { limit: number; brandIds?: string[] }): Promise<WaitingMarketplaceBrand[]>;
   /** A few completed product pages of the brand, as hints for the website lookup. */
   listings(brandId: string, limit: number): Promise<{ channel: string; url: string }[]>;
+  /** Marketplace runs not yet completed, failed or cancelled. */
+  live(): Promise<number>;
 }
