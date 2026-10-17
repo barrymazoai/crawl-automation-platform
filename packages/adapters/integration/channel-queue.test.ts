@@ -182,4 +182,49 @@ describe.skipIf(!hasPostgres)("the shared product queue against a real PostgreSQ
     await dispatch.settle(await claimOne(), { state: "completed", reason: null });
     expect(await flag()).toBe(false);
   });
+
+  it("a forced item that follows a queued run of the same product forces that run", async () => {
+    const swansonList = (batch: string) =>
+      AddToQueueSchema.parse({
+        channel: "swanson",
+        batchId: batch,
+        label: "Swanson ON scan",
+        products: [
+          {
+            sourceId: swansonSource,
+            url: "https://www.swansonvitamins.com/p/on-2",
+            listingId: "ON2",
+          },
+        ],
+      });
+    const swanson = async () => {
+      const row = (await dispatch.controls()).find((entry) => entry.channel === "swanson");
+      if (!row) {
+        throw new Error("no swanson control row");
+      }
+      await dispatch.fillReady(row);
+      const [claimed] = await dispatch.claim(row);
+      if (!claimed) {
+        throw new Error("expected an item to be claimed");
+      }
+      return claimed;
+    };
+    await store.add(swansonList("66666666-6666-4666-8666-666666666666"));
+    const earlier = await swanson();
+    await dispatch.settle(earlier, { state: "completed", reason: null });
+    await store.add(swansonList("77777777-7777-4777-8777-777777777777"));
+    await store.requeue({ channel: "swanson", itemIds: [earlier.itemId], forceFormula: true });
+    const leader = await swanson();
+    expect(leader.itemId).not.toBe(earlier.itemId);
+    expect(leader.forceFormula).toBe(true);
+    await dispatch.settle(leader, { state: "completed", reason: null });
+    const rows = await database.query<{ state: string; force_formula: boolean }>(
+      "SELECT state, force_formula FROM queue_item WHERE item_id = ANY($1::text[])",
+      [[earlier.itemId, leader.itemId]],
+    );
+    expect(rows).toEqual([
+      { state: "completed", force_formula: false },
+      { state: "completed", force_formula: false },
+    ]);
+  });
 });

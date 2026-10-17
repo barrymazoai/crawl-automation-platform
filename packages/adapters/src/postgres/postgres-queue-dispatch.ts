@@ -27,8 +27,10 @@ const StartedRow = z.object({
   forceFormula: z.boolean(),
 });
 
+// A forced item that joined an already queued run of the same product forces that run (owner 2026-10-17).
 const STARTED_COLUMNS = `i.item_id AS "itemId", i.channel, i.run_id::text AS "runId",
-  i.source_id::text AS "sourceId", i.url, i.force_formula AS "forceFormula"`;
+  i.source_id::text AS "sourceId", i.url, (i.force_formula OR EXISTS (SELECT 1 FROM queue_item f
+    WHERE f.follows_item_id = i.item_id AND f.state = 'following' AND f.force_formula)) AS "forceFormula"`;
 
 /** The shared queue tables as the dispatcher moves items through them; every change under the channel's lock. */
 export class PostgresQueueDispatch implements DispatchStore {
@@ -98,13 +100,19 @@ export class PostgresQueueDispatch implements DispatchStore {
          WHERE run_id = $1 AND outcome = 'running'`,
         [item.runId, outcome.state, outcome.reason],
       );
-      // A completed fresh extraction is not forced again when a later round queues the product.
       await tx.query(
-        `UPDATE queue_item SET state = $2, reason = $3, updated_at = clock_timestamp(),
-           force_formula = force_formula AND $2 <> 'completed'
+        `UPDATE queue_item SET state = $2, reason = $3, updated_at = clock_timestamp()
          WHERE item_id = $4 AND run_id = $1 AND state = 'running'`,
         [item.runId, outcome.state, outcome.reason, item.itemId],
       );
+      if (outcome.state === "completed") {
+        // A completed fresh extraction (the item and the followers that settled with it) is not forced again.
+        await tx.query(
+          `UPDATE queue_item SET force_formula = false
+           WHERE run_id = $1 AND (item_id = $2 OR follows_item_id = $2) AND force_formula`,
+          [item.runId, item.itemId],
+        );
+      }
     });
   }
 
