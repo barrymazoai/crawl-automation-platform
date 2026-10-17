@@ -54,9 +54,9 @@ describe("worker capture settings", () => {
   });
 
   it("reads a channel's own ScraperAPI options", () => {
-    const parsed = capture.parse({ route, scraperApi, channels: { gnc: { premium: true } } });
+    const parsed = capture.parse({ route, scraperApi, channels: { gnc: { ultraPremium: true } } });
     expect(parsed.channels).toMatchObject({
-      gnc: { premium: true },
+      gnc: { ultraPremium: true },
       costco: { render: false },
       wholefoods: { headers: { cookie: expect.stringMatching(/^wfm_store_d8=/) } },
     });
@@ -64,7 +64,7 @@ describe("worker capture settings", () => {
 
   it.each([
     { route: { ...route, responseMode: "binary" }, scraperApi },
-    { route, scraperApi, channels: { gnc: { ultraPremium: true } } },
+    { route, scraperApi, channels: { gnc: { stealth: true } } },
     { route, scraperApi, channels: { walmart: { premium: true } } },
     { route, scraperApi: { ...scraperApi, allowedOrigins: ["http://www.gnc.com"] } },
   ])("refuses settings a page fetch cannot use: %j", (settings) => {

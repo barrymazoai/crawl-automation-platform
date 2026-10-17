@@ -11,6 +11,11 @@ const optionFields = {
   render: z.boolean(),
   /** ScraperAPI uses premium residential proxies (costs more credits). */
   premium: z.boolean(),
+  /**
+   * ScraperAPI's strongest tier for protected sites (30 credits a page; owner 2026-10-17: GNC behind PerimeterX).
+   * Replaces `premium` when both are set. Absent in earlier receipts.
+   */
+  ultraPremium: z.boolean(),
   /** Per-channel fixed headers, sent on the first request only. Values are never evidence. */
   headers: ScraperApiHeadersSchema,
 };
@@ -21,6 +26,7 @@ export const ScraperApiOptionsSchema = z.strictObject({
   sessionNumber: optionFields.sessionNumber.default(null),
   render: optionFields.render.default(false),
   premium: optionFields.premium.default(false),
+  ultraPremium: optionFields.ultraPremium.optional(),
   headers: optionFields.headers.optional(),
 });
 /** Some of the options, e.g. one channel's own; nothing is filled in, so absent ones keep their defaults. */

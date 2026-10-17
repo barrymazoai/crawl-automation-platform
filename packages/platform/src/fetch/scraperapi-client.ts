@@ -146,7 +146,9 @@ function providerUrl(apiKey: string, target: URL, options: ScraperApiOptions): U
   if (options.render) {
     url.searchParams.set("render", "true");
   }
-  if (options.premium) {
+  if (options.ultraPremium) {
+    url.searchParams.set("ultra_premium", "true");
+  } else if (options.premium) {
     url.searchParams.set("premium", "true");
   }
   if (options.headers && Object.keys(options.headers).length > 0) {

@@ -114,6 +114,13 @@ describe("ScraperAPI client", () => {
     expect(calls[1]?.searchParams.get("country_code")).toBe("gb");
   });
 
+  it("asks for ultra premium instead of premium when a channel turns it on", async () => {
+    const { client, calls } = provider({ status: 200 });
+    await client.get(request({ options: { premium: true, ultraPremium: true } }), signal());
+    expect(calls[0]?.searchParams.get("ultra_premium")).toBe("true");
+    expect(calls[0]?.searchParams.has("premium")).toBe(false);
+  });
+
   it.each([{ countryCode: "USA" }, { sessionNumber: -1 }, { binary: true }])(
     "refuses the options %j before any request",
     async (options) => {
