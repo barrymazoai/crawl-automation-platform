@@ -19,6 +19,8 @@ export interface StartedItem {
   sourceId: string;
   url: string;
   stopRequested: boolean;
+  /** Queued again to extract the formula afresh (owner 2026-10-17). */
+  forceFormula?: boolean;
 }
 
 /** How an item ended. Reason records a Review code or an explicit completed scope exclusion. */

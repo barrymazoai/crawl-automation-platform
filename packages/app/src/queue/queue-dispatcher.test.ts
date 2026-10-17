@@ -146,6 +146,19 @@ describe("QueueDispatcher", () => {
     ]);
   });
 
+  it("an item queued again with forceFormula starts its run with the flag", async () => {
+    const { store, starter, queue } = dispatcher({});
+    store.claimable = [{ ...item("fresh"), forceFormula: true }];
+    await queue.tick(signal());
+    expect(starter.submit).toHaveBeenCalledExactlyOnceWith({
+      kind: "product",
+      requestId: "fresh",
+      sourceId: "source-1",
+      url: "https://www.swansonvitamins.com/p/fresh",
+      forceFormula: true,
+    });
+  });
+
   it("a refused start is a Review with the refusal's code, never started again", async () => {
     const { store, starter, queue } = dispatcher({});
     starter.submit.mockRejectedValueOnce(appErrors.create("RUN.CHANNEL_UNSUPPORTED"));

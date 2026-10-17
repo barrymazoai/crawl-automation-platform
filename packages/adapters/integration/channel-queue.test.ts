@@ -130,4 +130,56 @@ describe.skipIf(!hasPostgres)("the shared product queue against a real PostgreSQ
     expect((await control()).mode).toBe("paused");
     expect((await store.status("gnc")).counts.ready).toBeUndefined();
   });
+
+  it("an item queued again with forceFormula is claimed with it; completing clears it, a Review keeps it", async () => {
+    await store.add(
+      AddToQueueSchema.parse({
+        channel: "swanson",
+        batchId: "55555555-5555-4555-8555-555555555555",
+        label: "Swanson ON scan",
+        products: [
+          {
+            sourceId: swansonSource,
+            url: "https://www.swansonvitamins.com/p/on-1",
+            listingId: "ON1",
+          },
+        ],
+      }),
+    );
+    const swanson = async (): Promise<QueueControl> => {
+      const row = (await dispatch.controls()).find((entry) => entry.channel === "swanson");
+      if (!row) {
+        throw new Error("no swanson control row");
+      }
+      return row;
+    };
+    const claimOne = async () => {
+      await dispatch.fillReady(await swanson());
+      const [claimed] = await dispatch.claim(await swanson());
+      if (!claimed) {
+        throw new Error("expected the item to be claimed");
+      }
+      return claimed;
+    };
+    const first = await claimOne();
+    expect(first.forceFormula).toBe(false);
+    await dispatch.settle(first, { state: "completed", reason: null });
+    const forced = { channel: "swanson" as const, itemIds: [first.itemId], forceFormula: true };
+    expect(await store.requeue(forced)).toEqual({ requeued: 1 });
+    const fresh = await claimOne();
+    expect(fresh).toMatchObject({ itemId: first.itemId, forceFormula: true });
+    expect((await dispatch.running("swanson"))[0]?.forceFormula).toBe(true);
+    const flag = async () =>
+      (
+        await database.query<{ force_formula: boolean }>(
+          "SELECT force_formula FROM queue_item WHERE item_id = $1",
+          [first.itemId],
+        )
+      )[0]?.force_formula;
+    await dispatch.settle(fresh, { state: "review", reason: "LABEL.FORMULA_INCOMPLETE" });
+    expect(await flag()).toBe(true);
+    await store.requeue(forced);
+    await dispatch.settle(await claimOne(), { state: "completed", reason: null });
+    expect(await flag()).toBe(false);
+  });
 });

@@ -83,18 +83,23 @@ export const SourcePrioritySchema = z.strictObject({
 });
 export type SourcePriority = z.infer<typeof SourcePrioritySchema>;
 
+/** Owner 2026-10-17: extract the formula afresh instead of reusing the one already collected for the product. */
+const forceFormula = z.boolean().optional();
+
 const RequeueIdsSchema = z.strictObject({
   channel,
   itemIds: z
     .array(z.string().regex(/^[a-f0-9]{64}$/))
     .min(1)
     .max(10_000),
+  forceFormula,
 });
 export const RequeueFilterSchema = z.strictObject({
   channel,
   filter: z.strictObject({ ...QueueFilterFields, state: z.literal("review") }),
   limit: z.number().int().min(1).max(10_000),
   dryRun: z.boolean().default(true),
+  forceFormula,
 });
 export const RequeueSchema = z.union([RequeueIdsSchema, RequeueFilterSchema]);
 export type Requeue = z.infer<typeof RequeueSchema>;

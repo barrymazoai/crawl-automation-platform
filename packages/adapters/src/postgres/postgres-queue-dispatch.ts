@@ -24,10 +24,11 @@ const StartedRow = z.object({
   sourceId: z.string(),
   url: z.string(),
   stopRequested: z.boolean(),
+  forceFormula: z.boolean(),
 });
 
 const STARTED_COLUMNS = `i.item_id AS "itemId", i.channel, i.run_id::text AS "runId",
-  i.source_id::text AS "sourceId", i.url`;
+  i.source_id::text AS "sourceId", i.url, i.force_formula AS "forceFormula"`;
 
 /** The shared queue tables as the dispatcher moves items through them; every change under the channel's lock. */
 export class PostgresQueueDispatch implements DispatchStore {
@@ -79,7 +80,7 @@ export class PostgresQueueDispatch implements DispatchStore {
            UPDATE queue_item i SET state = 'running', attempt = i.attempt + 1, run_id = gen_random_uuid(),
              reason = NULL, updated_at = clock_timestamp()
            FROM picked WHERE i.item_id = picked.item_id
-           RETURNING i.item_id, i.channel, i.run_id, i.source_id, i.url, i.attempt),
+           RETURNING i.item_id, i.channel, i.run_id, i.source_id, i.url, i.force_formula, i.attempt),
          logged AS (
            INSERT INTO queue_attempt (run_id, item_id, channel, attempt)
            SELECT run_id, item_id, channel, attempt FROM moved)
@@ -97,8 +98,10 @@ export class PostgresQueueDispatch implements DispatchStore {
          WHERE run_id = $1 AND outcome = 'running'`,
         [item.runId, outcome.state, outcome.reason],
       );
+      // A completed fresh extraction is not forced again when a later round queues the product.
       await tx.query(
-        `UPDATE queue_item SET state = $2, reason = $3, updated_at = clock_timestamp()
+        `UPDATE queue_item SET state = $2, reason = $3, updated_at = clock_timestamp(),
+           force_formula = force_formula AND $2 <> 'completed'
          WHERE item_id = $4 AND run_id = $1 AND state = 'running'`,
         [item.runId, outcome.state, outcome.reason, item.itemId],
       );

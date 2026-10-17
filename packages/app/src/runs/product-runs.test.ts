@@ -64,6 +64,17 @@ describe("ProductRuns", () => {
     );
   });
 
+  it("a forced run carries forceFormula into the pipeline input", async () => {
+    const { runs, starter } = setup();
+
+    await runs.submit({ ...request, forceFormula: true });
+
+    expect(starter.start).toHaveBeenCalledWith(
+      `product-run-${runId}`,
+      expect.objectContaining({ forceFormula: true }),
+    );
+  });
+
   it("a repeated request of a started run starts nothing", async () => {
     const { runs, starter } = setup("temporal-run-1");
 

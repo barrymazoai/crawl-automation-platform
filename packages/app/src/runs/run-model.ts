@@ -32,6 +32,8 @@ export const SubmitRunSchema = z.discriminatedUnion("kind", [
     requestId: Id,
     sourceId: Id,
     url: z.url({ protocol: /^https$/ }).max(4096),
+    /** Extract the formula afresh instead of reusing the one already collected (owner 2026-10-17). */
+    forceFormula: z.literal(true).optional(),
   }),
   z.strictObject({
     kind: z.literal("list"),

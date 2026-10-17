@@ -108,6 +108,7 @@ export class QueueDispatcher {
       requestId: item.runId,
       sourceId: item.sourceId,
       url: item.url,
+      ...(item.forceFormula ? { forceFormula: true as const } : {}),
     };
     try {
       await this.deps.starter.submit(run);

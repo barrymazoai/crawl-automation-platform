@@ -43,6 +43,10 @@ export async function collectCapturedProduct(
   const request = input.sourceUrl ? { ...sourcePlan, sourceUrl: input.sourceUrl } : sourcePlan;
   const outcome = ChannelPlanOutcomeSchema.parse(await plan.prepareChannelProduct(request));
   const { listingId, variantId } = sourcePlan.owner;
+  // A forced run reuses nothing; inputs started before the flag existed never carry it, so their history replays.
+  if (input.forceFormula) {
+    return extractFormula(input, pipeline, { captured, outcome });
+  }
   const known = KnownFormulaSchema.parse(
     await pipeline.findKnownFormula({
       runId: input.runId,
@@ -66,9 +70,23 @@ export async function collectCapturedProduct(
   if (reused) {
     return withEnrichmentSource(reused, sourcePlan);
   }
+  return extractFormula(input, pipeline, { captured, outcome });
+}
+
+/** The product's own Label steps from its planned sources. */
+async function extractFormula(
+  input: ProductPipelineInput,
+  pipeline: PipelineActivities,
+  planned: {
+    captured: Extract<CaptureResult, { status: "captured" }>;
+    outcome: z.infer<typeof ChannelPlanOutcomeSchema>;
+  },
+): Promise<unknown> {
+  const { captured, outcome } = planned;
   if (outcome.status === "review") {
     return notSupplement(input, captured, outcome) ?? outcome;
   }
+  const { sourcePlan } = captured;
   const result = await streamLabel({ input, pipeline, sourcePlan, manifest: outcome.manifest });
   return withEnrichmentSource(notSupplement(input, captured, result) ?? result, sourcePlan);
 }

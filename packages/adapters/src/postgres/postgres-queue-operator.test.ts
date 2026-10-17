@@ -117,7 +117,7 @@ describe("shared queue operator repository", () => {
     expect(query.mock.calls[2]?.[0]).toMatch(/SELECT state.*FOR UPDATE/);
     expect(query.mock.calls[2]?.[1]).toEqual(["amazon", [item.itemId]]);
     expect(query.mock.calls[3]?.[0]).toContain("state = 'queued', run_id = NULL, reason = NULL");
-    expect(query.mock.calls[3]?.[1]).toEqual(["amazon", [item.itemId]]);
+    expect(query.mock.calls[3]?.[1]).toEqual(["amazon", [item.itemId], false]);
     expect(query.mock.calls.map(([sql]) => sql).join(" ")).not.toMatch(
       /queue_attempt|review_record/,
     );

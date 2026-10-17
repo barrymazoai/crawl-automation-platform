@@ -26,6 +26,7 @@ export class PostgresQueueRequeue {
     return this.enqueueIds({
       channel: input.channel,
       itemIds: selected.map((item) => item.itemId),
+      forceFormula: input.forceFormula,
     });
   }
 
@@ -43,9 +44,10 @@ export class PostgresQueueRequeue {
       throw appErrors.create("QUEUE.REQUEUE_NOT_SETTLED");
     }
     await this.transaction.query(
-      `UPDATE queue_item SET state = 'queued', run_id = NULL, reason = NULL, updated_at = clock_timestamp()
+      `UPDATE queue_item SET state = 'queued', run_id = NULL, reason = NULL, force_formula = $3,
+         updated_at = clock_timestamp()
        WHERE channel = $1 AND item_id = ANY($2::text[])`,
-      [input.channel, input.itemIds],
+      [input.channel, input.itemIds, input.forceFormula ?? false],
     );
     return { requeued: rows.length };
   }

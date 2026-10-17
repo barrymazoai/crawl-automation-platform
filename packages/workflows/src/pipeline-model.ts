@@ -31,6 +31,8 @@ export const ProductPipelineInputSchema = z.strictObject({
   sourceId: z.uuid(),
   /** Catalog of sourceId, captured at acceptance; no default alters old history payloads. */
   sourceUrl: z.url().max(4096).optional(),
+  /** Extract the formula afresh: no known or sibling formula is reused (owner 2026-10-17). */
+  forceFormula: z.literal(true).optional(),
   /** Unique per product per run; names its archive, projection and plan. */
   operationId: ExecutionIdSchema,
   queues: z.strictObject({
@@ -115,9 +117,8 @@ export type CaptureResult = z.infer<typeof CaptureResultSchema>;
 type AcquisitionReview = z.infer<typeof AcquisitionReviewSchema>;
 type ChannelSavedLabelWorkflowInput = z.infer<typeof ChannelSavedLabelWorkflowInputSchema>;
 
-export const KnownFormulaSchema = z
-  .strictObject({ operationId: z.string().min(1).max(300) })
-  .nullable();
+const KnownFormula = z.strictObject({ operationId: z.string().min(1).max(300) });
+export const KnownFormulaSchema = KnownFormula.nullable();
 
 export const FormulaKeySchema = z.strictObject({
   channel: PipelineChannelSchema,

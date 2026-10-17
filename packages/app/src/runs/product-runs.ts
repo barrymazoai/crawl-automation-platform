@@ -73,7 +73,10 @@ export class ProductRuns {
     this.deps.registry.forBrandSource(source.channel, sourceUrl).productAddress(run.url);
     const accepted = await this.deps.store.accept({ ...run, ...source });
     if (accepted.startedRunId === null) {
-      const input = this.pipelineInput(accepted, target.resources, sourceUrl);
+      const input = {
+        ...this.pipelineInput(accepted, target.resources, sourceUrl),
+        ...(run.forceFormula ? { forceFormula: true as const } : {}),
+      };
       const { startedRunId } = await this.deps.starter.start(accepted.workflowId, input);
       await this.deps.store.markStarted(accepted.runId, startedRunId);
     }

@@ -194,6 +194,15 @@ it.each(["swanson", "costco"])(
   },
 );
 
+it("a forced run reads its label although a formula is known and a sibling's could be reused", async () => {
+  const { pipeline } = await withFamily();
+  pipeline.findKnownFormula.mockResolvedValue({ operationId: "formula-earlier" });
+  const result = await ProductPipelineWorkflow({ ...input, forceFormula: true });
+  expect(result).toEqual({ status: "collected", operationId: "label-1" });
+  expect(pipeline.findKnownFormula).not.toHaveBeenCalled();
+  expect(pipeline.reuseSiblingFormula).not.toHaveBeenCalled();
+});
+
 it("a capture Review is returned as is, releases the lane and starts nothing else", async () => {
   const { pipeline, plan, resource } = await setup();
   pipeline.captureProduct.mockResolvedValue(review);
