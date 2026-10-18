@@ -38,7 +38,7 @@ export default {
     const exported = await http.get(EXPORT_URL);
     const text = new TextDecoder('latin1').decode(exported.body);
     const csv = text.split(/\r?\n/).slice(2).join('\n');
-    const rows = parse(csv, { columns: true, relax_column_count: true, skip_empty_lines: true, trim: false });
+    const rows = parse(csv, { columns: true, relax_column_count: true, relax_quotes: true, skip_empty_lines: true, trim: false });
     log.info({ rows: rows.length, preamble: text.split(/\r?\n/)[0] }, 'GRAS export');
 
     const stats = { listed: rows.length, item_pages_read: 0, item_page_failures: 0 };
