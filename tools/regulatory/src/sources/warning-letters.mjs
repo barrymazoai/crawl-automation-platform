@@ -4,7 +4,9 @@
 // deal with supplements or food are not fetched; the rest are read once and
 // kept in the cache, so a later run only fetches letters it has not seen.
 import * as cheerio from 'cheerio';
+import { readJson } from '../lib/store.mjs';
 import { clean, clip, isoDate, nullIfEmpty, sentences } from '../lib/text.mjs';
+import { applyModelIngredients, isCurrent, letterText, resultPath } from './warning-letter-ai.mjs';
 import {
   ANIMAL_PRODUCT,
   DIETARY_SUPPLEMENT,
@@ -172,6 +174,7 @@ export function extract(row, letter) {
       scope_quote: clip(scope.quote, 500),
       violation_types: violationTypes,
       ingredients_mentioned: ingredients,
+      ingredients_source: 'rule',
       evidence,
       response_letter_url: row.response?.url ?? null,
       closeout_letter_url: row.closeout?.url ?? null,
@@ -197,7 +200,7 @@ export default {
   kind: 'warning_letter',
   inventory: false,
   completeList: true,
-  async collect({ http, log, refetchPages }) {
+  async collect({ http, log, refetchPages, dataDir }) {
     const rows = [];
     for (let start = 0; ; start += PAGE_SIZE) {
       const data = JSON.parse(await http.text(listUrl(start)));
@@ -205,7 +208,15 @@ export default {
       log.info({ start, got: data.data.length, total: data.recordsTotal }, 'warning letter list page');
       if (data.data.length < PAGE_SIZE || rows.length >= data.recordsTotal) break;
     }
-    const stats = { listed: rows.length, excluded_office: 0, pages_read: 0, out_of_scope: 0, page_failures: 0 };
+    const stats = {
+      listed: rows.length,
+      excluded_office: 0,
+      pages_read: 0,
+      out_of_scope: 0,
+      page_failures: 0,
+      model_ingredients: 0,
+      model_ingredients_stale: 0,
+    };
     const records = [];
     const failures = [];
     const listedKeys = new Set();
@@ -226,11 +237,19 @@ export default {
         continue;
       }
       stats.pages_read += 1;
-      const found = extract(row, parseLetter(page.body.toString('utf8')));
+      const letter = parseLetter(page.body.toString('utf8'));
+      const found = extract(row, letter);
       if (!found.scope) {
         stats.out_of_scope += 1;
         continue;
       }
+      // Ingredients read by the model (src/ai-ingredients.mjs), when its answer
+      // was made from this letter text with the current prompt.
+      const model = await readJson(resultPath(dataDir, row.slug));
+      if (model && isCurrent(model, letterText(letter))) {
+        found.details = applyModelIngredients(found.details, model);
+        stats.model_ingredients += 1;
+      } else if (model) stats.model_ingredients_stale += 1;
       records.push({
         kind: 'warning_letter',
         source: 'fda_warning_letters',

@@ -53,6 +53,29 @@ paid proxy is used.
   records that are new or changed in that run).
 - `cache/`: raw responses (gzip), used for `--offline` re-extraction.
 
+## Ingredients read by a model (warning letters)
+
+```sh
+node src/ai-ingredients.mjs --data-dir ~/regulatory-data --scope dietary_supplement   # or --slugs a,b
+node src/run.mjs --data-dir ~/regulatory-data --mode backfill --sources fda_warning_letters --offline
+```
+
+The first command reads each letter from the cache (no web request) and asks
+`gpt-5.6-luna` (medium) through the Codex CLI logged in on the machine for the
+ingredients the letter names, each with a sentence from the letter. An item is
+kept only when that sentence is in the letter word for word (quote marks and
+FDA's [bracket] edits aside) and contains the name as written; a shortened
+quote is replaced by the letter's best-matching sentence (`quote_repaired`).
+Results go to `ai/warning-letter-ingredients/<slug>.json`, with the dropped
+items and reasons. A letter whose text and prompt are unchanged is skipped.
+
+The second command merges them: `details.ingredients_mentioned` and the
+ingredient `evidence` then come from the model (`ingredients_source:
+model:...`, `ingredient_details` with role per ingredient), and the lexicon
+result stays in `details.ingredients_rule`. Letters without a current model
+answer keep the lexicon result (`ingredients_source: rule`). New letters need
+the first command again before they get model ingredients.
+
 The extraction rules are in `src/sources/*-rules.mjs`; every violation type,
 ingredient and scope decision keeps the sentence it came from in
 `details.evidence` / `details.scope_quote`. See

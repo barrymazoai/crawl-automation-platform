@@ -3,7 +3,9 @@
 // the letter word for word and contains the name as the letter writes it.
 // When the model shortened or re-punctuated the sentence but the name is in the
 // letter, the letter's own sentence that best matches the quote replaces it.
-import { sentences } from '../lib/text.mjs';
+import { createHash } from 'node:crypto';
+import { join } from 'node:path';
+import { clip, sentences } from '../lib/text.mjs';
 
 export const PROMPT_VERSION = 'wl-ingredients-v2';
 const MIN_QUOTE_OVERLAP = 0.6;
@@ -102,4 +104,37 @@ export function verify(letterText, items) {
     }
   }
   return { kept, dropped };
+}
+
+// The text the model reads and its hash; a stored answer applies only while the
+// letter text and the prompt are unchanged.
+export const letterText = (letter) => letter.paragraphs.join('\n');
+export const textHash = (text) => `sha256:${createHash('sha256').update(text).digest('hex')}`;
+export const resultPath = (dataDir, slug) => join(dataDir, 'ai', 'warning-letter-ingredients', `${slug}.json`);
+export const isCurrent = (result, text) => result?.prompt_version === PROMPT_VERSION && result.input_sha256 === textHash(text);
+
+// Model ingredients replace the lexicon ones; the lexicon list stays in
+// ingredients_rule for comparison.
+export function applyModelIngredients(details, result) {
+  return {
+    ...details,
+    ingredients_mentioned: result.ingredients.map((i) => i.name),
+    ingredients_rule: details.ingredients_mentioned,
+    ingredients_source: `model:${result.model}/${result.effort}/${result.prompt_version}`,
+    ingredient_details: result.ingredients.map(({ name, name_in_letter, role, quote_repaired }) => ({
+      name,
+      name_in_letter,
+      role,
+      quote_repaired: Boolean(quote_repaired),
+    })),
+    evidence: [
+      ...details.evidence.filter((e) => e.field !== 'ingredients_mentioned'),
+      ...result.ingredients.map((i) => ({
+        field: 'ingredients_mentioned',
+        value: i.name,
+        quote: clip(i.quote, 500),
+        source: 'model',
+      })),
+    ],
+  };
 }

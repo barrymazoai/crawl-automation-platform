@@ -74,6 +74,7 @@ try {
           mode: args.mode,
           now,
           refetchPages: args['refetch-pages'],
+          dataDir,
           previous: stores.get(source.kind),
         });
         sourceLog.info({ records: out.records.length, seconds: Math.round((Date.now() - started) / 1000) }, 'source collected');

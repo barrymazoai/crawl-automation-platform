@@ -5,7 +5,6 @@
 // the ingredients it names, keeps only quote-verified items and writes
 // <dir>/ai/warning-letter-ingredients/<slug>.json. warning_letter.jsonl is not
 // changed. A letter whose text, prompt and model are unchanged is skipped.
-import { createHash } from 'node:crypto';
 import { mkdir, readFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
@@ -14,7 +13,15 @@ import pino from 'pino';
 import { codexJson } from './lib/codex.mjs';
 import { createHttp } from './lib/http.mjs';
 import { loadKind, readJson, writeJson } from './lib/store.mjs';
-import { PROMPT_VERSION, SCHEMA, buildPrompt, verify } from './sources/warning-letter-ai.mjs';
+import {
+  PROMPT_VERSION,
+  SCHEMA,
+  buildPrompt,
+  letterText,
+  resultPath,
+  textHash,
+  verify,
+} from './sources/warning-letter-ai.mjs';
 import { parseLetter } from './sources/warning-letters.mjs';
 
 const { values: args } = parseArgs({
@@ -60,9 +67,9 @@ await Promise.all(
     limit(async () => {
       const record = bySlug.get(slug);
       const page = await cache.get(record.source_url);
-      const text = parseLetter(page.body.toString('utf8')).paragraphs.join('\n');
-      const inputHash = `sha256:${createHash('sha256').update(text).digest('hex')}`;
-      const file = join(outDir, `${slug}.json`);
+      const text = letterText(parseLetter(page.body.toString('utf8')));
+      const inputHash = textHash(text);
+      const file = resultPath(dataDir, slug);
       const prior = await readJson(file);
       if (
         prior?.input_sha256 === inputHash &&
