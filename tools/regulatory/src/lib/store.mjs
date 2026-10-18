@@ -3,7 +3,7 @@
 // whole file atomically; new/changed records also go to the run's changes file.
 import { createHash } from 'node:crypto';
 import { createReadStream } from 'node:fs';
-import { mkdir, rename, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { createInterface } from 'node:readline';
 import stringify from 'safe-stable-stringify';
@@ -79,6 +79,15 @@ export async function writeJsonl(file, records) {
   const body = sorted.map((r) => JSON.stringify(orderFields(r))).join('\n');
   await writeFile(`${file}.tmp`, body ? `${body}\n` : '');
   await rename(`${file}.tmp`, file);
+}
+
+export async function readJson(file) {
+  try {
+    return JSON.parse(await readFile(file, 'utf8'));
+  } catch (error) {
+    if (error.code === 'ENOENT') return null;
+    throw error;
+  }
 }
 
 export async function writeJson(file, value) {

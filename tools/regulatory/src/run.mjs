@@ -8,7 +8,7 @@ import { parseArgs } from 'node:util';
 import pino from 'pino';
 import lockfile from 'proper-lockfile';
 import { createHttp } from './lib/http.mjs';
-import { completeness, dateRange, loadKind, upsert, writeJson, writeJsonl } from './lib/store.mjs';
+import { completeness, dateRange, loadKind, readJson, upsert, writeJson, writeJsonl } from './lib/store.mjs';
 import gras from './sources/gras.mjs';
 import mediaRss from './sources/media-rss.mjs';
 import ndi from './sources/ndi.mjs';
@@ -158,8 +158,16 @@ try {
     };
   }
   manifest.finished_at = new Date().toISOString();
+  for (const entry of Object.values(manifest.sources)) entry.run_id = runId;
   await writeJson(join(runDir, 'manifest.json'), manifest);
-  await writeJson(join(dataDir, 'manifest.json'), manifest);
+  // The top-level manifest describes the files as they stand: a source this run
+  // did not touch keeps its entry from the run that last collected it.
+  const previous = await readJson(join(dataDir, 'manifest.json'));
+  const current = { ...manifest, sources: { ...manifest.sources } };
+  for (const [name, entry] of Object.entries(previous?.sources ?? {})) {
+    if (!(name in current.sources)) current.sources[name] = { run_id: previous.run_id, ...entry };
+  }
+  await writeJson(join(dataDir, 'manifest.json'), current);
   log.info(
     { sources: Object.fromEntries(Object.entries(manifest.sources).map(([k, v]) => [k, v.status])) },
     'run finished',
