@@ -41,13 +41,16 @@ export const VIOLATION_RULES = {
   ],
   unapproved_new_drug: [
     /unapproved new drugs?/i,
-    /new drugs? (?:within the meaning of|as defined (?:in|by)|under) section 201\(p\)/i,
-    /section 505\(a\)/i,
+    // FDA writes both new drug and “new drug”, and "sections 301(d) and 505(a)".
+    /new drugs?[”"]? (?:within the meaning of|as defined (?:in|by)|under) section 201\(p\)/i,
+    /\b505\(a\)/,
   ],
   prohibited_ingredient: [
     /201\(ff\)\(3\)\(B\)/,
     /excluded from the (?:dietary supplement )?definition/i,
-    /(?:is|are) not (?:a )?dietary ingredients?/i,
+    /\bis not a dietary ingredient\b/i,
+    /unsafe food additive/i,
+    /section 402\(a\)\(2\)\(C\)/i,
     /does not (?:meet|qualify)[^.]{0,60}dietary ingredient/i,
     /cannot be (?:lawfully )?marketed as (?:a )?dietary supplement/i,
     /section 402\(f\)/i,
@@ -57,9 +60,23 @@ export const VIOLATION_RULES = {
     /hidden (?:drug|active)/i,
     /FDA laboratory analysis[^.]{0,200}(?:confirm|reveal|found|show)/i,
   ],
-  labeling: [/misbranded (?:within the meaning of|under) section 403/i, /section 403\([a-z]/i, /21 CFR 101\.\d/i],
-  other: [/Foreign Supplier Verification/i, /\bFSVP\b/, /\bHACCP\b/, /section 402\(a\)\(4\)/i, /insanitary conditions/i, /failure to register/i],
+  // The sentence has to say a product is misbranded; FSVP letters quote section
+  // 403(w) only as part of a requirement ("... or misbranded under section 403(w)").
+  labeling: [/(?:is|are|be|been|being) (?:each )?misbranded (?:within the meaning of|under) section 403/i, /21 CFR 101\.\d/i],
+  other: [
+    /Foreign Supplier Verification/i,
+    /\bFSVP\b/,
+    /\bHACCP\b/,
+    /section 402\(a\)\(4\)/i,
+    /insanitary conditions/i,
+    /failure to register/i,
+    /Section 5 of the FTC Act/i,
+  ],
 };
+
+// Text that names an ingredient without being about a product: URLs and the
+// Supplement Facts rule "Not a significant source of ...".
+const NOT_PRODUCT_TEXT = /https?:\/\/\S+|www\.\S+|not a significant source of[^.]*/gi;
 
 // Substances that recur in supplement and food enforcement. A name is listed
 // only when a plain-text match cannot be some other word; generic words
@@ -143,10 +160,40 @@ const INGREDIENTS = [
   ['hydroxychloroquine', /hydroxychloroquine/i],
   ['5-HTP', /5-HTP|5-hydroxytryptophan/i],
   ['sodium nitrite', /sodium nitrite/i],
+  ['spirulina', /spirulina/i],
+  ['chlorella', /chlorella/i],
+  ['milk thistle', /milk thistle|silymarin|silybum/i],
+  ['holy basil (tulsi)', /holy basil|\btulsi\b/i],
+  ['coenzyme Q10', /co-?enzyme ?Q-?10|\bCoQ-?10\b|ubiquinol|ubiquinone/i],
+  ['L-theanine', /theanine/i],
+  ['creatine', /creatine/i],
+  ['whey protein', /whey protein/i],
+  ['collagen', /collagen/i],
+  ['magnesium', /magnesium|magtein/i],
+  ['iron', /\biron\b/i],
+  ['calcium', /\bcalcium\b/i],
+  ['vitamin B12', /vitamin B-?12|cobalamin/i],
+  ['folic acid', /folic acid|\bfolate\b/i],
+  ['probiotics', /probiotics?\b/i],
+  ['omega-3 / fish oil', /omega-?3|fish oil/i],
+  ['glucosamine', /glucosamine/i],
+  ['chondroitin', /chondroitin/i],
+  ['saw palmetto', /saw palmetto/i],
+  ['maca', /\bmaca\b/i],
+  ['moringa', /moringa/i],
+  ['sea moss', /sea moss|irish moss/i],
+  ['shilajit', /shilajit/i],
+  ['tongkat ali', /tongkat ali|eurycoma/i],
+  ['valerian', /valerian/i],
+  ['wormwood', /wormwood|artemisia/i],
+  ['guarana', /guarana/i],
+  ['alpha-GPC', /alpha-?GPC/i],
+  ['tyrosine', /tyrosine/i],
 ];
 
 export function matchIngredients(sentence) {
-  return INGREDIENTS.filter(([, re]) => re.test(sentence)).map(([name]) => name);
+  const text = sentence.replace(NOT_PRODUCT_TEXT, ' ');
+  return INGREDIENTS.filter(([, re]) => re.test(text)).map(([name]) => name);
 }
 
 // Domains named in the letter, minus government and reference sites.

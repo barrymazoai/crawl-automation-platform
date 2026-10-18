@@ -94,9 +94,11 @@ export function parseLetter(html) {
       header[label] = parts.length ? parts.join('; ') : null;
     }
   });
+  // Claims quoted from websites are usually list items, not paragraphs.
   const paragraphs = main
-    .find('p')
+    .find('p, li')
     .not('.address')
+    .filter((_, el) => el.tagName === 'p' || $(el).find('p, li').length === 0)
     .map((_, p) => clean($(p).text()))
     .get()
     .filter(Boolean);
