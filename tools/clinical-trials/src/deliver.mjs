@@ -35,7 +35,7 @@ export async function deliver({ dataDir, runDir, runId, supplySmart, entities, m
     const ingredients = matchers.ingredients.matchStudy(study);
     for (const r of ingredients.rejected) rejectedTerms.push({ ...r, nct_id: entry.nct_id });
     for (const link of companies.filter((l) => l.ambiguous)) ambiguous.push({ nct_id: entry.nct_id, matched_name: link.matched_name, company_id: link.company.id, company_name: link.company.name, candidates: link.ambiguous });
-    if (companies.length || ingredients.links.length) found.set(entry.nct_id, { companies, ingredients: ingredients.links });
+    if (companies.length || ingredients.links.length) found.set(entry.nct_id, { companies, ingredients: ingredients.links, supplement: isDietarySupplement(study) });
     // Leads: industry sponsors of supplement trials that Supply Smart doesn't have.
     if (isDietarySupplement(study)) {
       const lead = parties(study).find((p) => p.role === 'lead_sponsor');
@@ -65,16 +65,25 @@ export async function deliver({ dataDir, runDir, runId, supplySmart, entities, m
   const companyRows = [];
   const productRows = [];
   const ingredientRows = [];
+  const linked = new Set();
+  let outsideNutrition = 0;
   for (const [nct, f] of found) {
-    for (const l of f.companies) {
-      companyRows.push(checked(CompanyLinkSchema, { nct_id: nct, company_id: l.company.id, role: l.role, matched_name: l.matched_name, match_basis: l.basis, confidence: l.confidence }, 'company link'));
-    }
+    const productLinks = [];
     if (f.companies.some((l) => l.confidence !== 'low' && productsByCompany.has(l.company.id))) {
-      const study = await readStudy(dataDir, nct);
-      for (const l of matchProducts(study, f.companies, productsByCompany)) {
-        productRows.push(checked(ProductLinkSchema, { nct_id: nct, product_id: l.product.id, intervention_name: l.intervention_name, match_basis: l.basis, confidence: l.confidence }, 'product link'));
-      }
+      productLinks.push(...matchProducts(await readStudy(dataDir, nct), f.companies, productsByCompany));
     }
+    for (const l of productLinks) {
+      productRows.push(checked(ProductLinkSchema, { nct_id: nct, product_id: l.product.id, intervention_name: l.intervention_name, match_basis: l.basis, confidence: l.confidence }, 'product link'));
+    }
+    // Brand links only for nutrition trials: a supplement intervention, or a product or branded
+    // ingredient of ours named in it. Bayer sponsors thousands of drug trials; they are not trials of
+    // its supplement products. They stay in the store, counted in the manifest.
+    if (f.supplement || productLinks.length || f.ingredients.length) {
+      for (const l of f.companies) {
+        companyRows.push(checked(CompanyLinkSchema, { nct_id: nct, company_id: l.company.id, role: l.role, matched_name: l.matched_name, match_basis: l.basis, confidence: l.confidence }, 'company link'));
+      }
+    } else outsideNutrition += f.companies.length;
+    if (f.supplement || productLinks.length || f.ingredients.length) linked.add(nct);
     for (const l of f.ingredients) {
       ingredientRows.push(checked(IngredientLinkSchema, {
         nct_id: nct,
@@ -92,7 +101,6 @@ export async function deliver({ dataDir, runDir, runId, supplySmart, entities, m
     }
   }
 
-  const linked = new Set(found.keys());
   const listed = [...new Set([...linked, ...(state.delivered_nct_ids ?? []).filter((n) => index.has(n) && !index.get(n).removed_at)])].sort();
   const trials = [];
   for (const nct of listed) trials.push(checked(TrialRecordSchema, trialRecord(await readStudy(dataDir, nct)), 'trial'));
@@ -109,6 +117,7 @@ export async function deliver({ dataDir, runDir, runId, supplySmart, entities, m
       trials: trials.length,
       trials_listed_only_to_clear_links: listed.length - linked.size,
       company_links: countBy(companyRows, 'confidence'),
+      company_links_outside_nutrition_not_delivered: outsideNutrition,
       product_links: countBy(productRows, 'confidence'),
       ingredient_links: countBy(ingredientRows, 'confidence'),
       brands_with_trials: new Set(companyRows.map((r) => r.company_id)).size,

@@ -4,8 +4,9 @@
 //   sponsor_exact  the sponsor's name without legal forms equals the company's   high; medium if short, low if one
 //                  ordinary word ("Seed" = "SEED Co. Ltd.", a contact-lens maker)
 //   sponsor_alias  the name a "dba" / parenthesis gives equals the company's     high (medium if weak)
-//                  equal only after dropping business words                     high if the core is long, medium,
-//                                                                               low when it is one ordinary word
+//                  equal only after dropping business words                     two+ words: high if long, else medium;
+//                                                                               one word: medium if it is the company's
+//                                                                               whole name, else low
 //   manual         listed in <data-dir>/aliases.json                            high
 //
 // A full-name match beats a core-only one; several companies tied on the best match are all low
@@ -56,8 +57,7 @@ export function createCompanyMatcher(companies, manualAliases = []) {
         offer(company, stripped === whole ? 'sponsor_exact' : 'sponsor_alias', coreIsOrdinaryWord(key) && stripped === whole ? 'low' : coreIsWeak(key) ? 'medium' : 'high', 2);
       }
       for (const company of byCore.get(c)?.values() ?? []) {
-        const long = c.split(' ').length > 1 || c.length >= 8;
-        offer(company, 'sponsor_alias', coreIsWeak(c) ? 'low' : long ? 'high' : 'medium', 1);
+        offer(company, 'sponsor_alias', coreConfidence(c, company), 1);
       }
     }
     // Only the best kind of match counts; several companies tied on it are all low.
@@ -66,6 +66,17 @@ export function createCompanyMatcher(companies, manualAliases = []) {
     const best = list.filter((x) => x.strength === top);
     if (best.length > 1) return best.map((x) => ({ ...x, confidence: 'low', ambiguous: best.length }));
     return best;
+  }
+
+  /**
+   * Equal cores only. Two or more words: high when long. One word: medium only when it is the
+   * company's whole name ("Semaine" ↔ "Semaine Health"); when both sides lost words to meet
+   * ("Olympus labs" ↔ "Olympus Corporation", "Biotics Research" ↔ "AB Biotics") it is a guess: low.
+   */
+  function coreConfidence(c, company) {
+    if (coreIsWeak(c)) return 'low';
+    if (c.includes(' ')) return c.length >= 8 ? 'high' : 'medium';
+    return nameVariants(company.name).some((v) => legalStripped(v) === c) ? 'medium' : 'low';
   }
 
   /** Company links of one study: { company, role, matched_name, basis, confidence }. */

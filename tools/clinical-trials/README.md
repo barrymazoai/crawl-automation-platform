@@ -52,7 +52,7 @@ against it before it is written.
 |---|---|
 | `manifest.json` | `run_id`, `fetched_at` (last collect), `source_db` (`cloud-test` for test.supplysmart.net, else `SUPPLY_SMART_SOURCE_DB`), counts |
 | `trials.jsonl` | every linked trial (registry values as given, `raw` = the API record) **and** every trial linked last time, so the importer drops links the matcher no longer makes |
-| `trial_company_links.jsonl` | brand ↔ trial from the lead sponsor / collaborator fields only |
+| `trial_company_links.jsonl` | brand ↔ trial from the lead sponsor / collaborator fields only, for nutrition trials only (a dietary-supplement intervention, or one of our products / branded ingredients named); a sponsor's drug and device trials stay in the store and are counted in the manifest |
 | `trial_product_links.jsonl` | product ↔ trial, searched only inside a brand linked high or medium |
 | `trial_ingredient_links.jsonl` | branded ingredient ↔ trial (KAN-214 draft contract; no importer yet) |
 | `review/unmatched_industry_sponsors.jsonl` | industry sponsors of supplement trials that Supply Smart doesn't have, with counts: candidates for new companies or for `aliases.json` |
@@ -73,7 +73,9 @@ All literal; names are normalized (case, accents, ®/™, punctuation) and compa
   `sponsor_exact` = equal without legal forms (Inc, LLC, GmbH…); `sponsor_alias` = the name a "dba" or
   parenthesis states, or equal once business words (Health, Nutrition, USA, International…) are dropped;
   `manual` = `<data-dir>/aliases.json`. A short or ordinary core ("Seed", "Ritual") lowers the confidence;
-  several companies tied on the best match are all `low`. Supply Smart hides unreviewed `low` links.
+  a one-word core is `medium` only when it is the company's whole name ("Semaine" ↔ "Semaine Health"),
+  `low` when both sides dropped words to meet ("Olympus labs" ↔ "Olympus Corporation"); several
+  companies tied on the best match are all `low`. Supply Smart hides unreviewed `low` links.
 - **Product** (`src/match/products.mjs`): intervention name / other names against the linked brand's
   product names, as word sets without the brand's words, sizes, counts and filler; form words stay
   (`PMS Capsule` ≠ `PMS Gummy`). Same words → high; one contains the other → medium; close → low; only
