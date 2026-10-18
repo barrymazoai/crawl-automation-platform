@@ -191,6 +191,7 @@ export default {
   name: 'fda_warning_letters',
   kind: 'warning_letter',
   inventory: false,
+  completeList: true,
   async collect({ http, log, refetchPages }) {
     const rows = [];
     for (let start = 0; ; start += PAGE_SIZE) {
@@ -202,8 +203,10 @@ export default {
     const stats = { listed: rows.length, excluded_office: 0, pages_read: 0, out_of_scope: 0, page_failures: 0 };
     const records = [];
     const failures = [];
+    const listedKeys = new Set();
     for (const raw of rows) {
       const row = parseListRow(raw);
+      listedKeys.add(row.slug);
       if (EXCLUDED_OFFICE.test(row.office)) {
         stats.excluded_office += 1;
         continue;
@@ -241,6 +244,6 @@ export default {
         fetched_at: page.fetchedAt,
       });
     }
-    return { records, stats, failures };
+    return { records, listedKeys, stats, failures };
   },
 };

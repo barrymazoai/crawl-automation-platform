@@ -33,9 +33,10 @@ function cellValue(cell) {
 }
 
 export default {
-  name: 'fda_ndi_notifications',
+  name: 'fda_ndi_list',
   kind: 'ndi',
   inventory: true,
+  completeList: true,
   async collect({ http, log }) {
     const page = await http.text(PAGE_URL);
     const link = findXlsxLink(page);
@@ -68,7 +69,7 @@ export default {
       raw._ndin_link = cells[0].hyperlink ?? null;
       records.push({
         kind: 'ndi',
-        source: 'fda_ndi_notifications',
+        source: 'fda_ndi_list',
         source_key: ndin,
         source_url: cells[0].hyperlink ?? PAGE_URL,
         title: `NDIN ${ndin}: ${ingredient ?? '(no ingredient name)'}`,
@@ -77,18 +78,20 @@ export default {
         raw_company_address: null,
         raw_company_website: null,
         event_date: isoDate(values[4]),
-        status: responseDate ? 'fda_responded' : 'no_response_listed',
+        status: responseDate ? 'response_dated' : null,
         status_date: responseDate,
         details: {
           ndin,
           ingredient_name: ingredient,
           response_date: responseDate,
+          // The list has neither FDA's conclusion nor a link to its letter.
           fda_response: null,
+          response_letter_url: null,
           report_number: nullIfEmpty(values[1] === null ? null : String(values[1])),
         },
         raw,
       });
     });
-    return { records, stats, failures: [], notes: [`list file: ${link.file} (${link.url})`] };
+    return { records, listedKeys: new Set(records.map((r) => r.source_key)), stats, failures: [], notes: [`list file: ${link.file} (${link.url})`] };
   },
 };

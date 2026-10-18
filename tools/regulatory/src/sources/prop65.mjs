@@ -77,7 +77,7 @@ export function isSupplementProduct(source) {
 }
 
 export default {
-  name: 'ca_ag_prop65',
+  name: 'ca_prop65',
   kind: 'lawsuit',
   inventory: false,
   async collect({ http, log, mode, now }) {
@@ -101,10 +101,9 @@ export default {
     const records = [];
     for (const n of notices.values()) {
       if (!isSupplementProduct(n.source)) continue;
-      const status = statusOf(n);
       records.push({
         kind: 'lawsuit',
-        source: 'ca_ag_prop65',
+        source: 'ca_prop65',
         source_key: n.ag_number,
         source_url: n.detail_url ?? `${ORIGIN}/prop65/60-Day-Notice-${n.ag_number}`,
         title: `Prop 65 60-day notice ${n.ag_number}: ${n.chemical ?? 'chemical not listed'} in ${n.source}`,
@@ -114,10 +113,12 @@ export default {
         raw_company_website: null,
         event_date: n.date_filed,
         published_date: n.date_filed,
-        status,
+        // Every lawsuit-kind record is an allegation; the notice's own progress is case_progress.
+        status: 'alleged',
         status_date: null,
         details: {
           lawsuit_type: 'prop65_notice',
+          case_progress: statusOf(n),
           plaintiff: n.noticing_party,
           plaintiff_attorney: n.plaintiff_attorney,
           court: null,

@@ -8,10 +8,10 @@ Runs on Server 一, started by hand. No scheduler is installed yet.
 | Kind | Source (`source`) | What is read |
 |---|---|---|
 | `warning_letter` | `fda_warning_letters` | FDA warning letter list (DataTables JSON behind the warning-letter page) + each letter page, except letters from the Tobacco, Devices, Biologics and Veterinary centers |
-| `gras` | `fda_gras_notices` | GRAS notice CSV export + each notice page (for the FDA response letter link) |
-| `ndi` | `fda_ndi_notifications` | NDI page → its current XLSX (looked up by file name each run) |
-| `lawsuit` | `ca_ag_prop65` | CA AG Prop 65 60-day notice search results, month by month; supplement-type products only |
-| `lawsuit` | `trade_press_rss` | NutraIngredients and SupplySide Supplement Journal RSS; litigation/enforcement items only; headline, the feed's own summary and the link |
+| `gras` | `fda_gras_inventory` | GRAS notice CSV export + each notice page (for the FDA response letter link) |
+| `ndi` | `fda_ndi_list` | NDI page → its current XLSX (looked up by file name each run) |
+| `lawsuit` | `ca_prop65` | CA AG Prop 65 60-day notice search results, month by month; supplement-type products only |
+| `lawsuit` | `media:nutraingredients`, `media:supplysidesj` (option name `media`) | NutraIngredients and SupplySide Supplement Journal RSS; litigation/enforcement items only; headline, the feed's own summary and the link |
 
 ## Run
 
@@ -27,7 +27,9 @@ pages again instead of using the cached copy), `--offline` (cache only, no
 requests; used to re-run extraction after a rule change).
 
 `backfill` reads every warning letter in the list, every GRAS and NDI row, 12
-months of Prop 65 notices, and up to 40 pages of the SupplySide feed.
+months of Prop 65 notices, and both RSS feeds. The feeds have no archive:
+NutraIngredients shows its latest 20 items (about 3 days), SupplySide its
+latest 50 (about 7 weeks), so media coverage only grows from the first run on.
 `incremental` reads the same lists but fetches only letter/notice pages it has
 not seen (or whose list row changed), and the last 45 days of Prop 65 notices.
 
@@ -41,7 +43,10 @@ paid proxy is used.
 - `<kind>.jsonl`: every record ever seen, one per `source` + `source_key`,
   rewritten atomically each run. `first_seen_at`, `last_seen_at`,
   `changed_at` and `content_hash` are bookkeeping; `published_date` of the
-  inventory sources (GRAS, NDI) is the first-seen date.
+  inventory sources (GRAS, NDI) is the first-seen date. A `backfill` run marks
+  warning letters, GRAS and NDI records that are no longer in the source list
+  with `removed_at`; nothing is deleted. Every `lawsuit` record has
+  `status: alleged`; a Prop 65 notice's progress is `details.case_progress`.
 - `manifest.json`: the latest run (per source: status, counts new/updated/
   unchanged, date coverage, requests and problems, field completeness).
 - `runs/<run-id>/`: `run.log`, `manifest.json`, `changes/<kind>.jsonl` (only

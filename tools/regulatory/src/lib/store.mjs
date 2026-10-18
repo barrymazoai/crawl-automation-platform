@@ -63,7 +63,8 @@ export function upsert(records, incoming, { now, inventory }) {
   record.first_seen_at = previous?.first_seen_at ?? now;
   record.last_seen_at = now;
   record.fetched_at = incoming.fetched_at ?? now;
-  if (previous && previous.content_hash === record.content_hash) {
+  // A record that had disappeared from its source and is back counts as updated.
+  if (previous && previous.content_hash === record.content_hash && !previous.removed_at) {
     records.set(key, { ...record, fetched_at: previous.fetched_at, changed_at: previous.changed_at });
     return 'unchanged';
   }
@@ -86,7 +87,17 @@ export async function writeJson(file, value) {
   await rename(`${file}.tmp`, file);
 }
 
-const FIELD_ORDER = [...CONTENT_FIELDS.slice(0, 13), 'fetched_at', 'first_seen_at', 'last_seen_at', 'changed_at', 'content_hash', 'details', 'raw'];
+const FIELD_ORDER = [
+  ...CONTENT_FIELDS.slice(0, 13),
+  'fetched_at',
+  'first_seen_at',
+  'last_seen_at',
+  'removed_at',
+  'changed_at',
+  'content_hash',
+  'details',
+  'raw',
+];
 
 function orderFields(r) {
   const out = {};

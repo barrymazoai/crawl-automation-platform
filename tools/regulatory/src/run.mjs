@@ -108,15 +108,26 @@ try {
       entry.status = result.reason.name === 'HostBlockedError' ? 'blocked' : 'failed';
       entry.error = result.reason.message;
     } else {
-      const { records, stats, failures, notes } = result.value.out;
+      const { records, listedKeys, stats, failures, notes } = result.value.out;
       const store = stores.get(source.kind);
-      const counts = { new: 0, updated: 0, unchanged: 0 };
+      const counts = { new: 0, updated: 0, unchanged: 0, removed: 0 };
       for (const record of records) {
         const outcome = upsert(store, record, { now, inventory: source.inventory });
         counts[outcome] += 1;
         if (outcome !== 'unchanged') changes.get(source.kind).push(store.get(`${record.source}|${record.source_key}`));
       }
-      const own = [...store.values()].filter((r) => r.source === source.name);
+      const owns = (r) => r.source === source.name || r.source.startsWith(`${source.name}:`);
+      // Full reconcile of a complete list: a record whose key is gone from the
+      // source gets removed_at (it is kept, never deleted).
+      if (args.mode === 'backfill' && source.completeList && listedKeys?.size) {
+        for (const r of store.values()) {
+          if (!owns(r) || r.removed_at || listedKeys.has(r.source_key)) continue;
+          r.removed_at = now;
+          counts.removed += 1;
+          changes.get(source.kind).push(r);
+        }
+      }
+      const own = [...store.values()].filter(owns);
       Object.assign(entry, {
         collected: records.length,
         ...counts,

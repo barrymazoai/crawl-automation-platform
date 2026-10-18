@@ -31,9 +31,10 @@ function itemLinks(html) {
 }
 
 export default {
-  name: 'fda_gras_notices',
+  name: 'fda_gras_inventory',
   kind: 'gras',
   inventory: true,
+  completeList: true,
   async collect({ http, log, previous, refetchPages }) {
     const exported = await http.get(EXPORT_URL);
     const text = new TextDecoder('latin1').decode(exported.body);
@@ -44,13 +45,15 @@ export default {
     const stats = { listed: rows.length, item_pages_read: 0, item_page_failures: 0 };
     const failures = [];
     const records = [];
+    const listedKeys = new Set();
     for (const row of rows) {
       const grn = clean(row['GRAS Notice (GRN) No.']).replace(/^=T\("(.*)"\)$/, '$1');
       if (!grn) continue;
+      listedKeys.add(grn);
       const fdaResponse = nullIfEmpty(htmlText(row["FDA's Letter"]).replace(/\s*\(in PDF\)\s*$/i, ''));
       const base = {
         kind: 'gras',
-        source: 'fda_gras_notices',
+        source: 'fda_gras_inventory',
         source_key: grn,
         source_url: itemUrl(grn),
         title: `GRN ${grn}: ${htmlText(row.Substance)}`,
@@ -64,7 +67,7 @@ export default {
         raw: row,
       };
       // The item page is read again only when the CSV row changed.
-      const prior = previous.get(`fda_gras_notices|${grn}`);
+      const prior = previous.get(`fda_gras_inventory|${grn}`);
       const rowUnchanged = prior && contentHash({ raw: prior.raw }) === contentHash({ raw: row });
       let links =
         rowUnchanged && !refetchPages
@@ -97,6 +100,6 @@ export default {
         },
       });
     }
-    return { records, stats, failures, notes: [`export header: ${text.split(/\r?\n/)[0]}`] };
+    return { records, listedKeys, stats, failures, notes: [`export header: ${text.split(/\r?\n/)[0]}`] };
   },
 };

@@ -2,26 +2,25 @@
 // the summary the feed itself carries and the link; article pages are never
 // fetched. NutraIngredients-USA now publishes as nutraingredients.com and
 // Natural Products Insider as SupplySide Supplement Journal (supplysidesj.com).
-import { subMonths } from 'date-fns';
 import { XMLParser } from 'fast-xml-parser';
 import { htmlText, isoDate, nullIfEmpty } from '../lib/text.mjs';
 import { ENFORCEMENT_NEWS, LAWSUIT_TYPES } from './media-rules.mjs';
 
+// Neither feed has paging or an archive (SupplySide ignores ?page=N), so a
+// feed only ever shows its latest items: about 3 days for NutraIngredients
+// (20 items) and about 7 weeks for SupplySide (50 items).
 const FEEDS = [
   {
     outlet: 'NutraIngredients',
+    source: 'media:nutraingredients',
     url: 'https://www.nutraingredients.com/arc/outboundfeeds/rss/',
-    // The feed has no paging: only the latest 20 items are ever available.
-    pageUrl: null,
   },
   {
     outlet: 'SupplySide Supplement Journal',
+    source: 'media:supplysidesj',
     url: 'https://www.supplysidesj.com/rss.xml',
-    pageUrl: (n) => `https://www.supplysidesj.com/rss.xml?page=${n}`,
   },
 ];
-
-const MAX_BACKFILL_PAGES = 40;
 
 const parser = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: '@_', textNodeName: '#text' });
 const textOf = (v) => (v === undefined || v === null ? null : typeof v === 'object' ? (v['#text'] ?? null) : String(v));
@@ -54,7 +53,7 @@ function toRecord(feed, item) {
   const published = item.pubDate ? new Date(item.pubDate) : null;
   return {
     kind: 'lawsuit',
-    source: 'trade_press_rss',
+    source: feed.source,
     source_key: url,
     source_url: url,
     title: item.title,
@@ -64,7 +63,7 @@ function toRecord(feed, item) {
     raw_company_website: null,
     event_date: null,
     published_date: published && !Number.isNaN(published.getTime()) ? isoDate(published) : null,
-    status: 'reported',
+    status: 'alleged',
     status_date: null,
     details: {
       lawsuit_type: LAWSUIT_TYPES.find(([, re]) => re.test(text))?.[0] ?? 'other',
@@ -81,37 +80,19 @@ function toRecord(feed, item) {
 }
 
 export default {
-  name: 'trade_press_rss',
+  name: 'media',
   kind: 'lawsuit',
   inventory: false,
-  async collect({ http, log, mode, now }) {
-    const cutoff = subMonths(new Date(now), 12);
+  async collect({ http, log }) {
     const records = [];
     const stats = {};
     for (const feed of FEEDS) {
-      const s = { pages: 0, items: 0, kept: 0, oldest: null, newest: null };
-      stats[feed.outlet] = s;
-      const seen = new Set();
-      const pages = mode === 'backfill' && feed.pageUrl ? MAX_BACKFILL_PAGES : 1;
-      for (let n = 0; n < pages; n += 1) {
-        const items = parseFeed(await http.text(n === 0 ? feed.url : feed.pageUrl(n)));
-        s.pages += 1;
-        const fresh = items.filter((i) => i.link && !seen.has(i.link));
-        if (fresh.length === 0) break;
-        for (const item of fresh) {
-          seen.add(item.link);
-          s.items += 1;
-          const day = isoDate(item.pubDate ? new Date(item.pubDate) : null);
-          if (day && (!s.oldest || day < s.oldest)) s.oldest = day;
-          if (day && (!s.newest || day > s.newest)) s.newest = day;
-          const record = toRecord(feed, item);
-          if (record) records.push(record);
-        }
-        const oldest = fresh.map((i) => new Date(i.pubDate)).filter((d) => !Number.isNaN(d.getTime())).sort((a, b) => a - b)[0];
-        if (oldest && oldest < cutoff) break;
-      }
-      s.kept = records.filter((r) => r.details.outlet === feed.outlet).length;
-      log.info({ outlet: feed.outlet, ...s }, 'feed read');
+      const items = parseFeed(await http.text(feed.url));
+      const days = items.map((i) => isoDate(i.pubDate ? new Date(i.pubDate) : null)).filter(Boolean).sort();
+      const kept = items.map((item) => toRecord(feed, item)).filter(Boolean);
+      records.push(...kept);
+      stats[feed.outlet] = { items: items.length, kept: kept.length, oldest: days[0] ?? null, newest: days.at(-1) ?? null };
+      log.info({ outlet: feed.outlet, ...stats[feed.outlet] }, 'feed read');
     }
     return { records, stats, failures: [] };
   },
