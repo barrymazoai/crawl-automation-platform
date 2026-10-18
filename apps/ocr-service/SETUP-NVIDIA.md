@@ -6,7 +6,7 @@ Use [README.md](README.md#windows-deployment-ownerintegrator) for the complete d
 - Code: `D:\crawlv3-cloud\repo\apps\ocr-service`, obtained exclusively from origin `main` with Git. Never transfer code or scripts by SCP/bundle.
 - Data: `D:\ocr` retains models, caches, temporary files, health records and the shared SQLite job database.
 - Concurrency: four uvicorn workers, one inference lane per worker; ONNX intra/inter-op and OpenCV threads set to one.
-- Listener: `0.0.0.0:8081`, reached over the LAN directly. No `netsh portproxy`; IP Helper is disabled (owner 2026-10-18). The inbound firewall rule for TCP 8081 admits the local subnet only.
+- Listener: `0.0.0.0:8081`, reached over the LAN directly. No `netsh portproxy` (owner 2026-10-18). Keep the IP Helper service (iphlpsvc) running: Tailscale depends on it. The inbound firewall rule for TCP 8081 admits the local subnet only.
 - Start: manually run the checkout's `start-nvidia.cmd`. No boot/login auto-start, scheduled task or Windows service installation.
 - Stop: pause intake, drain, stop the exact owned console, then verify its supervisor and worker PIDs are absent. Never kill every Python process.
 - Rollback: preserve the old `D:\ocr\service` directory; set `OCR_SERVICE_DIR` to that path in the manual launcher, after stopping the new fleet and disabling client job control.

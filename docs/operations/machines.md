@@ -532,7 +532,7 @@ SHA256:G0nkbUe2En//nb9EO4/3L5fRxR6VgQKQ5Yck534UKqU
 - 历史核验主机名：`RC-workstation`；项目根目录 `D:\crawlv3-cloud`。
 - Node 路径：`D:\crawl-automation\tools\node-v22.17.0-win-x64\node.exe`。
 - 美国主 Mini 到 Windows 的 OCR 地址：`http://192.168.68.74:8081`（2026-10-17 换 IP 后），健康入口 `/health`，处理入口 `/ocr`。
-- OCR 直接监听 `0.0.0.0:8081`，不用 `netsh portproxy`，IP Helper 已停用（用户 2026-10-18）；防火墙规则只放行本地子网访问 TCP 8081。
+- OCR 直接监听 `0.0.0.0:8081`，不用 `netsh portproxy`（用户 2026-10-18）；IP Helper 服务（iphlpsvc）必须保持运行，Tailscale 依赖它，切勿停用；防火墙规则只放行本地子网访问 TCP 8081。
 - 保持 **OCR HTTP 服务**；此前无用的 Windows OCR Worker 已停用，不应为了建档重新启动。
 - 最近一次恢复核验（2026-09-23 13:21）：OCR HTTP 实际为 4/4 CUDA 后端，Text / Vision 维持此前各 4 槽配置。美国主 Mini 的 OCR 许可上限是 6；许可数与实际 HTTP 后端数不同。
 - Worker / OCR 按用户要求手动启动，不新增开机或登录自启。
