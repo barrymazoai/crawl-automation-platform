@@ -17,7 +17,7 @@ Runs on Server 一, started by hand. No scheduler is installed yet.
 
 ```sh
 cd ~/apps/regulatory/tools/regulatory
-pnpm install --frozen-lockfile
+pnpm install --frozen-lockfile --ignore-workspace   # own lockfile; not part of the workspace
 node src/run.mjs --data-dir ~/regulatory-data --mode backfill      # first run, monthly reconcile
 node src/run.mjs --data-dir ~/regulatory-data --mode incremental   # regular runs
 ```
