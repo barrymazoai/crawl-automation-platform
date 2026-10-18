@@ -62,7 +62,7 @@ export const VIOLATION_RULES = {
   ],
   // The sentence has to say a product is misbranded; FSVP letters quote section
   // 403(w) only as part of a requirement ("... or misbranded under section 403(w)").
-  labeling: [/(?:is|are|be|been|being) (?:each )?misbranded (?:within the meaning of|under) section 403/i, /21 CFR 101\.\d/i],
+  labeling: [/misbrand\w*(?: \w+){0,3} (?:within the meaning of|under) section 403/i, /21 CFR 101\.\d/i],
   other: [
     /Foreign Supplier Verification/i,
     /\bFSVP\b/,
@@ -74,9 +74,15 @@ export const VIOLATION_RULES = {
   ],
 };
 
-// Text that names an ingredient without being about a product: URLs and the
-// Supplement Facts rule "Not a significant source of ...".
-const NOT_PRODUCT_TEXT = /https?:\/\/\S+|www\.\S+|not a significant source of[^.]*/gi;
+// Sentences that cite a rule rather than a product's own violation; FSVP
+// letters quote section 403(w) as a requirement for the importer's suppliers.
+export const VIOLATION_EXCEPT = { labeling: /21 CFR 1\.5\d\d|\(if applicable\)/ };
+
+// Text that names an ingredient without being about a product: URLs, the
+// Supplement Facts rule "Not a significant source of ...", and nutrition
+// declaration rules (calories, (b)(2)-dietary ingredients).
+const NOT_PRODUCT_TEXT =
+  /https?:\/\/\S+|www\.\S+|not a significant source of[^.]*|[^.]*\(b\)\(2\)-dietary ingredients[^.]*|[^.]*\bcalories\b[^.]*/gi;
 
 // Substances that recur in supplement and food enforcement. A name is listed
 // only when a plain-text match cannot be some other word; generic words

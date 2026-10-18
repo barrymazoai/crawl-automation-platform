@@ -14,6 +14,7 @@ import {
   FOOD_OFFICE,
   FOOD_PRODUCT,
   MARKETPLACE,
+  VIOLATION_EXCEPT,
   VIOLATION_RULES,
   WEBSITE_CONTEXT,
   domainsIn,
@@ -131,7 +132,9 @@ export function extract(row, letter) {
   const evidence = [];
   const violationTypes = [];
   for (const [type, patterns] of Object.entries(VIOLATION_RULES)) {
-    const quotes = sentenceList.filter((s) => patterns.some((re) => re.test(s))).slice(0, MAX_QUOTES);
+    const quotes = sentenceList
+      .filter((s) => patterns.some((re) => re.test(s)) && !VIOLATION_EXCEPT[type]?.test(s))
+      .slice(0, MAX_QUOTES);
     if (quotes.length === 0) continue;
     violationTypes.push(type);
     for (const quote of quotes) evidence.push({ field: 'violation_types', value: type, quote: clip(quote, 500) });
