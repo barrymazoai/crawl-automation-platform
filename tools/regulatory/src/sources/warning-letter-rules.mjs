@@ -5,10 +5,31 @@
 // letter pages are not fetched.
 export const EXCLUDED_OFFICE = /tobacco products|devices and radiological|biologics evaluation|veterinary medicine/i;
 
-// Central food offices, used only when a letter page has no Product field.
+// Central food offices: their letters are about food or supplements even when
+// the Product field says otherwise.
 export const FOOD_OFFICE = /food safety and applied nutrition|\bCFSAN\b|human foods program/i;
 
 export const DIETARY_SUPPLEMENT = /dietary supplement/i;
+
+// In the letter text a passing mention is not enough: the sentence has to say
+// the recipient's products are (or are sold as, or cannot be) dietary
+// supplements. FDA office names ("Division of ... Dietary Supplements",
+// "Office of Dietary Supplement Programs") in the response address are removed first.
+export const FDA_OFFICE_NAME = /(?:Division|Office) of [A-Z][\w ,&]*?Dietary Supplements?(?: Programs?)?/g;
+export const DIETARY_SUPPLEMENT_TEXT = new RegExp(
+  [
+    '(?:marketed|labeled|labelled|sold|promoted|represented|offered|distributed)(?: for sale)? as (?:a |an )?(?:\\S+ ){0,2}dietary supplements?',
+    'your (?:\\S+ ){0,4}dietary supplements?',
+    'dietary supplement (?:products?|manufactur\\w*|facility|firm|distributor)',
+    '(?:adulterated|misbranded) dietary supplements?',
+    '(?:is|are) not (?:a |an )?(?:\\S+ ){0,2}dietary supplements?',
+    'definition of (?:a |an )?dietary supplement',
+    'cannot be (?:lawfully )?(?:marketed|sold) as (?:a |an )?dietary supplements?',
+    'CGMP requirements for dietary supplements',
+    '21 CFR (?:Part )?111\\b',
+  ].join('|'),
+  'i',
+);
 export const FOOD_PRODUCT = /food|beverage/i;
 export const ANIMAL_PRODUCT = /animal|veterinary/i;
 

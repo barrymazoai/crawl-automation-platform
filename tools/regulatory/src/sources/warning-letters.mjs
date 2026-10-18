@@ -8,7 +8,9 @@ import { clean, clip, isoDate, nullIfEmpty, sentences } from '../lib/text.mjs';
 import {
   ANIMAL_PRODUCT,
   DIETARY_SUPPLEMENT,
+  DIETARY_SUPPLEMENT_TEXT,
   EXCLUDED_OFFICE,
+  FDA_OFFICE_NAME,
   FOOD_OFFICE,
   FOOD_PRODUCT,
   MARKETPLACE,
@@ -84,7 +86,12 @@ export function parseLetter(html) {
     } else if (label === 'Issuing Office') {
       header.office = nullIfEmpty(dd.first().text());
     } else {
-      header[label] = nullIfEmpty(dd.first().text());
+      // Multi-valued fields are separated by <br> ("Dietary Supplements<br/>Drugs").
+      const parts = (dd.first().html() ?? '')
+        .split(/<br\s*\/?>/i)
+        .map((part) => clean(cheerio.load(`<div>${part}</div>`)('div').text()))
+        .filter(Boolean);
+      header[label] = parts.length ? parts.join('; ') : null;
     }
   });
   const paragraphs = main
@@ -96,21 +103,18 @@ export function parseLetter(html) {
   return { header, paragraphs };
 }
 
-function firstSentence(sentenceList, pattern) {
-  return sentenceList.find((s) => pattern.test(s)) ?? null;
-}
-
 // Scope: dietary_supplement when the letter says so (Product field, subject or
-// text); food when the Product field is food, or the letter comes from a
-// central food office and has no Product field. Otherwise not collected.
+// a sentence about the recipient's products); food when the Product field is
+// human food or the letter comes from a central food office. Otherwise the
+// letter is not collected.
 function scopeOf(row, header, sentenceList) {
   const product = header.Product ?? null;
   if (product && DIETARY_SUPPLEMENT.test(product)) return { scope: 'dietary_supplement', basis: 'product_field', quote: product };
   if (DIETARY_SUPPLEMENT.test(row.subject)) return { scope: 'dietary_supplement', basis: 'subject', quote: row.subject };
-  const quote = firstSentence(sentenceList, DIETARY_SUPPLEMENT);
+  const quote = sentenceList.find((s) => DIETARY_SUPPLEMENT_TEXT.test(s.replace(FDA_OFFICE_NAME, '')));
   if (quote) return { scope: 'dietary_supplement', basis: 'letter_text', quote };
   if (product && FOOD_PRODUCT.test(product) && !ANIMAL_PRODUCT.test(product)) return { scope: 'food', basis: 'product_field', quote: product };
-  if (!product && FOOD_OFFICE.test(row.office)) return { scope: 'food', basis: 'issuing_office', quote: row.office };
+  if (FOOD_OFFICE.test(row.office)) return { scope: 'food', basis: 'issuing_office', quote: row.office };
   return null;
 }
 
