@@ -161,10 +161,10 @@ Server 一 `/Users/server/regulatory-data/`：
 | 媒体 RSS | **每天**（与原定"诉讼每周"不同） | `--mode incremental --sources media`。NutraIngredients 只保留约 3 天，每周跑会漏 |
 | 全量核对 | 每月一次 | `--mode backfill`：重读完整列表，标记 `removed_at`，Prop 65 重读 12 个月以更新进展；信件页面用缓存，`--refetch-pages` 可强制重读 |
 
-增量运行时，新增或有变化的记录写在 `runs/<run-id>/changes/`。新的补充剂类警告信要拿到模型读取的成分，在警告信增量之后再跑一次 `node src/ai-ingredients.mjs --scope dietary_supplement`（已处理过的会跳过；每封约 1 万 token），然后跑 `--sources fda_warning_letters --offline` 合并。近 12 个月新增的补充剂类信件只有 24 封。
+增量运行时，新增或有变化的记录写在 `runs/<run-id>/changes/`。新的补充剂类警告信要拿到模型读取的成分，在警告信增量之后再跑一次 `node src/ai-ingredients.mjs --scope dietary_supplement`（已处理过的会跳过；每封约 8 千 token），然后跑 `--sources fda_warning_letters --offline` 合并。近 12 个月新增的补充剂类信件只有 24 封。
 
 ## 9. 待决定
 
-1. **食品类警告信**（706 封）的成分是否也交给模型：估计约 1,100 万 token（含 Codex 固定开销）。这些信的成分多是普通食物或营养标示里的维生素，价值较低。另外，这 706 封是否保留，也可以在入库时只取 `dietary_supplement`。
+1. **食品类警告信**（706 封）的成分是否也交给模型：按补充剂类实际每封约 7,800 token 估算，约 550 万 token，约 1.5 小时（并发 1）。这些信的成分多是普通食物或营养标示里的维生素，价值较低。另外，这 706 封是否保留，也可以在入库时只取 `dietary_supplement`。
 2. **Prop 65 的漏收**：关键词判断不了的产品描述，可以交给模型判断是否属于补充剂类。
 3. **Prop 65 的边界产品**（花草茶、香料类姜黄粉等）是否收窄。
