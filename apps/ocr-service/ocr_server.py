@@ -19,6 +19,7 @@ import os
 import sys
 import time
 import threading
+from concurrent.futures import ThreadPoolExecutor
 import uuid
 from pathlib import Path
 from typing import Annotated, Any, Literal
@@ -125,6 +126,10 @@ BACKEND_HEALTH = BackendHealth()
 WORKER_PID, WORKER_BIRTH = os.getpid(), str(BACKEND_HEALTH.identity)
 JOB_STORE = JobStore(Path(os.environ.get("OCR_HOME", "D:/ocr")) / "runtime/jobs.sqlite3", JOB_RETENTION_SECONDS)
 INFERENCE_LOCK = threading.Lock()
+# All inference runs on this one thread. ONNX Runtime's CUDA provider keeps ~1 GB of GPU memory for every thread
+# that calls it and never frees it; on the shared request thread pool four workers filled the 24 GB card and the
+# driver failed (2026-10-17 blue screen). See docs/quality/2026-10-17-windows-ocr-gpu-faults.md.
+INFERENCE_THREAD = ThreadPoolExecutor(max_workers=1, thread_name_prefix="ocr-inference")
 
 
 async def _prune_jobs():
@@ -247,7 +252,9 @@ async def ocr(request: Request, file: UploadFile = File(...),
     # A thread keeps status/cancel responsive during native inference. The lock
     # belongs to the executing thread, so HTTP disconnect/cancellation cannot
     # unlock the engine or manufacture a terminal receipt while it still runs.
-    return await run_in_threadpool(_execute, data, min_score, request_id, t0, job_id)
+    # Shielded: a disconnect must not drop a queued call before it records its job.
+    work = asyncio.get_running_loop().run_in_executor(INFERENCE_THREAD, _execute, data, min_score, request_id, t0, job_id)
+    return await asyncio.shield(work)
 
 
 def _execute(data, min_score, request_id, t0, job_id):
