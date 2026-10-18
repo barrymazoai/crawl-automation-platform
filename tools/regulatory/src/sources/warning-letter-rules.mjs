@@ -43,7 +43,7 @@ export const VIOLATION_RULES = {
     /unapproved new drugs?/i,
     // FDA writes both new drug and “new drug”, and "sections 301(d) and 505(a)".
     /new drugs?[”"]? (?:within the meaning of|as defined (?:in|by)|under) section 201\(p\)/i,
-    /\b505\(a\)/,
+    /(?<![\d.])505\(a\)/, // not 21 CFR 1.505(a) (FSVP)
   ],
   prohibited_ingredient: [
     /201\(ff\)\(3\)\(B\)/,
