@@ -7,6 +7,24 @@ export const SUPPLEMENT_PRODUCT = new RegExp(
     'vitamin',
     'multivitamin',
     'protein (?:powder|shake|drink|bar|blend|mix)',
+    '\\b(?:soy|pea|plant|plant-based|hemp|rice|vegan|vanilla|chocolate) protein\\b',
+    'nutrition shake',
+    '\\bgainer\\b',
+    '\\bketones?\\b',
+    '\\bdetox\\b',
+    '\\bcleanse\\b',
+    '(?:flower|root|leaf|herb|seed|bark|berry) extract',
+    '\\btablets?\\b',
+    '\\bCBD\\b',
+    'cannabidiol',
+    'irish moss',
+    '\\bkelp\\b',
+    '(?:pre|post)natal',
+    'lactation',
+    'adaptogen',
+    'nootropic',
+    'fiber (?:powder|supplement|gumm)',
+    '(?:sleep|immune|joint|gut|liver|digestive|energy|focus|stress|mood|hydration) (?:support|health|boost|formula|blend|powder)',
     'whey',
     'collagen',
     'capsules?',
@@ -48,10 +66,10 @@ export const SUPPLEMENT_PRODUCT = new RegExp(
     'wheatgrass',
     'barley grass',
     'beet(?: ?root)? powder',
-    'mushroom (?:powder|extract|blend|complex|gumm)',
+    'mushroom (?:extract|blend|complex|gumm)',
   ].join('|'),
   'i',
 );
 
-// Wording that keeps a match out (pet products, cosmetics).
-export const NOT_SUPPLEMENT_PRODUCT = /\b(?:dogs?|cats?|pets?|canine|feline|equine|horses?)\b|shampoo|lotion|serum|cream/i;
+// Wording that keeps a match out (pet products, cosmetics, till receipts).
+export const NOT_SUPPLEMENT_PRODUCT = /\b(?:dogs?|cats?|pets?|canine|feline|equine|horses?)\b|shampoo|lotion|serum|cream|\breceipts?\b/i;
