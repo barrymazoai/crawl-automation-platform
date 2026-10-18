@@ -39,7 +39,7 @@ Server 一 `/Users/server/regulatory-data/`：
 
 主要字段完整率（全部取自 `manifest.json`）：
 
-- **警告信**：地址 100%、网站 24%、违规类型 99%、成分 26%、summary 100%。网站和成分是"信里提到才有"。
+- **警告信**：地址 100%、网站 24%、违规类型 99%、summary 100%；成分：补充剂类 169/187 封有（模型读取，见 §6.1），食品类仍用词表。网站和成分是"信里提到才有"；补充剂类没找到成分的 18 封，多是 CGMP 检查信，成分名在公开版里被涂黑成 "(b)(4)"。
 - **GRAS**：申报方 99.9%、地址 99.8%、FDA 结论 100%、回复信链接 95.9%（49 条 pending 没有回复信）。
 - **NDI**：公司 100%、提交日期 99.9%（2 条原表日期写错：`5/3/20201`、`10/282024`，原值保留在 `raw`）、回复日期 100%；FDA 结论 0%，表里没有，不猜。
 - **Prop 65**：原告、被指控方、化学物质、产品描述、通知 PDF 链接 99%+；法院为空，60 天通知还没有进入法院。
@@ -69,7 +69,7 @@ Server 一 `/Users/server/regulatory-data/`：
 | `labeling` | misbranded … under section 403（产品本身被判错标；FSVP 信中引用 403(w) 的要求条文不算）、21 CFR 101.x |
 | `other` | FSVP、HACCP、402(a)(4) / insanitary conditions、failure to register、Section 5 of the FTC Act |
 
-**成分**：一份约 110 种的固定词表，包括违禁兴奋剂、SARMs、药物掺假（sildenafil 类、sibutramine 等）、大麻类、高风险草本，以及常见补充剂成分（维生素、矿物质、spirulina、CoQ10、whey protein 等）。匹配前先去掉网址、"Not a significant source of…" 标签声明和营养标示条文。这是"信里提到了哪些成分"，不代表每个成分都是违规成分。
+**成分**：补充剂类信件改由模型读取（§6.1）。食品类仍用一份约 110 种的固定词表，包括违禁兴奋剂、SARMs、药物掺假（sildenafil 类、sibutramine 等）、大麻类、高风险草本，以及常见补充剂成分（维生素、矿物质、spirulina、CoQ10、whey protein 等）。匹配前先去掉网址、"Not a significant source of…" 标签声明和营养标示条文。这是"信里提到了哪些成分"，不代表每个成分都是违规成分。
 
 ## 5. Prop 65 与媒体的筛选词表
 
@@ -116,13 +116,30 @@ Server 一 `/Users/server/regulatory-data/`：
 
 修复后，用缓存重新处理了全部 893 封，其中 253 封的判断有变化。
 
-**结论**：规则版的违规类型已经可用（第二组准确率 100%、覆盖率 96%）。成分字段标出的基本是对的，但只能找到约四成：词表认识的成分才能找到，信里的其他草本、氨基酸、新成分都会漏掉。这个字段如果要可靠，需要换方法（见 §9）。
+**结论**：规则版的违规类型已经可用（第二组准确率 100%、覆盖率 96%）。成分字段标出的基本是对的，但只能找到约四成：词表认识的成分才能找到，信里的其他草本、氨基酸、新成分都会漏掉。所以补充剂类的成分改由模型读取，见 §6.1。
 
 **Prop 65 抽查**（各随机 20 条）：留下的 20 条里，18 条明确是补充剂类，1 条误收（植物肉粉 "Beef Free Pea Protein Dry Mix"），1 条边界（"Turmeric powder"，可能是香料）。排除的 20 条里，漏掉 1 条（"The Fittest Queen Supports Optimal Hormones"，描述里没有任何关键词）。按这个比例粗估，排除的 5,432 条里可能还有几十到两百多条补充剂类没收进来，样本小，估计误差大。
 
 **媒体**：5 条全部看过。4 条是明确的诉讼 / 执法新闻（法院禁令、专利判决、最高法院案、FTC 罚款），1 条只是在介绍州 EPR 法时提到相关诉讼，属于边界。
 
 **GRAS / NDI**：只解析结构化字段，没有判断规则。抽查 GRN 1100、1300、700，与原页面一致。
+
+### 6.1 成分改用模型读取（2026-10-18，用户批准）
+
+- **模型**：`gpt-5.6-luna`，medium 推理强度，经 Server 一上已登录的 Codex CLI（`codex exec`，只读沙箱、空工作目录、固定 JSON schema），并发 1。代码：`src/ai-ingredients.mjs`、`src/sources/warning-letter-ai.mjs`（提示词版本 `wl-ingredients-v2`）。
+- **输出**：模型对每个成分给出标准名、信里的原写法、角色（`declared_or_used` 声明或使用 / `undeclared_or_detected` 检出或未声明 / `named_in_claims` 宣称中提到）和一句原文。
+- **程序核对**：原写法必须出现在信里；引用的句子必须逐字出现在信里（忽略引号、FDA 的方括号改写和空白）。模型截短或改写了句子时，换成信里包含这个名字、且与引用重合度最高的原句（至少 60% 的词相同），标记 `quote_repaired`。不满足的项丢弃，丢弃原因保存在结果文件里。
+- **试跑**：先跑抽样核对过的 20 封，与人工结果逐封比对，见下表。第一版提示词因核对过严丢了不少真成分，改为 v2 后重跑：
+
+| | 词表 | 模型（v2） |
+|---|---|---|
+| 20 封共找出 | 约 45 项 | 126 项 |
+| 准确率 | 约 90% | 明显错误 3 项（"parasite killer blend"、"alkaloids"、营养标示里的 "iron"）；同义词重复 4 项 |
+| 覆盖率（第二组 10 封） | 约 39% | 约 94% |
+
+- **全量**：187 封补充剂类信件，用时 24 分钟，约 134 万 token，0 失败。保留 1,149 项（声明或使用 784、宣称中提到 292、检出未声明 73；其中 29 项的引用句做了替换），丢弃 14 项，大多是原句里没有这个名字或同义词重复。随机抽查 3 封新处理的信，成分全部正确；抽查 2 封没找到成分的信，确认成分名都被涂黑了。
+- **记录中的字段**：`details.ingredients_mentioned` 和成分 `evidence` 来自模型（`ingredients_source: model:gpt-5.6-luna/medium/wl-ingredients-v2`，`ingredient_details` 带角色）；词表结果保留在 `details.ingredients_rule`。模型结果文件在 `ai/warning-letter-ingredients/<slug>.json`。信件文本或提示词变了，结果自动失效，回落到词表结果。
+- **已知小问题**：同一成分偶尔以同义词各列一次（如 yuan zhi / polygala）；偶有泛称（"alkaloids"、"B vitamins"）。每项都附原句，人工可以直接判断。
 
 ## 7. 被拦或缺失
 
@@ -144,10 +161,10 @@ Server 一 `/Users/server/regulatory-data/`：
 | 媒体 RSS | **每天**（与原定"诉讼每周"不同） | `--mode incremental --sources media`。NutraIngredients 只保留约 3 天，每周跑会漏 |
 | 全量核对 | 每月一次 | `--mode backfill`：重读完整列表，标记 `removed_at`，Prop 65 重读 12 个月以更新进展；信件页面用缓存，`--refetch-pages` 可强制重读 |
 
-增量运行时，新增或有变化的记录写在 `runs/<run-id>/changes/`。
+增量运行时，新增或有变化的记录写在 `runs/<run-id>/changes/`。新的补充剂类警告信要拿到模型读取的成分，在警告信增量之后再跑一次 `node src/ai-ingredients.mjs --scope dietary_supplement`（已处理过的会跳过；每封约 1 万 token），然后跑 `--sources fda_warning_letters --offline` 合并。近 12 个月新增的补充剂类信件只有 24 封。
 
 ## 9. 待决定
 
-1. **成分（以及 Prop 65 的漏收）要不要加 AI**：可以只对补充剂 / 食品类警告信（约 900 封）让模型读全文，输出违规类型和成分，每一项必须附原句；程序再核对那句话确实在原文里，对不上的丢掉。Prop 65 可以只把关键词判断不了的产品描述交给模型。需要先确定用哪个模型账号、什么时候跑（Server 一的模型账号与商品队列共用，上限 10）。
-2. **食品类警告信是否保留**：目前收了 706 封，标为 `details.scope = "food"`，可以在入库时只取 `dietary_supplement`。
+1. **食品类警告信**（706 封）的成分是否也交给模型：估计约 1,100 万 token（含 Codex 固定开销）。这些信的成分多是普通食物或营养标示里的维生素，价值较低。另外，这 706 封是否保留，也可以在入库时只取 `dietary_supplement`。
+2. **Prop 65 的漏收**：关键词判断不了的产品描述，可以交给模型判断是否属于补充剂类。
 3. **Prop 65 的边界产品**（花草茶、香料类姜黄粉等）是否收窄。
