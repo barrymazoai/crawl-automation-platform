@@ -9,7 +9,7 @@ The Windows service uses the captured production RapidOCR/ONNX implementation, i
 - `POST /jobs/{id}/cancel`: same response shape. An unseen ID becomes a cancelled tombstone, preventing late submission. A queued ID becomes cancelled immediately and cannot enter inference. A running ID remains `running` with `cancel_requested: true`. This implementation lets the engine finish; only afterward does the job become `cancelled` and the OCR request return 409. An engine error remains `failed`. Repeated cancellation preserves terminal outcomes.
 - `GET /health`: preserves `status`, actual `healthy_backends` / `total_backends`, backend/providers, worker PID, session providers, model names and thread settings. Adds `job_control_supported`, `request_timeout_seconds`, `job_retention_seconds`.
 
-Only `done`, `failed`, or `cancelled` from a successful status query proves the exact job stopped. Cancellation acceptance, request abort, elapsed time and a missing record do not. The control endpoints have the same trusted-network access boundary as OCR; retain the loopback listener and existing LAN forwarding.
+Only `done`, `failed`, or `cancelled` from a successful status query proves the exact job stopped. Cancellation acceptance, request abort, elapsed time and a missing record do not. The control endpoints have the same trusted-network access boundary as OCR: the NVIDIA launcher listens on `0.0.0.0` and the Windows firewall admits the local subnet only. No `netsh portproxy` / IP Helper (owner 2026-10-18).
 
 ## Shared state and hard deadline
 
@@ -74,7 +74,7 @@ Code reaches Windows **only through Git on `main`**. The integrating agent must 
    This preserves the production runtime and switches the service command to:
 
    ```bat
-   D:\ocr\python\python.exe -m uvicorn ocr_server:app --app-dir D:\crawlv3-cloud\repo\apps\ocr-service --host 127.0.0.1 --port 8081 --workers 4 --timeout-keep-alive 30 --log-level info
+   D:\ocr\python\python.exe -m uvicorn ocr_server:app --app-dir D:\crawlv3-cloud\repo\apps\ocr-service --host 0.0.0.0 --port 8081 --workers 4 --timeout-keep-alive 30 --log-level info
    ```
 
    Do not run that bare command without the launcher's existing CUDA/thread/cache environment. Starting this console manually is the only service start action. Uvicorn replaces a timed-out child only while this manually started supervisor is alive.

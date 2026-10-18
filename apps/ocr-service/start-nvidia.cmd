@@ -11,7 +11,8 @@ set OCR_MIN_SCORE=0.3
 set OCR_INTRA_THREADS=1
 set OCR_WORKERS=4
 set OCR_PORT=8081
-set OCR_HOST=127.0.0.1
+REM Listen on the LAN directly; no netsh portproxy / IP Helper (owner 2026-10-18). The firewall admits the local subnet only.
+set OCR_HOST=0.0.0.0
 if not defined OCR_REQUEST_TIMEOUT_SECONDS set OCR_REQUEST_TIMEOUT_SECONDS=90
 if not defined OCR_JOB_RETENTION_SECONDS set OCR_JOB_RETENTION_SECONDS=86400
 set OMP_NUM_THREADS=1
@@ -29,4 +30,4 @@ if not exist "%TEMP%" mkdir "%TEMP%"
 if not exist "%OCR_HOME%\logs" mkdir "%OCR_HOME%\logs"
 cd /d "%OCR_SERVICE_DIR%"
 echo starting OCR backend=%OCR_BACKEND% workers=%OCR_WORKERS% port=%OCR_PORT%
-"%OCR_HOME%\python\python.exe" -m uvicorn ocr_server:app --app-dir "%OCR_SERVICE_DIR%" --host 127.0.0.1 --port %OCR_PORT% --workers %OCR_WORKERS% --timeout-keep-alive 30 --log-level info
+"%OCR_HOME%\python\python.exe" -m uvicorn ocr_server:app --app-dir "%OCR_SERVICE_DIR%" --host %OCR_HOST% --port %OCR_PORT% --workers %OCR_WORKERS% --timeout-keep-alive 30 --log-level info
