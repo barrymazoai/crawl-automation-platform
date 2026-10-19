@@ -1,4 +1,5 @@
-// node src/sync.mjs --data-dir <dir> --supply-smart-env <file> [--skip-crawl] [--no-model] [--dry-run]
+// node src/sync.mjs --data-dir <dir> --supply-smart-env <file> [--webhook-file <file>]
+//   [--skip-crawl] [--no-model] [--dry-run]
 //
 // The scheduled job (owner 2026-10-19: Tue and Fri 18:00 US Central, Server 一):
 //   1. collect every source (src/run.mjs);
@@ -9,9 +10,9 @@
 //      Supply Smart `regulatory.ingest` in numbered batches of ≤ 500: every
 //      batch as a dry run first, then for real;
 //   4. Supply Smart's per-kind totals are compared with the files;
-//   5. <dir>/last-sync.json is written, with `summary_text`. This machine holds
-//      no webhook: the Mac mini that sends the crawler notifications reads the
-//      file and posts it to the Feishu group (owner 2026-10-19).
+//   5. <dir>/last-sync.json is written and the crawler Feishu group gets a card
+//      straight from this machine (owner 2026-10-19): a short summary, or the
+//      problems in red.
 // A problem in one step is reported; later steps still run when their input is
 // sound (a failed source keeps its previous records, which are still correct).
 import { mkdir, writeFile } from 'node:fs/promises';
@@ -21,6 +22,7 @@ import { parseArgs } from 'node:util';
 import { execa } from 'execa';
 import pino from 'pino';
 import lockfile from 'proper-lockfile';
+import { feishuNotifier } from './lib/notify.mjs';
 import { supplySmartFromEnvFile } from './lib/supply-smart.mjs';
 import { loadKind, readJson, recordKey, writeJson } from './lib/store.mjs';
 import { resultPath } from './sources/warning-letter-ai.mjs';
@@ -38,6 +40,7 @@ const { values: args } = parseArgs({
   options: {
     'data-dir': { type: 'string', default: process.env.REGULATORY_DATA_DIR },
     'supply-smart-env': { type: 'string' },
+    'webhook-file': { type: 'string' },
     'skip-crawl': { type: 'boolean', default: false },
     'no-model': { type: 'boolean', default: false },
     'dry-run': { type: 'boolean', default: false },
@@ -245,9 +248,17 @@ async function compareCloud(supplySmart, pushed) {
 // ── 5. Message ──────────────────────────────────────────────────────────────
 
 function message() {
-  const when = new Date(startedAt).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', hour12: false });
-  const lines = [`【爬虫】Regulatory 同步${report.dry_run ? '（dry run）' : ''}${report.ok ? '完成' : '有问题'} · 北京时间 ${when}`];
-  if (!report.ok) lines.push('问题：', ...report.problems.map((p) => `- ${p}`));
+  const when = new Date(startedAt).toLocaleString('zh-CN', {
+    timeZone: 'Asia/Shanghai',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  });
+  const title = `Regulatory 同步${report.dry_run ? '（dry run）' : ''}${report.ok ? '完成' : '有问题'} ${when}`;
+  const lines = [];
+  if (!report.ok) lines.push('**问题**', ...report.problems.map((p) => `- ${p}`), '');
   if (report.crawl?.sources) {
     const parts = Object.entries(report.crawl.sources).map(
       ([name, s]) => `${name} 新${s.new}/改${s.updated}/删${s.removed}${s.blocked ? `/被拦${s.blocked}` : ''}`,
@@ -269,26 +280,37 @@ function message() {
     lines.push(
       `云端：${KINDS.map((k) => `${KIND_NAMES[k]} ${report.cloud.total[k]}`).join('，')}${report.cloud.matches ? '（与本地一致）' : `（本地 ${KINDS.map((k) => report.cloud.local[k]).join('/')}）`}`,
     );
-  return lines.join('\n');
+  return { title, markdown: lines.join('\n'), color: report.ok ? 'purple' : 'red' };
 }
 
 // ── Run ────────────────────────────────────────────────────────────────────
 
-const release = await lockfile.lock(dataDir, { lockfilePath: join(dataDir, '.sync.lock'), stale: 6 * 60 * 60 * 1000, update: 60 * 1000 });
+const notifier = await feishuNotifier(args['webhook-file'], { log });
+// A sync still running (or one that died within the last 6 h) holds the lock: report it and leave.
+const release = await lockfile
+  .lock(dataDir, { lockfilePath: join(dataDir, '.sync.lock'), stale: 6 * 60 * 60 * 1000, update: 60 * 1000 })
+  .catch((error) => {
+    problem(`上一次同步还没结束，本次没有运行：${error.message}`);
+    return null;
+  });
 try {
+  if (!release) throw new Error('lock held');
   if (!args['skip-crawl']) await crawl();
   if (!args['no-model']) await readIngredients();
   const supplySmart = await supplySmartFromEnvFile(args['supply-smart-env'], { log });
   const pushed = await push(supplySmart);
   await compareCloud(supplySmart, pushed);
 } catch (error) {
-  problem(`同步中断：${error.message}`, { stack: error.stack });
+  if (release) problem(`同步中断：${error.message}`, { stack: error.stack });
 } finally {
   report.finished_at = new Date().toISOString();
   report.ok = report.problems.length === 0;
-  report.summary_text = message();
+  const card = message();
+  report.summary_text = `${card.title}\n${card.markdown}`;
   await writeJson(join(dataDir, 'last-sync.json'), report);
-  log.info({ ok: report.ok, problems: report.problems.length }, 'sync finished');
-  await release();
+  report.notification = await notifier.send(card);
+  await writeJson(join(dataDir, 'last-sync.json'), report);
+  log.info({ ok: report.ok, problems: report.problems.length, notification: report.notification }, 'sync finished');
+  await release?.();
   process.exitCode = report.ok ? 0 : 1;
 }

@@ -159,7 +159,7 @@ Server 一 `/Users/server/regulatory-data/`：
   2. 读成分：补充剂类信件还没有模型成分的，用 Server 一 上的 Codex 读，显式指定 `gpt-5.6-luna`、effort `medium`，并发 1；Codex 报告的实际模型或 effort 不符就拒收。然后离线合并。食品类信件不跑模型。
   3. 推送：只推新增或有变化的记录，走 Supply Smart `regulatory.ingest`，用产品同步的服务 key，写测试环境。每批最多 500 条，带 `runId` 和 `batchId`，先 dry run 再真写。
   4. 核对：云端各类条数（`regulatory.overview`）和本地未删除的条数对比。
-  5. 写 `~/regulatory-data/last-sync.json`，里面有每一步的结果、问题列表和汇总文字（含读了多少封信、约多少 token）。Server 一 不持有 webhook，由发爬虫日常通知的 Mac mini 读这个文件，再发到「爬虫」群。
+  5. 写 `~/regulatory-data/last-sync.json`，里面有每一步的结果、问题列表和汇总文字（含读了多少封信、约多少 token）。Server 一 直接发卡片到「爬虫」群：成功发简短汇总，有问题发红色报警。webhook 和爬虫通知用的是同一个，存在 Server 一 的私有文件 `~/apps/regulatory-private/feishu.webhook` 里，不进 git。
 - **媒体 RSS**：跟着一周两次走。NutraIngredients 只保留约 3 天，两次之间的部分新闻会漏。
 
 ## 9. 待决定

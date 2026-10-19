@@ -1,5 +1,7 @@
-// Text message to the Feishu group bot the crawler notifications use. The
-// webhook URL lives in a private file on the server; without one, nothing is sent.
+// Card to the crawler Feishu group bot (owner 2026-10-19: Server 一 sends it
+// directly). Same card as the crawler's other notifications: a coloured header
+// and a markdown body. The webhook URL lives in a private file on the server
+// and is never logged; without one, nothing is sent.
 import { readFile } from 'node:fs/promises';
 
 export async function feishuNotifier(file, { log }) {
@@ -13,13 +15,18 @@ export async function feishuNotifier(file, { log }) {
   }
   return {
     enabled: Boolean(url),
-    async send(text) {
+    async send({ title, markdown, color }) {
       if (!url) return { sent: false, reason: 'no webhook' };
+      const card = {
+        schema: '2.0',
+        header: { title: { tag: 'plain_text', content: title }, template: color },
+        body: { elements: [{ tag: 'markdown', content: markdown.trim() || '(空)' }] },
+      };
       try {
         const response = await fetch(url, {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ msg_type: 'text', content: { text } }),
+          body: JSON.stringify({ msg_type: 'interactive', card }),
           signal: AbortSignal.timeout(30_000),
         });
         const body = await response.json().catch(() => ({}));

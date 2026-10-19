@@ -88,7 +88,8 @@ the first command again before they get model ingredients.
 
 ```sh
 node src/sync.mjs --data-dir ~/regulatory-data \
-  --supply-smart-env ~/apps/crawler-v3/manual-releases/brand-enrichment/.env.brand-enrichment
+  --supply-smart-env ~/apps/crawler-v3/manual-releases/brand-enrichment/.env.brand-enrichment \
+  --webhook-file ~/apps/regulatory-private/feishu.webhook
 # --dry-run: push as dry runs only; --skip-crawl, --no-model: leave out those steps
 ```
 
@@ -108,12 +109,12 @@ node src/sync.mjs --data-dir ~/regulatory-data \
    retried with the same batch (Supply Smart counts a batch once).
 4. Compares Supply Smart's per-kind totals (`regulatory.overview`, food
    letters included) with the records in the files that are not removed.
-5. Writes `last-sync.json`: every step's result, `problems`, and
-   `summary_text` (letters read and tokens included). Server 一 holds no
-   webhook; the Mac mini that sends the crawler notifications reads this file
-   and posts it to the Feishu group. A problem in one step does not stop later
-   steps whose input is still sound; the exit code is 1 when there was any
-   problem.
+5. Writes `last-sync.json` (every step's result, `problems`, `summary_text`)
+   and sends the crawler Feishu group a card from Server 一: a short summary
+   (letters read and tokens included), or the problems in red. The webhook URL
+   is the one the crawler notifications use, kept in a private file outside
+   git and never logged. A problem in one step does not stop later steps whose
+   input is still sound; the exit code is 1 when there was any problem.
 
 The extraction rules are in `src/sources/*-rules.mjs`; every violation type,
 ingredient and scope decision keeps the sentence it came from in
