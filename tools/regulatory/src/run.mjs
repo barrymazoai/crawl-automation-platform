@@ -1,4 +1,4 @@
-// node src/run.mjs --data-dir <dir> --mode backfill|incremental [--sources a,b] [--refetch-pages] [--offline]
+// node src/run.mjs --data-dir <dir> [--sources a,b] [--refetch-pages] [--offline]
 //
 // Writes <dir>/<kind>.jsonl (current state of every record), <dir>/manifest.json
 // (this run) and <dir>/runs/<run-id>/ (log, manifest, new/changed records).
@@ -17,18 +17,19 @@ import warningLetters from './sources/warning-letters.mjs';
 
 const SOURCES = [warningLetters, gras, ndi, prop65, mediaRss];
 const KINDS = ['warning_letter', 'gras', 'ndi', 'lawsuit'];
+// A complete list that comes back this much shorter than the records still
+// listed last time is treated as a broken answer: nothing is marked removed.
+const MAX_LIST_SHRINK = 0.05;
 
 const { values: args } = parseArgs({
   options: {
     'data-dir': { type: 'string', default: process.env.REGULATORY_DATA_DIR },
-    mode: { type: 'string', default: 'incremental' },
     sources: { type: 'string' },
     'refetch-pages': { type: 'boolean', default: false },
     offline: { type: 'boolean', default: false },
   },
 });
 if (!args['data-dir']) throw new Error('--data-dir (or REGULATORY_DATA_DIR) is required');
-if (!['backfill', 'incremental'].includes(args.mode)) throw new Error('--mode must be backfill or incremental');
 const selected = args.sources ? args.sources.split(',').map((s) => s.trim()) : SOURCES.map((s) => s.name);
 const unknown = selected.filter((name) => !SOURCES.some((s) => s.name === name));
 if (unknown.length) throw new Error(`unknown sources: ${unknown.join(', ')}`);
@@ -60,7 +61,7 @@ try {
   const stores = new Map();
   for (const kind of KINDS) stores.set(kind, await loadKind(join(dataDir, `${kind}.jsonl`)));
 
-  log.info({ mode: args.mode, sources: selected, refetchPages: args['refetch-pages'], offline: args.offline }, 'run started');
+  log.info({ sources: selected, refetchPages: args['refetch-pages'], offline: args.offline }, 'run started');
   const active = SOURCES.filter((s) => selected.includes(s.name));
   const results = await Promise.allSettled(
     active.map(async (source) => {
@@ -71,7 +72,6 @@ try {
         const out = await source.collect({
           http: client,
           log: sourceLog,
-          mode: args.mode,
           now,
           refetchPages: args['refetch-pages'],
           dataDir,
@@ -88,7 +88,6 @@ try {
 
   const manifest = {
     run_id: runId,
-    mode: args.mode,
     refetch_pages: args['refetch-pages'],
     offline: args.offline,
     started_at: now,
@@ -111,21 +110,27 @@ try {
     } else {
       const { records, listedKeys, stats, failures, notes } = result.value.out;
       const store = stores.get(source.kind);
+      const owns = (r) => r.source === source.name || r.source.startsWith(`${source.name}:`);
+      const listedBefore = [...store.values()].filter((r) => owns(r) && !r.removed_at);
       const counts = { new: 0, updated: 0, unchanged: 0, removed: 0 };
       for (const record of records) {
         const outcome = upsert(store, record, { now, inventory: source.inventory });
         counts[outcome] += 1;
         if (outcome !== 'unchanged') changes.get(source.kind).push(store.get(`${record.source}|${record.source_key}`));
       }
-      const owns = (r) => r.source === source.name || r.source.startsWith(`${source.name}:`);
-      // Full reconcile of a complete list: a record whose key is gone from the
-      // source gets removed_at (it is kept, never deleted).
-      if (args.mode === 'backfill' && source.completeList && listedKeys?.size) {
-        for (const r of store.values()) {
-          if (!owns(r) || r.removed_at || listedKeys.has(r.source_key)) continue;
-          r.removed_at = now;
-          counts.removed += 1;
-          changes.get(source.kind).push(r);
+      // Every run of a complete list reconciles it: a record whose key is gone
+      // from the source gets removed_at (it is kept, never deleted), unless the
+      // list shrank by more than MAX_LIST_SHRINK.
+      if (source.completeList && listedKeys?.size) {
+        const gone = listedBefore.filter((r) => !listedKeys.has(r.source_key));
+        if (listedKeys.size < listedBefore.length * (1 - MAX_LIST_SHRINK)) {
+          entry.removals_skipped = { listed: listedKeys.size, listed_before: listedBefore.length, would_remove: gone.length };
+        } else {
+          for (const r of gone) {
+            r.removed_at = now;
+            counts.removed += 1;
+            changes.get(source.kind).push(r);
+          }
         }
       }
       const own = [...store.values()].filter(owns);

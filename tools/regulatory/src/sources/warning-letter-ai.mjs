@@ -120,7 +120,7 @@ export function applyModelIngredients(details, result) {
     ...details,
     ingredients_mentioned: result.ingredients.map((i) => i.name),
     ingredients_rule: details.ingredients_mentioned,
-    ingredients_source: `model:${result.model}/${result.effort}/${result.prompt_version}`,
+    ingredients_source: `model:${[result.model, result.effort, result.prompt_version].filter(Boolean).join('/')}`,
     ingredient_details: result.ingredients.map(({ name, name_in_letter, role, quote_repaired }) => ({
       name,
       name_in_letter,

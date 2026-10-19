@@ -1,15 +1,19 @@
 // node src/ai-ingredients.mjs --data-dir <dir> (--slugs a,b | --slugs-file f.json | --scope dietary_supplement)
-//   [--model gpt-5.6-luna] [--effort medium] [--concurrency 1]
+//   [--provider claude|codex] [--model haiku] [--effort medium] [--concurrency 1] [--redo]
 //
 // Reads each warning letter from the cache (no web request), asks the model for
 // the ingredients it names, keeps only quote-verified items and writes
 // <dir>/ai/warning-letter-ingredients/<slug>.json. warning_letter.jsonl is not
-// changed. A letter whose text, prompt and model are unchanged is skipped.
+// changed. A letter that already has an answer for its current text and prompt
+// is skipped, whichever model gave it, unless --redo.
+// Owner 2026-10-19: new letters are read by Claude Haiku (`claude -p`); the
+// 2026-10-18 answers came from Codex gpt-5.6-luna (`--provider codex`).
 import { mkdir, readFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 import pLimit from 'p-limit';
 import pino from 'pino';
+import { claudeJson } from './lib/claude.mjs';
 import { codexJson } from './lib/codex.mjs';
 import { createHttp } from './lib/http.mjs';
 import { loadKind, readJson, writeJson } from './lib/store.mjs';
@@ -17,6 +21,7 @@ import {
   PROMPT_VERSION,
   SCHEMA,
   buildPrompt,
+  isCurrent,
   letterText,
   resultPath,
   textHash,
@@ -30,12 +35,22 @@ const { values: args } = parseArgs({
     slugs: { type: 'string' },
     'slugs-file': { type: 'string' },
     scope: { type: 'string' },
-    model: { type: 'string', default: 'gpt-5.6-luna' },
-    effort: { type: 'string', default: 'medium' },
+    provider: { type: 'string', default: 'claude' },
+    model: { type: 'string' },
+    effort: { type: 'string' },
     concurrency: { type: 'string', default: '1' },
+    redo: { type: 'boolean', default: false },
   },
 });
 if (!args['data-dir']) throw new Error('--data-dir (or REGULATORY_DATA_DIR) is required');
+const PROVIDERS = {
+  claude: { model: 'haiku', effort: null, call: claudeJson },
+  codex: { model: 'gpt-5.6-luna', effort: 'medium', call: codexJson },
+};
+const provider = PROVIDERS[args.provider];
+if (!provider) throw new Error(`--provider must be one of ${Object.keys(PROVIDERS).join(', ')}`);
+const model = args.model ?? provider.model;
+const effort = args.provider === 'codex' ? (args.effort ?? provider.effort) : null;
 const dataDir = resolve(args['data-dir']);
 const now = new Date().toISOString();
 const runDir = join(dataDir, 'runs', `${now.replace(/[:.]/g, '-')}-ai-ingredients`);
@@ -59,7 +74,7 @@ const missing = slugs.filter((s) => !bySlug.has(s));
 if (missing.length) throw new Error(`not in warning_letter.jsonl: ${missing.join(', ')}`);
 
 const cache = createHttp({ cacheDir: join(dataDir, 'cache'), log, offline: true }).forSource();
-const summary = { started_at: now, model: args.model, effort: args.effort, prompt_version: PROMPT_VERSION, letters: [] };
+const summary = { started_at: now, provider: args.provider, model, effort, prompt_version: PROMPT_VERSION, letters: [] };
 
 const limit = pLimit(Number(args.concurrency));
 await Promise.all(
@@ -71,35 +86,33 @@ await Promise.all(
       const inputHash = textHash(text);
       const file = resultPath(dataDir, slug);
       const prior = await readJson(file);
-      if (
-        prior?.input_sha256 === inputHash &&
-        prior.prompt_version === PROMPT_VERSION &&
-        prior.model === args.model &&
-        prior.effort === args.effort
-      ) {
-        summary.letters.push({ slug, skipped: 'unchanged', kept: prior.ingredients.length });
+      if (!args.redo && isCurrent(prior, text)) {
+        summary.letters.push({ slug, skipped: 'current', model: prior.model, kept: prior.ingredients.length });
         return;
       }
       try {
-        const { answer, tokens, seconds } = await codexJson({
+        const answered = await provider.call({
           prompt: buildPrompt(text),
           schema: SCHEMA,
-          model: args.model,
-          effort: args.effort,
+          model,
+          effort,
           timeoutMs: 10 * 60_000,
           retries: 2,
           log: log.child({ slug }),
         });
+        const { answer, tokens, seconds } = answered;
         const { kept, dropped } = verify(text, answer.ingredients ?? []);
         await writeJson(file, {
           slug,
           source_url: record.source_url,
-          model: args.model,
-          effort: args.effort,
+          provider: args.provider,
+          model: answered.model ?? model,
+          effort,
           prompt_version: PROMPT_VERSION,
           input_sha256: inputHash,
           extracted_at: new Date().toISOString(),
           tokens,
+          cost_usd: answered.cost_usd ?? null,
           seconds,
           ingredients: kept,
           dropped,

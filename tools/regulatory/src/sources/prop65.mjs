@@ -80,9 +80,11 @@ export default {
   name: 'ca_prop65',
   kind: 'lawsuit',
   inventory: false,
-  async collect({ http, log, mode, now }) {
+  async collect({ http, log, now }) {
     const today = new Date(now);
-    const from = mode === 'backfill' ? startOfMonth(subMonths(today, 12)) : addDays(today, -45);
+    // Every run reads the last 12 months (~70 requests), so a notice's later
+    // progress (complaint, settlement) is picked up without a separate reconcile.
+    const from = startOfMonth(subMonths(today, 12));
     const notices = new Map();
     const stats = { windows: 0, pages: 0, notices_listed: 0, kept: 0 };
     for (const [start, end] of windows(from, today)) {

@@ -151,17 +151,16 @@ Server 一 `/Users/server/regulatory-data/`：
 - **警告信回复信链接**：FDA 很少公开回复信，`response_letter_url` 只有 0.1% 有值；closeout letter 有 14.8%。
 - **食品类警告信的成分**：仍有一些是营养标示里的维生素和矿物质（如 vitamin D 21 次），准确率比补充剂类低，使用时注意。
 
-## 8. 定时运行建议（尚未安装）
+## 8. 定时运行与同步（2026-10-19 用户确认）
 
-| 来源 | 频率 | 命令 |
-|---|---|---|
-| 警告信 | 每周两次 | `--mode incremental --sources fda_warning_letters`（4 个列表请求 + 新信件页面） |
-| GRAS、NDI | 每月 | `--mode incremental --sources fda_gras_inventory,fda_ndi_list` |
-| Prop 65 | 每周 | `--mode incremental --sources ca_prop65`（最近 45 天，约 10 个请求） |
-| 媒体 RSS | **每天**（与原定"诉讼每周"不同） | `--mode incremental --sources media`。NutraIngredients 只保留约 3 天，每周跑会漏 |
-| 全量核对 | 每月一次 | `--mode backfill`：重读完整列表，标记 `removed_at`，Prop 65 重读 12 个月以更新进展；信件页面用缓存，`--refetch-pages` 可强制重读 |
-
-增量运行时，新增或有变化的记录写在 `runs/<run-id>/changes/`。新的补充剂类警告信要拿到模型读取的成分，在警告信增量之后再跑一次 `node src/ai-ingredients.mjs --scope dietary_supplement`（已处理过的会跳过；每封约 8 千 token），然后跑 `--sources fda_warning_letters --offline` 合并。近 12 个月新增的补充剂类信件只有 24 封。
+- **时间与位置**：Server 一 crontab，每周二、周五 18:00 美国中部时间（北京时间周三、周六 07:00；11 月 1 日后 08:00）。依据：近 12 个月的警告信 145 封在周二发布、4 封在周一；Prop 65 通知多数在周五。
+- **命令**：`node src/sync.mjs`（用法见 `tools/regulatory/README.md`），依次做：
+  1. 采集所有来源。每次都读完整列表并标删除；列表比上次短 5% 以上时不标删除，并报警。Prop 65 每次读 12 个月，约 70 个请求，不再有每月一次的全量核对。
+  2. 读成分：补充剂类信件还没有模型成分的，用 Claude Haiku（`claude -p`）读，并发 1，然后离线合并。食品类信件不跑模型。
+  3. 推送：只推新增或有变化的记录，走 Supply Smart `regulatory.ingest`，用产品同步的服务 key，写测试环境。每批最多 500 条，带 `runId` 和 `batchId`，先 dry run 再真写。
+  4. 核对：云端各类条数（`regulatory.overview`）和本地未删除的条数对比。
+  5. 写 `~/regulatory-data/last-sync.json`；向爬虫飞书群发汇总，或报警。
+- **媒体 RSS**：跟着一周两次走。NutraIngredients 只保留约 3 天，两次之间的部分新闻会漏。
 
 ## 9. 待决定
 
