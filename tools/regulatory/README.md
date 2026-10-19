@@ -59,15 +59,17 @@ paid proxy is used.
 ## Ingredients read by a model (warning letters)
 
 ```sh
-node src/ai-ingredients.mjs --data-dir ~/regulatory-data --scope dietary_supplement   # or --slugs a,b
+node src/ai-ingredients.mjs --data-dir ~/regulatory-data --scope dietary_supplement \
+  --model gpt-5.6-luna --effort medium            # or --slugs a,b
 node src/run.mjs --data-dir ~/regulatory-data --sources fda_warning_letters --offline
 ```
 
-The first command reads each letter from the cache (no web request) and asks a
-model for the ingredients the letter names, each with a sentence from the
-letter: Claude Haiku through the Claude Code CLI logged in on the machine
-(`claude -p`, default since 2026-10-19), or `--provider codex` (`gpt-5.6-luna`
-medium, which read the 2026-10-18 letters). An item is
+The first command reads each letter from the cache (no web request) and asks
+`gpt-5.6-luna` (effort medium) through the Codex CLI logged in on the machine for the
+ingredients the letter names, each with a sentence from the letter. Model and
+effort have no defaults and must be given (the machine's Codex default is a
+dearer model); an answer from any other model or effort, as Codex reports it,
+is refused. An item is
 kept only when that sentence is in the letter word for word (quote marks and
 FDA's [bracket] edits aside) and contains the name as written; a shortened
 quote is replaced by the letter's best-matching sentence (`quote_repaired`).
@@ -86,14 +88,14 @@ the first command again before they get model ingredients.
 
 ```sh
 node src/sync.mjs --data-dir ~/regulatory-data \
-  --supply-smart-env ~/apps/crawler-v3/manual-releases/brand-enrichment/.env.brand-enrichment \
-  --webhook-file ~/apps/regulatory-private/feishu.webhook
+  --supply-smart-env ~/apps/crawler-v3/manual-releases/brand-enrichment/.env.brand-enrichment
 # --dry-run: push as dry runs only; --skip-crawl, --no-model: leave out those steps
 ```
 
 1. Collects every source (`src/run.mjs`).
-2. Supplement-type letters without model ingredients are read and merged
-   (the two commands above).
+2. Supplement-type letters without model ingredients are read (gpt-5.6-luna,
+   medium, one at a time) and merged: the two commands above. Food letters
+   are not sent to the model.
 3. Pushes to Supply Smart `regulatory.ingest` (contract: supply-smart-mono
    `docs/packages/database-api/domains/regulatory-ingest.md`) with the service
    key product sync uses (`SUPPLY_SMART_DATABASE_RPC_URL`, `SUPPLY_SMART_API_KEY`
@@ -106,9 +108,12 @@ node src/sync.mjs --data-dir ~/regulatory-data \
    retried with the same batch (Supply Smart counts a batch once).
 4. Compares Supply Smart's per-kind totals (`regulatory.overview`, food
    letters included) with the records in the files that are not removed.
-5. Writes `last-sync.json` and sends the crawler Feishu group a summary, or the
-   problems. A problem in one step does not stop later steps whose input is
-   still sound; the exit code is 1 when there was any problem.
+5. Writes `last-sync.json`: every step's result, `problems`, and
+   `summary_text` (letters read and tokens included). Server 一 holds no
+   webhook; the Mac mini that sends the crawler notifications reads this file
+   and posts it to the Feishu group. A problem in one step does not stop later
+   steps whose input is still sound; the exit code is 1 when there was any
+   problem.
 
 The extraction rules are in `src/sources/*-rules.mjs`; every violation type,
 ingredient and scope decision keeps the sentence it came from in

@@ -1,19 +1,18 @@
 // node src/ai-ingredients.mjs --data-dir <dir> (--slugs a,b | --slugs-file f.json | --scope dietary_supplement)
-//   [--provider claude|codex] [--model haiku] [--effort medium] [--concurrency 1] [--redo]
+//   --model gpt-5.6-luna --effort medium [--concurrency 1] [--redo]
 //
 // Reads each warning letter from the cache (no web request), asks the model for
 // the ingredients it names, keeps only quote-verified items and writes
 // <dir>/ai/warning-letter-ingredients/<slug>.json. warning_letter.jsonl is not
 // changed. A letter that already has an answer for its current text and prompt
 // is skipped, whichever model gave it, unless --redo.
-// Owner 2026-10-19: new letters are read by Claude Haiku (`claude -p`); the
-// 2026-10-18 answers came from Codex gpt-5.6-luna (`--provider codex`).
+// The model is read through the Codex CLI logged in on the machine; model and
+// effort have no defaults (owner 2026-10-19: gpt-5.6-luna, medium, one at a time).
 import { mkdir, readFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 import pLimit from 'p-limit';
 import pino from 'pino';
-import { claudeJson } from './lib/claude.mjs';
 import { codexJson } from './lib/codex.mjs';
 import { createHttp } from './lib/http.mjs';
 import { loadKind, readJson, writeJson } from './lib/store.mjs';
@@ -35,7 +34,6 @@ const { values: args } = parseArgs({
     slugs: { type: 'string' },
     'slugs-file': { type: 'string' },
     scope: { type: 'string' },
-    provider: { type: 'string', default: 'claude' },
     model: { type: 'string' },
     effort: { type: 'string' },
     concurrency: { type: 'string', default: '1' },
@@ -43,14 +41,8 @@ const { values: args } = parseArgs({
   },
 });
 if (!args['data-dir']) throw new Error('--data-dir (or REGULATORY_DATA_DIR) is required');
-const PROVIDERS = {
-  claude: { model: 'haiku', effort: null, call: claudeJson },
-  codex: { model: 'gpt-5.6-luna', effort: 'medium', call: codexJson },
-};
-const provider = PROVIDERS[args.provider];
-if (!provider) throw new Error(`--provider must be one of ${Object.keys(PROVIDERS).join(', ')}`);
-const model = args.model ?? provider.model;
-const effort = args.provider === 'codex' ? (args.effort ?? provider.effort) : null;
+if (!args.model || !args.effort) throw new Error('--model and --effort are required (no defaults)');
+const { model, effort } = args;
 const dataDir = resolve(args['data-dir']);
 const now = new Date().toISOString();
 const runDir = join(dataDir, 'runs', `${now.replace(/[:.]/g, '-')}-ai-ingredients`);
@@ -74,7 +66,7 @@ const missing = slugs.filter((s) => !bySlug.has(s));
 if (missing.length) throw new Error(`not in warning_letter.jsonl: ${missing.join(', ')}`);
 
 const cache = createHttp({ cacheDir: join(dataDir, 'cache'), log, offline: true }).forSource();
-const summary = { started_at: now, provider: args.provider, model, effort, prompt_version: PROMPT_VERSION, letters: [] };
+const summary = { started_at: now, model, effort, prompt_version: PROMPT_VERSION, letters: [] };
 
 const limit = pLimit(Number(args.concurrency));
 await Promise.all(
@@ -91,7 +83,7 @@ await Promise.all(
         return;
       }
       try {
-        const answered = await provider.call({
+        const answered = await codexJson({
           prompt: buildPrompt(text),
           schema: SCHEMA,
           model,
@@ -105,14 +97,12 @@ await Promise.all(
         await writeJson(file, {
           slug,
           source_url: record.source_url,
-          provider: args.provider,
-          model: answered.model ?? model,
-          effort,
+          model: answered.model,
+          effort: answered.effort,
           prompt_version: PROMPT_VERSION,
           input_sha256: inputHash,
           extracted_at: new Date().toISOString(),
           tokens,
-          cost_usd: answered.cost_usd ?? null,
           seconds,
           ingredients: kept,
           dropped,

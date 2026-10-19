@@ -1,16 +1,17 @@
-// node src/sync.mjs --data-dir <dir> --supply-smart-env <file> [--webhook-file <file>]
-//   [--skip-crawl] [--no-model] [--dry-run]
+// node src/sync.mjs --data-dir <dir> --supply-smart-env <file> [--skip-crawl] [--no-model] [--dry-run]
 //
 // The scheduled job (owner 2026-10-19: Tue and Fri 18:00 US Central, Server 一):
 //   1. collect every source (src/run.mjs);
 //   2. supplement-type warning letters without model ingredients are read by
-//      Claude Haiku (src/ai-ingredients.mjs) and merged (offline run);
+//      Codex gpt-5.6-luna, effort medium, one at a time (src/ai-ingredients.mjs)
+//      and merged (offline run);
 //   3. records that are new or changed since the last successful push go to
 //      Supply Smart `regulatory.ingest` in numbered batches of ≤ 500: every
 //      batch as a dry run first, then for real;
 //   4. Supply Smart's per-kind totals are compared with the files;
-//   5. <dir>/last-sync.json is written and the crawler Feishu group gets a
-//      short summary, or an alert when any step had a problem.
+//   5. <dir>/last-sync.json is written, with `summary_text`. This machine holds
+//      no webhook: the Mac mini that sends the crawler notifications reads the
+//      file and posts it to the Feishu group (owner 2026-10-19).
 // A problem in one step is reported; later steps still run when their input is
 // sound (a failed source keeps its previous records, which are still correct).
 import { mkdir, writeFile } from 'node:fs/promises';
@@ -20,20 +21,23 @@ import { parseArgs } from 'node:util';
 import { execa } from 'execa';
 import pino from 'pino';
 import lockfile from 'proper-lockfile';
-import { feishuNotifier } from './lib/notify.mjs';
 import { supplySmartFromEnvFile } from './lib/supply-smart.mjs';
 import { loadKind, readJson, recordKey, writeJson } from './lib/store.mjs';
+import { resultPath } from './sources/warning-letter-ai.mjs';
 
 const KINDS = ['warning_letter', 'gras', 'ndi', 'lawsuit'];
 const KIND_NAMES = { warning_letter: '警告信', gras: 'GRAS', ndi: 'NDI', lawsuit: '诉讼' };
 const BATCH_SIZE = 500;
+// Owner 2026-10-19: always this model and effort, passed explicitly; never the
+// machine's Codex default and never a dearer model.
+const MODEL = 'gpt-5.6-luna';
+const EFFORT = 'medium';
 const TOOL_DIR = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
 const { values: args } = parseArgs({
   options: {
     'data-dir': { type: 'string', default: process.env.REGULATORY_DATA_DIR },
     'supply-smart-env': { type: 'string' },
-    'webhook-file': { type: 'string' },
     'skip-crawl': { type: 'boolean', default: false },
     'no-model': { type: 'boolean', default: false },
     'dry-run': { type: 'boolean', default: false },
@@ -116,12 +120,18 @@ const waitingForModel = (letters) =>
 
 async function readIngredients() {
   const waiting = waitingForModel(await loadKind(join(dataDir, 'warning_letter.jsonl')));
-  report.model = { letters: waiting.length, read: 0, still_waiting: waiting.length };
+  report.model = { model: MODEL, effort: EFFORT, letters: waiting.length, read: 0, still_waiting: waiting.length, tokens: 0 };
   if (!waiting.length) return;
   const slugsFile = join(syncDir, 'logs', `${syncId}-model-slugs.json`);
   await writeFile(slugsFile, JSON.stringify(waiting.map((r) => r.source_key)));
-  const ai = await node('src/ai-ingredients.mjs', ['--data-dir', dataDir, '--slugs-file', slugsFile]);
+  const ai = await node('src/ai-ingredients.mjs', [
+    '--data-dir', dataDir, '--slugs-file', slugsFile, '--model', MODEL, '--effort', EFFORT, '--concurrency', '1',
+  ]);
   if (ai.exitCode !== 0) problem(`成分读取退出码 ${ai.exitCode}：${lastLine(ai.all)}`);
+  for (const r of waiting) {
+    const answer = await readJson(resultPath(dataDir, r.source_key));
+    if (answer && answer.extracted_at >= startedAt) report.model.tokens += answer.tokens ?? 0;
+  }
   // Merge whatever was answered, even when some letters failed.
   const merge = await node('src/run.mjs', ['--data-dir', dataDir, '--sources', 'fda_warning_letters', '--offline']);
   if (merge.exitCode !== 0) {
@@ -244,7 +254,8 @@ function message() {
     );
     lines.push(`采集：${parts.join('；')}`);
   }
-  if (report.model?.letters) lines.push(`成分：${report.model.letters} 封待读，读到 ${report.model.read} 封`);
+  if (report.model?.letters)
+    lines.push(`成分（${MODEL} ${EFFORT}）：${report.model.letters} 封待读，读到 ${report.model.read} 封，约 ${report.model.tokens.toLocaleString('en-US')} token`);
   if (report.push) {
     const p = report.push;
     const c = report.dry_run ? p.dry : p.counted;
@@ -263,7 +274,6 @@ function message() {
 
 // ── Run ────────────────────────────────────────────────────────────────────
 
-const notifier = await feishuNotifier(args['webhook-file'], { log });
 const release = await lockfile.lock(dataDir, { lockfilePath: join(dataDir, '.sync.lock'), stale: 6 * 60 * 60 * 1000, update: 60 * 1000 });
 try {
   if (!args['skip-crawl']) await crawl();
@@ -276,10 +286,9 @@ try {
 } finally {
   report.finished_at = new Date().toISOString();
   report.ok = report.problems.length === 0;
+  report.summary_text = message();
   await writeJson(join(dataDir, 'last-sync.json'), report);
-  report.notification = await notifier.send(message());
-  await writeJson(join(dataDir, 'last-sync.json'), report);
-  log.info({ ok: report.ok, problems: report.problems.length, notification: report.notification }, 'sync finished');
+  log.info({ ok: report.ok, problems: report.problems.length }, 'sync finished');
   await release();
   process.exitCode = report.ok ? 0 : 1;
 }

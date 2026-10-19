@@ -156,10 +156,10 @@ Server 一 `/Users/server/regulatory-data/`：
 - **时间与位置**：Server 一 crontab，每周二、周五 18:00 美国中部时间（北京时间周三、周六 07:00；11 月 1 日后 08:00）。依据：近 12 个月的警告信 145 封在周二发布、4 封在周一；Prop 65 通知多数在周五。
 - **命令**：`node src/sync.mjs`（用法见 `tools/regulatory/README.md`），依次做：
   1. 采集所有来源。每次都读完整列表并标删除；列表比上次短 5% 以上时不标删除，并报警。Prop 65 每次读 12 个月，约 70 个请求，不再有每月一次的全量核对。
-  2. 读成分：补充剂类信件还没有模型成分的，用 Claude Haiku（`claude -p`）读，并发 1，然后离线合并。食品类信件不跑模型。
+  2. 读成分：补充剂类信件还没有模型成分的，用 Server 一 上的 Codex 读，显式指定 `gpt-5.6-luna`、effort `medium`，并发 1；Codex 报告的实际模型或 effort 不符就拒收。然后离线合并。食品类信件不跑模型。
   3. 推送：只推新增或有变化的记录，走 Supply Smart `regulatory.ingest`，用产品同步的服务 key，写测试环境。每批最多 500 条，带 `runId` 和 `batchId`，先 dry run 再真写。
   4. 核对：云端各类条数（`regulatory.overview`）和本地未删除的条数对比。
-  5. 写 `~/regulatory-data/last-sync.json`；向爬虫飞书群发汇总，或报警。
+  5. 写 `~/regulatory-data/last-sync.json`，里面有每一步的结果、问题列表和汇总文字（含读了多少封信、约多少 token）。Server 一 不持有 webhook，由发爬虫日常通知的 Mac mini 读这个文件，再发到「爬虫」群。
 - **媒体 RSS**：跟着一周两次走。NutraIngredients 只保留约 3 天，两次之间的部分新闻会漏。
 
 ## 9. 待决定
