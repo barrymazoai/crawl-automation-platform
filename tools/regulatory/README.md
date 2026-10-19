@@ -116,6 +116,18 @@ node src/sync.mjs --data-dir ~/regulatory-data \
    git and never logged. A problem in one step does not stop later steps whose
    input is still sound; the exit code is 1 when there was any problem.
 
+Daily overdue check (crontab, 12:00 US Central):
+
+```sh
+node src/check-sync.mjs --data-dir ~/regulatory-data --webhook-file ~/apps/regulatory-private/feishu.webhook
+```
+
+Every full sync (it collected and pushed; not `--dry-run` or `--skip-crawl`)
+also writes `sync/last-full-sync.json`. When that file is missing or older than
+102 h (the longest normal gap is Friday → Tuesday, 96 h), the group gets one
+red card per missed sync. A machine that is down sends nothing; the crawler's
+host checks cover that.
+
 The extraction rules are in `src/sources/*-rules.mjs`; every violation type,
 ingredient and scope decision keeps the sentence it came from in
 `details.evidence` / `details.scope_quote`. See

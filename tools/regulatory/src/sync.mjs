@@ -310,6 +310,8 @@ try {
   await writeJson(join(dataDir, 'last-sync.json'), report);
   report.notification = await notifier.send(card);
   await writeJson(join(dataDir, 'last-sync.json'), report);
+  // The daily overdue check (src/check-sync.mjs) only counts full runs: a manual dry run proves nothing.
+  if (release && !args['dry-run'] && !args['skip-crawl']) await writeJson(join(syncDir, 'last-full-sync.json'), report);
   log.info({ ok: report.ok, problems: report.problems.length, notification: report.notification }, 'sync finished');
   await release?.();
   process.exitCode = report.ok ? 0 : 1;
