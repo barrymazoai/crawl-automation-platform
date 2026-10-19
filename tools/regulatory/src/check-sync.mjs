@@ -10,7 +10,7 @@
 import { join, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 import pino from 'pino';
-import { feishuNotifier } from './lib/notify.mjs';
+import { feishuNotifier } from '../../notify/feishu.mjs';
 import { readJson, writeJson } from './lib/store.mjs';
 
 const { values: args } = parseArgs({

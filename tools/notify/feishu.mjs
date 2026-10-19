@@ -1,7 +1,8 @@
-// Card to the crawler Feishu group bot (owner 2026-10-19: Server 一 sends it
-// directly). Same card as the crawler's other notifications: a coloured header
-// and a markdown body. The webhook URL lives in a private file on the server
-// and is never logged; without one, nothing is sent.
+// Card to the 「Supply Smart 服务通知」 Feishu group bot, shared by the regulatory
+// sync and the crawler progress notifications (owner 2026-10-19: Server 一 sends
+// them directly). A coloured header and a markdown body. The webhook URL lives
+// in a private file on the server and is never logged; without one, nothing is
+// sent.
 import { readFile } from 'node:fs/promises';
 
 export async function feishuNotifier(file, { log }) {

@@ -22,7 +22,7 @@ import { parseArgs } from 'node:util';
 import { execa } from 'execa';
 import pino from 'pino';
 import lockfile from 'proper-lockfile';
-import { feishuNotifier } from './lib/notify.mjs';
+import { feishuNotifier } from '../../notify/feishu.mjs';
 import { supplySmartFromEnvFile } from './lib/supply-smart.mjs';
 import { loadKind, readJson, recordKey, writeJson } from './lib/store.mjs';
 import { resultPath } from './sources/warning-letter-ai.mjs';
