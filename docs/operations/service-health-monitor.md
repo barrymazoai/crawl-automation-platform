@@ -106,6 +106,18 @@ launchctl bootout gui/$(id -u)/com.barry.notify.service-monitor   # 立刻停，
   `SERVICE_MONITOR_OVERRIDE='{"windows":{"ocr_health":"http://100.114.3.97:8099/health"}}' /usr/bin/python3 service_monitor.py check`
 - **加检查项**：在 `CHECKS` 加名字，在对应机器的远程脚本或 `group_*` 函数里输出结果。
 
-## 验证记录
+## 2026-10-19 安装验证
 
-见本文末尾"2026-10-19 安装验证"。
+- 用户确认安装清单后，在 Mac mini 上 sparse clone 分支 `ops/service-health-monitor`（6d1ff04）到 `~/apps/service-monitor`，
+  plist `plutil -lint` 通过并 `launchctl bootstrap`。
+- 15:14 `launchctl kickstart` 跑一轮：15/15 通过，退出码 0，群里收到「服务心跳」（全部正常）。
+- 15:14–15:19 手动跑一轮，`SERVICE_MONITOR_OVERRIDE` 把 Windows OCR 地址临时改成 `:8099`：
+  15:14 发现、15:16 / 15:19 两次重试仍失败，群里收到「服务告警」（Windows · OCR 8081 健康检查，连试 3 次都失败）。
+- 15:19 `launchctl kickstart` 用正常地址再跑：群里收到「服务恢复」（持续约 5 分钟，目前全部正常），状态清空。
+- 三条消息都用飞书 CLI 读群消息确认已到「Supply Smart 服务通知」群。没有关闭或重启任何服务。
+- 本机打桩模拟（不提交）另外确认：重试期间恢复不发消息；同一问题持续不重复报；整台机器不在线只报一条；心跳每天一次。
+
+## 已知情况
+
+- `docs/operations/machines.md` 里 Server 二 的 Worker 地址仍写 `192.168.68.74:7233`；实际 Server 一 worker 配置和
+  Temporal gateway 用的是 `192.168.68.76:7233`（.74 现在是 Windows OCR）。本监控按实际配置检查。
