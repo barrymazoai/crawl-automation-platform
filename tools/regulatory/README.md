@@ -110,7 +110,7 @@ node src/sync.mjs --data-dir ~/regulatory-data \
 4. Compares Supply Smart's per-kind totals (`regulatory.overview`, food
    letters included) with the records in the files that are not removed.
 5. Writes `last-sync.json` (every step's result, `problems`, `summary_text`)
-   and sends the crawler Feishu group a card from Server 一: a short summary
+   and sends the 「Supply Smart 服务通知」 Feishu group a card from Server 一: a short summary
    (letters read and tokens included), or the problems in red. The webhook URL
    is the one the crawler notifications use, kept in a private file outside
    git and never logged. A problem in one step does not stop later steps whose

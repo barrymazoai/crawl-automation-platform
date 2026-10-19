@@ -10,7 +10,7 @@
 //      Supply Smart `regulatory.ingest` in numbered batches of ≤ 500: every
 //      batch as a dry run first, then for real;
 //   4. Supply Smart's per-kind totals are compared with the files;
-//   5. <dir>/last-sync.json is written and the crawler Feishu group gets a card
+//   5. <dir>/last-sync.json is written and the 「Supply Smart 服务通知」 Feishu group gets a card
 //      straight from this machine (owner 2026-10-19): a short summary, or the
 //      problems in red.
 // A problem in one step is reported; later steps still run when their input is

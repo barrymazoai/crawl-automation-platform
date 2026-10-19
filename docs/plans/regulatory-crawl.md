@@ -159,7 +159,7 @@ Server 一 `/Users/server/regulatory-data/`：
   2. 读成分：补充剂类信件还没有模型成分的，用 Server 一 上的 Codex 读，显式指定 `gpt-5.6-luna`、effort `medium`，并发 1；Codex 报告的实际模型或 effort 不符就拒收。然后离线合并。食品类信件不跑模型。
   3. 推送：只推新增或有变化的记录，走 Supply Smart `regulatory.ingest`，用产品同步的服务 key，写测试环境。每批最多 500 条，带 `runId` 和 `batchId`，先 dry run 再真写。
   4. 核对：云端各类条数（`regulatory.overview`）和本地未删除的条数对比。
-  5. 写 `~/regulatory-data/last-sync.json`，里面有每一步的结果、问题列表和汇总文字（含读了多少封信、约多少 token）。Server 一 直接发卡片到「爬虫」群：成功发简短汇总，有问题发红色报警。webhook 和爬虫通知用的是同一个，存在 Server 一 的私有文件 `~/apps/regulatory-private/feishu.webhook` 里，不进 git。
+  5. 写 `~/regulatory-data/last-sync.json`，里面有每一步的结果、问题列表和汇总文字（含读了多少封信、约多少 token）。Server 一 直接发卡片到「Supply Smart 服务通知」群（原「爬虫」群，2026-10-19 改名）：成功发简短汇总，有问题发红色报警。webhook 和爬虫通知用的是同一个，存在 Server 一 的私有文件 `~/apps/regulatory-private/feishu.webhook` 里，不进 git。
 - **超时报警**：Server 一 每天 12:00（美国中部时间）跑 `src/check-sync.mjs`。上一次完整同步（采集并真实推送；手动 dry run 不算）超过 102 小时就发红色卡片，每次漏跑只报一次。Server 一 整台宕机时它发不出来，这种情况由爬虫的机器在线检查兜底。
 - **媒体 RSS**：跟着一周两次走。NutraIngredients 只保留约 3 天，两次之间的部分新闻会漏。
 

@@ -4,7 +4,7 @@
 // Friday, so the longest normal gap is 96 h. When <dir>/sync/last-full-sync.json
 // (written by every sync that collected and pushed for real; manual dry runs
 // don't count) is missing or older than --max-age-hours (default
-// 102 = 96 + 6 h), the crawler Feishu group gets a red card, once per missed
+// 102 = 96 + 6 h), the 「Supply Smart 服务通知」 Feishu group gets a red card, once per missed
 // sync (the next successful sync posts its own card). It cannot report a
 // machine that is down; the crawler's host checks cover that.
 import { join, resolve } from 'node:path';
