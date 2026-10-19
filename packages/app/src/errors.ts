@@ -177,4 +177,12 @@ export const appErrors = defineErrors({
     category: "RUNTIME",
     message: "Brand scans need their settings (R2 and ScraperAPI) in this process's config.",
   },
+  "JOURNAL_PRUNE.NOT_CONFIGURED": {
+    category: "RUNTIME",
+    message: "Journal pruning needs journalPrune and storage in this API's config.",
+  },
+  "JOURNAL_PRUNE.BUSY": {
+    category: "VALIDATION",
+    message: "A journal prune is already running; read storage.journalPruneStatus.",
+  },
 });

@@ -506,6 +506,7 @@ SHA256:G0nkbUe2En//nb9EO4/3L5fRxR6VgQKQ5Yck534UKqU
 - 部署根目录：`/Users/server/apps/crawler-v3`。实际生效版本以该机部署清单与运行进程为准，不能用 MacBook 工作区的 HEAD 代替。
 - Crawler 主数据库：该机 `127.0.0.1:55432/crawler_v3_dev`；容器 `crawler-v3-us-postgres-1`，持久卷 `crawler-v3-us-postgres18`。查询迁移后的生产业务记录应指向这里。
 - 已用于局域网访问的 Node：`/Users/server/Applications/Crawler Node.app/Contents/MacOS/node`。
+- 本地原始网页副本每天清理（用户 2026-10-19）：`live/pipeline/journal/v3/<渠道>-html/` 每天约涨 10G，10-19 曾把磁盘写到 96%，触发 `disk_low`，全部资源不健康，任务批量以 `RESOURCE.WAIT_LIMIT` 进 Review。现在由 Server 一 的 API 进程按 `api.private.json` 里的 `journalPrune`（`root` = workers 的 `storage.journalRoot`；`dailyAtUtcHour: 20` = 北京 04:00；`null` 只手动）清理超过 `minAgeHours`（默认 24）的文件。删除条件是 R2 上同 key、同大小、同 MD5 都对得上，对不上的文件会保留并列入结果。journal 里其他目录本机会读，所以不清。入口：`storage.journalPrune {dryRun}`（默认只预览），以及 `storage.journalPruneStatus`。
 - 固定管理入口：根目录下 `crawler-queue`、`crawler-maintenance`、`manual-control.mjs`。操作前先核查现状及对应执行单。
 - 2026-09-21/22 曾核验局域网地址 `192.168.68.55`、`192.168.68.70`；它们是历史观测，不能据此保证 DHCP 地址一直不变。
 - 2026-09-23 13:18 恢复 4,057 个未执行单商品；13:21 快照为 running 79、queued 3,933、ready 20。此处记录恢复事实，实时剩余量须重新查询。[恢复记录](../quality/2026-09-23-single-products-resumed.md)

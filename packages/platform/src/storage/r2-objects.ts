@@ -1,7 +1,9 @@
 import {
   GetObjectCommand,
+  ListObjectsV2Command,
   PutObjectCommand,
   type GetObjectCommandOutput,
+  type ListObjectsV2CommandOutput,
   type PutObjectCommandOutput,
 } from "@aws-sdk/client-s3";
 import { setTimeout as sleep } from "node:timers/promises";
@@ -31,6 +33,17 @@ export interface R2ClientPort {
     command: PutObjectCommand,
     options: { abortSignal: AbortSignal },
   ): Promise<PutObjectCommandOutput>;
+  send(
+    command: ListObjectsV2Command,
+    options: { abortSignal: AbortSignal },
+  ): Promise<ListObjectsV2CommandOutput>;
+}
+
+/** One listed object: its key inside this scope, size and ETag (the MD5 of a single-part upload). */
+export interface ListedObject {
+  key: string;
+  byteSize: number;
+  etag: string;
 }
 
 /** Fresh SigV4 request per read; no persisted presigned URLs. Only conditional writes repeat, on R2 server errors. */
@@ -78,6 +91,37 @@ export class R2Objects implements ObjectStore {
     const command = new GetObjectCommand({ Bucket: this.scope.bucket, Key: scopedKey });
     const response = await this.client.send(command, { abortSignal: bounded });
     return readR2Body(response, maxBytes, bounded);
+  }
+
+  /** Every object under `prefix` (a folder inside this scope), page by page; nothing is retried. */
+  async *list(prefix: string, signal: AbortSignal): AsyncGenerator<ListedObject> {
+    const scoped = `${this.key(prefix)}/`;
+    let token: string | undefined;
+    do {
+      const bounded = this.signal(signal);
+      let page: ListObjectsV2CommandOutput;
+      try {
+        page = await this.client.send(
+          new ListObjectsV2Command({
+            Bucket: this.scope.bucket,
+            Prefix: scoped,
+            ContinuationToken: token,
+          }),
+          { abortSignal: bounded },
+        );
+      } catch (error) {
+        signal.throwIfAborted();
+        // No cause: the SDK error carries request headers (credentials). r2Diagnostics keeps the safe reason.
+        throw artifactErrors.create("ARTIFACT.UNAVAILABLE", { details: r2Diagnostics(error) });
+      }
+      for (const object of page.Contents ?? []) {
+        if (object.Key?.startsWith(scoped) && object.Size !== undefined && object.ETag) {
+          const key = object.Key.slice(this.scope.prefix.length + 1);
+          yield { key, byteSize: object.Size, etag: object.ETag.replaceAll('"', "") };
+        }
+      }
+      token = page.IsTruncated ? page.NextContinuationToken : undefined;
+    } while (token);
   }
 
   // ObjectStore's existing four-argument API is shared with legacy workers.

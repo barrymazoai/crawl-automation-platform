@@ -9,6 +9,7 @@ import { queueRouter } from "./queue.js";
 import { resourcesRouter } from "./resources.js";
 import { productsRouter, reviewsRouter } from "./results.js";
 import { runsRouter } from "./runs.js";
+import { storageRouter } from "./storage.js";
 import { usageRouter } from "./usage.js";
 import { enrichmentRouter } from "./enrichment.js";
 
@@ -26,6 +27,7 @@ export const appRouter = router({
   history: historyRouter,
   resources: resourcesRouter,
   listingStates: listingStatesRouter,
+  storage: storageRouter,
   /** Local PM2 jobs and heartbeats, cross-machine Temporal pollers, and OCR health. */
   fleet: router({ status: procedure.query(({ ctx }) => ctx.fleet.status()) }),
 });

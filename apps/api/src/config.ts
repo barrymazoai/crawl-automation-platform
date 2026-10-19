@@ -13,6 +13,7 @@ import { ResourceKindsSchema } from "@crawl-automation/channels-core";
 import { OcrApiSettingsSchema } from "@crawl-automation/processing";
 import {
   DatabaseConfigSchema,
+  JOURNAL_HTML_PREFIXES,
   LogConfigSchema,
   R2ScopeSchema,
   ScraperApiOptionChoicesSchema,
@@ -135,8 +136,29 @@ export const ApiConfigSchema = z
     cleanup: z.strictObject({ intervalMs: z.number().int().min(10_000).max(3_600_000) }).default({
       intervalMs: 60_000,
     }),
+    /**
+     * This machine's copies of original pages, removed once R2 holds the same bytes (owner 2026-10-19). Needs
+     * `storage` (the workers' R2 scope) and runs only where the API shares the workers' disk (Server 一).
+     */
+    journalPrune: z
+      .strictObject({
+        /** The workers' `storage.journalRoot`. */
+        root: absolutePath,
+        prefixes: z
+          .array(z.string().min(1))
+          .min(1)
+          .default([...JOURNAL_HTML_PREFIXES]),
+        minAgeHours: z.number().int().min(1).max(720).default(24),
+        /** UTC hour of the daily prune (20 = 04:00 Beijing); null runs only when started through the API. */
+        dailyAtUtcHour: z.number().int().min(0).max(23).nullable().default(null),
+      })
+      .optional(),
   })
-  .superRefine(validateBrandEnrichmentSettings);
+  .superRefine(validateBrandEnrichmentSettings)
+  .refine((config) => !config.journalPrune || config.storage, {
+    message: "journalPrune needs storage (R2) to check each copy",
+    path: ["journalPrune"],
+  });
 export type ApiConfig = z.infer<typeof ApiConfigSchema>;
 
 /** Reads the private `V3_API_CONFIG` file and checks capture permits before the API starts. */

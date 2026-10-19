@@ -31,6 +31,7 @@ export * from "./storage/retained-publication.js";
 export * from "./storage/r2-settings.js";
 export * from "./storage/r2-objects.js";
 export * from "./storage/r2-client.js";
+export * from "./storage/journal-prune.js";
 export * from "./fetch/index.js";
 export * from "./browser/index.js";
 export * from "./errors/resource-health-errors.js";

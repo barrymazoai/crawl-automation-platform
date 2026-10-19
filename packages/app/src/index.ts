@@ -44,6 +44,7 @@ export * from "./stops/stop-policy.js";
 export * from "./stops/judge-permits.js";
 export * from "./stops/permit-activity.js";
 export * from "./cleanup/cleanup-service.js";
+export * from "./cleanup/journal-prune-service.js";
 export * from "./pipeline/index.js";
 export * from "./formula/index.js";
 export * from "./history/index.js";

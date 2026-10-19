@@ -50,6 +50,7 @@ import { listingStateService, productRuns, queueDispatcher, queueService } from 
 import { historyService, productService } from "./results-parts.js";
 import { evidenceService, originalEvidenceService, reviewService } from "./evidence-parts.js";
 import { fleetService } from "./routers/fleet-parts.js";
+import { journalPruneService } from "./journal-prune-parts.js";
 
 /** Everything the API is built from. Adapters are created once and shared. */
 export interface ApiParts {
@@ -82,6 +83,7 @@ export interface ApiParts {
   deliveryRunner: DeliveryRunner;
   queueDispatcher: QueueDispatcher;
   cleanup: CleanupService;
+  journalPrune: ReturnType<typeof journalPruneService>;
 }
 
 type Parts = AwilixContainer<ApiParts>;
@@ -149,7 +151,7 @@ function registerServices(container: Parts): void {
   });
 }
 
-/** The background loops the API process runs: delivery of accepted runs, the product queue, brand scans, cleanup. */
+/** The background loops the API process runs: delivery of accepted runs, the product queue, brand scans, cleanup, journal prune. */
 function registerLoops(container: Parts): void {
   container.register({
     deliveryRunner: asFunction(deliveryRunner).singleton(),
@@ -190,6 +192,7 @@ function registerLoops(container: Parts): void {
           intervalMs: parts.config.cleanup.intervalMs,
         }),
     ).singleton(),
+    journalPrune: asFunction(journalPruneService).singleton(),
   });
 }
 

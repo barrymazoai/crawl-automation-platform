@@ -11,6 +11,7 @@ import type {
   FleetService,
   HistoryService,
   ListingStateService,
+  JournalPruneService,
   ProductService,
   OriginalEvidenceService,
   QueueService,
@@ -44,6 +45,7 @@ export interface ApiContext {
   listingStates: ListingStateService;
   brandScans: BrandScanService;
   brandSources: BrandSourceImport;
+  journalPrune?: JournalPruneService | null | undefined;
 }
 
 type TrpcCode = TRPCError["code"];
@@ -62,6 +64,7 @@ const conflictCodes = new Set([
   "RUN.STOP_NOT_PROVEN",
   "PERMIT.OWNER_RUNNING",
   "PERMIT.STOP_NOT_PROVEN",
+  "JOURNAL_PRUNE.BUSY",
 ]);
 
 /** Maps an application error code to the HTTP-level tRPC code. */

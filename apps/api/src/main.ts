@@ -10,11 +10,12 @@ async function heartbeat() {
   return path ? startHeartbeat(path, "api") : { stop: async () => undefined };
 }
 
-/** Starts the API, the delivery runner, the queue dispatcher, brand scans and the cleanup loop; stops them cleanly on SIGTERM or SIGINT. */
+/** Starts the API, the delivery runner, the queue dispatcher, brand scans, the cleanup loop and the journal prune; stops them cleanly on SIGTERM or SIGINT. */
 async function main(): Promise<void> {
   const config = await loadApiConfig();
   const container = await buildContainer(config);
-  const { log, deliveryRunner, queueDispatcher, cleanup, database, temporal } = container.cradle;
+  const { log, deliveryRunner, queueDispatcher, cleanup, journalPrune, database, temporal } =
+    container.cradle;
   const { runner: brandScanRunner } = container.cradle.brandScanParts;
   const server = await listen(createHttpApp(apiContext(container.cradle)), config.api);
   const health = await heartbeat();
@@ -28,6 +29,7 @@ async function main(): Promise<void> {
     queueDispatcher.run(stop.signal),
     brandScanRunner?.run(stop.signal),
     cleanup.run(stop.signal),
+    journalPrune?.run(stop.signal),
   ]);
 
   log.info("api stopping");

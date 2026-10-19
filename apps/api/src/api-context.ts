@@ -22,5 +22,6 @@ export function apiContext(parts: ApiParts): ApiContext {
     listingStates: parts.listingStates,
     brandScans: parts.brandScanParts.brandScans,
     brandSources: parts.brandScanParts.brandSources,
+    journalPrune: parts.journalPrune,
   };
 }
