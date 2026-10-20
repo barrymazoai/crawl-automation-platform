@@ -13,7 +13,14 @@ export async function withNamedEgoSpace(
   chosen: SelectedProcess,
 ): Promise<WorkerConfig> {
   const browser = config.browser;
-  if (!browser || !chosen.roles.some((role) => role.role === "browser")) {
+  // The resources role probes the local space's health (Server 一), so it needs the same space as the browser role.
+  const probesHealth = config.resourceHealth?.resources[browser?.resourceId ?? ""] !== undefined;
+  if (
+    !browser ||
+    !chosen.roles.some(
+      (role) => role.role === "browser" || (role.role === "resources" && probesHealth),
+    )
+  ) {
     return config;
   }
   const name = BROWSER_RESOURCE_SPACES[browser.resourceId];
