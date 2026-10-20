@@ -3,12 +3,15 @@ import { DENY_NOTIFICATIONS } from "./deny-notifications.js";
 import { EGO_OWNERSHIP } from "./ego-ownership.js";
 import { EGO_AGENT_NAVIGATION } from "./ego-agent-navigation.js";
 
-/** CDP preload registration belongs to one CLI session, so prepare in the call that navigates. */
-export function agentPagePreparationModule(input: {
-  taskSpaceId: number;
-  label: string;
-  targetId: string;
-}): string {
+/**
+ * CDP preload registration belongs to one CLI session, so prepare in the call that navigates. The module also exports
+ * the task's evidence directory: a model that copied the 64-character task hash by hand dropped a character and saved
+ * every page into a sibling folder the host never reads (bloodsugarfriendly.com, 2026-10-20).
+ */
+export function agentPagePreparationModule(
+  input: { taskSpaceId: number; label: string; targetId: string },
+  paths: { outDir?: string } = {},
+): string {
   const source = `(() => {
     const marker = Symbol.for("crawler.dtc.permissions/2");
     if (globalThis[marker]) return;
@@ -16,8 +19,9 @@ export function agentPagePreparationModule(input: {
     ${DENY_NOTIFICATIONS}
     globalThis[marker] = true;
   })();`;
+  const exports = paths.outDir ? `export const outDir = ${JSON.stringify(paths.outDir)};\n` : "";
   return `import { appendFile } from "node:fs/promises";
-const params = ${JSON.stringify(input)};
+${exports}const params = ${JSON.stringify(input)};
 export async function prepareBrowserRound({ taskSpace, listTaskSpaces }) {
   ${EGO_OWNERSHIP}
   await requireAgent();

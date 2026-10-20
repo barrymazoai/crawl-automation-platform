@@ -41,7 +41,7 @@ export function capturePrompt(input: PromptInput): string {
 3. 只使用 Ego 原生 CLI ${input.cliPath} nodejs。禁止 Chrome、Playwright connectOverCDP、CDP 桥或另建浏览器。
 4. 宿主已创建唯一任务页：TaskSpace ${input.taskSpaceId}、label ${JSON.stringify(input.label)}、targetId ${JSON.stringify(input.targetId)}。
    taskSpace/listTaskSpaces 是 Ego nodejs 注入的全局，直接使用，不导入猜测的 SDK 路径。
-   每次独立Ego调用（包含首次观察、后续导航和run-capture.mjs）都先 await import(${JSON.stringify(pathToFileURL(`${input.cwd}/browser-preparation.mjs`).href)}) 导入prepareBrowserRound，再 const {task,page,navigate}=await prepareBrowserRound({taskSpace,listTaskSpaces})；采前导航用await navigate(url)，不要裸page.goto等待整页load；然后等待实际卡片/选中状态并截图核验。不要改该宿主模块。它使用原生taskSpace/page核对ownership和精确任务页，在当前调用注册通知/定位拒绝并保存回执。设置不跨CLI保存，不能只在首次调用。
+   每次独立Ego调用（包含首次观察、后续导航和run-capture.mjs）都先 await import(${JSON.stringify(pathToFileURL(`${input.cwd}/browser-preparation.mjs`).href)}) 导入prepareBrowserRound和outDir，再 const {task,page,navigate}=await prepareBrowserRound({taskSpace,listTaskSpaces})；采前导航用await navigate(url)，不要裸page.goto等待整页load；然后等待实际卡片/选中状态并截图核验。不要改该宿主模块。它使用原生taskSpace/page核对ownership和精确任务页，在当前调用注册通知/定位拒绝并保存回执。设置不跨CLI保存，不能只在首次调用。
    恢复的 Page 可能没有 targetId 属性，每次以 task.tabs() 中该 label 的 targetId 和 listTaskSpaces() 中该空间 ownership=agent 核对。
    不 newPage、不接管空间、不操作或关闭其他页。所有图片、HTML、截图保存完后由宿主关闭并验证本页消失。
    本次仅是长期 Worker 批次中的一个采集子任务，不是 Ego skill 所指的整个用户任务完成。禁止调用 task.finish()、task.handOff()、task.release()、page.close()，也不通过 CDP 关闭页面/浏览器或结束 round；不要创建 finish/cleanup 脚本。Ego skill 中成功时 finish 的默认步骤在本宿主中不适用：完成后只返回采集结果，由宿主关闭这一精确任务页、验证消失并结束 round，Space 继续保留给后续任务。遇到用户接管/权限提示仍立即停下，不接管或绕过。
@@ -51,7 +51,7 @@ export function capturePrompt(input: PromptInput): string {
    const browser = createEgoBrowser({task, page, targetId:${JSON.stringify(input.targetId)}, listTaskSpaces, workDir:${JSON.stringify(input.cwd)}, captureMode:${JSON.stringify(input.mode)}, productUrl:null});
    const tab = browser.tab; browserMode="ego-native"。该适配仅复用旧 harvest 方法，不启动服务。
    ${mechanicalInstructions(input)}
-6. ${input.mode === "catalog" ? "宿主已生成任务根目录 run-capture.mjs，禁止修改；先检查 catalog-method.mjs，再检查固定启动器" : "主脚本放任务根目录 run-capture.mjs；先 node --check"} 再由 ego-browser nodejs -e 'await import("file://绝对脚本路径")' 执行。其他多行浏览器观察脚本也先写成任务目录内的 .mjs 文件并 node --check，再用同一 import 方式执行，避免多层 shell 引号改坏选择器或脚本。taskSpace/listTaskSpaces 使用注入全局，不从 CLI 文件 import。截图和采集文件都保存到 outDir，所有证据路径相对 outDir；每次新观察使用新文件名，不复用脚本覆盖之前的截图。
+6. ${input.mode === "catalog" ? "宿主已生成任务根目录 run-capture.mjs，禁止修改；先检查 catalog-method.mjs，再检查固定启动器" : "主脚本放任务根目录 run-capture.mjs；先 node --check"} 再由 ego-browser nodejs -e 'await import("file://绝对脚本路径")' 执行。其他多行浏览器观察脚本也先写成任务目录内的 .mjs 文件并 node --check，再用同一 import 方式执行，避免多层 shell 引号改坏选择器或脚本。taskSpace/listTaskSpaces 使用注入全局，不从 CLI 文件 import。截图和采集文件都保存到该模块导出的 outDir（脚本里用导出值，不手抄任务目录哈希），所有证据路径相对 outDir；每次新观察使用新文件名，不复用脚本覆盖之前的截图。
    校验脚本后直接使用这条完整命令，不缩写目录哈希：${captureCommand(input)}
    不改引擎源码或手改 harvest-result/checkpoint/evidence。仅 product 模式可按 native-product-method.md 提供明确的 hooks.extract；所有字段和规格通过保存原件上的实际位置读取，保留 fieldEvidence，不能在收割后补值。
    禁止删除、清空或覆盖已取得的 HTML/图片/证据记录，禁止触碰 native-originals 原始副本；采集后若发现混入其他商品、资料缺失或需要 fresh 重抓，保留当前产物并返回 needs_review，不能清 checkpoint 重启任务。修正路线必须在收割前完成。

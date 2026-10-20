@@ -16,9 +16,13 @@ export async function prepareCaptureTask(
     taskSpaceId: number;
   },
 ) {
-  await writeFile(join(input.cwd, "browser-preparation.mjs"), input.page.preparationModule(), {
-    flag: "wx",
-  });
+  await writeFile(
+    join(input.cwd, "browser-preparation.mjs"),
+    input.page.preparationModule({ outDir: input.outDir }),
+    {
+      flag: "wx",
+    },
+  );
   const { page, ...paths } = input;
   const common = { ...paths, label: page.label, targetId: page.targetId };
   if (request.mode === "catalog") {
