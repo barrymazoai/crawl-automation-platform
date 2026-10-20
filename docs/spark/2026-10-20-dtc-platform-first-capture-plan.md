@@ -121,3 +121,20 @@
 1. 同意"平台站默认固定读取器、agent 做后备"这一方向（与 10-03 的决定相对）。
 2. 多规格产品第 1 步继续走 agent（4.4），还是也先用"共用图库给选中规格"的临时规则。我建议前者，度量干净。
 3. 6.2 的对照站点由你指定，或授权我从未收录的 Shopify 小站里挑。
+
+## 10. 离线重放结果（2026-10-20，Server 二，commit eb20c49）
+
+输入 dtc-native 1,976 份留存页（Shopify 1,931），用 `--embed-platform-json` 把 agent 当时取回的 `<product>.json` 内嵌进页面，等价于上线后准备脚本的效果。结果目录 Server 二 `manual-releases/dtc-platform-replay-20261020/replay-embedded-3`。
+
+| 指标 | 结果 | 阈值 |
+|---|---|---|
+| Shopify 产品记录命中 | 1,925 / 1,931 = 99.7% | ≥ 95% |
+| 规格数与 agent 一致 | 1,925 / 1,925 = 100% | ≥ 98% |
+| 单规格（第 1 步走平台路径） | 约 1,598（83%） | 其余转 agent，等第 2 步 |
+| 剩余失败 | Solaray 1（handle 含 ® 编码不一致）、Jarrow 3、Sambucol 2（页面 > 6 MB） | |
+
+重放前的读取器在这些页面上几乎全败（Nature's Truth 0/514、Jarrow 0/141、Natrol 2/136），暴露并修了三类缺陷：一个坏 JSON-LD 块让整页报 `DTC.JSON_INVALID`（`0a7565b`）；其他商品的快速加购表单让选中规格判定失败（`f91fcb9`）；多规格基础页没有单一选中时整页拒绝（`4ba88ac`、`eb20c49`，现读作基础商品、规格 null，与 agent 口径一致；`adapter.test.ts` 对应断言改为新契约）。
+
+两个口径说明：成分表文字只在 Natrol（136，其中 33 完整）、bloodsugarfriendly（27）、Blueshift（20）、Zahlers（5）的页面上存在，其余站的 Facts 全在图里，所以平台路径的价值在身份、规格和原图，不在文字；表里 "images ≥ agent" 偏低主要因为平台图库用 `cdn.shopify.com` 路径而 agent 记的是站内 `/cdn/shop/files` 路径，同一批文件比较不上，真实缺口只是详情区的配料宣传图，不是 Facts 图。
+
+WooCommerce（biomatrix）读取器读到 52 张图而 agent 收 4 张，规格 1/21 一致，证实它还不能默认启用，维持 agent。
