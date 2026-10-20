@@ -349,6 +349,17 @@ describe("packaging facts", () => {
     expect(facts.warnings).toEqual(["PACKAGING.PACK_MEANING_UNRESOLVED"]);
   });
 
+  it("a value ends at a list separator (bloodsugarfriendly.com, 2026-10-20)", () => {
+    const text =
+      "Serving size1 Bar (60g)\nServing size 1 bar (60 g) · 12 bars per box · NET WT 25.40 oz (720 g)";
+    const facts = extractPackagingFacts(owner, [document(text)]);
+    expect(facts.servingSize).toMatchObject({ status: "observed", value: "1 Bar (60g)" });
+    expect(facts.servingSize.claims.map((claim) => claim.quote.text)).toEqual([
+      "Serving size1 Bar (60g)",
+      "Serving size 1 bar (60 g)",
+    ]);
+  });
+
   it("a unitless serving size is no claim, and format-only differences agree (GNC/Swanson, owner 2026-10-08)", () => {
     const gnc = extractPackagingFacts(owner, [
       document(

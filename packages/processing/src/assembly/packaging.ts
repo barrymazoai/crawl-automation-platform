@@ -28,6 +28,12 @@ const MAX_DOCUMENTS = 100;
 const LABEL_LINE = /^\s*(Serving Size|Servings Per Container)\s*:?\s*(.*?)\s*$/i;
 const PACK_MENTION = /\b(?:\d+(?:\.\d+)?\s*[- ]?\s*packs?\b|pack\s+of\s+\d+(?:\.\d+)?\b)/gi;
 const QUANTITY = /^(?:about\s+|approximately\s+)?\d/i;
+/**
+ * A label value ends at a list separator: "Serving size 1 bar (60 g) · 12 bars per box · NET WT 25.40 oz (720 g)"
+ * is "1 bar (60 g)" (bloodsugarfriendly.com, 2026-10-20). Simulated on 43,994 retained pages: 15 DTC conflicts
+ * resolved, 3 Amazon values cut from a whole run-on line, no new conflict. ";" is not a separator here.
+ */
+const SEPARATOR = /\s*[·•|]/u;
 
 /**
  * Packaging facts read from explicit labels in the full page documents: never a guessed unit, never multiplied
@@ -165,10 +171,18 @@ function labelValue(lines: Line[], at: { index: number; inline: string }) {
     return null;
   }
   if (at.inline) {
-    return { value: at.inline, end: line.start + line.text.length };
+    return untilSeparator(line, line.text.lastIndexOf(at.inline));
   }
   const next = lines.slice(at.index + 1).find((candidate) => candidate.text.trim());
-  return next ? { value: next.text.trim(), end: next.start + next.text.length } : null;
+  return next ? untilSeparator(next, next.text.search(/\S/u)) : null;
+}
+
+/** The value from `from` on its line up to a list separator, and the offset where its quote ends. */
+function untilSeparator(line: Line, from: number) {
+  const rest = line.text.slice(from);
+  const cut = SEPARATOR.exec(rest);
+  const value = (cut ? rest.slice(0, cut.index) : rest).trimEnd();
+  return { value: value.trim(), end: line.start + from + value.length };
 }
 
 function resolved(claims: PackagingClaim[], field: "servingSize" | "servingsPerContainer") {
