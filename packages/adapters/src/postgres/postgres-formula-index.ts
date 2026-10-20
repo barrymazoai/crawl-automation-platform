@@ -46,22 +46,34 @@ const CAPTURE_IDENTITY = `h.record->>'codec' = 'v3-capture-history/1'
 const CAPTURE_OWNER = `h.record->'owner'->>'runId' = p.record->'observation'->>'requestId'
   AND h.record->'owner'->>'sourceId' = p.record->'observation'->>'sourceId'`;
 
-/** URL handles resolve only through saved page provenance, never a variant-only or fuzzy match. */
-const FIND_MEMBER = `SELECT p.operation_id,
+const MEMBER_COLUMNS = `p.operation_id, p.collected_at,
     p.record->'observation'->>'listingId' AS listing_id,
-    p.record->'observation'->>'variantId' AS variant_id
-  FROM collected_product p
-  WHERE p.record->>'codec' IN ('collected-product/3', 'collected-product/4', 'collected-product/5')
+    p.record->'observation'->>'variantId' AS variant_id`;
+
+const MEMBER_FILTER = `p.record->>'codec' IN ('collected-product/3', 'collected-product/4', 'collected-product/5')
     AND p.record->'observation'->>'sourceId' IN
       (SELECT id::text FROM brand_source WHERE channel = ANY($1::text[]))
-    AND p.record->'observation'->>'variantId' IS NOT DISTINCT FROM $3::text
-    AND (p.record->'observation'->>'listingId' = $2 OR ($4::text IS NOT NULL AND EXISTS (
-      SELECT 1 FROM product_history_source h WHERE ${CAPTURE_IDENTITY}
-        AND ${CAPTURE_OWNER}
-        AND (h.record->'capture'->>'variantId' IS NULL OR
-          h.record->'capture'->>'variantId' = p.record->'observation'->>'variantId')
-    )))
-   ORDER BY p.collected_at DESC
+    AND p.record->'observation'->>'variantId' IS NOT DISTINCT FROM $3::text`;
+
+/**
+ * URL handles resolve only through saved page provenance, never a variant-only or fuzzy match. The listing and the
+ * URL are two indexed branches: one `listingId = $2 OR EXISTS (…)` scanned all of collected_product for each family
+ * member and hit the statement timeout under Amazon round 3 (94 Reviews, 2026-10-20 12:00–14:00 Beijing).
+ */
+const FIND_MEMBER = `SELECT operation_id, listing_id, variant_id FROM (
+  SELECT ${MEMBER_COLUMNS}
+    FROM collected_product p
+   WHERE p.record->'observation'->>'listingId' = $2 AND ${MEMBER_FILTER}
+  UNION ALL
+  SELECT ${MEMBER_COLUMNS}
+    FROM product_history_source h
+    JOIN collected_product p ON ${CAPTURE_OWNER}
+   WHERE $4::text IS NOT NULL AND ${CAPTURE_IDENTITY}
+     AND (h.record->'capture'->>'variantId' IS NULL OR
+       h.record->'capture'->>'variantId' = p.record->'observation'->>'variantId')
+     AND ${MEMBER_FILTER}
+  ) member
+   ORDER BY collected_at DESC
    LIMIT 1`;
 
 const COVERAGE = `SELECT
