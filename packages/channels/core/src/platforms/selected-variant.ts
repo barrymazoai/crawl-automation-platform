@@ -19,9 +19,14 @@ export function selectedVariant(
     )
     .map((input) => input.getAttribute("value"))
     .filter((value) => value && value !== "0");
-  const unique = [...new Set(inputs)];
-  if (unique.length > 1 || (unique[0] && !variants.some((variant) => variant.id === unique[0]))) {
+  // Quick-add forms of other products (naturestruth.com lists 11 on a product page, 2026-10-20) name variants that
+  // are not this product's; only this product's own variant IDs say what is selected. Two different own IDs in two
+  // forms is a page that selects two things, which is still no identity.
+  const own = [...new Set(inputs)].filter((value) =>
+    variants.some((variant) => variant.id === value),
+  );
+  if (own.length > 1) {
     throw platformPageErrors.create("DTC.IDENTITY_UNVERIFIED");
   }
-  return unique[0] ?? (variants.length === 1 ? (variants[0]?.id ?? null) : null);
+  return own[0] ?? (variants.length === 1 ? (variants[0]?.id ?? null) : null);
 }
