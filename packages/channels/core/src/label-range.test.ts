@@ -57,3 +57,24 @@ it("keeps the whole page when the panel's end is unknown (Drug Facts, a sentence
     labelRange("Supplement facts - Serving size: 1 scoop - Transparent label.\n\nMore text"),
   ).toBeNull();
 });
+
+it("ends the panel at its footnote, not at a column heading or a later Daily Value sentence", () => {
+  const label = [
+    "Nutrition Facts",
+    "Melatonin, 5 mg",
+    "Amount Per Serving",
+    "%DV",
+    "Vitamin B6 10mg 588%",
+    "Melatonin 5mg",
+    "*",
+    "Other Ingredients",
+    "Microcrystalline Cellulose, Stearic Acid.",
+  ].join("\n");
+  const text = [
+    label,
+    "Suggested Use",
+    "Take 1 tablet.",
+    "FAQ: 20 g is 40% of the Daily Value.",
+  ].join("\n");
+  expect(covered(text)).toBe(label);
+});

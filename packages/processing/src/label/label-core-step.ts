@@ -50,7 +50,7 @@ export class LabelCoreStep {
     signal.throwIfAborted();
     const input = LabelCoreInputSchema.parse(raw);
     const full = await this.fullDocument(input, signal);
-    const [policyName, policy] = this.policyFor(full.source);
+    const [policyName, policy] = this.policyFor(full.source, input.corePolicy);
     const html = decodeUtf8(
       (await this.deps.artifacts.resolve(full.source, input.owner, signal)).bytes,
     );
@@ -86,10 +86,14 @@ export class LabelCoreStep {
     return full;
   }
 
-  /** The one policy that reads pages from this source's producer. */
-  private policyFor(source: ArtifactRef): [string, LabelCorePolicy] {
+  /**
+   * The named policy, or (inputs from before 2026-10-20) the one policy that reads pages from this source's producer.
+   * DTC and Swanson pages share a producer, so a name is how a DTC page reaches its own policy.
+   */
+  private policyFor(source: ArtifactRef, name?: string): [string, LabelCorePolicy] {
     const matching = Object.entries(this.deps.policies).filter(
-      ([, policy]) =>
+      ([policyName, policy]) =>
+        (name === undefined || policyName === name) &&
         source.kind === "source-html" &&
         policy.sourceModule === source.producer.module &&
         (policy.sourceVersion === undefined ||
