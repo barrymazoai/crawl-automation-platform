@@ -57,15 +57,35 @@ export function readShopifyData(record: JsonObject, url: string) {
   ) {
     throw platformPageErrors.create("DTC.IDENTITY_UNVERIFIED");
   }
-  const images = (Array.isArray(record.images) ? record.images : []).flatMap((entry) =>
-    schemaImages(entry).concat(string(object(entry)?.src) ?? []),
-  );
+  const categories = shopifyCategories(record);
   return {
     productId,
     title,
     brandRaw: string(record.vendor),
     variants,
-    images,
+    images: recordImages(record),
     detailsHtml: string(record.description) ?? string(record.body_html),
+    ...(categories.length ? { categories } : {}),
   };
+}
+
+/** The product's images as the store lists them: URL strings, or objects with a `src`. */
+function recordImages(record: JsonObject): string[] {
+  return (Array.isArray(record.images) ? record.images : []).flatMap((entry) =>
+    schemaImages(entry).concat(string(object(entry)?.src) ?? []),
+  );
+}
+
+/** The store's own filing: the product type (`product_type` in embedded data, `type` in `.js`) and its tags. */
+export function shopifyCategories(record: JsonObject): string[] {
+  const type = string(record.product_type) ?? string(record.type);
+  const tags = Array.isArray(record.tags)
+    ? record.tags.map(string)
+    : typeof record.tags === "string"
+      ? record.tags.split(",").map(string)
+      : [];
+  const names = [type, ...tags]
+    .filter((name): name is string => name !== null)
+    .map((name) => name.slice(0, 200));
+  return [...new Set(names)].slice(0, 20);
 }

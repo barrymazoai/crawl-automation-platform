@@ -52,6 +52,32 @@ if (ready) {
     await page.waitForTimeout(Math.min(250, Math.max(0, deadline - Date.now())));
   }
   await requireAgent();
+  // Owner 2026-10-20: the store's own product JSON (Shopify's same-origin \`<handle>.js\`) is fetched by the page
+  // itself and embedded in the snapshot, so the archived page carries variants, original images and the type/tags
+  // the platform reader needs. No request leaves the browser; a store without it simply reports why.
+  let productJson = "skipped";
+  if (/\\/products\\/[^/?#]+\\/?(?:[?#]|$)/.test(read.url)) {
+    productJson = await page.evaluate(async () => {
+      try {
+        if (document.querySelector('script[data-crawl-source="shopify-product-js"]')) return "embedded";
+        const path = location.pathname.replace(/\\/$/, "");
+        const response = await fetch(path + ".js", { credentials: "same-origin", headers: { accept: "application/json" } });
+        if (!response.ok) return "http-" + response.status;
+        const text = await response.text();
+        const data = JSON.parse(text);
+        if (!data || typeof data !== "object" || data.id === undefined || !Array.isArray(data.variants)) return "not-product";
+        const script = document.createElement("script");
+        script.type = "application/json";
+        script.setAttribute("data-crawl-source", "shopify-product-js");
+        script.textContent = text.split("</").join("<\\\\/");
+        document.body.appendChild(script);
+        return "embedded";
+      } catch (error) {
+        return "failed";
+      }
+    }).catch(() => "failed");
+  }
+  await requireAgent();
   preparation = await page.evaluate(input => {
     ${preparationDomScript()}
     const guard = window.__crawlProductPreparation;
@@ -62,8 +88,8 @@ if (ready) {
     });
     return { expanded, scrolls: input.scrolls, pending: pendingContent(document, input.url, preparationPolicy),
       blockedActions: guard.blocked, ended: input.stable >= 4 && !guard.blocked ? "stable" : "capped",
-      elapsedMs: input.elapsedMs };
-  }, { url: read.url, expanded, scrolls, stable, elapsedMs: Date.now() - started });
+      elapsedMs: input.elapsedMs, productJson: input.productJson };
+  }, { url: read.url, expanded, scrolls, stable, elapsedMs: Date.now() - started, productJson });
 }`;
 
 export function dtcPreparationScript(): string {

@@ -22,6 +22,8 @@ export const PagePreparationSchema = z.object({
   blockedActions: z.number().int().nonnegative(),
   ended: z.enum(["stable", "capped"]),
   elapsedMs: z.number().nonnegative(),
+  /** Whether the store's own product JSON was embedded into the snapshot (Shopify `.js`, owner 2026-10-20). */
+  productJson: z.string().max(40).optional(),
 });
 
 export type PagePreparation = z.infer<typeof PagePreparationSchema>;

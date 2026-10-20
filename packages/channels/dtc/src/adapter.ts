@@ -59,8 +59,37 @@ function parsedProduct(
     },
     variants: product.variants.map((variant) => dtcProductAddress(variant.url, sites)),
     facts,
+    ...(product.categories?.length ? { categories: product.categories } : {}),
   };
 }
+
+/**
+ * Owner 2026-10-20: store filings outside supplements on DTC sites (Shopify product type and tags, JSON-LD
+ * breadcrumbs). A product under one whose label step would go to Review ends as "not a supplement": the 69
+ * `CHANNEL.LABEL_NO_SOURCE` attempts since 2026-10-05 were essential oils, gift cards and the like. Exact names,
+ * case-insensitive; pet supplements are deliberately not listed.
+ */
+export const DTC_NON_SUPPLEMENT_CATEGORIES: readonly string[] = [
+  "Gift Card",
+  "Gift Cards",
+  "Apparel",
+  "Clothing",
+  "Merchandise",
+  "Merch",
+  "Accessories",
+  "Essential Oil",
+  "Essential Oils",
+  "Aromatherapy",
+  "Skin Care",
+  "Skincare",
+  "Hair Care",
+  "Body Care",
+  "Beauty",
+  "Cosmetics",
+  "Books",
+  "Equipment",
+  "Devices",
+];
 
 /** One registry entry for all configured DTC sites. BrowserPages/Ego is the only capture path. */
 export function createDtcAdapter(
@@ -96,6 +125,7 @@ export function createDtcAdapter(
     pageSighting: (page) => dtcBrandSighting(page, scope),
     parseProduct: (page) => parsedProduct(page, scopedSites, productSource),
     externalId: (parsed) => parsed.identity.listingId,
+    nonSupplementCategories: DTC_NON_SUPPLEMENT_CATEGORIES,
     planning: dtcPlanning(scope),
   };
 }

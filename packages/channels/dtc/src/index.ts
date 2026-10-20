@@ -1,4 +1,5 @@
 export * from "./adapter.js";
+export * from "./capture-route.js";
 export * from "./label-core.js";
 export * from "./site-policy.js";
 export * from "./address.js";
