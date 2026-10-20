@@ -29,11 +29,22 @@ export function parsePageJson(text: string): unknown {
   }
 }
 
+/**
+ * Every JSON script of the type that parses. A theme's broken block (tallyhealth.com 2026-10-20: a raw control
+ * character inside a JSON-LD description) is skipped, not fatal: the product record the readers need is in another
+ * block, and a missing record is reported by the reader as DTC.PRODUCT_MISSING / IDENTITY_UNVERIFIED.
+ */
 export function jsonScripts(document: Document, type: string): unknown[] {
   return [...document.querySelectorAll(`script[type="${type}"]`)]
     .map((script) => script.textContent?.trim() ?? "")
     .filter(Boolean)
-    .map(parsePageJson);
+    .flatMap((text) => {
+      try {
+        return [JSON.parse(text) as unknown];
+      } catch {
+        return [];
+      }
+    });
 }
 
 /** Follow schema containers only; recommendation objects are not silently selected. */

@@ -4,7 +4,11 @@
  * reader recognises the page, finds a facts block, how many original images and variants it sees, and how that
  * compares with what the agent recorded for the same page.
  *
- * Usage: tsx tools/replay-dtc-platform-read.mts <dtc-native root> <new output dir> [limit]
+ * Usage: tsx tools/replay-dtc-platform-read.mts <dtc-native root> <new output dir> [limit] [--embed-platform-json]
+ *
+ * `--embed-platform-json` adds the platform product JSON the agent fetched for the same page (its `native-originals`
+ * receipt of kind `json`) to the retained HTML as the capture's preparation script now does live, so the replay shows
+ * the reader with the data it will actually have.
  */
 import { mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
@@ -14,9 +18,11 @@ import { platformHint } from "../packages/channels/dtc/src/analysis/data.js";
 import { completeFacts } from "../packages/channels/core/src/platforms/content.js";
 import { errorCodeOf } from "../packages/platform/src/errors/error-code.js";
 
-const [root, output, limitArg] = process.argv.slice(2);
+const args = process.argv.slice(2);
+const embedPlatformJson = args.includes("--embed-platform-json");
+const [root, output, limitArg] = args.filter((arg) => !arg.startsWith("--"));
 if (!root || !output) {
-  throw new Error("Usage: <dtc-native root> <new output dir> [limit]");
+  throw new Error("Usage: <dtc-native root> <new output dir> [limit] [--embed-platform-json]");
 }
 const limit = limitArg ? Number(limitArg) : Number.POSITIVE_INFINITY;
 await mkdir(output, { mode: 0o700 }); // An existing output directory is never overwritten.
@@ -36,6 +42,7 @@ interface Row {
   agentVariants?: number;
   categories?: number;
   selectedVariant?: string | null;
+  platformJson?: boolean;
 }
 
 const rows: Row[] = [];
@@ -61,7 +68,9 @@ for (const task of tasks) {
     rows.push({ task, site: hostname(url), platform: "?", url, status: "NO_RETAINED_PAGE" });
     continue;
   }
-  const html = await readFile(htmlFile, "utf8");
+  const retained = await readFile(htmlFile, "utf8");
+  const platformJson = embedPlatformJson ? await retainedPlatformJson(join(root, task), url) : null;
+  const html = platformJson ? embed(retained, platformJson) : retained;
   const site = hostname(url);
   const platform = platformHint({ url, html, archiveKey: "" });
   const policy = dtcSitePolicy({ siteKey: site, platform, catalogUrl: null });
@@ -83,6 +92,7 @@ for (const task of tasks) {
       agentVariants,
       categories: product.categories?.length ?? 0,
       selectedVariant: product.selectedVariantId,
+      platformJson: platformJson !== null,
     });
   } catch (error) {
     rows.push({
@@ -94,6 +104,7 @@ for (const task of tasks) {
       message: String(error instanceof Error ? error.message : error).slice(0, 200),
       agentImages,
       agentVariants,
+      platformJson: platformJson !== null,
     });
   }
 }
@@ -139,6 +150,38 @@ const table = [
 ].join("\n");
 await writeFile(join(output, "summary.md"), table + "\n", { flag: "wx" });
 console.log(table);
+
+/** The agent's retained `<product>.json` response for this page, when it fetched one (receipt kind `json`). */
+async function retainedPlatformJson(task: string, url: string): Promise<string | null> {
+  const originals = join(task, "native-originals");
+  if (!(await exists(originals))) {
+    return null;
+  }
+  const path = new URL(url).pathname.replace(/\/$/, "");
+  for (const name of await readdir(originals)) {
+    if (!name.endsWith(".receipt.json")) {
+      continue;
+    }
+    const receipt = JSON.parse(await readFile(join(originals, name), "utf8")) as {
+      kind?: string;
+      url?: string;
+      path?: string;
+    };
+    const target = receipt.url ? new URL(receipt.url).pathname : "";
+    if (receipt.kind === "json" && receipt.path && (target === `${path}.json` || target === `${path}.js`)) {
+      const file = join(task, receipt.path);
+      return (await exists(file)) ? readFile(file, "utf8") : null;
+    }
+  }
+  return null;
+}
+
+/** What the live preparation script does: the platform JSON as one more JSON script at the end of the body. */
+function embed(html: string, json: string): string {
+  const script = `<script type="application/json" data-crawl-source="shopify-product-js">${json.split("</").join("<\\/")}</script>`;
+  const at = html.lastIndexOf("</body>");
+  return at < 0 ? html + script : html.slice(0, at) + script + html.slice(at);
+}
 
 function hostname(url: string): string {
   try {
