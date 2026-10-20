@@ -1,3 +1,4 @@
+import { dtcLabelCore } from "./label-core.js";
 import {
   ANY_HTTPS_ORIGIN,
   completeFacts,
@@ -95,13 +96,21 @@ export function createDtcAdapter(
     pageSighting: (page) => dtcBrandSighting(page, scope),
     parseProduct: (page) => parsedProduct(page, scopedSites, productSource),
     externalId: (parsed) => parsed.identity.listingId,
-    planning: {
-      channel: "dtc",
-      parserVersion: "dtc-rendered/1",
-      projectionModule: "dtc.browser-projection",
-      projection: dtcProjection,
-      read: (projection, url, owner) => readDtcProjection(projection, { url, owner }, scope),
-    },
+    planning: dtcPlanning(scope),
+  };
+}
+
+function dtcPlanning(
+  scope: Parameters<typeof readDtcProjection>[2],
+): NonNullable<DtcAdapter["planning"]> {
+  return {
+    channel: "dtc",
+    parserVersion: "dtc-rendered/1",
+    projectionModule: "dtc.browser-projection",
+    projection: dtcProjection,
+    read: (projection, url, owner) => readDtcProjection(projection, { url, owner }, scope),
+    corePolicy: "dtc-label-core/1",
+    labelCore: dtcLabelCore,
   };
 }
 

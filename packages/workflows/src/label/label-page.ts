@@ -5,7 +5,7 @@ import {
   PageTextPrepareOutcomeSchema,
   observationIdentity,
 } from "@crawl-automation/v3-contracts";
-import { isCancellation } from "@temporalio/workflow";
+import { isCancellation, patched } from "@temporalio/workflow";
 import type { LabelRun } from "./label-run.js";
 import type { Source, State } from "./label-model.js";
 import { sameJson } from "./same.js";
@@ -67,7 +67,13 @@ async function labelCore(
   at: { source: PageSource; fullDocument: unknown },
 ): Promise<PageOutcome> {
   const { input } = run.entry;
-  const coreInput = { owner: input.owner, fullDocument: at.fullDocument };
+  // 2026-10-20: the channel's policy is named, since DTC and Swanson pages share a producer.
+  const named = input.corePolicy && patched("label-core-policy-name-v1");
+  const coreInput = {
+    owner: input.owner,
+    fullDocument: at.fullDocument,
+    ...(named ? { corePolicy: input.corePolicy } : {}),
+  };
   const core = LabelCoreOutcomeSchema.parse(
     await run.call("activities", "prepareLabelCore", coreInput),
   );

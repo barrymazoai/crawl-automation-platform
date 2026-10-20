@@ -98,7 +98,11 @@ async function labelCore(
   if (!core.reader) {
     throw labelFailure("CHANNEL.CORE_UNAVAILABLE");
   }
-  const request = { owner: input.owner, fullDocument };
+  const request = {
+    owner: input.owner,
+    fullDocument,
+    ...(input.corePolicy ? { corePolicy: input.corePolicy } : {}),
+  };
   const prepared = LabelCoreOutcomeSchema.parse(await core.reader.inspect(request, core.signal));
   const own =
     isDeepStrictEqual(prepared.input, request) &&
