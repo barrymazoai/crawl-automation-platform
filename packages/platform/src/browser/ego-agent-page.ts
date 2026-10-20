@@ -28,8 +28,11 @@ export class EgoAgentPage {
     return this.page.label;
   }
 
-  preparationModule() {
-    return agentPagePreparationModule({ taskSpaceId: this.settings.taskSpaceId, ...this.page });
+  preparationModule(paths: { outDir?: string } = {}) {
+    return agentPagePreparationModule(
+      { taskSpaceId: this.settings.taskSpaceId, ...this.page },
+      paths,
+    );
   }
 
   static async open(settings: EgoSettings, signal: AbortSignal): Promise<EgoAgentPage> {
