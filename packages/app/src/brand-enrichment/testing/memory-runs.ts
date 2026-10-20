@@ -30,6 +30,7 @@ export function memoryRuns() {
       records.set(id, updated);
       return updated;
     }),
+    ...liveRuns(records),
     moveCompany: vi.fn<BrandEnrichmentRuns["moveCompany"]>(async (from, to) => {
       const moved = [...records.values()].filter((run) => run.companyId === from);
       moved.forEach((run) => records.set(run.runId, { ...run, companyId: to }));
@@ -41,6 +42,15 @@ export function memoryRuns() {
     ),
   } satisfies BrandEnrichmentRuns;
   return { runs, records, steps };
+}
+function liveRuns(records: Map<string, BrandEnrichmentRun>) {
+  return {
+    liveRequestRuns: vi.fn<BrandEnrichmentRuns["liveRequestRuns"]>(async () =>
+      [...records.values()].filter(
+        (run) => run.role === "request" && ["running", "waiting_for_person"].includes(run.state),
+      ),
+    ),
+  };
 }
 function createPort(records: Map<string, BrandEnrichmentRun>) {
   return {

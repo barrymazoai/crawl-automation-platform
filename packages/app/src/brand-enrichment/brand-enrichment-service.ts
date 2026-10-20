@@ -7,6 +7,7 @@ import { requireRun } from "./run-records.js";
 import { BrandQuestionService } from "./question-service.js";
 import * as inputs from "./api-model.js";
 import { BrandProductsRetry } from "./products-retry.js";
+import { refuseRetailSite } from "./retail-requests.js";
 
 /** Facade: the API's only entry point. Intake is explicitly requested, never a polling loop. */
 export class BrandEnrichmentService {
@@ -23,6 +24,12 @@ export class BrandEnrichmentService {
         details: { requestId, pendingWindow: 100 },
       });
     }
+    const site = await refuseRetailSite(this.deps.requests, request, signal);
+    if (site) {
+      throw brandEnrichmentErrors.create("BRAND_ENRICHMENT.RETAIL_SITE", {
+        details: { requestId, site },
+      });
+    }
     return this.claim(request, signal);
   }
 
@@ -33,7 +40,12 @@ export class BrandEnrichmentService {
     for (const request of pending) {
       signal.throwIfAborted();
       try {
-        results.push({ requestId: request.id, run: await this.claim(request, signal) });
+        const site = await refuseRetailSite(this.deps.requests, request, signal);
+        results.push(
+          site
+            ? { requestId: request.id, skipped: "retail_site" as const, site }
+            : { requestId: request.id, run: await this.claim(request, signal) },
+        );
       } catch (error) {
         results.push({ requestId: request.id, error: String(error) });
       }

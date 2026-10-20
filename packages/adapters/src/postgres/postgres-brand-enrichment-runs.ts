@@ -106,6 +106,15 @@ export class PostgresBrandEnrichmentRuns implements BrandEnrichmentRuns {
     return toRun(rows[0]);
   }
 
+  async liveRequestRuns() {
+    const rows = await this.database.query(
+      `SELECT ${runColumns} FROM brand_enrichment_run
+       WHERE role = 'request' AND state IN ('running', 'waiting_for_person')
+       ORDER BY created_at`,
+    );
+    return rows.map(toRun);
+  }
+
   async moveCompany(fromCompanyId: string, toCompanyId: string) {
     const rows = await this.database.query(
       `UPDATE brand_enrichment_run SET company_id = $2::uuid, updated_at = clock_timestamp()

@@ -181,3 +181,68 @@ it("omits old waiting_for_person ownership from the outgoing completion summary"
     signal,
   );
 });
+
+function intakeService(pending: Array<{ id: string; brandName: string; brandUrl: string }>) {
+  const store = memoryRuns();
+  const request = requests();
+  request.pending.mockResolvedValue(
+    pending.map((item) => ({
+      ...item,
+      companyId: null,
+      status: "pending" as const,
+      failureReason: null,
+      summary: null,
+    })),
+  );
+  const gateway = {
+    startProductsRetry: vi.fn(),
+    describeProductsRetry: vi.fn(),
+    start: vi.fn(async () => {}),
+    startMarketplace: vi.fn(),
+    cancel: vi.fn(),
+    describe: vi.fn(),
+  };
+  const service = new BrandEnrichmentService({
+    runs: store.runs,
+    requests: request,
+    reviews: reviews(),
+    companies: companies(),
+    gateway,
+  });
+  return { service, store, request, gateway };
+}
+
+it("a retailer's site is not enriched: failed with the reason, no run (owner 2026-10-20, KAN-220)", async () => {
+  const gnc = { id: randomUUID(), brandName: "GNC", brandUrl: "https://gnc.com/" };
+  const own = { id: randomUUID(), brandName: "Example", brandUrl: "https://example.test/" };
+  const { service, store, request, gateway } = intakeService([gnc, own]);
+
+  const results = await service.claimPending({ limit: 2 }, signal);
+
+  expect(results[0]).toEqual({ requestId: gnc.id, skipped: "retail_site", site: "gnc.com" });
+  expect(request.update).toHaveBeenCalledWith(
+    {
+      id: gnc.id,
+      status: "failed",
+      reason: expect.stringContaining("gnc.com is a retailer / marketplace site"),
+    },
+    signal,
+  );
+  expect(store.runs.create).toHaveBeenCalledTimes(1);
+  expect(store.runs.create).toHaveBeenCalledWith(expect.objectContaining({ requestId: own.id }));
+  expect(gateway.start).toHaveBeenCalledTimes(1);
+  expect(results[1]).toMatchObject({ requestId: own.id, run: { requestId: own.id } });
+});
+
+it("starting a retailer's request by hand fails it the same way", async () => {
+  const amazon = { id: randomUUID(), brandName: "Amazon", brandUrl: "https://www.amazon.com/" };
+  const { service, store, request } = intakeService([amazon]);
+  await expect(service.start({ requestId: amazon.id }, signal)).rejects.toMatchObject({
+    code: "BRAND_ENRICHMENT.RETAIL_SITE",
+  });
+  expect(request.update).toHaveBeenCalledWith(
+    expect.objectContaining({ id: amazon.id, status: "failed" }),
+    signal,
+  );
+  expect(store.runs.create).not.toHaveBeenCalled();
+});

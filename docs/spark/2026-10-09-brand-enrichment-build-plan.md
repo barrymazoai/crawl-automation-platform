@@ -20,7 +20,7 @@
 | # | Decision | Default used |
 |---|---|---|
 | 2 | How Codex searches | Its own web search first; the Ego space only for pages it cites, which are saved with their hash |
-| 3 | Trigger | By hand: `brandEnrichment.start({ requestId })` and `brandEnrichment.claimPending({ limit })`. Nothing polls on its own (manual-start rule) |
+| 3 | Trigger | ~~By hand only~~ **Superseded 2026-10-20 (owner, KAN-220)**: the brand-enrichment worker claims requests itself within seconds through Supply Smart's long poll, one at a time; see [brand request intake](2026-10-20-brand-request-intake.md). `brandEnrichment.start({ requestId })` and `claimPending({ limit })` still work by hand |
 | 4 | Existing descriptions | `mode: "fill_empty"` |
 | 5 | Group email | One email per request, sub-brands listed from `summary.family.subBrands` |
 | 6 | New owners | Visible company, profile + Apollo only (owner, 2026-10-09) |

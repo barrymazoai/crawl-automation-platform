@@ -37,19 +37,28 @@ export class MarketplaceBrandsApi {
     ).result.data;
   }
 
-  private async call(path: string, input: unknown, signal: AbortSignal): Promise<unknown> {
-    const response = await this.fetch(`${this.baseUrl.replace(/\/$/, "")}/${path}`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(input),
-      redirect: "error",
-      signal: AbortSignal.any([signal, AbortSignal.timeout(600_000)]),
-    });
-    if (!response.ok) {
-      throw errors.create("PRODUCT_SYNC.BRANDS_API_FAILED", {
-        details: { path, status: response.status },
-      });
-    }
-    return response.json();
+  private call(path: string, input: unknown, signal: AbortSignal): Promise<unknown> {
+    return operatorsApiCall({ baseUrl: this.baseUrl, fetch: this.fetch }, { path, input }, signal);
   }
+}
+
+/** One tRPC mutation on the operators' API (`apps/api`), the same path a person uses. */
+export async function operatorsApiCall(
+  api: { baseUrl: string; fetch: typeof globalThis.fetch },
+  { path, input }: { path: string; input: unknown },
+  signal: AbortSignal,
+): Promise<unknown> {
+  const response = await api.fetch(`${api.baseUrl.replace(/\/$/, "")}/${path}`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(input),
+    redirect: "error",
+    signal: AbortSignal.any([signal, AbortSignal.timeout(600_000)]),
+  });
+  if (!response.ok) {
+    throw errors.create("PRODUCT_SYNC.BRANDS_API_FAILED", {
+      details: { path, status: response.status },
+    });
+  }
+  return response.json();
 }

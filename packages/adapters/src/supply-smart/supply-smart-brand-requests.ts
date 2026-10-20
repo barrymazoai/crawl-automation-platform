@@ -1,10 +1,10 @@
-import type { BrandRequests } from "@crawl-automation/app";
+import type { BrandRequestWaits, BrandRequests } from "@crawl-automation/app";
 import { BrandRequestListSchema, type BrandRequestUpdate } from "@crawl-automation/v3-contracts";
 import { z } from "zod";
 import { supplySmartStatus, type SupplySmartRpc } from "./supply-smart-rpc.js";
 
-/** `brandEnrichment/serviceList` and `serviceUpdateStatus` on the biz API. */
-export class SupplySmartBrandRequests implements BrandRequests {
+/** `brandEnrichment/serviceList`, `serviceUpdateStatus` and `serviceWaitPending` on the biz API. */
+export class SupplySmartBrandRequests implements BrandRequests, BrandRequestWaits {
   constructor(private readonly rpc: SupplySmartRpc) {}
 
   async pending(limit: number, signal: AbortSignal) {
@@ -14,6 +14,20 @@ export class SupplySmartBrandRequests implements BrandRequests {
         path: "brandEnrichment.serviceList",
         input: { status: "pending", sort: "oldest", page: 1, pageSize: limit },
         answer: BrandRequestListSchema,
+      },
+      signal,
+    );
+    return answer.requests;
+  }
+
+  /** KAN-220 long poll; Supply Smart holds it at most 25 s, inside the client's 60 s timeout. */
+  async waitPending(limit: number, waitMs: number, signal: AbortSignal) {
+    const answer = await this.rpc.call(
+      {
+        api: "biz",
+        path: "brandEnrichment.serviceWaitPending",
+        input: { limit, waitMs },
+        answer: BrandRequestListSchema.pick({ requests: true }),
       },
       signal,
     );

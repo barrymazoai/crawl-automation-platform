@@ -43,6 +43,11 @@ export interface BrandRequests {
   update(update: BrandRequestUpdate, signal: AbortSignal): Promise<{ claimed: boolean }>;
 }
 
+/** KAN-220: the biz API's long poll; answers at once when requests are pending, else after `waitMs` with none. */
+export interface BrandRequestWaits {
+  waitPending(limit: number, waitMs: number, signal: AbortSignal): Promise<BrandRequest[]>;
+}
+
 export type LinkOutcome =
   | { status: "linked"; result: CompanyLinkResult }
   /** 409: the brand already has an owner of that kind. Kept in the run's steps, never overwritten. */
@@ -135,6 +140,8 @@ export interface BrandEnrichmentRuns {
     limit: number;
   }): Promise<BrandEnrichmentRun[]>;
   update(runId: string, change: BrandEnrichmentRunChange): Promise<BrandEnrichmentRun>;
+  /** Live root runs of Supply Smart requests (role `request`), oldest first: request intake's concurrency. */
+  liveRequestRuns(): Promise<BrandEnrichmentRun[]>;
   /** After an owner-approved merge: runs that point at the merged company point at the survivor. */
   moveCompany(fromCompanyId: string, toCompanyId: string): Promise<number>;
 
