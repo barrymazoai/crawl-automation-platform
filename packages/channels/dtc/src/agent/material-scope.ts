@@ -33,13 +33,7 @@ export async function scopedHarvestRecord(input: ScopeInput, variantId: string) 
   if (!variant?.url) {
     throw new Error("material_variant_address_missing");
   }
-  const gallery = input.record.gallery.filter((image) => scope.galleryUrls.includes(image.url));
-  if (
-    gallery.length !== scope.galleryUrls.length ||
-    new Set(scope.galleryUrls).size !== gallery.length
-  ) {
-    throw new Error("material_gallery_incomplete_or_unknown");
-  }
+  const { gallery, galleryUrls, platform } = scopeGallery(input.record, scope);
   const detailsHtml = await materialHtml(input, scope.productHtml);
   await materialHtml(input, scope.pageHtml);
   const html = await captureFile(input.root, scope.pageHtml);
@@ -54,16 +48,33 @@ export async function scopedHarvestRecord(input: ScopeInput, variantId: string) 
   const review: CaptureReview = {
     ...input.review,
     selectedVariantId: variantId,
-    galleryUrls: scope.galleryUrls,
+    galleryUrls,
     evidence,
-    imageAssignments: scope.galleryUrls.map((url) => ({
+    imageAssignments: galleryUrls.map((url) => ({
       url,
-      variantId: scope.status === "mixed" ? null : variantId,
+      variantId: scope.status === "mixed" || platform.includes(url) ? null : variantId,
       basis: "product-gallery",
     })),
   };
   const status = scope.status === "mixed" ? ("mixed" as const) : ("observed" as const);
   return { record, review, html, detailsHtml, context: { status, evidence, reason: scope.reason } };
+}
+
+/** The variant's observed images plus the platform's own gallery images the model did not list (owner 2026-10-20). */
+function scopeGallery(record: HarvestRecord, scope: ResolvedScope) {
+  const scoped = record.gallery.filter((image) => scope.galleryUrls.includes(image.url));
+  if (
+    scoped.length !== scope.galleryUrls.length ||
+    new Set(scope.galleryUrls).size !== scoped.length
+  ) {
+    throw new Error("material_gallery_incomplete_or_unknown");
+  }
+  // They belong to every variant until the downstream mixed-gallery step attributes them.
+  const platform = platformGalleryUrls(record).filter((url) => !scope.galleryUrls.includes(url));
+  const gallery = record.gallery.filter(
+    (image) => scope.galleryUrls.includes(image.url) || platform.includes(image.url),
+  );
+  return { gallery, galleryUrls: gallery.map((image) => image.url), platform };
 }
 
 function variantMetadata(record: HarvestRecord, variant: HarvestRecord["variants"][number]) {
@@ -110,4 +121,10 @@ function mixedFallback(input: ScopeInput, reason: string): ResolvedScope {
     productHtml,
     galleryUrls: input.record.gallery.map((image) => image.url),
   };
+}
+
+/** Images run-harvest added from the platform's own gallery (`platformGalleryUrls`, owner 2026-10-20). */
+function platformGalleryUrls(record: HarvestRecord): string[] {
+  const urls = (record as { platformGalleryUrls?: unknown }).platformGalleryUrls;
+  return Array.isArray(urls) ? urls.filter((url): url is string => typeof url === "string") : [];
 }
