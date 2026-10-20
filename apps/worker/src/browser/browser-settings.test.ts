@@ -10,21 +10,20 @@ const browser = {
 it.each([
   { resourceId: undefined },
   { resourceId: "unknown-browser" },
-  { resourceId: "server2-ego-space-6" },
-  { ego: { ...browser.ego, taskSpaceId: 1 } },
   {
     resourceId: "server2-ego-space-6",
     ego: { ...browser.ego, taskSpaceId: 6 },
     pollLegacyQueue: true,
   },
-])("rejects an unbound, mismatched or foreign legacy browser configuration: %j", (changes) => {
+])("rejects an unbound or foreign legacy browser configuration: %j", (changes) => {
   expect(BrowserSettingsSchema.safeParse({ ...browser, ...changes }).success).toBe(false);
 });
 
+// Owner 2026-10-20: spaces are found by name at startup; the configured number is only the last one seen.
 it.each([
   ["mini-ego-space-1", 2],
-  ["server2-ego-space-6", 6],
-] as const)("binds %s to exactly Ego space %i", (resourceId, taskSpaceId) => {
+  ["server2-ego-space-6", 19],
+] as const)("accepts %s with Ego space number %i", (resourceId, taskSpaceId) => {
   expect(
     BrowserSettingsSchema.parse({
       ...browser,

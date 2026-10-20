@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { BrandProductProgress } from "@crawl-automation/v3-contracts";
+import type { BrandProductProgress, SiteAnalysis } from "@crawl-automation/v3-contracts";
 import {
   SiteAnalysisApplyResultSchema,
   type SiteAnalysisApplyResult,
@@ -47,12 +47,7 @@ export class BrandProductsService {
       return { done: false };
     }
     if (analysis.state !== "completed") {
-      await saveOutput(this.deps.runs, {
-        runId,
-        step: productStep("products", attempt),
-        output: { captured: 0, review: 0, state: analysis.state, reasons: analysis.reasons },
-      });
-      return { done: true };
+      return this.unfinishedAnalysis({ runId, attempt }, analysis);
     }
     const applied = await this.apply(
       { runId, attempt },
@@ -63,6 +58,18 @@ export class BrandProductsService {
     }
     await this.deliver({ runId, attempt, companyId: run.companyId, applied }, signal);
     return { done: true };
+  }
+  private async unfinishedAnalysis({ runId, attempt }: Attempt, analysis: SiteAnalysis) {
+    await saveOutput(this.deps.runs, {
+      runId,
+      step: productStep("products", attempt),
+      output: { captured: 0, review: 0, state: analysis.state, reasons: analysis.reasons },
+    });
+    // bloodsugarfriendly.com 2026-10-20: one Ego screenshot timeout left a six-product shop with none.
+    const retry =
+      analysis.state === "failed" ||
+      (analysis.state === "needs-review" && analysis.brands.length === 0);
+    return { done: true, retry };
   }
   private async missingCatalog({ runId, attempt }: Attempt, absorbed: boolean) {
     await saveOutput(this.deps.runs, {

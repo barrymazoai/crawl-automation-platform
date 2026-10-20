@@ -1,15 +1,18 @@
 import { z } from "zod";
 
-/** Resource identities are stable; mini-ego-space-1 intentionally owns Ego space 2. */
+/**
+ * Resource identities are stable; each names its Ego task space (owner 2026-10-20: match spaces by name). Ego forgets
+ * its spaces on restart and numbers new ones upward, so the numbers in these ids are history, not the Ego numbers.
+ */
 export const BROWSER_RESOURCE_SPACES = {
-  "mini-ego-space-1": 2,
-  "server2-ego-space-6": 6,
-  // DTC product pool on Server 二 (owner 2026-10-06); Ego assigned these space numbers.
-  "server2-ego-space-14": 14,
-  "server2-ego-space-15": 15,
-  "server2-ego-space-16": 16,
+  "mini-ego-space-1": "crawler-browser-worker",
+  "server2-ego-space-6": "crawler-browser-worker",
+  // DTC product pool on Server 二 (owner 2026-10-06).
+  "server2-ego-space-14": "crawler-dtc-product-1",
+  "server2-ego-space-15": "crawler-dtc-product-2",
+  "server2-ego-space-16": "crawler-dtc-product-3",
   // Brand enrichment only (owner 2026-10-09): family check and research.
-  "server2-ego-space-17": 17,
+  "server2-ego-space-17": "crawler-brand-website",
 } as const;
 export const BrowserResourceIdSchema = z.enum([
   "mini-ego-space-1",

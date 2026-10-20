@@ -79,6 +79,19 @@ it("preserves products activity payloads for histories without an attempt", asyn
     reason: "Error: failed",
   });
 });
+it("a site analysis that failed or verified no brand gets one more products attempt", async () => {
+  const request = input();
+  mocks.plain.brandProducts.mockResolvedValue({ done: true, retry: true });
+  await BrandEnrichmentWorkflow(request);
+  expect(mocks.plain.brandProducts.mock.calls).toEqual([
+    [{ runId: request.runId }],
+    [{ runId: request.runId, attempt: 2 }],
+  ]);
+  expect(mocks.patched).toHaveBeenCalledWith("brand-products-auto-retry-v1");
+  expect(mocks.plain.brandClose).toHaveBeenCalledWith(
+    expect.objectContaining({ state: "completed" }),
+  );
+});
 it("a product track failure is retained and the brand still writes its profile and completes", async () => {
   mocks.plain.brandProducts.mockRejectedValue(new Error("one delivery failed"));
   await BrandEnrichmentWorkflow(input());

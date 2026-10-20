@@ -10,10 +10,7 @@ import {
   WholeFoodsScanSettingsSchema,
 } from "@crawl-automation/channels-wholefoods";
 import { EgoSettingsSchema } from "@crawl-automation/platform";
-import {
-  BROWSER_RESOURCE_SPACES,
-  BrowserResourceIdSchema,
-} from "@crawl-automation/platform/browser-routing";
+import { BrowserResourceIdSchema } from "@crawl-automation/platform/browser-routing";
 import { z } from "zod";
 
 /**
@@ -26,6 +23,7 @@ export const BrowserSettingsSchema = z
     resourceId: BrowserResourceIdSchema,
     /** Server 一 only, until all histories on the old shared queue have settled. */
     pollLegacyQueue: z.boolean().default(false),
+    /** `ego.taskSpaceId` is the last number seen; a browser process finds its space by name at startup. */
     ego: EgoSettingsSchema,
     costcoScan: CostcoScanSettingsSchema.prefault({}),
     costco: CostcoStoreSchema.refine(
@@ -47,13 +45,6 @@ export const BrowserSettingsSchema = z
     egressId: z.string().min(1).max(120).default("ego-browser/1"),
   })
   .superRefine((settings, context) => {
-    if (settings.ego.taskSpaceId !== BROWSER_RESOURCE_SPACES[settings.resourceId]) {
-      context.addIssue({
-        code: "custom",
-        path: ["ego", "taskSpaceId"],
-        message: "Ego space does not match browser.resourceId",
-      });
-    }
     if (settings.pollLegacyQueue && settings.resourceId !== "mini-ego-space-1") {
       context.addIssue({
         code: "custom",
