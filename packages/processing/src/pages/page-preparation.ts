@@ -16,6 +16,7 @@ import { claimOnce } from "../publication/claim-once.js";
 import { encodeJson, hashString } from "../results/result-record.js";
 import { writeOnce } from "../results/write-once.js";
 import { pageFailure } from "./page-errors.js";
+import { labelRange } from "./label-range.js";
 import type { PageEvidence } from "./page-evidence.js";
 import { checkedPageInput, pageCompletionKey, pagePolicy } from "./page-input.js";
 import { parsePage } from "./page-parser.js";
@@ -126,6 +127,7 @@ function preparedFiles(
     document: pageFileRef(input, { name: "document", value: document }),
     tables: pageFileRef(input, { name: "tables", value: tables }),
     textLength: parsed.text.length,
+    ...labelRangeOf(parsed.text),
   });
   const files: PreparedFiles["files"] = [
     [record.document.objectKey, document],
@@ -133,6 +135,11 @@ function preparedFiles(
     [pageCompletionKey(input), record],
   ];
   return { record, files };
+}
+
+function labelRangeOf(text: string) {
+  const range = labelRange(text);
+  return range ? { labelRange: range } : {};
 }
 
 function pageFileRef(input: PagePrepareInput, file: { name: string; value: unknown }): ArtifactRef {
