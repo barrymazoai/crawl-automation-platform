@@ -9,3 +9,4 @@ export * from "./ego-stop.js";
 export * from "./page-preparation.js";
 export * from "./ego-agent-page.js";
 export * from "./ego-cli-process.js";
+export * from "./ego-space.js";

@@ -34,7 +34,9 @@ export async function analyzeWithDtcAgent(
     },
     signal,
   );
-  const raw: unknown = JSON.parse((await captureFile(saved.root, "analysis.json")).toString());
+  const raw = withTextReasons(
+    JSON.parse((await captureFile(saved.root, "analysis.json")).toString()),
+  );
   const pages = Pages.parse(
     JSON.parse((await captureFile(saved.root, "evidence-pages.json")).toString()),
   );
@@ -75,6 +77,28 @@ function unreachableSite(raw: unknown, pages: z.infer<typeof Pages>) {
     return null;
   }
   return { state: "needs-review" as const, brands: [], reasons: parsed.data.reasons };
+}
+
+/**
+ * The agent sometimes writes a reason as an object ({code, message, …}; bloodsugarfriendly.com 2026-10-20, an Ego
+ * screenshot timeout) instead of a sentence. Its words are kept as text, so the answer is not lost as unreadable.
+ */
+function withTextReasons(raw: unknown): unknown {
+  if (!raw || typeof raw !== "object" || !Array.isArray((raw as { reasons?: unknown }).reasons)) {
+    return raw;
+  }
+  return { ...raw, reasons: (raw as { reasons: unknown[] }).reasons.map(reasonText) };
+}
+
+function reasonText(reason: unknown): string {
+  if (typeof reason === "string") {
+    return reason;
+  }
+  const { code, message } = (reason ?? {}) as { code?: unknown; message?: unknown };
+  if (typeof message === "string") {
+    return typeof code === "string" ? `${code}: ${message}` : message;
+  }
+  return JSON.stringify(reason);
 }
 
 /**

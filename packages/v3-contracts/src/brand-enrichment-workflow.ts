@@ -25,4 +25,8 @@ export const BrandEnrichmentWorkflowInputSchema = z.strictObject({
 export type BrandEnrichmentWorkflowInput = z.infer<typeof BrandEnrichmentWorkflowInputSchema>;
 export interface BrandFamilyPlan { children: string[]; products: boolean }
 export interface BrandReviewPlan { ownerRunId?: string }
-export interface BrandProductProgress { done: boolean }
+export interface BrandProductProgress {
+  done: boolean;
+  /** Owner 2026-10-20: the site analysis failed or verified no brand; the brand run tries products once more. */
+  retry?: boolean;
+}

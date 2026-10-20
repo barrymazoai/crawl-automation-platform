@@ -11,7 +11,7 @@ import {
   patched,
 } from "@temporalio/workflow";
 import { brandEnrichmentActivities } from "./brand-enrichment-routing.js";
-import { runBrandProducts, settleBrandTracks } from "./brand-enrichment-tracks.js";
+import { brandProductsTrack, settleBrandTracks } from "./brand-enrichment-tracks.js";
 import type { BrandEnrichmentActivities } from "./brand-enrichment-activities.js";
 
 /** Explicit saga with one close path and no automatic retries. */
@@ -34,7 +34,7 @@ export async function BrandEnrichmentWorkflow(raw: BrandEnrichmentWorkflowInput)
       ...family.children.map((childRunId) => () => child(input, childRunId)),
       () => gated("brandResearch", { runId }),
       () => gated("brandApollo", { runId }),
-      ...(family.products ? [() => runBrandProducts(input, plain)] : []),
+      ...(family.products ? [() => brandProductsTrack(input, plain)] : []),
     ];
     // Failure must not let a sibling activity keep using pages/permits after parent close.
     await settleBrandTracks(tasks);

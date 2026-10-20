@@ -18,6 +18,12 @@ const MessageSchema = z.discriminatedUnion("kind", [
     code: z.string().nullable(),
     targets: z.array(z.string()),
   }),
+  z.object({
+    kind: z.literal("space"),
+    spaceId: z.number().int().positive().nullable(),
+    ownership: z.string().nullable(),
+    code: z.string().nullable(),
+  }),
   z.object({ kind: z.literal("stop"), reason: z.literal("user-control") }),
   z.object({ kind: z.literal("opened"), targetId: z.string().min(1) }),
   z.object({

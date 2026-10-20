@@ -52,7 +52,7 @@ export const analysisInstructions = `分析入口属于官网、自营商店、�
 3. 未超限时按清单逐一验证品牌目录与代表商品身份。正常完成一个品牌后继续下一个；“其他品牌尚未验证”是待办，不是停止原因，不能仅以multi_brand_retailer_requires_brand_by_brand_verification结束。只在真实权限/挑战、观察失败、身份歧义或实际预算边界时保留原因结束，不伪造所有品牌通过。
 4. 代表商品只需核对真实品牌与目录归属。不要展开Ingredients/Facts/FAQ、检查整套图库或执行旧skill的单品完整性预检；这些属于后续单品任务。本站没有多品牌清单时，先以实际站点证据确认品牌范围，再按单品牌路线验证。
 允许沿官方实际链接展开一层直属品牌，不递归。遵守 scope 中 maxBrands/maxPages/maxDomains 限额。
-保存 analysis.json：{state:"completed"或"needs-review",brands:[{name,domain,platform:"shopify"或"woocommerce"或"jsonld",catalogUrl,productCount,countExact,wholeCatalog,discoveredFrom:{page,link},status:"verified"或"needs-review",reason:null或说明}],archiveKeys:[],reasons:[]}。
+保存 analysis.json：{state:"completed"或"needs-review",brands:[{name,domain,platform:"shopify"或"woocommerce"或"jsonld",catalogUrl,productCount,countExact,wholeCatalog,discoveredFrom:{page,link},status:"verified"或"needs-review",reason:null或说明}],archiveKeys:[],reasons:[]}。reasons 每项都是一句字符串说明（可以以原因代码开头），不是对象。
 整个任务只保存一份 evidence-pages.json，顶层是平铺数组[{url,htmlPath,screenshotPath}]，合并所有品牌实际页面；共用同一份来源页原件只列一次，不按品牌名分组对象。每个品牌至少覆盖来源页、目录和代表商品的实际 HTML 与截图。brands[].domain填已观察catalogUrl的实际hostname（包含实际www或其他子域名），不是默认公司可注册域名。
 超限且尚未验证任何品牌时brands可为空，候选保存在brand-candidates.json；不得为补齐代表商品而违反先检查上限的顺序。evidence-pages仅列实际已保存的HTML/截图对，htmlPath和screenshotPath不能null或引用不存在文件；额外截图放verification.evidence。discoveredFrom.page必须是实际看到该目录链接且已保存的页面，link为观察到的目标；不能把网站存在但没访问的品牌索引页写作来源。
 保存 analysis-verification.json：{method,surface:"live_site",evidence:[相对文件路径],verifier:"codex",limitsReached:boolean}。
