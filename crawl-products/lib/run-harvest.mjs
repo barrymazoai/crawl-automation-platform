@@ -155,8 +155,10 @@ async function defaultFetchProductData(productUrl) {
 }
 
 
+// No image/avif: downstream accepts PNG, JPEG and WebP only. Shopify answers a small `&width=` gallery thumbnail
+// in AVIF when asked for it and in WebP otherwise (bloodsugarfriendly.com, 2026-10-20: 5 of 6 products in Review).
 const IMAGE_FETCH_HEADERS = Object.freeze({
-  accept: "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
+  accept: "image/webp,image/apng,image/png,image/jpeg,image/*;q=0.8,*/*;q=0.5",
   "user-agent":
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
     + "(KHTML, like Gecko) Chrome/124.0 Safari/537.36",
