@@ -319,6 +319,8 @@ async function runHarvestImpl(browser, tab, planInput, opts) {
       || (captureOnly ? async () => null : browser?.harvestHooks?.fetchProductData || defaultFetchProductData),
     observedImagesOnly: browser?.mode === "ego-native",
     observedGallery,
+    // Native captures still read the platform's own gallery for the dispatched product (owner 2026-10-20).
+    fetchPlatformProduct: observedGallery ? opts.hooks?.fetchPlatformProduct || defaultFetchProductData : null,
     /*
      * 商品页 HTML：独立站的成分表常在页面里、不在接口里，所以每个商品都"去页面看一眼"。
      * 不依赖调用方传 —— 调用方（Codex 写的脚本）可能忘了传，那样会静默退化成全靠 OCR。
@@ -774,8 +776,12 @@ function newPageHtmlStats() {
 
 async function buildEvidencePackage(record, url, outDir, hooks, log, pageHtmlStats) {
   const gallery = [];
+  const platformAdded = hooks.observedGallery && hooks.fetchPlatformProduct
+    ? await platformGalleryUrls(hooks.fetchPlatformProduct, url, hooks.observedGallery) : [];
+  if (platformAdded.length) log("platform_gallery_images_added", { url, added: platformAdded.length });
   const images = hooks.observedGallery
-    ? hooks.observedGallery.map(url => ({ url })) : recordImages(record);
+    ? [...hooks.observedGallery.map(url => ({ url })), ...platformAdded.map(url => ({ url, platform: true }))]
+    : recordImages(record);
   const flags = buildFlags(record);
 
   // Platform variant expansion + SKU backfill (no browser involved).
@@ -827,6 +833,11 @@ async function buildEvidencePackage(record, url, outDir, hooks, log, pageHtmlSta
       entry.mime = fetched.mime;
       saved += 1;
     } catch (error) {
+      // A platform-gallery addition only backs up the observed gallery; its loss is not a capture failure.
+      if (image.platform) {
+        log("platform_gallery_image_skipped", { url: image.url, error: String(error) });
+        continue;
+      }
       flags.push(`image_download_failed:${image.url}`);
       log("image_download_failed", { url: image.url, error: String(error) });
     }
@@ -855,9 +866,54 @@ async function buildEvidencePackage(record, url, outDir, hooks, log, pageHtmlSta
   // every sellable state (id/SKU/options/price/variant URL) reaches
   // crawl-records and downstream enrich without a semantic round per variant.
   if (variants.length > 0) pkg.variants = variants;
+  const platformSaved = gallery.filter((entry) => platformAdded.includes(entry.url)).map((entry) => entry.url);
+  if (platformSaved.length) pkg.platformGalleryUrls = platformSaved;
   if (record.fieldEvidence) pkg.fieldEvidence = record.fieldEvidence;
   if (pageHtml) pkg.pageHtml = pageHtml;
   return pkg;
+}
+
+/**
+ * Owner 2026-10-20: a native capture keeps the model's observed gallery and adds the platform's own gallery for the
+ * dispatched product (Shopify product JSON), so a carousel item the model left out is still captured
+ * (creatine-reimagined on bloodsugarfriendly.com: the back label with Supplement Facts was only a thumbnail button).
+ * Same product handle only; images match by file name, never by keywords. Other platforms answer null: nothing added.
+ */
+async function platformGalleryUrls(fetchPlatformProduct, productUrl, observed) {
+  const handle = /\/products\/([^/?#]+)/.exec(new URL(productUrl).pathname)?.[1];
+  let product = null;
+  try {
+    product = handle ? await fetchPlatformProduct(productUrl) : null;
+  } catch {
+    return [];
+  }
+  if (!product || (product.handle && product.handle !== decodeURIComponent(handle))) return [];
+  const seen = new Set(observed.map(galleryFileKey));
+  const added = [];
+  for (const image of Array.isArray(product.images) ? product.images : []) {
+    const source = typeof image === "string" ? image : image?.src;
+    let url;
+    try {
+      url = new URL(source, productUrl);
+    } catch {
+      continue;
+    }
+    if (url.protocol !== "https:" || url.username || url.password) continue;
+    const key = galleryFileKey(url.href);
+    if (!seen.has(key)) {
+      seen.add(key);
+      added.push(url.href);
+    }
+  }
+  return added.slice(0, Math.max(0, 100 - observed.length));
+}
+
+function galleryFileKey(value) {
+  try {
+    return new URL(value).pathname.split("/").pop().toLowerCase();
+  } catch {
+    return String(value);
+  }
 }
 
 function nativeGallery(urls) {

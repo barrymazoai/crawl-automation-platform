@@ -14,7 +14,7 @@ detailCoverage.checkScope 必须为"website-text"：五项checks核对的是网�
 Sold out/Out of stock是库存状态，不证明规格不能查看。除真实权限/挑战边界外，缺货项也须实际尝试网站选项或明确观察到的规格URL，并保存操作及结果；未尝试只能记尚未观察，不能声称网站无法切换。不得用option-value ID、默认项或临时常量补不存在的variant ID，身份只能来自已核实的网站variants。单规格无法确认不丢其他完整规格。
 基础商品有多个规格时，价格和 SKU 留在对应 variants，不把默认/第一个/首个有货规格的值回填到 fields。明确派发 variant URL 时才允许对应规格值进入 fields。保存 HTML 用 fetchPageSource，仅保存当前渲染状态，不导航重置选项；先展开需要的区块。页面身份、规格、币种、地区或一次性/订阅价存在冲突时保留冲突并 needs_review，不从推荐区补值。
 fields.title 和 fields.brand 必须来自实际商品页面/该商品的平台数据，品牌不能照抄任务来源名称；保留品牌出处。其他页面原文字段原样保存，缺失留空，不推断成分。pageHtml 必须指向实际保存的详情 HTML。
-采集实际产品轮播/图库全部原图，以及详情中实际展示的 Facts/背标图片。不要把整个 main 的所有 img 当图库；徽章、推荐商品、导航缩略图要区别开。
+采集实际产品轮播/图库全部原图，以及详情中实际展示的 Facts/背标图片。不要把整个 main 的所有 img 当图库；徽章、推荐商品、站点导航图要区别开。本商品图库的缩略图就是图库项：大图加一排缩略图、点击切换的图库，每个缩略图对应的完整原图都要收（点击后读大图，或用该缩略图同一文件已观察到的最大 srcset），不能只收当前大图而排除其余缩略图项。
 收割前在实际页面核实所有图库项及详情图片，把已观察到的完整原图 URL 数组作为 runHarvest(...,{observedGalleryUrls:[...],...}) 必填参数；原生单品不会使用通用提取器按关键词猜测出来的图片集合。不要根据文件名筛选或编造未观察的原图地址。
 逐张查看已保存的图库，确认轮播所有项及后续图、折叠/延迟加载内容都已检查；不靠 alt/文件名关键词决定收哪张图。
 保存 capture-review.json：{productUrl,selectedVariantId:null或实际ID,galleryUrls:[全部已保存原图URL],galleryComplete:true或false,variantsComplete:true或false,detailComplete:true或false,method:"实际观察与复核过程的文字说明，必须是字符串，不是字段方法对象",surface:"local_file",evidence:[相对截图/图片路径],verifier:"codex",imageAssignments:[{url,variantId:null或ID,basis:"product-gallery"或"variant-featured"}]}。
