@@ -25,6 +25,9 @@ const blocks = new Set([
   ...["h1", "h2", "h3", "h4", "h5", "h6"],
 ]);
 
+/** Inline elements a div-built table uses as its cells. */
+const rowItems = new Set(["span", "b", "strong", "i", "em", "small", "label"]);
+
 const limit = () => pageFailure("PROCESSING.PAGE_LIMIT");
 
 /** A cell span as written; `rowspan=0` (the remaining rows) is kept as it is, never expanded or guessed. */
@@ -46,6 +49,11 @@ export class PageCollector {
   readonly parts: string[] = [];
   readonly tables: PageTable[] = [];
   private readonly skips: boolean[] = [];
+  /** Open elements and whether each has had text of its own, for the row-of-cells rule. */
+  private readonly names: string[] = [];
+  private readonly ownText: boolean[] = [];
+  /** The depth of a just-closed inline cell, until anything but whitespace or a sibling cell follows. */
+  private closedCell: number | null = null;
   private readonly open: OpenTable[] = [];
   private depth = 0;
   private suppressed = 0;
@@ -63,8 +71,13 @@ export class PageCollector {
     this.skips.push(skip);
     this.suppressed += skip ? 1 : 0;
     if (this.suppressed) {
+      this.names.push(name);
+      this.ownText.push(false);
       return;
     }
+    this.separateCells(name);
+    this.names.push(name);
+    this.ownText.push(false);
     if (blocks.has(name)) {
       this.append("\n");
     }
@@ -82,20 +95,46 @@ export class PageCollector {
       throw limit();
     }
     if (!this.suppressed) {
+      if (value.trim()) {
+        this.closedCell = null;
+        this.ownText[this.ownText.length - 1] = true;
+      }
       this.append(value);
     }
   }
 
   closeTag(name: string): void {
     const skip = this.skips.pop();
+    this.names.pop();
+    this.ownText.pop();
     this.depth--;
     this.suppressed -= skip ? 1 : 0;
     if (this.suppressed || skip) {
       return;
     }
+    this.closedCell = rowItems.has(name) ? this.depth : null;
     this.closeTableParts(name);
     if (blocks.has(name)) {
       this.append("\n");
+    }
+  }
+
+  /**
+   * Owner 2026-10-20: sibling inline elements that make up a block on their own are a row of cells and get a tab
+   * between them. Div-built Facts panels (bloodsugarfriendly.com: `<div><span>Total Fat 8g</span><span>10%</span>`)
+   * otherwise read "Total Fat 8g10%" and "Calories170". A block with text of its own is unchanged.
+   */
+  private separateCells(name: string): void {
+    const parent = this.names.at(-1);
+    const siblingCell =
+      this.closedCell === this.depth - 1 &&
+      rowItems.has(name) &&
+      parent !== undefined &&
+      blocks.has(parent) &&
+      !this.ownText.at(-1);
+    this.closedCell = null;
+    if (siblingCell) {
+      this.append("\t");
     }
   }
 

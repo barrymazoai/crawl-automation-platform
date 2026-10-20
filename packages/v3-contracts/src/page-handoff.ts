@@ -10,7 +10,11 @@ export const PageTablesSchema = z.array(z.strictObject({ index: z.number().int()
 export const PreparedPageRecordSchema = z.strictObject({ schemaVersion: z.literal(1), codec: z.literal("prepared-page/1"),
   input: PagePrepareInputSchema, document: ArtifactRefSchema, tables: ArtifactRefSchema,
   textLength: z.number().int().positive().max(200000),
+  /** Owner 2026-10-20: the label's part of the text (one Facts panel and its ingredients); absent = the whole text. */
+  labelRange: z.strictObject({ start: z.number().int().min(0), end: z.number().int().positive() }).optional(),
 }).superRefine((r, ctx) => {
+  if (r.labelRange && (r.labelRange.end <= r.labelRange.start || r.labelRange.end > r.textLength))
+    ctx.addIssue({ code: "custom", message: "Label range must lie inside the text" });
   const refs = [r.input.page, r.document, r.tables];
   if (new Set(refs.map(f => f.artifactId)).size !== 3 || new Set(refs.map(f => f.objectKey)).size !== 3)
     ctx.addIssue({ code: "custom", message: "Page artifacts must be distinct" });

@@ -72,11 +72,25 @@ export function resolveAnchor(anchor: Anchor, source: QuoteSource, context?: Anc
 }
 
 function citedLines(anchor: Anchor, lines: readonly EvidenceLine[]): Cited {
-  const first = lines[anchor.fromLine - 1];
-  const last = lines[anchor.toLine - 1];
   const words = anchor.text.trim().split(/\s+/u);
   const tooLong = anchor.toLine - anchor.fromLine > MAX_CITED_LINES;
-  if (!first || !last || anchor.toLine < anchor.fromLine || tooLong || !words[0]) {
+  if (
+    !lines[anchor.fromLine - 1] ||
+    !lines[anchor.toLine - 1] ||
+    anchor.toLine < anchor.fromLine ||
+    tooLong ||
+    !words[0]
+  ) {
+    throw citationInvalid();
+  }
+  // Blank lines at either end of the selection hold no words, so they cannot hide a wrong line id
+  // (bloodsugarfriendly.com 2026-10-20: an exclusion quote ending on "170Calories" cited the empty line after it).
+  const printed = lines
+    .slice(anchor.fromLine - 1, anchor.toLine)
+    .filter((line) => line.text.trim());
+  const first = printed[0];
+  const last = printed.at(-1);
+  if (!first || !last) {
     throw citationInvalid();
   }
   return { first, last, words };
