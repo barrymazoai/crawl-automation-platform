@@ -4,11 +4,14 @@ export interface LabelRange {
   end: number;
 }
 
-const HEADING = /^(supplement|nutrition|drug)\s+facts\b/i;
+// Drug Facts are laid out differently (actives, uses, warnings, inactive ingredients): those pages stay whole.
+const HEADING = /^(supplement|nutrition)\s+facts\b/i;
+const DRUG_HEADING = /^drug\s+facts\b/i;
 const INGREDIENTS = /^(other\s+)?ingredients\b/i;
 const TAIL = /^((other\s+)?ingredients\b|contains\b|allergen)/i;
 const FOOTNOTE = /(daily value|%\s*dv\b|^\*|^†)/i;
-const AMOUNT = /(\d+(?:\.\d+)?)\s*(mcg|mg|g|iu|%)\b/gi;
+const AMOUNT = /(\d+(?:\.\d+)?)\s*(mcg|mg|ml|g|iu|%)\b/gi;
+const HAS_AMOUNT = /\d+(?:\.\d+)?\s*(mcg|mg|ml|g|iu|%)\b/i;
 const MAX_PANEL_LINES = 80;
 const MAX_TAIL_LINES = 40;
 const MAX_TAIL_GAP = 6;
@@ -18,23 +21,30 @@ interface Panel {
   head: number;
   end: number;
   ingredients: boolean;
+  /** Its end is known: a Daily Value footnote. Drug Facts or a "Supplement facts - …" sentence have none. */
+  footnote: boolean;
 }
 
 /**
  * Owner 2026-10-20 (bloodsugarfriendly.com): a product page repeats its Facts panel and surrounds it with marketing
  * text; given the whole page, the label text model had to account for hundreds of lines and failed every time. The
  * text task covers only the panel and the ingredient statement right after it. The whole page stays the input
- * (null) when the page has no panel, panels with different amounts (two strengths, a kit), or ingredients the
- * chosen panel does not reach. Simulated on 3,000 retained pages: no ingredient statement lost.
+ * (null) when the page has no panel whose end is known (a Daily Value footnote; not Drug Facts), panels with
+ * different amounts (two strengths, a kit), or ingredients the chosen panel does not reach. Simulated on 3,000
+ * retained pages: no ingredient statement lost.
  */
 export function labelRange(text: string): LabelRange | null {
   const lines = text.split("\n");
+  if (lines.some((line) => DRUG_HEADING.test(line.trim()))) {
+    return null;
+  }
   const found = panels(lines);
-  const [first] = found;
+  const ended = found.filter((panel) => panel.footnote);
+  const [first] = ended;
   if (!first || !sameLabel(lines, found)) {
     return null;
   }
-  const best = found.reduce(
+  const best = ended.reduce(
     (chosen, panel) => (panel.ingredients && !chosen.ingredients ? panel : chosen),
     first,
   );
@@ -52,13 +62,16 @@ function panels(lines: string[]): Panel[] {
   return heads.map((head, index) => {
     const stop = Math.min(heads[index + 1] ?? lines.length, head + MAX_PANEL_LINES);
     let end = head;
-    for (let line = head; line < stop; line++) {
+    let rows = false;
+    for (let line = head + 1; line < stop; line++) {
       const value = lines[line]?.trim() ?? "";
-      if (value && FOOTNOTE.test(value)) {
+      // A "% Daily Value" column heading before any row is not the end; the footnote follows the rows.
+      if (rows && FOOTNOTE.test(value)) {
         end = line;
       }
+      rows ||= HAS_AMOUNT.test(value) && !/^serving/i.test(value);
     }
-    return { head, ...tail(lines, end) };
+    return { head, footnote: end > head, ...tail(lines, end) };
   });
 }
 
