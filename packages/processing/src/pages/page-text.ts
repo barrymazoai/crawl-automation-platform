@@ -30,7 +30,7 @@ export function pageTextTask(plan: Plan, record: PreparedPageRecord) {
     ...plan.text,
     operationId: plan.textOperationId,
     source: { kind: "prepared" as const, document: record.document },
-    range: record.labelRange ?? { start: 0, end: record.textLength },
+    range: { start: 0, end: record.textLength },
   };
   return TextInputSchema.parse({
     ...unsigned,

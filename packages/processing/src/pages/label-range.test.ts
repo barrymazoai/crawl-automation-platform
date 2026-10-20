@@ -44,3 +44,16 @@ it("keeps the whole page when the ingredients are not after the panel", () => {
 it("keeps the whole page without a panel", () => {
   expect(labelRange("Home\n\nINGREDIENTS: Whey.")).toBeNull();
 });
+
+it("keeps the whole page when the panel's end is unknown (Drug Facts, a sentence)", () => {
+  const drug = [
+    "Drug Facts",
+    "Active ingredient Purpose",
+    "Menthol 0.1% Cold sore treatment",
+    "Uses",
+  ];
+  expect(labelRange(drug.join("\n"))).toBeNull();
+  expect(
+    labelRange("Supplement facts - Serving size: 1 scoop - Transparent label.\n\nMore text"),
+  ).toBeNull();
+});
