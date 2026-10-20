@@ -20,4 +20,5 @@ export * from "./product-redelivery.js";
 export * from "./product-delivery-step.js";
 export * from "./redelivery-candidates.js";
 export * from "./redelivery-sweep.js";
+export * from "./request-intake.js";
 export { productStep, productAnalysisRequestId } from "./product-attempt.js";

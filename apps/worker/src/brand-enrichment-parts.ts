@@ -29,6 +29,8 @@ import type { CoreParts } from "./core-parts.js";
 import { buildBrandStepServices, type BrandEnrichmentTasks } from "./brand-enrichment-services.js";
 import { buildBrandRedeliverySweep } from "./brand-redelivery-parts.js";
 import { buildProductSyncSweep } from "./product-sync-parts.js";
+import type { BrandEnrichmentSettings } from "./brand-enrichment-settings.js";
+import { buildRequestIntake } from "./brand-request-intake-parts.js";
 
 /**
  * The Codex tasks and product delivery, built per kind on first use. Text turns (Apollo judge, reviewer, titles)
@@ -127,13 +129,29 @@ export async function buildBrandEnrichmentParts(parts: CoreParts) {
     redelivery: services.redelivery,
     lookbackDays: config.limits.redeliveryLookbackDays,
   });
-  const productSync = buildProductSyncSweep(parts, { rpc, settings: config.productSync });
   return {
     runs,
     ...services,
     redeliverySweep,
-    productSync,
+    ...backgroundLoops(parts, { rpc, runs, productSync: config.productSync }),
     closeConnection: () => temporal.close(),
+  };
+}
+/** The worker-owned loops beside the Temporal workers: product sync and, since KAN-220, request intake. */
+function backgroundLoops(
+  parts: CoreParts,
+  input: {
+    rpc: SupplySmartRpc;
+    runs: PostgresBrandEnrichmentRuns;
+    productSync: BrandEnrichmentSettings["productSync"];
+  },
+) {
+  return {
+    productSync: buildProductSyncSweep(parts, { rpc: input.rpc, settings: input.productSync }),
+    requestIntake: buildRequestIntake(parts, {
+      requests: new SupplySmartBrandRequests(input.rpc),
+      runs: input.runs,
+    }),
   };
 }
 /** Our waiting brands and their company matches, for marketplace runs (owner 2026-10-15). */

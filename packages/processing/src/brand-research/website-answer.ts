@@ -1,4 +1,8 @@
-import { BrandWebsiteSchema, type BrandWebsiteOwner } from "@crawl-automation/v3-contracts";
+import {
+  BrandWebsiteSchema,
+  RETAIL_SITES,
+  type BrandWebsiteOwner,
+} from "@crawl-automation/v3-contracts";
 import { checkedAnswer } from "./answer.js";
 import type { ResearchArchive } from "./archive.js";
 import { invalidAnswer } from "./errors.js";
@@ -7,24 +11,6 @@ import type { WebsiteSubject } from "./inputs.js";
 import { domainOf, normalizedText } from "./identity.js";
 import type { RetainedPage } from "./archive.js";
 
-/** Marketplaces and resellers are never a brand's official website (owner 2026-10-15). */
-const MARKETPLACES = [
-  "amazon.com",
-  "walmart.com",
-  "target.com",
-  "ebay.com",
-  "iherb.com",
-  "vitacost.com",
-  "luckyvitamin.com",
-  "pipingrock.com",
-  "vitaminshoppe.com",
-  "cvs.com",
-  "walgreens.com",
-  "gnc.com",
-  "swansonvitamins.com",
-  "wholefoodsmarket.com",
-  "costco.com",
-];
 /** A retailer's site is its own house brand's website, proven by the brand name carrying the retailer's name. */
 const HOUSE_BRANDS: Record<string, string[]> = {
   "gnc.com": ["gnc"],
@@ -43,7 +29,8 @@ function refuseMarketplace(url: string, brandName: string) {
   if (!domain) {
     invalidAnswer("website", "url_invalid");
   }
-  const marketplace = MARKETPLACES.find((site) => domain === site || domain.endsWith(`.${site}`));
+  // Marketplaces and resellers are never a brand's official website (owner 2026-10-15).
+  const marketplace = RETAIL_SITES.find((site) => domain === site || domain.endsWith(`.${site}`));
   const name = brandName.toLowerCase();
   if (marketplace && !(HOUSE_BRANDS[marketplace] ?? []).some((own) => name.includes(own))) {
     invalidAnswer("website", "marketplace_not_official");

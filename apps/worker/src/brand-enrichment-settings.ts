@@ -15,6 +15,26 @@ export const BrandEnrichmentSettingsSchema = BrandEnrichmentWorkflowSettingsSche
     })
     .prefault({}),
   /**
+   * Owner 2026-10-20 (KAN-220): customer brand requests start within seconds of being submitted, through Supply
+   * Smart's long poll, at most `maxLiveRuns` at once; a fallback round every `fallbackMinutes` also claims, and stops
+   * request runs still live after `timeoutMinutes` (request failed with reason "Timeout", card to `webhookFile`'s
+   * Feishu group). Claims and stops go through the operators' API (`apiUrl`, else `stopSweep.apiUrl`); without
+   * either, intake stays manual.
+   */
+  requestIntake: z
+    .strictObject({
+      enabled: z.boolean().default(true),
+      apiUrl: z.url().optional(),
+      maxLiveRuns: z.number().int().min(1).max(20).default(1),
+      waitSeconds: z.number().int().min(1).max(25).default(25),
+      /** How long to wait before looking again while every slot is taken. */
+      busySeconds: z.number().int().min(1).max(600).default(15),
+      fallbackMinutes: z.number().int().min(1).max(1440).default(15),
+      timeoutMinutes: z.number().int().min(10).max(10_080).default(120),
+      webhookFile: z.string().refine(isAbsolute, "Must be an absolute path").optional(),
+    })
+    .prefault({}),
+  /**
    * Marketplace products to Supply Smart (owner 2026-10-12). Zero minutes disables the loop; the first deploy runs a
    * small smoke batch before the limits are raised.
    */

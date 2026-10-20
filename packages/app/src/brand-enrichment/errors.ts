@@ -17,6 +17,10 @@ export const brandEnrichmentErrors = defineErrors({
     category: "VALIDATION",
     message: "Brand enrichment record not found in the available records.",
   },
+  "BRAND_ENRICHMENT.RETAIL_SITE": {
+    category: "VALIDATION",
+    message: "The request is for a retailer or marketplace site, which is not enriched.",
+  },
   "BRAND_ENRICHMENT.CLAIM_CONFLICT": {
     category: "VALIDATION",
     message: "Another worker claimed this request.",

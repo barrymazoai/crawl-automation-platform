@@ -63,3 +63,30 @@ it("gives up after the configured retries and reports the 429", async () => {
   expect(supplySmartStatus(error)).toBe(429);
   expect(fetch).toHaveBeenCalledTimes(4);
 });
+
+it("long-polls serviceWaitPending on the biz API (KAN-220)", async () => {
+  const { SupplySmartBrandRequests } = await import("./supply-smart-brand-requests.js");
+  const request = {
+    id: "1518d203-4d2b-4a39-9b3e-6a2f0c1d2e3f",
+    brandName: "blood sugar friendly",
+    brandUrl: "https://bloodsugarfriendly.com/",
+    companyId: null,
+    status: "pending",
+    failureReason: null,
+    summary: null,
+  };
+  const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValueOnce(
+    new Response(JSON.stringify({ json: { requests: [request] }, meta: [] }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    }),
+  );
+  const requests = new SupplySmartBrandRequests(new SupplySmartRpc(settings, fetch));
+
+  await expect(requests.waitPending(1, 25_000, new AbortController().signal)).resolves.toEqual([
+    request,
+  ]);
+  const sent = fetch.mock.calls[0]?.[0] as Request;
+  expect(sent.url).toBe("https://supply-smart.test/api/rpc/brandEnrichment/serviceWaitPending");
+  expect(await sent.json()).toEqual({ json: { limit: 1, waitMs: 25_000 } });
+});
