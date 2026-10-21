@@ -8,6 +8,8 @@ import { servingSizeExamples } from "./examples/serving-size.js";
 import { dailyValueOnlyRowExamples } from "./examples/daily-value-only-row.js";
 import { amountEnclosedInNameExamples } from "./examples/amount-enclosed-in-name.js";
 import { ingredientListNotAFormulaExamples } from "./examples/ingredient-list-not-a-formula.js";
+import { bracketedMayContainExamples } from "./examples/bracketed-may-contain-is-not-a-declaration.js";
+import { servingUncertaintyExamples } from "./examples/servings-per-container-uncertainty-is-a-warning.js";
 
 const examples: Record<string, { pass: { subject: unknown; source: string }[]; fail: { subject: unknown; source: string }[] }> = {
   [labelRuleTable.rows[0].id]: parentExamples,
@@ -17,8 +19,10 @@ const examples: Record<string, { pass: { subject: unknown; source: string }[]; f
   [labelRuleTable.rows[2].id]: amountEnclosedInNameExamples,
   [labelRuleTable.dailyValueCells[0].id]: dailyValueOnlyRowExamples,
   [labelRuleTable.formulas[0].id]: ingredientListNotAFormulaExamples,
+  [labelRuleTable.ingredientRoles[0].id]: bracketedMayContainExamples,
+  [labelRuleTable.servingUncertainty[0].id]: servingUncertaintyExamples,
 };
-const checkRules: LabelRule<unknown>[] = [...labelRuleTable.rows, ...labelRuleTable.ingredientItems, ...labelRuleTable.cells, ...labelRuleTable.dailyValueCells, ...labelRuleTable.formulas] as LabelRule<unknown>[];
+const checkRules: LabelRule<unknown>[] = [...labelRuleTable.rows, ...labelRuleTable.ingredientItems, ...labelRuleTable.cells, ...labelRuleTable.dailyValueCells, ...labelRuleTable.formulas, ...labelRuleTable.ingredientRoles, ...labelRuleTable.servingUncertainty] as LabelRule<unknown>[];
 
 describe("label rule table", () => {
   it("every rule has a unique ID, a date, a reason and real examples on both sides", () => {

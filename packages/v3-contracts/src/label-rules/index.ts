@@ -6,6 +6,8 @@ import { ingredientListNotAFormulaRule } from "./ingredient-list-not-a-formula.j
 import { ingredientNotOnlyParenthesisRule } from "./ingredient-items.js";
 import { parentRule } from "./parent.js";
 import { servingSizeEquivalences } from "./serving-size.js";
+import { bracketedMayContainIsNotADeclarationRule } from "./bracketed-may-contain-is-not-a-declaration.js";
+import { servingsPerContainerUncertaintyIsAWarningRule } from "./servings-per-container-uncertainty-is-a-warning.js";
 
 export * from "./rule.js";
 export type { LabelRow, RowSubject } from "./rows.js";
@@ -17,6 +19,8 @@ export { ingredientListNotAFormulaRule, isIngredientListFormula } from "./ingred
 export { ingredientNotOnlyParenthesisRule } from "./ingredient-items.js";
 export { parentRule, openGroupsBefore } from "./parent.js";
 export { servingSizeEquivalences, sameServingSize } from "./serving-size.js";
+export { bracketedMayContainIsNotADeclarationRule, outsideBrackets } from "./bracketed-may-contain-is-not-a-declaration.js";
+export { servingsPerContainerUncertaintyIsAWarningRule, type ServingUncertaintySubject } from "./servings-per-container-uncertainty-is-a-warning.js";
 
 /** Every rule in the table, by kind; the table test requires examples for each ID. */
 export const labelRuleTable = {
@@ -25,5 +29,7 @@ export const labelRuleTable = {
   cells: [emptyCellRule],
   dailyValueCells: [dailyValueOnlyRowRule],
   formulas: [ingredientListNotAFormulaRule],
+  ingredientRoles: [bracketedMayContainIsNotADeclarationRule],
+  servingUncertainty: [servingsPerContainerUncertaintyIsAWarningRule],
   servingSize: servingSizeEquivalences,
 } as const;

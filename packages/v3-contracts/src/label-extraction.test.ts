@@ -76,6 +76,21 @@ it("model uncertainty remains reviewable; a heading-only group and a missing ser
   expect(assessed.codes).not.toContain("LABEL.FORMULA_INCOMPLETE");
   expect(assessed.warnings.map(w => w.code)).toEqual(expect.arrayContaining(["LABEL.SERVING_SIZE_MISSING", "LABEL.GROUP_HEADING_ONLY"]));
 });
+it("keeps parenthesized ingredient sources and rejects top-level declarations", () => {
+  const c = gncLabelFixture();
+  c.otherIngredients!.items.push({ text: "colors (may contain black carrot, elderberry & beetroot concentrates)", evidence: "colors (may contain black carrot, elderberry & beetroot concentrates)" });
+  expect(assess(c).codes).not.toContain("LABEL.INGREDIENT_ROLE_INVALID");
+  c.otherIngredients!.items.push({ text: "Contains: Soy", evidence: "Contains: Soy" });
+  expect(assess(c).codes).toContain("LABEL.INGREDIENT_ROLE_INVALID");
+});
+it("warns only for sole unknown serving metadata with a retained formula", () => {
+  const c = gncLabelFixture();
+  c.formula!.servingsPerContainer = null;
+  c.issues = [{ code: "UNREADABLE", detail: "Servings per container is not visible in the supplied image." }];
+  expect(assess(c)).toEqual(expect.objectContaining({ status: "candidate", codes: [], warnings: [expect.objectContaining({ code: "LABEL.SERVINGS_PER_CONTAINER_UNCERTAIN" })] }));
+  c.issues = [{ code: "METADATA_CONFLICT", detail: "The image contains two labels with different servings per container: 15 and 30." }];
+  expect(assess(c).codes).toContain("LABEL.EVIDENCE_UNCERTAIN");
+});
 it("partial sections cannot bypass bad doses", () => {
   const c = gncLabelFixture(); c.otherIngredients = null; c.formula!.columns[0]!.rows = [c.formula!.columns[0]!.rows[0]!];
   c.ingredientsComplete = false;

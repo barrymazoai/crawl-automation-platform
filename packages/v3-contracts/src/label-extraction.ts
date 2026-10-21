@@ -8,7 +8,9 @@ import { acceptsDailyValueOnlyRow } from "./label-rules/daily-value-only-row.js"
 import { acceptsAmountInName } from "./label-rules/amount-enclosed-in-name.js";
 import { isIngredientListFormula, ingredientListNotAFormulaRule } from "./label-rules/ingredient-list-not-a-formula.js";
 import { applyLabelRules } from "./label-rules/rule.js";
-export { hasConfirmedNoOtherIngredients } from "./label-ingredient-declaration.js";
+import { bracketedMayContainIsNotADeclarationRule } from "./label-rules/bracketed-may-contain-is-not-a-declaration.js";
+import { servingsPerContainerUncertaintyIsAWarningRule } from "./label-rules/servings-per-container-uncertainty-is-a-warning.js";
+export { hasClosedPrintedIngredients, hasConfirmedNoOtherIngredients } from "./label-ingredient-declaration.js";
 
 /** New opt-in extraction protocol; never reinterpret a legacy candidate as this codec. */
 export const labelExtractionVersion = "label-extraction/1" as const;
@@ -88,10 +90,11 @@ export function assessLabelCandidate(candidate: LabelCandidate) {
     componentCount += column.rows.filter(row => row.kind === "blend_component").length;
   }
   const hasIngredients = componentCount > 0 || !!candidate.otherIngredients || hasConfirmedNoOtherIngredients(candidate);
+  if ("ingredientDeclaration" in candidate && candidate.ingredientDeclaration && !candidate.ingredientDeclaration.wholeLabelVisible && candidate.ingredientsComplete && candidate.otherIngredients) warnings.push({ code: "LABEL.WHOLE_LABEL_NOT_VISIBLE", detail: "complete printed ingredient list retained without whole-label coverage" });
   if (ingredientDeclarationIncomplete(candidate)) flag("LABEL.INGREDIENTS_INCOMPLETE", "no complete printed list or enabled whole-label absence declaration");
   if (candidate.otherIngredients) {
     if (!isIngredientHeading(candidate.otherIngredients.heading.text)) flag("LABEL.INGREDIENT_HEADING_INVALID", `ingredient heading "${candidate.otherIngredients.heading.text.slice(0, 80)}" is not an ingredients heading`);
-    if (candidate.otherIngredients.items.some(i => /\b(?:contains\s*:|may\s+contain|manufactured\s+(?:in|on)|shared\s+equipment)/i.test(i.text))) flag("LABEL.INGREDIENT_ROLE_INVALID", "an ingredient item is an allergen/manufacturing statement");
+    candidate.otherIngredients.items.forEach(i => applyLabelRules([bracketedMayContainIsNotADeclarationRule], i.text).forEach(f => flag(f.code, f.detail, f.rule)));
   }
   if (!candidate.formula && candidate.formulaComplete || !hasIngredients && candidate.ingredientsComplete) flag("LABEL.COMPLETENESS_CONFLICT", "marked complete with nothing extracted");
   if (formula?.drugFacts && !validDrugFormula(candidate)) flag("LABEL.FORMULA_INCOMPLETE", "Drug Facts requires its heading, active ingredient columns and inactive ingredients");
@@ -100,7 +103,9 @@ export function assessLabelCandidate(candidate: LabelCandidate) {
   // size keeps its formula with an empty serving size, never one guessed from directions.
   if (formula && !formula.servingSize && !formula.drugFacts) warnings.push({ code: "LABEL.SERVING_SIZE_MISSING", detail: "formula has no printed serving size; kept with an empty serving size" });
   if (hasIngredients && !candidate.ingredientsComplete) flag("LABEL.INGREDIENTS_INCOMPLETE", candidate.otherIngredients ? "model marked the ingredient list incomplete" : "only blend components, no Other Ingredients list");
-  const uncertain = candidate.issues.find(i => ["UNREADABLE", "AMBIGUOUS", "METADATA_CONFLICT"].includes(i.code));
+  const servingWarning = applyLabelRules([servingsPerContainerUncertaintyIsAWarningRule], { formula, issues: candidate.issues });
+  warnings.push(...servingWarning);
+  const uncertain = servingWarning.length ? null : candidate.issues.find(i => ["UNREADABLE", "AMBIGUOUS", "METADATA_CONFLICT"].includes(i.code));
   if (uncertain) flag("LABEL.EVIDENCE_UNCERTAIN", `model reported ${uncertain.code}${"detail" in uncertain && uncertain.detail ? `: ${String(uncertain.detail).slice(0, 160)}` : ""}`);
   // A contradiction is a section marked complete and also reported missing. A partly visible section reported
   // missing is only incomplete (owner 2026-10-07): it is left out, and the label's complete sections still count.

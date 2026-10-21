@@ -14,6 +14,11 @@ export const labelValidationWarnings = defineErrors({
     category: "VALIDATION",
     message: "The formula is kept with an empty serving size because the label prints none.",
   },
+  "LABEL.SERVINGS_PER_CONTAINER_UNCERTAIN": {
+    category: "VALIDATION",
+    message:
+      "The formula is retained although its serving count or size is not visible or readable.",
+  },
   "LABEL.AMOUNT_IN_NAME": {
     category: "VALIDATION",
     message:
@@ -23,6 +28,11 @@ export const labelValidationWarnings = defineErrors({
     category: "VALIDATION",
     message:
       "The answer's formula only repeats the printed Ingredients list; the label has no formula panel.",
+  },
+  "LABEL.WHOLE_LABEL_NOT_VISIBLE": {
+    category: "VALIDATION",
+    message:
+      "The complete printed ingredient list is retained although the whole physical label is not visible.",
   },
 });
 
