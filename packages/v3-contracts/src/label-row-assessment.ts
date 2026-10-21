@@ -5,10 +5,16 @@ type Row = NonNullable<LabelCandidate["formula"]>["columns"][number]["rows"][num
 const rowText = (row: Row, index: number) =>
   `row ${index} "${row.name.text.slice(0, 80)}"${row.amount ? ` amount "${row.amount.text.slice(0, 30)}"` : ""}`;
 
-/** Existing row checks shared by every extraction protocol; never repair a missing dose. */
-export function assessLabelRows(rows: Row[]) {
+/**
+ * Existing row checks shared by every extraction protocol; never repair a missing dose. `emptyCells` are the rows the
+ * empty-cell rule accepted (blank in this column, printed in another): their amount checks are the rule's.
+ */
+export function assessLabelRows(rows: Row[], emptyCells: ReadonlySet<number> = new Set()) {
   const result = assessLabelGroups(rows);
   rows.forEach((row, index) => {
+    if (emptyCells.has(index)) {
+      return;
+    }
     const detail = rowText(row, index);
     result.findings.push(...amountFindings(row, detail));
     const parent = row.parentRowIndex === null ? undefined : rows[row.parentRowIndex];

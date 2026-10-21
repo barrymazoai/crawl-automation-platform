@@ -3,6 +3,8 @@ import { drugFactsHeading, drugActiveHeading, drugInactiveHeading } from "./labe
 import { LabelIngredientDeclarationSchema } from "./label-ingredient-declaration.js";
 import { hasConfirmedNoOtherIngredients, ingredientDeclarationIncomplete } from "./label-ingredient-declaration.js";
 import { assessLabelRows } from "./label-row-assessment.js";
+import { acceptedEmptyCells, emptyCellRule } from "./label-rules/empty-cell.js";
+import { applyLabelRules } from "./label-rules/rule.js";
 export { hasConfirmedNoOtherIngredients } from "./label-ingredient-declaration.js";
 
 /** New opt-in extraction protocol; never reinterpret a legacy candidate as this codec. */
@@ -63,8 +65,10 @@ export function assessLabelCandidate(candidate: LabelCandidate) {
   // Every code keeps the first place that raised it, so a Review can say which row broke which rule.
   const flag = (code: string, detail: string, rule?: string) => { if (!codes.has(code)) findings.push({ code, detail, ...(rule ? { rule } : {}) }); codes.add(code); };
   let componentCount = 0;
-  for (const column of candidate.formula?.columns ?? []) {
-    const rows = assessLabelRows(column.rows);
+  const columns = candidate.formula?.columns ?? [];
+  for (const [at, column] of columns.entries()) {
+    column.rows.forEach((_, index) => applyLabelRules([emptyCellRule], { columns, column: at, index }).forEach(f => flag(f.code, f.detail, f.rule)));
+    const rows = assessLabelRows(column.rows, acceptedEmptyCells(columns, at));
     rows.findings.forEach(finding => flag(finding.code, finding.detail, finding.rule));
     warnings.push(...rows.warnings);
     componentCount += column.rows.filter(row => row.kind === "blend_component").length;

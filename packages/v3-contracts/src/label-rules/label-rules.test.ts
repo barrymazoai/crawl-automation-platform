@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { applyLabelRules, labelRuleTable, sameServingSize, type LabelRule } from "./index.js";
 import { blendPercentageExamples } from "./examples/blend-percentage.js";
+import { emptyCellExamples } from "./examples/empty-cell.js";
 import { ingredientItemExamples } from "./examples/ingredient-items.js";
 import { parentExamples } from "./examples/parent.js";
 import { servingSizeExamples } from "./examples/serving-size.js";
@@ -9,8 +10,9 @@ const examples: Record<string, { pass: { subject: unknown; source: string }[]; f
   [labelRuleTable.rows[0].id]: parentExamples,
   [labelRuleTable.rows[1].id]: blendPercentageExamples,
   [labelRuleTable.ingredientItems[0].id]: ingredientItemExamples,
+  [labelRuleTable.cells[0].id]: emptyCellExamples,
 };
-const checkRules: LabelRule<unknown>[] = [...labelRuleTable.rows, ...labelRuleTable.ingredientItems] as LabelRule<unknown>[];
+const checkRules: LabelRule<unknown>[] = [...labelRuleTable.rows, ...labelRuleTable.ingredientItems, ...labelRuleTable.cells] as LabelRule<unknown>[];
 
 describe("label rule table", () => {
   it("every rule has a unique ID, a date, a reason and real examples on both sides", () => {
