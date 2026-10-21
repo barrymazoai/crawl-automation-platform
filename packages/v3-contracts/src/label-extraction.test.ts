@@ -1,6 +1,6 @@
 import { expect, it } from "vitest";
 import { z } from "zod";
-import { LabelImageCandidateSchema, LabelTextWireSchema, assessLabelCandidate, labelFormulaStructure, type LabelImageCandidate } from "./label-extraction.js";
+import { LabelImageCandidateSchema, LabelTextWireSchema, assessLabelCandidate, isIngredientHeading, labelFormulaStructure, type LabelImageCandidate } from "./label-extraction.js";
 import { VisionCandidateSchema } from "./vision.js";
 import { gncLabelFixture } from "./label.fixture.js";
 import { labelImageIntegrityCodes } from "./label-quality.js";
@@ -8,6 +8,14 @@ import { ingredientListNotAFormulaExamples } from "./label-rules/examples/ingred
 import { dailyValueOnlyRowExamples } from "./label-rules/examples/daily-value-only-row.js";
 import { amountEnclosedInNameExamples } from "./label-rules/examples/amount-enclosed-in-name.js";
 const assess = (c = gncLabelFixture()) => assessLabelCandidate(LabelImageCandidateSchema.parse(c));
+it("accepts exact inactive heading aliases without generic inactive prose", () => {
+  for (const heading of ["inactive", "INACTIVE:", "Inactive ingredient", "Inactive Ingredients:", "inactive ingredient(s):"]) {
+    expect(isIngredientHeading(heading)).toBe(true);
+  }
+  for (const heading of ["inactive substances", "inactive: may contain milk", "inactivity"]) {
+    expect(isIngredientHeading(heading)).toBe(false);
+  }
+});
 it("treats a duplicated Ingredients list as partial without rewriting the candidate", () => {
   const original = ingredientListNotAFormulaExamples.pass[1]!.subject;
   const candidate = structuredClone(original);

@@ -3,8 +3,96 @@ import { drugLines, drugWire, decodeDrug } from "../../testing/drug-label-fixtur
 import { defined } from "../../testing/defined.js";
 import { decodeLabelText } from "./label-decoder.js";
 import { labelTextPrompt } from "./label-instructions.js";
+import { simpleLabel } from "../../testing/simple-label.js";
 
 describe("Drug Facts text protocol", () => {
+  it("decodes a compressed active/inactive line and its isolated Ingredients heading", () => {
+    const text =
+      "Ingredients\n\nDrug classification: active ingredient in each lozenge menthol 5mg purposes antitussive inactive sucrose";
+    const anchor = (line: number, value: string) => ({ fromLine: line, toLine: line, text: value });
+    const wire = {
+      codec: "label-extraction/1",
+      formula: {
+        drugFacts: null,
+        servingSize: null,
+        servingsPerContainer: null,
+        columns: [
+          {
+            heading: anchor(3, "active ingredient"),
+            rows: [
+              {
+                kind: "nutrient",
+                name: anchor(3, "menthol"),
+                amount: anchor(3, "5mg"),
+                dailyValue: null,
+                purpose: anchor(3, "antitussive"),
+                amountStatus: "printed",
+                parentRowIndex: null,
+              },
+            ],
+          },
+        ],
+      },
+      otherIngredients: { heading: anchor(3, "inactive"), items: [anchor(3, "sucrose")] },
+      formulaComplete: true,
+      ingredientsComplete: true,
+      exclusions: [
+        { quote: anchor(1, "Ingredients"), reason: "heading" },
+        { quote: anchor(3, "Drug classification:"), reason: "metadata" },
+        { quote: anchor(3, "in each lozenge"), reason: "metadata" },
+        { quote: anchor(3, "purposes"), reason: "heading" },
+      ],
+      issues: [],
+    };
+    const decode = (policyVersion: string) =>
+      decodeLabelText({
+        text,
+        scope: { range: { start: 0, end: text.length } },
+        response: JSON.stringify(wire),
+        policyVersion,
+      });
+    expect(decode("label-text/6").codes).toEqual([]);
+    defined(wire.exclusions[2]).reason = "heading";
+    expect(decode("label-text/6").codes).toEqual([]);
+    expect(decode("label-text/5").codes).toContain("LABEL.COVERAGE_UNCERTAIN");
+  });
+
+  it("keeps bare inactive and purposes under Review on an ordinary label", () => {
+    const fixture = simpleLabel();
+    fixture.lines[6] = "inactive Cellulose, and Silica";
+    const other = defined(fixture.wire.otherIngredients);
+    other.heading.text = "inactive";
+    const text = fixture.lines.join("\n");
+    const decode = () =>
+      decodeLabelText({
+        text,
+        scope: { range: { start: 0, end: text.length } },
+        response: JSON.stringify(fixture.wire),
+        policyVersion: "label-text/6",
+      });
+    expect(decode().codes).toContain("LABEL.INGREDIENT_HEADING_INVALID");
+    fixture.lines.splice(6, 0, "purposes");
+    other.heading.fromLine = 8;
+    other.heading.toLine = 8;
+    other.items.forEach((item) => {
+      item.fromLine = 8;
+      item.toLine = 8;
+    });
+    fixture.wire.exclusions.push({
+      quote: { fromLine: 7, toLine: 7, text: "purposes" },
+      reason: "heading",
+    });
+    const withPurpose = fixture.lines.join("\n");
+    expect(
+      decodeLabelText({
+        text: withPurpose,
+        scope: { range: { start: 0, end: withPurpose.length } },
+        response: JSON.stringify(fixture.wire),
+        policyVersion: "label-text/6",
+      }).codes,
+    ).toContain("LABEL.COVERAGE_UNCERTAIN");
+  });
+
   it("keeps strengths and Purpose as exact quotes without inventing serving metadata", () => {
     const result = decodeDrug();
     expect(result.status).toBe("candidate");

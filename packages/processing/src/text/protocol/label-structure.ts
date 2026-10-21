@@ -1,6 +1,7 @@
 import { completeIngredientItem, ingredientGap } from "./ingredient-boundaries.js";
 import { labelValidationErrors } from "../../label/validation-errors.js";
 import { isIngredientHeading, type LabelTextCandidateSchema } from "@crawl-automation/v3-contracts";
+import { pseudoDrugFactsContext, pseudoInactivePositionAllowed } from "./pseudo-drug-facts.js";
 import type { z } from "zod";
 
 type Candidate = z.infer<typeof LabelTextCandidateSchema>;
@@ -12,6 +13,7 @@ type Ingredients = NonNullable<Candidate["otherIngredients"]>;
 const clauseEnd = /(?:\d|%|\)|†|\*|\d\s*(?:mg|mcg|iu|g)|[.,;:!?|]|<p>|-\s*-)\s*$/i;
 const warning =
   /\b(?:contains\s*:|may\s+contain|manufactured\s+(?:in|on)|processed\s+(?:in|on)|shared\s+equipment)/i;
+const INACTIVE_HEADING = /^inactive(?:\s+ingredients?(?:\(s\))?)?\s*:?$/i;
 
 /** Label codes for formula rows out of printed order within their column. */
 export function rowOrderCodes(candidate: Candidate): string[] {
@@ -31,7 +33,13 @@ export function ingredientCodes(candidate: Candidate, text: string): string[] {
     return [];
   }
   const codes = new Set<string>();
-  if (!ingredientHeadingAllowed(other) || !ingredientHeadingPositionAllowed(candidate, text)) {
+  if (
+    !ingredientHeadingAllowed(other) ||
+    (/^inactive$/i.test(other.heading.text.trim()) &&
+      !candidate.formula?.drugFacts &&
+      !pseudoDrugFactsContext(candidate, text)) ||
+    !ingredientHeadingPositionAllowed(candidate, text)
+  ) {
     codes.add(labelValidationErrors.code("LABEL.INGREDIENT_HEADING_INVALID"));
   }
   if (ingredientItemsAreRows(other)) {
@@ -55,20 +63,40 @@ function ingredientHeadingPositionAllowed(candidate: Candidate, text: string): b
   }
   const lineStart = text.lastIndexOf("\n", heading.start - 1) + 1;
   const before = text.slice(lineStart, heading.start).trim();
-  if (!before || clauseEnd.test(before) || /\band\s+the$/i.test(before)) {
+  if (simpleClausePrefix(before)) {
     return true;
   }
-  if (
-    /(?:daily\s+value(?:\s*\(dv\))?\s+not\s+established|\d+(?:\.\d+)?\s*mg\s+per\s+tablet)$/i.test(
-      before,
-    )
-  ) {
+  if (doseClausePrefix(before)) {
     return true;
   }
+  return inactiveClausePositionAllowed(candidate, text, {
+    headingStart: heading.start,
+    headingText: heading.text,
+    before,
+  });
+}
+
+function simpleClausePrefix(before: string): boolean {
+  return !before || clauseEnd.test(before) || /\band\s+the$/i.test(before);
+}
+
+function doseClausePrefix(before: string): boolean {
+  return /(?:daily\s+value(?:\s*\(dv\))?\s+not\s+established|\d+(?:\.\d+)?\s*mg\s+per\s+tablet)$/i.test(
+    before,
+  );
+}
+
+function inactiveClausePositionAllowed(
+  candidate: Candidate,
+  text: string,
+  source: { headingStart: number; headingText: string; before: string },
+): boolean {
   return (
-    /^inactive(?:\s+ingredients?(?:\(s\))?)?\s*:?$/i.test(heading.text.trim()) &&
+    INACTIVE_HEADING.test(source.headingText.trim()) &&
     (!!candidate.formula?.drugFacts ||
-      adjacentIngredientsPrefix(candidate, text, { headingStart: heading.start, before }))
+      (pseudoDrugFactsContext(candidate, text) &&
+        pseudoInactivePositionAllowed(candidate, text, source.headingStart)) ||
+      adjacentIngredientsPrefix(candidate, text, source))
   );
 }
 

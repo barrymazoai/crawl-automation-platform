@@ -3,7 +3,7 @@ import { uncoveredSpans } from "./coverage.js";
 import type { Span } from "./evidence-lines.js";
 import { ingredientGap } from "./ingredient-boundaries.js";
 import { STANDARD_FOOTNOTE } from "./label-footnotes.js";
-import { anchoredHeadings } from "./label-headings.js";
+import { anchoredHeadings, isolatedIngredientsHeadings } from "./label-headings.js";
 
 const COLUMN_LABEL = /(?:Amt\s+Per\s+Serving\s*:|%\s*Daily\s+Value\s*:)/gi;
 const PARAGRAPH_TAG = /<\/?p>/gi;
@@ -17,7 +17,11 @@ export function labelCoverage(
   placed: readonly Span[],
 ): Span[] {
   const { text, range } = source;
-  const derived = [...anchoredHeadings(candidate, text, range), ...paragraphTags(text, range)];
+  const derived = [
+    ...anchoredHeadings(candidate, text, range),
+    ...isolatedIngredientsHeadings(candidate, text, range),
+    ...paragraphTags(text, range),
+  ];
   const items = candidate.otherIngredients?.items ?? [];
   items.forEach((item, index) => {
     const previous = items[index - 1];

@@ -2,6 +2,7 @@ import { isDvFootnote } from "./label-footnotes.js";
 import { allergenStatement, trademarkStatement } from "./label-notes.js";
 import { ingredientGap } from "./ingredient-boundaries.js";
 import { drugExclusionAllowed } from "./drug-label.js";
+import { pseudoDrugExclusionAllowed, pseudoDrugFactsContext } from "./pseudo-drug-facts.js";
 import {
   knownStructuralExclusion,
   specialStructuralExclusion,
@@ -31,6 +32,11 @@ export function exclusionCodes(judged: Judged): string[] {
         DRUG_POLICIES.includes(judged.policyVersion) &&
         judged.candidate.formula?.drugFacts &&
         drugExclusionAllowed(exclusion, judged.text, judged.candidate)
+      ) &&
+      !(
+        judged.policyVersion === "label-text/6" &&
+        pseudoDrugFactsContext(judged.candidate, judged.text) &&
+        pseudoDrugExclusionAllowed(exclusion, judged.candidate, judged.text)
       ),
   );
   return uncertain ? [labelValidationErrors.code("LABEL.COVERAGE_UNCERTAIN")] : [];

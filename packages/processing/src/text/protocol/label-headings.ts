@@ -83,6 +83,39 @@ export function anchoredHeadings(candidate: LabelTextCandidate, text: string, ra
   return spans;
 }
 
+/** An isolated Amazon Ingredients line labels the immediately following quoted formula or ingredient clause. */
+export function isolatedIngredientsHeadings(
+  candidate: LabelTextCandidate,
+  text: string,
+  range: Span,
+): Span[] {
+  const headings = [
+    ...(candidate.formula?.columns.map((column) => column.heading).filter((field) => !!field) ??
+      []),
+    candidate.otherIngredients?.heading,
+  ].filter((field) => !!field);
+  return [
+    ...text.slice(range.start, range.end).matchAll(/^[ \t]*Ingredients[ \t]*(?=\r?$)/gim),
+  ].flatMap((match) => {
+    const start = range.start + match.index;
+    const end = start + match[0].length;
+    const next = /^(?:\r?\n[ \t]*)+([^\r\n]+)/.exec(text.slice(end, range.end));
+    const nextLine = next?.[1];
+    if (!next || !nextLine) {
+      return [];
+    }
+    const lineStart = end + next[0].length - nextLine.length;
+    const lineEnd = lineStart + nextLine.length;
+    const first = headings.find(
+      (field) =>
+        field.start >= lineStart &&
+        field.start < lineEnd &&
+        /^(?:Drug classification:\s*)?$/i.test(text.slice(lineStart, field.start)),
+    );
+    return first ? [{ start, end }] : [];
+  });
+}
+
 function factsHeadingSpan(
   formula: NonNullable<LabelTextCandidate["formula"]>,
   text: string,

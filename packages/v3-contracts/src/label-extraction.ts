@@ -58,6 +58,7 @@ export type LabelCandidate = LabelTextCandidate | LabelImageCandidate;
  * headings and warnings, which is what this rule exists for. */
 export function isIngredientHeading(raw: string): boolean {
   const text = raw.trim();
+  if (/^inactive(?:\s+ingredients?(?:\(s\))?)?\s*:?$/i.test(text)) return true;
   if (!/\b(?:ingredients?|ingr[e\.]{0,2}dients?|oher\s+ingredients)\b/i.test(text)) return false;
   if (/\b(?:supplement|nutrition|drug)\s+facts\b|amount\s+per\s+serving|daily\s+value|contains\s*:|may\s+contain|allergen/i.test(text)) return false;
   return text.length <= 80;
