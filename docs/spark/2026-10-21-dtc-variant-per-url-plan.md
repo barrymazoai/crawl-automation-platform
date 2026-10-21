@@ -84,3 +84,26 @@
 2. **共用图库政策**：每个规格任务把整库图都归自己，不同面板靠 `FORMULA_CONFLICT` 拦截，而不是再调模型判归属。接受？
 3. **基础页无默认选中（Natrol、Kate Farms）**：按产品级（规格 null）收录一份，另外每个规格各收一份。接受？
 4. 上线后是否把 78 件老 Review 的基础任务全部重排。
+
+## 10. 离线重放结果（2026-10-21，Server 二，commit 807561b，`tools/replay-dtc-variants.mts`，留存页 2,065 份）
+
+多规格页 404 份（其中 158 份基础页没有默认选中），规格地址 1,043 条。
+
+| site | 多规格页 | 基础页有默认 | 规格地址 | 读出 | selected = 请求 | facts | 证据图中位数 | 失败 |
+|---|---|---|---|---|---|---|---|---|
+| solaray.com | 146 | 146 | 320 | 320 | 146 | 0 | 9 | - |
+| jarrow.com | 90 | 0 | 198 | 198 | 198 | 0 | 10 | -（修 807561b 前 27 条 IDENTITY_UNVERIFIED：JSON-LD 路径不认 `?variant=`） |
+| www.natrol.com | 46 | 0 | 112 | 112 | 112 | 112 | 1 | - |
+| shop.katefarms.com | 0 | 0 | 94 | 94 | 94 | 0 | 4 | - |
+| www.blueshiftnutrition.com | 26 | 26 | 60 | 60 | 26 | 44 | 6 | - |
+| www.tryauri.com | 0 | 0 | 39 | 39 | 36 | 0 | 62 | - |
+| womaness.com | 11 | 0 | 33 | 33 | 33 | 0 | 9 | - |
+| tallyhealth.com | 11 | 0 | 33 | 33 | 33 | 0 | 6 | - |
+| lovewellness.com | 11 | 11 | 26 | 26 | 11 | 0 | 14 | - |
+| shop.hmwmethod.com | 11 | 11 | 22 | 22 | 11 | 0 | 2 | - |
+| zahlers.com | 2 | 2 | 6 | 6 | 2 | 0 | 26 | - |
+
+口径说明：
+- "selected = 请求"只在基础页**没有**默认选中的站能离线判断（Jarrow、Natrol、Kate Farms、womaness、tallyhealth 全中）。有默认选中的站（solaray、blueshift、lovewellness、hmwmethod、zahlers）留存的是基础页 HTML，表单里永远是默认规格，离线必然不等于请求；线上 Shopify 按 `?variant=` 服务端渲染表单，这一项只能在真实站对照里验证。若线上某主题真不按 `?variant=` 渲染，页面身份与地址不符 → 走共享采集的 `identity_conflict` sighting，不会把错的规格收进来（adapter.test 已断言）。
+- "featured" 全 0：这些店的 variant 没有单独 `featured_image`，图库共用；评估依据是证据图数（每个规格任务拿到整库）。
+- Kate Farms / tryauri 的留存任务 URL 本身带 `?variant=`，所以没有"基础页"行。

@@ -69,28 +69,102 @@ export async function executeEgoScript(settings: EgoSettings, options: CommandOp
     killDescendants: true,
     reject: false,
   });
-  const output = collectMessages(subprocess.all, options.opened);
+  // The CLI relays the script's console lines on stderr and writes its own output on stdout; each stream is read
+  // on its own so one cannot splice into the other's lines.
+  const output = collectMessages([subprocess.stderr, subprocess.stdout], options.opened);
   const [answer, captured] = await Promise.all([subprocess, output]);
   return { answer, pid: subprocess.pid, ...captured };
 }
 
-async function collectMessages(stream: Readable, opened?: (targetId: string) => Promise<void>) {
+/** A CLI notice the Ego runtime prints asynchronously, e.g. `[ego-browser:notice] Ego Lite update is available…`. */
+const CLI_NOTICE = /\[ego-browser:[a-z]+\][^\n]*$/u;
+
+/**
+ * Assembles marker messages from output lines. A notice the CLI prints while a long line is still being written
+ * splits that line in two (a 1 MB page ended "Unterminated string in JSON at position 579148", lovewellness.com,
+ * 2026-10-21): the fragment keeps waiting for its continuation lines, with the notice text removed, until the JSON
+ * parses. A line that parses but is not a known message is still a protocol failure.
+ */
+export function egoMessageAssembler(onMessage: (message: EgoMessage) => void | Promise<void>) {
+  return new EgoMessageAssembler(onMessage);
+}
+
+class EgoMessageAssembler {
+  private pending: string | null = null;
+  private failure: unknown;
+
+  constructor(private readonly onMessage: (message: EgoMessage) => void | Promise<void>) {}
+
+  async line(raw: string): Promise<void> {
+    const line = raw.replace(CLI_NOTICE, "");
+    if (line.startsWith(EGO_MARKER)) {
+      this.unterminated();
+      this.pending = line.slice(EGO_MARKER.length);
+    } else if (this.pending !== null) {
+      this.pending += line;
+    } else {
+      return;
+    }
+    await this.settle();
+  }
+
+  /** The failure, if any, once the stream has ended. */
+  end(): unknown {
+    this.unterminated();
+    return this.failure;
+  }
+
+  private fail(cause: unknown): void {
+    this.failure ??= egoErrors.create("BROWSER.PROTOCOL", { cause });
+  }
+
+  private unterminated(): void {
+    if (this.pending !== null) {
+      this.fail(new Error(`Unterminated Ego message: ${this.pending.slice(0, 200)}`));
+      this.pending = null;
+    }
+  }
+
+  private async settle(): Promise<void> {
+    if (this.pending === null) {
+      return;
+    }
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(this.pending);
+    } catch {
+      return; // A split line: wait for the rest.
+    }
+    const text = this.pending;
+    this.pending = null;
+    const message = MessageSchema.safeParse(parsed);
+    if (!message.success) {
+      this.fail(new Error(`Unknown Ego message: ${text.slice(0, 200)}`));
+      return;
+    }
+    await this.onMessage(message.data);
+  }
+}
+
+async function collectMessages(
+  streams: (Readable | null | undefined)[],
+  opened?: (targetId: string) => Promise<void>,
+) {
   const messages: EgoMessage[] = [];
   let failure: unknown;
-  const lines = createInterface({ input: stream, crlfDelay: Infinity });
-  for await (const line of lines) {
-    if (!line.startsWith(EGO_MARKER)) {
-      continue;
-    }
-    try {
-      const message = MessageSchema.parse(JSON.parse(line.slice(EGO_MARKER.length)));
+  const read = async (stream: Readable) => {
+    const assembler = egoMessageAssembler(async (message) => {
       messages.push(message);
       if (message.kind === "opened") {
         await opened?.(message.targetId);
       }
-    } catch (error) {
-      failure ??= egoErrors.create("BROWSER.PROTOCOL", { cause: error });
+    });
+    const lines = createInterface({ input: stream, crlfDelay: Infinity });
+    for await (const line of lines) {
+      await assembler.line(line);
     }
-  }
+    failure ??= assembler.end();
+  };
+  await Promise.all(streams.flatMap((stream) => (stream ? [read(stream)] : [])));
   return { messages, failure };
 }
