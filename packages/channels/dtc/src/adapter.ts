@@ -80,6 +80,14 @@ export const DTC_NON_SUPPLEMENT_CATEGORIES: readonly string[] = [
   "Essential Oil",
   "Essential Oils",
   "Aromatherapy",
+  // naturestruth.com 2026-10-21: its oils are typed by their name ("Peppermint") and tagged by use; these tags
+  // name external uses only (a diffuser, a spray, a massage or topical oil), never a supplement.
+  "Diffuser",
+  "Aroma Spray",
+  "Air Freshener",
+  "Topical Oil",
+  "Massage",
+  "Carrier Oil",
   "Skin Care",
   "Skincare",
   "Hair Care",
