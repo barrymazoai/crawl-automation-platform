@@ -39,7 +39,7 @@ export function previousVerdicts(
 
 const REUSABLE_REASONS = new Set(["keyword_screen_missed", "no_text"]);
 
-/** An image the previous round verified as matching no keyword; it never enters the label. */
+/** An image already verified as unmatched or as a reviewed front panel never enters the label. */
 function reusableImage(at: {
   source: SavedEvidenceSource;
   state: OrderedState;
@@ -47,17 +47,47 @@ function reusableImage(at: {
   verified: PreviousVerdicts;
 }) {
   const { source, state, index, verified } = at;
-  const unmatchedImage =
-    source.kind === "file-image" && state.status === "not_matched" && state.reason === undefined;
-  if (!unmatchedImage || index >= verified.covered) {
+  if (source.kind !== "file-image" || index >= verified.covered) {
     return null;
   }
   const diagnostic = verified.diagnostics.get(source.id);
-  const verdict = verified.outcomes.get(source.id)?.status === "not_matched";
-  return verdict && diagnostic && REUSABLE_REASONS.has(diagnostic.reason) ? diagnostic : null;
+  const outcome = verified.outcomes.get(source.id);
+  if (!diagnostic || !outcome) {
+    return null;
+  }
+  return reusableUnmatched(state, diagnostic, outcome) || reusableReview(state, diagnostic, outcome)
+    ? { diagnostic, outcome }
+    : null;
 }
 
-/** Owner 2026-10-21: reuse the verified "no keyword" verdict instead of re-reading the image and its OCR record. */
+function reusableUnmatched(
+  state: OrderedState,
+  diagnostic: NonNullable<OrderedDiagnostics["sourceDiagnostics"]>[number],
+  outcome: OrderedDiagnostics["outcomes"][number],
+) {
+  return (
+    state.status === "not_matched" &&
+    state.reason === undefined &&
+    outcome.status === "not_matched" &&
+    REUSABLE_REASONS.has(diagnostic.reason)
+  );
+}
+
+function reusableReview(
+  state: OrderedState,
+  diagnostic: NonNullable<OrderedDiagnostics["sourceDiagnostics"]>[number],
+  outcome: OrderedDiagnostics["outcomes"][number],
+) {
+  return (
+    state.status === "review" &&
+    outcome.status === "review" &&
+    !!outcome.code &&
+    outcome.evidenceKeys.length > 0 &&
+    diagnostic.reason === "model_no_label"
+  );
+}
+
+/** Reuse an absent-label verdict from this exact task prefix, retaining the original Review code and key. */
 export function reuseVerdict(
   evidence: DiagnosedOrderedEvidence,
   at: {
@@ -67,24 +97,53 @@ export function reuseVerdict(
     verified: PreviousVerdicts | null;
   },
 ): boolean {
-  const diagnostic = at.verified ? reusableImage({ ...at, verified: at.verified }) : null;
-  if (!diagnostic) {
+  const previous = at.verified ? reusableImage({ ...at, verified: at.verified }) : null;
+  if (!previous) {
     return false;
+  }
+  recordReusedOutcome(evidence, at.source.id, previous);
+  copyDiagnostic(evidence, at.source.id, previous.diagnostic);
+  return true;
+}
+
+function recordReusedOutcome(
+  evidence: DiagnosedOrderedEvidence,
+  sourceId: string,
+  previous: NonNullable<ReturnType<typeof reusableImage>>,
+) {
+  const { diagnostic, outcome } = previous;
+  if (diagnostic.reason === "model_no_label") {
+    (evidence.reusedOutcomes ??= new Map()).set(sourceId, outcome);
   }
   evidence.reasons.push({
     progress: 1,
     failure: {
-      sourceId: at.source.id,
-      code: "CHANNEL.LABEL_NO_SOURCE",
+      sourceId,
+      code:
+        diagnostic.reason === "model_no_label"
+          ? (outcome.code ?? "CHANNEL.LABEL_NO_SOURCE")
+          : "CHANNEL.LABEL_NO_SOURCE",
       executionFact: "executed",
+      ...(diagnostic.reason === "model_no_label" ? { evidenceKey: outcome.evidenceKeys[0] } : {}),
     },
   });
-  const current = evidence.sourceDiagnostics?.find((entry) => entry.sourceId === at.source.id);
+}
+
+function copyDiagnostic(
+  evidence: DiagnosedOrderedEvidence,
+  sourceId: string,
+  diagnostic: NonNullable<OrderedDiagnostics["sourceDiagnostics"]>[number],
+) {
+  const current = evidence.sourceDiagnostics?.find((entry) => entry.sourceId === sourceId);
   if (current) {
     current.reason = diagnostic.reason;
-    current.matchedKeywords = [];
+    if (diagnostic.detail) {
+      current.detail = diagnostic.detail;
+    }
+    if (diagnostic.reason !== "model_no_label") {
+      current.matchedKeywords = [];
+    }
   }
-  return true;
 }
 
 export function unmatchedDiagnostic(

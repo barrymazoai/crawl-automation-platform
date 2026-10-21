@@ -1,5 +1,5 @@
 import { isOrderedEvidencePolicy } from "@crawl-automation/v3-contracts";
-import { orderedProgress } from "./ordered-progress.js";
+import { noLabelSources, orderedProgress } from "./ordered-progress.js";
 import {
   ORDERED_DIAGNOSTICS_LIMIT,
   OrderedDiagnosticsSchema,
@@ -111,11 +111,13 @@ export class LabelOrderedSelection {
     if (!orderedProgress(request, evidence, order.length - attempted.length).complete) {
       throw labelFailure("CHANNEL.LABEL_SELECTION_UNVERIFIED");
     }
-    const selected = new Set(evidence.sources.map((source) => source.id));
+    const withoutLabel = noLabelSources(evidence);
+    const sources = evidence.sources.filter((source) => !withoutLabel.has(source.id));
+    const selected = new Set(sources.map((source) => source.id));
     const skipped = selection.states
       .filter((state) => !selected.has(state.id))
       .map((state) => state.id);
-    const decisions = decisionsFor(loaded, selection.states, selected);
+    const decisions = decisionsFor(loaded, selection.states, { selected, withoutLabel });
     await this.plans.publish(
       labelKeys.selection(selection.input),
       { request: selection, decisions },
@@ -125,7 +127,7 @@ export class LabelOrderedSelection {
       ? await this.plans.fullDocuments(loaded.manifest, signal)
       : [];
     return this.plans.publishManifest(
-      { input: selection.input, sources: evidence.sources, skipped, documents },
+      { input: selection.input, sources, skipped, documents },
       signal,
     );
   }
@@ -175,18 +177,20 @@ function assertCoverage(loaded: LoadedPlan, states: { id: string }[]) {
 function decisionsFor(
   loaded: LoadedPlan,
   states: { id: string; status: string; reason?: string | undefined }[],
-  selected: Set<string>,
+  verdict: { selected: Set<string>; withoutLabel: Set<string> },
 ) {
   const eligible = new Set(orderedSources(loaded));
   return states.map((state) => ({
     id: state.id,
-    action: selected.has(state.id) ? "selected" : "skipped",
-    reason: selected.has(state.id)
+    action: verdict.selected.has(state.id) ? "selected" : "skipped",
+    reason: verdict.selected.has(state.id)
       ? "verified_label_source"
-      : !eligible.has(state.id)
-        ? "no_label_section"
-        : state.status === "not_started"
-          ? "complete_label_already_selected"
-          : (state.reason ?? state.status),
+      : verdict.withoutLabel.has(state.id)
+        ? "model_no_label"
+        : !eligible.has(state.id)
+          ? "no_label_section"
+          : state.status === "not_started"
+            ? "complete_label_already_selected"
+            : (state.reason ?? state.status),
   }));
 }

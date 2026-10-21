@@ -56,6 +56,7 @@ it("uses a retained model answer for no-label detail without inventing a product
   candidate.otherIngredients = null;
   candidate.issues = [
     { code: "FORMULA_MISSING", detail: "Only the front of the bottle is visible." },
+    { code: "INGREDIENTS_MISSING", detail: "No ingredient list is visible." },
   ];
   const source = imageSource(candidate, 0);
   const result = noSourceSummary({

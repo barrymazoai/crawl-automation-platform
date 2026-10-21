@@ -1,6 +1,12 @@
-import { assessLabelCandidate, type LabelCandidate } from "@crawl-automation/v3-contracts";
+import {
+  assessLabelCandidate,
+  type LabelCandidate,
+  type LabelImageCandidate,
+} from "@crawl-automation/v3-contracts";
 import { labelValidationErrors } from "./validation-errors.js";
+import { imageReviewWithoutLabel } from "../assembly/source-without-label.js";
 import type { OrderedEvidence, OrderedState } from "./ordered-model.js";
+import type { OrderedDiagnostics } from "./ordered-diagnostics.js";
 
 type Record = OrderedEvidence["entries"][number]["record"];
 type Reviewed = NonNullable<OrderedEvidence["failures"][number]["reviewed"]>["record"];
@@ -16,6 +22,7 @@ export interface SourceDiagnostic {
 
 export interface DiagnosedOrderedEvidence extends OrderedEvidence {
   sourceDiagnostics?: SourceDiagnostic[];
+  reusedOutcomes?: Map<string, OrderedDiagnostics["outcomes"][number]>;
 }
 
 /** Small Review payload: the full originals and model answers remain in retained evidence. */
@@ -30,8 +37,8 @@ export function noSourceSummary(evidence: DiagnosedOrderedEvidence) {
 
 function compactDiagnostic(source: SourceDiagnostic, evidence: OrderedEvidence) {
   const candidate = diagnosticCandidate(source.sourceId, evidence);
-  const noLabel = candidate && !candidate.formula && !candidate.otherIngredients;
-  const detail = noLabel ? candidate.issues[0]?.detail : source.detail;
+  const noLabel = isNoLabelDiagnostic(source, candidate);
+  const detail = noLabel ? (candidate?.issues[0]?.detail ?? source.detail) : source.detail;
   return {
     sourceId: source.sourceId.slice(0, 128),
     kind: source.kind,
@@ -44,15 +51,34 @@ function compactDiagnostic(source: SourceDiagnostic, evidence: OrderedEvidence) 
   };
 }
 
-function diagnosticCandidate(sourceId: string, evidence: OrderedEvidence) {
+function isNoLabelDiagnostic(source: SourceDiagnostic, candidate: LabelImageCandidate | undefined) {
+  if (source.reason === "model_no_label") {
+    return true;
+  }
   return (
-    evidence.entries.find((entry) => entry.id === sourceId)?.candidate ??
-    evidence.failures.find((failure) => failure.id === sourceId)?.candidate
+    source.kind === "image" &&
+    !!candidate &&
+    imageReviewWithoutLabel({ id: source.sourceId, code: "", candidate, verifiedExecuted: true })
   );
 }
 
+function diagnosticCandidate(sourceId: string, evidence: OrderedEvidence) {
+  const entry = evidence.entries.find((item) => item.id === sourceId);
+  return entry?.kind === "image"
+    ? entry.candidate
+    : evidence.failures.find((failure) => failure.id === sourceId)?.candidate;
+}
+
 /** One source's own assessment; product conflicts are reported separately. */
-export function sourceOutcome(state: OrderedState, evidence: OrderedEvidence) {
+export function sourceOutcome(state: OrderedState, evidence: DiagnosedOrderedEvidence) {
+  const reused = evidence.reusedOutcomes?.get(state.id);
+  if (reused) {
+    return { ...reused, sections: [], executionFact: "executed", progress: 2 };
+  }
+  return freshOutcome(state, evidence);
+}
+
+function freshOutcome(state: OrderedState, evidence: OrderedEvidence) {
   const entry = evidence.entries.find((entry) => entry.id === state.id);
   const failure = evidence.failures.find((failure) => failure.id === state.id);
   const candidate = entry?.candidate ?? failure?.candidate;

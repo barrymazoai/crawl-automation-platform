@@ -32,7 +32,7 @@ export const OrderedDiagnosticsSchema = z.object({
   sourceOutcomes: SourceOutcomesSchema.optional(),
   /**
    * Owner 2026-10-21: every source's diagnostic as this round verified it, so the next round can reuse the verdicts
-   * of images that matched no keyword instead of re-reading each of them again (the walk was quadratic in images).
+   * of images that matched no keyword or whose verified model answer showed no label sections.
    */
   sourceDiagnostics: z
     .array(

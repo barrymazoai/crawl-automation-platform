@@ -1,5 +1,6 @@
 import { mergeLabelProduct } from "../assembly/label-merge.js";
 import { assemblyErrors } from "../assembly/assembly-errors.js";
+import { imageReviewWithoutLabel } from "../assembly/source-without-label.js";
 import {
   noSourceSummary,
   sourceOutcome,
@@ -19,20 +20,26 @@ export function orderedProgress(
   evidence: DiagnosedOrderedEvidence,
   untried = 0,
 ) {
-  const merged = evidence.sources.length
+  const withoutLabel = noLabelSources(evidence);
+  const eligible = {
+    entries: evidence.entries,
+    failures: evidence.failures.filter((failure) => !withoutLabel.has(failure.id)),
+  };
+  const sources = evidence.sources.filter((source) => !withoutLabel.has(source.id));
+  const merged = sources.length
     ? mergeLabelProduct(
         {
           operationId: request.input.operationId,
           observation: request.input.owner,
           evidencePolicy: request.input.evidencePolicy,
-          sources: evidence.sources,
+          sources,
         },
-        evidence,
+        eligible,
       )
     : null;
   const outcomes = request.states.map((state) => sourceOutcome(state, evidence));
   const conflicts = merged?.codes.filter((code) => code.endsWith("_CONFLICT")) ?? [];
-  const ranked = rankedFailures(outcomes, conflicts);
+  const ranked = rankedFailures(outcomes, conflicts, withoutLabel);
   const reason = primaryOrderedFailure(request.input.failurePolicy, ranked);
   return {
     complete: !evidence.terminal && completeLabel(merged, untried),
@@ -42,6 +49,16 @@ export function orderedProgress(
     outcomes,
     codes: merged?.codes ?? [],
   };
+}
+
+export function noLabelSources(evidence: DiagnosedOrderedEvidence) {
+  const ids = evidence.failures.filter(imageReviewWithoutLabel).map((failure) => failure.id);
+  for (const diagnostic of evidence.sourceDiagnostics ?? []) {
+    if (diagnostic.status === "review" && diagnostic.reason === "model_no_label") {
+      ids.push(diagnostic.sourceId);
+    }
+  }
+  return new Set(ids);
 }
 
 function noSourceDiagnostics(
@@ -54,7 +71,11 @@ function noSourceDiagnostics(
     : {};
 }
 
-function rankedFailures(outcomes: ReturnType<typeof sourceOutcome>[], conflicts: string[]) {
+function rankedFailures(
+  outcomes: ReturnType<typeof sourceOutcome>[],
+  conflicts: string[],
+  withoutLabel: Set<string>,
+) {
   return outcomes.flatMap((outcome, index) => {
     const conflict = sourceConflict(outcome.sections, conflicts);
     const code = conflict ?? outcome.code;
@@ -66,7 +87,14 @@ function rankedFailures(outcomes: ReturnType<typeof sourceOutcome>[], conflicts:
       code,
       executionFact: outcome.executionFact,
     };
-    return [{ failure, progress: outcome.progress + (conflict ? 10 : 0), index }];
+    return [
+      {
+        failure,
+        progress: outcome.progress + (conflict ? 10 : 0),
+        index,
+        noLabel: withoutLabel.has(outcome.sourceId),
+      },
+    ];
   });
 }
 
@@ -78,18 +106,19 @@ function completeLabel(merged: ReturnType<typeof mergeLabelProduct> | null, untr
 /** /1 breaks equal-progress ties; /2 always ranks a real failure above an absent label. */
 export function primaryOrderedFailure(
   policy: OrderedFailurePolicy | undefined,
-  ranked: { failure: SourceFailure; progress: number; index: number }[],
+  ranked: { failure: SourceFailure; progress: number; index: number; noLabel?: boolean }[],
 ) {
-  const useful = (code: string) => (policy && code !== "CHANNEL.LABEL_NO_SOURCE" ? 1 : 0);
-  return [...ranked].sort(
+  const useful = (entry: (typeof ranked)[number]) =>
+    policy && entry.failure.code !== "CHANNEL.LABEL_NO_SOURCE" && !entry.noLabel ? 1 : 0;
+  const first = [...ranked].sort(
     (left, right) =>
-      (policy === "source-failure-first/2"
-        ? useful(right.failure.code) - useful(left.failure.code)
-        : 0) ||
+      Number(!!left.noLabel) - Number(!!right.noLabel) ||
+      (policy === "source-failure-first/2" ? useful(right) - useful(left) : 0) ||
       right.progress - left.progress ||
-      useful(right.failure.code) - useful(left.failure.code) ||
+      useful(right) - useful(left) ||
       right.index - left.index,
-  )[0]?.failure;
+  )[0];
+  return first?.noLabel ? { ...first.failure, code: "CHANNEL.LABEL_NO_SOURCE" } : first?.failure;
 }
 
 function sourceConflict(sections: string[], conflicts: string[]) {

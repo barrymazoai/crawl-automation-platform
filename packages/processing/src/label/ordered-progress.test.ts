@@ -64,3 +64,25 @@ it("/2 retains no-source when there is no real failure, and handles an empty lis
   expect(primaryOrderedFailure("source-failure-first/2", [noLabel])).toEqual(noLabel.failure);
   expect(primaryOrderedFailure("source-failure-first/2", [])).toBeUndefined();
 });
+
+it("ranks an image proven to lack a label below a real error, and summarizes its sole failure as no source", () => {
+  const emptyReview = {
+    failure: {
+      sourceId: "front",
+      code: "VISION.LABEL_INGREDIENTS_INCOMPLETE",
+      executionFact: "executed",
+    },
+    progress: 4,
+    index: 2,
+    noLabel: true,
+  };
+  const real = failed("VISION.LABEL_AMOUNT_STATE_CONFLICT");
+  expect(primaryOrderedFailure("source-failure-first/2", [emptyReview, real])).toEqual(
+    real.failure,
+  );
+  expect(primaryOrderedFailure(undefined, [emptyReview, real])).toEqual(real.failure);
+  expect(primaryOrderedFailure("source-failure-first/2", [emptyReview])).toEqual({
+    ...emptyReview.failure,
+    code: "CHANNEL.LABEL_NO_SOURCE",
+  });
+});

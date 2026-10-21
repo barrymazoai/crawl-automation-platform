@@ -7,6 +7,7 @@ import {
   type VisionTask,
 } from "@crawl-automation/v3-contracts";
 import { sourceReviewFailure } from "../assembly/source-review.js";
+import { blocksFallback, recordModelReview } from "./ordered-model-review.js";
 import { labelFailure } from "./label-errors.js";
 import type { LabelPlans } from "./label-plans.js";
 import type { LabelInspection } from "./selection-model.js";
@@ -21,8 +22,8 @@ export interface OrderedDeps {
 
 /**
  * Read only the sources actually attempted, re-verifying originals and exact task receipts. With the previous
- * round's progress record (owner 2026-10-21), an image that matched no keyword keeps that round's verified verdict;
- * every source that could enter the label (registered or reviewed) is still re-verified from its own evidence.
+ * round's progress record (owner 2026-10-21), an image proven to lack a label keeps that verified verdict;
+ * every source that could contribute label fields is still re-verified from its own evidence.
  */
 export async function orderedEvidence(
   plans: LabelPlans,
@@ -156,14 +157,6 @@ async function preparationReview(
   return true;
 }
 
-/** A missing or conflicting evidence identity is never a content-based reason to skip a source. */
-function blocksFallback(code: string, executionFact: string) {
-  return (
-    executionFact === "unknown" ||
-    /(?:IDENTITY|CONFLICT|MISMATCH|UNVERIFIED|UNKNOWN|PENDING|NOT_DURABLE|UNCONFIRMED)/.test(code)
-  );
-}
-
 async function modelReview(reading: Reading, at: ReviewedSource) {
   const { deps, evidence, request } = reading;
   const reviews = {
@@ -187,17 +180,7 @@ async function modelReview(reading: Reading, at: ReviewedSource) {
       signal: reading.signal,
     },
   );
-  evidence.failures.push(failure);
-  evidence.terminal ||= !failure.verifiedExecuted;
-  evidence.reasons.push({
-    progress: failure.candidate?.formula || failure.hasFormula ? 4 : 3,
-    failure: {
-      sourceId: at.source.id,
-      code: failure.code,
-      executionFact: failure.verifiedExecuted ? "executed" : "unknown",
-      evidenceKey: failure.evidenceKey,
-    },
-  });
+  recordModelReview(evidence, failure, at.source.id);
 }
 
 interface ReviewedSource {

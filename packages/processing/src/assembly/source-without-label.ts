@@ -3,7 +3,7 @@ import { z } from "zod";
 import { labelValidationErrors } from "../label/validation-errors.js";
 import { textErrors } from "../text/errors.js";
 import { assemblyErrors } from "./assembly-errors.js";
-import { fail, type MergeState } from "./merge-state.js";
+import { fail, type MergeFailure, type MergeState } from "./merge-state.js";
 
 /** FORMULA_MISSING is a model issue, not a Review code. An empty label becomes CORE_MISSING. */
 export const SOURCE_WITHOUT_LABEL: readonly string[] = [
@@ -12,6 +12,20 @@ export const SOURCE_WITHOUT_LABEL: readonly string[] = [
 ];
 const COVERAGE_UNCERTAIN = textErrors.code("TEXT.LABEL_COVERAGE_UNCERTAIN");
 const RawTextResponseSchema = z.object({ rawResponse: z.string() });
+
+/** A schema-checked image answer can prove absence only when both label sections are absent. */
+export function imageReviewWithoutLabel(failure: MergeFailure): boolean {
+  const candidate = failure.candidate;
+  if (!failure.verifiedExecuted || !candidate || candidate.formula || candidate.otherIngredients) {
+    return false;
+  }
+  const issues = new Set(candidate.issues.map((issue) => issue.code));
+  return (
+    !issues.has("UNREADABLE") &&
+    ((issues.has("FORMULA_MISSING") && issues.has("INGREDIENTS_MISSING")) ||
+      ["VISION.LABEL_CORE_MISSING", "LABEL.CORE_MISSING"].includes(failure.code))
+  );
+}
 
 /** A verified Review keeps the raw answer even when decoding failed. Never infer from prose. */
 export function textReviewHasFormula(review: ReviewRecord): boolean | undefined {
