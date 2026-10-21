@@ -173,10 +173,16 @@ describe("DTC adapter contracts (small synthetic boundary cases, not saved-page 
       ),
     ).toEqual(adapter.productAddress(url));
   });
-  it("refuses missing rendered selection on a multi-variant product", () => {
+  it("without a rendered selection, a confirmed requested variant counts and a base address is the base product", () => {
+    // Owner 2026-10-20 (DTC step 1): the platform path reads base pages of multi-variant products as the base
+    // product (variant null), as the agent path records them; the route then hands them to the agent.
     const input = page({ data: { ...data, variants: [...data.variants, { id: 12 }] } });
     input.html = input.html.replace(/<input[^>]*>/, "");
-    expect(() => adapter.parseProduct(input)).toThrow();
+    expect(adapter.parseProduct(input).identity.variantId).toBe("11");
+    const base = { ...input, url: "https://shop.example/products/sleep" };
+    expect(adapter.parseProduct(base).identity.variantId).toBeNull();
+    const unknown = { ...input, url: "https://shop.example/products/sleep?variant=99" };
+    expect(() => adapter.parseProduct(unknown)).toThrow();
   });
   it("refuses challenge pages and malformed product JSON", () => {
     expect(() => dtcDocument("<title>Just a moment...</title>")).toThrow();

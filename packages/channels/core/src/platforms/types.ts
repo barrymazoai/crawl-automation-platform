@@ -33,6 +33,8 @@ export interface PlatformProduct {
   facts: FactsText;
   factsHtml: string | null;
   images: string[];
+  /** How the store files the product (Shopify product type and tags); absent when it states none. */
+  categories?: string[];
 }
 
 export interface PlatformCatalog {

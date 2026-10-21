@@ -7,6 +7,8 @@ const siteFields = {
     .max(253)
     .regex(/^[a-z0-9]+(?:[.-][a-z0-9]+)*\.[a-z]{2,}$/),
   platform: z.enum(["shopify", "woocommerce", "jsonld"]),
+  /** Overrides the platform's default capture route (owner 2026-10-20); absent keeps the default. */
+  capture: z.enum(["platform", "agent"]).optional(),
 };
 const catalogAddress = z.url().max(4096);
 const brandCatalog = z.strictObject({

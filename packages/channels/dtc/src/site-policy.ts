@@ -7,12 +7,21 @@ import type {
 import type { ListScroll } from "@crawl-automation/platform";
 import { dtcPreparationScript } from "./page-preparation.js";
 
+/** Which reader captures a site's products: the platform reader in one Ego page read, or the Codex capture agent. */
+export type DtcCaptureRoute = "platform" | "agent";
+
 export interface DtcSitePolicy {
   siteKey: string;
   /** Retain a pre-existing single-brand policy when discovered catalogs share its domain. */
   legacySite?: DtcSitePolicy;
   kind: "single-brand" | "multi-brand";
   platform: StorePlatform | "unverified";
+  /**
+   * Owner 2026-10-20: Shopify sites default to the platform reader (facts block, original images and variants from the
+   * store's own data, as Swanson does); every other platform stays on the agent until its reader is proven on real
+   * pages. A stored or private setting may override either way; `agent` is also the rollback.
+   */
+  capture: DtcCaptureRoute;
   origins: readonly string[];
   catalogUrl: string | null;
   brands: readonly DtcBrandCatalog[];
@@ -31,8 +40,9 @@ export interface DtcBrandCatalog {
 }
 
 type SiteInput = Pick<DtcSitePolicy, "siteKey" | "platform"> &
-  Partial<Omit<DtcSitePolicy, "siteKey" | "platform" | "kind" | "catalogUrl" | "brands">> &
-  (
+  Partial<
+    Omit<DtcSitePolicy, "siteKey" | "platform" | "kind" | "catalogUrl" | "brands" | "capture">
+  > & { capture?: DtcCaptureRoute | undefined } & (
     | { kind?: "single-brand"; catalogUrl: string | null; brands?: never }
     | { kind: "multi-brand"; brands: readonly DtcBrandCatalog[]; catalogUrl?: never }
   );
@@ -96,9 +106,14 @@ export function dtcSitePolicy(site: SiteInput): DtcSitePolicy {
     imageOrigins: [...origins, "https://cdn.shopify.com"],
     productPath: site.platform === "jsonld" ? CUSTOM_PRODUCT_PATH : STORE_PRODUCT_PATH,
     ...site,
+    capture: site.capture ?? defaultCaptureRoute(site.platform),
     catalog: listing,
     scroll: site.scroll ?? { ...scroll, itemSelector: catalogItemSelector(listing) },
   };
+}
+
+function defaultCaptureRoute(platform: DtcSitePolicy["platform"]): DtcCaptureRoute {
+  return platform === "shopify" ? "platform" : "agent";
 }
 
 /** Private configured sites; API-discovered sources are loaded from their persisted policies. */

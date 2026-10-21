@@ -34,6 +34,25 @@ function shopifyBrand(vendor: string | null, document: Document, context: Platfo
   return vendor ?? jsonLdBrand(document, context);
 }
 
+/**
+ * The rendered form decides. When no form singles one out, the address's own `variant` counts if it is one of this
+ * product's variants (shop.katefarms.com draws no cart input, 2026-10-20). A base address of a multi-variant product
+ * with no selection is the base product (null), as the agent path records it, not a failed identity; the caller
+ * still refuses a requested variant the page never confirms.
+ */
+function selectedShopifyVariant(
+  document: Document,
+  context: PlatformContext,
+  variants: PlatformProduct["variants"],
+): string | null {
+  const rendered = selectedVariant(document, variants, productRoot(document, context));
+  if (rendered) {
+    return rendered;
+  }
+  const requested = new URL(context.url).searchParams.get("variant");
+  return requested && variants.some((entry) => entry.id === requested) ? requested : null;
+}
+
 export function readShopifyProduct(document: Document, context: PlatformContext): PlatformProduct {
   const url = canonicalUrl(document, context.url);
   const record = url ? ownRecord(document, url) : null;
@@ -41,11 +60,7 @@ export function readShopifyProduct(document: Document, context: PlatformContext)
     return { ...readJsonLdProduct(document, context), platform: "shopify" };
   }
   const data = readShopifyData(record, url);
-  const root = productRoot(document, context);
-  const selected = selectedVariant(document, data.variants, root);
-  if (!selected) {
-    throw platformPageErrors.create("DTC.IDENTITY_UNVERIFIED");
-  }
+  const selected = selectedShopifyVariant(document, context, data.variants);
   const variant = data.variants.find((entry) => entry.id === selected);
   const offer = {
     price: variant?.price,

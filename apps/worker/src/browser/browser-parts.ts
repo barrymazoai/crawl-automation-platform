@@ -3,7 +3,9 @@ import { dtcAgentParts } from "./dtc-agent-parts.js";
 import {
   configuredDtcSites,
   storedDtcSites,
+  DtcPlatformCapture,
   DTC_BROWSER_POLICY,
+  type DtcSitePolicy,
 } from "@crawl-automation/channel-dtc";
 import { PipelineCapture } from "@crawl-automation/app";
 import {
@@ -12,6 +14,7 @@ import {
   HttpCapture,
   ProductSourcePlans,
   type BrowserCaptureResult,
+  type CaptureRequest,
 } from "@crawl-automation/channels-core";
 import { EgoPages } from "@crawl-automation/platform";
 import { captureRecords } from "../capture-records.js";
@@ -61,12 +64,7 @@ export function buildBrowserParts(parts: CoreParts): BrowserParts {
   const registry = parts.registry;
   const sourcePlans = browserSourcePlans(parts);
   const dtc = dtcAgentParts(parts, dtcSites, { sourcePlans, pages: ego });
-  const capture = new BrowserProductCapture({
-    registry,
-    http: new HttpCapture(pages),
-    publication: parts.publication,
-    sourcePlans,
-  });
+  const capture = routedCapture(parts, { pages, sourcePlans, agent: dtc.product, sites: dtcSites });
   const scanner = buildBrowserScanners({
     ego,
     dtcSites,
@@ -78,7 +76,7 @@ export function buildBrowserParts(parts: CoreParts): BrowserParts {
   });
   return {
     capture: new PipelineCapture<BrowserCaptureResult>({
-      capture: selectCapture(dtc.product, capture),
+      capture,
       ...captureRecords({ database: parts.database, log: parts.log, registry }),
     }),
     scanner,
@@ -87,13 +85,35 @@ export function buildBrowserParts(parts: CoreParts): BrowserParts {
   };
 }
 
-function selectCapture(
-  dtc: Pick<BrowserProductCapture, "capture">,
-  browser: BrowserProductCapture,
+/**
+ * Every browser channel through the shared archive-first capture; DTC first asks its site router (owner 2026-10-20:
+ * Shopify sites are read by the platform reader, the agent keeps the rest and multi-variant pages).
+ */
+function routedCapture(
+  parts: CoreParts,
+  deps: {
+    pages: BrowserPages;
+    sourcePlans: ProductSourcePlans;
+    agent: Pick<BrowserProductCapture, "capture">;
+    sites: readonly DtcSitePolicy[];
+  },
 ) {
+  const { registry, publication } = parts;
+  const shared = new BrowserProductCapture({
+    registry,
+    http: new HttpCapture(deps.pages),
+    publication,
+    sourcePlans: deps.sourcePlans,
+  });
+  const dtc = new DtcPlatformCapture({
+    ...deps,
+    registry,
+    publication,
+    onDecision: (decision) => parts.log.info(decision, "DTC capture routed"),
+  });
   return {
-    capture: (request: Parameters<BrowserProductCapture["capture"]>[0], signal: AbortSignal) =>
-      (request.channel === "dtc" ? dtc : browser).capture(request, signal),
+    capture: (request: CaptureRequest, signal: AbortSignal) =>
+      (request.channel === "dtc" ? dtc : shared).capture(request, signal),
   };
 }
 

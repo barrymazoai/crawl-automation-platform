@@ -5,6 +5,7 @@ import {
   readJsonLdProduct,
   readShopifyProduct,
   readWooCommerceProduct,
+  jsonLdBreadcrumbs,
   type FetchedPage,
   type PlatformProduct,
 } from "@crawl-automation/channels-core";
@@ -43,12 +44,22 @@ export function readDtcProduct(
     imageOrigins: site.imageOrigins,
     ...(site.productSelector ? { productSelector: site.productSelector } : {}),
   };
-  const product = (site.readProduct ?? readers[site.platform])(dtcDocument(page.html), context);
+  const document = dtcDocument(page.html);
+  const product = (site.readProduct ?? readers[site.platform])(document, context);
   siteForUrl(product.url, [site]);
   if (dtcProductAddress(page.url, sites).variantId && product.selectedVariantId === null) {
     throw platformPageErrors.create("DTC.IDENTITY_UNVERIFIED");
   }
-  return product;
+  const categories = storeCategories(document, product);
+  return categories.length ? { ...product, categories } : product;
+}
+
+/** The store's filing of the product: its JSON-LD breadcrumb, then the platform's own type and tags. */
+function storeCategories(document: Document, product: PlatformProduct): string[] {
+  const scripts = [...document.querySelectorAll('script[type="application/ld+json"]')].map(
+    (script) => script.textContent ?? "",
+  );
+  return [...new Set([...jsonLdBreadcrumbs(scripts), ...(product.categories ?? [])])];
 }
 
 /** Read a canonical redirect before title/facts parsing; core owns the identity_conflict comparison. */
