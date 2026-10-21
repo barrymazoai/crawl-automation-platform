@@ -14,14 +14,22 @@ function topLevelSeparators(text: string): number[] | null {
       if (stack.pop() !== character) {
         return null;
       }
-    } else if (/[,;]/.test(character) && stack.length === 0) {
+    } else if (/[,;]/.test(character) && stack.length === 0 && !isNumericLocantComma(text, index)) {
       separators.push(index);
     }
   }
   return stack.length ? null : separators;
 }
 
-/** A comma after an initial modifier does not name another ingredient ("Raw, wild extract"). */
+function isNumericLocantComma(text: string, index: number): boolean {
+  return (
+    text.charAt(index) === "," &&
+    /\d/.test(text.charAt(index - 1)) &&
+    /\d/.test(text.charAt(index + 1))
+  );
+}
+
+/** A comma after initial quality modifiers does not name another ingredient ("Wild, high-mountain, organic sage"). */
 export function completeIngredientItem(text: string, allowPrintedMismatch = false): boolean {
   const separators = topLevelSeparators(text);
   return (
@@ -30,7 +38,10 @@ export function completeIngredientItem(text: string, allowPrintedMismatch = fals
     !/-\s*$/.test(text) &&
     (separators ?? []).every(
       (index) =>
-        text[index] === "," && /^(?:(?:raw|wild|organic)\s*,?\s*)+$/i.test(text.slice(0, index)),
+        text[index] === "," &&
+        /^(?:(?:raw|wild|organic|(?:high|low)-[a-z]+|[a-z]+-grown)\s*,?\s*)+$/i.test(
+          text.slice(0, index),
+        ),
     )
   );
 }
@@ -57,16 +68,41 @@ function malformedSingleItem(text: string): boolean {
 const MINOR_INGREDIENTS =
   /^\s*(?:[,;.]\s*){0,2}(?:contains\s+)?(?:(?:<|less\s+than)\s*2\s*%|2\s*%\s+or\s+less)\s+of(?:\s+(?:each\s+of\s+)?the\s+following)?\s*:?[\s,;]*$/i;
 
-function listSeparator(previous: string, gap: string): boolean {
+const SUBLIST_HEADING = /^[A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,3}:$/;
+const NON_INGREDIENT_HEADING =
+  /^(?:Contains|Manufactured|Processed|Directions|Warnings|Uses|Other Ingredients)\b/i;
+
+function citedSublistHeading(gap: string, gapStart: number, headings: readonly Quote[]): boolean {
+  const match = /^\.\s+([^\n:]+:)\s*$/.exec(gap);
+  const heading = match?.[1];
+  if (!heading || !SUBLIST_HEADING.test(heading) || NON_INGREDIENT_HEADING.test(heading)) {
+    return false;
+  }
+  const start = gapStart + gap.indexOf(heading);
+  return headings.some((quote) => quote.start === start && quote.end === start + heading.length);
+}
+
+function listSeparator(
+  previous: string,
+  gap: string,
+  context: { start: number; headings: readonly Quote[] },
+): boolean {
   return (
     /^\s*(?:(?:[,;.|‚]\s*(?:and\s+)?)|and\s+|in\s+a\s+base\s+of\s+)$/i.test(gap) ||
     (/\.\s*$/.test(previous) && /^\s+$/.test(gap)) ||
-    MINOR_INGREDIENTS.test(gap)
+    MINOR_INGREDIENTS.test(gap) ||
+    citedSublistHeading(gap, context.start, context.headings)
   );
 }
 
 /** Separators must contain no skipped words; conjunctions are used only between anchored items. */
-export function ingredientGap(text: string, previous: Quote, next: Quote): Span | null {
+export function ingredientGap(
+  text: string,
+  previous: Quote,
+  target: Quote | { next: Quote; headings: readonly Quote[] },
+): Span | null {
+  const next = "next" in target ? target.next : target;
+  const headings = "next" in target ? target.headings : [];
   if (
     previous.end > next.start ||
     !completeIngredientItem(previous.text, true) ||
@@ -75,7 +111,10 @@ export function ingredientGap(text: string, previous: Quote, next: Quote): Span 
     return null;
   }
   const gap = text.slice(previous.end, next.start);
-  const separated = listSeparator(previous.text, gap);
+  const separated = listSeparator(previous.text, gap, {
+    start: previous.end,
+    headings,
+  });
   // This conjunction joins adjectives inside one ingredient name, never two list entries.
   const compound =
     /\bnatural\s*$/i.test(previous.text) &&

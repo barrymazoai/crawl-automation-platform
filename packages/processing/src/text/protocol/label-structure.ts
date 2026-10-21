@@ -1,7 +1,11 @@
 import { completeIngredientItem, ingredientGap } from "./ingredient-boundaries.js";
 import { labelValidationErrors } from "../../label/validation-errors.js";
 import { isIngredientHeading, type LabelTextCandidateSchema } from "@crawl-automation/v3-contracts";
-import { pseudoDrugFactsContext, pseudoInactivePositionAllowed } from "./pseudo-drug-facts.js";
+import {
+  pseudoDrugFactsContext,
+  pseudoInactiveListStartAllowed,
+  pseudoInactivePositionAllowed,
+} from "./pseudo-drug-facts.js";
 import type { z } from "zod";
 
 type Candidate = z.infer<typeof LabelTextCandidateSchema>;
@@ -49,7 +53,7 @@ export function ingredientCodes(candidate: Candidate, text: string): string[] {
     if (outsideSection(other, item, text)) {
       codes.add(labelValidationErrors.code("LABEL.INGREDIENT_ROLE_INVALID"));
     }
-    if (crossesBoundary(other, index, text)) {
+    if (crossesBoundary(candidate, index, text)) {
       codes.add(labelValidationErrors.code("LABEL.INGREDIENT_BOUNDARY"));
     }
   });
@@ -150,7 +154,11 @@ function outsideSection(other: Ingredients, item: Ingredients["items"][number], 
   );
 }
 
-function crossesBoundary(other: Ingredients, index: number, text: string) {
+function crossesBoundary(candidate: Candidate, index: number, text: string) {
+  const other = candidate.otherIngredients;
+  if (!other) {
+    return false;
+  }
   const item = other.items[index];
   const previous = other.items[index - 1];
   if (!item) {
@@ -160,7 +168,13 @@ function crossesBoundary(other: Ingredients, index: number, text: string) {
     return true;
   }
   if (!previous) {
-    return !/^\s*[:,]?\s*(?:<p>\s*)*$/i.test(text.slice(other.heading.end, item.start));
+    return (
+      !/^\s*[:,]?\s*(?:<p>\s*)*$/i.test(text.slice(other.heading.end, item.start)) &&
+      !pseudoInactiveListStartAllowed(candidate, text)
+    );
   }
-  return ingredientGap(text, previous, item) === null;
+  const headings = candidate.exclusions
+    .filter((exclusion) => exclusion.reason === "heading")
+    .map((exclusion) => exclusion.quote);
+  return ingredientGap(text, previous, { next: item, headings }) === null;
 }

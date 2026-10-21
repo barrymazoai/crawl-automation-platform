@@ -34,6 +34,53 @@ describe("anchored ingredient boundaries", () => {
       expect(decodeSimple(simpleLabel({ ingredients })).codes).toEqual([]);
     }
   });
+  it("accepts a cited title-case sublist heading after a sentence delimiter", () => {
+    const text = "Collagen. Amino Acids: Alanine, Arginine";
+    const collagen = { text: "Collagen", start: 0, end: 8 };
+    const alanine = { text: "Alanine", start: 23, end: 30 };
+    const heading = { text: "Amino Acids:", start: 10, end: 22 };
+    expect(ingredientGap(text, collagen, alanine)).toBeNull();
+    expect(ingredientGap(text, collagen, { next: alanine, headings: [heading] })).toEqual({
+      start: 8,
+      end: 23,
+    });
+    expect(
+      ingredientGap("Collagen. Directions: Alanine", collagen, {
+        next: { text: "Alanine", start: 22, end: 29 },
+        headings: [{ text: "Directions:", start: 10, end: 21 }],
+      }),
+    ).toBeNull();
+    for (const heading of ["Contains Milk:", "Manufactured In A Facility:"]) {
+      const source = `Collagen. ${heading} Alanine`;
+      const start = source.indexOf(heading);
+      const nextStart = source.indexOf("Alanine");
+      expect(
+        ingredientGap(source, collagen, {
+          next: { text: "Alanine", start: nextStart, end: source.length },
+          headings: [{ text: heading, start, end: start + heading.length }],
+        }),
+      ).toBeNull();
+    }
+  });
+  it("keeps a numeric chemical locant within one ingredient", () => {
+    expect(completeIngredientItem("cyclohexane 1,4-dicarboxylate")).toBe(true);
+    expect(completeIngredientItem("Vitamin B12, 4-dicarboxylate")).toBe(false);
+  });
+  it("keeps comma-separated quality modifiers but rejects a merged ingredient", () => {
+    expect(completeIngredientItem("Wild, high-mountain, organic sage oil powder")).toBe(true);
+    expect(completeIngredientItem("Wild, Zinc Oxide, organic sage oil powder")).toBe(false);
+  });
+  it("keeps a cited amino-acid sublist segmented into individual entries", () => {
+    const fixture = simpleLabel({
+      ingredients: "Bovine Collagen Peptides. Amino Acids: Alanine, Arginine",
+      items: ["Bovine Collagen Peptides", "Alanine", "Arginine"],
+    });
+    fixture.wire.exclusions.push({
+      quote: { fromLine: 7, toLine: 7, text: "Amino Acids:" },
+      reason: "heading",
+    });
+    expect(decodeSimple(fixture).codes).not.toContain("LABEL.INGREDIENT_BOUNDARY");
+  });
   it("accepts six cited electrolyte ingredients separated only by comma and space", () => {
     const items = ["sodium", "potassium", "magnesium", "calcium", "chloride", "phosporous"];
     const fixture = simpleLabel({ items, ingredients: items.join(", ") });

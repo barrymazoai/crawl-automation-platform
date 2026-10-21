@@ -44,6 +44,39 @@ export function pseudoInactivePositionAllowed(
   });
 }
 
+/** A page's generic Ingredients title can precede a compressed active row and an inactive list. */
+export function pseudoInactiveListStartAllowed(
+  candidate: LabelTextCandidate,
+  text: string,
+  inactiveStart?: number,
+): boolean {
+  const other = candidate.otherIngredients;
+  const first = other?.items[0];
+  if (!other || !first || !/^Ingredients$/i.test(other.heading.text.trim())) {
+    return false;
+  }
+  const inactive = candidate.exclusions.find(
+    (exclusion) =>
+      exclusion.reason === "heading" &&
+      /^inactive$/i.test(exclusion.quote.text.trim()) &&
+      (inactiveStart === undefined || exclusion.quote.start === inactiveStart) &&
+      exclusion.quote.end <= first.start &&
+      /^\s*$/.test(text.slice(exclusion.quote.end, first.start)) &&
+      pseudoInactivePositionAllowed(candidate, text, exclusion.quote.start),
+  );
+  if (!inactive) {
+    return false;
+  }
+  return (candidate.formula?.columns ?? []).some(
+    (column) =>
+      column.heading &&
+      ACTIVE_COLUMN.test(column.heading.text.trim()) &&
+      column.heading.start >= other.heading.end &&
+      /^\s*$/.test(text.slice(other.heading.end, column.heading.start)) &&
+      column.heading.end < inactive.quote.start,
+  );
+}
+
 /** Only structural heading and metadata exclusions get the label-text/6 pseudo panel allowance. */
 export function pseudoDrugExclusionAllowed(
   exclusion: Exclusion,
@@ -55,6 +88,13 @@ export function pseudoDrugExclusionAllowed(
     return isolatedIngredientsHeadings(candidate, text, { start: 0, end: text.length }).some(
       (span) => span.start === exclusion.quote.start && span.end === exclusion.quote.end,
     );
+  }
+  if (
+    exclusion.reason === "heading" &&
+    /^inactive$/i.test(value) &&
+    pseudoInactiveListStartAllowed(candidate, text, exclusion.quote.start)
+  ) {
+    return true;
   }
   if (!["heading", "metadata"].includes(exclusion.reason)) {
     return false;

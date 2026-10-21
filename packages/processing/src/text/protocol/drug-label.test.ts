@@ -6,6 +6,58 @@ import { labelTextPrompt } from "./label-instructions.js";
 import { simpleLabel } from "../../testing/simple-label.js";
 
 describe("Drug Facts text protocol", () => {
+  it("decodes an active semicolon clause followed by a bare inactive list", () => {
+    const text =
+      "Ingredients\n\nactive ingredient;in each lozenge;methol 5mg purposes antitussive;cough suppressant;/ oral anesthetic inactive organic brown rice syrup;organic cane syrup;and organic turmeric";
+    const anchor = (line: number, value: string) => ({ fromLine: line, toLine: line, text: value });
+    const wire = {
+      codec: "label-extraction/1",
+      formula: {
+        drugFacts: null,
+        servingSize: null,
+        servingsPerContainer: null,
+        columns: [
+          {
+            heading: anchor(3, "active ingredient;in each lozenge"),
+            rows: [
+              {
+                kind: "nutrient",
+                name: anchor(3, "methol"),
+                amount: anchor(3, "5mg"),
+                dailyValue: null,
+                purpose: anchor(3, "antitussive;cough suppressant;/ oral anesthetic"),
+                amountStatus: "printed",
+                parentRowIndex: null,
+              },
+            ],
+          },
+        ],
+      },
+      otherIngredients: {
+        heading: anchor(1, "Ingredients"),
+        items: ["organic brown rice syrup", "organic cane syrup", "organic turmeric"].map((value) =>
+          anchor(3, value),
+        ),
+      },
+      formulaComplete: true,
+      ingredientsComplete: true,
+      exclusions: [
+        { quote: anchor(3, "purposes"), reason: "heading" },
+        { quote: anchor(3, "inactive"), reason: "heading" },
+        { quote: anchor(3, "and"), reason: "noise" },
+      ],
+      issues: [],
+    };
+    expect(
+      decodeLabelText({
+        text,
+        scope: { range: { start: 0, end: text.length } },
+        response: JSON.stringify(wire),
+        policyVersion: "label-text/6",
+      }).codes,
+    ).toEqual([]);
+  });
+
   it("decodes a compressed active/inactive line and its isolated Ingredients heading", () => {
     const text =
       "Ingredients\n\nDrug classification: active ingredient in each lozenge menthol 5mg purposes antitussive inactive sucrose";
