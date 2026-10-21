@@ -214,6 +214,23 @@ describe("DTC adapter contracts (small synthetic boundary cases, not saved-page 
     const unknown = { ...input, url: "https://shop.example/products/sleep?variant=99" };
     expect(() => adapter.parseProduct(unknown)).toThrow();
   });
+  it("reports a variant address whose page renders another variant as an identity conflict", () => {
+    // Step 2: the task is variant 12, but the form still selects 11 (a theme that ignores `?variant=`); the shared
+    // capture turns the page identity into an unlisted sighting instead of collecting the wrong variant.
+    const input = {
+      ...page({
+        selection: "11",
+        data: { ...data, variants: [...data.variants, { id: 12, price: 1100 }] },
+      }),
+      url: "https://shop.example/products/sleep?variant=12",
+    };
+    const observed = adapter.pageIdentity?.(input);
+    expect(observed?.variantId).toBe("11");
+    expect(
+      observed &&
+        identitySighting(adapter.productAddress(input.url), observed, "retained.html")?.reason,
+    ).toBe("identity_conflict");
+  });
   it("refuses challenge pages and malformed product JSON", () => {
     expect(() => dtcDocument("<title>Just a moment...</title>")).toThrow();
     expect(() =>

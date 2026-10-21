@@ -1,6 +1,7 @@
 import { amount, availability } from "./commerce.js";
 import { identifier, object, parsePageJson, records, string } from "./json.js";
-import { readJsonLdProduct, selectedVariant } from "./jsonld.js";
+import { readJsonLdProduct } from "./jsonld.js";
+import { selectedOrRequestedVariant } from "./selected-variant.js";
 import { platformPageErrors } from "./errors.js";
 import type { PlatformContext, PlatformProduct, PlatformVariant } from "./types.js";
 import { variantUrl } from "./urls.js";
@@ -56,7 +57,7 @@ export function readWooCommerceProduct(
   const product = readJsonLdProduct(document, context, observedId);
   const productId = observedId ?? product.productId;
   const variants = form ? wooVariants(form, product.url) : [];
-  const selected = selectedVariant(document, variants, form);
+  const selected = selectedOrRequestedVariant(document, variants, { url: context.url, root: form });
   if (form && !selected) {
     throw platformPageErrors.create("DTC.IDENTITY_UNVERIFIED");
   }

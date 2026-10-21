@@ -3,7 +3,8 @@ import { productRoot } from "./content.js";
 import { readProductContent } from "./read-content.js";
 import { platformPageErrors } from "./errors.js";
 import { object, records, string } from "./json.js";
-import { jsonLdBrand, jsonLdProducts, readJsonLdProduct, selectedVariant } from "./jsonld.js";
+import { jsonLdBrand, jsonLdProducts, readJsonLdProduct } from "./jsonld.js";
+import { selectedOrRequestedVariant } from "./selected-variant.js";
 import { embeddedShopifyProducts, readShopifyData } from "./shopify-data.js";
 import type { JsonObject, PlatformContext, PlatformProduct } from "./types.js";
 import { canonicalUrl } from "./urls.js";
@@ -45,12 +46,10 @@ function selectedShopifyVariant(
   context: PlatformContext,
   variants: PlatformProduct["variants"],
 ): string | null {
-  const rendered = selectedVariant(document, variants, productRoot(document, context));
-  if (rendered) {
-    return rendered;
-  }
-  const requested = new URL(context.url).searchParams.get("variant");
-  return requested && variants.some((entry) => entry.id === requested) ? requested : null;
+  return selectedOrRequestedVariant(document, variants, {
+    url: context.url,
+    root: productRoot(document, context),
+  });
 }
 
 export function readShopifyProduct(document: Document, context: PlatformContext): PlatformProduct {

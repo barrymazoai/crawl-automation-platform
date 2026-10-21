@@ -29,3 +29,22 @@ export function selectedVariant(
   }
   return variants.length === 1 ? (variants[0]?.id ?? null) : null;
 }
+
+/**
+ * The rendered form decides. When no form singles one out, the address's own `variant` / `variation_id` counts if it
+ * is one of this product's variants (shop.katefarms.com draws no cart input, 2026-10-20; one task per variant URL,
+ * step 2, 2026-10-21). A base address of a multi-variant product with no selection stays the base product (null).
+ */
+export function selectedOrRequestedVariant(
+  document: Document,
+  variants: readonly PlatformVariant[],
+  at: { url: string; root?: Element | null },
+): string | null {
+  const rendered = selectedVariant(document, variants, at.root ?? null);
+  if (rendered) {
+    return rendered;
+  }
+  const query = new URL(at.url).searchParams;
+  const requested = query.get("variant") ?? query.get("variation_id");
+  return requested && variants.some((entry) => entry.id === requested) ? requested : null;
+}

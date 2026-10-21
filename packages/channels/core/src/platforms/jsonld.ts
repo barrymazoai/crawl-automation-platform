@@ -14,7 +14,7 @@ import {
 import type { JsonObject, PlatformContext, PlatformProduct, PlatformVariant } from "./types.js";
 import { canonicalUrl, pageUrl, samePage } from "./urls.js";
 import { groupSelection } from "./jsonld-group.js";
-import { selectedVariant } from "./selected-variant.js";
+import { selectedOrRequestedVariant } from "./selected-variant.js";
 export { selectedVariant } from "./selected-variant.js";
 
 export function jsonLdProducts(document: Document): JsonObject[] {
@@ -140,7 +140,10 @@ function productSelection(document: Document, context: PlatformContext) {
   const { url } = productHeading(product, document, context);
   const variants = variantOffers(product, url);
   const selected = variants.length
-    ? selectedVariant(document, variants, productRoot(document, context))
+    ? selectedOrRequestedVariant(document, variants, {
+        url: context.url,
+        root: productRoot(document, context),
+      })
     : null;
   return { product, variants, selected };
 }

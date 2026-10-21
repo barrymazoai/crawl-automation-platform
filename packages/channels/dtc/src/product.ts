@@ -47,6 +47,8 @@ export function readDtcProduct(
   const document = dtcDocument(page.html);
   const product = (site.readProduct ?? readers[site.platform])(document, context);
   siteForUrl(product.url, [site]);
+  // A task for `?variant=<id>` needs the page to confirm a variant; a page that renders another variant instead is
+  // an identity conflict, judged by the shared capture from the page identity (step 2, owner 2026-10-21).
   if (dtcProductAddress(page.url, sites).variantId && product.selectedVariantId === null) {
     throw platformPageErrors.create("DTC.IDENTITY_UNVERIFIED");
   }
