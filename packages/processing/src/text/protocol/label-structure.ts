@@ -9,7 +9,7 @@ type Ingredients = NonNullable<Candidate["otherIngredients"]>;
 // Text before the heading on the same line is tolerated when the heading starts a new clause: after the tail of a
 // facts row (amount, %DV, footnote) or after sentence punctuation, as Amazon's one-line ingredient paragraphs read
 // ("Vitamin D. Other Ingredients: Sugar, ..."). Never inside running prose ("We discuss Other Ingredients ...").
-const clauseEnd = /(?:\d|%|\)|†|\*|\b(?:mg|mcg|iu|g)|[.;:!?])\s*$/i;
+const clauseEnd = /(?:\d|%|\)|†|\*|\d\s*(?:mg|mcg|iu|g)|[.,;:!?|]|<p>|-\s*-)\s*$/i;
 const warning =
   /\b(?:contains\s*:|may\s+contain|manufactured\s+(?:in|on)|processed\s+(?:in|on)|shared\s+equipment)/i;
 
@@ -33,7 +33,16 @@ export function ingredientCodes(candidate: Candidate, text: string): string[] {
   const codes = new Set<string>();
   const lineStart = text.lastIndexOf("\n", other.heading.start - 1) + 1;
   const before = text.slice(lineStart, other.heading.start).trim();
-  if (!isIngredientHeading(other.heading.text) || (before && !clauseEnd.test(before))) {
+  if (
+    !ingredientHeadingAllowed(other) ||
+    (before &&
+      !clauseEnd.test(before) &&
+      !/\band\s+the$/i.test(before) &&
+      !/(?:daily\s+value(?:\s*\(dv\))?\s+not\s+established|\d+(?:\.\d+)?\s*mg\s+per\s+tablet)$/i.test(
+        before,
+      ) &&
+      !(!!candidate.formula?.drugFacts && /^inactive\s+ingredients?/i.test(other.heading.text)))
+  ) {
     codes.add(labelValidationErrors.code("LABEL.INGREDIENT_HEADING_INVALID"));
   }
   other.items.forEach((item, index) => {
@@ -45,6 +54,19 @@ export function ingredientCodes(candidate: Candidate, text: string): string[] {
     }
   });
   return [...codes];
+}
+
+/** Local aliases are limited to headings whose following citations form an ingredient list. */
+export function ingredientHeadingAllowed(other: Ingredients): boolean {
+  const heading = other.heading.text.trim();
+  return (
+    isIngredientHeading(heading) ||
+    /^inactive\s*(?::|$)/i.test(heading) ||
+    (heading.toLowerCase() === "contains" && other.items.length > 1) ||
+    /^other\s+ingredients\s*:\s*may\s+contain\s+any\s+or\s+all\s+of\s+the\s+following\s*:?$/i.test(
+      heading,
+    )
+  );
 }
 
 function outsideSection(other: Ingredients, item: Ingredients["items"][number], text: string) {
@@ -65,11 +87,11 @@ function crossesBoundary(other: Ingredients, index: number, text: string) {
   if (!item) {
     return false;
   }
-  if (!completeIngredientItem(item.text)) {
+  if (!completeIngredientItem(item.text, other.items.length > 1)) {
     return true;
   }
   if (!previous) {
-    return !/^\s*:?\s*$/.test(text.slice(other.heading.end, item.start));
+    return !/^\s*[:,]?\s*(?:<p>\s*)*$/i.test(text.slice(other.heading.end, item.start));
   }
   return ingredientGap(text, previous, item) === null;
 }

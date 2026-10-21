@@ -7,11 +7,11 @@ const HEADING = new RegExp(
   "i",
 );
 const COLUMN =
-  String.raw`(?:ingredients?|amounts?(?:\s+per\s+serving)?|per\s+serving|` +
+  String.raw`(?:(?:amt|amounts?)(?:\s+per\s+serving)?|ingredients?|per\s+serving|` +
   String.raw`%\s*dv|dv\s*%|(?:%\s*)?daily\s+value)`;
 const SYMBOLS = String.raw`[*+†‡§¶•■|/\s]`;
 const TABLE_HEADING = new RegExp(
-  String.raw`^${SYMBOLS}*${COLUMN}(?:${SYMBOLS}+${COLUMN})*${SYMBOLS}*\.?$`,
+  String.raw`^${SYMBOLS}*${COLUMN}(?:${SYMBOLS}+${COLUMN})*${SYMBOLS}*:?\.?$`,
   "i",
 );
 const SERVING_HEADER = /^(Serving Size|Servings? Per Container)\s*:\s*(\S[\s\S]*)$/i;
@@ -30,6 +30,37 @@ export function labelHeadingAllowed(value: string, candidate: LabelTextCandidate
     : candidate.formula?.servingsPerContainer;
   const words = (text: string) => text.replace(/\s+/gu, " ").trim();
   return !!field && words(field.text) === words(header[2] ?? "");
+}
+
+const MINOR_HEADING =
+  /^(?:contains\s+)?(?:(?:less\s+than|<)\s*2\s*%|2\s*%\s+or\s+less)\s+of(?:\s+(?:each\s+of\s+)?the\s+following)?\s*:?$/i;
+const INGREDIENT_SUBHEADING =
+  /^(?:each\s+capsule\s+contains\s*:|other\s+ingredients\s*:\s*may\s+contain\s+any\s+or\s+all\s+of\s+the\s+following\s*:|contains\s*:)$/i;
+
+/** Only a cited clause that leads directly into anchored ingredients can be excluded as a list subheading. */
+export function ingredientSubheadingAllowed(
+  value: string,
+  source: { candidate: LabelTextCandidate; span: Span; text: string },
+): boolean {
+  if (!MINOR_HEADING.test(value) && !INGREDIENT_SUBHEADING.test(value)) {
+    return false;
+  }
+  if (/^each\s+capsule\s+contains\s*:$/i.test(value)) {
+    return capsuleHeadingBeforeRow(source);
+  }
+  const items = source.candidate.otherIngredients?.items ?? [];
+  const next = items.find((item) => item.start >= source.span.end);
+  return !!next && /^\s*[,;:]?\s*$/.test(source.text.slice(source.span.end, next.start));
+}
+
+function capsuleHeadingBeforeRow(source: {
+  candidate: LabelTextCandidate;
+  span: Span;
+  text: string;
+}): boolean {
+  const rows = source.candidate.formula?.columns.flatMap((column) => column.rows) ?? [];
+  const next = rows.find((row) => row.name.start >= source.span.end)?.name;
+  return !!next && /^[\s:,;]*$/.test(source.text.slice(source.span.end, next.start));
 }
 
 /** A sole facts heading before the extracted panel, and prefixes immediately adjoining their values. */

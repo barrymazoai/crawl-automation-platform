@@ -24,6 +24,33 @@ describe("anchored ingredient boundaries", () => {
       ).codes,
     ).toEqual([]);
   });
+  it("keeps printed list separators and a minor-ingredients subheading between cited items", () => {
+    for (const ingredients of [
+      "Cellulose | Silica",
+      "Cellulose in a base of Silica",
+      "Cellulose, Contains Less Than 2% Of Each Of The Following: Silica",
+    ]) {
+      expect(decodeSimple(simpleLabel({ ingredients })).codes).toEqual([]);
+    }
+  });
+  it("keeps a source's mismatched bracket when neighboring cited items delimit it", () => {
+    expect(
+      decodeSimple(
+        simpleLabel({
+          ingredients: "Vegetables [Carrot, Celery, Onion), Salt",
+          items: ["Vegetables [Carrot, Celery, Onion)", "Salt"],
+        }),
+      ).codes,
+    ).toEqual([]);
+  });
+  it("still reviews a truncated ingredient and an incomplete minor heading", () => {
+    expect(
+      decodeSimple(simpleLabel({ items: ["Hyaluronic -"], ingredients: "Hyaluronic -" })).codes,
+    ).toContain("LABEL.INGREDIENT_BOUNDARY");
+    expect(
+      decodeSimple(simpleLabel({ ingredients: "Cellulose, Less than 2 of Silica" })).codes,
+    ).toContain("LABEL.INGREDIENT_BOUNDARY");
+  });
   it.each([
     { ingredients: "Cellulose, Zinc, Silica", items: ["Cellulose", "Silica"] },
     { ingredients: "Natural and Artificial Flavors", items: ["Natural", "Artificial Flavors"] },

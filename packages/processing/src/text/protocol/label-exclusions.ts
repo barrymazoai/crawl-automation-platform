@@ -1,17 +1,11 @@
-import {
-  STANDARD_FOOTNOTE,
-  isDvFootnote,
-  labelSpecificFootnoteAllowed,
-} from "./label-footnotes.js";
-import {
-  allergenStatement,
-  labelMetadataAllowed,
-  labelNoteAllowed,
-  trademarkStatement,
-} from "./label-notes.js";
+import { isDvFootnote } from "./label-footnotes.js";
+import { allergenStatement, trademarkStatement } from "./label-notes.js";
 import { ingredientGap } from "./ingredient-boundaries.js";
 import { drugExclusionAllowed } from "./drug-label.js";
-import { labelHeadingAllowed } from "./label-headings.js";
+import {
+  knownStructuralExclusion,
+  specialStructuralExclusion,
+} from "./label-structural-exclusions.js";
 import { DOSE, rowExclusionAllowed } from "./label-rows.js";
 import { labelValidationErrors } from "../../label/validation-errors.js";
 import type { LabelTextCandidateSchema } from "@crawl-automation/v3-contracts";
@@ -82,14 +76,13 @@ function isFieldPrefix(exclusion: Exclusion, judged: Judged): boolean {
 }
 
 /** Label structure, not content: headings, standard footnotes and notes, list connectors, marker legends. */
-function structuralExclusion(exclusion: Exclusion, judged: Judged, value: string): boolean {
+function structuralExclusion(exclusion: Exclusion, judged: Judged): boolean {
+  if (specialStructuralExclusion(exclusion, judged.candidate, judged.text)) {
+    return true;
+  }
   return (
     ["heading", "metadata", "footnote", "noise"].includes(exclusion.reason) &&
-    (labelHeadingAllowed(value, judged.candidate) ||
-      STANDARD_FOOTNOTE.test(value) ||
-      (exclusion.reason === "footnote" && labelSpecificFootnoteAllowed(value)) ||
-      (["metadata", "noise"].includes(exclusion.reason) && labelMetadataAllowed(value)) ||
-      labelNoteAllowed(exclusion, judged.candidate) ||
+    (knownStructuralExclusion(exclusion, judged.candidate) ||
       ingredientConnector(exclusion, judged) ||
       markerLegend(exclusion, judged))
   );
@@ -100,7 +93,7 @@ const AROUND_LABEL = new Set(["marketing", "directions", "metadata", "heading", 
 
 function allowedExclusion(exclusion: Exclusion, judged: Judged): boolean {
   const value = exclusion.quote.text.trim();
-  if (structuralExclusion(exclusion, judged, value)) {
+  if (structuralExclusion(exclusion, judged)) {
     return true;
   }
   if (AROUND_LABEL.has(exclusion.reason) && outsideLabel(exclusion, judged)) {

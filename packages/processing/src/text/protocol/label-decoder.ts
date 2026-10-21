@@ -12,8 +12,8 @@ import { drugStructureCodes } from "./drug-label.js";
 import { coversEveryPrintedCharacter } from "./coverage.js";
 import { evidenceLines, type Quote } from "./evidence-lines.js";
 import { exclusionCodes } from "./label-exclusions.js";
-import { labelCoverage } from "./label-coverage.js";
-import { ingredientCodes, rowOrderCodes } from "./label-structure.js";
+import { equivalentFootnoteAllowed, labelCoverage } from "./label-coverage.js";
+import { ingredientCodes, ingredientHeadingAllowed, rowOrderCodes } from "./label-structure.js";
 import { labelLimitErrors } from "./label-limits.js";
 import { resolveAnchor, type Anchor, type AnchorContext } from "./resolve-anchor.js";
 import { isWithinText, splitsCharacter } from "./text-range.js";
@@ -29,6 +29,8 @@ export interface DecodedLabel {
   status: ReturnType<typeof assessLabelCandidate>["status"] | "review";
   /** Label check codes (`LABEL.*`); empty when the answer is a candidate. */
   codes: string[];
+  /** Cited dose-related notes retained without changing a row amount. */
+  warnings: { code: string; detail: string }[];
 }
 
 /** A label answer to read: the task's range, the full text, the raw answer and the policy it was asked under. */
@@ -52,12 +54,36 @@ export function decodeLabelText(request: LabelTextRequest): DecodedLabel {
   const candidate = LabelTextCandidateSchema.parse(quotes.place(wire));
   const modelExclusions = candidate.exclusions.length;
   separateTextIngredientDeclarations(candidate);
+  return validateCandidate({
+    candidate,
+    text,
+    range: scope.range,
+    policyVersion,
+    modelExclusions,
+    placed: quotes.placed,
+  });
+}
+
+function validateCandidate(input: {
+  candidate: Candidate;
+  text: string;
+  range: TextInput["range"];
+  policyVersion: string;
+  modelExclusions: number;
+  placed: readonly Quote[];
+}): DecodedLabel {
+  const { candidate, text, range, policyVersion, modelExclusions, placed } = input;
   const assessment = assessLabelCandidate(candidate);
+  const structureCodes = ingredientCodes(candidate, text);
+  const localHeading =
+    candidate.otherIngredients && ingredientHeadingAllowed(candidate.otherIngredients);
   const codes = new Set([
-    ...assessment.codes,
+    ...assessment.codes.filter(
+      (code) => code !== "LABEL.INGREDIENT_HEADING_INVALID" || !localHeading,
+    ),
     ...rowOrderCodes(candidate),
-    ...drugStructureCodes(candidate, text, scope.range),
-    ...ingredientCodes(candidate, text),
+    ...drugStructureCodes(candidate, text, range),
+    ...structureCodes,
     // Model exclusions still need policy review; decoded slices already have exact placed citations.
     ...exclusionCodes({
       candidate: { ...candidate, exclusions: candidate.exclusions.slice(0, modelExclusions) },
@@ -65,11 +91,45 @@ export function decodeLabelText(request: LabelTextRequest): DecodedLabel {
       policyVersion,
     }),
   ]);
-  const coverage = labelCoverage(candidate, { text, range: scope.range }, quotes.placed);
-  if (!coversEveryPrintedCharacter(text, scope.range, coverage)) {
+  const coverage = labelCoverage(candidate, { text, range }, placed);
+  if (!coversEveryPrintedCharacter(text, range, coverage)) {
     codes.add(labelValidationErrors.code("LABEL.EXTRACTION_INCOMPLETE"));
   }
-  return { candidate, status: codes.size ? "review" : assessment.status, codes: [...codes] };
+  const warnings = candidateWarnings(candidate, text, assessment.warnings);
+  const status = candidateStatus({ candidate, assessment, codes, localHeading: !!localHeading });
+  return { candidate, status, codes: [...codes], warnings };
+}
+
+function candidateWarnings(
+  candidate: Candidate,
+  text: string,
+  warnings: DecodedLabel["warnings"],
+): DecodedLabel["warnings"] {
+  const equivalent = candidate.exclusions
+    .filter((exclusion) => equivalentFootnoteAllowed(exclusion, candidate, text))
+    .map((exclusion) => ({ code: "equivalent-footnote", detail: exclusion.quote.text }));
+  return [...warnings, ...equivalent];
+}
+
+function candidateStatus(input: {
+  candidate: Candidate;
+  assessment: ReturnType<typeof assessLabelCandidate>;
+  codes: Set<string>;
+  localHeading: boolean;
+}): DecodedLabel["status"] {
+  const { candidate, assessment, codes, localHeading } = input;
+  if (codes.size) {
+    return "review";
+  }
+  const acceptedHeadingOnly =
+    assessment.status === "review" &&
+    assessment.codes.length === 1 &&
+    assessment.codes[0] === "LABEL.INGREDIENT_HEADING_INVALID" &&
+    localHeading;
+  if (acceptedHeadingOnly) {
+    return candidate.formula ? "candidate" : "partial";
+  }
+  return assessment.status;
 }
 
 function assertLimits(scope: Pick<TextInput, "range">, text: string, response: string): void {
@@ -139,11 +199,13 @@ class QuotePlacer {
       // The row's own amount and DV sit after the previous row, on either side of the name: a Nutrition Facts panel
       // prints "including 0 g Added Sugars" (bloodsugarfriendly.com 2026-10-21), and a name may enclose the amount.
       const own = { after: rowStart, taken: this.placed.filter((quote) => quote !== name) };
+      const amount = this.optional(row.amount, own);
+      const afterAmount = amount?.end ?? name.start;
       return {
         ...row,
         name,
-        amount: this.optional(row.amount, own),
-        dailyValue: this.optional(row.dailyValue, own),
+        amount,
+        dailyValue: this.optional(row.dailyValue, { ...own, after: afterAmount }),
         ...(row.purpose ? { purpose: this.optional(row.purpose, own) } : {}),
       };
     });

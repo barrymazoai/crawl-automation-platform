@@ -18,6 +18,19 @@ describe("resolveAnchor", () => {
     expect(quote.text).toBe("1 Level   Scoop (5 grams)");
     expect(source.text.slice(quote.start, quote.end)).toBe(quote.text);
   });
+  it("places the printed whitespace in a percent DV heading", () => {
+    const { source } = setup(["Amount Per Serving", "", "% DV"]);
+    expect(
+      resolveAnchor({ fromLine: 1, toLine: 3, text: "Amount Per Serving\n\n%DV" }, source).text,
+    ).toBe("Amount Per Serving\n\n% DV");
+  });
+  it("places an item that begins on its cited line and wraps onto the next", () => {
+    const { source } = setup(["WHEY POWDER, ONION", "POWDER, LECITHIN"]);
+    expect(resolveAnchor(anchor(1, "ONION POWDER"), source).text).toBe("ONION\nPOWDER");
+    expect(() => resolveAnchor(anchor(1, "LECITHIN"), source)).toThrow(
+      expect.objectContaining({ code: "TEXT.CITATION_INVALID" }),
+    );
+  });
 
   it("refuses a quote that is not printed on the cited lines", () => {
     const { source } = setup(["Calories 20", "Ribose 5 g"]);

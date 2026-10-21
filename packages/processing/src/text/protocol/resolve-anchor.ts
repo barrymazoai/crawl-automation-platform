@@ -36,6 +36,7 @@ interface Cited {
   first: EvidenceLine;
   last: EvidenceLine;
   words: string[];
+  following?: EvidenceLine;
 }
 
 const MAX_CITED_LINES = 50;
@@ -93,7 +94,8 @@ function citedLines(anchor: Anchor, lines: readonly EvidenceLine[]): Cited {
   if (!first || !last) {
     throw citationInvalid();
   }
-  return { first, last, words };
+  const following = anchor.fromLine === anchor.toLine ? lines[anchor.toLine] : undefined;
+  return { first, last, words, ...(following ? { following } : {}) };
 }
 
 /** The quoted words; only when they are not on the lines, the name with the row's own amount inside it. */
@@ -101,10 +103,21 @@ function findOccurrences(cited: Cited, text: string, enclosed?: string): Span[] 
   const window = text.slice(cited.first.start, cited.last.end);
   const find = (pattern: string) => occurrences(window, cited.first.start, pattern);
   const found = find(quotePattern(cited.words));
-  if (found.length || !enclosed) {
+  if (found.length) {
     return found;
   }
-  return enclosingPatterns(cited.words, enclosed).flatMap(find);
+  const next = cited.following;
+  if (next && cited.words.length > 1) {
+    const across = occurrences(
+      text.slice(cited.first.start, next.end),
+      cited.first.start,
+      quotePattern(cited.words),
+    ).filter((span) => span.start < cited.last.end && span.end > next.start);
+    if (across.length) {
+      return across;
+    }
+  }
+  return enclosed ? enclosingPatterns(cited.words, enclosed).flatMap(find) : [];
 }
 
 /** Among repeats: whole words (a whole entry for list items), after the previous item, not already quoted. */

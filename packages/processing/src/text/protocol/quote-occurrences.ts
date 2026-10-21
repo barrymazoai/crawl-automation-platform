@@ -6,7 +6,7 @@ const wordCharacter = /[\p{L}\p{N}]/u;
 
 /** A quote's words as a pattern; whitespace between words may differ from the printed text. */
 export function quotePattern(words: readonly string[]): string {
-  return words.map(escapeToken).join("\\s+");
+  return words.map((word) => (/^%dv$/i.test(word) ? "%\\s*DV" : escapeToken(word))).join("\\s+");
 }
 
 /** The quote's words with `enclosed` (a row's own amount) inside, at every inner word boundary. */

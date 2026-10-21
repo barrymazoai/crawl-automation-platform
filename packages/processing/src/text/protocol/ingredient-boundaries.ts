@@ -22,26 +22,44 @@ function topLevelSeparators(text: string): number[] | null {
 }
 
 /** A comma after an initial modifier does not name another ingredient ("Raw, wild extract"). */
-export function completeIngredientItem(text: string): boolean {
+export function completeIngredientItem(text: string, allowPrintedMismatch = false): boolean {
   const separators = topLevelSeparators(text);
   return (
-    separators !== null &&
+    (separators !== null || (allowPrintedMismatch && malformedSingleItem(text))) &&
     !/^\s*[([]/.test(text) &&
-    separators.every(
+    !/-\s*$/.test(text) &&
+    (separators ?? []).every(
       (index) =>
         text[index] === "," && /^(?:(?:raw|wild|organic)\s*,?\s*)+$/i.test(text.slice(0, index)),
     )
   );
 }
 
+/** A cited item can retain its source's broken bracket only when it contains no outer list separator. */
+function malformedSingleItem(text: string): boolean {
+  const stack: string[] = [];
+  let opened = false;
+  for (const character of text) {
+    if (character === "(" || character === "[") {
+      stack.push(character === "(" ? ")" : "]");
+      opened = true;
+    } else if (character === ")" || character === "]") {
+      stack.pop();
+    } else if ((character === "," || character === ";") && stack.length === 0) {
+      return false;
+    }
+  }
+  return opened;
+}
+
 // "Hydroxypropyl Methylcellulose. Contains <2% of: Magnesium Stearate" (Swanson) or "Water, Less than 2% of:
 // Pectin" (Costco) continues the same list.
 const MINOR_INGREDIENTS =
-  /^\s*(?:[,;.]\s*){0,2}(?:contains\s+)?(?:(?:<|less\s+than)\s*2\s*%|2\s*%\s+or\s+less)\s+of\s*:\s*$/i;
+  /^\s*(?:[,;.]\s*){0,2}(?:contains\s+)?(?:(?:<|less\s+than)\s*2\s*%|2\s*%\s+or\s+less)\s+of(?:\s+(?:each\s+of\s+)?the\s+following)?\s*:?[\s,;]*$/i;
 
 function listSeparator(previous: string, gap: string): boolean {
   return (
-    /^\s*(?:[,;.]\s*(?:and\s+)?|and\s+)$/i.test(gap) ||
+    /^\s*(?:(?:[,;.|‚]\s*(?:and\s+)?)|and\s+|in\s+a\s+base\s+of\s+)$/i.test(gap) ||
     (/\.\s*$/.test(previous) && /^\s+$/.test(gap)) ||
     MINOR_INGREDIENTS.test(gap)
   );
@@ -51,8 +69,8 @@ function listSeparator(previous: string, gap: string): boolean {
 export function ingredientGap(text: string, previous: Quote, next: Quote): Span | null {
   if (
     previous.end > next.start ||
-    !completeIngredientItem(previous.text) ||
-    !completeIngredientItem(next.text)
+    !completeIngredientItem(previous.text, true) ||
+    !completeIngredientItem(next.text, true)
   ) {
     return null;
   }
