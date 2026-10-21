@@ -25,6 +25,11 @@ describe("anchored ingredient boundaries", () => {
       ).codes,
     ).toEqual([]);
   });
+  it("reads a bracketed minor-ingredient group spelled 'percent' (Natrol gummies, 2026-10-21)", () => {
+    const items = ["Water", "Citric Acid", "Pectin"];
+    const ingredients = "Water, Contains 2 percent or less of (Citric Acid, Pectin).";
+    expect(decodeSimple(simpleLabel({ items, ingredients })).codes).toEqual([]);
+  });
   it("keeps printed list separators and a minor-ingredients subheading between cited items", () => {
     for (const ingredients of [
       "Cellulose | Silica",

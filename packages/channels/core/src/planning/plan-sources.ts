@@ -79,8 +79,12 @@ function imageSource(input: ChannelPlanInput, index: number) {
   } as const;
 }
 
-/** PDFs are excluded by policy; SVG is unsupported by the raster OCR/vision pipeline. */
-const excludedFile = (image: ImageCandidate) => /\.(?:pdf|svg)$/i.test(new URL(image.url).pathname);
+/**
+ * PDFs are excluded by policy; SVG and GIF are unsupported by the raster OCR/vision pipeline (a lovewellness.com
+ * benefits animation ended ARTIFACT.MEDIA_TYPE instead of being left out, 2026-10-21).
+ */
+const excludedFile = (image: ImageCandidate) =>
+  /\.(?:pdf|svg|gif)$/i.test(new URL(image.url).pathname);
 
 /** Keep excluded candidates in the evidence, and preserve later images' positions and task IDs. */
 function imageSources(input: ChannelPlanInput, evidence: ChannelProductEvidence) {

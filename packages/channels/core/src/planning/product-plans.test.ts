@@ -221,7 +221,7 @@ describe("formula planner (text facts first)", () => {
     expect(ids).toEqual(["page", "image-0", "image-2"]);
   });
 
-  it.each(["badge.svg", "badge.SVG?v=1"])(
+  it.each(["badge.svg", "badge.SVG?v=1", "benefits.gif"])(
     "skips unsupported %s without blocking the next label or changing its operation ID",
     async (badge) => {
       const images = [image("front.jpg"), image(badge), image("facts.png"), image("image?id=4")];

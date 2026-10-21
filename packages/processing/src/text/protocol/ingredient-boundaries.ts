@@ -63,10 +63,11 @@ function malformedSingleItem(text: string): boolean {
   return opened;
 }
 
-// "Hydroxypropyl Methylcellulose. Contains <2% of: Magnesium Stearate" (Swanson) or "Water, Less than 2% of:
-// Pectin" (Costco) continues the same list.
+// "Hydroxypropyl Methylcellulose. Contains <2% of: Magnesium Stearate" (Swanson), "Water, Less than 2% of:
+// Pectin" (Costco) or "Water, Contains 2 percent or less of (Citric Acid, …)" (Natrol gummies, 2026-10-21) continues
+// the same list; the bracket that opens the minor-ingredient group is part of the separator.
 const MINOR_INGREDIENTS =
-  /^\s*(?:[,;.]\s*){0,2}(?:contains\s+)?(?:(?:<|less\s+than)\s*2\s*%|2\s*%\s+or\s+less)\s+of(?:\s+(?:each\s+of\s+)?the\s+following)?\s*:?[\s,;]*$/i;
+  /^\s*(?:[,;.]\s*){0,2}(?:contains\s+)?(?:(?:<|less\s+than)\s*2\s*(?:%|percent)|2\s*(?:%|percent)\s+or\s+less)\s+of(?:\s+(?:each\s+of\s+)?the\s+following)?\s*:?[\s,;(]*$/i;
 
 const SUBLIST_HEADING = /^[A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,3}:$/;
 const NON_INGREDIENT_HEADING =
