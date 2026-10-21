@@ -1,9 +1,12 @@
 import { ReviewRecoveryService } from "@crawl-automation/app";
 import { ArtifactResolver, type Database, type ObjectStore } from "@crawl-automation/platform";
+import type { VisionTask } from "@crawl-automation/v3-contracts";
 import {
   LedgerOcrText,
   OcrResults,
   SavedLabelRecheck,
+  VisionEvidence,
+  VisionResults,
   ocrRecordCodec,
   textRecordCodec,
   visionRecordCodec,
@@ -35,20 +38,30 @@ export function createReviewRecovery(database: Database, parts: RecoveryParts) {
   const results = new OcrResults({ local, remote, registry, storageId: parts.storageId });
   const ocr = new LedgerOcrText({ artifacts, results, registry });
   const reviews = new PostgresReviewStore(database);
+  const verifyOcr = async (task: VisionTask, signal: AbortSignal) => {
+    await ocr.verifiedText(task.input.selection, signal);
+  };
   const recheck = new SavedLabelRecheck({
     ...parts,
     objects: remote,
     reviews,
     textRecords: new PostgresResultRegistry(database, textRecordCodec),
     imageRecords: new PostgresResultRegistry(database, visionRecordCodec),
-    verifyOcr: async (task, signal) => {
-      await ocr.verifiedText(task.input.selection, signal);
-    },
+    verifyOcr,
+  });
+  const evidence = new VisionEvidence({ local, remote: parts.objects, verifyOcr });
+  const visionResults = new VisionResults({
+    local,
+    remote: parts.objects,
+    registry: null,
+    evidence,
+    storageId: parts.storageId,
   });
   return new ReviewRecoveryService({
     reviews,
     recheck,
     objects: parts.objects,
+    vision: { evidence, results: visionResults },
     ledger: new PostgresRecoveryLedger(database),
   });
 }

@@ -120,6 +120,38 @@ export class VisionResults implements StepResults<VisionTask, VisionOutput, Visi
     return after;
   }
 
+  /** Publishes an already retained Review answer after today's rules accept it. The original answer stays intact. */
+  async publishReviewed(task: VisionTask, signal: AbortSignal): Promise<VisionRecord> {
+    const prepared = await this.stageReviewed(task, signal);
+    const registry = this.deps.registry;
+    if (!registry) {
+      throw visionFailure("VISION.REGISTRY_UNAVAILABLE", "executed");
+    }
+    await registry.register(prepared).catch((error: unknown) => {
+      recordRecovery(error, { operation: "vision.recover.register" });
+    });
+    const saved = await registry.read(task.input.operationId);
+    if (
+      !saved ||
+      recordHash(visionRecordCodec, saved) !== recordHash(visionRecordCodec, prepared)
+    ) {
+      throw visionFailure("VISION.HANDOFF_UNKNOWN", "executed");
+    }
+    return saved;
+  }
+
+  /** Keeps and verifies the completion; a recovery ledger can register this record in its own transaction. */
+  async stageReviewed(task: VisionTask, signal: AbortSignal): Promise<VisionRecord> {
+    const answer = await this.deps.evidence.verify(task, { allowLocal: false }, signal);
+    const prepared = prepareVisionRecord(task, answer, this.deps.storageId);
+    await this.put(
+      this.deps.remote,
+      { key: prepared.record.completion.objectKey, bytes: prepared.completion },
+      signal,
+    );
+    return prepared.record;
+  }
+
   /** Writes once and reads back; different bytes under the key mean storing it cannot be confirmed. */
   protected put(
     store: ObjectStore,

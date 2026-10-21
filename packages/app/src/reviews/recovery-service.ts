@@ -9,8 +9,9 @@ import {
   assemblyFailure,
   type RecheckedLabel,
 } from "@crawl-automation/processing";
-import { appErrors } from "../errors.js";
+import type { ReviewRecord, VisionTask } from "@crawl-automation/v3-contracts";
 import { ReviewPageSchema } from "./review-model.js";
+import { readReviewRecord, retainedReviewKind } from "./retained-answer.js";
 import {
   ReviewRecoveryInputSchema,
   type RecoveryItem,
@@ -19,6 +20,7 @@ import {
 } from "./recovery-model.js";
 import type { ReviewRecoveryDeps } from "./recovery-ports.js";
 import { publishRecoveryFiles } from "./recovery-publication.js";
+import { evaluateVisionRecovery } from "./vision-recovery.js";
 
 /** Manual, bounded retained-evidence recovery. Preview persists an audit report only, never product artifacts. */
 export class ReviewRecoveryService {
@@ -63,33 +65,14 @@ export class ReviewRecoveryService {
   private async evaluate(
     reviewId: string,
     signal: AbortSignal,
-  ): Promise<{ item: RecoveryItem; label?: RecheckedLabel }> {
-    const review = await this.deps.reviews.read(reviewId);
-    if (!review) {
-      throw appErrors.create("REVIEW.NOT_FOUND", { details: { reviewId } });
-    }
+  ): Promise<{ item: RecoveryItem; label?: RecheckedLabel; visionTask?: VisionTask }> {
+    const review = await readReviewRecord(this.deps.reviews, reviewId);
     const base = { reviewId, originalReviewHash: recheckDigest(review), operationId: null };
     try {
-      const label = await this.deps.recheck.check(review, signal);
-      const collection = label.result.status === "ready" ? recoveredCollection(label) : null;
-      if (collection) {
-        const existing = await this.deps.ledger.collectionFor(
-          collection.record.observation.observationId,
-        );
-        if (existing && existing.operationId !== collection.record.operationId) {
-          throw assemblyFailure("LABEL_COLLECTION.OBSERVATION_ALREADY_COLLECTED");
-        }
+      if (retainedReviewKind(review) === "vision") {
+        return await evaluateVisionRecovery(review, this.deps, signal);
       }
-      return {
-        label,
-        item: {
-          ...base,
-          digest: recheckedLabelDigest(label),
-          operationId: collection?.record.operationId ?? null,
-          status: collection ? "recoverable" : "review",
-          codes: label.result.codes,
-        },
-      };
+      return await this.evaluateLabel(review, base, signal);
     } catch (error) {
       recordRecovery(error, { operation: "reviews.recover.preview", reviewId });
       signal.throwIfAborted();
@@ -97,6 +80,31 @@ export class ReviewRecoveryService {
         item: { ...base, status: "unavailable", codes: [recheckCode(error)], digest: null },
       };
     }
+  }
+
+  private async evaluateLabel(
+    review: ReviewRecord,
+    base: Pick<RecoveryItem, "reviewId" | "originalReviewHash" | "operationId">,
+    signal: AbortSignal,
+  ) {
+    const label = await this.deps.recheck.check(review, signal);
+    const collection = label.result.status === "ready" ? recoveredCollection(label) : null;
+    if (collection) {
+      const existing = await this.deps.ledger.collectionFor(
+        collection.record.observation.observationId,
+      );
+      if (existing && existing.operationId !== collection.record.operationId) {
+        throw assemblyFailure("LABEL_COLLECTION.OBSERVATION_ALREADY_COLLECTED");
+      }
+    }
+    const item: RecoveryItem = {
+      ...base,
+      digest: recheckedLabelDigest(label),
+      operationId: collection?.record.operationId ?? null,
+      status: collection ? "recoverable" : "review",
+      codes: label.result.codes,
+    };
+    return { label, item };
   }
 
   private async apply(previewId: string) {
@@ -124,8 +132,17 @@ export class ReviewRecoveryService {
         details: { reviewId: expected.reviewId },
       });
     }
+    return this.publishEvaluated(previewId, actual, signal);
+  }
+
+  private async publishEvaluated(
+    previewId: string,
+    actual: { item: RecoveryItem; label?: RecheckedLabel; visionTask?: VisionTask },
+    signal: AbortSignal,
+  ) {
     const collection =
       actual.label?.result.status === "ready" ? recoveredCollection(actual.label) : null;
+    const vision = actual.visionTask ? await this.stageVision(actual.visionTask, signal) : null;
     if (collection) {
       await publishRecoveryFiles(this.deps.objects, collection.files, signal);
     }
@@ -134,7 +151,15 @@ export class ReviewRecoveryService {
       previewId,
       item: actual.item,
       collection: collection?.record ?? null,
+      ...(vision ? { vision } : {}),
     });
+  }
+
+  private stageVision(task: VisionTask, signal: AbortSignal) {
+    if (!this.deps.vision || !this.deps.ledger.supportsVision) {
+      throw recheckErrors.create("RECHECK.PUBLICATION_UNVERIFIED");
+    }
+    return this.deps.vision.results.stageReviewed(task, signal);
   }
 }
 

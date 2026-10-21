@@ -2,7 +2,8 @@
 
 `reviews.recover` is a manual tRPC mutation. It has no workflow starter or model,
 OCR API, browser, or ScraperAPI dependency. Select **product assembly/collection
-Review IDs**, not child text or image Reviews.
+Review IDs** or `codex.vision` Reviews with a retained `label-extraction/1`
+response. Child text Reviews still need their product assembly/collection Review.
 
 ```json
 { "dryRun": true, "selection": { "reviewIds": ["label-REVIEW_ID"] } }
@@ -33,8 +34,18 @@ full-text quote scope. Page preparation is recomputed from retained HTML; label
 core extraction uses the configured channel policy. Packaging checks run again.
 Images require original pixel hashes, registered OCR/keyword evidence, a matching
 vision intent, and the retained answer. Registered result/completion hashes are
-checked. A reviewed image's decoded response must also match its registered Review
-candidate; inconsistent historical candidates remain unavailable.
+checked. Within product assembly recovery, a reviewed image's decoded response
+must also match its registered Review candidate; inconsistent historical
+candidates remain unavailable.
+
+For a direct vision Review, dry run re-decodes its byte-exact retained response
+with today's label rules and returns the current code plus a small candidate
+summary. A recoverable preview verifies the original image, OCR selection,
+intent, response fingerprint and hash. Publication keeps the original response,
+writes its normal vision completion, and registers the vision result with the
+recovery receipt in one database transaction. The original Review remains
+immutable. A still failing answer remains in Review with today's code. No model
+call or replacement image is made.
 
 Complete labels use today's `label-image-first/6` assembly rules and the standard
 collected-product schema. Derived answer receipts and the new assembly are written

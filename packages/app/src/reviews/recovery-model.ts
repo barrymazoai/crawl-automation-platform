@@ -31,6 +31,14 @@ export const RecoveryItemSchema = z.strictObject({
   codes: z.array(z.string()),
   digest: Sha256Schema.nullable(),
   operationId: ExecutionIdSchema.nullable(),
+  candidateSummary: z
+    .strictObject({
+      status: z.enum(["candidate", "partial", "review"]),
+      formulaColumns: z.number().int().nonnegative(),
+      formulaRows: z.number().int().nonnegative(),
+      otherIngredients: z.number().int().nonnegative(),
+    })
+    .optional(),
 });
 export type RecoveryItem = z.infer<typeof RecoveryItemSchema>;
 export const RecoveryPreviewSchema = z.strictObject({

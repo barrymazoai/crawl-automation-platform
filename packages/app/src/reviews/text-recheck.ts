@@ -13,28 +13,21 @@ import {
   type TextInput,
 } from "@crawl-automation/v3-contracts";
 import { z } from "zod";
+import {
+  recheckResult,
+  retainedReviewKind,
+  type RecheckOutcome,
+  type RecheckResult,
+} from "./retained-answer.js";
+import { VisionAnswerRecheck } from "./vision-recheck.js";
 
-/** How a stored answer fares under today's decoding rules. */
-export type RecheckStatus = "passes" | "fails" | "not_applicable" | "unavailable";
-
-export interface RecheckResult {
-  reviewId: string;
-  operationId: string;
-  /** The code the Review was recorded with. */
-  recordedCode: string;
-  status: RecheckStatus;
-  /** Today's failure code, when it still fails or its evidence could not be read. */
-  code: string | null;
-  reason: string | null;
-}
+export type { RecheckResult, RecheckStatus } from "./retained-answer.js";
 
 /** An intent file is small; this only bounds the read. */
 const INTENT_BYTES = 2 * 1024 * 1024;
 const StoredAnswerSchema = z.object({ rawResponse: z.string() });
 const IntentSchema = z.object({ input: z.unknown() });
 const ANSWER_SCHEMAS = new Set(["text-raw-response/1", "text-output/1"]);
-
-type Outcome = Pick<RecheckResult, "status" | "code" | "reason">;
 
 /** The model answer a text Review kept, or null when it kept none. */
 function storedAnswer(review: ReviewRecord): string | null {
@@ -54,24 +47,22 @@ export class TextAnswerRecheck {
   constructor(private readonly deps: { objects: Pick<ObjectStore, "read">; sources: TextSource }) {}
 
   async check(review: ReviewRecord, signal: AbortSignal): Promise<RecheckResult> {
+    if (retainedReviewKind(review) === "vision") {
+      return new VisionAnswerRecheck(this.deps.objects).check(review, signal);
+    }
     const { failure } = review;
-    const identity = {
-      reviewId: review.reviewId,
-      operationId: failure.operationId,
-      recordedCode: failure.code,
-    };
     const answer = storedAnswer(review);
     if (failure.stage !== "codex.text" || answer === null) {
       const reason =
         failure.stage === "codex.text" ? "no stored model answer" : "not a text Review";
-      return { ...identity, status: "not_applicable", code: null, reason };
+      return recheckResult(review, { status: "not_applicable", code: null, reason });
     }
     const input = await this.task(review, signal);
     if (!input) {
       const reason = "the task's intent is missing from R2 or names another task";
-      return { ...identity, status: "unavailable", code: null, reason };
+      return recheckResult(review, { status: "unavailable", code: null, reason });
     }
-    return { ...identity, ...(await this.decode(input, answer, signal)) };
+    return recheckResult(review, await this.decode(input, answer, signal));
   }
 
   /** The task, from its intent file (a text Review's evidence key), when it is this Review's task. */
@@ -87,7 +78,11 @@ export class TextAnswerRecheck {
     return own ? input : null;
   }
 
-  private async decode(input: TextInput, answer: string, signal: AbortSignal): Promise<Outcome> {
+  private async decode(
+    input: TextInput,
+    answer: string,
+    signal: AbortSignal,
+  ): Promise<RecheckOutcome> {
     let text: string;
     try {
       text = (await this.deps.sources.resolve(input, signal)).text;

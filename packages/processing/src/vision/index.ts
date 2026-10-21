@@ -15,3 +15,4 @@ export * from "./vision-recovery.js";
 export * from "./vision-results.js";
 export * from "./vision-review.js";
 export * from "./vision-step.js";
+export * from "./retained-review-answer.js";

@@ -1,10 +1,16 @@
 import type { ObjectStore } from "@crawl-automation/platform";
-import type { LabelCollectedProduct } from "@crawl-automation/v3-contracts";
-import type { SavedLabelRecheck } from "@crawl-automation/processing";
+import type { LabelCollectedProduct, VisionRecord } from "@crawl-automation/v3-contracts";
+import type {
+  SavedLabelRecheck,
+  VisionEvidence,
+  VisionResults,
+} from "@crawl-automation/processing";
 import type { ReviewStore } from "./review-ports.js";
 import type { RecoveryItem, RecoveryOutcome, RecoveryPreview } from "./recovery-model.js";
 
 export interface RecoveryLedger {
+  /** Vision publication needs a receipt that verifies the processing result, not a collection. */
+  supportsVision?: true;
   savePreview(preview: RecoveryPreview): Promise<void>;
   readPreview(previewId: string): Promise<RecoveryPreview | null>;
   status(reviewId: string): Promise<RecoveryOutcome | null>;
@@ -14,6 +20,7 @@ export interface RecoveryLedger {
     previewId: string;
     item: RecoveryItem;
     collection: LabelCollectedProduct | null;
+    vision?: VisionRecord | null;
   }): Promise<RecoveryOutcome>;
 }
 
@@ -22,4 +29,8 @@ export interface ReviewRecoveryDeps {
   recheck: Pick<SavedLabelRecheck, "check">;
   ledger: RecoveryLedger;
   objects: ObjectStore;
+  vision?: {
+    evidence: Pick<VisionEvidence, "verify">;
+    results: Pick<VisionResults, "stageReviewed">;
+  };
 }

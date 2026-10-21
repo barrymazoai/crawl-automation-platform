@@ -7,9 +7,22 @@ import {
   type RecoveryOutcome,
 } from "@crawl-automation/app";
 import type { Database, Queryable } from "@crawl-automation/platform";
-import { LabelCollectedProductSchema, ReviewRecordSchema } from "@crawl-automation/v3-contracts";
-import { labelCollectedHash, recheckDigest, recheckErrors } from "@crawl-automation/processing";
+import {
+  LabelCollectedProductSchema,
+  ReviewRecordSchema,
+  type ReviewRecord,
+} from "@crawl-automation/v3-contracts";
+import {
+  isRetainedVisionReview,
+  isReviewedVisionRecord,
+  labelCollectedHash,
+  recheckDigest,
+  recheckErrors,
+  recordHash,
+  visionRecordCodec,
+} from "@crawl-automation/processing";
 import { PostgresCollectedProducts } from "../postgres/postgres-collected-products.js";
+import { PostgresResultRegistry } from "../postgres/postgres-result-registry.js";
 
 interface ReceiptRow {
   fingerprint: string;
@@ -21,6 +34,7 @@ const unverified = () => recheckErrors.create("RECHECK.RECEIPT_UNVERIFIED");
 
 /** Recovery metadata uses existing API receipts. The immutable Review row is never updated. */
 export class PostgresRecoveryLedger implements RecoveryLedger {
+  readonly supportsVision = true;
   constructor(private readonly database: Database) {}
 
   async savePreview(raw: RecoveryPreview): Promise<void> {
@@ -60,22 +74,21 @@ export class PostgresRecoveryLedger implements RecoveryLedger {
       await tx.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [
         `review-recovery:${input.item.reviewId}`,
       ]);
-      await assertOriginal(tx, input.item);
+      const review = await originalReview(tx, input.item.reviewId);
+      if (recheckDigest(review) !== input.item.originalReviewHash) {
+        throw recheckErrors.create("RECHECK.PREVIEW_CHANGED");
+      }
       const prior = await recoveryStatus(tx, input.item.reviewId);
       if (prior?.superseded) {
         return prior;
       }
-      const collection = input.collection && LabelCollectedProductSchema.parse(input.collection);
-      if (collection) {
-        await assertCollectionOwner(tx, input);
-        await new PostgresCollectedProducts(tx).append(collection);
-      }
+      const publishedHash = await registerRecovered(tx, review, input);
       const outcome = RecoveryOutcomeSchema.parse({
         ...input.item,
         previewId: input.previewId,
-        status: collection ? "recovered" : input.item.status,
-        superseded: !!collection,
-        recordHash: collection ? labelCollectedHash(collection) : null,
+        status: publishedHash ? "recovered" : input.item.status,
+        superseded: !!publishedHash,
+        recordHash: publishedHash,
         recordedAt: new Date().toISOString(),
       });
       await insertReceipt(tx, {
@@ -86,6 +99,35 @@ export class PostgresRecoveryLedger implements RecoveryLedger {
       return outcome;
     });
   }
+}
+
+async function registerRecovered(
+  tx: Queryable,
+  review: ReviewRecord,
+  input: Parameters<RecoveryLedger["record"]>[0],
+): Promise<string | null> {
+  const collection = input.collection && LabelCollectedProductSchema.parse(input.collection);
+  const vision = input.vision && visionRecordCodec.parseRecord(input.vision);
+  if (collection && vision) {
+    throw unverified();
+  }
+  if (collection) {
+    assertCollectionOwner(review, input);
+    await new PostgresCollectedProducts(tx).append(collection);
+    return labelCollectedHash(collection);
+  }
+  if (vision) {
+    if (
+      input.item.status !== "recoverable" ||
+      input.item.operationId !== vision.input.operationId ||
+      !isReviewedVisionRecord(review, vision)
+    ) {
+      throw unverified();
+    }
+    await new PostgresResultRegistry(tx, visionRecordCodec).register(vision);
+    return recordHash(visionRecordCodec, vision);
+  }
+  return null;
 }
 
 function checkedReceipt(row: ReceiptRow): unknown {
@@ -110,9 +152,11 @@ async function recoveryStatus(db: Queryable, reviewId: string): Promise<Recovery
     throw unverified();
   }
   if (result.superseded) {
-    const collection =
-      result.operationId && (await new PostgresCollectedProducts(db).read(result.operationId));
-    if (!collection || labelCollectedHash(collection) !== result.recordHash) {
+    const review = await originalReview(db, reviewId);
+    const hash = isRetainedVisionReview(review)
+      ? await visionResultHash(db, result.operationId)
+      : await collectionHash(db, result.operationId);
+    if (!hash || hash !== result.recordHash) {
       throw unverified();
     }
   }
@@ -143,20 +187,21 @@ async function originalReview(db: Queryable, reviewId: string) {
   return review;
 }
 
-async function assertOriginal(
-  db: Queryable,
-  item: Parameters<RecoveryLedger["record"]>[0]["item"],
-) {
-  if (recheckDigest(await originalReview(db, item.reviewId)) !== item.originalReviewHash) {
-    throw recheckErrors.create("RECHECK.PREVIEW_CHANGED");
-  }
+async function visionResultHash(db: Queryable, operationId: string | null) {
+  const vision =
+    operationId && (await new PostgresResultRegistry(db, visionRecordCodec).read(operationId));
+  return vision ? recordHash(visionRecordCodec, vision) : null;
 }
 
-async function assertCollectionOwner(
-  db: Queryable,
+async function collectionHash(db: Queryable, operationId: string | null) {
+  const collection = operationId && (await new PostgresCollectedProducts(db).read(operationId));
+  return collection ? labelCollectedHash(collection) : null;
+}
+
+function assertCollectionOwner(
+  review: ReviewRecord,
   input: Parameters<RecoveryLedger["record"]>[0],
 ) {
-  const review = await originalReview(db, input.item.reviewId);
   const collection = input.collection;
   if (
     !collection ||

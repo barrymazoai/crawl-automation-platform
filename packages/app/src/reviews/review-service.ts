@@ -8,6 +8,7 @@ import type { ReviewRecoveryService } from "./recovery-service.js";
 import type { ReviewRecoveryInput } from "./recovery-model.js";
 import { z } from "zod";
 import { recoveredReviewPage } from "./recovery-read-model.js";
+import { readReviewRecord } from "./retained-answer.js";
 
 import type { ReviewStore } from "./review-ports.js";
 export type { ReviewStore } from "./review-ports.js";
@@ -89,11 +90,7 @@ export class ReviewService {
   }
 
   private async record(reviewId: string): Promise<ReviewRecord> {
-    const review = await this.deps.reviews.read(reviewId);
-    if (review === null) {
-      throw appErrors.create("REVIEW.NOT_FOUND", { details: { reviewId } });
-    }
-    return review;
+    return readReviewRecord(this.deps.reviews, reviewId);
   }
 
   private evidenceReaders() {
