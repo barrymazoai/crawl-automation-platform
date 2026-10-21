@@ -54,12 +54,22 @@ export function readDtcProduct(
   return categories.length ? { ...product, categories } : product;
 }
 
-/** The store's filing of the product: its JSON-LD breadcrumb, then the platform's own type and tags. */
+/** The capture result carries at most this many store categories (pipeline-model nonSupplement). */
+const MAX_CATEGORIES = 20;
+
+/**
+ * The store's filing of the product: its JSON-LD breadcrumb, then the platform's own type and tags, at most 20 in
+ * all. Nature's Truth tags an oil with a dozen misspellings (2026-10-21); a longer list failed the capture result's
+ * schema and ended the product as PIPELINE.PRODUCT_UNRESOLVED instead of "not a supplement".
+ */
 function storeCategories(document: Document, product: PlatformProduct): string[] {
   const scripts = [...document.querySelectorAll('script[type="application/ld+json"]')].map(
     (script) => script.textContent ?? "",
   );
-  return [...new Set([...jsonLdBreadcrumbs(scripts), ...(product.categories ?? [])])];
+  return [...new Set([...jsonLdBreadcrumbs(scripts), ...(product.categories ?? [])])].slice(
+    0,
+    MAX_CATEGORIES,
+  );
 }
 
 /** Read a canonical redirect before title/facts parsing; core owns the identity_conflict comparison. */
