@@ -22,8 +22,8 @@ describe("observedImageSizes", () => {
     expect(observedImageSizes([original, ...thumbnails])).toEqual([original]);
   });
 
-  it("keeps the widest observed rendition when the original was not observed", () => {
-    expect(observedImageSizes(thumbnails)).toEqual([thumbnails[5]]);
+  it("keeps every legacy rendition when the original was not observed", () => {
+    expect(observedImageSizes(thumbnails)).toEqual(thumbnails);
   });
 
   it("keeps a different version of the same file", () => {

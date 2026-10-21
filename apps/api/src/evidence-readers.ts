@@ -4,7 +4,7 @@ import { OcrResults, TextEvidence, noResult } from "@crawl-automation/processing
 import { ArtifactResolver, createR2Objects } from "@crawl-automation/platform";
 import { swansonLabelCore } from "@crawl-automation/channel-swanson";
 import { gncLabelCore } from "@crawl-automation/channels-gnc";
-import { dtcLabelCore } from "@crawl-automation/channel-dtc";
+import { dtcLabelCore, dtcLabelCoreV2 } from "@crawl-automation/channel-dtc";
 import type { ApiConfig } from "./config.js";
 
 const apiErrors = defineErrors({
@@ -16,6 +16,14 @@ const apiErrors = defineErrors({
 
 const refuseWrite = async (): Promise<never> => {
   throw apiErrors.create("API.READ_ONLY_STORAGE");
+};
+
+/** Each channel's label-core readers by policy name; DTC keeps /1 readable beside the current /2. */
+const labelCores = {
+  "swanson-label-core/1": swansonLabelCore,
+  "gnc-label-core/1": gncLabelCore,
+  "dtc-label-core/1": dtcLabelCore,
+  "dtc-label-core/2": dtcLabelCoreV2,
 };
 
 /**
@@ -40,11 +48,7 @@ export function evidenceReaders(storage: NonNullable<ApiConfig["storage"]>) {
     artifacts: new ArtifactResolver(noCopies, remote),
     ocr: { inspect: async () => noResult },
     remoteOcr,
-    labelCores: {
-      "swanson-label-core/1": swansonLabelCore,
-      "gnc-label-core/1": gncLabelCore,
-      "dtc-label-core/1": dtcLabelCore,
-    },
+    labelCores,
   });
   const readers = {
     files: new ReviewEvidence({ objects: remote }),
@@ -54,11 +58,7 @@ export function evidenceReaders(storage: NonNullable<ApiConfig["storage"]>) {
     objects: r2.store,
     text: sources,
     storageId: storage.storageId,
-    labelCores: {
-      "swanson-label-core/1": swansonLabelCore,
-      "gnc-label-core/1": gncLabelCore,
-      "dtc-label-core/1": dtcLabelCore,
-    },
+    labelCores,
   };
   return { readers, objects: remote, recovery, close: r2.close };
 }
