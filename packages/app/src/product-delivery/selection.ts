@@ -27,7 +27,7 @@ function assertOwner(input: ReadyDeliveryProduct) {
     owner.sourceId === history.owner.sourceId,
     owner.requestId === history.owner.runId,
     owner.listingId === history.listing.externalId,
-    owner.variantId === history.capture.variantId,
+    history.capture.variantId === null || owner.variantId === history.capture.variantId,
     owner.listingId === product.listingId,
     owner.variantId === product.variantId,
   ];

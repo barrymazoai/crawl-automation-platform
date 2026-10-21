@@ -36,6 +36,33 @@ describe("Supply Smart product delivery with real answer codecs and fake RPC", (
     });
   });
 
+  it("delivers a selected variant from a capture whose URL had no variant", async () => {
+    const product = deliveryProduct();
+    if (!product.history) {
+      throw new Error("fixture");
+    }
+    product.history.capture.variantId = null;
+    product.history.listing.url = "https://example.com/products/focusfuel";
+    const state = setup(deliverySnapshot([product]));
+    expect(await state.run()).toEqual({ captured: 1, review: 0, delivered: 1, refused: [] });
+    expect(state.rpc.calls[0]?.input).toMatchObject({
+      items: [{ externalId: "variant-1" }],
+    });
+  });
+
+  it("refuses a selected variant after a foreign history row is excluded", async () => {
+    const product = deliveryProduct();
+    product.history = null;
+    const state = setup(deliverySnapshot([product]));
+    expect(await state.run()).toEqual({
+      captured: 1,
+      review: 0,
+      delivered: 0,
+      refused: [{ externalId: "variant-1", reason: "PRODUCT_DELIVERY.MATERIAL_MISSING" }],
+    });
+    expect(state.rpc.calls).toEqual([]);
+  });
+
   it("continues accepted products when another item is refused and never completes that run", async () => {
     const state = setup(deliverySnapshot([deliveryProduct("1"), deliveryProduct("2")]));
     state.rpc.refused.add("variant-1");

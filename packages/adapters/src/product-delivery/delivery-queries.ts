@@ -27,8 +27,10 @@ export const DELIVERY_HISTORY = `
     AND record->'listing'->>'channel'='dtc'
     AND record->'owner'->>'runId'=$1 AND record->'owner'->>'sourceId'=$2
     AND record->'listing'->>'externalId'=$3
-    AND record->'capture'->>'variantId' IS NOT DISTINCT FROM $4::text
-  ORDER BY record->>'capturedAt' DESC, source_record_id DESC LIMIT 1`;
+    AND (record->'capture'->>'variantId' IS NOT DISTINCT FROM $4::text
+      OR record->'capture'->>'variantId' IS NULL)
+  ORDER BY (record->'capture'->>'variantId' IS NOT DISTINCT FROM $4::text) DESC,
+    record->>'capturedAt' DESC, source_record_id DESC LIMIT 1`;
 
 export const DELIVERY_HOLDS = `
   SELECT DISTINCT 'review' AS kind, record->'failure'->>'operationId' AS "operationId",
