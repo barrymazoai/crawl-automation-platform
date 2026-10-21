@@ -30,4 +30,25 @@ export const OrderedDiagnosticsSchema = z.object({
     .max(100),
   codes: z.array(z.string()),
   sourceOutcomes: SourceOutcomesSchema.optional(),
+  /**
+   * Owner 2026-10-21: every source's diagnostic as this round verified it, so the next round can reuse the verdicts
+   * of images that matched no keyword instead of re-reading each of them again (the walk was quadratic in images).
+   */
+  sourceDiagnostics: z
+    .array(
+      z.object({
+        sourceId: z.string(),
+        kind: z.enum(["page", "image", "text"]),
+        status: z.string(),
+        reason: z.string(),
+        detail: z.string().optional(),
+        matchedKeywords: z.array(z.string()).optional(),
+      }),
+    )
+    .max(100)
+    .optional(),
 });
+export type OrderedDiagnostics = z.infer<typeof OrderedDiagnosticsSchema>;
+
+/** The byte limit of one progress record. */
+export const ORDERED_DIAGNOSTICS_LIMIT = 2 * 1024 * 1024;

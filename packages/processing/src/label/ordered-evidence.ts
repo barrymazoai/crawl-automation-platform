@@ -11,17 +11,23 @@ import { labelFailure } from "./label-errors.js";
 import type { LabelPlans } from "./label-plans.js";
 import type { LabelInspection } from "./selection-model.js";
 import type { OrderedProgress, OrderedSource, OrderedState } from "./ordered-model.js";
+import type { OrderedDiagnostics } from "./ordered-diagnostics.js";
+import { previousVerdicts, reuseVerdict, unmatchedDiagnostic } from "./ordered-reuse.js";
 
 export interface OrderedDeps {
   inspection: LabelInspection;
   visionFingerprint: (task: VisionTask) => string;
 }
 
-/** Read only the sources actually attempted, re-verifying originals and exact task receipts. */
+/**
+ * Read only the sources actually attempted, re-verifying originals and exact task receipts. With the previous
+ * round's progress record (owner 2026-10-21), an image that matched no keyword keeps that round's verified verdict;
+ * every source that could enter the label (registered or reviewed) is still re-verified from its own evidence.
+ */
 export async function orderedEvidence(
   plans: LabelPlans,
   deps: OrderedDeps,
-  at: { request: OrderedProgress; signal: AbortSignal },
+  at: { request: OrderedProgress; signal: AbortSignal; previous?: OrderedDiagnostics | null },
 ): Promise<DiagnosedOrderedEvidence> {
   const loaded = await plans.load(at.request.input, at.signal);
   const evidence: DiagnosedOrderedEvidence = {
@@ -38,10 +44,14 @@ export async function orderedEvidence(
       ),
     ),
   };
-  for (const state of at.request.states) {
+  const verified = previousVerdicts(at.previous ?? null, at.request);
+  for (const [index, state] of at.request.states.entries()) {
     const source = loaded.manifest.sources.find((entry) => entry.id === state.id);
     if (!source) {
       throw labelFailure("CHANNEL.LABEL_IDENTITY_CONFLICT");
+    }
+    if (reuseVerdict(evidence, { source, state, index, verified })) {
+      continue;
     }
     await readState({ plans, deps, evidence, ...at }, { source, state });
   }
@@ -89,25 +99,6 @@ async function readState(
     return modelReview(reading, { source: result.source, state });
   }
   evidence.entries.push(await registeredSource(deps.inspection, result.source, signal));
-}
-
-function unmatchedDiagnostic(
-  evidence: DiagnosedOrderedEvidence,
-  source: SavedEvidenceSource,
-  reason: "no_text" | undefined,
-) {
-  const diagnostic = evidence.sourceDiagnostics?.find((entry) => entry.sourceId === source.id);
-  if (!diagnostic || diagnostic.reason === "skipped") {
-    return;
-  }
-  if (source.kind === "file-image") {
-    // SavedSourceEvidence verifies the screen before returning not_matched. Its contract
-    // guarantees zero matched keywords; an empty OCR document has its own explicit reason.
-    diagnostic.reason = reason === "no_text" ? "no_text" : "keyword_screen_missed";
-    diagnostic.matchedKeywords = [];
-  } else {
-    diagnostic.reason = reason ?? "source_not_matched";
-  }
 }
 
 function registeredSource(inspection: LabelInspection, source: OrderedSource, signal: AbortSignal) {

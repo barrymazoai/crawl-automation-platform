@@ -1,11 +1,22 @@
 import { isOrderedEvidencePolicy } from "@crawl-automation/v3-contracts";
 import { orderedProgress } from "./ordered-progress.js";
-import { orderedProgressKey } from "./ordered-diagnostics.js";
+import {
+  ORDERED_DIAGNOSTICS_LIMIT,
+  OrderedDiagnosticsSchema,
+  orderedProgressKey,
+  type OrderedDiagnostics,
+} from "./ordered-diagnostics.js";
+import { recordRecovery } from "@crawl-automation/platform";
+import { decodeJson } from "../results/result-record.js";
 import { labelFailure } from "./label-errors.js";
 import { labelKeys } from "./label-plan-model.js";
 import type { LabelPlans, LoadedPlan } from "./label-plans.js";
 import { orderedEvidence, type OrderedDeps } from "./ordered-evidence.js";
-import { OrderedProgressSchema, OrderedSelectionSchema } from "./ordered-model.js";
+import {
+  OrderedProgressSchema,
+  OrderedSelectionSchema,
+  type OrderedProgress,
+} from "./ordered-model.js";
 
 /** The configured source order; URL hints rank images, never establish their label contents. */
 export function orderedSources(loaded: LoadedPlan) {
@@ -51,7 +62,8 @@ export class LabelOrderedSelection {
       order,
       request.states.map((state) => state.id),
     );
-    const evidence = await orderedEvidence(this.plans, this.deps, { request, signal });
+    const previous = await this.previousRecord(request.input, request.states.slice(0, -1), signal);
+    const evidence = await orderedEvidence(this.plans, this.deps, { request, signal, previous });
     const untried = order.length - request.states.length;
     const { outcomes, codes, sourceOutcomes, ...progress } = orderedProgress(
       request,
@@ -60,12 +72,26 @@ export class LabelOrderedSelection {
     );
     await this.plans.publish(
       orderedProgressKey(request.input, request.states),
-      { request, outcomes, codes, ...(sourceOutcomes ? { sourceOutcomes } : {}) },
+      {
+        request,
+        outcomes,
+        codes,
+        ...(sourceOutcomes ? { sourceOutcomes } : {}),
+        ...(evidence.sourceDiagnostics ? { sourceDiagnostics: evidence.sourceDiagnostics } : {}),
+      },
       signal,
     );
     // Keep the existing strict workflow response compatible. Review reads the summary from
     // this immutable report; it needs no extra workflow command or response field.
     return { input: request, ...progress };
+  }
+
+  private previousRecord(
+    input: OrderedProgress["input"],
+    states: OrderedProgress["states"],
+    signal: AbortSignal,
+  ) {
+    return readPreviousRecord(this.plans, { input, states }, signal);
   }
 
   /** Omitted downloads are legal only after the attempted prefix proves a complete label. */
@@ -80,7 +106,8 @@ export class LabelOrderedSelection {
       order,
       attempted.map((state) => state.id),
     );
-    const evidence = await orderedEvidence(this.plans, this.deps, { request, signal });
+    const previous = await this.previousRecord(request.input, attempted, signal);
+    const evidence = await orderedEvidence(this.plans, this.deps, { request, signal, previous });
     if (!orderedProgress(request, evidence, order.length - attempted.length).complete) {
       throw labelFailure("CHANNEL.LABEL_SELECTION_UNVERIFIED");
     }
@@ -101,6 +128,30 @@ export class LabelOrderedSelection {
       { input: selection.input, sources: evidence.sources, skipped, documents },
       signal,
     );
+  }
+}
+
+/** The progress record this task wrote for exactly these states, or null when there is none to reuse. */
+async function readPreviousRecord(
+  plans: LabelPlans,
+  at: { input: OrderedProgress["input"]; states: OrderedProgress["states"] },
+  signal: AbortSignal,
+): Promise<OrderedDiagnostics | null> {
+  if (!at.states.length) {
+    return null;
+  }
+  try {
+    const bytes = await plans.read(
+      orderedProgressKey(at.input, at.states),
+      ORDERED_DIAGNOSTICS_LIMIT,
+      signal,
+    );
+    return bytes ? OrderedDiagnosticsSchema.parse(decodeJson(bytes)) : null;
+  } catch (error) {
+    // A missing or unreadable record only costs the full re-verification it used to take.
+    recordRecovery(error, { operation: "label/ordered-progress-reuse" });
+    signal.throwIfAborted();
+    return null;
   }
 }
 

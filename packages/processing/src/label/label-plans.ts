@@ -182,6 +182,11 @@ export class LabelPlans {
     return this.deps.publication.publish(key, encodeJson(value), "application/json", signal);
   }
 
+  /** One retained record of this task, as published; null when there is none. */
+  read(key: string, limit: number, signal: AbortSignal): Promise<Uint8Array | null> {
+    return this.deps.publication.remote.read(key, limit, signal);
+  }
+
   /** The full prepared page documents, for packaging admission. */
   async fullDocuments(manifest: SavedManifest, signal: AbortSignal): Promise<ArtifactRef[]> {
     const documents: ArtifactRef[] = [];

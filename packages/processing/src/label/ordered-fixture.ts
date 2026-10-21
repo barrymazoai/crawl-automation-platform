@@ -90,6 +90,8 @@ export async function orderedFixture(options: Options = {}) {
       source: tasks.get(request.sourceId),
     })),
     publish: vi.fn(),
+    // No earlier progress record in these fixtures: every source is re-read, as before 2026-10-21.
+    read: vi.fn(async () => null),
     publishManifest: vi.fn(async (parts: unknown) => parts),
   };
   const inspection: LabelInspection = {
