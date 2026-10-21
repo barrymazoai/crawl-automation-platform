@@ -34,10 +34,10 @@ const PLATFORM_READ_FAILURES: ReadonlySet<string> = new Set([
 
 /**
  * Owner 2026-10-20: DTC product capture by site. A `platform` site is read once in Ego (the page is kept) and, when
- * the platform reader recognises a single-variant product, that same page enters the shared archive-first capture
- * exactly as Swanson's pages do. Multi-variant products and pages the reader does not recognise go to the Codex
- * capture agent as before (one variant per URL is step 2). No page is read twice and nothing is archived before the
- * route is known.
+ * the platform reader recognises the product, that same page enters the shared archive-first capture exactly as
+ * Swanson's pages do; a multi-variant product is one task per variant URL (step 2, owner 2026-10-21). Pages the
+ * reader does not recognise go to the Codex capture agent as before. No page is read twice and nothing is archived
+ * before the route is known.
  */
 export class DtcPlatformCapture {
   constructor(
@@ -102,7 +102,9 @@ function platformDecision(
     return { route: "platform", site };
   }
   try {
-    const product = readDtcProduct(
+    // Step 2 (owner 2026-10-21): multi-variant products stay on the platform path too; each variant is its own task
+    // (`?variant=`), discovered from the page's variant list. Only a page the reader cannot read goes to the agent.
+    readDtcProduct(
       {
         url: finalUrl ?? at.url,
         html: decodeHtml(fetched.bytes),
@@ -110,9 +112,7 @@ function platformDecision(
       },
       at.sites,
     );
-    return product.variants.length > 1
-      ? { route: "agent", site, reason: "multi_variant" }
-      : { route: "platform", site };
+    return { route: "platform", site };
   } catch (error) {
     const code = errorCodeOf(error);
     if (code && PLATFORM_READ_FAILURES.has(code)) {

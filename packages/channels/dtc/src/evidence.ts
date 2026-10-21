@@ -17,15 +17,21 @@ export interface DtcRendered {
   platform: PlatformProduct["platform"];
 }
 
+/**
+ * Step 2 (owner 2026-10-21): the task's variant owns the gallery (the sole variant, or the one the page or the
+ * `?variant=` address selected); a base page of a multi-variant product with no selection keeps it unassigned, as
+ * the product-level task. Only the owning variant's featured image joins: another variant's image is not this task's.
+ */
 function productImages(product: PlatformProduct, site: DtcSitePolicy) {
+  const owner = product.selectedVariantId;
   const galleries = product.images.map((url) => ({
     url,
-    // A sole verified variant owns this product's gallery; shared multi-variant images stay unassigned.
-    variantId: product.variants.length <= 1 ? product.selectedVariantId : null,
+    variantId: owner,
     basis: "product-gallery" as const,
     verifiedOriginal: false as const,
   }));
-  const featured = product.variants.flatMap((variant) => {
+  const owned = product.variants.filter((variant) => variant.id === owner);
+  const featured = owned.flatMap((variant) => {
     const urls = imageUrls(variant.image ? [variant.image] : [], {
       url: product.url,
       siteKey: site.siteKey,
@@ -68,7 +74,8 @@ export function dtcEvidence(
           {
             field: "supplement-facts",
             html: product.factsHtml,
-            scope: product.variants.length > 1 ? "product-unassigned-variant" : "selected-product",
+            // The page's facts block belongs to the task's variant or, without a selection, to the base product.
+            scope: "selected-product",
           },
         ]
       : [],
@@ -76,7 +83,7 @@ export function dtcEvidence(
     warnings: [
       ...dtcBrandWarnings(brandEvidence),
       ...(product.variants.length > 1
-        ? [dtcEvidenceErrors.code("DTC.FACTS_VARIANT_UNASSIGNED")]
+        ? [dtcEvidenceErrors.code("DTC.GALLERY_SHARED_WITH_VARIANT")]
         : []),
     ],
   });

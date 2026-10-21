@@ -22,4 +22,9 @@ export const dtcEvidenceErrors = defineErrors({
     category: "SOURCE",
     message: "The facts could not be assigned to a variant.",
   },
+  "DTC.GALLERY_SHARED_WITH_VARIANT": {
+    category: "SOURCE",
+    message:
+      "A multi-variant product's gallery is read for this task's variant; a differing panel ends in a formula conflict.",
+  },
 });

@@ -69,7 +69,9 @@ describe("DTC adapter contracts (small synthetic boundary cases, not saved-page 
       currency: "USD",
       availability: "InStock",
     });
-    expect(parsed.variants[0]?.variantId).toBe("11");
+    // Since step 2 the page's own selected variant is this task; only the others are handed back for discovery.
+    expect(parsed.variants).toEqual([]);
+    expect(parsed.evidence.variants[0]?.variantId).toBe("11");
   });
   it("takes gallery and accordion images without recommendations", () => {
     const images = adapter.parseProduct(page()).evidence.imageCandidates;
@@ -127,13 +129,41 @@ describe("DTC adapter contracts (small synthetic boundary cases, not saved-page 
       facts: parsed.facts,
     });
   });
-  it("does not assign common facts to every flavour", () => {
+  it("gives a multi-variant page's gallery and facts to the selected variant and hands the others back", () => {
+    // Step 2 (owner 2026-10-21): one variant per URL. The page selects variant 11; variant 12 is discovered.
     const parsed = adapter.parseProduct(
-      page({ data: { ...data, variants: [...data.variants, { id: 12, price: 1400 }] } }),
+      page({
+        data: {
+          ...data,
+          variants: [
+            { ...data.variants[0], featured_image: { src: "/eleven.jpg" } },
+            { id: 12, price: 1400, featured_image: { src: "/twelve.jpg" } },
+          ],
+        },
+      }),
     );
-    expect(parsed.facts.complete).toBe(false);
-    expect(parsed.evidence.factsCandidates[0]?.scope).toBe("product-unassigned-variant");
-    expect(parsed.evidence.imageCandidates.every((image) => image.variantId === null)).toBe(true);
+    expect(adapter.discoversVariants).toBe(true);
+    expect(parsed.identity.variantId).toBe("11");
+    expect(parsed.evidence.factsCandidates[0]?.scope).toBe("selected-product");
+    expect(parsed.evidence.imageCandidates.every((image) => image.variantId === "11")).toBe(true);
+    expect(parsed.evidence.imageCandidates.some((image) => image.url.endsWith("/eleven.jpg"))).toBe(
+      true,
+    );
+    expect(parsed.evidence.imageCandidates.some((image) => image.url.endsWith("/twelve.jpg"))).toBe(
+      false,
+    );
+    expect(parsed.evidence.warnings).toContain("DTC.GALLERY_SHARED_WITH_VARIANT");
+    expect(parsed.variants.map((variant) => variant.variantId)).toEqual(["12"]);
+    expect(parsed.evidence.variants.map((variant) => variant.variantId)).toEqual(["11", "12"]);
+  });
+  it("keeps a base page without a selection unassigned and discovers every variant", () => {
+    const input = page({ data: { ...data, variants: [...data.variants, { id: 12 }] } });
+    input.html = input.html.replace(/<input[^>]*>/, "");
+    const base = adapter.parseProduct({ ...input, url: "https://shop.example/products/sleep" });
+    expect(base.identity.variantId).toBeNull();
+    expect(base.evidence.factsCandidates[0]?.scope).toBe("selected-product");
+    expect(base.evidence.imageCandidates.every((image) => image.variantId === null)).toBe(true);
+    expect(base.variants.map((variant) => variant.variantId)).toEqual(["11", "12"]);
   });
   it("reports a canonical identity conflict before requiring product content", () => {
     const wrong = {
@@ -175,7 +205,7 @@ describe("DTC adapter contracts (small synthetic boundary cases, not saved-page 
   });
   it("without a rendered selection, a confirmed requested variant counts and a base address is the base product", () => {
     // Owner 2026-10-20 (DTC step 1): the platform path reads base pages of multi-variant products as the base
-    // product (variant null), as the agent path records them; the route then hands them to the agent.
+    // product (variant null), as the agent path records them; since step 2 the other variants are discovered.
     const input = page({ data: { ...data, variants: [...data.variants, { id: 12 }] } });
     input.html = input.html.replace(/<input[^>]*>/, "");
     expect(adapter.parseProduct(input).identity.variantId).toBe("11");

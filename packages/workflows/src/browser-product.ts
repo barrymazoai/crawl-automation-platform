@@ -13,6 +13,7 @@ import { collectCapturedProduct } from "./collect-captured-product.js";
 import { browserRoute, pooledQueue, pooledRoute } from "./resources/browser-route.js";
 import { collectDtcVariants } from "./dtc-variants.js";
 import { resolveDtcGallery } from "./dtc-gallery.js";
+import { queueDiscovered } from "./discovered-queue.js";
 
 /**
  * A browser capture with a plan enters the shared formula pipeline; otherwise it reuses a family formula.
@@ -26,6 +27,7 @@ export async function collectInBrowser(
   if (captured.status !== "captured") {
     return captured;
   }
+  await queueDiscoveredFromBrowser(input, pipeline, captured);
   if (input.channel === "dtc" && captured.variants && patched("dtc-variant-handoff-v1")) {
     const variants =
       captured.planned && patched("dtc-mixed-gallery-v1")
@@ -38,6 +40,21 @@ export async function collectInBrowser(
     return collectCapturedProduct(input, pipeline, captured.planned);
   }
   return collectFamilyProduct(input, pipeline, captured);
+}
+
+/**
+ * Step 2 (owner 2026-10-21): a DTC page's other variants join the queue as their own tasks (`?variant=`), the way
+ * HTTP channels queue the variants a captured page names; best effort, never a Review.
+ */
+async function queueDiscoveredFromBrowser(
+  input: ProductPipelineInput,
+  pipeline: PipelineActivities,
+  captured: Extract<Awaited<ReturnType<typeof captureInBrowser>>, { status: "captured" }>,
+): Promise<void> {
+  const discovered = captured.planned?.discovered;
+  if (discovered?.length && patched("browser-discovered-variants-v1")) {
+    await queueDiscovered(input, pipeline, discovered);
+  }
 }
 
 async function captureInBrowser(input: ProductPipelineInput) {

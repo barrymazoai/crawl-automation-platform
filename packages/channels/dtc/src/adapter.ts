@@ -57,7 +57,11 @@ function parsedProduct(
         `dtc-seller:${site.siteKey}`,
       ],
     },
-    variants: product.variants.map((variant) => dtcProductAddress(variant.url, sites)),
+    // Step 2 (owner 2026-10-21): the other variants are handed back for discovery; the page's own selected variant
+    // is this task's identity and must not be queued a second time under its `?variant=` address.
+    variants: product.variants
+      .filter((variant) => variant.id !== product.selectedVariantId)
+      .map((variant) => dtcProductAddress(variant.url, sites)),
     facts,
     ...(product.categories?.length ? { categories: product.categories } : {}),
   };
@@ -133,6 +137,8 @@ export function createDtcAdapter(
     pageSighting: (page) => dtcBrandSighting(page, scope),
     parseProduct: (page) => parsedProduct(page, scopedSites, productSource),
     externalId: (parsed) => parsed.identity.listingId,
+    // Step 2 (owner 2026-10-21): one variant per URL, as Swanson; a captured page's other variants join the queue.
+    discoversVariants: true,
     nonSupplementCategories: DTC_NON_SUPPLEMENT_CATEGORIES,
     planning: dtcPlanning(scope),
   };
