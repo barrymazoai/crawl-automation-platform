@@ -125,10 +125,12 @@ class QuotePlacer {
     let after = 0;
     return rows.map((row) => {
       const enclosed = row.amount ? { enclosed: row.amount.text } : {};
+      const rowStart = after;
       const name = this.field(row.name, { after, ...enclosed });
       after = name.end;
-      // The row's own amount and DV follow its name, and may sit inside a name that encloses the amount.
-      const own = { after: name.start, taken: this.placed.filter((quote) => quote !== name) };
+      // The row's own amount and DV sit after the previous row, on either side of the name: a Nutrition Facts panel
+      // prints "including 0 g Added Sugars" (bloodsugarfriendly.com 2026-10-21), and a name may enclose the amount.
+      const own = { after: rowStart, taken: this.placed.filter((quote) => quote !== name) };
       return {
         ...row,
         name,

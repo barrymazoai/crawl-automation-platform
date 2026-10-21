@@ -24,10 +24,17 @@ export function labelCoverage(
   const covered = [...placed, ...derived];
   if (candidate.formula) {
     for (const gap of uncoveredSpans(range, covered)) {
-      if (STANDARD_FOOTNOTE.test(text.slice(gap.start, gap.end).trim())) {
+      const value = text.slice(gap.start, gap.end).trim();
+      if (STANDARD_FOOTNOTE.test(value) || ROW_CONNECTOR.test(value)) {
         covered.push(gap);
       }
     }
   }
   return covered;
 }
+
+/**
+ * The FDA Nutrition Facts wording "Total Sugars 0 g, including 0 g Added Sugars": the connector between two quoted
+ * rows carries no value (bloodsugarfriendly.com 2026-10-21, Review TEXT.LABEL_EXTRACTION_INCOMPLETE).
+ */
+const ROW_CONNECTOR = /^[,;:\s]*(?:including|includes)[,;:\s]*$/iu;

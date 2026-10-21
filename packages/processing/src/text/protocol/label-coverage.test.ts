@@ -1,8 +1,68 @@
 import { describe, expect, it } from "vitest";
+import { LabelTextWireSchema } from "@crawl-automation/v3-contracts";
 import { simpleLabel, decodeSimple } from "../../testing/simple-label.js";
 import { decodeDrug, drugLines, drugWire } from "../../testing/drug-label-fixture.js";
+import { decodeLabelText } from "./label-decoder.js";
+
+// bloodsugarfriendly.com protein bar, 2026-10-21: the FDA Added Sugars wording, with the amount before its name.
+const addedSugarsLines = [
+  "Nutrition Facts",
+  "Serving size 1 bar (60 g)",
+  "Total Sugars 0 g, including 0 g Added Sugars (0% DV)",
+  "Ingredients",
+  "Milk Protein Concentrate, Allulose.",
+];
+const addedSugarsWire = () => {
+  const anchor = (line: number, text: string) => ({ fromLine: line, toLine: line, text });
+  const row = (name: string, amount: string, dailyValue: string | null) => ({
+    kind: "nutrient",
+    name: anchor(3, name),
+    amount: anchor(3, amount),
+    dailyValue: dailyValue ? anchor(3, dailyValue) : null,
+    purpose: null,
+    amountStatus: "printed",
+    parentRowIndex: null,
+  });
+  return LabelTextWireSchema.parse({
+    codec: "label-extraction/1",
+    formula: {
+      drugFacts: null,
+      servingSize: anchor(2, "1 bar (60 g)"),
+      servingsPerContainer: null,
+      columns: [
+        {
+          heading: anchor(1, "Nutrition Facts"),
+          rows: [row("Total Sugars", "0 g", null), row("Added Sugars", "0 g", "(0% DV)")],
+        },
+      ],
+    },
+    otherIngredients: {
+      heading: anchor(4, "Ingredients"),
+      items: [anchor(5, "Milk Protein Concentrate"), anchor(5, "Allulose")],
+    },
+    formulaComplete: true,
+    ingredientsComplete: true,
+    exclusions: [{ quote: anchor(2, "Serving size"), reason: "heading" }],
+    issues: [],
+  });
+};
 
 describe("derived structural coverage", () => {
+  it("places an Added Sugars amount printed before its name and covers the row connector", () => {
+    const text = addedSugarsLines.join("\n");
+    const result = decodeLabelText({
+      text,
+      scope: { range: { start: 0, end: text.length } },
+      response: JSON.stringify(addedSugarsWire()),
+      policyVersion: "label-text/6",
+    });
+    expect(result.codes).toEqual([]);
+    const rows = result.candidate.formula?.columns[0]?.rows ?? [];
+    expect(rows.map((row) => row.amount?.start)).toEqual([
+      text.indexOf("0 g,"),
+      text.indexOf("0 g Added"),
+    ]);
+  });
   it.each(["Supplement Facts", "Nutrition Facts"])(
     "covers %s and value-anchored structures",
     (heading) => {
