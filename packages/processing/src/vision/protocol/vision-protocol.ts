@@ -10,6 +10,9 @@ import {
   decodeIngredientPresenceAnswer,
   isIngredientPresenceAnswer,
 } from "./label-ingredient-presence.js";
+import { decodeRetainedRepair, labelVisionRepairPolicyVersion } from "./label-vision-repair.js";
+import { LabelVisionRepairAnswerSchema } from "./label-vision-repair.js";
+import { isDeepStrictEqual } from "node:util";
 
 export type VisionProtocol = VisionInput["extractionProtocol"];
 
@@ -38,11 +41,26 @@ export function decodeVisionResult(input: VisionInput, raw: string) {
   if (!input.extractionProtocol) {
     return validateVision(raw);
   }
+  if (JSON.parse(raw)?.codec === labelVisionRepairPolicyVersion) {
+    const envelope = LabelVisionRepairAnswerSchema.parse(JSON.parse(raw));
+    const original = decodeLabelAnswer(input.extractionProtocol, envelope.originalRaw);
+    if (
+      !isDeepStrictEqual(original.candidate, envelope.originalCandidate) ||
+      !isDeepStrictEqual(original.codes, envelope.originalCodes)
+    ) {
+      throw new Error("Retained repair original does not match the original answer");
+    }
+    const saved = decodeRetainedRepair(raw);
+    if (saved.operationId && saved.operationId !== `${input.operationId}:repair`) {
+      throw new Error("Repair operation does not belong to this vision task");
+    }
+    return saved;
+  }
   const decoded = decodeLabelAnswer(input.extractionProtocol, raw);
   const { candidate, status, codes } = decoded;
   const first = codes[0];
   const code = status === "review" && first ? first.replace(/^LABEL\./, "VISION.LABEL_") : null;
-  return { candidate, status, code };
+  return { candidate, status, code, codes };
 }
 
 function decodeLabelAnswer(protocol: VisionProtocol, raw: string) {

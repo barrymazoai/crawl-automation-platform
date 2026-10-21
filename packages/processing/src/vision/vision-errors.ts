@@ -23,6 +23,7 @@ export const visionErrors = defineErrors({
   ),
   "VISION.OUTPUT_LIMIT": processing("The model answer is larger than allowed."),
   "VISION.INVALID_OUTPUT": processing("The model answer could not be read."),
+  "VISION.REPAIR_CHANGED_CONTENT": processing("A structural repair changed label content."),
   "VISION.LOCAL_EVIDENCE_CONFLICT": artifact("The answer kept locally does not match."),
   "VISION.HANDOFF_PENDING": artifact("The answer is kept but not fully stored or registered."),
   "VISION.HANDOFF_UNVERIFIED": artifact("The answer in R2 does not match the one kept locally."),

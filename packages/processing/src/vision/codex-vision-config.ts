@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { CodexClientSettingsSchema } from "../codex/codex-settings.js";
+import { CodexModelSettingsSchema } from "@crawl-automation/v3-contracts";
 import {
   labelIngredientPresenceProtocol,
   labelIngredientPresencePolicySchema,
@@ -11,6 +12,13 @@ export const CodexVisionConfigSchema = CodexClientSettingsSchema.extend({
   /** New wire protocol; the task's normalized candidate format remains label-extraction/1. */
   visualProtocol: z.literal(labelIngredientPresenceProtocol).optional(),
   ingredientPresencePolicy: labelIngredientPresencePolicySchema.optional(),
+  /** Optional independent structural repair turn; absent means enabled with the visual model's settings. */
+  repair: z
+    .strictObject({
+      enabled: z.boolean().default(true),
+      settings: CodexModelSettingsSchema.optional(),
+    })
+    .optional(),
 }).refine(
   (config) =>
     (!config.visualProtocol || !!config.extractionProtocol) &&

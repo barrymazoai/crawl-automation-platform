@@ -51,11 +51,17 @@ export function visionReview(attempt: StepAttempt<VisionTask>, failure: StepFail
         evidenceKey: key,
         ...(typeof cause === "string" && cause ? { cause } : {}),
         ...labelFindings(attempt.candidate?.value),
+        ...repairDetails(attempt),
       },
     },
     candidate: attempt.candidate,
     inspection: { kind: "none" },
   });
+}
+
+function repairDetails(attempt: StepAttempt<VisionTask>): { repairCodes?: string[] } {
+  const repairCodes = (attempt as StepAttempt<VisionTask> & { repairCodes?: string[] }).repairCodes;
+  return repairCodes?.length ? { repairCodes } : {};
 }
 
 /**

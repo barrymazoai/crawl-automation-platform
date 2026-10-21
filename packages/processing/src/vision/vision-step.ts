@@ -8,25 +8,27 @@ import {
   type VisionTask,
 } from "@crawl-automation/v3-contracts";
 import type { ReviewReader, ReviewWriter } from "../step/review-ledger.js";
-import { encodeJson } from "../results/result-record.js";
-import { writeOnce } from "../results/write-once.js";
 import { ProcessingStep, type StepAttempt, type StepFailure } from "../step/processing-step.js";
 import { codexFactOf } from "../codex/codex-errors.js";
 import { recordedFact, type ExecutionFact } from "../step/step-failure.js";
 import type { VisionModel } from "./codex-vision-model.js";
-import { MAX_VISION_ANSWER_BYTES } from "./protocol/vision-limits.js";
-import { visionCandidateSchema } from "./protocol/vision-protocol.js";
 import { claimVisionIntent, keepCallFailure } from "./vision-attempts.js";
-import { isVisionErrorCode, visionFailure } from "./vision-errors.js";
-import { decodeAnswer } from "./vision-evidence.js";
-import { visionKeys, visionResponse } from "./vision-files.js";
+import { visionFailure } from "./vision-errors.js";
 import type { VisionOutcome } from "./vision-outcome.js";
 import { visionReview } from "./vision-review.js";
+import { finishVisionAnswer } from "./vision-answer-flow.js";
 import type { VisionOutput, VisionResults } from "./vision-results.js";
-import { retentionSignal } from "../step/retention.js";
 
 export interface VisionStepDeps {
-  model: Pick<VisionModel, "fingerprint" | "extractionProtocol" | "interpret">;
+  model: Pick<
+    VisionModel,
+    | "fingerprint"
+    | "extractionProtocol"
+    | "interpret"
+    | "repair"
+    | "repairEnabled"
+    | "repairFingerprint"
+  >;
   results: VisionResults;
   /** The OCR text a keyword selection was made from, checked against the selection. */
   ocrText: { verifiedText(selection: KeywordResult, signal: AbortSignal): Promise<string> };
@@ -45,7 +47,7 @@ const handoffCodes = {
   unknown: "VISION.HANDOFF_UNKNOWN",
   reviewUnknown: "VISION.REVIEW_UNVERIFIED",
 } as const;
-/** The vision step: reads one selected label image with the model once and keeps its answer as the vision result. */
+/** The vision step: reads one selected label image and may make one bounded structural repair turn. */
 export class VisionStep extends ProcessingStep<
   VisionTask,
   VisionOutput,
@@ -94,34 +96,21 @@ export class VisionStep extends ProcessingStep<
     return claimVisionIntent(this.deps, task, signal);
   }
 
-  /** The one model call: the raw answer is kept locally, then in R2, before it is decoded and judged. */
+  /** The first model call, followed by answer retention and at most one eligible repair turn. */
   protected async call(attempt: StepAttempt<VisionTask>, image: Uint8Array, signal: AbortSignal) {
     const task = attempt.input;
     const raw = await this.interpret(task, image, signal);
     attempt.fact = "executed";
-    if (Buffer.byteLength(raw) > MAX_VISION_ANSWER_BYTES) {
-      throw visionFailure("VISION.OUTPUT_LIMIT", "executed");
-    }
-    const bytes = encodeJson(visionResponse(task, raw));
-    await this.keepAnswer(task, bytes);
-    const decoded = readAnswer(task, raw);
-    if (decoded.answer) {
-      const schema = visionCandidateSchema(task.input.extractionProtocol);
-      attempt.candidate = { schema, value: decoded.answer.candidate };
-    }
-    // Every answer goes to R2, an unreadable or rejected one included, so its Review can be inspected.
-    await this.publishAnswer(task, bytes, signal);
-    if (!decoded.answer) {
-      throw decoded.error;
-    }
-    if (decoded.answer.status === "review") {
-      const code = decoded.answer.code;
-      throw visionFailure(
-        code && isVisionErrorCode(code) ? code : "VISION.INVALID_OUTPUT",
-        "executed",
-      );
-    }
-    return { bytes, status: decoded.answer.status };
+    return finishVisionAnswer({
+      task,
+      attempt,
+      image,
+      raw,
+      model: this.deps.model,
+      local: this.deps.local,
+      remote: this.deps.remote,
+      signal,
+    });
   }
 
   protected settled(task: VisionTask, record: VisionRecord, registered: boolean): VisionOutcome {
@@ -171,41 +160,6 @@ export class VisionStep extends ProcessingStep<
       await keepCallFailure(this.deps.local, task, error);
       throw error;
     }
-  }
-
-  /** Kept even after a late cancellation: the answer exists and must not be lost. */
-  private keepAnswer(task: VisionTask, bytes: Uint8Array): Promise<void> {
-    const entry = { key: visionKeys.response(task), bytes };
-    const mismatch = () => visionFailure("VISION.LOCAL_EVIDENCE_CONFLICT", "executed");
-    return writeOnce(this.deps.local, entry, {
-      signal: retentionSignal(),
-      mismatch,
-    });
-  }
-
-  /** Written once to R2 and read back; an unconfirmed upload leaves the answer pending (kept locally), never lost. */
-  private async publishAnswer(
-    task: VisionTask,
-    bytes: Uint8Array,
-    signal: AbortSignal,
-  ): Promise<void> {
-    const entry = { key: visionKeys.response(task), bytes };
-    const mismatch = () => visionFailure("VISION.HANDOFF_PENDING", "executed");
-    try {
-      await writeOnce(this.deps.remote, entry, { signal, mismatch });
-    } catch (error) {
-      const own = errorCodeOf(error)?.startsWith("VISION.");
-      throw own ? error : visionFailure("VISION.HANDOFF_PENDING", "executed", error);
-    }
-  }
-}
-
-/** The decoded answer, or the reason it cannot be read. */
-function readAnswer(task: VisionTask, raw: string) {
-  try {
-    return { answer: decodeAnswer(task, raw), error: null };
-  } catch (error) {
-    return { answer: null, error };
   }
 }
 

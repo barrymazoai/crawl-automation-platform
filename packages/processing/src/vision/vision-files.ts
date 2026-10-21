@@ -20,13 +20,14 @@ export const visionKeys = {
   prefix: (task: VisionTask) => `v3/vision/${task.input.operationId}`,
   intent: (task: VisionTask) => `${visionKeys.prefix(task)}/intent.json`,
   response: (task: VisionTask) => `${visionKeys.prefix(task)}/response.json`,
+  repairOriginal: (task: VisionTask) => `${visionKeys.prefix(task)}/repair-original.json`,
   registration: (task: VisionTask) => `${visionKeys.prefix(task)}/registration.json`,
   failure: (task: VisionTask) => `${visionKeys.prefix(task)}/failure.json`,
 };
 
 export const visionLimits = {
   intentBytes: 1024 * 1024,
-  responseBytes: 2 * 1024 * 1024,
+  responseBytes: 4 * 1024 * 1024,
   completionBytes: 1024 * 1024,
   failureBytes: 8192,
   imageBytes: 16 * 1024 * 1024,
@@ -43,7 +44,7 @@ export const VisionIntentSchema = z.strictObject({
 });
 export const VisionResponseSchema = z.strictObject({
   fingerprint: Sha256Schema,
-  raw: z.string().max(250_000),
+  raw: z.string().max(1_800_000),
   sha256: Sha256Schema,
 });
 export type VisionResponse = z.infer<typeof VisionResponseSchema>;
