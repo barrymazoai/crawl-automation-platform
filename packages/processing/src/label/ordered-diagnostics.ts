@@ -30,6 +30,17 @@ export const OrderedDiagnosticsSchema = z.object({
     .max(100),
   codes: z.array(z.string()),
   sourceOutcomes: SourceOutcomesSchema.optional(),
+  /** The ingredient lists that disagreed, per source, when the merge ended LABEL_PRODUCT.INGREDIENTS_CONFLICT. */
+  conflicts: z
+    .array(
+      z.object({
+        code: z.string(),
+        sources: z.array(
+          z.object({ id: z.string(), items: z.array(z.string()), shape: z.array(z.string()) }),
+        ),
+      }),
+    )
+    .optional(),
   /**
    * Owner 2026-10-21: every source's diagnostic as this round verified it, so the next round can reuse the verdicts
    * of images that matched no keyword or whose verified model answer showed no label sections.

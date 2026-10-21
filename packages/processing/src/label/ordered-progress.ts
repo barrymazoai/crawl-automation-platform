@@ -1,4 +1,9 @@
-import { mergeLabelProduct } from "../assembly/label-merge.js";
+import { ingredientConflictDetails } from "@crawl-automation/v3-contracts";
+import {
+  mergeLabelProduct,
+  type MergeFailure,
+  type VerifiedLabelSource,
+} from "../assembly/label-merge.js";
 import { assemblyErrors } from "../assembly/assembly-errors.js";
 import { imageReviewWithoutLabel } from "../assembly/source-without-label.js";
 import {
@@ -41,14 +46,32 @@ export function orderedProgress(
   const conflicts = merged?.codes.filter((code) => code.endsWith("_CONFLICT")) ?? [];
   const ranked = rankedFailures(outcomes, conflicts, withoutLabel);
   const reason = primaryOrderedFailure(request.input.failurePolicy, ranked);
+  const conflictDetails = conflictLists(conflicts, eligible);
   return {
     complete: !evidence.terminal && completeLabel(merged, untried),
     terminal: evidence.terminal,
     ...(reason ? { reason, failures: ranked.map((entry) => entry.failure) } : {}),
     ...noSourceDiagnostics(request.input.failurePolicy, evidence, reason),
+    ...(conflictDetails ? { conflicts: conflictDetails } : {}),
     outcomes,
     codes: merged?.codes ?? [],
   };
+}
+
+/** The lists that disagreed travel with the Review (2026-10-21): 597 conflict Reviews carried none to compare. */
+function conflictLists(
+  conflicts: string[],
+  eligible: { entries: VerifiedLabelSource[]; failures: MergeFailure[] },
+) {
+  if (!conflicts.includes("LABEL_PRODUCT.INGREDIENTS_CONFLICT")) {
+    return null;
+  }
+  return ingredientConflictDetails([
+    ...eligible.entries,
+    ...eligible.failures.flatMap((failure) =>
+      failure.candidate ? [{ id: failure.id, candidate: failure.candidate }] : [],
+    ),
+  ]);
 }
 
 export function noLabelSources(evidence: DiagnosedOrderedEvidence) {

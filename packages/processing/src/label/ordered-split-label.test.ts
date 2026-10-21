@@ -126,6 +126,25 @@ it("keeps a conflict in Review and names both overlapping sources", async () => 
     code: "LABEL.INGREDIENTS_INCOMPLETE",
     executionFact: "executed",
   });
+  // The progress record carries both lists, so the Review can be judged without re-reading the sources.
+  expect(test.plans.publish).toHaveBeenLastCalledWith(
+    orderedProgressKey(test.input, test.request.states),
+    expect.objectContaining({
+      conflicts: [
+        expect.objectContaining({
+          code: "LABEL_PRODUCT.INGREDIENTS_CONFLICT",
+          sources: expect.arrayContaining([
+            expect.objectContaining({
+              id: "source-1",
+              items: expect.arrayContaining(["Cellulose"]),
+            }),
+            expect.objectContaining({ id: "source-3", items: ["Soy", "Silica"] }),
+          ]),
+        }),
+      ],
+    }),
+    expect.anything(),
+  );
 });
 
 it("uses a reviewed facts section even without a registered facts duplicate", async () => {

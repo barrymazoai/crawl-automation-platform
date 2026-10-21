@@ -65,7 +65,7 @@ export class LabelOrderedSelection {
     const previous = await this.previousRecord(request.input, request.states.slice(0, -1), signal);
     const evidence = await orderedEvidence(this.plans, this.deps, { request, signal, previous });
     const untried = order.length - request.states.length;
-    const { outcomes, codes, sourceOutcomes, ...progress } = orderedProgress(
+    const { outcomes, codes, sourceOutcomes, conflicts, ...progress } = orderedProgress(
       request,
       evidence,
       untried,
@@ -77,6 +77,7 @@ export class LabelOrderedSelection {
         outcomes,
         codes,
         ...(sourceOutcomes ? { sourceOutcomes } : {}),
+        ...(conflicts ? { conflicts } : {}),
         ...(evidence.sourceDiagnostics ? { sourceDiagnostics: evidence.sourceDiagnostics } : {}),
       },
       signal,

@@ -38,6 +38,7 @@ export async function labelReviewDiagnostics(
     outcomes: [...saved.outcomes, ...remaining],
     mergeCodes: saved.codes,
     ...(saved.sourceOutcomes ? { sourceOutcomes: saved.sourceOutcomes } : {}),
+    ...(saved.conflicts ? { conflicts: saved.conflicts } : {}),
   };
 }
 
