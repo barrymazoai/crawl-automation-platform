@@ -7,7 +7,7 @@ import { observationIdentity } from "./processing.js";
 import { labelExtractionSchema, LabelImageCandidateSchema, assessLabelCandidate, type LabelImageCandidate } from "./label-extraction.js";
 import type { TextCandidateV3 } from "./text.js";
 import { ProductEvidenceJoinSchema } from "./product-evidence.js";
-import { collectedSourcesAgree } from "./label-product-agreement.js";
+import { collectedSourcesAgree, projectedJoinedFormula } from "./label-product-agreement.js";
 import { labelImageIntegrityCodes, labelNumericSourceConflict } from "./label-quality.js";
 import { LabelReviewedImageRecordSchema } from "./label-reviewed-image.js";
 import { completeLabelSections } from "./label-sections.js";
@@ -151,7 +151,12 @@ export const LabelCollectedProductSchema = z.discriminatedUnion("schemaVersion",
     }
     for (const code of packaging.warnings) if (!r.warnings.some(w => w.code === code)) invalid();
   }
-  if ((r.formula || r.schemaVersion !== 5) && !projectedSources.some(p => p.formula && JSON.stringify(p.formula) === JSON.stringify(r.formula))) invalid();
+  const joined = r.warnings.some(w => w.code === "LABEL_PRODUCT.FORMULA_SECTIONS_JOINED");
+  const projected = joined ? projectedJoinedFormula(r.formula, authoritative.map((source, index) =>
+    ({ id: source.id, formula: projectedSources[index]?.formula ?? null }))) : null;
+  if ((r.formula || r.schemaVersion !== 5) && !(joined
+    ? projected && JSON.stringify(projected) === JSON.stringify(r.formula)
+    : projectedSources.some(p => p.formula && JSON.stringify(p.formula) === JSON.stringify(r.formula)))) invalid();
   if (r.otherIngredients && !projectedSources.some(p => JSON.stringify(p.otherIngredients) === JSON.stringify(r.otherIngredients))) invalid();
   const expected: z.infer<typeof LabelProductIngredientSchema>[] = (r.formula?.columns ?? []).flatMap((c, columnIndex) => c.rows.flatMap((row, rowIndex) => row.kind === "blend_component" ?
     [{ name: row.name, amount: row.amount, role: "blend_component" as const, columnIndex, rowIndex, parentRowIndex: row.parentRowIndex }] : []));

@@ -144,6 +144,7 @@ describe("shared label agreement boundaries", () => {
     expect(formulaAgreement(first, second)).toBe("conflict");
   });
 
+
   it("treats normalized readings of one panel as exact", () => {
     const first = formula();
     const second = structuredClone(first);

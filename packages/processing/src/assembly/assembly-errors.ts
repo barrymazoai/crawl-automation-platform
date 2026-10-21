@@ -14,6 +14,9 @@ export const assemblyErrors = defineErrors({
   "LABEL_PRODUCT.FORMULA_SUBSET": validation(
     "A shorter formula reading was covered by a more complete source.",
   ),
+  "LABEL_PRODUCT.FORMULA_SECTIONS_JOINED": validation(
+    "Two images show separate sections of one formula panel.",
+  ),
   "LABEL_PRODUCT.INCOMPLETE_IMAGE_NOT_SELECTED": {
     category: "VALIDATION",
     message: "Incomplete image not selected.",

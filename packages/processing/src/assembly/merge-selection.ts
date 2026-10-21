@@ -3,14 +3,18 @@ import {
   isCompleteLabelImage,
   isOrderedEvidencePolicy,
   formulaAgreement,
-  formulaComparisonSize,
   labelAgreementFormula,
   preferFormulaSource,
   projectLabelProductCandidate,
   type LabelAgreement,
 } from "@crawl-automation/v3-contracts";
 import type { MergePolicy } from "./merge-policy.js";
-import { byText, type MergeState, type LabelEvidence } from "./merge-state.js";
+import {
+  byText,
+  joinVerifiedFormulaSections,
+  type MergeState,
+  type LabelEvidence,
+} from "./merge-state.js";
 import { reviewEntry } from "./merge-entry-review.js";
 import { sameServingSize } from "./serving-size.js";
 import { partialLabelConflicts } from "./partial-label.js";
@@ -96,6 +100,7 @@ function selectFormula(state: MergeState, pick: Pick): void {
   if (!state.formula && !secondaryText) {
     state.formulaShape = shape;
     state.formulaSource = pick.entry;
+    state.formulaSources = [pick.entry];
     state.formula = projected.formula;
   }
 }
@@ -106,6 +111,12 @@ function compareFormula(state: MergeState, pick: Pick, shape: Shape): void {
   const agreement = formulaAgreement(state.formulaShape, shape);
   if (agreement === "subset") {
     acceptFormulaSubset(state, pick, shape);
+  } else if (agreement === "sections") {
+    if (
+      !joinVerifiedFormulaSections(state, { entry: pick.entry, projected: pick.projected, shape })
+    ) {
+      state.codes.add(assemblyErrors.code("LABEL_PRODUCT.FORMULA_CONFLICT"));
+    }
   } else {
     recordAgreement(state, pick, {
       agreement,
@@ -120,14 +131,16 @@ function acceptFormulaSubset(state: MergeState, pick: Pick, shape: Shape): void 
   if (!selected) {
     return;
   }
-  const shorter =
-    formulaComparisonSize(state.formulaShape) < formulaComparisonSize(shape)
-      ? selected.id
-      : pick.entry.id;
+  const replace =
+    state.formulaSources.length === 1 &&
+    !pick.secondaryText &&
+    preferFormulaSource(selected.candidate, pick.candidate);
+  const shorter = replace ? selected.id : pick.entry.id;
   state.warnings.push({ id: shorter, code: assemblyErrors.code("LABEL_PRODUCT.FORMULA_SUBSET") });
-  if (!pick.secondaryText && preferFormulaSource(selected.candidate, pick.candidate)) {
+  if (replace) {
     state.formulaShape = shape;
     state.formulaSource = pick.entry;
+    state.formulaSources = [pick.entry];
     state.formula = pick.projected.formula;
   }
 }

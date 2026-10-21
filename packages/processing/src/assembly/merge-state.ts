@@ -1,3 +1,5 @@
+import { isDeepStrictEqual } from "node:util";
+import { joinFormulaSections } from "@crawl-automation/v3-contracts";
 import type {
   ArtifactRef,
   LabelCollectedProduct,
@@ -8,6 +10,7 @@ import type {
   TextRecord,
   VisionRecord,
   labelAgreementFormula,
+  projectLabelProductCandidate,
 } from "@crawl-automation/v3-contracts";
 
 /** A label source whose registered original evidence the reader has re-verified. */
@@ -57,6 +60,7 @@ export interface MergeState {
   otherIngredients: LabelCollectedProduct["otherIngredients"];
   formulaShape: ReturnType<typeof labelAgreementFormula>;
   formulaSource: LabelEvidence | null;
+  formulaSources: LabelEvidence[];
   otherShape: string[] | null;
   otherSourceId: string | null;
 }
@@ -67,6 +71,44 @@ export const byText = (left: string, right: string) => (left < right ? -1 : left
 /** Every selected formula row can identify an active in a page's full ingredient list. */
 export const selectedFormulaNames = (state: MergeState): string[] =>
   state.formula?.columns.flatMap((column) => column.rows.map((row) => row.name.text)) ?? [];
+
+/** Join only original image sections registered for this product observation. */
+export function joinVerifiedFormulaSections(
+  state: MergeState,
+  next: {
+    entry: LabelEvidence;
+    projected: ReturnType<typeof projectLabelProductCandidate>;
+    shape: NonNullable<ReturnType<typeof labelAgreementFormula>>;
+  },
+): boolean {
+  const selected = state.formulaSource;
+  if (
+    !selected ||
+    selected.kind !== "image" ||
+    next.entry.kind !== "image" ||
+    !imageAtObservation(state, selected.id) ||
+    !imageAtObservation(state, next.entry.id) ||
+    !state.formula ||
+    !next.projected.formula ||
+    !state.formulaShape ||
+    state.formulaShape.columns.length !== next.shape.columns.length
+  ) {
+    return false;
+  }
+  state.formula = joinFormulaSections(state.formula, next.projected.formula);
+  state.formulaShape = joinFormulaSections(state.formulaShape, next.shape);
+  state.formulaSources.push(next.entry);
+  state.warnings.push({ id: next.entry.id, code: "LABEL_PRODUCT.FORMULA_SECTIONS_JOINED" });
+  return true;
+}
+
+function imageAtObservation(state: MergeState, id: string): boolean {
+  const source = state.sources.get(id);
+  return (
+    source?.kind === "image" &&
+    isDeepStrictEqual(source.task.input.selection.observation, state.manifest.observation)
+  );
+}
 
 /** A problem of a required source blocks the product; of an optional source it is only a warning. */
 export function fail(state: MergeState, id: string, code: string): void {

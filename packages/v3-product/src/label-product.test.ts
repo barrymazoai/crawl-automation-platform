@@ -48,6 +48,23 @@ it("selects the fuller formula from two readings and records the shorter source"
   expect(record.formula.columns[0]!.rows).toHaveLength(18);
   expect(record.warnings).toContainEqual({ id: "source-0", code: "LABEL_PRODUCT.FORMULA_SUBSET" });
 });
+it("joins two image formula sections with both source citations in the legacy merge", async () => {
+  const tail = gncLabelFixture(), head = gncLabelFixture();
+  tail.formula!.columns[0]!.rows = tail.formula!.columns[0]!.rows.slice(2, 4);
+  tail.formula!.servingSize = null;
+  head.formula!.columns[0]!.rows = head.formula!.columns[0]!.rows.slice(0, 2);
+  const f = await labelProductFixture([tail, head]);
+  const out = await f.assembly.run(f.join, signal());
+  expect(out.status).toBe("ready");
+  expect((await f.collector.run({ join: f.join, evidenceKey: out.evidenceKey }, signal())).status)
+    .toBe("collected");
+  const record = [...f.collected.values()][0]!;
+  expect(record.formula.columns[0]!.rows.map(row => row.name.sourceId)).toEqual([
+    "source-1", "source-1", "source-0", "source-0",
+  ]);
+  expect(record.warnings).toContainEqual({ id: "source-1",
+    code: "LABEL_PRODUCT.FORMULA_SECTIONS_JOINED" });
+});
 it.each(["amount", "ingredients", "container"])("valid %s disagreement is Review, even for optional sources", async kind => {
   const other = gncLabelFixture();
   if (kind === "amount") other.formula!.columns[0]!.rows[5]!.amount!.text = "201 mg";

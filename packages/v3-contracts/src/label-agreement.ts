@@ -1,5 +1,6 @@
 import { dequal } from "dequal";
 import type { labelFormulaStructure, LabelCandidate } from "./label-extraction.js";
+import type { LabelCollectedProduct } from "./label-product.js";
 import { hasConfirmedNoOtherIngredients } from "./label-ingredient-declaration.js";
 import { labelNameForComparison, labelTypographyStructure } from "./label-typography.js";
 import { sameServingSize } from "./label-rules/serving-size.js";
@@ -7,9 +8,10 @@ type Formula = NonNullable<ReturnType<typeof labelFormulaStructure>> & {
   wording?: (string | null)[];
 };
 type Row = Formula["columns"][number]["rows"][number];
-type FormulaInput = Formula | NonNullable<LabelCandidate["formula"]>;
+type FormulaInput = Formula | NonNullable<LabelCandidate["formula"]> |
+  NonNullable<LabelCollectedProduct["formula"]>;
 export type LabelAgreement = "exact" | "wording" | "conflict";
-export type FormulaAgreement = LabelAgreement | "subset";
+export type FormulaAgreement = LabelAgreement | "subset" | "sections";
 type Comparison = "label-typography/1" | "label-typography/2";
 const fieldText = (value: string | { text: string } | null) =>
   typeof value === "string" ? value : (value?.text ?? null);
@@ -114,12 +116,21 @@ const formulaMetadata = (left: string | null, right: string | null, serving = fa
 export const formulaComparisonSize = (formula: FormulaInput | null): number =>
   formula?.columns.reduce((sum, column) => sum + column.rows.length, 0) ?? 0;
 
-/** Prefer a verified complete reading, then the reading with more retained rows. */
+/** Prefer the reading with the most actual information, including untruncated names and DV cells. */
 export function preferFormulaSource(current: LabelCandidate, next: LabelCandidate): boolean {
-  const quality = (candidate: LabelCandidate) => Number(candidate.formulaComplete && candidate.issues.length === 0);
-  return quality(next) > quality(current) ||
-    quality(next) === quality(current) &&
-    formulaComparisonSize(next.formula) > formulaComparisonSize(current.formula);
+  const score = (candidate: LabelCandidate) => {
+    const formula = candidate.formula;
+    const rows = formula?.columns.flatMap(column => column.rows.map(row => ({
+      name: row.name.text, dailyValue: !!row.dailyValue,
+    }))) ?? [];
+    return [Number(candidate.formulaComplete), -candidate.issues.length,
+      rows.filter(row => row.dailyValue).length,
+      Number(!!formula?.servingSize) + Number(!!formula?.servingsPerContainer),
+      rows.reduce((total, row) => total + row.name.length, 0), rows.length];
+  };
+  const first = score(current), second = score(next);
+  return second.some((value, index) => value !== first[index] &&
+    second.slice(0, index).every((earlier, at) => earlier === first[at]) && value > first[index]!);
 }
 
 function sourceClause(value: string) {
@@ -187,6 +198,73 @@ function rowsAgreeWithoutParent(left: Row, right: Row): boolean {
   return rowsAgree({ ...left, parentRowIndex: null }, { ...right, parentRowIndex: null });
 }
 
+const bareName = (value: string) => name(value.replace(/\([^)]*\)/gu, " "));
+function rowNamesAlign(left: string | null, right: string | null): boolean {
+  if (!left || !right) return left === right;
+  if (namesAgree(left, right)) return true;
+  const first = bareName(left), second = bareName(right);
+  return first.length >= 3 && second.length >= 3 &&
+    (first.startsWith(second) || second.startsWith(first));
+}
+
+function compatibleMaterial(left: Row, right: Row): boolean {
+  const kinds = [left.kind, right.kind];
+  const mixedKind = left.kind !== right.kind &&
+    kinds.every(kind => kind === "nutrient" || kind === "blend_component");
+  if (left.kind !== right.kind && !mixedKind) return false;
+  if (!mixedKind && left.parentRowIndex !== right.parentRowIndex) return false;
+  if (left.amountStatus !== right.amountStatus) return false;
+  const sourceQualified = /\(\s*(?:as|from)\b/iu;
+  if (left.kind === "nutrient" && right.kind === "nutrient" &&
+    (sourceQualified.test(left.name ?? "") || sourceQualified.test(right.name ?? "")) &&
+    !namesAgree(left.name, right.name)) return false;
+  const firstDV = formulaMeasure(left.dailyValue)?.replace(/\s/gu, "");
+  const secondDV = formulaMeasure(right.dailyValue)?.replace(/\s/gu, "");
+  return rowNamesAlign(left.name, right.name) &&
+    formulaMeasure(left.amount) === formulaMeasure(right.amount) &&
+    (!firstDV || !secondDV || firstDV === secondDV);
+}
+
+function splitComponentMatches(parts: Row[], whole: Row): boolean {
+  if (whole.kind !== "blend_component" || whole.amount !== null ||
+    whole.amountStatus !== "not_declared" ||
+    parts.some(part => part.kind !== "blend_component" || part.amount !== null ||
+      part.amountStatus !== "not_declared" || !part.name) ||
+    !whole.name) return false;
+  const fragments = parts.map(part => bareName(part.name!).replace(/\s/gu, ""));
+  const target = bareName(whole.name).replace(/\s/gu, "");
+  if (fragments.some(fragment => fragment.length < 3) ||
+    !target.startsWith(fragments[0]!)) return false;
+  let position = fragments[0]!.length;
+  for (const fragment of fragments.slice(1)) {
+    const next = target.indexOf(fragment, position);
+    if (next < position || next - position > 12) return false;
+    position = next + fragment.length;
+  }
+  return position === target.length || target.startsWith(fragments.at(-1)!, target.length - fragments.at(-1)!.length);
+}
+
+function coveredBy(shorter: Row[], longer: Row[]): boolean {
+  let index = 0;
+  for (const row of longer) {
+    if (index >= shorter.length) break;
+    if (compatibleMaterial(shorter[index]!, row)) { index++; continue; }
+    const count = [3, 2].find(size =>
+      index + size <= shorter.length && splitComponentMatches(shorter.slice(index, index + size), row));
+    if (count) index += count;
+  }
+  return index === shorter.length;
+}
+
+function separateSections(left: Formula, right: Formula): boolean {
+  if (left.drugFacts || right.drugFacts) return false;
+  const quantified = (formula: Formula) => formula.columns.flatMap(column => column.rows)
+    .filter(row => row.name && row.amount && row.kind !== "group_header");
+  const first = quantified(left), second = quantified(right);
+  return first.length > 0 && second.length > 0 &&
+    !first.some(row => second.some(other => rowNamesAlign(row.name, other.name)));
+}
+
 function repeatedMaterial(rows: Row[]): boolean {
   const keys = rows.map(row => `${row.kind}:${name(row.name ?? "")}`);
   return new Set(keys).size !== keys.length;
@@ -199,10 +277,13 @@ function columnRelation(left: Formula["columns"][number], right: Formula["column
   const second = right.rows.filter(row => row.kind !== "group_header");
   const groupsA = left.rows.filter(row => row.kind === "group_header");
   const groupsB = right.rows.filter(row => row.kind === "group_header");
-  if (repeatedMaterial(first) || repeatedMaterial(second) ||
-      first.length === second.length && groupsA.length === groupsB.length) return "conflict";
+  if (first.length === second.length && groupsA.length === groupsB.length &&
+    first.some((row, index) => row.kind !== second[index]?.kind ||
+      namesAgree(row.name, second[index]?.name ?? null) &&
+      !!row.dailyValue !== !!second[index]?.dailyValue)) return "conflict";
+  if (repeatedMaterial(first) || repeatedMaterial(second)) return "conflict";
   const groupsMatch = subsetRows(groupsA, groupsB) || subsetRows(groupsB, groupsA);
-  const materialSubset = subsetRows(first, second) || subsetRows(second, first);
+  const materialSubset = coveredBy(first, second) || coveredBy(second, first);
   return groupsMatch && materialSubset ? "subset" : "conflict";
 }
 
@@ -235,13 +316,42 @@ export function formulaAgreement(
     !!first.drugFacts === !!second.drugFacts &&
     formulaMetadata(first.servingSize, second.servingSize, true) &&
     formulaMetadata(first.servingsPerContainer, second.servingsPerContainer) &&
-    first.columns.length === second.columns.length;
+    first.columns.length === second.columns.length &&
+    first.columns.every((column, index) =>
+      formulaMetadata(column.heading, second.columns[index]!.heading));
   if (!compatible) return "conflict";
+  if (first.drugFacts && !first.columns.every((column, index) =>
+    orderedAgreement(column.rows, second.columns[index]!.rows, rowsAgree))) return "conflict";
+  if (separateSections(first, second)) return "sections";
   const relations = first.columns.map((column, index) =>
     columnRelation(column, second.columns[index]!));
   if (relations.includes("conflict")) return "conflict";
   if (relations.includes("subset")) return "subset";
   return dequal(normalizedFormula(first), normalizedFormula(second)) ? "exact" : "wording";
+}
+
+/** Join two verified sections without rewriting any quoted field or its source citation. */
+export function joinFormulaSections<T extends {
+  servingSize: unknown;
+  servingsPerContainer: unknown;
+  columns: { heading: unknown; rows: { parentRowIndex: number | null }[] }[];
+}>(left: T, right: T): T {
+  const first = left.servingSize ? left : right.servingSize ? right : left;
+  const second = first === left ? right : left;
+  return {
+    ...first,
+    servingSize: first.servingSize ?? second.servingSize,
+    servingsPerContainer: first.servingsPerContainer ?? second.servingsPerContainer,
+    columns: first.columns.map((column, index) => {
+      const later = second.columns[index]!;
+      const offset = column.rows.length;
+      return { heading: column.heading ?? later.heading, rows: [
+        ...column.rows,
+        ...later.rows.map(row => ({ ...row, parentRowIndex:
+          row.parentRowIndex === null ? null : row.parentRowIndex + offset })),
+      ] };
+    }),
+  } as T;
 }
 
 /** Review-only normalized comparison shape; original fields remain in provenance. */
