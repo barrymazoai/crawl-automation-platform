@@ -69,7 +69,12 @@ export function fakeMachine(
         await service.deploy(request);
       }
     },
-    env: (name) => (name === "V3_DATABASE_URL" ? "postgres://placeholder" : undefined),
+    env: (name) =>
+      name === "V3_DATABASE_URL"
+        ? "postgres://placeholder"
+        : name === "PM2_HOME"
+          ? "/pm2"
+          : undefined,
     print: (line) => lines.push(line),
     migrate: async (source, settings) => {
       migrations.push({ source, settings });

@@ -8,6 +8,7 @@ const titles = (migrate: boolean) =>
 describe("deploy plan", () => {
   it("clones main fresh, installs locked, builds each app once, then switches, restarts and checks", () => {
     expect(titles(false)).toEqual([
+      "Check PM2_HOME is set",
       "Check the release directory is new",
       "Clone origin",
       "Check the commit is on main",

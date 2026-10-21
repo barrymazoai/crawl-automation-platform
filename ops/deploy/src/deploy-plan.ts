@@ -44,6 +44,9 @@ export function deployPlan(machine: MachineConfig, options: DeployOptions): Step
   const gitStep = (title: string, args: string[]): CommandStep => command(title, git, args);
   const apps = [...new Set(machine.jobs.map((job) => job.app))];
   return [
+    // The job switch needs the operator's PM2 home; checking it first keeps a missing variable from leaving a
+    // cloned and built release directory behind that the next attempt then refuses (2026-10-21).
+    { kind: "require-env", title: "Check PM2_HOME is set", name: "PM2_HOME" },
     { kind: "fresh-release", title: "Check the release directory is new", path: source },
     gitStep("Clone origin", ["clone", "--no-checkout", machine.repository, source]),
     gitStep("Check the commit is on main", [

@@ -62,6 +62,7 @@ describe("Server 二 browser-only deployment", () => {
   it("builds only worker and deploys without an API, migration settings or migration credentials", async () => {
     const steps = deployPlan(machine, { commit: COMMIT, migrate: false });
     expect(steps.map((step) => step.title)).toEqual([
+      "Check PM2_HOME is set",
       "Check the release directory is new",
       "Clone origin",
       "Check the commit is on main",
@@ -71,7 +72,7 @@ describe("Server 二 browser-only deployment", () => {
       "Write the PM2 file, replace changed jobs and wait for ready",
     ]);
     const fake = fakeMachine();
-    fake.ports.env = () => undefined;
+    fake.ports.env = (name) => (name === "PM2_HOME" ? "/pm2" : undefined);
     await new Deployment(machine, fake.ports, { commit: COMMIT, dryRun: false }).run(steps);
     expect(fake.migrations).toEqual([]);
     expect(fake.commands).toContain("/opt/pnpm --filter @crawl-automation/worker build");
