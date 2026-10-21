@@ -3,6 +3,8 @@ import {
   LabelImageCandidateSchema,
   LabelImageFieldSchema,
   assessLabelCandidate,
+  hasClosedPrintedIngredients,
+  isIngredientHeading,
   labelImageIntegrityCodes,
   legacyLabelExtractionSchema,
 } from "@crawl-automation/v3-contracts";
@@ -82,9 +84,15 @@ export function decodeIngredientPresenceAnswer(response: string) {
   });
   const codes = new Set<string>();
   splitOtherIngredients(candidate, wire.otherIngredientsBlock, codes);
+  const closedList = !codes.size && hasClosedIngredientList(candidate);
+  if (closedList) {
+    candidate.ingredientsComplete = true;
+    candidate.issues = candidate.issues.filter((issue) => !isWholeLabelCoverageIssue(issue));
+  }
   if (
     wire.otherIngredientsState !== "present" &&
-    (candidate.otherIngredients || wire.otherIngredientsBlock)
+    (candidate.otherIngredients || wire.otherIngredientsBlock) &&
+    !(wire.otherIngredientsState === "not_fully_visible" && closedList)
   ) {
     codes.add(labelValidationErrors.code("LABEL.INGREDIENT_BOUNDARY"));
   }
@@ -95,4 +103,37 @@ export function decodeIngredientPresenceAnswer(response: string) {
     status: codes.size ? ("review" as const) : assessed.status,
     codes: [...codes],
   };
+}
+
+/** Whole-package coverage is unnecessary when the printed ingredient section itself closes. */
+function hasClosedIngredientList(candidate: z.infer<typeof LabelImageCandidateSchema>): boolean {
+  const declaration = candidate.ingredientDeclaration;
+  const other = candidate.otherIngredients;
+  if (
+    !other ||
+    !isIngredientHeading(other.heading.text) ||
+    !["present", "not_fully_visible"].includes(declaration?.state ?? "")
+  ) {
+    return false;
+  }
+  return (
+    hasClosedPrintedIngredients(candidate) &&
+    candidate.issues.every(
+      (issue) =>
+        !["INGREDIENTS_MISSING", "AMBIGUOUS"].includes(issue.code) ||
+        isWholeLabelCoverageIssue(issue),
+    )
+  );
+}
+
+function isWholeLabelCoverageIssue(issue: { code: string; detail: string }): boolean {
+  if (!["INGREDIENTS_MISSING", "AMBIGUOUS"].includes(issue.code)) {
+    return false;
+  }
+  return (
+    /(?:whole|entire|full)\s+(?:physical\s+)?label|label\s+coverage/iu.test(issue.detail) &&
+    !/label\s+ingredient\s+list|(?:section|body|text)s?\s+(?:(?:is|are)\s+)?not\s+visible|cropp|cut\s+off|obscur|unreadab|illegib|partially\s+visible|may\s+continue|continu\w*\s+beyond/iu.test(
+      issue.detail,
+    )
+  );
 }
