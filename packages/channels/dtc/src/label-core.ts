@@ -94,20 +94,58 @@ function withoutChromeLines(text: string): string {
     .trim();
 }
 
+/** A single named ingredient panel has a DOM boundary even when the page has no Facts table. */
+function ingredientPanel(root: Element): Element | null {
+  const panels = [...root.querySelectorAll("h2, h3, h4, summary")]
+    .map(ingredientHeadingPanel)
+    .filter((panel): panel is Element => panel !== null);
+  return panels.length === 1 ? (panels[0] ?? null) : null;
+}
+
+function ingredientHeadingPanel(heading: Element): Element | null {
+  if (
+    !/^(?:(?:plant[- ]based|other)\s+)?ingredients\s*:?$/i.test(heading.textContent?.trim() ?? "")
+  ) {
+    return null;
+  }
+  return boundedIngredientParent(heading);
+}
+
+function boundedIngredientParent(heading: Element): Element | null {
+  const parent = heading.parentElement;
+  const body = heading.nextElementSibling;
+  if (!parent || !body) {
+    return null;
+  }
+  if (
+    !parent.matches("section, article, details, div") ||
+    parent.firstElementChild !== heading ||
+    parent.children.length !== 2
+  ) {
+    return null;
+  }
+  return body.matches("section, article, div, ul, p") && body.textContent?.trim() ? parent : null;
+}
+
 function labelPageText(html: string): string {
   // The channel plan supplies an HTML fragment; wrapping it gives linkedom a stable body for DOM pruning.
   const { document } = parseHTML(`<!doctype html><html><body>${html}</body></html>`);
   for (const child of [...document.body.children]) {
     pruneChrome(child);
   }
-  return withoutChromeLines(pageText(document.body.innerHTML, { rowCells: true }));
+  const full = withoutChromeLines(pageText(document.body.innerHTML, { rowCells: true }));
+  if (labelRange(full)) {
+    return full;
+  }
+  const panel = ingredientPanel(document.body);
+  return panel ? withoutChromeLines(pageText(panel.innerHTML, { rowCells: true })) : full;
 }
 
 /**
  * Owner 2026-10-20 (bloodsugarfriendly.com): a DTC page's label text is its Facts panel and the ingredient statement
  * after it, with div-built cells kept apart. Given the whole page (640 lines, the panel printed three times), the
- * label text model failed 46 of 46 runs on every model; given this, Luna medium read 7 of 10, all values right. A
- * page without a panel whose end is known keeps its whole text.
+ * label text model failed 46 of 46 runs on every model; given this, Luna medium read 7 of 10, all values right.
+ * A page without a Facts panel keeps its whole text unless a single ingredient section has an explicit DOM boundary.
  */
 export function extractDtcLabelCore(html: string): string {
   if (Buffer.byteLength(html) > MAX_BYTES) {

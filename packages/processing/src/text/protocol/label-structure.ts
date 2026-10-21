@@ -24,7 +24,20 @@ export function rowOrderCodes(candidate: Candidate): string[] {
   const outOfOrder = (candidate.formula?.columns ?? []).some((column) =>
     column.rows.some((row, index) => {
       const previous = column.rows[index - 1];
-      return previous !== undefined && row.name.start <= previous.name.end;
+      if (!previous || row.name.start > previous.name.end) {
+        return false;
+      }
+      // A blend total may print its component names on the same line. The first child is inside the parent's
+      // cited name, then later children continue in printed order (Natrol Sleep+ Calm, 2026-10-21).
+      const printedChild =
+        row.kind === "blend_component" &&
+        row.parentRowIndex === index - 1 &&
+        previous.kind === "blend_total" &&
+        row.name.start >= previous.name.start &&
+        row.name.end <= previous.name.end &&
+        row.amount === null &&
+        row.dailyValue === null;
+      return !printedChild;
     }),
   );
   return outOfOrder ? [labelValidationErrors.code("LABEL.ROW_ORDER_INVALID")] : [];
