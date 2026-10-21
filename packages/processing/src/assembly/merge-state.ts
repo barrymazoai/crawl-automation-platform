@@ -61,6 +61,8 @@ export interface MergeState {
   formulaShape: ReturnType<typeof labelAgreementFormula>;
   formulaSource: LabelEvidence | null;
   formulaSources: LabelEvidence[];
+  /** Incomplete images that read a separate section of the selected panel; joined once the selection is settled. */
+  pendingSections: LabelEvidence[];
   otherShape: string[] | null;
   otherSourceId: string | null;
 }

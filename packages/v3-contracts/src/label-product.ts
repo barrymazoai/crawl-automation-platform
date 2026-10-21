@@ -129,6 +129,11 @@ export const LabelCollectedProductSchema = z.discriminatedUnion("schemaVersion",
   if(r.evidencePolicy==="label-image-first/5" && imageFirst && authoritative.length!==1)invalid();
   const projectedSources = authoritative.map(p => projectLabelProductCandidate(p.id,
     split ? (completeLabelSections(p.candidate) ?? p.candidate) : p.candidate));
+  // A joined panel may take its other half from a source whose selected section kept only the ingredients
+  // (the formula below the Facts header was read without the serving line, 2026-10-21).
+  const joinedPart = (source: typeof authoritative[number], index: number) =>
+    projectedSources[index]?.formula ?? projectLabelProductCandidate(source.id, source.candidate).formula;
+  let countConflict = false;
   const confirmedNone = authoritative.some(p => isCompleteLabelImage(p) &&
     hasConfirmedNoOtherIngredients(p.candidate) &&
     p.id === r.formula?.columns[0]?.rows[0]?.name.sourceId);
@@ -146,14 +151,17 @@ export const LabelCollectedProductSchema = z.discriminatedUnion("schemaVersion",
     const conflict = counts.size > 1;
     if (conflict !== r.warnings.some(w => w.code === "PACKAGING.SERVINGS_PER_CONTAINER_CONFLICT")) invalid();
     if (conflict) {
+      countConflict = true;
       if (r.formula && r.formula.servingsPerContainer !== null) invalid();
       for (const p of projectedSources) if (p.formula) p.formula.servingsPerContainer = null;
     }
     for (const code of packaging.warnings) if (!r.warnings.some(w => w.code === code)) invalid();
   }
   const joined = r.warnings.some(w => w.code === "LABEL_PRODUCT.FORMULA_SECTIONS_JOINED");
-  const projected = joined ? projectedJoinedFormula(r.formula, authoritative.map((source, index) =>
-    ({ id: source.id, formula: projectedSources[index]?.formula ?? null }))) : null;
+  const projected = joined ? projectedJoinedFormula(r.formula, authoritative.map((source, index) => {
+    const formula = joinedPart(source, index);
+    return { id: source.id, formula: formula && countConflict ? { ...formula, servingsPerContainer: null } : formula };
+  })) : null;
   if ((r.formula || r.schemaVersion !== 5) && !(joined
     ? projected && JSON.stringify(projected) === JSON.stringify(r.formula)
     : projectedSources.some(p => p.formula && JSON.stringify(p.formula) === JSON.stringify(r.formula)))) invalid();

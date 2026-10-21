@@ -44,6 +44,7 @@ export function beginMerge(
     formulaShape: null,
     formulaSource: null,
     formulaSources: [],
+    pendingSections: [],
     otherShape: null,
     otherSourceId: null,
   };

@@ -1,4 +1,5 @@
 import { assemblyErrors, type AssemblyErrorCode } from "./assembly-errors.js";
+import type { Shape } from "./packaging-serving-check.js";
 import {
   isCompleteLabelImage,
   isOrderedEvidencePolicy,
@@ -16,9 +17,10 @@ import {
   type LabelEvidence,
 } from "./merge-state.js";
 import { reviewEntry } from "./merge-entry-review.js";
-import { sameServingSize } from "./serving-size.js";
+import { checkAgainstPackaging } from "./packaging-serving-check.js";
 import { partialLabelConflicts } from "./partial-label.js";
 import { selectOtherIngredients } from "./ingredient-selection.js";
+import { deferSeparateSection, joinPendingSections } from "./partial-image-selection.js";
 type Candidate = LabelEvidence["candidate"];
 type Projected = ReturnType<typeof projectLabelProductCandidate>;
 
@@ -43,6 +45,7 @@ export function selectLabel(
   for (const entry of ordered) {
     selectEntry(state, entry, policy);
   }
+  joinPendingSections(state);
 }
 
 function selectEntry(state: MergeState, entry: LabelEvidence, policy: MergePolicy): void {
@@ -56,6 +59,10 @@ function selectEntry(state: MergeState, entry: LabelEvidence, policy: MergePolic
     const section = policy.split.sections.get(entry.id);
     if (section) {
       selectSections(state, section, policy);
+      if (!section.candidate.formula && !conflicts.length) {
+        // The section kept only its intact ingredients; its incomplete formula may still be the panel's other half.
+        deferSeparateSection(state, entry, [policy.split.complete]);
+      }
       return;
     }
   }
@@ -105,8 +112,6 @@ function selectFormula(state: MergeState, pick: Pick): void {
   }
 }
 
-type Shape = NonNullable<ReturnType<typeof labelAgreementFormula>>;
-
 function compareFormula(state: MergeState, pick: Pick, shape: Shape): void {
   const agreement = formulaAgreement(state.formulaShape, shape);
   if (agreement === "subset") {
@@ -142,37 +147,6 @@ function acceptFormulaSubset(state: MergeState, pick: Pick, shape: Shape): void 
     state.formulaSource = pick.entry;
     state.formulaSources = [pick.entry];
     state.formula = pick.projected.formula;
-  }
-}
-
-/**
- * With packaging evidence, the container count is compared across sources but never kept as a per-serving value (the
- * original stays in the provenance), and the serving size must match the page's.
- */
-function checkAgainstPackaging(state: MergeState, shape: Shape, pick: Pick): void {
-  const { packaging } = state;
-  if (!packaging) {
-    return;
-  }
-  if (shape.servingsPerContainer) {
-    state.counts.add(shape.servingsPerContainer);
-  }
-  shape.servingsPerContainer = null;
-  const servingSize = packaging.servingSize.value;
-  if (
-    !servingSize ||
-    (shape.drugFacts && !shape.servingSize) ||
-    (shape.servingSize && sameServingSize(shape.servingSize, servingSize))
-  ) {
-    return;
-  }
-  if (pick.imageFirst) {
-    state.warnings.push({
-      id: pick.entry.id,
-      code: assemblyErrors.code("PACKAGING.SERVING_SIZE_CONFLICT"),
-    });
-  } else {
-    state.codes.add(assemblyErrors.code("PACKAGING.SERVING_SIZE_CONFLICT"));
   }
 }
 

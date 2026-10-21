@@ -1,22 +1,18 @@
 import {
   assessLabelCandidate,
   completeLabelSections,
-  ingredientWordingKey,
   partialLabelValidationCodes,
   type LabelCandidate,
 } from "@crawl-automation/v3-contracts";
 import { labelValidationErrors } from "../label/validation-errors.js";
 import { assemblyErrors } from "./assembly-errors.js";
 import { splitLabel } from "./split-label.js";
+import { formulaFits, ingredientsFit } from "./partial-label-fit.js";
 import type { LabelEvidence } from "./merge-state.js";
 
 export const partialLabelCodes: readonly string[] = partialLabelValidationCodes.map((code) =>
   labelValidationErrors.code(code),
 );
-
-const words = (field: { text: string } | null | undefined) =>
-  field?.text.replace(/\s+/gu, " ").trim().toLowerCase();
-type Formula = NonNullable<LabelCandidate["formula"]>;
 
 /** A retained one-section image may contribute only its intact printed section. */
 export function partialImageSection(
@@ -151,64 +147,4 @@ export function isPartialLabel(candidate: LabelCandidate): boolean {
     !candidate.issues.some((issue) => ["AMBIGUOUS", "METADATA_CONFLICT"].includes(issue.code)) &&
     assessed.codes.every((code) => partialLabelCodes.includes(code))
   );
-}
-
-function formulaFits(partial: Formula, complete: Formula): boolean {
-  if (
-    ["servingSize", "servingsPerContainer", "drugFacts"].some((key) => {
-      const field = key as "servingSize" | "servingsPerContainer" | "drugFacts";
-      return partial[field] && words(partial[field]) !== words(complete[field]);
-    })
-  ) {
-    return false;
-  }
-  return partial.columns.every((column) => {
-    const matches = complete.columns.filter(
-      (full) => words(full.heading) === words(column.heading),
-    );
-    const full = matches[0];
-    return (
-      matches.length === 1 &&
-      !!full &&
-      column.rows.every((row) => rowFits(row, { partial: column.rows, complete: full.rows }))
-    );
-  });
-}
-
-type Row = Formula["columns"][number]["rows"][number];
-function rowFits(row: Row, rows: { partial: Row[]; complete: Row[] }): boolean {
-  const matches = rows.complete.filter(
-    (full) => words(full.name) === words(row.name) && full.kind === row.kind,
-  );
-  const full = matches[0];
-  if (
-    matches.length !== 1 ||
-    !full ||
-    parentName(row, rows.partial) !== parentName(full, rows.complete)
-  ) {
-    return false;
-  }
-  return (["amount", "dailyValue", "purpose"] as const).every(
-    (field) => !row[field] || words(row[field]) === words(full[field]),
-  );
-}
-
-function parentName(row: Row, rows: Row[]) {
-  return row.parentRowIndex === null ? null : words(rows[row.parentRowIndex]?.name);
-}
-
-function ingredientsFit(partial: LabelCandidate, complete: LabelCandidate): boolean {
-  // Wording-only differences are one item, as in the full-label comparison (owner 2026-10-09, CRAWLV3-214).
-  const key = (item: { text: string }) => ingredientWordingKey(item.text);
-  const wanted = partial.otherIngredients?.items.map(key) ?? [];
-  const available = complete.otherIngredients?.items.map(key) ?? [];
-  let offset = 0;
-  if (partial.ingredientsComplete && wanted.length !== available.length) {
-    return false;
-  }
-  return wanted.every((name) => {
-    const index = available.indexOf(name, offset);
-    offset = index + 1;
-    return index >= 0;
-  });
 }
