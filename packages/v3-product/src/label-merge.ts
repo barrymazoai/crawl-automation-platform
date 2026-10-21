@@ -2,7 +2,7 @@ import { isDeepStrictEqual as equal } from "node:util";
 import { LabelProductManifestSchema, LabelImageCandidateSchema, TextCandidateV3Schema, TextRecordSchema, VisionRecordSchema,
   LabelProductProvenanceSchema, projectLabelProductCandidate, assessLabelCandidate, labelFormulaStructure, assertTextQuotes, isCompleteLabelImage, isCompleteLabelText,
   type LabelProductManifest, type LabelCollectedProduct, type LabelImageCandidate,
-  labelTypographyStructure, labelNameForComparison, labelImageIntegrityCodes, labelNumericSourceConflict, PackagingFactsSchema, type PackagingFacts, type TextRecord, type TextCandidateV3, type VisionRecord } from "@crawl-automation/v3-contracts";
+  labelTypographyStructure, labelNameForComparison, labelImageIntegrityCodes, labelNumericSourceConflict, ingredientListRelation, ingredientComparisonSize, PackagingFactsSchema, type PackagingFacts, type TextRecord, type TextCandidateV3, type VisionRecord } from "@crawl-automation/v3-contracts";
 export type VerifiedLabelSource = { id: string } & ({ kind: "text"; record: TextRecord; candidate: TextCandidateV3; fullText: string } |
   { kind: "image"; record: VisionRecord; candidate: LabelImageCandidate });
 const words = (s: string) => s.replace(/\s+/gu, " ").trim();
@@ -22,6 +22,7 @@ export function mergeLabelProduct(raw: LabelProductManifest, entries: VerifiedLa
   }
   let formula: LabelCollectedProduct["formula"] | null = null, otherIngredients: LabelCollectedProduct["otherIngredients"] = null;
   let formulaShape: ReturnType<typeof labelFormulaStructure> = null, otherShape: string[] | null = null;
+  let otherSourceId: string | null = null;
   const fail = (id: string, code: string) => { if (sources.get(id)!.required) codes.add(code); else warnings.push({ id, code }); };
   for (const failure of failures) {
     if (!sources.has(failure.id) || seen.has(failure.id)) throw Error("LABEL_PRODUCT.IDENTITY_CONFLICT");
@@ -107,12 +108,24 @@ export function mergeLabelProduct(raw: LabelProductManifest, entries: VerifiedLa
     }
     if (c.otherIngredients) {
       const shape = c.otherIngredients.items.map(i => manifest.admission?.comparison ? labelNameForComparison(i.text) : words(i.text));
-      if ((otherShape || secondaryText) && !equal(otherShape, shape)) {
+      const relation = ingredientListRelation(otherShape, shape);
+      if (otherShape !== null && relation === "subset") {
+        const longer = ingredientComparisonSize(otherShape) < ingredientComparisonSize(shape);
+        const shorter = longer ? otherSourceId : e.id;
+        if (shorter) warnings.push({ id: shorter, code: "LABEL_PRODUCT.INGREDIENTS_SUBSET" });
+        if (!secondaryText && longer) {
+          otherShape = shape; otherSourceId = e.id; otherIngredients = projected.otherIngredients;
+        }
+      } else if (otherShape !== null && !secondaryText && relation === "reordered") {
+        warnings.push({ id: e.id, code: "LABEL_PRODUCT.INGREDIENTS_REORDERED" });
+      } else if ((otherShape || secondaryText) && relation === "conflict") {
         if (secondaryText) warnings.push({ id: e.id, code: "LABEL_PRODUCT.SECONDARY_TEXT_INGREDIENTS_CONFLICT" });
         else codes.add("LABEL_PRODUCT.INGREDIENTS_CONFLICT");
+      } else if ((otherShape || secondaryText) && relation === "wording") {
+        warnings.push({ id: e.id, code: "LABEL_PRODUCT.SOURCE_WORDING_DIFFERS" });
       }
       if (!otherIngredients && !secondaryText) {
-        otherShape = shape; otherIngredients = projected.otherIngredients;
+        otherShape = shape; otherSourceId = e.id; otherIngredients = projected.otherIngredients;
       }
     }
   }

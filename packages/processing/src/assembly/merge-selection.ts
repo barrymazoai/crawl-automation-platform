@@ -3,9 +3,7 @@ import {
   isCompleteLabelImage,
   isOrderedEvidencePolicy,
   formulaAgreement,
-  ingredientsAgreement,
   labelAgreementFormula,
-  labelAgreementIngredients,
   projectLabelProductCandidate,
   type LabelAgreement,
 } from "@crawl-automation/v3-contracts";
@@ -14,6 +12,7 @@ import { byText, type MergeState, type LabelEvidence } from "./merge-state.js";
 import { reviewEntry } from "./merge-entry-review.js";
 import { sameServingSize } from "./serving-size.js";
 import { partialLabelConflicts } from "./partial-label.js";
+import { selectOtherIngredients } from "./ingredient-selection.js";
 type Candidate = LabelEvidence["candidate"];
 type Projected = ReturnType<typeof projectLabelProductCandidate>;
 
@@ -132,29 +131,6 @@ function checkAgainstPackaging(state: MergeState, shape: Shape, pick: Pick): voi
     });
   } else {
     state.codes.add(assemblyErrors.code("PACKAGING.SERVING_SIZE_CONFLICT"));
-  }
-}
-
-function selectOtherIngredients(state: MergeState, pick: Pick): void {
-  const { candidate, projected, secondaryText } = pick;
-  if (!candidate.otherIngredients && !labelAgreementIngredients(candidate)) {
-    return;
-  }
-  const comparison = state.manifest.admission?.comparison;
-  const shape = labelAgreementIngredients(candidate);
-  if (state.otherShape || secondaryText) {
-    recordAgreement(state, pick, {
-      agreement: ingredientsAgreement(state.otherShape, shape, comparison),
-      conflict: "LABEL_PRODUCT.INGREDIENTS_CONFLICT",
-      secondary: "LABEL_PRODUCT.SECONDARY_TEXT_INGREDIENTS_CONFLICT",
-      // Owner 2026-10-09: a complete image's ingredient list wins over page text listing others. An image that
-      // confirms there are none still blocks page text that lists some.
-      imageWins: !!state.otherIngredients,
-    });
-  }
-  if (state.otherShape === null && !secondaryText) {
-    state.otherShape = shape;
-    state.otherIngredients = projected.otherIngredients;
   }
 }
 

@@ -35,6 +35,97 @@ function expectAgreement(first: LabelImageCandidate, second: LabelImageCandidate
 }
 
 describe("label source wording agreement", () => {
+  it("accepts the same items in another order with an explicit warning", async () => {
+    const first = agreementCandidate(vitamin, ["Cellulose", "Casein Peptones"]);
+    const second = agreementCandidate(vitamin, ["casein peptones", "cellulose"]);
+    const setup = assemblySetup([first, second]);
+    expect(mergeImages(first, second)).toMatchObject({
+      status: "ready",
+      codes: [],
+      warnings: [{ id: "source-1", code: "LABEL_PRODUCT.INGREDIENTS_REORDERED" }],
+    });
+    const assembled = await setup.assembly.run(setup.join, signal());
+    expect(
+      (
+        await setup.collector.run(
+          { join: setup.join, evidenceKey: assembled.evidenceKey },
+          signal(),
+        )
+      ).status,
+    ).toBe("collected");
+  });
+
+  it("accepts a non-prefix subset and keeps the complete source", () => {
+    const full = agreementCandidate(vitamin, ["Cellulose", "Salt", "Casein Peptones"]);
+    const partial = agreementCandidate(vitamin, ["Cellulose", "Casein Peptones"]);
+    expect(mergeImages(full, partial)).toMatchObject({
+      status: "ready",
+      codes: [],
+      warnings: [{ id: "source-1", code: "LABEL_PRODUCT.INGREDIENTS_SUBSET" }],
+    });
+  });
+
+  it("chooses the longer exact superset and retains a subset warning", async () => {
+    const short = agreementCandidate(vitamin, ["Cellulose"]);
+    const full = agreementCandidate(vitamin, ["Cellulose", "Casein Peptones"]);
+    const setup = assemblySetup([short, full]);
+    const result = mergeImages(short, full);
+    expect(result).toMatchObject({
+      status: "ready",
+      codes: [],
+      warnings: [{ id: "source-0", code: "LABEL_PRODUCT.INGREDIENTS_SUBSET" }],
+    });
+    expect(result.otherIngredients).toEqual(
+      projectLabelProductCandidate("source-1", full).otherIngredients,
+    );
+    const assembled = await setup.assembly.run(setup.join, signal());
+    expect(assembled.status).toBe("ready");
+    expect(
+      (
+        await setup.collector.run(
+          { join: setup.join, evidenceKey: assembled.evidenceKey },
+          signal(),
+        )
+      ).status,
+    ).toBe("collected");
+  });
+
+  it("retains both printed lists and normalized shapes in the Review and review.json", async () => {
+    const first = agreementCandidate(vitamin, ["Cellulose", "Casein Peptones"]);
+    const second = agreementCandidate(vitamin, ["Cellulose", "Potassium Citrate"]);
+    const setup = assemblySetup([first, second]);
+    const result = await setup.assembly.run(setup.join, signal());
+    expect(result).toMatchObject({
+      status: "review",
+      codes: ["LABEL_PRODUCT.INGREDIENTS_CONFLICT"],
+    });
+    if (result.status !== "review") {
+      throw new Error("expected Review");
+    }
+    const record = defined(setup.records.get(result.reviewId));
+    const conflicts = [
+      {
+        code: "LABEL_PRODUCT.INGREDIENTS_CONFLICT",
+        sources: [
+          {
+            id: "source-0",
+            items: ["Cellulose", "Casein Peptones"],
+            shape: ["cellulose", "casein peptones"],
+          },
+          {
+            id: "source-1",
+            items: ["Cellulose", "Potassium Citrate"],
+            shape: ["cellulose", "potassium citrate"],
+          },
+        ],
+      },
+    ];
+    expect(record.rawError.details).toMatchObject({ conflicts });
+    const bytes = defined(
+      setup.deps.local.data.get(`label-product-reviews/${result.reviewId}.json`),
+    );
+    expect(JSON.parse(Buffer.from(bytes).toString()).rawError.details.conflicts).toEqual(conflicts);
+  });
   // Both directions cover the same wording discrepancy reported across 19 products.
   it.each([
     [vitamin, vitaminD3],
@@ -90,8 +181,6 @@ describe("label source wording agreement", () => {
     ["casein", "potassium citrate"],
     ["Microcrystalline cellulose", "casein", "potassium citrate"],
     ["casein"],
-    ["casein peptones", "Microcrystalline cellulose"],
-    ["Microcrystalline cellulose", "casein peptones", "potassium citrate"],
     ["Microcrystalline cellulose", "contains 5% or less of: casein peptones"],
   ])("keeps real ingredient item/order differences in Review: %j", (...items) => {
     const first = agreementCandidate();

@@ -19,6 +19,10 @@ export const assemblyErrors = defineErrors({
     category: "VALIDATION",
     message: "Ingredients conflict.",
   },
+  "LABEL_PRODUCT.INGREDIENTS_SUBSET": validation(
+    "A shorter ingredient list was covered by a longer source.",
+  ),
+  "LABEL_PRODUCT.INGREDIENTS_REORDERED": validation("Ingredient items agree in a different order."),
   "LABEL_PRODUCT.SECONDARY_TEXT_FORMULA_CONFLICT": {
     category: "VALIDATION",
     message: "Secondary text formula conflict.",

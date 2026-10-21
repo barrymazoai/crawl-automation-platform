@@ -43,6 +43,7 @@ export function beginMerge(
     otherIngredients: null,
     formulaShape: null,
     otherShape: null,
+    otherSourceId: null,
   };
   if (!!manifest.admission !== !!rawPackaging) {
     throw assemblyFailure("LABEL_PRODUCT.PACKAGING_UNVERIFIED");

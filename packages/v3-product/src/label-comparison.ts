@@ -1,5 +1,5 @@
 import { isDeepStrictEqual } from "node:util";
-import { LabelTextCandidateSchema, LabelImageCandidateSchema, assessLabelCandidate, labelFormulaStructure } from "@crawl-automation/v3-contracts";
+import { LabelTextCandidateSchema, LabelImageCandidateSchema, assessLabelCandidate, labelFormulaStructure, ingredientsAgreement } from "@crawl-automation/v3-contracts";
 type Source = { kind: "text" | "image"; candidate: unknown };
 /** Pure pairwise diagnostics only. No ownership, citation verification, registration or ingestion approval. */
 export function compareLabelStructure(left: Source, right: Source) {
@@ -12,6 +12,6 @@ export function compareLabelStructure(left: Source, right: Source) {
   if (!isDeepStrictEqual(bodyA, bodyB)) codes.push("LABEL.FORMULA_CONFLICT");
   if (ca !== cb) codes.push("LABEL.CONTAINER_COUNT_CONFLICT");
   const other = (c: typeof a) => c.otherIngredients?.items.map(i => i.text.replace(/\s+/gu, " ").trim()) ?? null;
-  if (!isDeepStrictEqual(other(a), other(b))) codes.push("LABEL.OTHER_INGREDIENTS_CONFLICT");
+  if (ingredientsAgreement(other(a), other(b)) === "conflict") codes.push("LABEL.OTHER_INGREDIENTS_CONFLICT");
   return { status: codes.length ? "conflict" as const : "match" as const, codes };
 }

@@ -189,11 +189,59 @@ const ingredient = (value: string) =>
  * and "DRY ROASTED ALMONDS." on the label are one item.
  */
 export function ingredientWordingKey(value: string): string {
-  return ingredient(labelNameForComparison(value))
+  return ingredient(labelNameForComparison(value.replace(/[™®]/gu, "").normalize("NFKC").replace(/[‘’]/gu, "'").replace(/[“”]/gu, '"')))
+    .replace(/\s*\(\s*/gu, " (")
+    .replace(/\s*\)\s*/gu, ") ")
+    .replace(/\s*(?:&|\band\b)\s*/gu, " and ")
     .replace(/(?<=^|[\s(,;:])[*†‡§]+|[*†‡§]+(?=$|[\s),.;:!?])/gu, "")
     .replace(/^[\s.,;:!?]+|[\s.,;:!?]+$/gu, "")
     .replace(/\s+/gu, " ")
     .trim();
+}
+
+const ingredientShape = (items: string[]) => items
+  .map(item => ingredientWordingKey(item.replace(/\bcontains\s*:\s*.*$/iu, "")))
+  .filter(Boolean);
+export const ingredientComparisonSize = (items: string[]) => new Set(ingredientShape(items)).size;
+
+function conjunctionSegmentation(left: string[], right: string[]): boolean {
+  if (left.length + 1 !== right.length) return false;
+  return left.some((item, index) => {
+    const parts = item.split(/\s+and\s+/u);
+    if (parts.length !== 2 || parts.some(part => !part)) return false;
+    const expanded = [...left.slice(0, index), ...parts, ...left.slice(index + 1)];
+    return dequal(expanded, right);
+  });
+}
+
+export type IngredientRelation = "exact" | "wording" | "reordered" | "subset" | "conflict";
+/** Compare lists without changing the printed values. Only exact item keys can be a subset. */
+export function ingredientListRelation(left: string[] | null, right: string[] | null): IngredientRelation {
+  if (dequal(left, right)) return "exact";
+  if (left === null || right === null) return "conflict";
+  if (left.length === 0 || right.length === 0) return "conflict";
+  const first = ingredientShape(left), second = ingredientShape(right);
+  if (!first.length || !second.length) return "conflict";
+  if (dequal(first, second)) return "wording";
+  if (conjunctionSegmentation(first, second) || conjunctionSegmentation(second, first)) return "wording";
+  const setA = new Set(first), setB = new Set(second);
+  if (setA.size === setB.size && [...setA].every(item => setB.has(item))) return "reordered";
+  if (setA.size < setB.size && [...setA].every(item => setB.has(item)) ||
+      setB.size < setA.size && [...setB].every(item => setA.has(item))) return "subset";
+  return "conflict";
+}
+
+/** Review-only diagnostic; the assembly wire result and source wording stay unchanged. */
+export function ingredientConflictDetails(
+  sources: { id: string; candidate: { otherIngredients?: { items: { text: string }[] } | null } }[],
+) {
+  return [{
+    code: "LABEL_PRODUCT.INGREDIENTS_CONFLICT",
+    sources: sources.flatMap(source => {
+      const items = source.candidate.otherIngredients?.items.map(item => item.text);
+      return items ? [{ id: source.id, items, shape: ingredientShape(items) }] : [];
+    }),
+  }];
 }
 
 /** Only a leading low-percentage qualifier is ignored; item boundaries and order stay intact. */
@@ -203,16 +251,6 @@ export function ingredientsAgreement(
   // The comparison version once chose whether ™/® counted; wording never makes a conflict (owner 2026-10-09).
   _comparison?: Comparison,
 ): LabelAgreement {
-  if (dequal(left, right)) {
-    return "exact";
-  }
-  const agrees =
-    left !== null &&
-    right !== null &&
-    orderedAgreement(
-      left,
-      right,
-      (first, second) => ingredientWordingKey(first) === ingredientWordingKey(second),
-    );
-  return agrees ? "wording" : "conflict";
+  const relation = ingredientListRelation(left, right);
+  return relation === "exact" ? "exact" : relation === "conflict" ? "conflict" : "wording";
 }

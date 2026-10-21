@@ -4,6 +4,8 @@ import { sameServingSize } from "./label-rules/serving-size.js";
 import {
   formulaAgreement,
   ingredientsAgreement,
+  ingredientListRelation,
+  ingredientComparisonSize,
   labelAgreementFormula,
   labelAgreementIngredients,
   type LabelAgreement,
@@ -81,15 +83,24 @@ export function collectedSourcesAgree(record: CollectedAgreement, accepted: Sour
     const otherResult = source.candidate.otherIngredients
       ? ingredientsAgreement(other, otherShape(source), record.comparisonPolicy)
       : "exact";
+    const sourceOther = otherShape(source);
+    const relation = source.candidate.otherIngredients
+      ? ingredientListRelation(other, sourceOther) : "exact";
+    const shorterId = relation === "subset" && other && sourceOther &&
+      ingredientComparisonSize(other) < ingredientComparisonSize(sourceOther) ? otherId : source.id;
+    const ingredientWarning = relation === "subset" || relation === "reordered"
+      ? record.warnings.some(warning => warning.id === shorterId && warning.code ===
+          (relation === "subset" ? "LABEL_PRODUCT.INGREDIENTS_SUBSET" : "LABEL_PRODUCT.INGREDIENTS_REORDERED"))
+      : null;
     return (
       acceptsAgreement(record, source, {
         agreement: formulaResult,
         secondaryCode: "LABEL_PRODUCT.SECONDARY_TEXT_FORMULA_CONFLICT",
       }) &&
-      acceptsAgreement(record, source, {
+      (ingredientWarning ?? acceptsAgreement(record, source, {
         agreement: otherResult,
         secondaryCode: "LABEL_PRODUCT.SECONDARY_TEXT_INGREDIENTS_CONFLICT",
-      }) &&
+      })) &&
       packagingAgrees(record, source)
     );
   });

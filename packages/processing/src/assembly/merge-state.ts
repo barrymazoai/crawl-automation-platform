@@ -57,6 +57,7 @@ export interface MergeState {
   otherIngredients: LabelCollectedProduct["otherIngredients"];
   formulaShape: ReturnType<typeof labelAgreementFormula>;
   otherShape: string[] | null;
+  otherSourceId: string | null;
 }
 
 export const words = (text: string) => text.replace(/\s+/gu, " ").trim();

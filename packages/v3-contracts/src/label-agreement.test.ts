@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   formulaAgreement,
   ingredientsAgreement,
+  ingredientListRelation,
   labelAgreementFormula,
 } from "./label-agreement.js";
 import { gncLabelFixture } from "./label.fixture.js";
@@ -105,6 +106,18 @@ const structuralChanges: [string, (shape: Formula) => void][] = [
 ];
 
 describe("shared label agreement boundaries", () => {
+  it("normalizes typography, conjunctions and an attached Contains tail", () => {
+    expect(ingredientListRelation(
+      ["Ｃｅｌｌｕｌｏｓｅ（ plant ）.", "Salt & pepper. Contains: Soy"],
+      ["cellulose (plant)", "salt and pepper"],
+    )).toBe("wording");
+  });
+
+  it("accepts an explicit terminal conjunction split into two adjacent items", () => {
+    expect(ingredientListRelation(["Cellulose", "Salt & pepper"], ["Cellulose", "salt", "pepper"]))
+      .toBe("wording");
+    expect(ingredientListRelation(["Sodium chloride"], ["Sodium", "chloride"])).toBe("conflict");
+  });
   it.each(structuralChanges)("preserves a %s conflict", (_kind, change) => {
     const first = formula();
     const second = structuredClone(first);
