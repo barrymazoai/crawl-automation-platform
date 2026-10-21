@@ -99,6 +99,36 @@ it("warns only for sole unknown serving metadata with a retained formula", () =>
   c.issues = [{ code: "METADATA_CONFLICT", detail: "The image contains two labels with different servings per container: 15 and 30." }];
   expect(assess(c).codes).toContain("LABEL.EVIDENCE_UNCERTAIN");
 });
+it("keeps the B0012DEKUK formula when the sole ambiguity is the absent Drug Facts heading", () => {
+  const c = gncLabelFixture();
+  c.formula!.drugFacts = null;
+  c.otherIngredients!.heading.text = "Ingredients";
+  c.issues = [{ code: "AMBIGUOUS", detail: "The label uses Active Ingredients and Inactive Ingredients without a Drug Facts heading." }];
+  const assessed = assess(c);
+  expect(assessed.status).toBe("candidate");
+  expect(assessed.codes).toEqual([]);
+  expect(assessed.warnings).toEqual([expect.objectContaining({
+    code: "LABEL.DRUG_FACTS_HEADING_ABSENT",
+    rule: "drug-facts-heading-absence-is-a-warning",
+  })]);
+  c.issues = [{ code: "AMBIGUOUS", detail: "Without a Drug Facts heading, amounts are not legible." }];
+  expect(assess(c).codes).toContain("LABEL.EVIDENCE_UNCERTAIN");
+});
+it("warns for both independent serving and Drug Facts heading omissions", () => {
+  const c = gncLabelFixture();
+  c.formula!.servingsPerContainer = null;
+  c.issues = [
+    { code: "UNREADABLE", detail: "Servings per container is not visible in the supplied image." },
+    { code: "AMBIGUOUS", detail: "The label uses Active Ingredients and Inactive Ingredients without a Drug Facts heading." },
+  ];
+  const assessed = assess(c);
+  expect(assessed.status).toBe("candidate");
+  expect(assessed.warnings.map(w => w.code)).toEqual([
+    "LABEL.SERVINGS_PER_CONTAINER_UNCERTAIN", "LABEL.DRUG_FACTS_HEADING_ABSENT",
+  ]);
+  c.issues.push({ code: "AMBIGUOUS", detail: "The active amount is unclear." });
+  expect(assess(c).codes).toContain("LABEL.EVIDENCE_UNCERTAIN");
+});
 it("partial sections cannot bypass bad doses", () => {
   const c = gncLabelFixture(); c.otherIngredients = null; c.formula!.columns[0]!.rows = [c.formula!.columns[0]!.rows[0]!];
   c.ingredientsComplete = false;

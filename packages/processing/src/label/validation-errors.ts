@@ -19,6 +19,11 @@ export const labelValidationWarnings = defineErrors({
     message:
       "The formula is retained although its serving count or size is not visible or readable.",
   },
+  "LABEL.DRUG_FACTS_HEADING_ABSENT": {
+    category: "VALIDATION",
+    message:
+      "The retained formula and ingredient list use Active/Inactive wording without a Drug Facts heading.",
+  },
   "LABEL.AMOUNT_IN_NAME": {
     category: "VALIDATION",
     message:

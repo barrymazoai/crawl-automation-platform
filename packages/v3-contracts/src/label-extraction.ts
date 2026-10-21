@@ -10,6 +10,7 @@ import { isIngredientListFormula, ingredientListNotAFormulaRule } from "./label-
 import { applyLabelRules } from "./label-rules/rule.js";
 import { bracketedMayContainIsNotADeclarationRule } from "./label-rules/bracketed-may-contain-is-not-a-declaration.js";
 import { servingsPerContainerUncertaintyIsAWarningRule } from "./label-rules/servings-per-container-uncertainty-is-a-warning.js";
+import { drugFactsHeadingAbsenceIsAWarningRule } from "./label-rules/drug-facts-heading-absence-is-a-warning.js";
 export { hasClosedPrintedIngredients, hasConfirmedNoOtherIngredients } from "./label-ingredient-declaration.js";
 
 /** New opt-in extraction protocol; never reinterpret a legacy candidate as this codec. */
@@ -104,9 +105,22 @@ export function assessLabelCandidate(candidate: LabelCandidate) {
   // size keeps its formula with an empty serving size, never one guessed from directions.
   if (formula && !formula.servingSize && !formula.drugFacts) warnings.push({ code: "LABEL.SERVING_SIZE_MISSING", detail: "formula has no printed serving size; kept with an empty serving size" });
   if (hasIngredients && !candidate.ingredientsComplete) flag("LABEL.INGREDIENTS_INCOMPLETE", candidate.otherIngredients ? "model marked the ingredient list incomplete" : "only blend components, no Other Ingredients list");
-  const servingWarning = applyLabelRules([servingsPerContainerUncertaintyIsAWarningRule], { formula, issues: candidate.issues });
-  warnings.push(...servingWarning);
-  const uncertain = servingWarning.length ? null : candidate.issues.find(i => ["UNREADABLE", "AMBIGUOUS", "METADATA_CONFLICT"].includes(i.code));
+  const headingSubject = { formula, formulaComplete: candidate.formulaComplete, otherIngredients: candidate.otherIngredients, issues: candidate.issues };
+  let servingWarning = applyLabelRules([servingsPerContainerUncertaintyIsAWarningRule], { formula, issues: candidate.issues });
+  let headingWarning = applyLabelRules([drugFactsHeadingAbsenceIsAWarningRule], headingSubject);
+  const uncertainIssues = candidate.issues.filter(i => ["UNREADABLE", "AMBIGUOUS", "METADATA_CONFLICT"].includes(i.code));
+  // Two independently harmless uncertainty reports can each receive their own warning. Keep the existing
+  // whole-answer serving rule for all other multi-issue answers, so a missing section cannot bypass Review.
+  if (candidate.issues.length === 2 && uncertainIssues.length === 2) {
+    const servingAt = uncertainIssues.findIndex(issue => applyLabelRules([servingsPerContainerUncertaintyIsAWarningRule], { formula, issues: [issue] }).length > 0);
+    const headingAt = uncertainIssues.findIndex(issue => applyLabelRules([drugFactsHeadingAbsenceIsAWarningRule], { ...headingSubject, issues: [issue] }).length > 0);
+    if (servingAt !== -1 && headingAt !== -1 && servingAt !== headingAt) {
+      servingWarning = applyLabelRules([servingsPerContainerUncertaintyIsAWarningRule], { formula, issues: [uncertainIssues[servingAt]!] });
+      headingWarning = applyLabelRules([drugFactsHeadingAbsenceIsAWarningRule], { ...headingSubject, issues: [uncertainIssues[headingAt]!] });
+    }
+  }
+  warnings.push(...servingWarning, ...headingWarning);
+  const uncertain = servingWarning.length + headingWarning.length === uncertainIssues.length ? null : uncertainIssues[0];
   if (uncertain) flag("LABEL.EVIDENCE_UNCERTAIN", `model reported ${uncertain.code}${"detail" in uncertain && uncertain.detail ? `: ${String(uncertain.detail).slice(0, 160)}` : ""}`);
   // A contradiction is a section marked complete and also reported missing. A partly visible section reported
   // missing is only incomplete (owner 2026-10-07): it is left out, and the label's complete sections still count.

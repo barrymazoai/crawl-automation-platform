@@ -34,6 +34,9 @@ const REFUSALS = new Set(["LABEL.TEXT_LIMIT", "LABEL.TEXT_RANGE"]);
 describe("label check codes", () => {
   it("finds the label codes in the source", () => {
     expect(labelCodesInSource()).toContain("LABEL.COVERAGE_UNCERTAIN");
+    expect(labelValidationWarnings.code("LABEL.DRUG_FACTS_HEADING_ABSENT")).toBe(
+      "LABEL.DRUG_FACTS_HEADING_ABSENT",
+    );
   });
 
   it.each(
