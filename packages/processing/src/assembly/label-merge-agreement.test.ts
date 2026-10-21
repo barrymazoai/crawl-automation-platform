@@ -35,6 +35,95 @@ function expectAgreement(first: LabelImageCandidate, second: LabelImageCandidate
 }
 
 describe("label source wording agreement", () => {
+  const cinnamon = "Ceylon Cinnamon (Cinnamomum verum) Dried Bark";
+  const excipients = ["Organic Glycerin", "Water"];
+  const cinnamonImage = () => {
+    const candidate = agreementCandidate(cinnamon, excipients);
+    defined(rowsOf(candidate)[0]).amount = agreementField("500 mg");
+    return candidate;
+  };
+
+  it("keeps the image's Other Ingredients when the page lists the cinnamon active", async () => {
+    const [image, page] = [cinnamonImage(), cinnamonImage()];
+    defined(page.otherIngredients).heading = agreementField("Ingredients:");
+    defined(page.otherIngredients).items = [cinnamon, "Water", "Organic Glycerin"].map(
+      agreementField,
+    );
+    const setup = await mergeSetup([image], page);
+    setup.join.manifest.evidencePolicy = "label-image-first/7";
+    const result = merge(setup);
+    expect(result).toMatchObject({
+      status: "ready",
+      codes: [],
+      warnings: [{ id: "a-text", code: "LABEL_PRODUCT.INGREDIENTS_PAGE_INCLUDES_ACTIVES" }],
+    });
+    expect(result.otherIngredients?.items.map((item) => item.text)).toEqual(excipients);
+    expect(result.otherIngredients?.heading.citation.kind).toBe("image");
+    await collectBoth(setup);
+  });
+
+  it("keeps an image subset after removing the page's named active", async () => {
+    const page = cinnamonImage();
+    defined(page.otherIngredients).heading = agreementField("Ingredients:");
+    defined(page.otherIngredients).items = [
+      cinnamon,
+      "Water",
+      "Citric Acid",
+      "Organic Glycerin",
+    ].map(agreementField);
+    const setup = await mergeSetup([cinnamonImage()], page);
+    setup.join.manifest.evidencePolicy = "label-image-first/7";
+    expect(merge(setup)).toMatchObject({
+      status: "ready",
+      codes: [],
+      warnings: [{ id: "a-text", code: "LABEL_PRODUCT.INGREDIENTS_PAGE_INCLUDES_ACTIVES" }],
+    });
+    expect((await collectBoth(setup)).otherIngredients?.items.map((item) => item.text)).toEqual(
+      excipients,
+    );
+  });
+
+  it("retains the earlier subset handling when the page list is shorter", async () => {
+    const page = cinnamonImage();
+    defined(page.otherIngredients).heading = agreementField("Ingredients:");
+    defined(page.otherIngredients).items = ["Water"].map(agreementField);
+    const setup = await mergeSetup([cinnamonImage()], page);
+    setup.join.manifest.evidencePolicy = "label-image-first/7";
+    expect(merge(setup)).toMatchObject({
+      status: "ready",
+      codes: [],
+      warnings: [{ id: "a-text", code: "LABEL_PRODUCT.INGREDIENTS_SUBSET" }],
+    });
+  });
+
+  it("keeps a non-formula page difference in Review", async () => {
+    const page = cinnamonImage();
+    defined(page.otherIngredients).heading = agreementField("Ingredients:");
+    defined(page.otherIngredients).items = [cinnamon, "Water", "Malt Syrup"].map(agreementField);
+    const setup = await mergeSetup([cinnamonImage()], page);
+    setup.join.manifest.evidencePolicy = "label-image-first/7";
+    expect(merge(setup)).toMatchObject({
+      status: "review",
+      codes: ["LABEL_PRODUCT.INGREDIENTS_CONFLICT"],
+    });
+  });
+
+  it("keeps Cinnamon Bark Oil distinct from a Cinnamon Extract formula row", async () => {
+    const image = agreementCandidate("Cinnamon Extract", ["Organic Glycerin", "Water"]);
+    const page = agreementCandidate("Cinnamon Extract", [
+      "Cinnamon Bark Oil",
+      "Water",
+      "Organic Glycerin",
+    ]);
+    defined(page.otherIngredients).heading = agreementField("Ingredients:");
+    const setup = await mergeSetup([image], page);
+    setup.join.manifest.evidencePolicy = "label-image-first/7";
+    expect(merge(setup)).toMatchObject({
+      status: "review",
+      codes: ["LABEL_PRODUCT.INGREDIENTS_CONFLICT"],
+    });
+  });
+
   it("accepts the same items in another order with an explicit warning", async () => {
     const first = agreementCandidate(vitamin, ["Cellulose", "Casein Peptones"]);
     const second = agreementCandidate(vitamin, ["casein peptones", "cellulose"]);

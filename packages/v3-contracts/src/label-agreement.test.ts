@@ -4,6 +4,7 @@ import {
   ingredientsAgreement,
   ingredientListRelation,
   labelAgreementFormula,
+  pageIngredientsIncludeActives,
 } from "./label-agreement.js";
 import { gncLabelFixture } from "./label.fixture.js";
 
@@ -106,6 +107,30 @@ const structuralChanges: [string, (shape: Formula) => void][] = [
 ];
 
 describe("shared label agreement boundaries", () => {
+  it("separates a named cinnamon active from the page's full ingredient list", () => {
+    expect(pageIngredientsIncludeActives(
+      ["Organic Glycerin", "Water"],
+      ["Ceylon Cinnamon (Cinnamomum verum) Dried Bark", "Water", "Organic Glycerin"],
+      ["Ceylon Cinnamon Bark Extract"],
+    )).toBe(true);
+  });
+
+  it("accepts an image subset of the page after named actives are removed", () => {
+    expect(pageIngredientsIncludeActives(
+      ["Organic Glycerin", "Water"],
+      ["Ceylon Cinnamon Bark Extract", "Water", "Citric Acid", "Organic Glycerin"],
+      ["Ceylon Cinnamon Bark Extract"],
+    )).toBe(true);
+  });
+
+  it("does not remove a similar but different cinnamon ingredient", () => {
+    expect(pageIngredientsIncludeActives(
+      ["Organic Glycerin", "Water"],
+      ["Cinnamon Bark Oil", "Water", "Organic Glycerin"],
+      ["Cinnamon Extract"],
+    )).toBe(false);
+  });
+
   it("normalizes typography, conjunctions and an attached Contains tail", () => {
     expect(ingredientListRelation(
       ["Ｃｅｌｌｕｌｏｓｅ（ plant ）.", "Salt & pepper. Contains: Soy"],

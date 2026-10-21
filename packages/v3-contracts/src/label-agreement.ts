@@ -231,6 +231,40 @@ export function ingredientListRelation(left: string[] | null, right: string[] | 
   return "conflict";
 }
 
+const botanicalOrPart = /\(\s*(?:[A-Z][a-z]+\s+[a-z]+(?:\s+[a-z]+)?|(?:root|leaf|bark|seed|fruit|flower|rhizome))\s*\)/gu;
+const formWord = /\b(?:extract|powder|dried)\b/gu;
+
+function activeNameKey(value: string): string {
+  return ingredientWordingKey(value.replace(botanicalOrPart, " "))
+    .replace(formWord, " ")
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .trim()
+    .replace(/\s+/gu, " ");
+}
+
+function matchesFormulaRow(item: string, rowName: string): boolean {
+  const exact = ingredientWordingKey(item) === ingredientWordingKey(rowName);
+  const itemKey = activeNameKey(item);
+  return exact || (itemKey.length > 0 && itemKey === activeNameKey(rowName));
+}
+
+export const isFullIngredientsHeading = (heading: string | null | undefined): boolean =>
+  heading !== null && heading !== undefined && /^ingredients\s*:?$/iu.test(heading.trim());
+
+/** A page's full ingredient list may include named formula rows before its excipients. */
+export function pageIngredientsIncludeActives(
+  imageItems: string[] | null,
+  pageItems: string[] | null,
+  formulaNames: string[],
+): boolean {
+  if (!imageItems?.length || !pageItems?.length || !formulaNames.length) return false;
+  const remaining = pageItems.filter(item => !formulaNames.some(name => matchesFormulaRow(item, name)));
+  if (remaining.length === pageItems.length || !remaining.length) return false;
+  const imageKeys = new Set(ingredientShape(imageItems));
+  const pageKeys = new Set(ingredientShape(remaining));
+  return imageKeys.size > 0 && [...imageKeys].every(key => pageKeys.has(key));
+}
+
 /** Review-only diagnostic; the assembly wire result and source wording stay unchanged. */
 export function ingredientConflictDetails(
   sources: { id: string; candidate: { otherIngredients?: { items: { text: string }[] } | null } }[],

@@ -6,8 +6,10 @@ import {
   ingredientsAgreement,
   ingredientListRelation,
   ingredientComparisonSize,
+  isFullIngredientsHeading,
   labelAgreementFormula,
   labelAgreementIngredients,
+  pageIngredientsIncludeActives,
   type LabelAgreement,
 } from "./label-agreement.js";
 
@@ -76,6 +78,9 @@ export function collectedSourcesAgree(record: CollectedAgreement, accepted: Sour
     record,
   );
   const other = otherShape(images.find((source) => source.id === otherId));
+  const formulaNames = formula?.columns.flatMap(column => column.rows.map(row => row.name).filter(
+    (name): name is string => name !== null,
+  )) ?? [];
   return accepted.every((source) => {
     const formulaResult = source.candidate.formula
       ? formulaAgreement(formula, formulaShape(source, record))
@@ -84,11 +89,22 @@ export function collectedSourcesAgree(record: CollectedAgreement, accepted: Sour
       ? ingredientsAgreement(other, otherShape(source), record.comparisonPolicy)
       : "exact";
     const sourceOther = otherShape(source);
+    const pageHasActives = source.kind === "text" &&
+      pageIngredientsIncludeActives(other, sourceOther, formulaNames);
     const relation = source.candidate.otherIngredients
       ? ingredientListRelation(other, sourceOther) : "exact";
+    const unexplainedFullPage = source.kind === "text" &&
+      isFullIngredientsHeading(source.candidate.otherIngredients?.heading.text) &&
+      !pageHasActives && (relation === "conflict" ||
+        relation === "subset" && other && sourceOther &&
+        ingredientComparisonSize(other) < ingredientComparisonSize(sourceOther));
+    if (unexplainedFullPage) return false;
     const shorterId = relation === "subset" && other && sourceOther &&
       ingredientComparisonSize(other) < ingredientComparisonSize(sourceOther) ? otherId : source.id;
-    const ingredientWarning = relation === "subset" || relation === "reordered"
+    const ingredientWarning = pageHasActives
+      ? record.warnings.some(warning => warning.id === source.id && warning.code ===
+          "LABEL_PRODUCT.INGREDIENTS_PAGE_INCLUDES_ACTIVES")
+      : relation === "subset" || relation === "reordered"
       ? record.warnings.some(warning => warning.id === shorterId && warning.code ===
           (relation === "subset" ? "LABEL_PRODUCT.INGREDIENTS_SUBSET" : "LABEL_PRODUCT.INGREDIENTS_REORDERED"))
       : null;

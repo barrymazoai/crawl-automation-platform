@@ -2,7 +2,7 @@ import { isDeepStrictEqual as equal } from "node:util";
 import { LabelProductManifestSchema, LabelImageCandidateSchema, TextCandidateV3Schema, TextRecordSchema, VisionRecordSchema,
   LabelProductProvenanceSchema, projectLabelProductCandidate, assessLabelCandidate, labelFormulaStructure, assertTextQuotes, isCompleteLabelImage, isCompleteLabelText,
   type LabelProductManifest, type LabelCollectedProduct, type LabelImageCandidate,
-  labelTypographyStructure, labelNameForComparison, labelImageIntegrityCodes, labelNumericSourceConflict, ingredientListRelation, ingredientComparisonSize, PackagingFactsSchema, type PackagingFacts, type TextRecord, type TextCandidateV3, type VisionRecord } from "@crawl-automation/v3-contracts";
+  labelTypographyStructure, labelNameForComparison, labelImageIntegrityCodes, labelNumericSourceConflict, ingredientListRelation, ingredientComparisonSize, isFullIngredientsHeading, pageIngredientsIncludeActives, PackagingFactsSchema, type PackagingFacts, type TextRecord, type TextCandidateV3, type VisionRecord } from "@crawl-automation/v3-contracts";
 export type VerifiedLabelSource = { id: string } & ({ kind: "text"; record: TextRecord; candidate: TextCandidateV3; fullText: string } |
   { kind: "image"; record: VisionRecord; candidate: LabelImageCandidate });
 const words = (s: string) => s.replace(/\s+/gu, " ").trim();
@@ -109,7 +109,20 @@ export function mergeLabelProduct(raw: LabelProductManifest, entries: VerifiedLa
     if (c.otherIngredients) {
       const shape = c.otherIngredients.items.map(i => manifest.admission?.comparison ? labelNameForComparison(i.text) : words(i.text));
       const relation = ingredientListRelation(otherShape, shape);
-      if (otherShape !== null && relation === "subset") {
+      const selectedKind = sources.get(otherSourceId ?? "")?.kind;
+      const pageIsCurrent = e.kind === "text" && selectedKind === "image";
+      const imageIsCurrent = e.kind === "image" && selectedKind === "text";
+      const formulaNames = formula?.columns.flatMap(col => col.rows.map(row => row.name.text)) ?? [];
+      const pageHasActives = otherShape !== null && (pageIsCurrent || imageIsCurrent) &&
+        pageIngredientsIncludeActives(pageIsCurrent ? otherShape : shape, pageIsCurrent ? shape : otherShape, formulaNames);
+      if (pageHasActives) {
+        const pageId = pageIsCurrent ? e.id : otherSourceId;
+        if (pageId) warnings.push({ id: pageId, code: "LABEL_PRODUCT.INGREDIENTS_PAGE_INCLUDES_ACTIVES" });
+        if (imageIsCurrent) { otherShape = shape; otherSourceId = e.id; otherIngredients = projected.otherIngredients; }
+      } else if (pageIsCurrent && isFullIngredientsHeading(c.otherIngredients.heading.text) && relation === "subset" &&
+        otherShape && ingredientComparisonSize(otherShape) < ingredientComparisonSize(shape)) {
+        codes.add("LABEL_PRODUCT.INGREDIENTS_CONFLICT");
+      } else if (otherShape !== null && relation === "subset") {
         const longer = ingredientComparisonSize(otherShape) < ingredientComparisonSize(shape);
         const shorter = longer ? otherSourceId : e.id;
         if (shorter) warnings.push({ id: shorter, code: "LABEL_PRODUCT.INGREDIENTS_SUBSET" });
@@ -119,7 +132,7 @@ export function mergeLabelProduct(raw: LabelProductManifest, entries: VerifiedLa
       } else if (otherShape !== null && !secondaryText && relation === "reordered") {
         warnings.push({ id: e.id, code: "LABEL_PRODUCT.INGREDIENTS_REORDERED" });
       } else if ((otherShape || secondaryText) && relation === "conflict") {
-        if (secondaryText) warnings.push({ id: e.id, code: "LABEL_PRODUCT.SECONDARY_TEXT_INGREDIENTS_CONFLICT" });
+        if (secondaryText && !isFullIngredientsHeading(c.otherIngredients.heading.text)) warnings.push({ id: e.id, code: "LABEL_PRODUCT.SECONDARY_TEXT_INGREDIENTS_CONFLICT" });
         else codes.add("LABEL_PRODUCT.INGREDIENTS_CONFLICT");
       } else if ((otherShape || secondaryText) && relation === "wording") {
         warnings.push({ id: e.id, code: "LABEL_PRODUCT.SOURCE_WORDING_DIFFERS" });

@@ -63,6 +63,10 @@ export interface MergeState {
 export const words = (text: string) => text.replace(/\s+/gu, " ").trim();
 export const byText = (left: string, right: string) => (left < right ? -1 : left > right ? 1 : 0);
 
+/** Every selected formula row can identify an active in a page's full ingredient list. */
+export const selectedFormulaNames = (state: MergeState): string[] =>
+  state.formula?.columns.flatMap((column) => column.rows.map((row) => row.name.text)) ?? [];
+
 /** A problem of a required source blocks the product; of an optional source it is only a warning. */
 export function fail(state: MergeState, id: string, code: string): void {
   if (state.sources.get(id)?.required) {
