@@ -1,14 +1,15 @@
 import { createHash } from "node:crypto";
-import { link, mkdir, mkdtemp, readdir, utimes, writeFile } from "node:fs/promises";
+import { link, mkdir, mkdtemp, open, readdir, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { pruneJournal } from "./journal-prune.js";
 import type { ListedObject } from "./r2-objects.js";
 
-const NOW = new Date("2026-10-19T20:00:00Z");
-const DAY = 24 * 3_600_000;
-const old = new Date(NOW.getTime() - 2 * DAY);
+const NOW = new Date("2026-10-21T03:00:00Z");
+const HOUR = 3_600_000;
+const MIN_AGE = 2 * HOUR;
+const old = new Date(NOW.getTime() - 2 * MIN_AGE);
 
 const md5 = (text: string) => createHash("md5").update(text).digest("hex");
 
@@ -41,7 +42,7 @@ function remote(objects: Record<string, string>) {
 
 const run = (root: string, store: ReturnType<typeof remote>, removeFiles: boolean) =>
   pruneJournal(
-    { root, prefixes: ["v3/amazon-html"], minAgeMs: DAY, removeFiles },
+    { root, prefixes: ["v3/amazon-html"], minAgeMs: MIN_AGE, removeFiles },
     { remote: store, now: () => NOW },
     new AbortController().signal,
   );
@@ -79,14 +80,97 @@ describe("pruneJournal", () => {
       files: 3,
       removed: 0,
       young: 1,
+      activeFolders: 1,
       notInR2: 1,
       differs: 1,
-      stagingKept: 2,
+      stagingKept: 3,
       foldersRemoved: 0,
     });
     expect(report.examples.notInR2).toEqual(["v3/amazon-html/product-b/original.json"]);
+    expect(report.examples.differs).toEqual(["v3/amazon-html/product-b/original.html"]);
     expect(store.listed).toEqual(["v3/amazon-html/product-b"]);
     expect(await readdir(join(root, "v3/amazon-html/product-b"))).toHaveLength(4);
+  });
+
+  it("removes a file exactly at the minimum age and keeps one a millisecond younger", async () => {
+    const { root, put } = await journal();
+    const atAge = new Date(NOW.getTime() - MIN_AGE);
+    await put("v3/amazon-html/product-at/original.html", "at", atAge);
+    await put("v3/amazon-html/product-under/original.html", "under", new Date(atAge.getTime() + 1));
+    const store = remote({
+      "v3/amazon-html/product-at/original.html": "at",
+      "v3/amazon-html/product-under/original.html": "under",
+    });
+
+    const report = await run(root, store, true);
+
+    expect(report).toMatchObject({ files: 2, removed: 1, young: 1, activeFolders: 1 });
+    expect(store.listed).toEqual(["v3/amazon-html/product-at"]);
+    expect(await readdir(join(root, "v3/amazon-html"))).toEqual(["product-under"]);
+  });
+
+  it("leaves a folder whole when any file in it was written within the minimum age", async () => {
+    const { root, put } = await journal();
+    await put("v3/amazon-html/product-f/original.html", "old enough");
+    await put("v3/amazon-html/product-f/original.json", "{}", new Date(NOW.getTime() - HOUR));
+    const store = remote({
+      "v3/amazon-html/product-f/original.html": "old enough",
+      "v3/amazon-html/product-f/original.json": "{}",
+    });
+
+    const report = await run(root, store, true);
+
+    expect(report).toMatchObject({
+      folders: 1,
+      files: 2,
+      removed: 0,
+      young: 2,
+      activeFolders: 1,
+      stagingKept: 2,
+    });
+    expect(store.listed).toEqual([]);
+    expect(await readdir(join(root, "v3/amazon-html/product-f"))).toHaveLength(4);
+  });
+
+  it("leaves a folder whole while a staging file is still being written", async () => {
+    const { root, put } = await journal();
+    await put("v3/amazon-html/product-g/original.html", "done");
+    const writing = join(root, "v3/amazon-html/product-g/.pending-in-progress");
+    await (await open(writing, "wx")).close();
+    await utimes(writing, NOW, NOW);
+    const store = remote({ "v3/amazon-html/product-g/original.html": "done" });
+
+    const report = await run(root, store, true);
+
+    expect(report).toMatchObject({
+      files: 1,
+      removed: 0,
+      young: 1,
+      activeFolders: 1,
+      stagingKept: 2,
+    });
+    expect(store.listed).toEqual([]);
+    expect(await readdir(join(root, "v3/amazon-html/product-g"))).toHaveLength(3);
+  });
+
+  it("keeps an old staging file nothing links to, with its folder", async () => {
+    const { root, put } = await journal();
+    await put("v3/amazon-html/product-h/original.html", "h");
+    const stale = join(root, "v3/amazon-html/product-h/.pending-stale");
+    await (await open(stale, "wx")).close();
+    await utimes(stale, old, old);
+    const store = remote({ "v3/amazon-html/product-h/original.html": "h" });
+
+    const report = await run(root, store, true);
+
+    expect(report).toMatchObject({
+      removed: 1,
+      stagingRemoved: 1,
+      stagingKept: 1,
+      activeFolders: 0,
+      foldersRemoved: 0,
+    });
+    expect(await readdir(join(root, "v3/amazon-html/product-h"))).toEqual([".pending-stale"]);
   });
 
   it("previews: counts what would go and removes nothing", async () => {

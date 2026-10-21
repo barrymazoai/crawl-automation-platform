@@ -9,7 +9,10 @@ export interface JournalPruneReport {
   /** Files whose R2 copy matched (removed, or removable in a preview). */
   removed: number;
   removedBytes: number;
+  /** Files in active folders: written within the minimum age, or still being written. */
   young: number;
+  /** Folders with such a write; nothing in them is checked or removed. */
+  activeFolders: number;
   notInR2: number;
   differs: number;
   /** `.pending-*` staging links of removed files; any other staging file stays. */
@@ -30,6 +33,7 @@ export function emptyReport(removeFiles: boolean, now: Date): JournalPruneReport
     removed: 0,
     removedBytes: 0,
     young: 0,
+    activeFolders: 0,
     notInR2: 0,
     differs: 0,
     stagingRemoved: 0,
