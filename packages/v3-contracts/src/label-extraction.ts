@@ -45,7 +45,10 @@ export function labelExtractionSchema<F extends z.ZodType>(field: F) {
   });
 }
 export const LabelTextWireSchema = labelExtractionSchema(LabelAnchorSchema);
-export const LabelTextCandidateSchema = labelExtractionSchema(LabelQuoteSchema);
+export const LabelTextCandidateSchema = labelExtractionSchema(LabelQuoteSchema).extend({
+  /** Decoder-only provenance; never part of the model's wire answer. */
+  ingredientParagraphReclassified: z.literal(true).optional(),
+});
 export const LabelImageCandidateSchema = labelExtractionSchema(LabelImageFieldSchema).extend({
   ingredientDeclaration: LabelIngredientDeclarationSchema.optional(),
 });
@@ -72,7 +75,8 @@ export function assessLabelCandidate(candidate: LabelCandidate) {
   // Every code keeps the first place that raised it, so a Review can say which row broke which rule.
   const flag = (code: string, detail: string, rule?: string) => { if (!codes.has(code)) findings.push({ code, detail, ...(rule ? { rule } : {}) }); codes.add(code); };
   let componentCount = 0;
-  const ingredientListFormula = isIngredientListFormula(candidate);
+  const ingredientListFormula = isIngredientListFormula(candidate) ||
+    ("ingredientParagraphReclassified" in candidate && candidate.ingredientParagraphReclassified === true);
   const formula = ingredientListFormula ? null : candidate.formula;
   if (ingredientListFormula) warnings.push({ code: ingredientListNotAFormulaRule.code, rule: ingredientListNotAFormulaRule.id, detail: "formula only repeats the printed Ingredients list; treated as no formula, with the ingredient list retained" });
   const columns = formula?.columns ?? [];

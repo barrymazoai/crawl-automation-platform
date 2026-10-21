@@ -20,6 +20,7 @@ import { resolveAnchor, type Anchor, type AnchorContext } from "./resolve-anchor
 import { isWithinText, splitsCharacter } from "./text-range.js";
 import { textLimits } from "../limits.js";
 import { separateTextIngredientDeclarations } from "./ingredient-declarations.js";
+import { normalizeUndosedIngredientParagraph } from "./undosed-ingredient-normalization.js";
 
 type Wire = z.infer<typeof LabelTextWireSchema>;
 type WireRow = NonNullable<Wire["formula"]>["columns"][number]["rows"][number];
@@ -54,6 +55,7 @@ export function decodeLabelText(request: LabelTextRequest): DecodedLabel {
   const quotes = new QuotePlacer(evidenceLines(scope, text), text);
   const candidate = LabelTextCandidateSchema.parse(quotes.place(wire));
   const modelExclusions = candidate.exclusions.length;
+  const ingredientHeading = normalizeUndosedIngredientParagraph(candidate, text, scope.range);
   separateTextIngredientDeclarations(candidate);
   return validateCandidate({
     candidate,
@@ -61,7 +63,7 @@ export function decodeLabelText(request: LabelTextRequest): DecodedLabel {
     range: scope.range,
     policyVersion,
     modelExclusions,
-    placed: quotes.placed,
+    placed: ingredientHeading ? [...quotes.placed, ingredientHeading] : quotes.placed,
   });
 }
 

@@ -3,6 +3,7 @@ import { emptyCellRule } from "./empty-cell.js";
 import { dailyValueOnlyRowRule } from "./daily-value-only-row.js";
 import { amountEnclosedInNameRule } from "./amount-enclosed-in-name.js";
 import { ingredientListNotAFormulaRule } from "./ingredient-list-not-a-formula.js";
+import { undosedIngredientParagraphRule } from "./undosed-ingredient-paragraph.js";
 import { ingredientNotOnlyParenthesisRule } from "./ingredient-items.js";
 import { parentRule } from "./parent.js";
 import { servingSizeEquivalences } from "./serving-size.js";
@@ -14,15 +15,36 @@ export * from "./rule.js";
 export type { LabelRow, RowSubject } from "./rows.js";
 export { blendPercentageRule } from "./blend-percentage.js";
 export { emptyCellRule, acceptedEmptyCells, type CellSubject } from "./empty-cell.js";
-export { dailyValueOnlyRowRule, acceptsDailyValueOnlyRow, type DailyValueCell } from "./daily-value-only-row.js";
+export {
+  dailyValueOnlyRowRule,
+  acceptsDailyValueOnlyRow,
+  type DailyValueCell,
+} from "./daily-value-only-row.js";
 export { amountEnclosedInNameRule, acceptsAmountInName } from "./amount-enclosed-in-name.js";
-export { ingredientListNotAFormulaRule, isIngredientListFormula } from "./ingredient-list-not-a-formula.js";
+export {
+  ingredientListNotAFormulaRule,
+  isIngredientListFormula,
+} from "./ingredient-list-not-a-formula.js";
+export {
+  undosedIngredientParagraphRule,
+  undosedIngredientParagraph,
+  type IngredientParagraphSubject,
+} from "./undosed-ingredient-paragraph.js";
 export { ingredientNotOnlyParenthesisRule } from "./ingredient-items.js";
 export { parentRule, openGroupsBefore } from "./parent.js";
 export { servingSizeEquivalences, sameServingSize } from "./serving-size.js";
-export { bracketedMayContainIsNotADeclarationRule, outsideBrackets } from "./bracketed-may-contain-is-not-a-declaration.js";
-export { servingsPerContainerUncertaintyIsAWarningRule, type ServingUncertaintySubject } from "./servings-per-container-uncertainty-is-a-warning.js";
-export { drugFactsHeadingAbsenceIsAWarningRule, type DrugFactsHeadingAbsenceSubject } from "./drug-facts-heading-absence-is-a-warning.js";
+export {
+  bracketedMayContainIsNotADeclarationRule,
+  outsideBrackets,
+} from "./bracketed-may-contain-is-not-a-declaration.js";
+export {
+  servingsPerContainerUncertaintyIsAWarningRule,
+  type ServingUncertaintySubject,
+} from "./servings-per-container-uncertainty-is-a-warning.js";
+export {
+  drugFactsHeadingAbsenceIsAWarningRule,
+  type DrugFactsHeadingAbsenceSubject,
+} from "./drug-facts-heading-absence-is-a-warning.js";
 
 /** Every rule in the table, by kind; the table test requires examples for each ID. */
 export const labelRuleTable = {
@@ -30,7 +52,7 @@ export const labelRuleTable = {
   ingredientItems: [ingredientNotOnlyParenthesisRule],
   cells: [emptyCellRule],
   dailyValueCells: [dailyValueOnlyRowRule],
-  formulas: [ingredientListNotAFormulaRule],
+  formulas: [ingredientListNotAFormulaRule, undosedIngredientParagraphRule],
   ingredientRoles: [bracketedMayContainIsNotADeclarationRule],
   servingUncertainty: [servingsPerContainerUncertaintyIsAWarningRule],
   drugFactsHeadingAbsence: [drugFactsHeadingAbsenceIsAWarningRule],
