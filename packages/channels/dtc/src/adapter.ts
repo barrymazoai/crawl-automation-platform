@@ -104,9 +104,15 @@ export const DTC_NON_SUPPLEMENT_CATEGORIES: readonly string[] = [
   // lovewellness.com 2026-10-21: product-scoped collection names in its inline analytics item.
   "Skincare for Down There™",
   "Sprays & Cleansers",
-  // womaness.com 2026-10-21: exact Shopify product types (Daily V Soothe; Gold Vibes in page analytics).
+  // womaness.com 2026-10-21: exact Shopify product types (Daily V Soothe; Gold Vibes in page analytics; Overnight
+  // Magic / Clean Slate "Face Cream", Fountain of Glow "Vitamin C Serum", Let's Neck "Neck and Decollete cream",
+  // Eye Opener "Eye Cream > Smoothing and Brightening > Hydrating").
   "Vaginal Moisturizer",
   "Vibrator",
+  "Face Cream",
+  "Vitamin C Serum",
+  "Neck and Decollete cream",
+  "Eye Cream > Smoothing and Brightening > Hydrating",
 ];
 
 /** One registry entry for all configured DTC sites. BrowserPages/Ego is the only capture path. */
