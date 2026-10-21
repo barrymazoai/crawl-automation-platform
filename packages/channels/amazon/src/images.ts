@@ -9,14 +9,11 @@ export const AMAZON_FILE_ORIGINS = [
   "https://images.amazon.com",
 ] as const;
 
-const GallerySchema = z
-  .array(
-    z.object({
-      hiRes: z.string().nullable().optional(),
-      large: z.string().nullable().optional(),
-    }),
-  )
-  .max(100);
+const GallerySchema = z.array(z.unknown()).max(100);
+const GalleryImageSchema = z.object({
+  hiRes: z.string().nullable().optional(),
+  large: z.string().nullable().optional(),
+});
 
 function imageUrl(raw: string | null | undefined): string | null {
   const url = raw ? URL.parse(raw) : null;
@@ -35,9 +32,16 @@ function scriptedImages(data: ScriptData): string[] {
   return data.galleries.flatMap((raw) => {
     const gallery = GallerySchema.safeParse(raw);
     return gallery.success
-      ? gallery.data.map((item) => imageUrl(item.hiRes) ?? imageUrl(item.large)).filter(Boolean)
+      ? gallery.data.flatMap((rawItem) => {
+          const item = GalleryImageSchema.safeParse(rawItem);
+          if (!item.success) {
+            return [];
+          }
+          const url = imageUrl(item.data.hiRes) ?? imageUrl(item.data.large);
+          return url ? [url] : [];
+        })
       : [];
-  }) as string[];
+  });
 }
 
 /**
