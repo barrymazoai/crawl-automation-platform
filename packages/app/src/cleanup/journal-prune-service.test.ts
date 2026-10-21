@@ -1,7 +1,7 @@
 import { Writable } from "node:stream";
 import { createLogger, type JournalPruneReport } from "@crawl-automation/platform";
 import { describe, expect, it, vi } from "vitest";
-import { JournalPruneService, untilNextHour } from "./journal-prune-service.js";
+import { JournalPruneService, untilNextTick } from "./journal-prune-service.js";
 
 const log = createLogger({
   name: "journal-prune-test",
@@ -13,7 +13,7 @@ const report = (removeFiles: boolean) => ({ removeFiles, removed: 3 }) as Journa
 describe("JournalPruneService", () => {
   it("previews by default and keeps the last result", async () => {
     const prune = vi.fn(async (removeFiles: boolean) => report(removeFiles));
-    const service = new JournalPruneService({ prune, log, dailyAtUtcHour: null });
+    const service = new JournalPruneService({ prune, log, intervalMs: null });
 
     expect(service.start({}).running).toMatchObject({ removeFiles: false });
     await vi.waitFor(() => expect(service.status().running).toBeNull());
@@ -27,7 +27,7 @@ describe("JournalPruneService", () => {
     const prune = vi.fn(
       () => new Promise<JournalPruneReport>((_resolve, reject) => (fail = reject)),
     );
-    const service = new JournalPruneService({ prune, log, dailyAtUtcHour: null });
+    const service = new JournalPruneService({ prune, log, intervalMs: null });
 
     service.start({ dryRun: false });
     expect(() => service.start({})).toThrow(
@@ -41,9 +41,17 @@ describe("JournalPruneService", () => {
   });
 });
 
-describe("untilNextHour", () => {
-  it("waits for the hour today, or tomorrow once it has passed", () => {
-    expect(untilNextHour(new Date("2026-10-19T18:30:00Z"), 20)).toBe(90 * 60_000);
-    expect(untilNextHour(new Date("2026-10-19T20:00:00Z"), 20)).toBe(24 * 3_600_000);
+describe("untilNextTick", () => {
+  const HOUR = 3_600_000;
+
+  it("waits for the next full hour, or a whole hour when on the dot", () => {
+    expect(untilNextTick(new Date("2026-10-21T03:30:00Z"), HOUR)).toBe(30 * 60_000);
+    expect(untilNextTick(new Date("2026-10-21T03:59:59.999Z"), HOUR)).toBe(1);
+    expect(untilNextTick(new Date("2026-10-21T04:00:00Z"), HOUR)).toBe(HOUR);
+  });
+
+  it("aligns other intervals to midnight UTC", () => {
+    expect(untilNextTick(new Date("2026-10-21T03:10:00Z"), 30 * 60_000)).toBe(20 * 60_000);
+    expect(untilNextTick(new Date("2026-10-21T20:00:00Z"), 24 * HOUR)).toBe(4 * HOUR);
   });
 });

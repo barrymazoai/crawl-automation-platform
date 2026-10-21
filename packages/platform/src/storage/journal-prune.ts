@@ -12,6 +12,9 @@ export type { JournalPruneReport } from "./journal-prune-report.js";
  * Owner 2026-10-19: the original product pages (`OriginalHtmlArchive`, `v3/<channel>-html/<operation>/…`) are read
  * from R2 only, so this machine's copies go once R2 holds the same bytes. Other journal folders are read locally
  * (plans, label files, claims) and are never pruned.
+ *
+ * Owner 2026-10-21: the prune runs every hour with a short minimum age, so a product folder is only touched when
+ * nothing in it (staging files included) was written within that age; one that is still being written stays whole.
  */
 export const JOURNAL_HTML_PREFIXES = [
   "v3/amazon-html",
@@ -33,7 +36,7 @@ export interface JournalPruneInput {
   /** The worker's `storage.journalRoot`. */
   root: string;
   prefixes: readonly string[];
-  /** Files younger than this stay, whatever R2 holds. */
+  /** A folder with any write younger than this stays whole, whatever R2 holds. */
   minAgeMs: number;
   /** False previews: everything is checked and counted, nothing is removed. */
   removeFiles: boolean;
@@ -41,7 +44,8 @@ export interface JournalPruneInput {
 
 /**
  * Removes local journal copies whose R2 object has the same key, size and MD5 (the ETag of a single-part upload).
- * A file missing from R2 or different there stays and is reported; a failed folder is reported and skipped.
+ * A folder written within `minAgeMs` is left whole; a file missing from R2 or different there stays and is
+ * reported; a failed folder is reported and skipped.
  */
 export async function pruneJournal(
   input: JournalPruneInput,
@@ -106,6 +110,7 @@ interface LocalFile {
   name: string;
   size: number;
   ino: number;
+  mtimeMs: number;
 }
 
 async function pruneFolder(
@@ -116,11 +121,20 @@ async function pruneFolder(
   const entries = await readdir(folder.path, { withFileTypes: true });
   const files = entries.filter((entry) => entry.isFile() && !entry.name.startsWith(STAGING));
   const staging = entries.filter((entry) => entry.isFile() && entry.name.startsWith(STAGING));
-  const old = await oldFiles(folder, files, at.report);
-  if (old.length === 0) {
+  const stats = await statFiles(folder, [...files, ...staging]);
+  at.report.files += files.length;
+  if (stats.some((stat) => stat.mtimeMs > folder.cutoff)) {
+    // Written within the minimum age, or still being written: nothing in it is checked or removed.
+    at.report.activeFolders += 1;
+    at.report.young += files.length;
+    at.report.stagingKept += staging.length;
     return;
   }
-  const removed = await removeSaved(folder, old, { ...at, remote });
+  if (files.length === 0) {
+    at.report.stagingKept += staging.length;
+    return;
+  }
+  const removed = await removeSaved(folder, stats.slice(0, files.length), { ...at, remote });
   const stagingRemoved = await removeStaging(folder, staging, removed);
   at.report.stagingRemoved += stagingRemoved;
   at.report.stagingKept += staging.length - stagingRemoved;
@@ -135,28 +149,19 @@ async function pruneFolder(
   }
 }
 
-async function oldFiles(
-  folder: PruneFolder,
-  files: { name: string }[],
-  report: JournalPruneReport,
-): Promise<LocalFile[]> {
-  const old = [];
+async function statFiles(folder: Folder, files: { name: string }[]): Promise<LocalFile[]> {
+  const stats = [];
   for (const { name } of files) {
     const stat = await lstat(join(folder.path, name));
-    if (stat.mtimeMs > folder.cutoff) {
-      report.young += 1;
-    } else {
-      old.push({ name, size: stat.size, ino: stat.ino });
-    }
+    stats.push({ name, size: stat.size, ino: stat.ino, mtimeMs: stat.mtimeMs });
   }
-  report.files += files.length;
-  return old;
+  return stats;
 }
 
 /** The inodes of the copies R2 holds byte for byte, removed unless this is a preview. */
 async function removeSaved(
   folder: PruneFolder,
-  old: LocalFile[],
+  files: LocalFile[],
   at: { report: JournalPruneReport; signal: AbortSignal; remote: JournalRemote },
 ): Promise<Set<number>> {
   const { report, signal, remote } = at;
@@ -165,7 +170,7 @@ async function removeSaved(
     listed.set(object.key, object);
   }
   const removed = new Set<number>();
-  for (const file of old) {
+  for (const file of files) {
     const key = `${folder.key}/${file.name}`;
     const path = join(folder.path, file.name);
     const saved = listed.get(key);
