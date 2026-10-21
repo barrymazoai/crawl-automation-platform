@@ -30,7 +30,7 @@ export function exclusionCodes(judged: Judged): string[] {
       !(
         DRUG_POLICIES.includes(judged.policyVersion) &&
         judged.candidate.formula?.drugFacts &&
-        drugExclusionAllowed(exclusion, judged.text)
+        drugExclusionAllowed(exclusion, judged.text, judged.candidate)
       ),
   );
   return uncertain ? [labelValidationErrors.code("LABEL.COVERAGE_UNCERTAIN")] : [];

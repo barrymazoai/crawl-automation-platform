@@ -31,19 +31,11 @@ export function ingredientCodes(candidate: Candidate, text: string): string[] {
     return [];
   }
   const codes = new Set<string>();
-  const lineStart = text.lastIndexOf("\n", other.heading.start - 1) + 1;
-  const before = text.slice(lineStart, other.heading.start).trim();
-  if (
-    !ingredientHeadingAllowed(other) ||
-    (before &&
-      !clauseEnd.test(before) &&
-      !/\band\s+the$/i.test(before) &&
-      !/(?:daily\s+value(?:\s*\(dv\))?\s+not\s+established|\d+(?:\.\d+)?\s*mg\s+per\s+tablet)$/i.test(
-        before,
-      ) &&
-      !(!!candidate.formula?.drugFacts && /^inactive\s+ingredients?/i.test(other.heading.text)))
-  ) {
+  if (!ingredientHeadingAllowed(other) || !ingredientHeadingPositionAllowed(candidate, text)) {
     codes.add(labelValidationErrors.code("LABEL.INGREDIENT_HEADING_INVALID"));
+  }
+  if (ingredientItemsAreRows(other)) {
+    codes.add(labelValidationErrors.code("LABEL.INGREDIENT_ITEMS_ARE_ROWS"));
   }
   other.items.forEach((item, index) => {
     if (outsideSection(other, item, text)) {
@@ -56,16 +48,65 @@ export function ingredientCodes(candidate: Candidate, text: string): string[] {
   return [...codes];
 }
 
+function ingredientHeadingPositionAllowed(candidate: Candidate, text: string): boolean {
+  const heading = candidate.otherIngredients?.heading;
+  if (!heading) {
+    return true;
+  }
+  const lineStart = text.lastIndexOf("\n", heading.start - 1) + 1;
+  const before = text.slice(lineStart, heading.start).trim();
+  if (!before || clauseEnd.test(before) || /\band\s+the$/i.test(before)) {
+    return true;
+  }
+  if (
+    /(?:daily\s+value(?:\s*\(dv\))?\s+not\s+established|\d+(?:\.\d+)?\s*mg\s+per\s+tablet)$/i.test(
+      before,
+    )
+  ) {
+    return true;
+  }
+  return (
+    /^inactive(?:\s+ingredients?(?:\(s\))?)?\s*:?$/i.test(heading.text.trim()) &&
+    (!!candidate.formula?.drugFacts ||
+      adjacentIngredientsPrefix(candidate, text, { headingStart: heading.start, before }))
+  );
+}
+
+function adjacentIngredientsPrefix(
+  candidate: Candidate,
+  text: string,
+  source: { headingStart: number; before: string },
+): boolean {
+  return (
+    /^Ingredients$/i.test(source.before) &&
+    candidate.exclusions.some(
+      (exclusion) =>
+        exclusion.reason === "heading" &&
+        /^Ingredients$/i.test(exclusion.quote.text.trim()) &&
+        exclusion.quote.end <= source.headingStart &&
+        /^\s*$/.test(text.slice(exclusion.quote.end, source.headingStart)),
+    )
+  );
+}
+
 /** Local aliases are limited to headings whose following citations form an ingredient list. */
 export function ingredientHeadingAllowed(other: Ingredients): boolean {
   const heading = other.heading.text.trim();
   return (
     isIngredientHeading(heading) ||
-    /^inactive\s*(?::|$)/i.test(heading) ||
-    (heading.toLowerCase() === "contains" && other.items.length > 1) ||
+    /^inactive(?:\s+ingredients?(?:\(s\))?)?\s*:?$/i.test(heading) ||
+    (/^contains:?$/i.test(heading) && other.items.length > 1) ||
     /^other\s+ingredients\s*:\s*may\s+contain\s+any\s+or\s+all\s+of\s+the\s+following\s*:?$/i.test(
       heading,
     )
+  );
+}
+
+/** Multiple cited dose-bearing entries are formula rows, not an ingredient declaration. */
+export function ingredientItemsAreRows(other: Ingredients): boolean {
+  return (
+    other.items.filter((item) => /\b\d+(?:[.,]\d+)?\s*(?:mcg|mg|g|iu)\b/i.test(item.text)).length >=
+    2
   );
 }
 

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { simpleLabel, decodeSimple } from "../../testing/simple-label.js";
+import { defined } from "../../testing/defined.js";
 import { completeIngredientItem, ingredientGap } from "./ingredient-boundaries.js";
 
 describe("anchored ingredient boundaries", () => {
@@ -32,6 +33,36 @@ describe("anchored ingredient boundaries", () => {
     ]) {
       expect(decodeSimple(simpleLabel({ ingredients })).codes).toEqual([]);
     }
+  });
+  it("accepts six cited electrolyte ingredients separated only by comma and space", () => {
+    const items = ["sodium", "potassium", "magnesium", "calcium", "chloride", "phosporous"];
+    const fixture = simpleLabel({ items, ingredients: items.join(", ") });
+    fixture.lines[6] = `Ingredients ${items.join(", ")}`;
+    defined(fixture.wire.otherIngredients).heading.text = "Ingredients";
+    expect(decodeSimple(fixture).codes).toEqual([]);
+  });
+  it("keeps a genuine boundary error after a heading is corrected", () => {
+    const fixture = simpleLabel({
+      ingredients: "sodium, potassium, magnesium",
+      items: ["sodium", "magnesium"],
+    });
+    fixture.lines[6] = "Ingredients sodium, potassium, magnesium";
+    defined(fixture.wire.otherIngredients).heading.text = "Ingredients";
+    expect(decodeSimple(fixture).codes).toContain("LABEL.INGREDIENT_BOUNDARY");
+  });
+  it("identifies two dose-bearing formula rows placed under Contains", () => {
+    const items = ["Vitamin C (as Ascorbic Acid) 2.35 g", "Zinc 15 mg"];
+    const fixture = simpleLabel({ items, ingredients: items.join(", ") });
+    fixture.lines.fill("", 0, 6);
+    fixture.lines[6] = `Contains: ${items.join(", ")}`;
+    fixture.wire.formula = null;
+    defined(fixture.wire.otherIngredients).heading.text = "Contains:";
+    const result = decodeSimple(fixture);
+    expect(result.codes).toContain("LABEL.INGREDIENT_ITEMS_ARE_ROWS");
+    expect(result.codes).not.toContain("LABEL.COMPLETENESS_CONFLICT");
+    expect(result.codes).toEqual(["LABEL.INGREDIENT_ITEMS_ARE_ROWS"]);
+    expect(result.candidate.formula).toBeNull();
+    expect(result.status).toBe("review");
   });
   it("keeps a source's mismatched bracket when neighboring cited items delimit it", () => {
     expect(

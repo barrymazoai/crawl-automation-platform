@@ -55,6 +55,10 @@ export const labelValidationErrors = defineErrors({
     category: "VALIDATION",
     message: "Ingredient heading invalid.",
   },
+  "LABEL.INGREDIENT_ITEMS_ARE_ROWS": {
+    category: "VALIDATION",
+    message: "Dose-bearing formula rows were placed in the ingredient list.",
+  },
   "LABEL.INGREDIENT_ROLE_INVALID": { category: "VALIDATION", message: "Ingredient role invalid." },
   "LABEL.OTHER_INGREDIENTS_CONFLICT": {
     category: "VALIDATION",

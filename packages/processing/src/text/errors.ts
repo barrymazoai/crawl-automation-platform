@@ -39,6 +39,9 @@ export const textErrors = defineErrors({
   "TEXT.LABEL_INGREDIENT_HEADING_INVALID": processing(
     "The ingredient heading is not a real heading.",
   ),
+  "TEXT.LABEL_INGREDIENT_ITEMS_ARE_ROWS": processing(
+    "Dose-bearing formula rows were placed in the ingredient list.",
+  ),
   "TEXT.LABEL_INGREDIENT_ROLE_INVALID": processing("An ingredient item is outside its section."),
   "TEXT.LABEL_INGREDIENTS_INCOMPLETE": processing("The ingredient list is incomplete."),
   "TEXT.LABEL_PARENT_INVALID": processing("A blend component points to a wrong parent."),

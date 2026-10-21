@@ -22,6 +22,64 @@ describe("Drug Facts text protocol", () => {
     ]);
   });
 
+  it.each(["inactive", "Inactive ingredient:", "Inactive ingredients", "Inactive ingredient(s):"])(
+    "accepts the printed Drug Facts inactive heading %s",
+    (heading) => {
+      const wire = drugWire();
+      defined(wire.otherIngredients).heading.text = heading;
+      const lines = drugLines.map((line, index) =>
+        index === 10 ? line.replace("Inactive Ingredients:", heading) : line,
+      );
+      const result = decodeDrug(wire, lines);
+      expect(result.codes).toEqual([]);
+      expect(result.status).toBe("candidate");
+    },
+  );
+
+  it.each(["Active ingredient(s):", "active ingredients", "Active:"])(
+    "accepts the printed Drug Facts active heading %s",
+    (heading) => {
+      const wire = drugWire();
+      defined(defined(defined(wire.formula).columns[0]).heading).text = heading;
+      const lines = drugLines.map((line, index) => (index === 1 ? heading : line));
+      expect(decodeDrug(wire, lines).codes).toEqual([]);
+    },
+  );
+
+  it("accepts a cited Purposes column, Drug classification header and an active-row connector", () => {
+    const wire = drugWire();
+    const lines = [...drugLines];
+    lines[2] = "Purposes antitussive;cough suppressant;/ oral anesthetic";
+    lines[3] = "Arnica montana and 30C HPUS Relieves muscle pain";
+    lines.push("Drug classification:");
+    defined(wire.exclusions[0]).quote.text = defined(lines[2]);
+    wire.exclusions.push(
+      { quote: { fromLine: 4, toLine: 4, text: "and" }, reason: "noise" },
+      { quote: { fromLine: 13, toLine: 13, text: "Drug classification:" }, reason: "metadata" },
+    );
+    expect(decodeDrug(wire, lines).codes).toEqual([]);
+  });
+
+  it("accepts an excluded Ingredients heading immediately before Inactive Ingredients", () => {
+    const wire = drugWire();
+    const lines = drugLines.map((line, index) =>
+      index === 10 ? "Ingredients Inactive Ingredients: sucrose" : line,
+    );
+    defined(wire.otherIngredients).items = [{ fromLine: 11, toLine: 11, text: "sucrose" }];
+    wire.exclusions.push({
+      quote: { fromLine: 11, toLine: 11, text: "Ingredients" },
+      reason: "heading",
+    });
+    expect(decodeDrug(wire, lines).codes).toEqual([]);
+    wire.formula = null;
+    const missingActive = decodeDrug(wire, lines);
+    expect(missingActive.codes).not.toContain("LABEL.INGREDIENT_HEADING_INVALID");
+    expect(missingActive.codes).toContain("LABEL.COMPLETENESS_CONFLICT");
+    wire.formula = drugWire().formula;
+    lines[10] = "Ingredients unrelated words Inactive Ingredients: sucrose";
+    expect(decodeDrug(wire, lines).codes).toContain("LABEL.INGREDIENT_ROLE_INVALID");
+  });
+
   it.each(["1X HPUS 7%", "200CK HPUS 0.85 g", "6C HPUS (0.28 mg)"])(
     "keeps strength %s verbatim",
     (strength) => {

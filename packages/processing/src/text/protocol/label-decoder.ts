@@ -13,7 +13,8 @@ import { coversEveryPrintedCharacter } from "./coverage.js";
 import { evidenceLines, type Quote } from "./evidence-lines.js";
 import { exclusionCodes } from "./label-exclusions.js";
 import { equivalentFootnoteAllowed, labelCoverage } from "./label-coverage.js";
-import { ingredientCodes, ingredientHeadingAllowed, rowOrderCodes } from "./label-structure.js";
+import { ingredientCodes, rowOrderCodes } from "./label-structure.js";
+import { textAssessmentCodes } from "./label-assessment.js";
 import { labelLimitErrors } from "./label-limits.js";
 import { resolveAnchor, type Anchor, type AnchorContext } from "./resolve-anchor.js";
 import { isWithinText, splitsCharacter } from "./text-range.js";
@@ -75,12 +76,8 @@ function validateCandidate(input: {
   const { candidate, text, range, policyVersion, modelExclusions, placed } = input;
   const assessment = assessLabelCandidate(candidate);
   const structureCodes = ingredientCodes(candidate, text);
-  const localHeading =
-    candidate.otherIngredients && ingredientHeadingAllowed(candidate.otherIngredients);
   const codes = new Set([
-    ...assessment.codes.filter(
-      (code) => code !== "LABEL.INGREDIENT_HEADING_INVALID" || !localHeading,
-    ),
+    ...textAssessmentCodes(candidate, assessment.codes),
     ...rowOrderCodes(candidate),
     ...drugStructureCodes(candidate, text, range),
     ...structureCodes,
@@ -96,7 +93,7 @@ function validateCandidate(input: {
     codes.add(labelValidationErrors.code("LABEL.EXTRACTION_INCOMPLETE"));
   }
   const warnings = candidateWarnings(candidate, text, assessment.warnings);
-  const status = candidateStatus({ candidate, assessment, codes, localHeading: !!localHeading });
+  const status = candidateStatus({ candidate, assessment, codes });
   return { candidate, status, codes: [...codes], warnings };
 }
 
@@ -115,18 +112,12 @@ function candidateStatus(input: {
   candidate: Candidate;
   assessment: ReturnType<typeof assessLabelCandidate>;
   codes: Set<string>;
-  localHeading: boolean;
 }): DecodedLabel["status"] {
-  const { candidate, assessment, codes, localHeading } = input;
+  const { candidate, assessment, codes } = input;
   if (codes.size) {
     return "review";
   }
-  const acceptedHeadingOnly =
-    assessment.status === "review" &&
-    assessment.codes.length === 1 &&
-    assessment.codes[0] === "LABEL.INGREDIENT_HEADING_INVALID" &&
-    localHeading;
-  if (acceptedHeadingOnly) {
+  if (assessment.status === "review") {
     return candidate.formula ? "candidate" : "partial";
   }
   return assessment.status;
