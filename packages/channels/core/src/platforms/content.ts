@@ -7,7 +7,7 @@ import type { PlatformContext } from "./types.js";
 import { allowedContent, PRODUCT_CONTENT, type ContentIdentity } from "./content-policy.js";
 import { ownContentHtml, type ProductContentScope } from "./content-scope.js";
 import { parseSrcset } from "srcset";
-import { observedImageSizes } from "./observed-images.js";
+import { observedImageSizes, shopifyThemeAsset } from "./observed-images.js";
 
 const SECTIONS =
   'table, details, [id*="facts"], [class*="facts"], [id*="ingredients"], [class*="accordion"], [class*="description"]';
@@ -70,7 +70,8 @@ export function imageUrls(values: readonly string[], context: PlatformContext): 
         url.protocol === "https:" &&
         !url.username &&
         !url.password &&
-        context.imageOrigins.includes(url.origin),
+        context.imageOrigins.includes(url.origin) &&
+        !shopifyThemeAsset(url),
     )
     .map((url) => url.href);
   const result = observedImageSizes(urls);
