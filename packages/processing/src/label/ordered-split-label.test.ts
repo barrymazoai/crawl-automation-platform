@@ -5,6 +5,7 @@ import {
   croppedPanel,
   factsPanel,
   ingredientsPanel,
+  reviewedFactsPanel,
   splitReview,
 } from "../testing/split-label-fixture.js";
 import { defined } from "../testing/defined.js";
@@ -16,22 +17,23 @@ import { OrderedProgressSchema } from "./ordered-model.js";
 import { orderedProgressKey } from "./ordered-diagnostics.js";
 
 async function fixture(conflict = false) {
+  const first = conflict ? croppedPanel() : reviewedFactsPanel();
   const last = ingredientsPanel();
   if (conflict && last.otherIngredients) {
     last.otherIngredients.items[0] = { text: "Soy", evidence: "Soy" };
   }
   const test = await orderedFixture({
     order: "text-first",
-    candidates: [factsPanel(), croppedPanel(), factsPanel(), last],
+    candidates: [factsPanel(), first, factsPanel(), last],
   });
   const records = new Map<string, ReviewRecord>();
   for (const id of ["a-text", "source-1"]) {
-    const review = splitReview(defined(test.tasks.get(id)));
+    const review = splitReview(defined(test.tasks.get(id)), id === "source-1" ? first : undefined);
     records.set(review.reviewId, review);
   }
   vi.mocked(test.inspection.review).mockImplementation(async (id) => records.get(id) ?? null);
   test.inspection.readReviewedImage = vi.fn(async ({ task, review }) => ({
-    candidate: croppedPanel(),
+    candidate: first,
     record: LabelReviewedImageRecordSchema.parse({
       codec: "vision-reviewed/1",
       ...task,
@@ -174,4 +176,138 @@ it("stops unknown execution and refuses a missing reviewed original without call
   await expect(test.selection.inspect(test.request, AbortSignal.timeout(5_000))).rejects.toThrow(
     "missing original",
   );
+});
+
+it("continues from a reviewed Facts image to an Ingredients image and keeps each printed source", async () => {
+  const facts = reviewedFactsPanel();
+  const test = await orderedFixture({
+    pageHasLabelSection: false,
+    candidates: [facts, ingredientsPanel()],
+  });
+  const source = defined(test.tasks.get("source-0"));
+  const review = splitReview(source, facts);
+  vi.mocked(test.inspection.review).mockResolvedValue(review);
+  test.inspection.readReviewedImage = vi.fn(async ({ task }) => ({
+    candidate: facts,
+    record: LabelReviewedImageRecordSchema.parse({
+      codec: "vision-reviewed/1",
+      ...task,
+      review,
+      result: defined(test.entries.get("source-0")).record.result,
+    }),
+  }));
+  const input = { ...test.input, evidencePolicy: "label-image-first/7" as const };
+  const first = OrderedProgressSchema.parse({
+    input,
+    states: [{ id: "source-0", status: "review", reviewId: review.reviewId }],
+  });
+  const signal = AbortSignal.timeout(5_000);
+  const pending = await test.selection.inspect(first, signal);
+  expect(pending).toMatchObject({ complete: false, terminal: false });
+  const firstReport = vi.mocked(test.plans.publish).mock.lastCall?.[1];
+  expect(firstReport).toMatchObject({
+    sourceDiagnostics: expect.arrayContaining([
+      expect.objectContaining({ sourceId: "source-0", reason: "partial: formula only" }),
+    ]),
+  });
+  Object.assign(test.plans, { read: vi.fn(async () => Buffer.from(JSON.stringify(firstReport))) });
+  const request = OrderedProgressSchema.parse({
+    input,
+    states: [...first.states, { id: "source-1", status: "registered" }],
+  });
+  const ready = await test.selection.inspect(request, signal);
+  expect(ready).toMatchObject({ complete: true, terminal: false });
+  expect(ready).not.toHaveProperty("reason");
+  const report = vi.mocked(test.plans.publish).mock.lastCall?.[1];
+  expect(report).toMatchObject({
+    codes: [],
+    sourceDiagnostics: expect.arrayContaining([
+      expect.objectContaining({ sourceId: "source-0", reason: "partial: formula only" }),
+      expect.objectContaining({ sourceId: "source-1", reason: "partial: ingredients only" }),
+    ]),
+  });
+  const evidence = await orderedEvidence(
+    test.plans as unknown as LabelPlans,
+    { inspection: test.inspection, visionFingerprint },
+    { request, signal },
+  );
+  const result = mergeLabelProduct(
+    {
+      operationId: input.operationId,
+      observation: input.owner,
+      evidencePolicy: input.evidencePolicy,
+      sources: evidence.sources,
+    },
+    evidence,
+  );
+  expect(result.status).toBe("ready");
+  expect(result.codes).toEqual([]);
+  expect(result.formula?.servingSize?.sourceId).toBe("source-0");
+  expect(result.otherIngredients?.heading.sourceId).toBe("source-1");
+  expect(result.warnings).toContainEqual({
+    id: "source-1",
+    code: "LABEL_PRODUCT.INGREDIENTS_FROM_OTHER_IMAGE",
+  });
+  expect(test.inspection.image).not.toHaveBeenCalled();
+});
+
+it("reports the Facts source when every attempted image still lacks Other Ingredients", async () => {
+  const facts = reviewedFactsPanel();
+  const test = await orderedFixture({
+    pageHasLabelSection: false,
+    candidates: [facts, factsPanel()],
+  });
+  const source = defined(test.tasks.get("source-0"));
+  const review = splitReview(source, facts);
+  vi.mocked(test.inspection.review).mockResolvedValue(review);
+  test.inspection.readReviewedImage = vi.fn(async ({ task }) => ({
+    candidate: facts,
+    record: LabelReviewedImageRecordSchema.parse({
+      codec: "vision-reviewed/1",
+      ...task,
+      review,
+      result: defined(test.entries.get("source-0")).record.result,
+    }),
+  }));
+  const request = OrderedProgressSchema.parse({
+    input: { ...test.input, evidencePolicy: "label-image-first/7" },
+    states: [
+      { id: "source-0", status: "review", reviewId: review.reviewId },
+      { id: "source-1", status: "registered" },
+    ],
+  });
+  const result = await test.selection.inspect(request, AbortSignal.timeout(5_000));
+  expect(result).toMatchObject({
+    complete: false,
+    terminal: false,
+    reason: { sourceId: "source-0", code: "LABEL.INGREDIENTS_INCOMPLETE" },
+  });
+  expect(vi.mocked(test.plans.publish).mock.lastCall?.[1]).toMatchObject({
+    codes: expect.arrayContaining(["LABEL.INGREDIENTS_INCOMPLETE"]),
+    sourceDiagnostics: expect.arrayContaining([
+      expect.objectContaining({ sourceId: "source-0", reason: "partial: formula only" }),
+    ]),
+  });
+});
+
+it("also combines Ingredients first and Facts second", async () => {
+  const test = await orderedFixture({
+    pageHasLabelSection: false,
+    candidates: [ingredientsPanel(), factsPanel()],
+  });
+  const request = OrderedProgressSchema.parse({
+    input: test.input,
+    states: [
+      { id: "source-0", status: "registered" },
+      { id: "source-1", status: "registered" },
+    ],
+  });
+  const result = await test.selection.inspect(request, AbortSignal.timeout(5_000));
+  expect(result).toMatchObject({ complete: true, terminal: false });
+  expect(vi.mocked(test.plans.publish).mock.lastCall?.[1]).toMatchObject({
+    sourceDiagnostics: expect.arrayContaining([
+      expect.objectContaining({ sourceId: "source-0", reason: "partial: ingredients only" }),
+      expect.objectContaining({ sourceId: "source-1", reason: "partial: formula only" }),
+    ]),
+  });
 });

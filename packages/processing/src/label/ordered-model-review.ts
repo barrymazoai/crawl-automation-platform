@@ -1,4 +1,5 @@
 import { imageReviewWithoutLabel } from "../assembly/source-without-label.js";
+import { recordPartialSection } from "./ordered-source-state.js";
 import type { DiagnosedOrderedEvidence } from "./ordered-source-outcome.js";
 
 type Failure = DiagnosedOrderedEvidence["failures"][number];
@@ -19,6 +20,7 @@ export function recordModelReview(
   evidence.failures.push(failure);
   evidence.terminal ||= !failure.verifiedExecuted || blocksFallback(failure.code, "executed");
   diagnoseNoLabel(evidence, failure, sourceId);
+  recordPartialSection(evidence, sourceId, failure.candidate);
   evidence.reasons.push({
     progress: failure.candidate?.formula || failure.hasFormula ? 4 : 3,
     failure: {

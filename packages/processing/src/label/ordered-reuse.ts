@@ -39,7 +39,7 @@ export function previousVerdicts(
 
 const REUSABLE_REASONS = new Set(["keyword_screen_missed", "no_text"]);
 
-/** An image already verified as unmatched or as a reviewed front panel never enters the label. */
+/** Only images without label sections can skip a read. Partial panels are reverified from retained evidence. */
 function reusableImage(at: {
   source: SavedEvidenceSource;
   state: OrderedState;

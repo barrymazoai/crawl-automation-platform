@@ -8,16 +8,52 @@ import {
   croppedPanel,
   factsPanel,
   ingredientsPanel,
+  reviewedFactsPanel,
   splitReview,
 } from "../testing/split-label-fixture.js";
 import { defined } from "../testing/defined.js";
 import { textEntry } from "../testing/label-sources.js";
 import { mergeLabelProduct } from "./label-merge.js";
 
+it("keeps a Facts image with unreadable content in Review despite a separate Ingredients image", () => {
+  const facts = reviewedFactsPanel();
+  facts.issues.push({ code: "UNREADABLE", detail: "Part of the panel is unreadable." });
+  const test = assemblySetup([facts, ingredientsPanel()]);
+  test.join.manifest.evidencePolicy = "label-image-first/7";
+  const result = mergeLabelProduct(test.join.manifest, { entries: [...test.entries.values()] });
+  expect(result.status).toBe("review");
+  expect(result.warnings).not.toContainEqual({
+    id: "source-1",
+    code: "LABEL_PRODUCT.INGREDIENTS_FROM_OTHER_IMAGE",
+  });
+});
+
+it("does not splice a second image when the Facts image already has its own ingredients", () => {
+  const facts = croppedPanel();
+  const test = assemblySetup([facts, ingredientsPanel()]);
+  test.join.manifest.evidencePolicy = "label-image-first/7";
+  const result = mergeLabelProduct(test.join.manifest, { entries: [...test.entries.values()] });
+  expect(result.status).toBe("review");
+  expect(result.warnings).not.toContainEqual({
+    id: "source-1",
+    code: "LABEL_PRODUCT.INGREDIENTS_FROM_OTHER_IMAGE",
+  });
+});
+
+it("requires a printed Ingredients heading on the second image", () => {
+  const ingredients = ingredientsPanel();
+  defined(ingredients.otherIngredients).heading.text = "Contains:";
+  const test = assemblySetup([reviewedFactsPanel(), ingredients]);
+  test.join.manifest.evidencePolicy = "label-image-first/6";
+  const result = mergeLabelProduct(test.join.manifest, { entries: [...test.entries.values()] });
+  expect(result.status).toBe("review");
+  expect(result.codes).toContain("LABEL.INGREDIENT_HEADING_INVALID");
+});
+
 it.each([false, true])(
   "collects and cold-reads complementary panels (reviewed facts: %s)",
   async (reviewed) => {
-    const candidate = reviewed ? croppedPanel() : factsPanel();
+    const candidate = reviewed ? reviewedFactsPanel() : factsPanel();
     const test = assemblySetup([candidate, ingredientsPanel()]);
     test.join.manifest.evidencePolicy = "label-image-first/6";
     if (reviewed) {

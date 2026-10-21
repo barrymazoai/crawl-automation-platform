@@ -7,6 +7,11 @@ import {
 import { assemblyErrors } from "../assembly/assembly-errors.js";
 import { imageReviewWithoutLabel } from "../assembly/source-without-label.js";
 import {
+  progressCompletion,
+  progressReport,
+  resolvedPartialFailure,
+} from "./ordered-progress-parts.js";
+import {
   noSourceSummary,
   sourceOutcome,
   type DiagnosedOrderedEvidence,
@@ -25,6 +30,41 @@ export function orderedProgress(
   evidence: DiagnosedOrderedEvidence,
   untried = 0,
 ) {
+  const { withoutLabel, eligible, merged } = mergeProgressEvidence(request, evidence);
+  const outcomes = request.states.map((state) => sourceOutcome(state, evidence));
+  const conflicts = merged?.codes.filter((code) => code.endsWith("_CONFLICT")) ?? [];
+  const ranked = rankedFailures(outcomes, conflicts, withoutLabel);
+  const { complete, ingredientsMissing, formulaSource } = progressCompletion(
+    merged,
+    evidence,
+    untried,
+  );
+  const remaining = complete
+    ? ranked.filter((entry) => !resolvedPartialFailure(entry.failure, evidence))
+    : ranked;
+  const reason = finalReason({
+    ingredientsMissing,
+    formulaSource,
+    untried,
+    policy: request.input.failurePolicy,
+    remaining,
+  });
+  const conflictDetails = conflictLists(conflicts, eligible);
+  return progressReport({
+    complete,
+    terminal: evidence.terminal,
+    reason,
+    failures: remaining.map((entry) => entry.failure),
+    sourceOutcomes: noSourceDiagnostics(request.input.failurePolicy, evidence, reason),
+    conflicts: conflictDetails,
+    outcomes,
+    codes: merged?.codes ?? [],
+    ingredientsMissing,
+    untried,
+  });
+}
+
+function mergeProgressEvidence(request: OrderedProgress, evidence: DiagnosedOrderedEvidence) {
   const withoutLabel = noLabelSources(evidence);
   const eligible = {
     entries: evidence.entries,
@@ -42,20 +82,24 @@ export function orderedProgress(
         eligible,
       )
     : null;
-  const outcomes = request.states.map((state) => sourceOutcome(state, evidence));
-  const conflicts = merged?.codes.filter((code) => code.endsWith("_CONFLICT")) ?? [];
-  const ranked = rankedFailures(outcomes, conflicts, withoutLabel);
-  const reason = primaryOrderedFailure(request.input.failurePolicy, ranked);
-  const conflictDetails = conflictLists(conflicts, eligible);
-  return {
-    complete: !evidence.terminal && completeLabel(merged, untried),
-    terminal: evidence.terminal,
-    ...(reason ? { reason, failures: ranked.map((entry) => entry.failure) } : {}),
-    ...noSourceDiagnostics(request.input.failurePolicy, evidence, reason),
-    ...(conflictDetails ? { conflicts: conflictDetails } : {}),
-    outcomes,
-    codes: merged?.codes ?? [],
-  };
+  return { withoutLabel, eligible, merged };
+}
+
+function finalReason(at: {
+  ingredientsMissing: boolean;
+  formulaSource: NonNullable<DiagnosedOrderedEvidence["sourceDiagnostics"]>[number] | undefined;
+  untried: number;
+  policy: OrderedFailurePolicy | undefined;
+  remaining: ReturnType<typeof rankedFailures>;
+}): SourceFailure | undefined {
+  if (at.ingredientsMissing && at.untried === 0 && at.formulaSource) {
+    return {
+      sourceId: at.formulaSource.sourceId,
+      code: "LABEL.INGREDIENTS_INCOMPLETE",
+      executionFact: "executed",
+    };
+  }
+  return primaryOrderedFailure(at.policy, at.remaining);
 }
 
 /** The lists that disagreed travel with the Review (2026-10-21): 597 conflict Reviews carried none to compare. */
@@ -90,8 +134,8 @@ function noSourceDiagnostics(
   reason: SourceFailure | undefined,
 ) {
   return policy === "source-failure-first/2" && reason?.code === "CHANNEL.LABEL_NO_SOURCE"
-    ? { sourceOutcomes: noSourceSummary(evidence) }
-    : {};
+    ? noSourceSummary(evidence)
+    : undefined;
 }
 
 function rankedFailures(
@@ -119,11 +163,6 @@ function rankedFailures(
       },
     ];
   });
-}
-
-/** Ready, and either with a formula or with every source tried. */
-function completeLabel(merged: ReturnType<typeof mergeLabelProduct> | null, untried: number) {
-  return merged?.status === "ready" && ((merged.parts?.formulaFound ?? true) || untried === 0);
 }
 
 /** /1 breaks equal-progress ties; /2 always ranks a real failure above an absent label. */

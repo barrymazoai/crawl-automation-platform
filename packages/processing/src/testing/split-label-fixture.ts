@@ -11,6 +11,14 @@ export function factsPanel(): LabelImageCandidate {
   return { ...simpleImage(), otherIngredients: null, ingredientsComplete: false };
 }
 
+/** Shape retained by real VISION.LABEL_INGREDIENTS_INCOMPLETE answers. */
+export function reviewedFactsPanel(): LabelImageCandidate {
+  return {
+    ...factsPanel(),
+    issues: [{ code: "INGREDIENTS_MISSING", detail: "Other Ingredients section is not visible." }],
+  };
+}
+
 export function ingredientsPanel(): LabelImageCandidate {
   return { ...simpleImage(), formula: null, formulaComplete: false };
 }

@@ -1,4 +1,8 @@
-import { readSourceState, sourceStateDiagnostic } from "./ordered-source-state.js";
+import {
+  readSourceState,
+  recordPartialSection,
+  sourceStateDiagnostic,
+} from "./ordered-source-state.js";
 import type { DiagnosedOrderedEvidence } from "./ordered-source-outcome.js";
 import { isDeepStrictEqual } from "node:util";
 import {
@@ -99,7 +103,11 @@ async function readState(
   if (state.status === "review") {
     return modelReview(reading, { source: result.source, state });
   }
-  evidence.entries.push(await registeredSource(deps.inspection, result.source, signal));
+  const entry = await registeredSource(deps.inspection, result.source, signal);
+  evidence.entries.push(entry);
+  if (entry.kind === "image") {
+    recordPartialSection(evidence, source.id, entry.candidate);
+  }
 }
 
 function registeredSource(inspection: LabelInspection, source: OrderedSource, signal: AbortSignal) {

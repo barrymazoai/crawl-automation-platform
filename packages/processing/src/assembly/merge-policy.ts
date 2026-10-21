@@ -1,4 +1,4 @@
-import { isPartialLabel, partialLabelConflicts } from "./partial-label.js";
+import { isPartialLabel, partialLabelConflicts, resolveSplit } from "./partial-label.js";
 import { assemblyErrors } from "./assembly-errors.js";
 import {
   isCompleteLabelImage,
@@ -32,19 +32,8 @@ export interface MergePolicy {
   integrity(entry: LabelEvidence): string[];
 }
 
-const FROM_2 = [
-  "label-image-first/2",
-  "label-image-first/3",
-  "label-image-first/4",
-  "label-image-first/5",
-];
-const FROM_3 = [
-  "label-image-first/3",
-  "label-image-first/4",
-  "label-image-first/5",
-  "label-image-first/6",
-  "label-image-first/7",
-];
+const FROM_2 = /^label-image-first\/[2-5]$/;
+const FROM_3 = /^label-image-first\/[3-7]$/;
 const SECONDARY_TEXT =
   /^TEXT\.LABEL_(?:GROUP_EMPTY|GROUP_INVALID|ROW_ORDER_INVALID|COVERAGE_UNCERTAIN|EXTRACTION_INCOMPLETE|FORMULA_INCOMPLETE|INGREDIENTS_INCOMPLETE|INVALID_OUTPUT|INGREDIENT_BOUNDARY)$/;
 const TEXT_QUALITY =
@@ -62,19 +51,15 @@ export function mergePolicy(state: MergeState, provenance: LabelEvidence[]): Mer
   const complete = eligible.filter(
     (entry) => isCompleteLabelImage(entry) || isCompleteLabelText(entry),
   );
-  const split = ordered && !complete.length ? splitLabel(eligible, onePart) : null;
+  const { split, conflicts, ingredientImageId } =
+    ordered && !complete.length
+      ? resolveSplit(eligible, onePart)
+      : { split: null, conflicts: [] as string[], ingredientImageId: null };
+  conflicts.forEach((code) => state.codes.add(code));
   const completeLabel = !!split || complete.length > 0;
   const imageFirst = !!policy && eligible.some(isCompleteLabelImage);
-  const textFallback = FROM_3.includes(policy) && !imageFirst && eligible.some(isCompleteLabelText);
-  if (numericConflict(policy, eligible)) {
-    state.codes.add(assemblyErrors.code("LABEL_PRODUCT.SOURCE_NUMERIC_CONFLICT"));
-  }
-  if (textFallback) {
-    state.warnings.push({
-      id: state.manifest.operationId,
-      code: assemblyErrors.code("LABEL_PRODUCT.COMPLETE_TEXT_FALLBACK"),
-    });
-  }
+  const textFallback = FROM_3.test(policy) && !imageFirst && eligible.some(isCompleteLabelText);
+  policyWarnings(state, { policy, eligible, textFallback, ingredientImageId });
   return {
     quality,
     imageFirst,
@@ -86,6 +71,32 @@ export function mergePolicy(state: MergeState, provenance: LabelEvidence[]): Mer
     sufficient: ordered,
     onePart,
   };
+}
+
+function policyWarnings(
+  state: MergeState,
+  at: {
+    policy: string;
+    eligible: LabelEvidence[];
+    textFallback: boolean;
+    ingredientImageId: string | null;
+  },
+) {
+  if (numericConflict(at.policy, at.eligible)) {
+    state.codes.add(assemblyErrors.code("LABEL_PRODUCT.SOURCE_NUMERIC_CONFLICT"));
+  }
+  if (at.textFallback) {
+    state.warnings.push({
+      id: state.manifest.operationId,
+      code: assemblyErrors.code("LABEL_PRODUCT.COMPLETE_TEXT_FALLBACK"),
+    });
+  }
+  if (at.ingredientImageId) {
+    state.warnings.push({
+      id: at.ingredientImageId,
+      code: assemblyErrors.code("LABEL_PRODUCT.INGREDIENTS_FROM_OTHER_IMAGE"),
+    });
+  }
 }
 
 function policyFlags(policy: string) {
@@ -171,7 +182,7 @@ function excused(state: MergeState, failure: MergeFailure, policy: MergePolicy):
 function secondaryTextExcused(evidencePolicy: string, code: string, policy: MergePolicy): boolean {
   const citation = evidencePolicy === "label-image-first/5" && code === "TEXT.CITATION_INVALID";
   return (
-    FROM_2.includes(evidencePolicy) && policy.imageFirst && (citation || SECONDARY_TEXT.test(code))
+    FROM_2.test(evidencePolicy) && policy.imageFirst && (citation || SECONDARY_TEXT.test(code))
   );
 }
 

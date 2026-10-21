@@ -1,8 +1,31 @@
 import { isLabelCoreVerdict } from "@crawl-automation/platform/errors/label-core";
 import type { SavedEvidenceSource } from "@crawl-automation/v3-contracts";
+import type { LabelImageCandidate } from "@crawl-automation/v3-contracts";
+import { partialImageSection } from "../assembly/partial-label.js";
 import { labelFailure } from "./label-errors.js";
 import type { OrderedEvidence, OrderedProgress, OrderedState } from "./ordered-model.js";
 import type { SourceDiagnostic } from "./ordered-source-outcome.js";
+import type { DiagnosedOrderedEvidence } from "./ordered-source-outcome.js";
+
+/** A progress record names the usable section while the full answer remains in retained evidence. */
+export function recordPartialSection(
+  evidence: DiagnosedOrderedEvidence,
+  sourceId: string,
+  candidate: LabelImageCandidate | undefined,
+) {
+  if (!candidate) {
+    return;
+  }
+  const section = partialImageSection(candidate);
+  const diagnostic = evidence.sourceDiagnostics?.find((item) => item.sourceId === sourceId);
+  if (section && diagnostic) {
+    diagnostic.reason = `partial: ${section}`;
+    const detail = candidate.issues[0]?.detail;
+    if (detail) {
+      diagnostic.detail = detail;
+    }
+  }
+}
 
 type DiagnosticSource = Pick<SavedEvidenceSource, "kind" | "id">;
 
