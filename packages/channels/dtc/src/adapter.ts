@@ -101,6 +101,12 @@ export const DTC_NON_SUPPLEMENT_CATEGORIES: readonly string[] = [
   "Books",
   "Equipment",
   "Devices",
+  // lovewellness.com 2026-10-21: product-scoped collection names in its inline analytics item.
+  "Skincare for Down There™",
+  "Sprays & Cleansers",
+  // womaness.com 2026-10-21: exact Shopify product types (Daily V Soothe; Gold Vibes in page analytics).
+  "Vaginal Moisturizer",
+  "Vibrator",
 ];
 
 /** One registry entry for all configured DTC sites. BrowserPages/Ego is the only capture path. */

@@ -60,18 +60,43 @@ export function readDtcProduct(
 const MAX_CATEGORIES = 20;
 
 /**
- * The store's filing of the product: its JSON-LD breadcrumb, then the platform's own type and tags, at most 20 in
- * all. Nature's Truth tags an oil with a dozen misspellings (2026-10-21); a longer list failed the capture result's
- * schema and ended the product as PIPELINE.PRODUCT_UNRESOLVED instead of "not a supplement".
+ * The store's filing of the product: its JSON-LD breadcrumb and platform type/tags first, then product-scoped
+ * collection names, at most 20 in all. Nature's Truth tags an oil with a dozen misspellings (2026-10-21); a longer
+ * list failed the capture result's schema and ended the product as PIPELINE.PRODUCT_UNRESOLVED.
  */
 function storeCategories(document: Document, product: PlatformProduct): string[] {
   const scripts = [...document.querySelectorAll('script[type="application/ld+json"]')].map(
     (script) => script.textContent ?? "",
   );
-  return [...new Set([...jsonLdBreadcrumbs(scripts), ...(product.categories ?? [])])].slice(
-    0,
-    MAX_CATEGORIES,
-  );
+  return [
+    ...new Set([
+      ...jsonLdBreadcrumbs(scripts),
+      ...(product.categories ?? []),
+      ...trackedProductCategories(document, product.productId),
+    ]),
+  ].slice(0, MAX_CATEGORIES);
+}
+
+/** Some Shopify themes render product-specific collection names in an inline analytics item. Read its JSON array
+ * only when the adjacent ProductID matches the page's own product, without executing the script. */
+function trackedProductCategories(document: Document, productId: string): string[] {
+  const pattern = /\bProductID\s*:\s*["']?(\d+)["']?\s*,\s*Categories\s*:\s*(\[[^\]]{0,2000}\])/g;
+  return [...document.querySelectorAll("script:not([src])")].flatMap((script) => {
+    const text = script.textContent ?? "";
+    return [...text.matchAll(pattern)].flatMap((match) => {
+      if (match[1] !== productId) {
+        return [];
+      }
+      try {
+        const names: unknown = JSON.parse(match[2] ?? "");
+        return Array.isArray(names)
+          ? names.filter((name): name is string => typeof name === "string" && !!name.trim())
+          : [];
+      } catch {
+        return [];
+      }
+    });
+  });
 }
 
 /** Read a canonical redirect before title/facts parsing; core owns the identity_conflict comparison. */

@@ -60,18 +60,14 @@ export function completeFacts(html: string | null): FactsText {
   return { ...result, complete: missing.length === 0, missing };
 }
 
-/** Only observed URLs; no invented high-resolution image addresses. */
+/** Only observed HTTPS URLs; image hosts need not be the store's own CDN. */
 export function imageUrls(values: readonly string[], context: PlatformContext): string[] {
   const urls = values
     .filter(Boolean)
     .map((raw) => new URL(raw, context.url))
     .filter(
       (url) =>
-        url.protocol === "https:" &&
-        !url.username &&
-        !url.password &&
-        context.imageOrigins.includes(url.origin) &&
-        !shopifyThemeAsset(url),
+        url.protocol === "https:" && !url.username && !url.password && !shopifyThemeAsset(url),
     )
     .map((url) => url.href);
   const result = observedImageSizes(urls);

@@ -117,12 +117,15 @@ describe("observed product image renditions", () => {
     },
   );
 
-  it("preserves origin and recommendation exclusions", () => {
+  it("keeps external image servers while excluding recommendations", () => {
     expect(
       images(`<img src="${label}&width=800">
       <img src="https://foreign.example/cdn/shop/files/facts.jpg?width=1600">
       <product-recommendations><img src="${hero}&width=1600"></product-recommendations>`),
-    ).toEqual([absolute(`${label}&width=800`)]);
+    ).toEqual([
+      absolute(`${label}&width=800`),
+      "https://foreign.example/cdn/shop/files/facts.jpg?width=1600",
+    ]);
   });
 
   it("applies the image limit to distinct candidates, while keeping the limit", () => {

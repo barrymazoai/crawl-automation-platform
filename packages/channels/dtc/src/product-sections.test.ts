@@ -38,6 +38,7 @@ describe.each([
       expect(product.images).toEqual([
         "https://shop.example/front.jpg",
         "https://shop.example/label.jpg",
+        "https://foreign.example/label.jpg",
       ]);
     },
   );

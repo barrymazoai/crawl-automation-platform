@@ -81,6 +81,7 @@ export function readShopifyProduct(document: Document, context: PlatformContext)
       {
         ...data,
         factsHtml: string(details?.supplement_facts),
+        selectedVariantId: selected,
       },
     ),
   };
