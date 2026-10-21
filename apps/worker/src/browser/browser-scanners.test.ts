@@ -1,5 +1,10 @@
 import { brandScanErrors } from "@crawl-automation/channels-core";
-import { configuredDtcSites } from "@crawl-automation/channel-dtc";
+import {
+  configuredDtcSites,
+  DtcBrandScan,
+  DtcCatalogPages,
+  DtcScanRoute,
+} from "@crawl-automation/channel-dtc";
 import { amazonStoreSourceUrl } from "@crawl-automation/channel-amazon";
 import { EgoPages, RetainedPublication, type ObjectStore } from "@crawl-automation/platform";
 import { describe, expect, it, vi } from "vitest";
@@ -151,47 +156,43 @@ describe("browser scan capability wiring", () => {
 it("captures configured DTC catalogs in Ego, without Whole Foods preparation", async () => {
   const sourceUrl = "https://shop.example/collections/all";
   const ego = new EgoPages({ cliPath: "/tmp/not-executed-ego", taskSpaceId: 1 });
-  const scan = vi.fn(async () => ({
-    complete: true,
-    soldHere: true,
-    archiveKeys: [],
-    pages: [
-      {
-        cards: 1,
-        nextPage: null,
-        statedTotal: null,
-        products: [
-          {
-            url: "https://shop.example/products/sleep",
-            listingId: "sleep",
-            variantId: null,
-            title: "Sleep",
-            kind: "product" as const,
-            brand: null,
-            seller: null,
-            brandBasis: "source" as const,
-          },
-        ],
-      },
-    ],
-  }));
+  const read = vi.spyOn(ego, "read").mockResolvedValue({
+    url: sourceUrl,
+    status: 200,
+    ready: true,
+    scroll: { rounds: 2, ended: "stable" },
+    html: '<main><div id="product-grid"><a href="/products/sleep">Sleep</a></div></main>',
+  });
   const round = vi.spyOn(ego, "round").mockRejectedValue(new Error("Unexpected store preparation"));
+  const publication = new RetainedPublication(memoryStore(), memoryStore());
+  const dtcSites = configuredDtcSites({
+    sites: [{ siteKey: "shop.example", platform: "shopify", catalogUrl: sourceUrl }],
+  });
+  const agent = { scan: vi.fn() };
+  const scan = new DtcScanRoute({
+    platform: new DtcBrandScan({
+      pages: new DtcCatalogPages({ browser: ego, publication }),
+      sites: dtcSites,
+    }),
+    agent,
+    sites: dtcSites,
+  });
   const scans = buildBrowserScanners({
     ego,
-    publication: new RetainedPublication(memoryStore(), memoryStore()),
+    publication,
     rounds: new ManagedBrowserRounds(ego, async () => true),
     store: { storeId: "10259", label: "The Alameda", postalCode: "95126" },
-    dtcScanner: { scan },
-    dtcSites: configuredDtcSites({
-      sites: [{ siteKey: "shop.example", platform: "shopify", catalogUrl: sourceUrl }],
-    }),
+    dtcScanner: scan,
+    dtcSites,
   });
   const signal = new AbortController().signal;
   await scans.prepare("https://shop.example/products/sleep", signal);
   const result = await scans.scan({ scanId: "dtc-scan", sourceUrl }, signal);
   expect(result).toMatchObject({ complete: true, soldHere: true });
   expect(result.pages[0]?.products[0]?.url).toBe("https://shop.example/products/sleep");
-  expect(scan).toHaveBeenCalledOnce();
+  expect(result.archiveKeys).toHaveLength(1);
+  expect(read).toHaveBeenCalledOnce();
+  expect(agent.scan).not.toHaveBeenCalled();
   expect(round).not.toHaveBeenCalled();
 });
 

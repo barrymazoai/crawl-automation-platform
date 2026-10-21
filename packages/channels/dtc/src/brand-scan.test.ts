@@ -94,7 +94,9 @@ describe("DTC browser catalog completion", () => {
       pages: { read: async () => drawn(1, { next: "/collections/elsewhere" }) },
       sites: [site],
     });
-    await expect(scan.scan(request, signal())).rejects.toThrow();
+    await expect(scan.scan(request, signal())).rejects.toMatchObject({
+      code: "BRAND_SCAN.PAGINATION",
+    });
   });
   it("accepts an explicitly empty stable catalog", async () => {
     const scan = new DtcBrandScan({

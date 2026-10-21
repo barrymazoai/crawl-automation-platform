@@ -36,7 +36,7 @@ export function dtcAgentParts(
       routeId: browser?.routeId ?? "ego-browser",
       egressId: browser?.egressId ?? "ego-browser/1",
     }),
-    scanner: new DtcAgentBrandScan({ agent: capture, sites }),
+    agentScanner: new DtcAgentBrandScan({ agent: capture, sites }),
     analysis: new SiteAnalysisRunner({
       store: new PostgresSiteAnalyses(parts.database),
       analyze: async (input, progress, signal) => {

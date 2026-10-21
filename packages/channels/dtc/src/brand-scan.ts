@@ -7,6 +7,7 @@ import {
   type ListedProduct,
   type PlatformCatalog,
 } from "@crawl-automation/channels-core";
+import { errorCodeOf } from "@crawl-automation/platform";
 import { catalogUrl, dtcProductAddress, siteForBrandUrl } from "./address.js";
 import type { DtcCatalogPages } from "./catalog-pages.js";
 import { dtcDocument } from "./product.js";
@@ -110,7 +111,7 @@ export class DtcBrandScan {
       if (!listing.nextUrl) {
         return { ...state, complete: true, stopped: "end" };
       }
-      url = catalogUrl(listing.nextUrl, site, source.catalogUrl);
+      url = nextCatalogUrl(listing.nextUrl, site, source.catalogUrl);
     }
     return state;
   }
@@ -120,5 +121,16 @@ export class DtcBrandScan {
     if (listing.products.length && listing.products.every((product) => known.has(product.url))) {
       throw brandScanErrors.create("BRAND_SCAN.PAGINATION");
     }
+  }
+}
+
+function nextCatalogUrl(raw: string, site: DtcSitePolicy, sourceUrl: string): string {
+  try {
+    return catalogUrl(raw, site, sourceUrl);
+  } catch (error) {
+    if (errorCodeOf(error) === "CHANNEL.URL_REJECTED") {
+      throw brandScanErrors.create("BRAND_SCAN.PAGINATION", { cause: error });
+    }
+    throw error;
   }
 }

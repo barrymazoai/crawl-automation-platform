@@ -128,7 +128,10 @@ export class DtcCatalogPages {
       contentEncoding: null,
       bytes: Buffer.from(page.html),
     });
-    if (!page.ready || Buffer.byteLength(page.html) > DTC_PAGE_LIMITS.maxBytes) {
+    if (Buffer.byteLength(page.html) > DTC_PAGE_LIMITS.maxBytes) {
+      throw platformPageErrors.create("DTC.PAGE_LIMIT");
+    }
+    if (!page.ready) {
       throw platformPageErrors.create("DTC.LISTING_UNVERIFIED");
     }
   }

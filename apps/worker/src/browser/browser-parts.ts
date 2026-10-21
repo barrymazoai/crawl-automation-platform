@@ -4,6 +4,9 @@ import {
   configuredDtcSites,
   storedDtcSites,
   DtcPlatformCapture,
+  DtcBrandScan,
+  DtcCatalogPages,
+  DtcScanRoute,
   DTC_BROWSER_POLICY,
   type DtcSitePolicy,
 } from "@crawl-automation/channel-dtc";
@@ -68,7 +71,7 @@ export function buildBrowserParts(parts: CoreParts): BrowserParts {
   const scanner = buildBrowserScanners({
     ego,
     dtcSites,
-    dtcScanner: dtc.scanner,
+    dtcScanner: routedDtcScanner({ parts, ego, sites: dtcSites, agent: dtc.agentScanner }),
     ...scanSettings(settings),
     publication: parts.publication,
     rounds: ego,
@@ -83,6 +86,24 @@ export function buildBrowserParts(parts: CoreParts): BrowserParts {
     analysis: dtc.analysis,
     ensureStore: (url, signal) => scanner.prepare(url, signal),
   };
+}
+
+function routedDtcScanner(deps: {
+  parts: CoreParts;
+  ego: EgoPages;
+  sites: readonly DtcSitePolicy[];
+  agent: ReturnType<typeof dtcAgentParts>["agentScanner"];
+}) {
+  const { parts, ego, sites, agent } = deps;
+  return new DtcScanRoute({
+    platform: new DtcBrandScan({
+      pages: new DtcCatalogPages({ browser: ego, publication: parts.publication }),
+      sites,
+    }),
+    agent,
+    sites,
+    onDecision: (decision) => parts.log.info(decision, "DTC scan routed"),
+  });
 }
 
 /**
