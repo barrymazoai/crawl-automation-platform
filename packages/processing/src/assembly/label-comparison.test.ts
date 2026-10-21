@@ -53,9 +53,11 @@ describe("label comparison", () => {
     expect(compareLabelStructure(source(), other).status).toBe("unresolved");
   });
 
-  it("preserves trademark differences without the explicit typography policy", () => {
+  // Owner 2026-10-09: wording never makes a conflict; a ™/® read on one photo of the panel and not on another is
+  // typography (2026-10-21: the walk now reads every Facts photo, so these differences are routine).
+  it("treats a trademark-only name difference as wording, not a conflict", () => {
     const other = source();
     defined(column(other).rows[4]).name.text = "FocusFuel Electrolyte Blend";
-    expect(compareLabelStructure(source(), other).status).toBe("conflict");
+    expect(compareLabelStructure(source(), other).status).toBe("match");
   });
 });

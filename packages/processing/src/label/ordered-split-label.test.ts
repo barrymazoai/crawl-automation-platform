@@ -16,8 +16,8 @@ import type { LabelPlans } from "./label-plans.js";
 import { OrderedProgressSchema } from "./ordered-model.js";
 import { orderedProgressKey } from "./ordered-diagnostics.js";
 
-async function fixture(conflict = false) {
-  const first = conflict ? croppedPanel() : reviewedFactsPanel();
+async function fixture(conflict = false, formulaConflict = false) {
+  const first = reviewedPanel(conflict, formulaConflict);
   const last = ingredientsPanel();
   if (conflict && last.otherIngredients) {
     last.otherIngredients.items[0] = { text: "Soy", evidence: "Soy" };
@@ -54,6 +54,15 @@ async function fixture(conflict = false) {
     { id: "source-3", status: "registered" },
   ];
   return { ...test, records, request: OrderedProgressSchema.parse({ input: test.input, states }) };
+}
+
+function reviewedPanel(conflict: boolean, formulaConflict: boolean) {
+  const first = conflict ? croppedPanel() : reviewedFactsPanel();
+  const amount = first.formula?.columns[0]?.rows[0]?.amount;
+  if (formulaConflict && amount) {
+    amount.text = "50 mg";
+  }
+  return first;
 }
 
 it("combines the Costco sequence's facts and ingredients, keeping the printed source of each field", async () => {
@@ -109,6 +118,33 @@ it("combines the Costco sequence's facts and ingredients, keeping the printed so
       ],
     }),
     signal,
+  );
+});
+
+it("publishes both formula shapes for a conflicting reviewed and registered image", async () => {
+  const test = await fixture(false, true);
+  const check = await test.selection.inspect(test.request, AbortSignal.timeout(5_000));
+  expect(check.complete).toBe(false);
+  expect(test.plans.publish).toHaveBeenLastCalledWith(
+    orderedProgressKey(test.input, test.request.states),
+    expect.objectContaining({
+      conflicts: expect.arrayContaining([
+        expect.objectContaining({
+          code: "LABEL_PRODUCT.FORMULA_CONFLICT",
+          sources: expect.arrayContaining([
+            expect.objectContaining({
+              id: "source-1",
+              shape: expect.objectContaining({ columns: expect.any(Array) }),
+            }),
+            expect.objectContaining({
+              id: "source-2",
+              shape: expect.objectContaining({ columns: expect.any(Array) }),
+            }),
+          ]),
+        }),
+      ]),
+    }),
+    expect.anything(),
   );
 });
 

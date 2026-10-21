@@ -3,7 +3,9 @@ import {
   isCompleteLabelImage,
   isOrderedEvidencePolicy,
   formulaAgreement,
+  formulaComparisonSize,
   labelAgreementFormula,
+  preferFormulaSource,
   projectLabelProductCandidate,
   type LabelAgreement,
 } from "@crawl-automation/v3-contracts";
@@ -89,19 +91,46 @@ function selectFormula(state: MergeState, pick: Pick): void {
   }
   checkAgainstPackaging(state, shape, pick);
   if (state.formulaShape) {
-    recordAgreement(state, pick, {
-      agreement: formulaAgreement(state.formulaShape, shape),
-      conflict: "LABEL_PRODUCT.FORMULA_CONFLICT",
-      secondary: "LABEL_PRODUCT.SECONDARY_TEXT_FORMULA_CONFLICT",
-    });
+    compareFormula(state, pick, shape);
   }
   if (!state.formula && !secondaryText) {
     state.formulaShape = shape;
+    state.formulaSource = pick.entry;
     state.formula = projected.formula;
   }
 }
 
 type Shape = NonNullable<ReturnType<typeof labelAgreementFormula>>;
+
+function compareFormula(state: MergeState, pick: Pick, shape: Shape): void {
+  const agreement = formulaAgreement(state.formulaShape, shape);
+  if (agreement === "subset") {
+    acceptFormulaSubset(state, pick, shape);
+  } else {
+    recordAgreement(state, pick, {
+      agreement,
+      conflict: "LABEL_PRODUCT.FORMULA_CONFLICT",
+      secondary: "LABEL_PRODUCT.SECONDARY_TEXT_FORMULA_CONFLICT",
+    });
+  }
+}
+
+function acceptFormulaSubset(state: MergeState, pick: Pick, shape: Shape): void {
+  const selected = state.formulaSource;
+  if (!selected) {
+    return;
+  }
+  const shorter =
+    formulaComparisonSize(state.formulaShape) < formulaComparisonSize(shape)
+      ? selected.id
+      : pick.entry.id;
+  state.warnings.push({ id: shorter, code: assemblyErrors.code("LABEL_PRODUCT.FORMULA_SUBSET") });
+  if (!pick.secondaryText && preferFormulaSource(selected.candidate, pick.candidate)) {
+    state.formulaShape = shape;
+    state.formulaSource = pick.entry;
+    state.formula = pick.projected.formula;
+  }
+}
 
 /**
  * With packaging evidence, the container count is compared across sources but never kept as a per-serving value (the

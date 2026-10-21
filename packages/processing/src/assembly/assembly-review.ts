@@ -6,6 +6,8 @@ import { sha256 } from "@crawl-automation/platform";
 import {
   ReviewRecordSchema,
   ingredientConflictDetails,
+  formulaConflictDetails,
+  type LabelCandidate,
   type LabelProductJoin,
   type ProductImageOutcome,
   type ReviewRecord,
@@ -125,20 +127,24 @@ function assemblyReviewRecord(review: AssemblyReviewCase, identity: string): Rev
 
 function reviewDetails(review: AssemblyReviewCase) {
   const { input, codes, existingCollection, cause, sourceCauses } = review;
-  const sources = ingredientSources(review.candidate);
+  const sources = conflictSources(review.candidate);
+  const conflicts = [
+    ...(codes.includes("LABEL_PRODUCT.INGREDIENTS_CONFLICT")
+      ? ingredientConflictDetails(sources)
+      : []),
+    ...(codes.includes("LABEL_PRODUCT.FORMULA_CONFLICT") ? formulaConflictDetails(sources) : []),
+  ].filter((conflict) => conflict.sources.length);
   return {
     input,
     codes,
-    ...(codes.includes("LABEL_PRODUCT.INGREDIENTS_CONFLICT") && sources.length
-      ? { conflicts: ingredientConflictDetails(sources) }
-      : {}),
+    ...(conflicts.length ? { conflicts } : {}),
     ...(existingCollection ? { existingCollection, versionPolicy: "retain-first/1" } : {}),
     ...(cause ? { cause } : {}),
     ...(sourceCauses?.length ? { sourceCauses } : {}),
   };
 }
 
-function ingredientSources(candidate: unknown) {
+function conflictSources(candidate: unknown): { id: string; candidate: LabelCandidate }[] {
   if (!candidate || typeof candidate !== "object" || !("result" in candidate)) {
     return [];
   }
@@ -152,12 +158,8 @@ function ingredientSources(candidate: unknown) {
     return [];
   }
   return result.provenance.filter(
-    (
-      source,
-    ): source is { id: string; candidate: { otherIngredients: { items: { text: string }[] } } } =>
-      !!source &&
-      typeof source.id === "string" &&
-      Array.isArray(source.candidate?.otherIngredients?.items),
+    (source): source is { id: string; candidate: LabelCandidate } =>
+      !!source && typeof source.id === "string" && !!source.candidate,
   );
 }
 

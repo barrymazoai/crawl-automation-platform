@@ -33,12 +33,6 @@ const row = (shape: Formula, index: number) => {
 
 const structuralChanges: [string, (shape: Formula) => void][] = [
   [
-    "missing row",
-    (shape) => {
-      rows(shape).pop();
-    },
-  ],
-  [
     "extra row",
     (shape) => {
       rows(shape).push({ ...row(shape, 17) });
@@ -150,6 +144,39 @@ describe("shared label agreement boundaries", () => {
     expect(formulaAgreement(first, second)).toBe("conflict");
   });
 
+  it("treats normalized readings of one panel as exact", () => {
+    const first = formula();
+    const second = structuredClone(first);
+    row(first, 5).amount = "1,200 mcg.";
+    row(second, 5).amount = "1200 µg";
+    row(first, 5).dailyValue = "12%†";
+    row(second, 5).dailyValue = "12 %**";
+    row(second, 5).name = `  ${row(first, 5).name?.toUpperCase()}\n`;
+    expect(formulaAgreement(first, second)).toBe("exact");
+  });
+
+  it("accepts missing trailing rows and a missing group heading as subsets", () => {
+    const first = formula();
+    const shorter = structuredClone(first);
+    rows(shorter).splice(-2);
+    expect(formulaAgreement(first, shorter)).toBe("subset");
+    const noGroup = structuredClone(first);
+    rows(noGroup).splice(4, 1);
+    expect(formulaAgreement(first, noGroup)).toBe("subset");
+  });
+
+  it("keeps a changed amount and disjoint material rows in conflict", () => {
+    const first = formula();
+    const second = structuredClone(first);
+    row(first, 5).amount = "500 mg";
+    row(second, 5).amount = "50 mg";
+    expect(formulaAgreement(first, second)).toBe("conflict");
+    const third = structuredClone(first);
+    rows(first).pop();
+    rows(third).splice(0, 1);
+    expect(formulaAgreement(first, third)).toBe("conflict");
+  });
+
   it("keeps column order and headings", () => {
     const first = formula();
     first.columns.push({ heading: "Second serving", rows: [{ ...row(first, 0) }] });
@@ -164,7 +191,7 @@ describe("shared label agreement boundaries", () => {
   });
 
   it.each(["name", "amount", "dailyValue"] as const)(
-    "records original %s whitespace differences",
+    "accepts original %s whitespace differences without warning",
     (key) => {
       const first = gncLabelFixture();
       const second = structuredClone(first);
@@ -182,7 +209,7 @@ describe("shared label agreement boundaries", () => {
         target[key].text = ` ${target[key].text} `;
       }
       expect(formulaAgreement(labelAgreementFormula(first), labelAgreementFormula(second))).toBe(
-        "wording",
+        "exact",
       );
     },
   );

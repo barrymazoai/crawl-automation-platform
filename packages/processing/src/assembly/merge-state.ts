@@ -56,6 +56,7 @@ export interface MergeState {
   formula: LabelCollectedProduct["formula"] | null;
   otherIngredients: LabelCollectedProduct["otherIngredients"];
   formulaShape: ReturnType<typeof labelAgreementFormula>;
+  formulaSource: LabelEvidence | null;
   otherShape: string[] | null;
   otherSourceId: string | null;
 }

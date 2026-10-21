@@ -23,9 +23,13 @@ function mergeImages(first: LabelImageCandidate, second: LabelImageCandidate) {
 const compareImages = (first: LabelImageCandidate, second: LabelImageCandidate) =>
   compareLabelStructure({ kind: "image", candidate: first }, { kind: "image", candidate: second });
 
-function expectAgreement(first: LabelImageCandidate, second: LabelImageCandidate) {
+function expectAgreement(
+  first: LabelImageCandidate,
+  second: LabelImageCandidate,
+  warnings = [warning],
+) {
   const result = mergeImages(first, second);
-  expect(result).toMatchObject({ status: "ready", codes: [], warnings: [warning] });
+  expect(result).toMatchObject({ status: "ready", codes: [], warnings });
   expect(result.formula).toEqual(projectLabelProductCandidate("source-0", first).formula);
   expect(result.otherIngredients).toEqual(
     projectLabelProductCandidate("source-0", first).otherIngredients,
@@ -242,7 +246,7 @@ describe("label source wording agreement", () => {
     defined(rows[0]).amount = agreementField(micrograms);
     defined(rows[0]).dailyValue = agreementField(dailyValue);
     defined(rows[1]).amount = agreementField(dose);
-    expectAgreement(agreementCandidate(), other);
+    expectAgreement(agreementCandidate(), other, []);
   });
 
   it.each([
@@ -381,20 +385,4 @@ describe("label source wording agreement", () => {
       expect(saved.warnings).toContainEqual(warning);
     },
   );
-
-  it("keeps different printed counts in Review and uses the existing diagnostic code", () => {
-    const first = agreementCandidate();
-    const second = agreementCandidate();
-    defined(first.formula).servingsPerContainer = agreementField("30 capsules");
-    defined(second.formula).servingsPerContainer = agreementField("60 capsules");
-    expect(mergeImages(first, second)).toMatchObject({
-      status: "review",
-      codes: ["LABEL_PRODUCT.FORMULA_CONFLICT"],
-      warnings: [],
-    });
-    expect(compareImages(first, second)).toEqual({
-      status: "conflict",
-      codes: ["LABEL.CONTAINER_COUNT_CONFLICT"],
-    });
-  });
 });

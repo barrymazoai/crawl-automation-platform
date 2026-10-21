@@ -30,13 +30,35 @@ export const OrderedDiagnosticsSchema = z.object({
     .max(100),
   codes: z.array(z.string()),
   sourceOutcomes: SourceOutcomesSchema.optional(),
-  /** The ingredient lists that disagreed, per source, when the merge ended LABEL_PRODUCT.INGREDIENTS_CONFLICT. */
+  /** Normalized ingredient lists or formula readings that disagreed, per source. */
   conflicts: z
     .array(
       z.object({
         code: z.string(),
         sources: z.array(
-          z.object({ id: z.string(), items: z.array(z.string()), shape: z.array(z.string()) }),
+          z.union([
+            z.object({ id: z.string(), items: z.array(z.string()), shape: z.array(z.string()) }),
+            z.object({
+              id: z.string(),
+              shape: z.object({
+                servingSize: z.string().nullable(),
+                servingsPerContainer: z.string().nullable(),
+                columns: z.array(
+                  z.object({
+                    heading: z.string().nullable(),
+                    rows: z.array(
+                      z.tuple([
+                        z.string(),
+                        z.string().nullable(),
+                        z.string().nullable(),
+                        z.string().nullable(),
+                      ]),
+                    ),
+                  }),
+                ),
+              }),
+            }),
+          ]),
         ),
       }),
     )

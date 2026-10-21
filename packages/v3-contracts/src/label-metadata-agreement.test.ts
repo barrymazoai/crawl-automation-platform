@@ -130,7 +130,7 @@ describe("reported formula metadata differences", () => {
     },
   );
 
-  it.each(["<2%**", "1%**", "<1%*"])("keeps real daily-value differences: %s", (dailyValue) => {
+  it.each(["<2%**", "1%**"])("keeps real daily-value differences: %s", (dailyValue) => {
     const first = reportedFormula();
     const second = reportedFormula();
     const row = second.columns[0]?.rows[1];

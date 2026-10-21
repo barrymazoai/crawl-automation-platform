@@ -1,4 +1,4 @@
-import { ingredientConflictDetails } from "@crawl-automation/v3-contracts";
+import { formulaConflictDetails, ingredientConflictDetails } from "@crawl-automation/v3-contracts";
 import {
   mergeLabelProduct,
   type MergeFailure,
@@ -107,15 +107,26 @@ function conflictLists(
   conflicts: string[],
   eligible: { entries: VerifiedLabelSource[]; failures: MergeFailure[] },
 ) {
-  if (!conflicts.includes("LABEL_PRODUCT.INGREDIENTS_CONFLICT")) {
+  if (
+    !conflicts.includes("LABEL_PRODUCT.INGREDIENTS_CONFLICT") &&
+    !conflicts.includes("LABEL_PRODUCT.FORMULA_CONFLICT")
+  ) {
     return null;
   }
-  return ingredientConflictDetails([
+  const sources = [
     ...eligible.entries,
     ...eligible.failures.flatMap((failure) =>
       failure.candidate ? [{ id: failure.id, candidate: failure.candidate }] : [],
     ),
-  ]);
+  ];
+  return [
+    ...(conflicts.includes("LABEL_PRODUCT.INGREDIENTS_CONFLICT")
+      ? ingredientConflictDetails(sources)
+      : []),
+    ...(conflicts.includes("LABEL_PRODUCT.FORMULA_CONFLICT")
+      ? formulaConflictDetails(sources)
+      : []),
+  ].filter((conflict) => conflict.sources.length);
 }
 
 export function noLabelSources(evidence: DiagnosedOrderedEvidence) {

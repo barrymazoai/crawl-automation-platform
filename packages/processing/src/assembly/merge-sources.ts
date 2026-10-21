@@ -42,6 +42,7 @@ export function beginMerge(
     formula: null,
     otherIngredients: null,
     formulaShape: null,
+    formulaSource: null,
     otherShape: null,
     otherSourceId: null,
   };

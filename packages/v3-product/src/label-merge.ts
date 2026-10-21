@@ -2,7 +2,7 @@ import { isDeepStrictEqual as equal } from "node:util";
 import { LabelProductManifestSchema, LabelImageCandidateSchema, TextCandidateV3Schema, TextRecordSchema, VisionRecordSchema,
   LabelProductProvenanceSchema, projectLabelProductCandidate, assessLabelCandidate, labelFormulaStructure, assertTextQuotes, isCompleteLabelImage, isCompleteLabelText,
   type LabelProductManifest, type LabelCollectedProduct, type LabelImageCandidate,
-  labelTypographyStructure, labelNameForComparison, labelImageIntegrityCodes, labelNumericSourceConflict, ingredientListRelation, ingredientComparisonSize, isFullIngredientsHeading, pageIngredientsIncludeActives, PackagingFactsSchema, type PackagingFacts, type TextRecord, type TextCandidateV3, type VisionRecord } from "@crawl-automation/v3-contracts";
+  labelTypographyStructure, labelNameForComparison, labelImageIntegrityCodes, labelNumericSourceConflict, ingredientListRelation, ingredientComparisonSize, isFullIngredientsHeading, pageIngredientsIncludeActives, formulaAgreement, formulaComparisonSize, preferFormulaSource, PackagingFactsSchema, type PackagingFacts, type TextRecord, type TextCandidateV3, type VisionRecord } from "@crawl-automation/v3-contracts";
 export type VerifiedLabelSource = { id: string } & ({ kind: "text"; record: TextRecord; candidate: TextCandidateV3; fullText: string } |
   { kind: "image"; record: VisionRecord; candidate: LabelImageCandidate });
 const words = (s: string) => s.replace(/\s+/gu, " ").trim();
@@ -22,6 +22,7 @@ export function mergeLabelProduct(raw: LabelProductManifest, entries: VerifiedLa
   }
   let formula: LabelCollectedProduct["formula"] | null = null, otherIngredients: LabelCollectedProduct["otherIngredients"] = null;
   let formulaShape: ReturnType<typeof labelFormulaStructure> = null, otherShape: string[] | null = null;
+  let formulaSource: typeof provenance[number] | null = null;
   let otherSourceId: string | null = null;
   const fail = (id: string, code: string) => { if (sources.get(id)!.required) codes.add(code); else warnings.push({ id, code }); };
   for (const failure of failures) {
@@ -97,12 +98,23 @@ export function mergeLabelProduct(raw: LabelProductManifest, entries: VerifiedLa
           else codes.add("PACKAGING.SERVING_SIZE_CONFLICT");
         }
       }
-      if (formulaShape && !equal(formulaShape, shape)) {
-        if (secondaryText) warnings.push({ id: e.id, code: "LABEL_PRODUCT.SECONDARY_TEXT_FORMULA_CONFLICT" });
-        else codes.add("LABEL_PRODUCT.FORMULA_CONFLICT");
+      if (formulaShape) {
+        const agreement = formulaAgreement(formulaShape, shape);
+        if (agreement === "subset" && formulaSource) {
+          const shorter = formulaComparisonSize(formulaShape) < formulaComparisonSize(shape) ? formulaSource.id : e.id;
+          warnings.push({ id: shorter, code: "LABEL_PRODUCT.FORMULA_SUBSET" });
+          if (!secondaryText && preferFormulaSource(formulaSource.candidate, c)) {
+            formulaShape = shape; formulaSource = e; formula = projected.formula;
+          }
+        } else if (agreement === "wording") warnings.push({ id: e.id, code: "LABEL_PRODUCT.SOURCE_WORDING_DIFFERS" });
+        else if (agreement === "conflict") {
+          if (secondaryText) warnings.push({ id: e.id, code: "LABEL_PRODUCT.SECONDARY_TEXT_FORMULA_CONFLICT" });
+          else codes.add("LABEL_PRODUCT.FORMULA_CONFLICT");
+        }
       }
       if (!formula && !secondaryText) {
         formulaShape = shape;
+        formulaSource = e;
         formula = projected.formula;
       }
     }

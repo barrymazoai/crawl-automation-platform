@@ -11,6 +11,9 @@ export const assemblyErrors = defineErrors({
     message: "A complete text source was selected as the fallback.",
   },
   "LABEL_PRODUCT.FORMULA_CONFLICT": { category: "VALIDATION", message: "Formula conflict." },
+  "LABEL_PRODUCT.FORMULA_SUBSET": validation(
+    "A shorter formula reading was covered by a more complete source.",
+  ),
   "LABEL_PRODUCT.INCOMPLETE_IMAGE_NOT_SELECTED": {
     category: "VALIDATION",
     message: "Incomplete image not selected.",

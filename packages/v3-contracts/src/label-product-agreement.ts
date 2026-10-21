@@ -3,6 +3,7 @@ import { hasConfirmedNoOtherIngredients } from "./label-ingredient-declaration.j
 import { sameServingSize } from "./label-rules/serving-size.js";
 import {
   formulaAgreement,
+  formulaComparisonSize,
   ingredientsAgreement,
   ingredientListRelation,
   ingredientComparisonSize,
@@ -11,6 +12,7 @@ import {
   labelAgreementIngredients,
   pageIngredientsIncludeActives,
   type LabelAgreement,
+  type FormulaAgreement,
 } from "./label-agreement.js";
 
 type Source = { id: string; kind: "image" | "text"; candidate: LabelCandidate };
@@ -37,8 +39,9 @@ const otherShape = (source: Source | undefined) =>
 function acceptsAgreement(
   record: CollectedAgreement,
   source: Source,
-  result: { agreement: LabelAgreement; secondaryCode: string },
+  result: { agreement: LabelAgreement | FormulaAgreement; secondaryCode: string },
 ): boolean {
+  if (result.agreement === "subset") return false;
   if (result.agreement === "exact") {
     return true;
   }
@@ -82,9 +85,15 @@ export function collectedSourcesAgree(record: CollectedAgreement, accepted: Sour
     (name): name is string => name !== null,
   )) ?? [];
   return accepted.every((source) => {
+    const sourceFormula = formulaShape(source, record);
     const formulaResult = source.candidate.formula
-      ? formulaAgreement(formula, formulaShape(source, record))
+      ? formulaAgreement(formula, sourceFormula)
       : "exact";
+    const shorterFormulaId = formulaComparisonSize(formula) < formulaComparisonSize(sourceFormula)
+      ? formulaId : source.id;
+    const formulaSubset = formulaResult === "subset"
+      ? record.warnings.some(warning => warning.id === shorterFormulaId &&
+          warning.code === "LABEL_PRODUCT.FORMULA_SUBSET") : null;
     const otherResult = source.candidate.otherIngredients
       ? ingredientsAgreement(other, otherShape(source), record.comparisonPolicy)
       : "exact";
@@ -109,10 +118,10 @@ export function collectedSourcesAgree(record: CollectedAgreement, accepted: Sour
           (relation === "subset" ? "LABEL_PRODUCT.INGREDIENTS_SUBSET" : "LABEL_PRODUCT.INGREDIENTS_REORDERED"))
       : null;
     return (
-      acceptsAgreement(record, source, {
+      (formulaSubset ?? acceptsAgreement(record, source, {
         agreement: formulaResult,
         secondaryCode: "LABEL_PRODUCT.SECONDARY_TEXT_FORMULA_CONFLICT",
-      }) &&
+      })) &&
       (ingredientWarning ?? acceptsAgreement(record, source, {
         agreement: otherResult,
         secondaryCode: "LABEL_PRODUCT.SECONDARY_TEXT_INGREDIENTS_CONFLICT",

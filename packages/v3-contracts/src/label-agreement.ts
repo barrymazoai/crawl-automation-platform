@@ -2,12 +2,14 @@ import { dequal } from "dequal";
 import type { labelFormulaStructure, LabelCandidate } from "./label-extraction.js";
 import { hasConfirmedNoOtherIngredients } from "./label-ingredient-declaration.js";
 import { labelNameForComparison, labelTypographyStructure } from "./label-typography.js";
+import { sameServingSize } from "./label-rules/serving-size.js";
 type Formula = NonNullable<ReturnType<typeof labelFormulaStructure>> & {
   wording?: (string | null)[];
 };
 type Row = Formula["columns"][number]["rows"][number];
 type FormulaInput = Formula | NonNullable<LabelCandidate["formula"]>;
 export type LabelAgreement = "exact" | "wording" | "conflict";
+export type FormulaAgreement = LabelAgreement | "subset";
 type Comparison = "label-typography/1" | "label-typography/2";
 const fieldText = (value: string | { text: string } | null) =>
   typeof value === "string" ? value : (value?.text ?? null);
@@ -60,7 +62,8 @@ export const labelAgreementFormula = (candidate: LabelCandidate, comparison?: Co
 
 const text = (value: string) => value.normalize("NFC").toLowerCase().replace(/\s+/gu, " ").trim();
 const name = (value: string) =>
-  text(value)
+  text(value.normalize("NFKC").replace(/[‘’]/gu, "'").replace(/[“”]/gu, '"'))
+    .replace(/(\d)\s*(?=(?:mcg|[µμ]g|mg|g|iu)\b)/gu, "$1 ")
     .replace(/\bd\s*[-‐‑‒–—]\s*3\b/gu, "d3")
     .replace(/[\p{P}\s]+/gu, " ")
     .trim();
@@ -84,7 +87,10 @@ export function labelMetadataAgreement(left: string | null, right: string | null
 function measure(value: string | null): string | null {
   return value === null
     ? null
-    : text(value)
+    : text(value.normalize("NFKC").replace(/(?<=\d),(?=\d{3}(?:\D|$))/gu, ""))
+        .replace(/[.,;:!?]+$/gu, "")
+        .replace(/\s*\(\s*/gu, " (")
+        .replace(/\s*\)\s*/gu, ") ")
         .replace(/(\d)\s*(?=[a-zµμ])/gu, "$1 ")
         .replace(/(?<![\p{L}\p{N}])(?:micrograms?|[µμu]g)\b/gu, "mcg")
         .replace(/\bmilligrams?\b/gu, "mg")
@@ -93,7 +99,27 @@ function measure(value: string | null): string | null {
         .replace(/\bmillilit(?:er|re)s?\b/gu, "ml")
         .replace(/\blit(?:er|re)s?\b/gu, "l")
         .replace(/\binternational units?\b/gu, "iu")
-        .replace(/(\d)\s*%/gu, "$1%");
+        .replace(/(\d)\s*%/gu, "$1%")
+        .trim();
+}
+
+const formulaName = (value: string | null) => value === null ? null :
+  ingredientWordingKey(value).replace(/(\d)\s*(?=(?:mcg|[µμ]g|mg|g|iu)\b)/gu, "$1 ");
+const formulaMeasure = (value: string | null) => measure(value)?.replace(/[†*]+/gu, "*") ?? null;
+const formulaMetadata = (left: string | null, right: string | null, serving = false) =>
+  left === null || right === null ||
+  (serving && sameServingSize(left, right)) ||
+  labelMetadataAgreement(left, right) !== "conflict";
+
+export const formulaComparisonSize = (formula: FormulaInput | null): number =>
+  formula?.columns.reduce((sum, column) => sum + column.rows.length, 0) ?? 0;
+
+/** Prefer a verified complete reading, then the reading with more retained rows. */
+export function preferFormulaSource(current: LabelCandidate, next: LabelCandidate): boolean {
+  const quality = (candidate: LabelCandidate) => Number(candidate.formulaComplete && candidate.issues.length === 0);
+  return quality(next) > quality(current) ||
+    quality(next) === quality(current) &&
+    formulaComparisonSize(next.formula) > formulaComparisonSize(current.formula);
 }
 
 function sourceClause(value: string) {
@@ -113,7 +139,7 @@ function namesAgree(left: string | null, right: string | null): boolean {
   if (left === null || right === null) {
     return left === right;
   }
-  if (name(left) === name(right)) {
+  if (formulaName(left) === formulaName(right) || name(left) === name(right)) {
     return true;
   }
   const first = sourceClause(left);
@@ -144,16 +170,59 @@ function rowsAgree(left: Row, right: Row): boolean {
   return (
     dequal(firstStructure, secondStructure) &&
     namesAgree(first, second) &&
-    measure(firstAmount) === measure(secondAmount) &&
-    measure(firstDaily)?.replace(/\s/gu, "") === measure(secondDaily)?.replace(/\s/gu, "")
+    formulaMeasure(firstAmount) === formulaMeasure(secondAmount) &&
+    formulaMeasure(firstDaily)?.replace(/\s/gu, "") === formulaMeasure(secondDaily)?.replace(/\s/gu, "")
   );
+}
+
+function subsetRows(shorter: Row[], longer: Row[]): boolean {
+  let index = 0;
+  for (const row of longer) {
+    if (shorter[index] && rowsAgreeWithoutParent(shorter[index]!, row)) index++;
+  }
+  return index === shorter.length;
+}
+
+function rowsAgreeWithoutParent(left: Row, right: Row): boolean {
+  return rowsAgree({ ...left, parentRowIndex: null }, { ...right, parentRowIndex: null });
+}
+
+function repeatedMaterial(rows: Row[]): boolean {
+  const keys = rows.map(row => `${row.kind}:${name(row.name ?? "")}`);
+  return new Set(keys).size !== keys.length;
+}
+
+function columnRelation(left: Formula["columns"][number], right: Formula["columns"][number]) {
+  if (!formulaMetadata(left.heading, right.heading)) return "conflict";
+  if (orderedAgreement(left.rows, right.rows, rowsAgree)) return "wording";
+  const first = left.rows.filter(row => row.kind !== "group_header");
+  const second = right.rows.filter(row => row.kind !== "group_header");
+  const groupsA = left.rows.filter(row => row.kind === "group_header");
+  const groupsB = right.rows.filter(row => row.kind === "group_header");
+  if (repeatedMaterial(first) || repeatedMaterial(second) ||
+      first.length === second.length && groupsA.length === groupsB.length) return "conflict";
+  const groupsMatch = subsetRows(groupsA, groupsB) || subsetRows(groupsB, groupsA);
+  const materialSubset = subsetRows(first, second) || subsetRows(second, first);
+  return groupsMatch && materialSubset ? "subset" : "conflict";
+}
+
+function normalizedFormula(formula: Formula) {
+  return {
+    servingSize: formula.servingSize && metadataText(formula.servingSize),
+    servingsPerContainer: formula.servingsPerContainer && metadataText(formula.servingsPerContainer),
+    columns: formula.columns.map(column => ({
+      heading: column.heading && formulaName(column.heading),
+      rows: column.rows.map(row => [row.kind, formulaName(row.name),
+        formulaMeasure(row.amount), formulaMeasure(row.dailyValue)]),
+    })),
+  };
 }
 
 /** Ordered formula comparison; metadata and all row coordinates retain their existing meaning. */
 export function formulaAgreement(
   left: FormulaInput | null,
   right: FormulaInput | null,
-): LabelAgreement {
+): FormulaAgreement {
   if (!left || !right) {
     return left === right ? "exact" : "conflict";
   }
@@ -162,19 +231,30 @@ export function formulaAgreement(
   if (dequal(first, second)) {
     return "exact";
   }
-  const agrees =
+  const compatible =
     !!first.drugFacts === !!second.drugFacts &&
-    labelMetadataAgreement(first.servingSize, second.servingSize) !== "conflict" &&
-    labelMetadataAgreement(first.servingsPerContainer, second.servingsPerContainer) !==
-      "conflict" &&
-    orderedAgreement(
-      first.columns,
-      second.columns,
-      (firstColumn, secondColumn) =>
-        labelMetadataAgreement(firstColumn.heading, secondColumn.heading) !== "conflict" &&
-        orderedAgreement(firstColumn.rows, secondColumn.rows, rowsAgree),
-    );
-  return agrees ? "wording" : "conflict";
+    formulaMetadata(first.servingSize, second.servingSize, true) &&
+    formulaMetadata(first.servingsPerContainer, second.servingsPerContainer) &&
+    first.columns.length === second.columns.length;
+  if (!compatible) return "conflict";
+  const relations = first.columns.map((column, index) =>
+    columnRelation(column, second.columns[index]!));
+  if (relations.includes("conflict")) return "conflict";
+  if (relations.includes("subset")) return "subset";
+  return dequal(normalizedFormula(first), normalizedFormula(second)) ? "exact" : "wording";
+}
+
+/** Review-only normalized comparison shape; original fields remain in provenance. */
+export function formulaConflictDetails(
+  sources: { id: string; candidate: Pick<LabelCandidate, "formula"> }[],
+) {
+  return [{
+    code: "LABEL_PRODUCT.FORMULA_CONFLICT",
+    sources: sources.flatMap(({ id, candidate }) => {
+      const formula = candidate.formula && formulaText(candidate.formula);
+      return formula ? [{ id, shape: normalizedFormula(formula) }] : [];
+    }),
+  }];
 }
 
 const ingredient = (value: string) =>

@@ -36,6 +36,18 @@ it("formula-only and ingredients-only independent candidates can complement; ord
   const writes = f.remote.writes; expect(await f.cold().assembly.run(reverse, signal())).toEqual(out); expect(f.remote.writes).toBe(writes);
   expect((await f.collector.run({ join: reverse, evidenceKey: out.evidenceKey }, signal())).status).toBe("collected");
 });
+it("selects the fuller formula from two readings and records the shorter source", async () => {
+  const short = gncLabelFixture(), full = gncLabelFixture();
+  short.formula!.columns[0]!.rows.splice(-2);
+  const f = await labelProductFixture([short, full]);
+  const out = await f.assembly.run(f.join, signal());
+  expect(out.status).toBe("ready");
+  const collected = await f.collector.run({ join: f.join, evidenceKey: out.evidenceKey }, signal());
+  expect(collected.status).toBe("collected");
+  const record = [...f.collected.values()][0]!;
+  expect(record.formula.columns[0]!.rows).toHaveLength(18);
+  expect(record.warnings).toContainEqual({ id: "source-0", code: "LABEL_PRODUCT.FORMULA_SUBSET" });
+});
 it.each(["amount", "ingredients", "container"])("valid %s disagreement is Review, even for optional sources", async kind => {
   const other = gncLabelFixture();
   if (kind === "amount") other.formula!.columns[0]!.rows[5]!.amount!.text = "201 mg";
