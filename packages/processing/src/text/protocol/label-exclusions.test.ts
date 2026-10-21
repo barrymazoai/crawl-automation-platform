@@ -161,3 +161,55 @@ describe("existing exclusion rules", () => {
     expect(checkExclusion(text, reason)).toEqual(["LABEL.COVERAGE_UNCERTAIN"]);
   });
 });
+
+describe("printed label exclusions", () => {
+  it.each([
+    [
+      "footnote",
+      "*These statements have not been evaluated by the Food and Drug Administration. This product is not intended to diagnose, treat, cure, or prevent any disease.",
+    ],
+    [
+      "footnote",
+      "†These statements have not been evaluated by the Food and Drug Administration. This product is not intended to diagnose, treat, cure, or prevent any disease.",
+    ],
+    ["allergen", "CONTAINS FISH: Alaska Walleye Pollock. Tilapia"],
+    ["allergen", "Contains Soy Lecithin And Gluten."],
+    ["allergen", "Free from milk and soy."],
+    ["marketing", "Trademark Information"],
+    ["marketing", "Clear Sinus &amp; Ear® is a trademark of Clear Products, Inc.®"],
+    ["metadata", "NET WT 25.40 oz (720 g)"],
+    [
+      "footnote",
+      "Net carbs: 20 g total carbohydrate − 12 g allulose − 8 g fiber = 0 g net carbs. Allulose is excluded from Total and Added Sugars under FDA guidance (October 2020). “Net carbs” is not an FDA-defined term.",
+    ],
+    [
+      "footnote",
+      "*High protein: 20 g per bar, 40% of the Daily Value. FDA defines “high” and “excellent source of” as 20% or more of the Daily Value per reference amount customarily consumed (21 CFR 101.54(b)); protein %DV is calculated using PDCAAS per 21 CFR 101.9(c)(7).",
+    ],
+    ["footnote", "‡Good source of fiber, 10% of the Daily Value."],
+    ["footnote", "*See 21 CFR 101.54(b) for the claim definition."],
+    ["metadata", "*NATURALLY-DERIVED INGREDIENT"],
+    [
+      "noise",
+      "Argentum Metallicum is officially approved by the Homeopathic Pharmacopoeia Convention of the United States (HPCUS) for all indications below.",
+    ],
+    ["metadata", "Approved by HPUS."],
+  ] satisfies [Reason, string][])("accepts %s: %j", (reason, value) => {
+    expect(checkExclusion(value, reason)).toEqual([]);
+  });
+
+  it.each([
+    ["noise", "(2 billion viable microorganisms**)"],
+    [
+      "allergen",
+      "Contains <2% of: Calcium Carbonate, Magnesium Silicate, Magnesium Stearate, Polyethylene Glycol, Polyvinyl Alcohol, Silicon Dioxide, Titanium Dioxide.",
+    ],
+    ["allergen", "Contains less than 2% of: Calcium Carbonate."],
+    ["allergen", "Contains 2% or less of: Salt, Natural Flavor."],
+    ["metadata", "Specifications: 100 Capsules, 500mg each"],
+    ["footnote", "High protein: 20 g per bar, 40% of the Daily Value."],
+    ["metadata", "NET WT 25.40 oz (720 g)\nProtein 20 g"],
+  ] satisfies [Reason, string][])("refuses %s: %j", (reason, value) => {
+    expect(checkExclusion(value, reason)).toEqual(["LABEL.COVERAGE_UNCERTAIN"]);
+  });
+});

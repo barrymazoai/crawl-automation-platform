@@ -1,5 +1,14 @@
-import { STANDARD_FOOTNOTE } from "./label-footnotes.js";
-import { labelNoteAllowed } from "./label-notes.js";
+import {
+  STANDARD_FOOTNOTE,
+  isDvFootnote,
+  labelSpecificFootnoteAllowed,
+} from "./label-footnotes.js";
+import {
+  allergenStatement,
+  labelMetadataAllowed,
+  labelNoteAllowed,
+  trademarkStatement,
+} from "./label-notes.js";
 import { ingredientGap } from "./ingredient-boundaries.js";
 import { drugExclusionAllowed } from "./drug-label.js";
 import { labelHeadingAllowed } from "./label-headings.js";
@@ -16,13 +25,9 @@ interface Judged {
   policyVersion: string;
 }
 
-const ESTABLISHED_FOOTNOTE =
-  /^[*+†]+\s*(?:percent\s+daily\s+values?|daily\s+values?)(?:\s*\(DV\))?\s+(?:not established\.?|not determined\.?)$/i;
 /** Drug Facts and every later rule set (label-text/5 onward). */
 const DRUG_POLICIES = ["label-text/5", "label-text/6"];
-const ALLERGEN = /^(?:contains\s*:|may\s+contain|manufactured\s+(?:in|on)|processed\s+(?:in|on))/i;
-
-/** Unrecognized exclusions retain `LABEL.COVERAGE_UNCERTAIN`; marketing always stays for Review. */
+/** Unrecognized exclusions retain `LABEL.COVERAGE_UNCERTAIN`; printed trademark notices are explicit exceptions. */
 export function exclusionCodes(judged: Judged): string[] {
   const uncertain = judged.candidate.exclusions.some(
     (exclusion) =>
@@ -45,7 +50,7 @@ function exactlyPlacedExclusion(exclusion: Exclusion, judged: Judged): boolean {
   return (
     isIngredientHeadingField(exclusion, judged) ||
     isFieldPrefix(exclusion, judged) ||
-    isDvFootnote(exclusion)
+    isDvFootnote(exclusion.reason, exclusion.quote.text.trim())
   );
 }
 
@@ -76,20 +81,14 @@ function isFieldPrefix(exclusion: Exclusion, judged: Judged): boolean {
   return /^\s*:?\s*$/.test(judged.text.slice(exclusion.quote.end, field.start));
 }
 
-/** "† Daily Value not established." or a lone DV symbol. */
-function isDvFootnote(exclusion: Exclusion): boolean {
-  const value = exclusion.quote.text.trim();
-  return (
-    exclusion.reason === "footnote" && (ESTABLISHED_FOOTNOTE.test(value) || /^[*+†]+$/.test(value))
-  );
-}
-
 /** Label structure, not content: headings, standard footnotes and notes, list connectors, marker legends. */
 function structuralExclusion(exclusion: Exclusion, judged: Judged, value: string): boolean {
   return (
     ["heading", "metadata", "footnote", "noise"].includes(exclusion.reason) &&
     (labelHeadingAllowed(value, judged.candidate) ||
       STANDARD_FOOTNOTE.test(value) ||
+      (exclusion.reason === "footnote" && labelSpecificFootnoteAllowed(value)) ||
+      (["metadata", "noise"].includes(exclusion.reason) && labelMetadataAllowed(value)) ||
       labelNoteAllowed(exclusion, judged.candidate) ||
       ingredientConnector(exclusion, judged) ||
       markerLegend(exclusion, judged))
@@ -112,7 +111,9 @@ function allowedExclusion(exclusion: Exclusion, judged: Judged): boolean {
   }
   switch (exclusion.reason) {
     case "allergen":
-      return ALLERGEN.test(value);
+      return allergenStatement(value);
+    case "marketing":
+      return trademarkStatement(value);
     case "directions":
       return allowedDirections(exclusion, judged);
     case "noise":
