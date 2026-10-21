@@ -5,14 +5,20 @@ import { emptyCellExamples } from "./examples/empty-cell.js";
 import { ingredientItemExamples } from "./examples/ingredient-items.js";
 import { parentExamples } from "./examples/parent.js";
 import { servingSizeExamples } from "./examples/serving-size.js";
+import { dailyValueOnlyRowExamples } from "./examples/daily-value-only-row.js";
+import { amountEnclosedInNameExamples } from "./examples/amount-enclosed-in-name.js";
+import { ingredientListNotAFormulaExamples } from "./examples/ingredient-list-not-a-formula.js";
 
 const examples: Record<string, { pass: { subject: unknown; source: string }[]; fail: { subject: unknown; source: string }[] }> = {
   [labelRuleTable.rows[0].id]: parentExamples,
   [labelRuleTable.rows[1].id]: blendPercentageExamples,
   [labelRuleTable.ingredientItems[0].id]: ingredientItemExamples,
   [labelRuleTable.cells[0].id]: emptyCellExamples,
+  [labelRuleTable.rows[2].id]: amountEnclosedInNameExamples,
+  [labelRuleTable.dailyValueCells[0].id]: dailyValueOnlyRowExamples,
+  [labelRuleTable.formulas[0].id]: ingredientListNotAFormulaExamples,
 };
-const checkRules: LabelRule<unknown>[] = [...labelRuleTable.rows, ...labelRuleTable.ingredientItems, ...labelRuleTable.cells] as LabelRule<unknown>[];
+const checkRules: LabelRule<unknown>[] = [...labelRuleTable.rows, ...labelRuleTable.ingredientItems, ...labelRuleTable.cells, ...labelRuleTable.dailyValueCells, ...labelRuleTable.formulas] as LabelRule<unknown>[];
 
 describe("label rule table", () => {
   it("every rule has a unique ID, a date, a reason and real examples on both sides", () => {

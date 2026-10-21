@@ -1,4 +1,6 @@
-import type { LabelRow } from "../rows.js";
+import type { LabelImageCandidate } from "../../label-extraction.js";
+
+type LabelRow = NonNullable<LabelImageCandidate["formula"]>["columns"][number]["rows"][number];
 
 type Kind = LabelRow["kind"];
 /** [kind, parent, name, amount] — the stored answer's fields that rules read, written compactly. */

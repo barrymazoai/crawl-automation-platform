@@ -6,13 +6,14 @@ const rowText = (row: Row, index: number) =>
   `row ${index} "${row.name.text.slice(0, 80)}"${row.amount ? ` amount "${row.amount.text.slice(0, 30)}"` : ""}`;
 
 /**
- * Existing row checks shared by every extraction protocol; never repair a missing dose. `emptyCells` are the rows the
- * empty-cell rule accepted (blank in this column, printed in another): their amount checks are the rule's.
+ * Existing row checks shared by every extraction protocol; never repair a missing dose. `acceptedRows` are cells
+ * accepted by a rule-table entry (blank sibling cell, food %DV-only row, or amount printed in the row name).
+ * Their amount checks are the corresponding rule's responsibility.
  */
-export function assessLabelRows(rows: Row[], emptyCells: ReadonlySet<number> = new Set()) {
+export function assessLabelRows(rows: Row[], acceptedRows: ReadonlySet<number> = new Set()) {
   const result = assessLabelGroups(rows);
   rows.forEach((row, index) => {
-    if (emptyCells.has(index)) {
+    if (acceptedRows.has(index)) {
       return;
     }
     const detail = rowText(row, index);

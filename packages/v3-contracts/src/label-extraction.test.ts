@@ -1,10 +1,37 @@
 import { expect, it } from "vitest";
 import { z } from "zod";
-import { LabelImageCandidateSchema, LabelTextWireSchema, assessLabelCandidate, labelFormulaStructure } from "./label-extraction.js";
+import { LabelImageCandidateSchema, LabelTextWireSchema, assessLabelCandidate, labelFormulaStructure, type LabelImageCandidate } from "./label-extraction.js";
 import { VisionCandidateSchema } from "./vision.js";
 import { gncLabelFixture } from "./label.fixture.js";
 import { labelImageIntegrityCodes } from "./label-quality.js";
+import { ingredientListNotAFormulaExamples } from "./label-rules/examples/ingredient-list-not-a-formula.js";
+import { dailyValueOnlyRowExamples } from "./label-rules/examples/daily-value-only-row.js";
+import { amountEnclosedInNameExamples } from "./label-rules/examples/amount-enclosed-in-name.js";
 const assess = (c = gncLabelFixture()) => assessLabelCandidate(LabelImageCandidateSchema.parse(c));
+it("treats a duplicated Ingredients list as partial without rewriting the candidate", () => {
+  const original = ingredientListNotAFormulaExamples.pass[1]!.subject;
+  const candidate = structuredClone(original);
+  const result = assessLabelCandidate(candidate);
+  expect(result.status).toBe("partial");
+  expect(result.codes).toEqual([]);
+  expect(result.warnings).toEqual([expect.objectContaining({ code: "LABEL.FORMULA_IS_INGREDIENT_LIST" })]);
+  expect(candidate).toEqual(original);
+});
+it("accepts a food %DV-only row and an included amount in the row name", () => {
+  const original = ingredientListNotAFormulaExamples.pass[1]!.subject;
+  const food = structuredClone(original);
+  type ImageRows = NonNullable<LabelImageCandidate["formula"]>["columns"][number]["rows"];
+  food.formula = { drugFacts: null, servingSize: { text: "2 Tbsp (30mL)", evidence: "2 Tbsp (30mL)" }, servingsPerContainer: null,
+    columns: [{ heading: { text: "Amount per serving", evidence: "Amount per serving" }, rows: [...dailyValueOnlyRowExamples.pass[0]!.subject.columns[0]!.rows] as ImageRows }] };
+  food.formulaComplete = true;
+  expect(assessLabelCandidate(food).status).toBe("candidate");
+  const sugars = structuredClone(food);
+  sugars.formula!.columns[0]!.rows = [...amountEnclosedInNameExamples.pass[0]!.subject.rows] as ImageRows;
+  const result = assessLabelCandidate(sugars);
+  expect(result.status).toBe("candidate");
+  expect(result.warnings).toEqual([expect.objectContaining({ code: "LABEL.AMOUNT_IN_NAME" })]);
+  expect(sugars.formula!.columns[0]!.rows[0]!.amount).toBeNull();
+});
 it("keeps 3 dose-free headers, 15 numerical rows and 11 components without duplicated ingredient records", () => {
   const c = gncLabelFixture(), rows = c.formula!.columns[0]!.rows;
   expect(assess(c)).toEqual({ status: "candidate", codes: [], findings: [], warnings: [] });

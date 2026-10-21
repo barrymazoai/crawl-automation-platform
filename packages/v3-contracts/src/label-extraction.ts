@@ -4,6 +4,9 @@ import { LabelIngredientDeclarationSchema } from "./label-ingredient-declaration
 import { hasConfirmedNoOtherIngredients, ingredientDeclarationIncomplete } from "./label-ingredient-declaration.js";
 import { assessLabelRows } from "./label-row-assessment.js";
 import { acceptedEmptyCells, emptyCellRule } from "./label-rules/empty-cell.js";
+import { acceptsDailyValueOnlyRow } from "./label-rules/daily-value-only-row.js";
+import { acceptsAmountInName } from "./label-rules/amount-enclosed-in-name.js";
+import { isIngredientListFormula, ingredientListNotAFormulaRule } from "./label-rules/ingredient-list-not-a-formula.js";
 import { applyLabelRules } from "./label-rules/rule.js";
 export { hasConfirmedNoOtherIngredients } from "./label-ingredient-declaration.js";
 
@@ -65,10 +68,21 @@ export function assessLabelCandidate(candidate: LabelCandidate) {
   // Every code keeps the first place that raised it, so a Review can say which row broke which rule.
   const flag = (code: string, detail: string, rule?: string) => { if (!codes.has(code)) findings.push({ code, detail, ...(rule ? { rule } : {}) }); codes.add(code); };
   let componentCount = 0;
-  const columns = candidate.formula?.columns ?? [];
+  const ingredientListFormula = isIngredientListFormula(candidate);
+  const formula = ingredientListFormula ? null : candidate.formula;
+  if (ingredientListFormula) warnings.push({ code: ingredientListNotAFormulaRule.code, rule: ingredientListNotAFormulaRule.id, detail: "formula only repeats the printed Ingredients list; treated as no formula, with the ingredient list retained" });
+  const columns = formula?.columns ?? [];
   for (const [at, column] of columns.entries()) {
     column.rows.forEach((_, index) => applyLabelRules([emptyCellRule], { columns, column: at, index }).forEach(f => flag(f.code, f.detail, f.rule)));
-    const rows = assessLabelRows(column.rows, acceptedEmptyCells(columns, at));
+    const accepted = acceptedEmptyCells(columns, at);
+    column.rows.forEach((row, index) => {
+      if (acceptsDailyValueOnlyRow({ columns, column: at, index })) accepted.add(index);
+      if (acceptsAmountInName({ rows: column.rows, index })) {
+        accepted.add(index);
+        warnings.push({ code: "LABEL.AMOUNT_IN_NAME", rule: "amount-enclosed-in-name", detail: `row ${index} "${row.name.text.slice(0, 80)}": amount is printed in the row name` });
+      }
+    });
+    const rows = assessLabelRows(column.rows, accepted);
     rows.findings.forEach(finding => flag(finding.code, finding.detail, finding.rule));
     warnings.push(...rows.warnings);
     componentCount += column.rows.filter(row => row.kind === "blend_component").length;
@@ -80,20 +94,20 @@ export function assessLabelCandidate(candidate: LabelCandidate) {
     if (candidate.otherIngredients.items.some(i => /\b(?:contains\s*:|may\s+contain|manufactured\s+(?:in|on)|shared\s+equipment)/i.test(i.text))) flag("LABEL.INGREDIENT_ROLE_INVALID", "an ingredient item is an allergen/manufacturing statement");
   }
   if (!candidate.formula && candidate.formulaComplete || !hasIngredients && candidate.ingredientsComplete) flag("LABEL.COMPLETENESS_CONFLICT", "marked complete with nothing extracted");
-  if (candidate.formula?.drugFacts && !validDrugFormula(candidate)) flag("LABEL.FORMULA_INCOMPLETE", "Drug Facts requires its heading, active ingredient columns and inactive ingredients");
-  if (candidate.formula && !candidate.formulaComplete) flag("LABEL.FORMULA_INCOMPLETE", "model marked the formula incomplete");
+  if (formula?.drugFacts && !validDrugFormula(candidate)) flag("LABEL.FORMULA_INCOMPLETE", "Drug Facts requires its heading, active ingredient columns and inactive ingredients");
+  if (formula && !candidate.formulaComplete) flag("LABEL.FORMULA_INCOMPLETE", "model marked the formula incomplete");
   // Owner 2026-10-07: a formula need not be perfect; a label (e.g. a website Facts block) that prints no serving
   // size keeps its formula with an empty serving size, never one guessed from directions.
-  if (candidate.formula && !candidate.formula.servingSize && !candidate.formula.drugFacts) warnings.push({ code: "LABEL.SERVING_SIZE_MISSING", detail: "formula has no printed serving size; kept with an empty serving size" });
+  if (formula && !formula.servingSize && !formula.drugFacts) warnings.push({ code: "LABEL.SERVING_SIZE_MISSING", detail: "formula has no printed serving size; kept with an empty serving size" });
   if (hasIngredients && !candidate.ingredientsComplete) flag("LABEL.INGREDIENTS_INCOMPLETE", candidate.otherIngredients ? "model marked the ingredient list incomplete" : "only blend components, no Other Ingredients list");
   const uncertain = candidate.issues.find(i => ["UNREADABLE", "AMBIGUOUS", "METADATA_CONFLICT"].includes(i.code));
   if (uncertain) flag("LABEL.EVIDENCE_UNCERTAIN", `model reported ${uncertain.code}${"detail" in uncertain && uncertain.detail ? `: ${String(uncertain.detail).slice(0, 160)}` : ""}`);
   // A contradiction is a section marked complete and also reported missing. A partly visible section reported
   // missing is only incomplete (owner 2026-10-07): it is left out, and the label's complete sections still count.
-  if (candidate.formula && candidate.formulaComplete && candidate.issues.some(i => i.code === "FORMULA_MISSING") ||
+  if (formula && candidate.formulaComplete && candidate.issues.some(i => i.code === "FORMULA_MISSING") ||
       hasIngredients && candidate.ingredientsComplete && candidate.issues.some(i => i.code === "INGREDIENTS_MISSING")) flag("LABEL.COMPLETENESS_CONFLICT", "a section marked complete is also reported missing");
-  if (!candidate.formula && !hasIngredients) flag("LABEL.CORE_MISSING", `no formula and no ingredients${candidate.issues[0] && "detail" in candidate.issues[0] && candidate.issues[0].detail ? `; model: ${String(candidate.issues[0].detail).slice(0, 160)}` : ""}`);
-  return { status: codes.size ? "review" as const : candidate.formula && hasIngredients ? "candidate" as const : "partial" as const,
+  if (!formula && !hasIngredients) flag("LABEL.CORE_MISSING", `no formula and no ingredients${candidate.issues[0] && "detail" in candidate.issues[0] && candidate.issues[0].detail ? `; model: ${String(candidate.issues[0].detail).slice(0, 160)}` : ""}`);
+  return { status: codes.size ? "review" as const : formula && hasIngredients ? "candidate" as const : "partial" as const,
     codes: [...codes], findings, warnings };
 }
 

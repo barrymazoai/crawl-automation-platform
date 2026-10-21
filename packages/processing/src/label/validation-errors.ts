@@ -14,6 +14,16 @@ export const labelValidationWarnings = defineErrors({
     category: "VALIDATION",
     message: "The formula is kept with an empty serving size because the label prints none.",
   },
+  "LABEL.AMOUNT_IN_NAME": {
+    category: "VALIDATION",
+    message:
+      'The row\'s amount is printed inside its name ("Includes 4g Added Sugars"); no separate amount cell.',
+  },
+  "LABEL.FORMULA_IS_INGREDIENT_LIST": {
+    category: "VALIDATION",
+    message:
+      "The answer's formula only repeats the printed Ingredients list; the label has no formula panel.",
+  },
 });
 
 /** Registered reasons retained in Reviews and source observations. */
