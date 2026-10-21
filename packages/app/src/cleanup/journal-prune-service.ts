@@ -17,8 +17,11 @@ export type JournalPruneStart = z.input<typeof JournalPruneStartSchema>;
 export interface JournalPruneDeps {
   prune(removeFiles: boolean, signal: AbortSignal): Promise<JournalPruneReport>;
   log: Logger;
-  /** UTC hour of the daily run, which removes files; null runs only when started through the API. */
-  dailyAtUtcHour: number | null;
+  /**
+   * How often the scheduled run, which removes files, starts: on every multiple of this from midnight UTC
+   * (3,600,000 = every full hour). Null runs only when started through the API.
+   */
+  intervalMs: number | null;
   now?: () => Date;
 }
 
@@ -29,8 +32,9 @@ export interface JournalPruneStatus {
 }
 
 /**
- * Owner 2026-10-19: this machine's copies of original pages are removed once a day after R2 is checked to hold the
- * same bytes. One prune at a time; the last result stays readable until the API restarts.
+ * Owner 2026-10-19: this machine's copies of original pages are removed after R2 is checked to hold the same
+ * bytes. Owner 2026-10-21: on a fixed interval (every hour on Server 一) instead of once a day, so the copies never
+ * pile up for two days. One prune at a time; the last result stays readable until the API restarts.
  */
 export class JournalPruneService {
   private running: JournalPruneStatus["running"] = null;
@@ -56,12 +60,14 @@ export class JournalPruneService {
 
   async run(signal: AbortSignal): Promise<void> {
     this.lifetime = signal;
-    const hour = this.deps.dailyAtUtcHour;
-    if (hour === null) {
+    const interval = this.deps.intervalMs;
+    if (interval === null) {
       return;
     }
     while (!signal.aborted) {
-      const ok = await delay(untilNextHour(this.now(), hour), true, { signal }).catch(ignoreAbort);
+      const ok = await delay(untilNextTick(this.now(), interval), true, { signal }).catch(
+        ignoreAbort,
+      );
       if (ok && !this.running) {
         await this.prune(true);
       }
@@ -87,11 +93,7 @@ export class JournalPruneService {
   }
 }
 
-export function untilNextHour(now: Date, utcHour: number): number {
-  const next = new Date(now);
-  next.setUTCHours(utcHour, 0, 0, 0);
-  if (next.getTime() <= now.getTime()) {
-    next.setUTCDate(next.getUTCDate() + 1);
-  }
-  return next.getTime() - now.getTime();
+/** Milliseconds until the next multiple of `intervalMs` from midnight UTC; a tick on the dot waits a full interval. */
+export function untilNextTick(now: Date, intervalMs: number): number {
+  return intervalMs - (now.getTime() % intervalMs);
 }

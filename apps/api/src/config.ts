@@ -139,6 +139,8 @@ export const ApiConfigSchema = z
     /**
      * This machine's copies of original pages, removed once R2 holds the same bytes (owner 2026-10-19). Needs
      * `storage` (the workers' R2 scope) and runs only where the API shares the workers' disk (Server 一).
+     * Owner 2026-10-21: every hour, leaving folders written in the last two hours alone, so the copies never
+     * fill the disk between runs.
      */
     journalPrune: z
       .strictObject({
@@ -148,9 +150,13 @@ export const ApiConfigSchema = z
           .array(z.string().min(1))
           .min(1)
           .default([...JOURNAL_HTML_PREFIXES]),
-        minAgeHours: z.number().int().min(1).max(720).default(24),
-        /** UTC hour of the daily prune (20 = 04:00 Beijing); null runs only when started through the API. */
-        dailyAtUtcHour: z.number().int().min(0).max(23).nullable().default(null),
+        /** A product folder with any write younger than this stays whole. */
+        minAgeHours: z.number().int().min(1).max(720).default(2),
+        /**
+         * Minutes between scheduled prunes, aligned to midnight UTC (60 = every full hour); null runs only when
+         * started through the API.
+         */
+        intervalMinutes: z.number().int().min(5).max(1440).nullable().default(60),
       })
       .optional(),
   })

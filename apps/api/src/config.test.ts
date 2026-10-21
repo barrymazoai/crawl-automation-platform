@@ -48,6 +48,22 @@ describe("API config", () => {
   });
 });
 
+describe("journal prune settings", () => {
+  const root = "/srv/crawler/live/pipeline/journal";
+
+  it("runs every hour and leaves folders written in the last two hours alone by default", () => {
+    const config = ApiConfigSchema.parse({ ...productionShaped, journalPrune: { root } });
+    expect(config.journalPrune).toMatchObject({ root, minAgeHours: 2, intervalMinutes: 60 });
+  });
+
+  it("takes a manual-only schedule and refuses the retired daily hour", () => {
+    const manual = { ...productionShaped, journalPrune: { root, intervalMinutes: null } };
+    expect(ApiConfigSchema.parse(manual).journalPrune?.intervalMinutes).toBeNull();
+    const daily = { ...productionShaped, journalPrune: { root, dailyAtUtcHour: 20 } };
+    expect(ApiConfigSchema.safeParse(daily).success).toBe(false);
+  });
+});
+
 describe("test evidence settings", () => {
   it("keeps test capture optional for existing API configs", () => {
     expect(ApiConfigSchema.parse(productionShaped).evidence).toBeUndefined();

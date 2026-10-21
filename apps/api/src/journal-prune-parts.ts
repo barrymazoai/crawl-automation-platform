@@ -18,6 +18,6 @@ export function journalPruneService(parts: { config: ApiConfig; log: Logger }) {
     prune: (removeFiles, signal) =>
       pruneJournal({ ...input, removeFiles }, { remote: r2.store, now: () => new Date() }, signal),
     log: parts.log.child({ service: "journal-prune" }),
-    dailyAtUtcHour: settings.dailyAtUtcHour,
+    intervalMs: settings.intervalMinutes === null ? null : settings.intervalMinutes * 60_000,
   });
 }
