@@ -7,6 +7,7 @@ import {
 } from "@crawl-automation/v3-contracts";
 import { visionFailure } from "../vision-errors.js";
 import { MAX_VISION_ANSWER_BYTES } from "./vision-limits.js";
+import { separateIngredientDeclarations } from "./ingredient-transcription.js";
 
 type LabelImageCandidate = z.infer<typeof LabelImageCandidateSchema>;
 type Column = NonNullable<LabelImageCandidate["formula"]>["columns"][number];
@@ -96,8 +97,10 @@ export function decodeLabelImage(response: string) {
   if (Buffer.byteLength(response) > MAX_VISION_ANSWER_BYTES) {
     throw visionFailure("VISION.OUTPUT_LIMIT", "executed");
   }
-  const candidate = retainDailyValueHeading(
-    LabelImageCandidateSchema.omit({ ingredientDeclaration: true }).parse(JSON.parse(response)),
+  const candidate = separateIngredientDeclarations(
+    retainDailyValueHeading(
+      LabelImageCandidateSchema.omit({ ingredientDeclaration: true }).parse(JSON.parse(response)),
+    ),
   );
   return { candidate, ...assessLabelCandidate(candidate) };
 }

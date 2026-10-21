@@ -118,4 +118,68 @@ describe("decodeLabelText", () => {
 
     expect(result.codes).toContain("LABEL.EXTRACTION_INCOMPLETE");
   });
+
+  it("splits a trailing allergen statement with exact citations and full coverage", () => {
+    const lines = [...dRibose.slice(0, -1), "Other Ingredients: silicon dioxide. Contains: Soy."];
+    const wire = {
+      ...answer,
+      otherIngredients: {
+        ...answer.otherIngredients,
+        items: [{ fromLine: 18, toLine: 18, text: "silicon dioxide. Contains: Soy." }],
+      },
+    };
+    const { text, result } = decode(lines, wire);
+    expect(result.codes).toEqual([]);
+    expect(result.candidate.otherIngredients?.items.map((item) => item.text)).toEqual([
+      "silicon dioxide.",
+    ]);
+    const allergen = result.candidate.exclusions.find((item) => item.reason === "allergen");
+    expect(allergen?.quote.text).toBe("Contains: Soy.");
+    expect(allergen && text.slice(allergen.quote.start, allergen.quote.end)).toBe("Contains: Soy.");
+  });
+
+  it("moves a statement-only item and a shared-equipment tail into allergen exclusions", () => {
+    for (const warning of ["CONTAINS: MILK", "Shared Equipment with Milk."]) {
+      const lines = [...dRibose.slice(0, -1), `Other Ingredients: rice flour, ${warning}`];
+      const wire = {
+        ...answer,
+        otherIngredients: {
+          ...answer.otherIngredients,
+          items: [
+            { fromLine: 18, toLine: 18, text: "rice flour" },
+            { fromLine: 18, toLine: 18, text: warning },
+          ],
+        },
+      };
+      const { result } = decode(lines, wire);
+      expect(result.codes).toEqual([]);
+      expect(result.candidate.otherIngredients?.items.map((item) => item.text)).toEqual([
+        "rice flour",
+      ]);
+      expect(result.candidate.exclusions.at(-1)).toMatchObject({
+        reason: "allergen",
+        quote: { text: warning },
+      });
+    }
+  });
+
+  it("excludes a French repeat from the first French label word", () => {
+    const item =
+      "Organic rolled oats. Contains: Oats. Ingrédients : Flocons d’avoine biologique. Contient : Avoine.";
+    const lines = [...dRibose.slice(0, -1), `Other Ingredients: ${item}`];
+    const wire = {
+      ...answer,
+      otherIngredients: {
+        ...answer.otherIngredients,
+        items: [{ fromLine: 18, toLine: 18, text: item }],
+      },
+    };
+    const { text, result } = decode(lines, wire);
+    expect(result.codes).toEqual([]);
+    expect(result.candidate.otherIngredients?.items[0]?.text).toBe("Organic rolled oats.");
+    const noise = result.candidate.exclusions.at(-1);
+    expect(noise?.reason).toBe("noise");
+    expect(noise?.quote.text).toBe("Ingrédients : Flocons d’avoine biologique. Contient : Avoine.");
+    expect(noise && text.slice(noise.quote.start, noise.quote.end)).toBe(noise?.quote.text);
+  });
 });

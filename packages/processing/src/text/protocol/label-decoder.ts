@@ -18,6 +18,7 @@ import { labelLimitErrors } from "./label-limits.js";
 import { resolveAnchor, type Anchor, type AnchorContext } from "./resolve-anchor.js";
 import { isWithinText, splitsCharacter } from "./text-range.js";
 import { textLimits } from "../limits.js";
+import { separateTextIngredientDeclarations } from "./ingredient-declarations.js";
 
 type Wire = z.infer<typeof LabelTextWireSchema>;
 type WireRow = NonNullable<Wire["formula"]>["columns"][number]["rows"][number];
@@ -49,13 +50,20 @@ export function decodeLabelText(request: LabelTextRequest): DecodedLabel {
   const wire: Wire = schema.parse(JSON.parse(response));
   const quotes = new QuotePlacer(evidenceLines(scope, text), text);
   const candidate = LabelTextCandidateSchema.parse(quotes.place(wire));
+  const modelExclusions = candidate.exclusions.length;
+  separateTextIngredientDeclarations(candidate);
   const assessment = assessLabelCandidate(candidate);
   const codes = new Set([
     ...assessment.codes,
     ...rowOrderCodes(candidate),
     ...drugStructureCodes(candidate, text, scope.range),
     ...ingredientCodes(candidate, text),
-    ...exclusionCodes({ candidate, text, policyVersion }),
+    // Model exclusions still need policy review; decoded slices already have exact placed citations.
+    ...exclusionCodes({
+      candidate: { ...candidate, exclusions: candidate.exclusions.slice(0, modelExclusions) },
+      text,
+      policyVersion,
+    }),
   ]);
   const coverage = labelCoverage(candidate, { text, range: scope.range }, quotes.placed);
   if (!coversEveryPrintedCharacter(text, scope.range, coverage)) {

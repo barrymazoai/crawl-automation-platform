@@ -78,6 +78,42 @@ describe("vision answer formats", () => {
     });
   });
 
+  it("separates a trailing warning and French repeat without changing image evidence", () => {
+    const label = labelCandidate();
+    const original =
+      "Organic rolled oats. Contains: Oats. Ingrédients : Flocons d’avoine biologique. Contient : Avoine.";
+    if (!label.otherIngredients) {
+      throw new Error("fixture has no ingredient section");
+    }
+    label.otherIngredients.items = [field(original)];
+    const decoded = decodeLabelImage(JSON.stringify(label));
+    expect(decoded.codes).not.toContain("LABEL.INGREDIENT_ROLE_INVALID");
+    expect(decoded.candidate.otherIngredients?.items).toEqual([
+      { text: "Organic rolled oats.", evidence: original },
+    ]);
+    expect(decoded.candidate.exclusions.slice(-2)).toEqual([
+      { reason: "allergen", quote: { text: "Contains: Oats.", evidence: original } },
+      {
+        reason: "noise",
+        quote: {
+          text: "Ingrédients : Flocons d’avoine biologique. Contient : Avoine.",
+          evidence: original,
+        },
+      },
+    ]);
+  });
+
+  it("keeps parenthesized may contain text inside an ingredient", () => {
+    const label = labelCandidate();
+    if (!label.otherIngredients) {
+      throw new Error("fixture has no ingredient section");
+    }
+    label.otherIngredients.items = [field("Paprika (may contain Silicon Dioxide)")];
+    const decoded = decodeLabelImage(JSON.stringify(label));
+    expect(decoded.candidate.otherIngredients?.items).toEqual(label.otherIngredients.items);
+    expect(decoded.candidate.exclusions).toEqual(label.exclusions);
+  });
+
   it("still fail a missing readable dose, keeping the printed metadata", () => {
     const label = labelCandidate();
     const row = label.formula?.columns[0]?.rows[14];
@@ -159,6 +195,21 @@ describe("vision answer formats", () => {
     expect(decoded.candidate.otherIngredients?.items.map((item) => item.text)).toEqual(
       text.split(", "),
     );
+  });
+
+  it("v2 keeps commas inside a trailing allergen declaration", () => {
+    const label = labelCandidate();
+    const text = "rice flour, silicon dioxide. Contains: Milk, Soy";
+    const decoded = decodeLabelImageV2(wire(label, field(text)));
+    expect(decoded.candidate.otherIngredients?.items.map((item) => item.text)).toEqual([
+      "rice flour",
+      "silicon dioxide.",
+    ]);
+    expect(decoded.candidate.exclusions.at(-1)).toEqual({
+      reason: "allergen",
+      quote: { text: "Contains: Milk, Soy", evidence: text },
+    });
+    expect(decoded.codes).not.toContain("LABEL.INGREDIENT_ROLE_INVALID");
   });
 
   it("v2 refuses a missing or contradictory transcription instead of inventing ingredients", () => {
