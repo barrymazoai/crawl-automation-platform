@@ -171,7 +171,6 @@ export function readJsonLdProduct(
     selectedVariantId: selected,
     variants,
     commerce: commerce(offer, product),
-    detailsHtml,
     ...readProductContent(
       document,
       { ...context, url, productId: contentProductId ?? productId },

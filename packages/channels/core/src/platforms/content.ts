@@ -11,9 +11,25 @@ import { observedImageSizes, shopifyThemeAsset } from "./observed-images.js";
 
 const SECTIONS =
   'table, details, [id*="facts"], [class*="facts"], [id*="ingredients"], [class*="accordion"], [class*="description"]';
+const RENDERED_DETAILS =
+  'details, [id*="facts"], [class*="facts"], [id*="ingredients"], [class*="accordion"], [class*="description"]';
 
 export function productRoot(document: Document, context: PlatformContext): Element | null {
   return document.querySelector(context.productSelector ?? PRODUCT_CONTENT.root);
+}
+
+/** Use only readable description and accordion blocks owned by the rendered product root. */
+export function renderedProductDetails(scope: ProductContentScope): string | null {
+  const nodes = [...(scope.root?.querySelectorAll(RENDERED_DETAILS) ?? [])].filter(
+    (node) =>
+      allowedContent(node, scope.identity) &&
+      !node.closest("[inert]") &&
+      Boolean(pageText(ownContentHtml(node, scope.identity))),
+  );
+  const blocks = nodes.filter(
+    (node) => !nodes.some((parent) => parent !== node && parent.contains(node)),
+  );
+  return blocks.map((node) => ownContentHtml(node, scope.identity)).join("\n") || null;
 }
 
 export function factsSection(scope: ProductContentScope, description: string | null) {
