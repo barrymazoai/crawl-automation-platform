@@ -8,6 +8,12 @@ import type { MigrationQuery } from "./migration-history-repository.js";
 
 const execute = promisify(execFile);
 
+/**
+ * The 2026-10-22 database dumps 1.4 GB+ and no longer finishes in 90 s (two backups were cut off and migration 065
+ * stopped before running). The dump reads one exported snapshot, so a long dump changes nothing; it only has to end.
+ */
+const DUMP_TIMEOUT_MS = 30 * 60_000;
+
 export interface MigrationConnection {
   host: string;
   port: number;
@@ -70,7 +76,7 @@ export class BackupRepository {
         `--snapshot=${snapshot}`,
         `--file=${file}`,
       ],
-      { env: this.environment(), timeout: 90_000, maxBuffer: 1024 * 1024 },
+      { env: this.environment(), timeout: DUMP_TIMEOUT_MS, maxBuffer: 1024 * 1024 },
     );
     await chmod(file, 0o600);
   }
@@ -89,7 +95,8 @@ export class BackupRepository {
       PGPASSWORD: password,
       PGCONNECT_TIMEOUT: "5",
       PGSSLMODE: "disable",
-      PGOPTIONS: "-c search_path=public -c statement_timeout=60000",
+      // pg_dump's COPY of the largest table is one statement; the dump as a whole is bounded by DUMP_TIMEOUT_MS.
+      PGOPTIONS: "-c search_path=public -c statement_timeout=0",
     };
   }
 }
