@@ -1,6 +1,8 @@
 import { execFileSync } from "node:child_process";
 import { AddToQueueSchema, type ScanResult } from "@crawl-automation/app";
+import { hashString } from "@crawl-automation/processing";
 import type { Database } from "@crawl-automation/platform";
+import { readFileSync } from "node:fs";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { PostgresBrandScans } from "../src/postgres/postgres-brand-scans.js";
 import { PostgresBrandSourceImport } from "../src/postgres/postgres-brand-source-import.js";
@@ -18,6 +20,10 @@ const hasPostgres = (() => {
 
 const requestId = "66666666-6666-4666-8666-666666666666";
 const earlierList = "77777777-7777-4777-8777-777777777777";
+const observedList = "abababab-abab-4bab-8bab-abababababab";
+const collectedFixture = JSON.parse(
+  readFileSync(new URL("../src/postgres/fixtures/collected-product.json", import.meta.url), "utf8"),
+) as Record<string, unknown> & { observation: Record<string, unknown> };
 
 const result: ScanResult = {
   state: "complete",
@@ -118,6 +124,73 @@ describe.skipIf(!hasPostgres)("brand scans against a real PostgreSQL", () => {
     }
     const known = await scans.knownListings(source, scan.scanId);
     expect(known.map((item) => item.listingId)).toEqual(["877080", "877081"]);
+  });
+
+  it("reads only variants actually collected by earlier base-address attempts", async () => {
+    const [scan] = await scans.list({ channel: "gnc", limit: 1 });
+    const [source] = await scans.sources([sourceId]);
+    if (!scan || !source) {
+      throw new Error("scan source missing");
+    }
+    const queue = new PostgresChannelQueueStore(database);
+    await queue.add(
+      AddToQueueSchema.parse({
+        channel: "gnc",
+        batchId: observedList,
+        label: "base observations",
+        products: [
+          { sourceId, url: "https://www.gnc.com/products/base", listingId: "base" },
+          { sourceId, url: "https://www.gnc.com/products/uncaptured", listingId: "uncaptured" },
+          {
+            sourceId,
+            url: "https://www.gnc.com/products/base?variant=other",
+            listingId: "base",
+            variantId: "other",
+          },
+        ],
+      }),
+    );
+    const rows = await database.query<{ item_id: string; variant_id: string | null }>(
+      "SELECT item_id, variant_id FROM queue_item WHERE batch_id = $1::uuid AND listing_id = 'base'",
+      [observedList],
+    );
+    for (const item of rows) {
+      const base = item.variant_id === null;
+      const runId = base
+        ? "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
+        : "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
+      await database.query(
+        "UPDATE queue_item SET state = 'running', attempt = 1, run_id = $2::uuid WHERE item_id = $1",
+        [item.item_id, runId],
+      );
+      await database.query(
+        "INSERT INTO queue_attempt (run_id, item_id, channel, attempt) VALUES ($1::uuid, $2, 'gnc', 1)",
+        [runId, item.item_id],
+      );
+      const operationId = `base-observed-${base ? "base" : "variant"}`;
+      const observationId = `base-observation-${base ? "base" : "variant"}`;
+      const record = {
+        ...collectedFixture,
+        operationId,
+        observation: {
+          ...collectedFixture.observation,
+          requestId: runId,
+          observationId,
+          sourceId,
+          listingId: "base",
+          variantId: item.variant_id === null ? "captured" : "other",
+        },
+      };
+      await database.query(
+        `INSERT INTO collected_product (operation_id, observation_id, record_hash, record)
+         VALUES ($1, $2, $3, $4::jsonb)`,
+        [operationId, observationId, hashString(JSON.stringify(record)), JSON.stringify(record)],
+      );
+    }
+    expect(await scans.observedBaseVariants(source, scan.scanId, ["base", "uncaptured"])).toEqual(
+      new Map([["base", new Set(["captured"])]]),
+    );
+    expect(await scans.observedBaseVariants(source, scan.scanId, [])).toEqual(new Map());
   });
 
   it("answers one scan, and counts its revisits: listed, seen and not seen yet", async () => {

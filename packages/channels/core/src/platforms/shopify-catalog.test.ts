@@ -10,19 +10,22 @@ const hasCorpus = existsSync(`${corpus}/sambucol.page.html`);
 
 describe("retained Shopify products.json pages", () => {
   it.skipIf(!hasCorpus).each([
-    ["bloodsugarfriendly", 6],
-    ["sambucol", 22],
-    ["auri", 5],
-    ["tally", 17],
-    ["womaness", 43],
-    ["katefarms", 19],
-    ["energi", 81],
-    ["natrol", 46],
-    ["jarrow", 104],
-  ])("parses %s as %i products", (name, count) => {
-    expect(readShopifyCatalogPage(readFileSync(`${corpus}/${name}.json`, "utf8"))).toHaveLength(
-      count,
-    );
+    ["bloodsugarfriendly", 6, 6],
+    ["sambucol", 22, 22],
+    ["auri", 5, 14],
+    ["tally", 17, 34],
+    ["womaness", 43, 52],
+    ["katefarms", 19, 48],
+    ["energi", 81, 81],
+    ["natrol", 46, 65],
+    ["jarrow", 104, 146],
+  ])("parses %s as %i products and %i variants", (name, products, variants) => {
+    const parsed = readShopifyCatalogPage(readFileSync(`${corpus}/${name}.json`, "utf8"));
+    expect(parsed).toHaveLength(products);
+    expect(parsed.reduce((count, product) => count + product.variants.length, 0)).toBe(variants);
+    expect(
+      parsed.every((product) => product.variants.every((variant) => variant.id && variant.title)),
+    ).toBe(true);
   });
 
   it("parses an empty page after the last one as no products", () => {
@@ -37,4 +40,16 @@ describe("retained Shopify products.json pages", () => {
       );
     },
   );
+
+  it.each([
+    { variants: [] },
+    { variants: [{ title: "Default Title" }] },
+    { variants: [{ id: 1, title: "" }] },
+    { variants: [{ id: 1, title: "Default Title", available: "yes" }] },
+  ])("rejects a product with invalid variants: $variants", ({ variants }) => {
+    const body = JSON.stringify({ products: [{ id: 1, handle: "one", title: "One", variants }] });
+    expect(() => readShopifyCatalogPage(body)).toThrowError(
+      expect.objectContaining({ code: "DTC.CATALOG_JSON_INVALID" }),
+    );
+  });
 });

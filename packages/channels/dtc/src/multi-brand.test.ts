@@ -53,6 +53,7 @@ function listing(request: DtcCatalogRead) {
     title: "Minerals",
     handle: `mineral-${request.position}`,
     vendor: "Thorne",
+    variants: [{ id: 11, title: "Default Title", available: true }],
   };
   return {
     url: request.url,
@@ -89,7 +90,7 @@ describe("a multi-brand scan is exactly one brand's collection", () => {
         brand: "Thorne",
         seller: site.siteKey,
         brandBasis: "page",
-        url: `${origin}/products/mineral-1`,
+        url: `${origin}/products/mineral-1?variant=11`,
       }),
     ]);
   });

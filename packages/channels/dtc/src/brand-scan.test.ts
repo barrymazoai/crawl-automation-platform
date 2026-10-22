@@ -46,7 +46,8 @@ describe("Shopify products.json brand scan", () => {
     expect(result.pages[0]?.products).toHaveLength(22);
     expect(result.pages[0]?.products[0]).toMatchObject({
       productId: "364217073700",
-      url: "https://sambucolusa.com/products/black-elderberry-syrup-small-4-oz",
+      url: "https://sambucolusa.com/products/black-elderberry-syrup-small-4-oz?variant=4787217924132",
+      variantId: "4787217924132",
       brandEvidence: { observedBrand: "Sambucol", status: "site-brand" },
     });
   });
@@ -68,7 +69,14 @@ describe("Shopify products.json brand scan", () => {
         "https://shop.katefarms.com/collections/all/products.json?limit=250&page=1",
       );
       expect(result.sourceUrl).toBe(kate.catalogUrl);
-      expect(result.pages[0]?.products).toHaveLength(19);
+      expect(result.pages[0]?.products).toHaveLength(48);
+      expect(result.pages[0]?.cards).toBe(19);
+      expect(result.pages[0]?.products[0]).toMatchObject({
+        productId: "7135864127664",
+        url: "https://shop.katefarms.com/products/glucose-support-1-2?variant=41796131979440",
+        variantId: "41796131979440",
+        title: "Glucose Support 1.2 - Vanilla / Case of 12",
+      });
     },
   );
 
@@ -86,10 +94,50 @@ describe("Shopify products.json brand scan", () => {
         signal(),
       );
       expect(result.pages).toHaveLength(1);
-      expect(result.pages[0]?.products).toHaveLength(104);
+      expect(result.pages[0]?.products).toHaveLength(146);
+      expect(result.pages[0]?.cards).toBe(104);
       expect(read).toHaveBeenCalledOnce();
     },
   );
+
+  it.skipIf(!hasCorpus).each([
+    {
+      name: "auri",
+      siteKey: "auri.com",
+      source: "https://auri.com/collections/all",
+      products: 5,
+      variants: 14,
+      firstUrl: "https://auri.com/products/kids-daily-gummies?variant=45457309171769",
+      firstTitle: "Super Mushroom Daily Gummies® for Kids - 1-Pack / 30 Day Supply",
+    },
+    {
+      name: "tally",
+      siteKey: "tallyhealth.com",
+      source: "https://tallyhealth.com/collections/all",
+      products: 17,
+      variants: 34,
+      firstUrl: "https://tallyhealth.com/products/amplify?variant=42309124882567",
+      firstTitle: "Amplify - Jar",
+    },
+  ])("lists each $name variant at its own address", async (fixture) => {
+    const scoped = dtcSitePolicy({
+      siteKey: fixture.siteKey,
+      platform: "shopify",
+      catalogUrl: fixture.source,
+    });
+    const read = vi.fn(async (request: DtcCatalogRead) => drawn(request, retained(fixture.name)));
+    const result = await new DtcBrandScan({ pages: { read }, sites: [scoped] }).scan(
+      { scanId: fixture.name, sourceUrl: fixture.source },
+      signal(),
+    );
+    expect(result.pages[0]?.cards).toBe(fixture.products);
+    expect(result.pages[0]?.products).toHaveLength(fixture.variants);
+    expect(result.pages[0]?.products[0]).toMatchObject({
+      url: fixture.firstUrl,
+      title: fixture.firstTitle,
+    });
+    expect(result.pages[0]?.products.every((product) => product.variantId !== null)).toBe(true);
+  });
 
   it("keeps a 250-product page cap partial and rejects an identical next page", async () => {
     const products = Array.from({ length: 250 }, (_, index) => ({
@@ -97,6 +145,7 @@ describe("Shopify products.json brand scan", () => {
       handle: `product-${index + 1}`,
       title: `Product ${index + 1}`,
       vendor: "Sambucol",
+      variants: [{ id: index + 1000, title: "Default Title" }],
     }));
     const read = async (request: DtcCatalogRead) => drawn(request, JSON.stringify({ products }));
     const scan = new DtcBrandScan({ pages: { read }, sites: [site], maxPages: 1 });
@@ -138,7 +187,10 @@ describe("Shopify products.json brand scan", () => {
       ],
     });
     const read = vi.fn(async (request: DtcCatalogRead) =>
-      drawn(request, '{"products":[{"id":1,"handle":"first","title":"First","vendor":"Alpha"}]}'),
+      drawn(
+        request,
+        '{"products":[{"id":1,"handle":"first","title":"First","vendor":"Alpha","variants":[{"id":42,"title":"Default Title"}]}]}',
+      ),
     );
     const result = await new DtcBrandScan({ pages: { read }, sites: [scoped] }).scan(
       { scanId: "query", sourceUrl: "https://shop.example/collections/alpha/?sort_by=title" },

@@ -42,16 +42,28 @@ function listingPage(
 ): DtcListingPage {
   const { site, source } = scope;
   return {
-    products: products.map((product) => ({
-      ...dtcProductAddress(new URL(`/products/${product.handle}`, source.catalogUrl).href, [site]),
-      productId: product.productId,
-      title: product.title,
-      kind: "product",
-      brand: site.kind === "single-brand" ? source.brand : (product.brandRaw ?? source.brand),
-      seller: site.siteKey,
-      brandBasis: site.kind === "multi-brand" && product.brandRaw ? "page" : "source",
-      brandEvidence: dtcBrandEvidence(site, product.brandRaw, source),
-    })),
+    products: products.flatMap((product) =>
+      product.variants.map((variant) => {
+        const url = new URL(`/products/${product.handle}`, source.catalogUrl);
+        url.searchParams.set("variant", variant.id);
+        return {
+          ...dtcProductAddress(url.href, [site]),
+          productId: product.productId,
+          title:
+            variant.title === "Default Title"
+              ? product.title
+              : `${product.title} - ${variant.title}`,
+          kind: "product" as const,
+          brand: site.kind === "single-brand" ? source.brand : (product.brandRaw ?? source.brand),
+          seller: site.siteKey,
+          brandBasis:
+            site.kind === "multi-brand" && product.brandRaw
+              ? ("page" as const)
+              : ("source" as const),
+          brandEvidence: dtcBrandEvidence(site, product.brandRaw, source),
+        };
+      }),
+    ),
     cards: products.length,
     nextPage: products.length === 250 ? position + 1 : null,
     statedTotal: null,

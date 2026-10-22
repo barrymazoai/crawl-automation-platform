@@ -106,12 +106,23 @@ function setup(single = false) {
     byRequest: vi.fn(async () => null),
     revisits: vi.fn(async () => ({ requested: 0, live: 0, unlisted: {}, pending: 0 })),
     knownListings: vi.fn(async () => []),
+    observedBaseVariants: vi.fn(async () => new Map()),
   };
   const read = vi.fn(async (request: { url: string }) => ({
     url: request.url,
     ready: true as const,
     status: 200,
-    html: '<div id="product-grid"><a href="/products/shared">Shared mineral</a></div>',
+    html: JSON.stringify({
+      products: [
+        {
+          id: 42,
+          handle: "shared",
+          title: "Shared mineral",
+          vendor: request.url.includes("/alpha/") ? "Alpha" : "Beta",
+          variants: [{ id: 11, title: "Default Title" }],
+        },
+      ],
+    }),
     archiveKey: `saved/${request.url.split("/").at(-1)}`,
     scroll: { rounds: 3, ended: "stable" as const },
   }));
@@ -244,7 +255,7 @@ it("imports two catalogs via API, runs two independent scans and preserves both 
   expect(test.records).toHaveLength(2);
   await test.runner.tick(AbortSignal.timeout(5000));
   expect(test.read.mock.calls.map(([request]) => request.url)).toEqual(
-    entries.map((entry) => entry.url),
+    entries.map((entry) => `${entry.url}/products.json?limit=250&page=1`),
   );
   expect(test.queued).toHaveLength(2);
   expect(test.queued.map((batch) => batch.batchId)).toEqual(scans.map((scan) => scan.scanId));

@@ -1,4 +1,4 @@
-import { compareScanListings } from "./scan-comparison.js";
+import { compareKnownScanListings } from "./scan-known-observations.js";
 import {
   cancelledScanResult,
   checkScanCancellation,
@@ -154,15 +154,14 @@ export class BrandScanRunner {
     Object.assign(result, listingScanResult(listing), {
       metrics: scanQueueMetrics({ added: 0 }, listing.metrics),
     });
-    // Known: queued by an earlier list of this source (the scan's own list is excluded).
     const known = amazon
       ? await amazon.knownListings(scan)
       : await this.deps.store.knownListings(scan.source, scan.scanId);
+    const counts = await compareKnownScanListings({ store: this.deps.store, scan, listing, known });
     if (await this.deps.store.isCancellationRequested(scan.scanId)) {
       return cancelledScanResult(result);
     }
     const admission = await this.queueAll(scan, listing);
-    const counts = compareScanListings(listing, known);
     Object.assign(result, {
       newListings: counts.newListings,
       knownListings: counts.knownListings,
@@ -173,10 +172,7 @@ export class BrandScanRunner {
       return cancelledScanResult(result);
     }
     const missing = listing.full ? await this.revisitMissing(scan, counts.missing) : 0;
-    return {
-      ...result,
-      missing,
-    };
+    return { ...result, missing };
   }
 
   private read(scan: ScanRecord, signal: AbortSignal): Promise<BrandListing> {

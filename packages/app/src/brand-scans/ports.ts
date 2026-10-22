@@ -38,6 +38,12 @@ export interface BrandScanStore {
   revisits(revisitBatchId: string): Promise<ScanRevisits>;
   /** The listings of this source ever queued by earlier lists (not by the scan itself). */
   knownListings(source: ScanSource, exceptBatchId: string): Promise<QueuedProduct[]>;
+  /** Observed variants for this source's earlier base-address listings, keyed by listing ID. */
+  observedBaseVariants(
+    source: ScanSource,
+    exceptBatchId: string,
+    listingIds: readonly string[],
+  ): Promise<Map<string, Set<string>>>;
 }
 
 /** Listing pages through ScraperAPI, archived before they are read (channels-core `ListingPages`). */

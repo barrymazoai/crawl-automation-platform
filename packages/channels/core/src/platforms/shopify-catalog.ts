@@ -1,11 +1,18 @@
 import { z } from "zod";
 import { platformPageErrors } from "./errors.js";
 
+const ShopifyCatalogVariant = z.object({
+  id: z.union([z.number().int().positive(), z.string().min(1)]),
+  title: z.string().min(1),
+  available: z.boolean().optional(),
+});
+
 const ShopifyCatalogProduct = z.object({
   id: z.union([z.number().int().positive(), z.string().min(1)]),
   handle: z.string().regex(/^[^/?#]+$/),
   title: z.string().min(1),
   vendor: z.string().nullable().optional(),
+  variants: z.array(ShopifyCatalogVariant).min(1),
 });
 const ShopifyCatalogPage = z.object({ products: z.array(ShopifyCatalogProduct) });
 
@@ -29,5 +36,10 @@ export function readShopifyCatalogPage(json: string | undefined) {
     handle: product.handle,
     title: product.title,
     brandRaw: product.vendor?.trim() || null,
+    variants: product.variants.map((variant) => ({
+      id: String(variant.id),
+      title: variant.title,
+      ...(variant.available === undefined ? {} : { available: variant.available }),
+    })),
   }));
 }

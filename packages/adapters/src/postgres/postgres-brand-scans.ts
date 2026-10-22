@@ -151,4 +151,36 @@ export class PostgresBrandScans extends PostgresScanCancellation implements Bran
     );
     return rows.map((row) => KnownRow.parse(row));
   }
+
+  /** One indexed listing lookup over immutable collected observations for earlier base URLs. */
+  async observedBaseVariants(
+    source: ScanSource,
+    exceptBatchId: string,
+    listingIds: readonly string[],
+  ): Promise<Map<string, Set<string>>> {
+    if (listingIds.length === 0) {
+      return new Map();
+    }
+    const rows = await this.database.query(
+      `SELECT DISTINCT q.listing_id AS "listingId",
+         p.record->'observation'->>'variantId' AS "variantId"
+       FROM queue_item q
+       JOIN queue_attempt a ON a.item_id = q.item_id
+       JOIN collected_product p ON p.record->'observation'->>'requestId' = a.run_id::text
+       WHERE q.channel = $1 AND q.source_id = $2::uuid AND q.batch_id <> $3::uuid
+         AND q.variant_id IS NULL AND q.listing_id = ANY($4::text[])
+         AND p.record->'observation'->>'sourceId' = q.source_id::text
+         AND p.record->'observation'->>'listingId' = q.listing_id
+         AND p.record->'observation'->>'variantId' IS NOT NULL`,
+      [source.channel, source.sourceId, exceptBatchId, listingIds],
+    );
+    const observed = new Map<string, Set<string>>();
+    for (const row of rows) {
+      const value = z.object({ listingId: z.string(), variantId: z.string() }).parse(row);
+      const variants = observed.get(value.listingId) ?? new Set<string>();
+      variants.add(value.variantId);
+      observed.set(value.listingId, variants);
+    }
+    return observed;
+  }
 }
