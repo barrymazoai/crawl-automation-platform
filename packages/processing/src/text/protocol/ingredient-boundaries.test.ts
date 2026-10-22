@@ -30,6 +30,25 @@ describe("anchored ingredient boundaries", () => {
     const ingredients = "Water, Contains 2 percent or less of (Citric Acid, Pectin).";
     expect(decodeSimple(simpleLabel({ items, ingredients })).codes).toEqual([]);
   });
+  it("reads Kate Farms' inline 1.5% minor heading and a named blend with its components (2026-10-22)", () => {
+    const items = [
+      "Sunflower Lecithin*",
+      "Spectra™ Phytonutrient Blend*: Extracts and Concentrates from: Broccoli*",
+      "CoffeeBerry®*",
+    ];
+    const ingredients =
+      "Sunflower Lecithin*, Contains 1.5% or Less of: Spectra™ Phytonutrient Blend*: Extracts and Concentrates from: Broccoli*, CoffeeBerry®*";
+    expect(decodeSimple(simpleLabel({ items, ingredients })).codes).toEqual([]);
+    const words = ["Sunflower Lecithin*", "Vanilla Extract*"];
+    expect(
+      decodeSimple(
+        simpleLabel({
+          items: words,
+          ingredients: "Sunflower Lecithin*, Directions: shake well. Vanilla Extract*",
+        }),
+      ).codes,
+    ).not.toEqual([]);
+  });
   it("keeps printed list separators and a minor-ingredients subheading between cited items", () => {
     for (const ingredients of [
       "Cellulose | Silica",

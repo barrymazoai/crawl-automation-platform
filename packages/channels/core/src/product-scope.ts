@@ -61,7 +61,14 @@ export function nonSupplementPath(
     return null;
   }
   const names = new Set(outside.map((name) => name.toLowerCase()));
-  return categories.some((name) => names.has(name.toLowerCase())) ? [...categories] : null;
+  return categories.some((name) => {
+    // Shopify product types can append subtypes as "Top level > Detail > Detail". Keep the original
+    // category in the evidence path while comparing its top level to the same exact-name registry.
+    const topLevel = name.includes(" > ") ? (name.split(" > ", 1)[0] ?? "").trim() : name;
+    return names.has(topLevel.toLowerCase());
+  })
+    ? [...categories]
+    : null;
 }
 
 /** The breadcrumb from the page's JSON-LD script texts; a block that does not parse is skipped. */

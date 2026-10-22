@@ -1,5 +1,6 @@
 import type { LabelTextCandidate } from "@crawl-automation/v3-contracts";
 import type { Span } from "./evidence-lines.js";
+import { minorIngredientHeading } from "./ingredient-boundaries.js";
 
 // Kate Farms Pediatric Peptide 1.0 (2026-10-22): "Nutrition Info" / "Composition | Amount" are
 // printed panel and column headings. They carry no serving-size claim; the table rows provide the amounts.
@@ -34,8 +35,6 @@ export function labelHeadingAllowed(value: string, candidate: LabelTextCandidate
   return !!field && words(field.text) === words(header[2] ?? "");
 }
 
-const MINOR_HEADING =
-  /^(?:contains\s+)?(?:(?:less\s+than|<)\s*2\s*%|2\s*%\s+or\s+less)\s+of(?:\s+(?:each\s+of\s+)?the\s+following)?\s*:?$/i;
 const INGREDIENT_SUBHEADING =
   /^(?:each\s+capsule\s+contains\s*:|other\s+ingredients\s*:\s*may\s+contain\s+any\s+or\s+all\s+of\s+the\s+following\s*:|contains\s*:)$/i;
 
@@ -44,7 +43,7 @@ export function ingredientSubheadingAllowed(
   value: string,
   source: { candidate: LabelTextCandidate; span: Span; text: string },
 ): boolean {
-  if (!MINOR_HEADING.test(value) && !INGREDIENT_SUBHEADING.test(value)) {
+  if (!minorIngredientHeading(value) && !INGREDIENT_SUBHEADING.test(value)) {
     return false;
   }
   if (/^each\s+capsule\s+contains\s*:$/i.test(value)) {

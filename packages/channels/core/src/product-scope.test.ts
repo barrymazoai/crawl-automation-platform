@@ -30,4 +30,14 @@ describe("store categories (owner 2026-10-08)", () => {
     expect(nonSupplementPath(undefined, outside)).toBeNull();
     expect(nonSupplementPath(["Baby Products"], undefined)).toBeNull();
   });
+  it("compares a layered Shopify product type by its top level (Womaness Let's Neck, 2026-10-22)", () => {
+    const outside = ["Neck and Decollete cream", "Eye Cream"];
+    const neck =
+      "Neck and Decollete cream > Cooling Rollerball Applicator > Tightening & Firming Neck Serum";
+    expect(nonSupplementPath([neck], outside)).toEqual([neck]);
+    expect(
+      nonSupplementPath(["Eye Cream > Smoothing and Brightening > Hydrating"], outside),
+    ).toEqual(["Eye Cream > Smoothing and Brightening > Hydrating"]);
+    expect(nonSupplementPath(["Supplement > Neck and Decollete cream"], outside)).toBeNull();
+  });
 });

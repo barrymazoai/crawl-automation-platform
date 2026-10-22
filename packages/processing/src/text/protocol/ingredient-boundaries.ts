@@ -36,13 +36,31 @@ export function completeIngredientItem(text: string, allowPrintedMismatch = fals
     (separators !== null || (allowPrintedMismatch && malformedSingleItem(text))) &&
     !/^\s*[([]/.test(text) &&
     !/-\s*$/.test(text) &&
-    (separators ?? []).every(
-      (index) =>
-        text[index] === "," &&
-        /^(?:(?:raw|wild|organic|(?:high|low)-[a-z]+|[a-z]+-grown)\s*,?\s*)+$/i.test(
-          text.slice(0, index),
-        ),
-    )
+    (compositeBlendItem(text, separators) ||
+      (separators ?? []).every(
+        (index) =>
+          text[index] === "," &&
+          /^(?:(?:raw|wild|organic|(?:high|low)-[a-z]+|[a-z]+-grown)\s*,?\s*)+$/i.test(
+            text.slice(0, index),
+          ),
+      ))
+  );
+}
+
+/** A named blend may print its component list after a colon as one quoted item. */
+function compositeBlendItem(text: string, separators: number[] | null): boolean {
+  if (!separators?.length) {
+    return false;
+  }
+  const colon = text.indexOf(":");
+  return (
+    colon > 0 &&
+    /\b(?:blend|complex)\b/i.test(text.slice(0, colon)) &&
+    separators.every((index) => index > colon && text[index] === ",") &&
+    text
+      .slice(text.lastIndexOf(":") + 1)
+      .split(",")
+      .every((part) => !!part.trim())
   );
 }
 
@@ -66,21 +84,39 @@ function malformedSingleItem(text: string): boolean {
 // "Hydroxypropyl Methylcellulose. Contains <2% of: Magnesium Stearate" (Swanson), "Water, Less than 2% of:
 // Pectin" (Costco) or "Water, Contains 2 percent or less of (Citric Acid, …)" (Natrol gummies, 2026-10-21) continues
 // the same list; the bracket that opens the minor-ingredient group is part of the separator.
-const MINOR_INGREDIENTS =
-  /^\s*(?:[,;.]\s*){0,2}(?:contains\s+)?(?:(?:<|less\s+than)\s*2\s*(?:%|percent)|2\s*(?:%|percent)\s+or\s+less)\s+of(?:\s+(?:each\s+of\s+)?the\s+following)?\s*:?[\s,;(]*$/i;
+const MINOR_HEADING = String.raw`(?:contains\s+)?(?:(?:<|less\s+than)\s*\d+(?:\.\d+)?\s*(?:%|percent)|\d+(?:\.\d+)?\s*(?:%|percent)\s+or\s+less)\s+of(?:\s+(?:each\s+of\s+)?the\s+following)?\s*:?`;
+const MINOR_INGREDIENTS = new RegExp(
+  String.raw`^\s*(?:[,;.]\s*){0,2}${MINOR_HEADING}[\s,;(]*$`,
+  "i",
+);
+
+export function minorIngredientHeading(value: string): boolean {
+  return new RegExp(String.raw`^\s*${MINOR_HEADING}\s*$`, "i").test(value);
+}
 
 const SUBLIST_HEADING = /^[A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,3}:$/;
 const NON_INGREDIENT_HEADING =
   /^(?:Contains|Manufactured|Processed|Directions|Warnings|Uses|Other Ingredients)\b/i;
 
-function citedSublistHeading(gap: string, gapStart: number, headings: readonly Quote[]): boolean {
-  const match = /^\.\s+([^\n:]+:)\s*$/.exec(gap);
+function citedSublistHeading(
+  gap: string,
+  context: { previous: string; gapStart: number; headings: readonly Quote[] },
+): boolean {
+  const blend = /\b(?:blend|complex)\*?$/i.test(context.previous.trim());
+  const match =
+    /^\.\s+([^\n:]+:)\s*$/.exec(gap) ?? (blend ? /^:\s+([^\n:]+:)\s*$/.exec(gap) : null);
   const heading = match?.[1];
-  if (!heading || !SUBLIST_HEADING.test(heading) || NON_INGREDIENT_HEADING.test(heading)) {
+  if (
+    !heading ||
+    (!blend && !SUBLIST_HEADING.test(heading)) ||
+    NON_INGREDIENT_HEADING.test(heading)
+  ) {
     return false;
   }
-  const start = gapStart + gap.indexOf(heading);
-  return headings.some((quote) => quote.start === start && quote.end === start + heading.length);
+  const start = context.gapStart + gap.indexOf(heading);
+  return context.headings.some(
+    (quote) => quote.start === start && quote.end === start + heading.length,
+  );
 }
 
 function listSeparator(
@@ -92,7 +128,7 @@ function listSeparator(
     /^\s*(?:(?:[,;.|‚]\s*(?:and\s+)?)|and\s+|in\s+a\s+base\s+of\s+)$/i.test(gap) ||
     (/\.\s*$/.test(previous) && /^\s+$/.test(gap)) ||
     MINOR_INGREDIENTS.test(gap) ||
-    citedSublistHeading(gap, context.start, context.headings)
+    citedSublistHeading(gap, { previous, gapStart: context.start, headings: context.headings })
   );
 }
 

@@ -106,13 +106,13 @@ export const DTC_NON_SUPPLEMENT_CATEGORIES: readonly string[] = [
   "Sprays & Cleansers",
   // womaness.com 2026-10-21: exact Shopify product types (Daily V Soothe; Gold Vibes in page analytics; Overnight
   // Magic / Clean Slate "Face Cream", Fountain of Glow "Vitamin C Serum", Let's Neck "Neck and Decollete cream",
-  // Eye Opener "Eye Cream > Smoothing and Brightening > Hydrating").
+  // Eye Opener "Eye Cream > Smoothing and Brightening > Hydrating"). Layered types compare by their first segment.
   "Vaginal Moisturizer",
   "Vibrator",
   "Face Cream",
   "Vitamin C Serum",
   "Neck and Decollete cream",
-  "Eye Cream > Smoothing and Brightening > Hydrating",
+  "Eye Cream",
 ];
 
 /** One registry entry for all configured DTC sites. BrowserPages/Ego is the only capture path. */
