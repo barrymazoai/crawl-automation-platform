@@ -6,6 +6,41 @@ const requestId = "33333333-3333-4333-8333-333333333333";
 const filter = { state: "review", reasons: ["QUEUE.RUN_FAILED"], sourceIds: [sourceId] };
 
 describe("queue operator API without authentication", () => {
+  it("previews withdrawal by default, then accepts explicit execution", async () => {
+    const result = {
+      dryRun: true,
+      matched: 2,
+      withdrawn: 1,
+      skipped: { running: 1, settled: 0, notFound: 0 },
+      byBatch: [],
+    };
+    const withdraw = vi
+      .fn()
+      .mockResolvedValueOnce(result)
+      .mockResolvedValueOnce({ ...result, dryRun: false });
+    const app = appWith({ queue: { withdraw } });
+    const input = { channel: "dtc", batchIds: [requestId] };
+    expect((await app.request("/trpc/queue.withdraw", post(input))).status).toBe(200);
+    expect(withdraw).toHaveBeenCalledExactlyOnceWith({ ...input, dryRun: true });
+    const execution = { ...input, dryRun: false, reason: "Duplicate metrics revisit" };
+    expect((await app.request("/trpc/queue.withdraw", post(execution))).status).toBe(200);
+    expect(withdraw).toHaveBeenLastCalledWith(execution);
+  });
+
+  it.each([
+    { channel: "dtc" },
+    { channel: "dtc", batchIds: [requestId], itemIds: ["a".repeat(64)] },
+    { channel: "dtc", batchIds: [] },
+    { channel: "dtc", itemIds: ["bad"] },
+    { channel: "dtc", batchIds: [requestId], dryRun: "false" },
+    { channel: "dtc", batchIds: [requestId], unknown: true },
+  ])("rejects invalid withdrawal input: %j", async (input) => {
+    const withdraw = vi.fn();
+    expect(
+      (await appWith({ queue: { withdraw } }).request("/trpc/queue.withdraw", post(input))).status,
+    ).toBe(400);
+    expect(withdraw).not.toHaveBeenCalled();
+  });
   it("returns filtered Review items and their source, attempt and update time", async () => {
     const item = {
       itemId: "a".repeat(64),

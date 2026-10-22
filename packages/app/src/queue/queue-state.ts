@@ -8,5 +8,6 @@ export const QueueStateSchema = z.enum([
   "pending",
   "review",
   "completed",
+  "withdrawn",
 ]);
 export type QueueState = z.infer<typeof QueueStateSchema>;

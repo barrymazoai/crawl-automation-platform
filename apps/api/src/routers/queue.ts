@@ -8,6 +8,7 @@ import {
   QueueSummaryQuerySchema,
   RequeueSchema,
   FamilyFormulaQuerySchema,
+  WithdrawSchema,
 } from "@crawl-automation/app";
 import { procedure, router } from "../trpc.js";
 
@@ -63,4 +64,7 @@ export const queueRouter = router({
 
   /** Explicit IDs keep the existing behavior; a bounded Review filter defaults to a read-only preview. */
   requeue: procedure.input(RequeueSchema).mutation(({ ctx, input }) => ctx.queue.requeue(input)),
+
+  /** Preview or withdraw unstarted requests from one channel. */
+  withdraw: procedure.input(WithdrawSchema).mutation(({ ctx, input }) => ctx.queue.withdraw(input)),
 });

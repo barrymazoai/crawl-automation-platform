@@ -106,6 +106,31 @@ export type Requeue = z.infer<typeof RequeueSchema>;
 export type RequeueResult =
   { requeued: number } | { dryRun: true; count: number; sample: QueueItemView[] };
 
+/** Withdraw only the named batch requests or exact items; preview is the default. */
+export const WithdrawSchema = z
+  .strictObject({
+    channel: QueueChannelSchema,
+    batchIds: z.array(z.uuid()).min(1).max(10_000).optional(),
+    itemIds: z
+      .array(z.string().regex(/^[a-f0-9]{64}$/))
+      .min(1)
+      .max(10_000)
+      .optional(),
+    reason: z.string().trim().min(1).max(200).optional(),
+    dryRun: z.boolean().default(true),
+  })
+  .refine((input) => (input.batchIds === undefined) !== (input.itemIds === undefined), {
+    message: "Provide exactly one of batchIds or itemIds.",
+  });
+export type Withdraw = z.infer<typeof WithdrawSchema>;
+export interface WithdrawResult {
+  dryRun: boolean;
+  matched: number;
+  withdrawn: number;
+  skipped: { running: number; settled: number; notFound: number };
+  byBatch: { batchId: string; label: string; count: number }[];
+}
+
 export type QueueMode = "running" | "paused" | "draining" | "stopping";
 
 export interface QueueStatus {
@@ -132,6 +157,9 @@ export interface QueueItemView {
   lastError: string | null;
   /** For Review items: the one-line reason or failure code. */
   reason: string | null;
+  /** Original withdrawal note and time, kept even if the item is later requeued. */
+  withdrawNote?: string | undefined;
+  withdrawnAt?: string | undefined;
   /** The active request this batch follows; followers never create their own execution. */
   followsItemId?: string | null | undefined;
 }
@@ -148,4 +176,5 @@ export interface QueueStore extends Partial<FamilyFormulaOutcomes> {
   pause(options: PauseQueue): Promise<void>;
   resume(channel: QueueChannel): Promise<void>;
   requeue(input: Requeue): Promise<RequeueResult>;
+  withdraw(input: Withdraw): Promise<WithdrawResult>;
 }

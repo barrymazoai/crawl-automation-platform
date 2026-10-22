@@ -101,6 +101,13 @@ describe("settledOutcome", () => {
 });
 
 describe("QueueDispatcher", () => {
+  it("does not start a withdrawn item when the store has no claimable work", async () => {
+    const { store, starter, queue } = dispatcher({});
+    store.claimable = [];
+    await queue.tick(signal());
+    expect(store.filled).toBe(1);
+    expect(starter.submit).not.toHaveBeenCalled();
+  });
   it("settles ended runs, then fills ready and starts claimed items once each", async () => {
     const { store, starter, queue } = dispatcher({
       done: { status: "COMPLETED", result: { status: "collected" } },

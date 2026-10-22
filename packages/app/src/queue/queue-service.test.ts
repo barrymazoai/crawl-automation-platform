@@ -7,6 +7,7 @@ import {
   QueueChannelSchema,
   QueueItemsQuerySchema,
   RequeueSchema,
+  WithdrawSchema,
   type QueueChannel,
   type QueueStore,
 } from "./queue-model.js";
@@ -35,6 +36,13 @@ function fakeStore(): QueueStore {
     pause: vi.fn(async () => undefined),
     resume: vi.fn(async () => undefined),
     requeue: vi.fn(async () => ({ requeued: 1 })),
+    withdraw: vi.fn(async (input) => ({
+      dryRun: input.dryRun,
+      matched: 1,
+      withdrawn: 1,
+      skipped: { running: 0, settled: 0, notFound: 0 },
+      byBatch: [],
+    })),
   };
 }
 
@@ -179,6 +187,20 @@ describe("QueueService", () => {
     expect(channels.requeue).toHaveBeenCalledOnce();
   });
 
+  it("passes a withdrawal preview and an explicit execution to the shared store", async () => {
+    const { service, channels } = fixture();
+    const preview = WithdrawSchema.parse({
+      channel: "dtc",
+      batchIds: ["33333333-3333-4333-8333-333333333333"],
+    });
+    expect((await service.withdraw(preview)).dryRun).toBe(true);
+    expect(channels.withdraw).toHaveBeenCalledExactlyOnceWith(preview);
+    const execute = { ...preview, dryRun: false, reason: "Duplicate metrics revisit" };
+    expect((await service.withdraw(execute)).dryRun).toBe(false);
+    expect(channels.withdraw).toHaveBeenLastCalledWith(execute);
+    expect(channels.resume).not.toHaveBeenCalled();
+  });
+
   it("preserves a refusal from the shared store without trying the legacy queue", async () => {
     const { service, channels } = fixture();
     const error = new Error("cleanup pending");
@@ -213,6 +235,25 @@ describe("QueueService", () => {
 });
 
 describe("queue inputs", () => {
+  it("requires one exact withdrawal selector and defaults to preview", () => {
+    const batchId = "33333333-3333-4333-8333-333333333333";
+    expect(WithdrawSchema.parse({ channel: "dtc", batchIds: [batchId] })).toEqual({
+      channel: "dtc",
+      batchIds: [batchId],
+      dryRun: true,
+    });
+    for (const invalid of [
+      { channel: "dtc" },
+      { channel: "dtc", batchIds: [batchId], itemIds: ["a".repeat(64)] },
+      { channel: "dtc", batchIds: [] },
+      { channel: "dtc", itemIds: ["bad"] },
+      { channel: "dtc", batchIds: [batchId], reason: "x".repeat(201) },
+      { channel: "dtc", batchIds: [batchId], surprise: true },
+    ]) {
+      expect(WithdrawSchema.safeParse(invalid).success).toBe(false);
+    }
+    expect(QueueItemsQuerySchema.parse({ state: "withdrawn" }).state).toBe("withdrawn");
+  });
   it("a call without a channel is about Amazon's queue", () => {
     expect(QueueItemsQuerySchema.parse({})).toEqual({
       channel: "amazon",

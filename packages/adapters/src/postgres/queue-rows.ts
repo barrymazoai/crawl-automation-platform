@@ -1,3 +1,4 @@
+import { QueueStateSchema } from "@crawl-automation/app";
 import { z } from "zod";
 
 /** A queue's status row: mode, limits, item counts by state, and running items needing attention. */
@@ -13,7 +14,7 @@ export const StatusRow = z.object({
 export const ItemRow = z.object({
   itemId: z.string(),
   batch: z.string(),
-  state: z.enum(["queued", "ready", "running", "following", "pending", "review", "completed"]),
+  state: QueueStateSchema,
   followsItemId: z.string().nullable().optional(),
   attempt: z.number(),
   runId: z.string().nullable(),

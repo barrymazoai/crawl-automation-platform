@@ -135,6 +135,17 @@ describe("shared queue operator repository", () => {
     },
   );
 
+  it("allows an explicitly withdrawn item through the existing requeue path", async () => {
+    const { store, query } = fixture();
+    query
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([{ state: "withdrawn" }])
+      .mockResolvedValueOnce([]);
+    expect(await store.requeue({ channel: "amazon", itemIds: [item.itemId] })).toEqual({
+      requeued: 1,
+    });
+  });
+
   it("refuses missing IDs and makes an empty filter selection a no-op", async () => {
     const { store, query } = fixture();
     await expect(

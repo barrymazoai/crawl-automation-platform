@@ -5,6 +5,12 @@ import { ItemRow } from "./queue-rows.js";
 
 const SharedItemRow = ItemRow.extend({
   sourceId: z.uuid(),
+  withdrawNote: z.string().nullable().optional(),
+  withdrawnAt: z
+    .union([z.date(), z.iso.datetime({ offset: true })])
+    .nullable()
+    .optional()
+    .transform((value) => (value instanceof Date ? value.toISOString() : value)),
   updatedAt: z
     .union([z.date(), z.iso.datetime({ offset: true })])
     .transform((value) => (value instanceof Date ? value.toISOString() : value)),
@@ -18,7 +24,8 @@ export class PostgresQueueReader {
     const rows = await this.database.query(
       `SELECT item_id AS "itemId", batch_id::text AS batch, state, attempt, run_id::text AS "runId",
          listing_id AS "listingId", source_id::text AS "sourceId", updated_at AS "updatedAt",
-         NULL AS "lastError", reason, follows_item_id AS "followsItemId"
+         NULL AS "lastError", reason, follows_item_id AS "followsItemId",
+         withdraw_note AS "withdrawNote", withdrawn_at AS "withdrawnAt"
        FROM queue_item WHERE channel = $1 AND state = $2
          AND ($4::text[] IS NULL OR reason = ANY($4))
          AND ($5::timestamptz IS NULL OR updated_at >= $5)
@@ -37,6 +44,14 @@ export class PostgresQueueReader {
         query.listingIds ?? null,
       ],
     );
-    return rows.map((row) => SharedItemRow.parse(row));
+    return rows.map((row) => {
+      const item = SharedItemRow.parse(row);
+      const { withdrawNote, withdrawnAt, ...base } = item;
+      return {
+        ...base,
+        ...(withdrawNote ? { withdrawNote } : {}),
+        ...(withdrawnAt ? { withdrawnAt } : {}),
+      };
+    });
   }
 }

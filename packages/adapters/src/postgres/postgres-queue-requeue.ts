@@ -39,7 +39,9 @@ export class PostgresQueueRequeue {
       "SELECT state FROM queue_item WHERE channel = $1 AND item_id = ANY($2::text[]) FOR UPDATE",
       [input.channel, input.itemIds],
     );
-    const settled = rows.every((row) => ["completed", "review", "pending"].includes(row.state));
+    const settled = rows.every((row) =>
+      ["completed", "review", "pending", "withdrawn"].includes(row.state),
+    );
     if (rows.length !== new Set(input.itemIds).size || !settled) {
       throw appErrors.create("QUEUE.REQUEUE_NOT_SETTLED");
     }

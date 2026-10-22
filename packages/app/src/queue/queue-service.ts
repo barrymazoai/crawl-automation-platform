@@ -18,6 +18,8 @@ import type {
   RequeueResult,
   QueueSummaryQuery,
   SourcePriority,
+  Withdraw,
+  WithdrawResult,
 } from "./queue-model.js";
 
 export interface QueueServiceDeps {
@@ -109,6 +111,15 @@ export class QueueService {
     const result = await this.deps.channels.requeue(input);
     const message = "dryRun" in result ? "requeue preview" : "products queued again";
     this.deps.log.info({ channel: input.channel, ...result }, message);
+    return result;
+  }
+
+  async withdraw(input: Withdraw): Promise<WithdrawResult> {
+    const result = await this.deps.channels.withdraw(input);
+    this.deps.log.info(
+      { channel: input.channel, batches: result.byBatch.map((batch) => batch.batchId), ...result },
+      input.dryRun ? "queue withdrawal preview" : "queue items withdrawn",
+    );
     return result;
   }
 

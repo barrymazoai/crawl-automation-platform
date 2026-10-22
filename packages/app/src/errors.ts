@@ -102,7 +102,7 @@ export const appErrors = defineErrors({
   },
   "QUEUE.REQUEUE_NOT_SETTLED": {
     category: "VALIDATION",
-    message: "Only completed or Review products can be queued again.",
+    message: "Only settled or withdrawn products can be queued again.",
   },
   "QUEUE.SOURCE_CHANNEL_MISMATCH": {
     category: "VALIDATION",
@@ -120,6 +120,10 @@ export const appErrors = defineErrors({
   "QUEUE.STOPPED_BEFORE_START": {
     category: "SCHEDULER",
     message: "The queue was stopped before this product's run started.",
+  },
+  "QUEUE.WITHDRAWN": {
+    category: "SCHEDULER",
+    message: "The queued request was withdrawn before its run started.",
   },
   "LISTING.OBSERVATION_CONFLICT": {
     category: "ARTIFACT",

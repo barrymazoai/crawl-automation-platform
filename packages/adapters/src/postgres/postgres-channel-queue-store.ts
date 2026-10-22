@@ -11,6 +11,7 @@ import {
   type QueueSummaryQuery,
   type ScanAdmissionSettings,
   type SourcePriority,
+  type Withdraw,
 } from "@crawl-automation/app";
 import type { Database, Queryable } from "@crawl-automation/platform";
 import type { FamilyFormulaOutcome, FamilyFormulaQuery } from "@crawl-automation/app";
@@ -21,6 +22,7 @@ import { QUEUE_ORDER, channelQueueStatus, lockChannelQueue } from "./channel-que
 import { PostgresQueueReader } from "./postgres-queue-reader.js";
 import { PostgresQueueRequeue } from "./postgres-queue-requeue.js";
 import { PostgresQueueSummary } from "./postgres-queue-summary.js";
+import { PostgresQueueWithdraw } from "./postgres-queue-withdraw.js";
 
 import { PostgresQueueAdd } from "./postgres-queue-add.js";
 
@@ -170,6 +172,10 @@ export class PostgresChannelQueueStore implements QueueStore {
 
   requeue(input: Requeue) {
     return this.locked(input.channel, (tx) => new PostgresQueueRequeue(tx).requeue(input));
+  }
+
+  withdraw(input: Withdraw) {
+    return this.locked(input.channel, (tx) => new PostgresQueueWithdraw(tx).withdraw(input));
   }
 
   private locked<Result>(
