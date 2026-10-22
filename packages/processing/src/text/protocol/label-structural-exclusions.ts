@@ -27,7 +27,10 @@ export function specialStructuralExclusion(
     return ingredientOrganicLegend(exclusion, candidate, text);
   }
   if (exclusion.reason === "noise") {
-    return inactiveConnectorAllowed(exclusion, candidate, text);
+    return (
+      ingredientOrganicLegend(exclusion, candidate, text) ||
+      inactiveConnectorAllowed(exclusion, candidate, text)
+    );
   }
   return exclusion.reason === "footnote" && equivalentFootnoteAllowed(exclusion, candidate, text);
 }
@@ -65,7 +68,7 @@ function blendSubheadingAllowed(
   });
 }
 
-/** A model may tag the printed organic marker legend as marketing rather than a footnote. */
+/** A model may tag the printed organic marker legend as marketing or noise rather than a footnote. */
 function ingredientOrganicLegend(
   exclusion: Exclusion,
   candidate: LabelTextCandidate,

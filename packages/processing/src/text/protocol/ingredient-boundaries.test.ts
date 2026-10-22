@@ -100,6 +100,62 @@ describe("anchored ingredient boundaries", () => {
     );
     expect(decodeSimple(fixture).codes).toEqual([]);
 
+    // Fresh Peptide 1.5 answer: the blend heading and first component share one item;
+    // the same trailing marker legend is classified as noise instead of footnote.
+    const freshItems = [...items];
+    freshItems.splice(
+      14,
+      2,
+      "Spectra™ Phytonutrient Blend*: Extracts and Concentrates from: Broccoli*",
+    );
+    const fresh = simpleLabel({ ingredients, items: freshItems });
+    fresh.lines[6] = `Ingredients:\u00a0${ingredients}`;
+    defined(fresh.wire.otherIngredients).heading.text = "Ingredients:";
+    fresh.wire.exclusions.push(
+      { quote: { fromLine: 7, toLine: 7, text: "Contains 1.5% or Less of:" }, reason: "heading" },
+      { quote: { fromLine: 7, toLine: 7, text: "*Organic" }, reason: "noise" },
+    );
+    expect(decodeSimple(fresh).codes).toEqual([]);
+
+    const unsupportedLegend = simpleLabel({
+      ingredients: "Purified Water. *Organic",
+      items: ["Purified Water"],
+    });
+    unsupportedLegend.wire.exclusions.push({
+      quote: { fromLine: 7, toLine: 7, text: "*Organic" },
+      reason: "noise",
+    });
+    expect(decodeSimple(unsupportedLegend).codes).toContain("LABEL.COVERAGE_UNCERTAIN");
+
+    // Real Standard 1.4 span: four printed ingredients cannot disappear between anchored items.
+    expect(
+      decodeSimple(
+        simpleLabel({
+          ingredients:
+            "Beet*, Raspberry*, Spinach*, Tart Cherry*, Blackberry*, Vitamin and Mineral Blend: (Choline Bitartrate, Magnesium Chloride)",
+          items: ["Beet*", "Vitamin and Mineral Blend: (Choline Bitartrate, Magnesium Chloride)"],
+        }),
+      ).codes,
+    ).toContain("LABEL.INGREDIENT_BOUNDARY");
+
+    // Real Pediatric Peptide 1.5 span: the named blend cannot be discarded as a heading.
+    const omittedBlend = simpleLabel({
+      ingredients:
+        "Sunflower Lecithin*, Spectra™ Phytonutrient Blend*: Extracts and Concentrates from: Broccoli*, CoffeeBerry®*",
+      items: ["Sunflower Lecithin*", "Broccoli*", "CoffeeBerry®*"],
+    });
+    omittedBlend.wire.exclusions.push(
+      {
+        quote: { fromLine: 7, toLine: 7, text: "Spectra™ Phytonutrient Blend*:" },
+        reason: "heading",
+      },
+      {
+        quote: { fromLine: 7, toLine: 7, text: "Extracts and Concentrates from:" },
+        reason: "heading",
+      },
+    );
+    expect(decodeSimple(omittedBlend).codes).toContain("LABEL.INGREDIENT_BOUNDARY");
+
     const invalid = simpleLabel({
       ingredients: "Spectra™ Phytonutrient Blend*: Directions: Broccoli*",
       items: ["Spectra™ Phytonutrient Blend*: Directions:", "Broccoli*"],
