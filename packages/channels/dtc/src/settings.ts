@@ -6,7 +6,7 @@ const siteFields = {
     .string()
     .max(253)
     .regex(/^[a-z0-9]+(?:[.-][a-z0-9]+)*\.[a-z]{2,}$/),
-  platform: z.enum(["shopify", "woocommerce", "jsonld"]),
+  platform: z.enum(["shopify", "woocommerce", "jsonld", "custom"]),
   /** Overrides the platform's default capture route (owner 2026-10-20); absent keeps the default. */
   capture: z.enum(["platform", "agent"]).optional(),
 };
@@ -38,6 +38,9 @@ const multiBrand = z.strictObject({
 
 /** Shared validation for private settings and browser-verified, persisted source settings. */
 export const DtcSiteSettingsSchema = z.union([singleBrand, multiBrand]).superRefine((site, ctx) => {
+  if (site.platform === "custom" && site.capture === "platform") {
+    ctx.addIssue({ code: "custom", message: "Custom stores require agent capture" });
+  }
   const catalogs = site.kind === "multi-brand" ? site.brands : [site];
   if (catalogs.some((entry) => !ownCatalog(site.siteKey, entry.catalogUrl))) {
     ctx.addIssue({ code: "custom", message: "Catalogs must be on the site's HTTPS origin" });

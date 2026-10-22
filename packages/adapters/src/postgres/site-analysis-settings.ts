@@ -1,24 +1,39 @@
 import { isDeepStrictEqual } from "node:util";
 import type { Queryable } from "@crawl-automation/platform";
 import type { AnalyzedBrand } from "@crawl-automation/v3-contracts";
+import { z } from "zod";
+
+type SettingsInput = {
+  sourceId: string;
+  analysisId: string;
+  brand: AnalyzedBrand;
+  singleBrand: boolean;
+};
+const StoredKindSchema = z.object({ kind: z.enum(["single-brand", "multi-brand"]) });
+
+function analyzedSettings(input: SettingsInput) {
+  const { brand } = input;
+  const site = {
+    siteKey: brand.domain,
+    platform: brand.platform,
+    ...(brand.platform === "custom" ? { capture: "agent" } : {}),
+  };
+  return input.singleBrand
+    ? { ...site, kind: "single-brand" as const, catalogUrl: brand.catalogUrl }
+    : {
+        ...site,
+        kind: "multi-brand" as const,
+        brands: [{ brand: brand.name, catalogUrl: brand.catalogUrl }],
+      };
+}
 
 /**
  * Insert once for new or matched sources; never alter an existing source or its verified policy.
  * The site kind is the analysis's own answer (owner 2026-10-06): one brand on the domain is a single-brand store.
  */
-export async function insertAnalyzedSettings(
-  tx: Queryable,
-  input: { sourceId: string; analysisId: string; brand: AnalyzedBrand; singleBrand: boolean },
-) {
-  const { sourceId, analysisId, brand } = input;
-  const site = { siteKey: brand.domain, platform: brand.platform };
-  const settings = input.singleBrand
-    ? { ...site, kind: "single-brand", catalogUrl: brand.catalogUrl }
-    : {
-        ...site,
-        kind: "multi-brand",
-        brands: [{ brand: brand.name, catalogUrl: brand.catalogUrl }],
-      };
+export async function insertAnalyzedSettings(tx: Queryable, input: SettingsInput) {
+  const { sourceId, analysisId } = input;
+  const settings = analyzedSettings(input);
   const inserted = await tx.query(
     "INSERT INTO dtc_source_settings (source_id,analysis_id,settings) VALUES ($1,$2,$3::jsonb) ON CONFLICT DO NOTHING RETURNING source_id",
     [sourceId, analysisId, JSON.stringify(settings)],
@@ -31,6 +46,36 @@ export async function insertAnalyzedSettings(
     [sourceId],
   );
   return isDeepStrictEqual(rows[0]?.settings, settings);
+}
+
+/** Caller holds the apply transaction. Keep the old policy before changing the current row. */
+export async function replaceAnalyzedSettings(tx: Queryable, input: SettingsInput) {
+  const rows = await tx.query<{ settings: unknown }>(
+    "SELECT settings FROM dtc_source_settings WHERE source_id=$1 FOR UPDATE",
+    [input.sourceId],
+  );
+  if (!rows[0]) {
+    await insertAnalyzedSettings(tx, input);
+    return null;
+  }
+  const previous = rows[0].settings;
+  const settings = analyzedSettings(input);
+  if (isDeepStrictEqual(previous, settings)) {
+    return null;
+  }
+  const oldKind = StoredKindSchema.parse(previous).kind;
+  await tx.query(
+    `INSERT INTO dtc_source_settings_history
+      (source_id,analysis_id,settings,replaced_by_analysis_id,reason)
+     SELECT source_id,analysis_id,settings,$2,'owner-approved analysis reapply'
+     FROM dtc_source_settings WHERE source_id=$1`,
+    [input.sourceId, input.analysisId],
+  );
+  await tx.query(
+    "UPDATE dtc_source_settings SET analysis_id=$2,settings=$3::jsonb WHERE source_id=$1",
+    [input.sourceId, input.analysisId, JSON.stringify(settings)],
+  );
+  return { oldKind, newKind: settings.kind };
 }
 
 /** A brand's own Shopify store lists every product at /collections/all, never at the bare collection index. */
@@ -67,6 +112,7 @@ export async function singleBrandSite(
 export async function conflictingCatalog(
   tx: Queryable,
   brand: AnalyzedBrand,
+  allowMatchedCorrection = false,
 ): Promise<string | null> {
   const rows = await tx.query(
     `SELECT 1 FROM brand_source source JOIN brand ON brand.id=source.brand_id
@@ -74,12 +120,23 @@ export async function conflictingCatalog(
       (source.url=$1 AND lower(brand.name)<>lower($2)) OR
       (lower(brand.name)=lower($2) AND source.region='US' AND source.url<>$1
         AND (source.url=$3 OR starts_with(source.url,$3 || '/'))))
-    UNION ALL SELECT 1 FROM dtc_source_settings
-      WHERE settings->>'siteKey'=$4 AND settings->>'platform'<>$5
+    UNION ALL SELECT 1 FROM dtc_source_settings settings
+      JOIN brand_source source ON source.id=settings.source_id
+      JOIN brand owner ON owner.id=source.brand_id
+      WHERE settings.settings->>'siteKey'=$4 AND settings.settings->>'platform'<>$5
+        AND NOT ($6::boolean AND source.channel='dtc' AND source.region='US'
+          AND source.url=$1 AND lower(owner.name)=lower($2))
     UNION ALL SELECT 1 FROM dtc_source_settings settings JOIN brand_source source ON source.id=settings.source_id
       WHERE settings.settings->>'siteKey'=$4 AND source.url<>$1
         AND settings.settings->>'kind'='single-brand' LIMIT 1`,
-    [brand.catalogUrl, brand.name, `https://${brand.domain}`, brand.domain, brand.platform],
+    [
+      brand.catalogUrl,
+      brand.name,
+      `https://${brand.domain}`,
+      brand.domain,
+      brand.platform,
+      allowMatchedCorrection,
+    ],
   );
   return rows.length
     ? "An existing source conflicts with this brand/domain catalog; preserved unchanged"

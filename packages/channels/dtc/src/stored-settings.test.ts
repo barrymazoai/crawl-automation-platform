@@ -31,6 +31,29 @@ it("refreshes persisted sources into a running registry and keeps brand URL vali
 it("a sub-brand policy is bound to its own domain, not its parent", () => {
   expect(() => storedDtcSites([], [{ ...setting("Alpha"), siteKey: "parent.example" }])).toThrow();
 });
+it("loads an applied custom store for agent capture", () => {
+  const [site] = storedDtcSites(
+    [],
+    [
+      {
+        siteKey: "www.dherbs.com",
+        platform: "custom",
+        capture: "agent",
+        kind: "single-brand",
+        catalogUrl: "https://www.dherbs.com/store/",
+      },
+    ],
+  );
+  expect(site?.capture).toBe("agent");
+  const adapter = createDtcAdapter(site ? [site] : []);
+  expect(
+    adapter.productAddress("https://www.dherbs.com/store/full-body-cleanse-p-1.html").listingId,
+  ).toMatch(/^dtc-/);
+  expect(
+    adapter.productAddress("https://www.dherbs.com/featured/full-body-cleanse/").listingId,
+  ).toMatch(/^dtc-/);
+  expect(() => adapter.productAddress("https://www.dherbs.com/")).toThrow();
+});
 it("preserves configured single-brand source semantics when a new catalog is added", () => {
   const legacy = dtcSitePolicy({
     siteKey: "shop.example",

@@ -15,7 +15,7 @@ export const SiteAnalysisLimitsSchema = z.object({
 export const AnalyzedBrandSchema = z.object({
   name: z.string().trim().min(1).max(1000),
   domain: z.string().min(1),
-  platform: z.enum(["shopify", "woocommerce", "jsonld"]),
+  platform: z.enum(["shopify", "woocommerce", "jsonld", "custom"]),
   catalogUrl: SiteUrlSchema.nullable(),
   productCount: z.number().int().nonnegative(),
   countExact: z.boolean(),

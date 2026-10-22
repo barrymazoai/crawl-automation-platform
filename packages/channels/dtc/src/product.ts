@@ -30,7 +30,7 @@ export function readDtcProduct(
   sites: readonly DtcSitePolicy[],
 ): PlatformProduct {
   const site = siteForUrl(page.url, sites);
-  if (site.platform === "unverified") {
+  if (site.platform === "unverified" || site.platform === "custom") {
     throw platformPageErrors.create("DTC.PLATFORM_UNVERIFIED", { details: { site: site.siteKey } });
   }
   const readers = {

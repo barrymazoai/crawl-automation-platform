@@ -1,6 +1,10 @@
 import { expect, it, vi } from "vitest";
 import { SiteAnalysisSchema } from "@crawl-automation/v3-contracts";
-import { SiteAnalysisService, type SiteAnalysisStore } from "./site-analysis-service.js";
+import {
+  ApplySiteAnalysisSchema,
+  SiteAnalysisService,
+  type SiteAnalysisStore,
+} from "./site-analysis-service.js";
 import { SiteAnalysisRunner } from "./site-analysis-runner.js";
 import { appErrors } from "../errors.js";
 const analysisId = "11111111-1111-4111-8111-111111111111";
@@ -68,6 +72,26 @@ it("applies a completed analysis through its atomic repository operation", async
   const input = { requestId: analysisId, analysisId, brands: ["Alpha"] };
   expect(await service.apply(input)).toEqual({ created: [], matched: [], skipped: [] });
   expect(store.apply).toHaveBeenCalledWith(input);
+});
+it("accepts explicit settings correction for a completed analysis", async () => {
+  const { service, store } = setup();
+  store.get.mockResolvedValue({ ...record, state: "completed" });
+  const input = { requestId: analysisId, analysisId, replaceSettings: true };
+  expect(ApplySiteAnalysisSchema.parse(input)).toEqual(input);
+  await service.apply(input);
+  expect(store.apply).toHaveBeenCalledWith(input);
+});
+it("rejects a settings correction combined with scan enqueue", async () => {
+  const { service, store } = setup();
+  await expect(
+    service.apply({
+      requestId: analysisId,
+      analysisId,
+      replaceSettings: true,
+      enqueue: true,
+    }),
+  ).rejects.toThrow();
+  expect(store.apply).not.toHaveBeenCalled();
 });
 it("runner persists each archive key before analysis continues and records success", async () => {
   const { store } = setup();

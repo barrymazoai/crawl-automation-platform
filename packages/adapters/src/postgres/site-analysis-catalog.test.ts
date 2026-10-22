@@ -4,13 +4,14 @@ import type { Queryable } from "@crawl-automation/platform";
 import { AnalyzedBrandSchema } from "@crawl-automation/v3-contracts";
 import { applySiteAnalysis } from "./site-analysis-apply.js";
 import { enqueueAnalyzedBrands } from "./site-analysis-enqueue.js";
-import { insertAnalyzedSettings } from "./site-analysis-settings.js";
+import { insertAnalyzedSettings, replaceAnalyzedSettings } from "./site-analysis-settings.js";
 
 vi.mock("./site-analysis-settings.js", async (original) => ({
   ...(await original<typeof import("./site-analysis-settings.js")>()),
   conflictingCatalog: vi.fn(async () => null),
   singleBrandSite: vi.fn(async () => true),
   insertAnalyzedSettings: vi.fn(async () => true),
+  replaceAnalyzedSettings: vi.fn(async () => ({ oldKind: "multi-brand", newKind: "single-brand" })),
 }));
 
 const catalogUrl = "https://owner.example/collections/absorbed";
@@ -30,6 +31,7 @@ const brand = (name: string, url: string) =>
 
 function fixture(
   brands = [brand("Absorbed", catalogUrl), brand("Owner", "https://owner.example/collections/all")],
+  existing = false,
 ) {
   const sourceId = randomUUID();
   const brandId = randomUUID();
@@ -40,6 +42,9 @@ function fixture(
     }
     if (sql.startsWith("SELECT id FROM brand")) {
       return [{ id: brandId }];
+    }
+    if (sql.startsWith("SELECT id,channel FROM brand_source")) {
+      return existing ? [{ id: sourceId, channel: "dtc" }] : [];
     }
     if (sql.startsWith("INSERT INTO brand_source")) {
       return [{ id: sourceId }];
@@ -71,6 +76,37 @@ it("applies and queues only the selected collection using the existing per-brand
     }),
   );
   expect(result.tasks).toEqual([{ ...result.created[0], scanId: test.scanId }]);
+});
+
+it("corrects only a matched source and reports the kind transition", async () => {
+  const test = fixture([brand("Owner", "https://owner.example/pages/shop")], true);
+  vi.mocked(replaceAnalyzedSettings).mockClear();
+  const analysisId = randomUUID();
+  const result = await applySiteAnalysis(test.tx, { analysisId, replaceSettings: true });
+  expect(result.created).toEqual([]);
+  expect(result.matched).toEqual([
+    { name: "Owner", brandId: test.brandId, sourceId: test.sourceId },
+  ]);
+  expect(result.corrected).toEqual([
+    {
+      name: "Owner",
+      brandId: test.brandId,
+      sourceId: test.sourceId,
+      oldKind: "multi-brand",
+      newKind: "single-brand",
+    },
+  ]);
+  expect(replaceAnalyzedSettings).toHaveBeenCalledWith(
+    test.tx,
+    expect.objectContaining({
+      sourceId: test.sourceId,
+      singleBrand: true,
+    }),
+  );
+  expect(test.query.mock.calls.some(([sql]) => sql.startsWith("INSERT INTO brand_source"))).toBe(
+    false,
+  );
+  expect(test.query.mock.calls.some(([sql]) => sql.startsWith("INSERT INTO brand ("))).toBe(false);
 });
 
 it("does not fall back to the whole store when the analysis has no matching collection", async () => {

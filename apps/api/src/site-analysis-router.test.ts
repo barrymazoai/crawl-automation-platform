@@ -28,6 +28,25 @@ it.each([undefined, ["Alpha"]])("applies all or selected brands: %j", async (bra
   expect(response.status).toBe(200);
   expect(apply).toHaveBeenCalledWith(input);
 });
+it("passes a settings correction to the service and rejects correction with enqueue", async () => {
+  const apply = vi.fn(async () => ({ created: [], matched: [], skipped: [] }));
+  const app = appWith({ siteAnalyses: { apply } });
+  const input = { requestId, analysisId: requestId, replaceSettings: true };
+  expect((await app.request("/trpc/brands.applySiteAnalysis", post(input))).status).toBe(200);
+  expect(apply).toHaveBeenCalledExactlyOnceWith(input);
+  expect(
+    (
+      await app.request(
+        "/trpc/brands.applySiteAnalysis",
+        post({
+          ...input,
+          enqueue: true,
+        }),
+      )
+    ).status,
+  ).toBe(400);
+  expect(apply).toHaveBeenCalledOnce();
+});
 it.each([
   "http://shop.example/",
   "https://user:pass@shop.example/",

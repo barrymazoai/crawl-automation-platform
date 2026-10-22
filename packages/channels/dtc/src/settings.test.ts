@@ -15,13 +15,24 @@ describe("browser-verified DTC site settings", () => {
     expect(configuredDtcSites()).toEqual([]);
   });
 
-  it.each(["shopify", "woocommerce", "jsonld"])("accepts the observed %s platform", (platform) => {
-    const settings = DtcSettingsSchema.parse({ sites: [{ ...site, platform }] });
-    expect(configuredDtcSites(settings)[0]).toMatchObject({
-      ...site,
-      platform,
-      origins: ["https://shop.example"],
-    });
+  it.each(["shopify", "woocommerce", "jsonld", "custom"])(
+    "accepts the observed %s platform",
+    (platform) => {
+      const settings = DtcSettingsSchema.parse({ sites: [{ ...site, platform }] });
+      expect(configuredDtcSites(settings)[0]).toMatchObject({
+        ...site,
+        platform,
+        origins: ["https://shop.example"],
+        capture: platform === "shopify" ? "platform" : "agent",
+      });
+    },
+  );
+
+  it("does not allow a custom store to select a platform reader", () => {
+    expect(
+      DtcSettingsSchema.safeParse({ sites: [{ ...site, platform: "custom", capture: "platform" }] })
+        .success,
+    ).toBe(false);
   });
 
   it.each([

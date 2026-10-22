@@ -15,11 +15,11 @@ export interface DtcSitePolicy {
   /** Retain a pre-existing single-brand policy when discovered catalogs share its domain. */
   legacySite?: DtcSitePolicy;
   kind: "single-brand" | "multi-brand";
-  platform: StorePlatform | "unverified";
+  platform: StorePlatform | "custom" | "unverified";
   /**
    * Owner 2026-10-20: Shopify sites default to the platform reader (facts block, original images and variants from the
    * store's own data, as Swanson does); every other platform stays on the agent until its reader is proven on real
-   * pages. A stored or private setting may override either way; `agent` is also the rollback.
+   * pages. A stored or private setting may override a reader-backed site; custom stores always use the agent.
    */
   capture: DtcCaptureRoute;
   origins: readonly string[];
@@ -88,9 +88,9 @@ function catalogItemSelector(policy: DtcSitePolicy["catalog"]): string {
 
 const STORE_PRODUCT_PATH = /^\/(?:collections\/[^/]+\/)?products?\/[^/]+\/?$/;
 /**
- * Owner 2026-10-08: a custom-built store (JSON-LD platform) names product pages freely (PureTrim: /cardio9.cfm,
- * /starterpaks/30-day-cleanse.cfm). Any non-root path on the site may be a product; the catalog evidence and the
- * product page's own JSON-LD Product still decide.
+ * Owner 2026-10-08: a custom-built store can name product pages freely (PureTrim: /cardio9.cfm,
+ * /starterpaks/30-day-cleanse.cfm; dherbs: /store/full-body-cleanse-p-1.html and /featured/full-body-cleanse/).
+ * Any non-root path may be a product address; catalog and product evidence decide whether it is one.
  */
 const CUSTOM_PRODUCT_PATH = /^\/[^/?#][^?#]*$/;
 
@@ -104,9 +104,13 @@ export function dtcSitePolicy(site: SiteInput): DtcSitePolicy {
     brands: [],
     origins,
     imageOrigins: [...origins, "https://cdn.shopify.com"],
-    productPath: site.platform === "jsonld" ? CUSTOM_PRODUCT_PATH : STORE_PRODUCT_PATH,
+    productPath:
+      site.platform === "jsonld" || site.platform === "custom"
+        ? CUSTOM_PRODUCT_PATH
+        : STORE_PRODUCT_PATH,
     ...site,
-    capture: site.capture ?? defaultCaptureRoute(site.platform),
+    capture:
+      site.platform === "custom" ? "agent" : (site.capture ?? defaultCaptureRoute(site.platform)),
     catalog: listing,
     scroll: site.scroll ?? { ...scroll, itemSelector: catalogItemSelector(listing) },
   };

@@ -3,6 +3,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it, vi } from "vitest";
 import { DtcBrandScan } from "./brand-scan.js";
 import { dtcSitePolicy } from "./site-policy.js";
+import { shopifyCatalogPageUrl } from "./address.js";
 import type { DtcCatalogRead } from "./catalog-pages.js";
 
 const corpus = fileURLToPath(
@@ -29,6 +30,17 @@ function drawn(request: DtcCatalogRead, html: string) {
 }
 
 describe("Shopify products.json brand scan", () => {
+  it("resolves an Optibio-like single-brand pages/shop source to all products", () => {
+    const sourceUrl = "https://optibiosupplements.com/pages/shop";
+    const owned = dtcSitePolicy({
+      siteKey: "optibiosupplements.com",
+      platform: "shopify",
+      catalogUrl: sourceUrl,
+    });
+    expect(shopifyCatalogPageUrl(sourceUrl, owned, 1)).toBe(
+      "https://optibiosupplements.com/collections/all/products.json?limit=250&page=1",
+    );
+  });
   it.skipIf(!hasCorpus)("reads Sambucol's 22 retained products without a theme grid", async () => {
     const read = vi.fn(async (request: DtcCatalogRead) => drawn(request, retained("sambucol")));
     const result = await new DtcBrandScan({ pages: { read }, sites: [site] }).scan(

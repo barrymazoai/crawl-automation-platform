@@ -14,7 +14,7 @@ export interface DtcRendered {
   brandEvidence: DtcBrandEvidence;
   evidence: ChannelProductEvidence;
   facts: FactsText;
-  platform: PlatformProduct["platform"];
+  platform: PlatformProduct["platform"] | "custom";
 }
 
 /**

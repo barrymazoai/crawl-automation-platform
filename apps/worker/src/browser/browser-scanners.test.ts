@@ -161,7 +161,7 @@ it("captures configured DTC catalogs in Ego, without Whole Foods preparation", a
     status: 200,
     ready: true,
     scroll: { rounds: 2, ended: "stable" },
-    html: '<html><body><pre>{"products":[{"id":123,"handle":"sleep","title":"Sleep","vendor":"Shop"}]}</pre></body></html>',
+    html: '<html><body><pre>{"products":[{"id":123,"handle":"sleep","title":"Sleep","vendor":"Shop","variants":[{"id":456,"title":"Default Title"}]}]}</pre></body></html>',
   });
   const round = vi.spyOn(ego, "round").mockRejectedValue(new Error("Unexpected store preparation"));
   const publication = new RetainedPublication(memoryStore(), memoryStore());
@@ -189,7 +189,7 @@ it("captures configured DTC catalogs in Ego, without Whole Foods preparation", a
   await scans.prepare("https://shop.example/products/sleep", signal);
   const result = await scans.scan({ scanId: "dtc-scan", sourceUrl }, signal);
   expect(result).toMatchObject({ complete: true, soldHere: true });
-  expect(result.pages[0]?.products[0]?.url).toBe("https://shop.example/products/sleep");
+  expect(result.pages[0]?.products[0]?.url).toBe("https://shop.example/products/sleep?variant=456");
   expect(result.archiveKeys).toHaveLength(1);
   expect(read).toHaveBeenCalledOnce();
   expect(agent.scan).not.toHaveBeenCalled();

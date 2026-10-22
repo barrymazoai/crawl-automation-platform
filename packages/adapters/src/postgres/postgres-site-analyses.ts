@@ -3,7 +3,7 @@ import {
   type SiteAnalysisLimits,
   type SiteAnalysisResult,
 } from "@crawl-automation/v3-contracts";
-import type { Database } from "@crawl-automation/platform";
+import type { Database, Logger } from "@crawl-automation/platform";
 import {
   SiteAnalysisApplyResultSchema,
   type AnalyzeSiteSchema,
@@ -18,7 +18,10 @@ import { analyzedTasks } from "./site-analysis-tasks.js";
 
 const columns = `id AS "analysisId", url, limits, state, brands, archive_keys AS "archiveKeys", reasons`;
 export class PostgresSiteAnalyses implements SiteAnalysisStore {
-  constructor(private readonly database: Database) {}
+  constructor(
+    private readonly database: Database,
+    private readonly log?: Pick<Logger, "info">,
+  ) {}
   create(input: z.infer<typeof AnalyzeSiteSchema>, limits: SiteAnalysisLimits) {
     return this.database.transaction((tx) =>
       oncePerRequest(
@@ -66,9 +69,10 @@ export class PostgresSiteAnalyses implements SiteAnalysisStore {
       [analysisId, result.state, JSON.stringify(result.brands), JSON.stringify(result.reasons)],
     );
   }
-  apply(input: z.infer<typeof ApplySiteAnalysisSchema>) {
+  async apply(input: z.infer<typeof ApplySiteAnalysisSchema>) {
     const { requestId, ...selection } = input;
-    return this.database.transaction((tx) =>
+    let applied = false;
+    const result = await this.database.transaction((tx) =>
       oncePerRequest(
         tx,
         {
@@ -82,10 +86,20 @@ export class PostgresSiteAnalyses implements SiteAnalysisStore {
           if (input.enqueue) {
             await enqueueAnalyzedBrands(tx, input.analysisId, result);
           }
+          applied = true;
           return result;
         },
       ),
     );
+    if (applied) {
+      for (const correction of result.corrected ?? []) {
+        this.log?.info(
+          { analysisId: input.analysisId, ...correction },
+          "DTC source settings corrected",
+        );
+      }
+    }
+    return result;
   }
   tasks(analysisId: string) {
     return analyzedTasks(this.database, analysisId);

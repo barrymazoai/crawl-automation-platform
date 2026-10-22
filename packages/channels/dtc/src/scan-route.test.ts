@@ -12,7 +12,7 @@ const shopify = dtcSitePolicy({
 });
 const agentSite = dtcSitePolicy({
   siteKey: "custom.example",
-  platform: "jsonld",
+  platform: "custom",
   catalogUrl: "https://custom.example/catalog",
 });
 

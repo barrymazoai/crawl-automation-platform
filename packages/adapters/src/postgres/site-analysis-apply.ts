@@ -1,9 +1,5 @@
-import {
-  insertAnalyzedSettings,
-  conflictingCatalog,
-  singleBrandSite,
-  storeCatalog,
-} from "./site-analysis-settings.js";
+import { conflictingCatalog, singleBrandSite, storeCatalog } from "./site-analysis-settings.js";
+import { applyAnalyzedSource } from "./site-analysis-source.js";
 import {
   siteAnalysisErrors,
   type SiteAnalysisApplyResult,
@@ -18,6 +14,7 @@ type BrandApplication = {
   brand: AnalyzedBrand;
   analysed: readonly AnalyzedBrand[];
   scoped: boolean;
+  replaceSettings: boolean;
 };
 
 export async function applySiteAnalysis(
@@ -32,7 +29,7 @@ export async function applySiteAnalysis(
     throw siteAnalysisErrors.create("SITE_ANALYSIS.NOT_APPLICABLE");
   }
   const brands = z.array(AnalyzedBrandSchema).parse(rows[0]?.["brands"]);
-  const result: SiteAnalysisApplyResult = { created: [], matched: [], skipped: [] };
+  const result: SiteAnalysisApplyResult = { created: [], matched: [], corrected: [], skipped: [] };
   const selected = input.brands?.map((name) => name.toLowerCase());
   skippedSelections(brands, input.brands ?? [], result);
   const catalogs = selectCatalog(brands, input.catalogUrl, result);
@@ -44,7 +41,13 @@ export async function applySiteAnalysis(
     }
     await applyBrand(
       tx,
-      { analysisId: input.analysisId, brand, analysed: brands, scoped: !!input.catalogUrl },
+      {
+        analysisId: input.analysisId,
+        brand,
+        analysed: brands,
+        scoped: !!input.catalogUrl,
+        replaceSettings: input.replaceSettings === true,
+      },
       result,
     );
   }
@@ -66,7 +69,7 @@ function selectCatalog(
 }
 
 async function applyBrand(tx: Queryable, input: BrandApplication, result: SiteAnalysisApplyResult) {
-  const { analysisId, brand: found } = input;
+  const { brand: found } = input;
   if (found.status !== "verified" || !found.catalogUrl || found.name.length > 80) {
     result.skipped.push({
       name: found.name,
@@ -82,48 +85,21 @@ async function applyBrand(tx: Queryable, input: BrandApplication, result: SiteAn
   // A collection-scoped analysis does not establish that the entire store belongs to this brand.
   const singleBrand = !input.scoped && (await singleBrandSite(tx, input));
   const brand = storeCatalog(found, singleBrand);
-  const conflict = await conflictingCatalog(tx, brand);
+  const conflict = await conflictingCatalog(tx, brand, input.replaceSettings);
   if (conflict) {
     result.skipped.push({ name: brand.name, reason: conflict });
     return;
   }
-  const brandId = await matchBrand(tx, brand.name);
-  const existing = await tx.query<Record<string, unknown>>(
-    "SELECT id,channel FROM brand_source WHERE brand_id=$1 AND region='US' AND url=$2",
-    [brandId, brand.catalogUrl],
+  await applyAnalyzedSource(
+    tx,
+    {
+      brand,
+      analysisId: input.analysisId,
+      singleBrand,
+      replaceSettings: input.replaceSettings,
+    },
+    result,
   );
-  if (existing[0]) {
-    await matchSource(tx, { row: existing[0], brand, brandId, analysisId, singleBrand }, result);
-    return;
-  }
-  const sourceId = await insertSource(tx, { brand, brandId, analysisId, singleBrand });
-  result.created.push({ name: brand.name, brandId, sourceId });
-}
-
-async function insertSource(
-  tx: Queryable,
-  input: { brand: AnalyzedBrand; brandId: string; analysisId: string; singleBrand: boolean },
-) {
-  const { brand, brandId, analysisId, singleBrand } = input;
-  const sources = await tx.query<Record<string, unknown>>(
-    `INSERT INTO brand_source (brand_id,channel,region,url,enabled)
-    VALUES ($1,'dtc','US',$2,true) RETURNING id`,
-    [brandId, brand.catalogUrl],
-  );
-  const sourceId = z.uuid().parse(sources[0]?.["id"]);
-  await insertAnalyzedSettings(tx, { sourceId, analysisId, brand, singleBrand });
-  return sourceId;
-}
-async function matchBrand(tx: Queryable, name: string): Promise<string> {
-  await tx.query<Record<string, unknown>>(
-    "INSERT INTO brand (name) VALUES ($1) ON CONFLICT (lower(name)) DO NOTHING",
-    [name],
-  );
-  const rows = await tx.query<Record<string, unknown>>(
-    "SELECT id FROM brand WHERE lower(name)=lower($1)",
-    [name],
-  );
-  return z.uuid().parse(rows[0]?.["id"]);
 }
 
 function skippedSelections(
@@ -136,31 +112,4 @@ function skippedSelections(
       result.skipped.push({ name, reason: "Name not present in this analysis" });
     }
   }
-}
-
-async function matchSource(
-  tx: Queryable,
-  input: {
-    row: Record<string, unknown>;
-    brand: AnalyzedBrand;
-    brandId: string;
-    analysisId: string;
-    singleBrand: boolean;
-  },
-  result: SiteAnalysisApplyResult,
-) {
-  const { row, brand, brandId, analysisId, singleBrand } = input;
-  if (row["channel"] !== "dtc") {
-    result.skipped.push({ name: brand.name, reason: "Existing source belongs to another channel" });
-    return;
-  }
-  const sourceId = z.uuid().parse(row["id"]);
-  if (!(await insertAnalyzedSettings(tx, { sourceId, analysisId, brand, singleBrand }))) {
-    result.skipped.push({
-      name: brand.name,
-      reason: "Existing source settings conflict; preserved unchanged",
-    });
-    return;
-  }
-  result.matched.push({ name: brand.name, brandId, sourceId });
 }

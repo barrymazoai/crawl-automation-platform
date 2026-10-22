@@ -9,18 +9,36 @@ import { siteAnalysisErrors } from "./errors.js";
 import { SiteAnalysisTaskSchema, type SiteAnalysisTaskProgress } from "./site-analysis-tasks.js";
 
 export const AnalyzeSiteSchema = z.strictObject({ requestId: z.uuid(), url: SiteUrlSchema });
-export const ApplySiteAnalysisSchema = z.strictObject({
-  requestId: z.uuid(),
-  analysisId: z.uuid(),
-  brands: z.array(z.string().trim().min(1)).min(1).max(500).optional(),
-  /** Apply only this exact catalog; discovery of the wider site cannot widen a collection task. */
-  catalogUrl: SiteUrlSchema.optional(),
-  /** Explicitly persist one queued brand task per verified source; old callers only save sources. */
-  enqueue: z.boolean().optional(),
-});
+export const ApplySiteAnalysisSchema = z
+  .strictObject({
+    requestId: z.uuid(),
+    analysisId: z.uuid(),
+    brands: z.array(z.string().trim().min(1)).min(1).max(500).optional(),
+    /** Apply only this exact catalog; discovery of the wider site cannot widen a collection task. */
+    catalogUrl: SiteUrlSchema.optional(),
+    /** Explicitly persist one queued brand task per verified source; old callers only save sources. */
+    enqueue: z.boolean().optional(),
+    /** Correct settings only on an existing DTC source, retaining its previous settings in history. */
+    replaceSettings: z.boolean().optional(),
+  })
+  .refine((input) => !(input.replaceSettings && input.enqueue), {
+    message: "Settings correction cannot enqueue scans in the same request",
+    path: ["enqueue"],
+  });
 export const SiteAnalysisApplyResultSchema = z.object({
   created: z.array(z.object({ name: z.string(), brandId: z.uuid(), sourceId: z.uuid() })),
   matched: z.array(z.object({ name: z.string(), brandId: z.uuid(), sourceId: z.uuid() })),
+  corrected: z
+    .array(
+      z.object({
+        name: z.string(),
+        brandId: z.uuid(),
+        sourceId: z.uuid(),
+        oldKind: z.enum(["single-brand", "multi-brand"]),
+        newKind: z.enum(["single-brand", "multi-brand"]),
+      }),
+    )
+    .optional(),
   skipped: z.array(z.object({ name: z.string(), reason: z.string() })),
   tasks: z.array(SiteAnalysisTaskSchema).optional(),
   notQueued: z.array(z.object({ name: z.string(), reason: z.string() })).optional(),

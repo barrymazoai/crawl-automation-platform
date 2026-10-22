@@ -111,3 +111,129 @@ it("does not create another task for a brand/domain whose source uses a differen
   expect(result.created).toHaveLength(0);
   expect(result.skipped[0]?.reason).toContain("preserved unchanged");
 });
+it("applies a verified custom store with an agent capture policy and an observed partial count", async () => {
+  const created = await store.create(
+    { requestId: randomUUID(), url: "https://www.dherbs.com/" },
+    SiteAnalysisLimitsSchema.parse({}),
+  );
+  await store.finish(created.analysisId, {
+    state: "completed",
+    brands: [
+      {
+        ...brand("Dherbs"),
+        domain: "www.dherbs.com",
+        platform: "custom",
+        catalogUrl: "https://www.dherbs.com/store/",
+        productCount: 27,
+        countExact: false,
+        wholeCatalog: false,
+        discoveredFrom: { page: "https://www.dherbs.com/", link: "https://www.dherbs.com/store/" },
+      },
+    ],
+    archiveKeys: [],
+    reasons: [],
+  });
+  const applied = await store.apply({ requestId: randomUUID(), analysisId: created.analysisId });
+  expect(applied.created).toHaveLength(1);
+  expect(await store.settings()).toContainEqual({
+    siteKey: "www.dherbs.com",
+    platform: "custom",
+    capture: "agent",
+    kind: "single-brand",
+    catalogUrl: "https://www.dherbs.com/store/",
+  });
+});
+it("retains old settings while explicitly correcting a scoped Optibio-like source", async () => {
+  const catalogUrl = "https://optibio.example/pages/shop";
+  const created = await store.create(
+    { requestId: randomUUID(), url: "https://optibio.example/" },
+    SiteAnalysisLimitsSchema.parse({}),
+  );
+  await store.finish(created.analysisId, {
+    state: "completed",
+    brands: [{ ...brand("Optibio"), domain: "optibio.example", catalogUrl }],
+    archiveKeys: [],
+    reasons: [],
+  });
+  const first = await store.apply({
+    requestId: randomUUID(),
+    analysisId: created.analysisId,
+    catalogUrl,
+  });
+  expect(first.created).toHaveLength(1);
+  const sourceId = first.created[0]?.sourceId;
+  const oldSettings = {
+    siteKey: "optibio.example",
+    platform: "shopify",
+    kind: "multi-brand",
+    brands: [{ brand: "Optibio", catalogUrl }],
+  };
+  expect(await store.settings()).toContainEqual(oldSettings);
+
+  const unchanged = await store.apply({ requestId: randomUUID(), analysisId: created.analysisId });
+  expect(unchanged.created).toHaveLength(0);
+  expect(unchanged.skipped).toEqual([
+    {
+      name: "Optibio",
+      reason: "Existing source settings conflict; preserved unchanged",
+    },
+  ]);
+  expect(await store.settings()).toContainEqual(oldSettings);
+
+  const corrected = await store.apply({
+    requestId: randomUUID(),
+    analysisId: created.analysisId,
+    replaceSettings: true,
+  });
+  expect(corrected.created).toHaveLength(0);
+  expect(corrected.matched[0]?.sourceId).toBe(sourceId);
+  expect(corrected.corrected).toEqual([
+    {
+      name: "Optibio",
+      brandId: first.created[0]?.brandId,
+      sourceId,
+      oldKind: "multi-brand",
+      newKind: "single-brand",
+    },
+  ]);
+  expect(await store.settings()).toContainEqual({
+    siteKey: "optibio.example",
+    platform: "shopify",
+    kind: "single-brand",
+    catalogUrl,
+  });
+  const history = await postgres.database.query<{
+    source_id: string;
+    analysis_id: string;
+    settings: unknown;
+    replaced_by_analysis_id: string;
+    reason: string;
+    replaced_at: Date;
+  }>(
+    "SELECT source_id,analysis_id,settings,replaced_by_analysis_id,reason,replaced_at FROM dtc_source_settings_history WHERE source_id=$1",
+    [sourceId],
+  );
+  expect(history).toHaveLength(1);
+  expect(history[0]).toMatchObject({
+    source_id: sourceId,
+    analysis_id: created.analysisId,
+    settings: oldSettings,
+    replaced_by_analysis_id: created.analysisId,
+    reason: "owner-approved analysis reapply",
+  });
+  expect(history[0]?.replaced_at).toBeInstanceOf(Date);
+  expect(
+    await postgres.database.query("SELECT id FROM brand_source WHERE id=$1", [sourceId]),
+  ).toHaveLength(1);
+  const again = await store.apply({
+    requestId: randomUUID(),
+    analysisId: created.analysisId,
+    replaceSettings: true,
+  });
+  expect(again.corrected).toEqual([]);
+  expect(
+    await postgres.database.query("SELECT id FROM dtc_source_settings_history WHERE source_id=$1", [
+      sourceId,
+    ]),
+  ).toHaveLength(1);
+});
