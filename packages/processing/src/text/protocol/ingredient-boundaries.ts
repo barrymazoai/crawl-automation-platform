@@ -119,6 +119,20 @@ function citedSublistHeading(
   );
 }
 
+/** The quoted blend item can itself end with the heading for its following component items. */
+function inlineBlendSublistStart(previous: string, gap: string): boolean {
+  if (!/^\s+$/.test(gap)) {
+    return false;
+  }
+  const match = /^[^:]+\b(?:blend|complex)\*?\s*:\s*([^:]+:)$/i.exec(previous.trim());
+  const heading = match?.[1];
+  return (
+    !!heading &&
+    /^[A-Z][\p{L}\p{M}\p{N}\s&'’/-]*:$/u.test(heading) &&
+    !NON_INGREDIENT_HEADING.test(heading)
+  );
+}
+
 function listSeparator(
   previous: string,
   gap: string,
@@ -128,6 +142,7 @@ function listSeparator(
     /^\s*(?:(?:[,;.|‚]\s*(?:and\s+)?)|and\s+|in\s+a\s+base\s+of\s+)$/i.test(gap) ||
     (/\.\s*$/.test(previous) && /^\s+$/.test(gap)) ||
     MINOR_INGREDIENTS.test(gap) ||
+    inlineBlendSublistStart(previous, gap) ||
     citedSublistHeading(gap, { previous, gapStart: context.start, headings: context.headings })
   );
 }

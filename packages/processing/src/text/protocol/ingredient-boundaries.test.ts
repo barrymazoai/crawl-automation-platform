@@ -49,6 +49,63 @@ describe("anchored ingredient boundaries", () => {
       ).codes,
     ).not.toEqual([]);
   });
+  it("keeps the Peptide 1.5 blend sublist, parenthesized blend and organic legend (2026-10-22)", () => {
+    const ingredients =
+      "Purified Water, Hydrolyzed Pea Protein*, Brown Rice Syrup Solids*, Agave Syrup*, High Linoleic Sunflower Oil*, Medium Chain Triglycerides (MCT from Coconut)*, Contains 1.5% or Less of: Vanilla Extract*, Natural Flavor*, Agave Inulin*, Flaxseed Oil*, Pea Starch*, Locust Bean Gum*, Rosemary Extract*, Sunflower Lecithin*, Spectra™ Phytonutrient Blend*: Extracts and Concentrates from: Broccoli*, CoffeeBerry®*, Green Tea*, Turmeric*, Kale*, Broccoli Sprout*, Acai*, Cinnamon*, Garlic*, Tomato*, Blueberry*, Carrot*, Beet*, Raspberry*, Spinach*, Tart Cherry*, Blackberry*,\u00a0Vitamin and Mineral Blend:\u00a0(Choline Bitartrate, Magnesium Chloride, Sodium Chloride, Tricalcium Phosphate, Sodium Ascorbate, Calcium Carbonate, Dimagnesium Phosphate, Potassium Chloride, Dipotassium Phosphate, DL-Alpha-Tocopheryl Acetate, Beta Carotene, Calcium Pantothenate, Cholecalciferol [Vitamin D3], Ferric Pyrophosphate, Niacinamide, Sodium Molybdate, Vitamin A Palmitate, Zinc Oxide, Biotin, Chromium Picolinate, Copper Sulfate, Cyanocobalamin [Vitamin B12], Folic Acid, Manganese Sulfate, Phylloquinone, Potassium Iodide, Pyridoxine Hydrochloride, Riboflavin, Sodium Selenite, Thiamine Hydrochloride), L-Cysteine, L-Carnitine, Taurine, L-Tryptophan. *Organic";
+    const items = [
+      "Purified Water",
+      "Hydrolyzed Pea Protein*",
+      "Brown Rice Syrup Solids*",
+      "Agave Syrup*",
+      "High Linoleic Sunflower Oil*",
+      "Medium Chain Triglycerides (MCT from Coconut)*",
+      "Vanilla Extract*",
+      "Natural Flavor*",
+      "Agave Inulin*",
+      "Flaxseed Oil*",
+      "Pea Starch*",
+      "Locust Bean Gum*",
+      "Rosemary Extract*",
+      "Sunflower Lecithin*",
+      "Spectra™ Phytonutrient Blend*: Extracts and Concentrates from:",
+      "Broccoli*",
+      "CoffeeBerry®*",
+      "Green Tea*",
+      "Turmeric*",
+      "Kale*",
+      "Broccoli Sprout*",
+      "Acai*",
+      "Cinnamon*",
+      "Garlic*",
+      "Tomato*",
+      "Blueberry*",
+      "Carrot*",
+      "Beet*",
+      "Raspberry*",
+      "Spinach*",
+      "Tart Cherry*",
+      "Blackberry*",
+      "Vitamin and Mineral Blend: (Choline Bitartrate, Magnesium Chloride, Sodium Chloride, Tricalcium Phosphate, Sodium Ascorbate, Calcium Carbonate, Dimagnesium Phosphate, Potassium Chloride, Dipotassium Phosphate, DL-Alpha-Tocopheryl Acetate, Beta Carotene, Calcium Pantothenate, Cholecalciferol [Vitamin D3], Ferric Pyrophosphate, Niacinamide, Sodium Molybdate, Vitamin A Palmitate, Zinc Oxide, Biotin, Chromium Picolinate, Copper Sulfate, Cyanocobalamin [Vitamin B12], Folic Acid, Manganese Sulfate, Phylloquinone, Potassium Iodide, Pyridoxine Hydrochloride, Riboflavin, Sodium Selenite, Thiamine Hydrochloride)",
+      "L-Cysteine",
+      "L-Carnitine",
+      "Taurine",
+      "L-Tryptophan",
+    ];
+    const fixture = simpleLabel({ ingredients, items });
+    fixture.lines[6] = `Ingredients:\u00a0${ingredients}`;
+    defined(fixture.wire.otherIngredients).heading.text = "Ingredients:";
+    fixture.wire.exclusions.push(
+      { quote: { fromLine: 7, toLine: 7, text: "Contains 1.5% or Less of:" }, reason: "heading" },
+      { quote: { fromLine: 7, toLine: 7, text: "*Organic" }, reason: "footnote" },
+    );
+    expect(decodeSimple(fixture).codes).toEqual([]);
+
+    const invalid = simpleLabel({
+      ingredients: "Spectra™ Phytonutrient Blend*: Directions: Broccoli*",
+      items: ["Spectra™ Phytonutrient Blend*: Directions:", "Broccoli*"],
+    });
+    expect(decodeSimple(invalid).codes).toContain("LABEL.INGREDIENT_BOUNDARY");
+  });
   it("keeps printed list separators and a minor-ingredients subheading between cited items", () => {
     for (const ingredients of [
       "Cellulose | Silica",
