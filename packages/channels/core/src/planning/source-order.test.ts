@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { hasLabelSection, labelSourcePolicy } from "./source-order.js";
+import { hasLabelSection, labelSourcePolicy, plannedLabelSourcePolicy } from "./source-order.js";
 
 it.each([
   ["amazon", "images-first"],
@@ -15,6 +15,27 @@ it.each([
 it("accepts a channel override independently of any merge policy", () => {
   expect(labelSourcePolicy("amazon", "text-first").order).toBe("text-first");
 });
+
+it("gives complete DTC page facts their own versioned text-only plan", () => {
+  expect(plannedLabelSourcePolicy("dtc", "images-first", true)).toEqual({
+    planRevision: "-facts-text-v2",
+  });
+  expect(plannedLabelSourcePolicy("dtc", "text-first", true)).toEqual({
+    planRevision: "-facts-text-v2",
+  });
+  expect(plannedLabelSourcePolicy("dtc", undefined, false)).toEqual({
+    sourcePolicy: { version: "label-sources/1", order: "images-first" },
+  });
+});
+
+it.each(["amazon", "wholefoods-amazon-formula"])(
+  "keeps %s ordered even when page facts are complete",
+  (channel) => {
+    expect(plannedLabelSourcePolicy(channel, undefined, true)).toEqual({
+      sourcePolicy: { version: "label-sources/1", order: "images-first" },
+    });
+  },
+);
 
 it.each([
   ["<h2>Supplement Facts</h2><p>partial</p>", true],

@@ -104,6 +104,20 @@ describe("label plans", () => {
     });
   });
 
+  it("accepts a page-only plan with packaging admission and no image tasks", async () => {
+    const setup = await labelPlanSetup();
+    setup.manifest.sources = setup.manifest.sources.filter((source) => source.kind === "page");
+    const input = { ...setup.input, admission: "label-packaging/1" as const };
+    const result = await setup.labelPlans.manifest(input, signal());
+    expect(result.manifest.sources.map((source) => [source.id, source.kind])).toEqual([
+      ["page", "text"],
+    ]);
+    expect(result.manifest.admission?.documents).toEqual([
+      setup.prepared.source.kind === "prepared" ? setup.prepared.source.document : null,
+    ]);
+    expect(setup.resolve.mock.calls.every(([source]) => source.kind === "page")).toBe(true);
+  });
+
   it("a plan for another product, an unprepared source or a foreign owner is refused", async () => {
     const setup = await labelPlanSetup();
     const foreignPlan = {

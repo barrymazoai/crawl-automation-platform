@@ -122,7 +122,11 @@ async function setup(input: {
   const registry = new ChannelRegistry([adapter]);
   const product = evidence(input.facts);
   product.imageCandidates = input.images ?? product.imageCandidates;
-  const parsed = { rendered: product, identity: { listingId: "877080", variantId: null } };
+  const parsed = {
+    rendered: product,
+    identity: { listingId: "877080", variantId: null },
+    facts: { text: null, complete: input.complete, missing: [] },
+  };
   const sourcePlans = new ProductSourcePlans(publication as never, {
     ...settings,
     sourceOrder: input.sourceOrder ?? {},
@@ -159,11 +163,16 @@ describe("formula planner (text facts first)", () => {
     ["gnc", "text-first"],
     ["swanson", "text-first"],
     ["costco", "text-first"],
-    ["dtc", "images-first"],
   ] as const)("persists the default source policy for new %s plans", async (channel, order) => {
     const { plan } = await setup({ facts: table, complete: true, channel });
     expect(plan.sourcePolicy).toEqual({ version: "label-sources/1", order });
     expect(plan).not.toHaveProperty("sourceOrder");
+  });
+
+  it("versions a complete DTC plan and uses the text-only policy", async () => {
+    const { plan } = await setup({ facts: table, complete: true, channel: "dtc" });
+    expect(plan.operationId).toMatch(/-facts-text-v2$/);
+    expect(plan.sourcePolicy).toBeUndefined();
   });
 
   it.each(["amazon", "wholefoods"] as const)(

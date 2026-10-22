@@ -16,6 +16,20 @@ export function labelSourcePolicy(channel: string, order?: SourcePolicy["order"]
 }
 
 /**
+ * DTC's complete page facts use the existing text-facts-first plan, which has no image tasks.
+ * Keeping the ordered policy on older inputs preserves their saved images-first plans.
+ */
+export function plannedLabelSourcePolicy(
+  channel: string,
+  order: SourcePolicy["order"] | undefined,
+  completePageFacts: boolean,
+): { sourcePolicy?: SourcePolicy; planRevision?: string } {
+  return channel === "dtc" && completePageFacts
+    ? { planRevision: "-facts-text-v2" }
+    : { sourcePolicy: labelSourcePolicy(channel, order) };
+}
+
+/**
  * A label heading admits partial text too; marketing prose alone never admits a model call.
  * GNC prints its facts table without a "Facts" heading ("Serving Size: 3 Capsules", "Other Ingredients").
  */

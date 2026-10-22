@@ -1,3 +1,4 @@
+import { existsSync, readFileSync } from "node:fs";
 import { describe, expect, it, vi } from "vitest";
 import {
   BrowserPages,
@@ -13,6 +14,7 @@ import { RetainedPublication, verifyBytes, type ObjectStore } from "@crawl-autom
 import { ChannelPlanInputSchema } from "@crawl-automation/v3-contracts";
 import { createDtcAdapter } from "./adapter.js";
 import { DTC_BROWSER_POLICY, dtcSitePolicy } from "./site-policy.js";
+import { dtcDocument } from "./product.js";
 
 class Memory implements ObjectStore {
   data = new Map<string, Uint8Array>();
@@ -227,5 +229,77 @@ it.each([null, "11", "variant-with-hyphens"])(
         },
       }).success,
     ).toBe(false);
+  },
+);
+
+const katePage = new URL(
+  "../../../../tools/diag-corpus/round8/html/nosource-katefarms--dtc-5247029e3337cbe9.html",
+  import.meta.url,
+);
+
+it.skipIf(!existsSync(katePage))(
+  "plans retained complete Kate Farms facts as page only while old DTC plans keep their images",
+  async () => {
+    const html = readFileSync(katePage, "utf8");
+    const pageUrl = dtcDocument(html).querySelector('link[rel="canonical"]')?.getAttribute("href");
+    if (!pageUrl) {
+      throw new Error("Retained Kate Farms page has no canonical URL");
+    }
+    const kateAdapter = createDtcAdapter([
+      dtcSitePolicy({ siteKey: "shop.katefarms.com", platform: "shopify", catalogUrl: null }),
+    ]);
+    const parsed = kateAdapter.parseProduct({
+      url: pageUrl,
+      html,
+      capturedAt: "2026-10-22T00:00:00.000Z",
+    });
+    expect(parsed.facts.complete).toBe(true);
+    expect(parsed.evidence.factsCandidates).toHaveLength(1);
+    expect(parsed.evidence.imageCandidates).toHaveLength(12);
+
+    const remote = new Memory();
+    const publication = new RetainedPublication(new Memory(), remote);
+    const planning = kateAdapter.planning;
+    if (!planning) {
+      throw new Error("DTC planning is required");
+    }
+    const sourcePlan = await new ProductSourcePlans(publication, settings).publish(
+      { ...request, url: pageUrl },
+      { parsed, planning },
+      AbortSignal.timeout(5000),
+    );
+    const plans = new ProductPlans({
+      registry: new ChannelRegistry([kateAdapter]),
+      publication,
+      resolver: {
+        resolve: async (ref) => ({
+          ref,
+          bytes: remote.data.get(ref.objectKey) ?? new Uint8Array(),
+        }),
+      },
+      reviews: { read: async () => null, append: vi.fn(async () => undefined) },
+      integrity: { verifyBytes },
+    });
+
+    const oldInput = {
+      ...sourcePlan,
+      operationId: sourcePlan.operationId.replace(/-facts-text-v2$/, ""),
+      sourcePolicy: { version: "label-sources/1" as const, order: "images-first" as const },
+    };
+    expect((await plans.run(oldInput, AbortSignal.timeout(5000))).status).toBe("prepared");
+    const before = await plans.inspect(oldInput, AbortSignal.timeout(5000));
+    expect(before?.manifest.sources.map((source) => source.id)).toEqual([
+      "page",
+      ...parsed.evidence.imageCandidates.map((_, index) => `image-${index}`),
+    ]);
+
+    expect(sourcePlan.operationId).toMatch(/-facts-text-v2$/);
+    expect(sourcePlan.sourcePolicy).toBeUndefined();
+    expect((await plans.run(sourcePlan, AbortSignal.timeout(5000))).status).toBe("prepared");
+    const after = await plans.inspect(sourcePlan, AbortSignal.timeout(5000));
+    expect(after?.manifest.sources.map((source) => source.id)).toEqual(["page"]);
+    expect(after?.manifest.sources[0]).toMatchObject({ kind: "page", required: true });
+    expect(after?.files).toEqual([]);
+    expect(after?.product.imageCandidates).toHaveLength(parsed.evidence.imageCandidates.length);
   },
 );

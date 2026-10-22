@@ -6,7 +6,7 @@ import {
 } from "@crawl-automation/v3-contracts";
 import type { ChannelPlanning, ParsedProduct, ProductIdentity } from "../adapter.js";
 import type { CaptureRequest, PlanSettings } from "./capture-request.js";
-import { labelSourcePolicy } from "../planning/source-order.js";
+import { plannedLabelSourcePolicy } from "../planning/source-order.js";
 
 const encode = (value: unknown) => Buffer.from(JSON.stringify(value));
 
@@ -14,6 +14,7 @@ interface Projected {
   request: CaptureRequest;
   identity: ProductIdentity;
   bytes: Buffer;
+  completeFacts: boolean;
 }
 
 /**
@@ -32,7 +33,12 @@ export class ProductSourcePlans {
     signal: AbortSignal,
   ): Promise<ChannelPlanInput> {
     const bytes = encode(input.planning.projection(input.parsed.rendered));
-    const projected = { request, identity: input.parsed.identity, bytes };
+    const projected = {
+      request,
+      identity: input.parsed.identity,
+      bytes,
+      completeFacts: input.parsed.facts.complete,
+    };
     const plan = this.planInput(projected, input.planning);
     await this.publication.publish(plan.source.objectKey, bytes, "application/json", signal);
     return plan;
@@ -51,15 +57,22 @@ export class ProductSourcePlans {
     };
     const { egressId, sourceOrder, ...providers } = this.settings;
     const channel = request.channel === "wholefoods" ? "amazon" : request.channel;
+    const textFactsOnly = providers.factsPolicy === "text-facts-first/1" && projected.completeFacts;
+    const { sourcePolicy, planRevision } = plannedLabelSourcePolicy(
+      channel,
+      sourceOrder?.[channel],
+      textFactsOnly,
+    );
     return ChannelPlanInputSchema.parse({
-      operationId: `plan-${key}`,
+      // A new operation keeps previously published DTC plans and their input fingerprints immutable.
+      operationId: `plan-${key}${planRevision ?? ""}`,
       owner,
       channel: planning.channel,
       parserVersion: planning.parserVersion,
       expectedUrl: request.url,
       binding: { sessionId: request.operationId, egressId },
       ...providers,
-      sourcePolicy: labelSourcePolicy(channel, sourceOrder?.[channel]),
+      ...(sourcePolicy ? { sourcePolicy } : {}),
       source: this.source(projected, planning, key),
     });
   }
