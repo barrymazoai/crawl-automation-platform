@@ -2,13 +2,11 @@ import type { BrowserScanRequest } from "@crawl-automation/channels-core";
 import {
   brandScanErrors,
   platformPageErrors,
-  readPlatformCatalog,
+  readShopifyCatalogPage,
   type ListingPage,
   type ListedProduct,
-  type PlatformCatalog,
 } from "@crawl-automation/channels-core";
-import { errorCodeOf } from "@crawl-automation/platform";
-import { catalogUrl, dtcProductAddress, siteForBrandUrl } from "./address.js";
+import { dtcProductAddress, shopifyCatalogPageUrl, siteForBrandUrl } from "./address.js";
 import type { DtcCatalogPages } from "./catalog-pages.js";
 import { dtcDocument } from "./product.js";
 import { DTC_SITES, type DtcSitePolicy } from "./site-policy.js";
@@ -16,6 +14,7 @@ import { dtcBrandSource, type DtcBrandSource } from "./brand-source.js";
 import { dtcBrandEvidence, type DtcBrandEvidence } from "./brand-evidence.js";
 
 export interface DtcListedProduct extends ListedProduct {
+  productId?: string;
   brand: string;
   seller: string;
   brandBasis: "page" | "source";
@@ -37,14 +36,15 @@ export interface DtcBrandScanResult {
 }
 
 function listingPage(
-  listing: PlatformCatalog,
+  products: ReturnType<typeof readShopifyCatalogPage>,
   scope: { site: DtcSitePolicy; source: DtcBrandSource },
   position: number,
 ): DtcListingPage {
   const { site, source } = scope;
   return {
-    products: listing.products.map((product) => ({
-      ...dtcProductAddress(product.url, [site]),
+    products: products.map((product) => ({
+      ...dtcProductAddress(new URL(`/products/${product.handle}`, source.catalogUrl).href, [site]),
+      productId: product.productId,
       title: product.title,
       kind: "product",
       brand: site.kind === "single-brand" ? source.brand : (product.brandRaw ?? source.brand),
@@ -52,8 +52,8 @@ function listingPage(
       brandBasis: site.kind === "multi-brand" && product.brandRaw ? "page" : "source",
       brandEvidence: dtcBrandEvidence(site, product.brandRaw, source),
     })),
-    cards: listing.products.length,
-    nextPage: listing.nextUrl ? position + 1 : null,
+    cards: products.length,
+    nextPage: products.length === 250 ? position + 1 : null,
     statedTotal: null,
   };
 }
@@ -70,6 +70,36 @@ function initialState(source: DtcBrandSource): DtcBrandScanResult {
   };
 }
 
+/** The browser renders products.json inside a <pre>; the retained original stays exactly what it returned. */
+function catalogJson(html: string): string | undefined {
+  return html.trimStart().startsWith("<")
+    ? (dtcDocument(html).querySelector("pre")?.textContent ?? undefined)
+    : html;
+}
+
+function verifiedProducts(
+  read: { url: string; status: number | null; html: string },
+  url: string,
+  seen: Set<string>,
+) {
+  if (read.url !== url || (read.status !== null && read.status !== 200)) {
+    throw platformPageErrors.create("DTC.CATALOG_HTTP_STATUS", {
+      details: { status: read.status, finalUrl: read.url },
+    });
+  }
+  const products = readShopifyCatalogPage(catalogJson(read.html));
+  if (products.length > 250) {
+    throw platformPageErrors.create("DTC.CATALOG_JSON_INVALID");
+  }
+  if (products.length && products.every((product) => seen.has(product.productId))) {
+    throw brandScanErrors.create("BRAND_SCAN.PAGINATION");
+  }
+  for (const product of products) {
+    seen.add(product.productId);
+  }
+  return products;
+}
+
 /** Separate browser scan, like Whole Foods; never attached to the HTTP-only BrandScanReader hook. */
 export class DtcBrandScan {
   constructor(
@@ -82,55 +112,24 @@ export class DtcBrandScan {
 
   async scan(request: BrowserScanRequest, signal: AbortSignal): Promise<DtcBrandScanResult> {
     const site = siteForBrandUrl(request.sourceUrl, this.deps.sites ?? DTC_SITES);
-    if (site.platform === "unverified") {
+    if (site.platform !== "shopify") {
       throw platformPageErrors.create("DTC.PLATFORM_UNVERIFIED");
     }
     const source = dtcBrandSource(request.sourceUrl, [site]);
     const state = initialState(source);
     const seen = new Set<string>();
-    let url = catalogUrl(source.catalogUrl, site, source.catalogUrl);
     for (let position = 1; position <= (this.deps.maxPages ?? 100); position += 1) {
       signal.throwIfAborted();
       await request.checkpoint?.();
-      if (seen.has(url)) {
-        throw brandScanErrors.create("BRAND_SCAN.PAGINATION");
-      }
-      seen.add(url);
+      const url = shopifyCatalogPageUrl(source.catalogUrl, site, position);
       const read = await this.deps.pages.read({ ...request, position, url, site }, signal);
-      const finalUrl = catalogUrl(read.url, site, source.catalogUrl);
-      const listing = readPlatformCatalog(dtcDocument(read.html), {
-        ...site.catalog,
-        url: finalUrl,
-      });
-      this.checkRepeated(state.pages, listing);
-      state.pages.push(listingPage(listing, { site, source }, position));
+      const products = verifiedProducts(read, url, seen);
+      state.pages.push(listingPage(products, { site, source }, position));
       state.archiveKeys.push(read.archiveKey);
-      if (read.scroll.ended !== "stable") {
-        return { ...state, stopped: "scroll_limit" };
-      }
-      if (!listing.nextUrl) {
+      if (products.length < 250) {
         return { ...state, complete: true, stopped: "end" };
       }
-      url = nextCatalogUrl(listing.nextUrl, site, source.catalogUrl);
     }
     return state;
-  }
-
-  private checkRepeated(pages: ListingPage[], listing: PlatformCatalog) {
-    const known = new Set(pages.flatMap((page) => page.products.map((product) => product.url)));
-    if (listing.products.length && listing.products.every((product) => known.has(product.url))) {
-      throw brandScanErrors.create("BRAND_SCAN.PAGINATION");
-    }
-  }
-}
-
-function nextCatalogUrl(raw: string, site: DtcSitePolicy, sourceUrl: string): string {
-  try {
-    return catalogUrl(raw, site, sourceUrl);
-  } catch (error) {
-    if (errorCodeOf(error) === "CHANNEL.URL_REJECTED") {
-      throw brandScanErrors.create("BRAND_SCAN.PAGINATION", { cause: error });
-    }
-    throw error;
   }
 }

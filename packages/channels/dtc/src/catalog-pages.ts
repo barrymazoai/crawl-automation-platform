@@ -1,22 +1,21 @@
 import {
   OriginalHtmlArchive,
   brandScanErrors,
-  checkPage,
   platformPageErrors,
   channelErrors,
   type BrowserReader,
 } from "@crawl-automation/channels-core";
-import { ListScrollResultSchema, type BrowserPage } from "@crawl-automation/platform";
+import { errorCodeOf, ListScrollResultSchema, type BrowserPage } from "@crawl-automation/platform";
 import type { RetainedPublication } from "@crawl-automation/platform";
 import { z } from "zod";
 import { DTC_PAGE_LIMITS, type DtcSitePolicy } from "./site-policy.js";
 import { dtcIdentityKey } from "./identity.js";
 import { dtcBrandSource } from "./brand-source.js";
-import { catalogUrl } from "./address.js";
+import { shopifyCatalogPageUrl } from "./address.js";
 
 const Proof = z.object({
   url: z.string(),
-  ready: z.literal(true),
+  ready: z.boolean(),
   status: z.number().nullable(),
   scroll: ListScrollResultSchema.pick({ rounds: true, ended: true }),
 });
@@ -46,27 +45,23 @@ export class DtcCatalogPages {
       if (!proof) {
         throw brandScanErrors.create("BRAND_SCAN.ARCHIVE_UNVERIFIED");
       }
-      return {
+      const retained = {
         ...Proof.parse(JSON.parse(Buffer.from(proof).toString("utf8"))),
         html: Buffer.from(saved.bytes).toString("utf8"),
         archiveKey: saved.source.objectKey,
       };
+      this.checkDrawn(retained, request.url);
+      return retained;
     }
     await archive.beginDownload(signal);
     return this.draw(request, archive, signal);
   }
 
   private async draw(request: DtcCatalogRead, archive: OriginalHtmlArchive, signal: AbortSignal) {
-    const page = await this.deps.browser.read(
-      {
-        url: request.url,
-        readySelector: `${request.site.catalog.catalogSelector}, ${request.site.catalog.emptySelector}`,
-        timeoutMs: DTC_PAGE_LIMITS.timeoutMs,
-        scroll: request.site.scroll,
-      },
-      signal,
-    );
-    this.checkDrawn(page);
+    const page = await this.browserPage(request.url, signal);
+    if (Buffer.byteLength(page.html) > DTC_PAGE_LIMITS.maxBytes) {
+      throw platformPageErrors.create("DTC.PAGE_LIMIT");
+    }
     const original = await archive.save(
       Buffer.from(page.html),
       {
@@ -80,11 +75,35 @@ export class DtcCatalogPages {
     );
     const proof = Proof.parse(page);
     await this.saveProof(`${archive.prefix}/catalog-proof.json`, proof, signal);
+    this.checkDrawn(page, request.url);
     return {
       ...proof,
       html: Buffer.from(original.bytes).toString("utf8"),
       archiveKey: original.source.objectKey,
     };
+  }
+
+  private async browserPage(url: string, signal: AbortSignal): Promise<BrowserPage> {
+    let page: BrowserPage;
+    try {
+      page = await this.deps.browser.read(
+        { url, readySelector: "body", timeoutMs: DTC_PAGE_LIMITS.timeoutMs },
+        signal,
+      );
+    } catch (error) {
+      const failure = (error as { details?: { failure?: { message?: unknown } } })?.details
+        ?.failure;
+      if (
+        !signal.aborted &&
+        errorCodeOf(error) === "BROWSER.UNAVAILABLE" &&
+        typeof failure?.message === "string" &&
+        /waitForSelector.*timed out/i.test(failure.message)
+      ) {
+        throw platformPageErrors.create("DTC.CATALOG_READY_TIMEOUT", { cause: error });
+      }
+      throw error;
+    }
+    return page;
   }
 
   private async saveProof(proofKey: string, proof: z.infer<typeof Proof>, signal: AbortSignal) {
@@ -104,7 +123,9 @@ export class DtcCatalogPages {
     const source = dtcBrandSource(request.sourceUrl ?? request.site.catalogUrl ?? request.url, [
       request.site,
     ]);
-    catalogUrl(request.url, request.site, source.catalogUrl);
+    if (request.url !== shopifyCatalogPageUrl(source.catalogUrl, request.site, request.position)) {
+      throw channelErrors.create("CHANNEL.URL_REJECTED", { details: { url: request.url } });
+    }
     const multi = request.site.kind === "multi-brand";
     const operation = `catalog-${request.scanId}-${request.position}`;
     return new OriginalHtmlArchive(this.deps.publication, {
@@ -121,18 +142,14 @@ export class DtcCatalogPages {
     });
   }
 
-  private checkDrawn(page: BrowserPage) {
-    checkPage({
-      status: page.status ?? 200,
-      contentType: "text/html",
-      contentEncoding: null,
-      bytes: Buffer.from(page.html),
-    });
-    if (Buffer.byteLength(page.html) > DTC_PAGE_LIMITS.maxBytes) {
-      throw platformPageErrors.create("DTC.PAGE_LIMIT");
+  private checkDrawn(page: BrowserPage, expectedUrl: string) {
+    if (page.url !== expectedUrl || (page.status !== null && page.status !== 200)) {
+      throw platformPageErrors.create("DTC.CATALOG_HTTP_STATUS", {
+        details: { status: page.status, finalUrl: page.url },
+      });
     }
     if (!page.ready) {
-      throw platformPageErrors.create("DTC.LISTING_UNVERIFIED");
+      throw platformPageErrors.create("DTC.CATALOG_READY_TIMEOUT");
     }
   }
 }

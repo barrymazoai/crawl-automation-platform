@@ -47,7 +47,7 @@ function page(options: { vendor?: string; schemaBrand?: unknown; embedded?: bool
   };
 }
 
-function listing(request: DtcCatalogRead, next?: string) {
+function listing(request: DtcCatalogRead) {
   const product = {
     id: request.position,
     title: "Minerals",
@@ -60,10 +60,7 @@ function listing(request: DtcCatalogRead, next?: string) {
     status: 200,
     scroll: { rounds: 3, ended: "stable" as const },
     archiveKey: `collection-${request.position}.html`,
-    html: `<div id="product-grid"><a href="/products/${product.handle}">Minerals</a></div>
-      <a href="/products/unrelated">Unrelated</a>
-      <script type="application/json">${JSON.stringify({ products: [product] })}</script>
-      ${next ? `<a rel="next" href="${next}">Next</a>` : ""}`,
+    html: `<html><body><pre>${JSON.stringify({ products: [product] })}</pre></body></html>`,
   };
 }
 
@@ -75,10 +72,8 @@ describe("a multi-brand scan is exactly one brand's collection", () => {
     expect(adapter.scanCapture?.(otherUrl)).toBe("browser");
   });
 
-  it("reads only the selected collection and its next page with end proof", async () => {
-    const read = vi.fn(async (request: DtcCatalogRead) =>
-      listing(request, request.position === 1 ? "?page=2" : undefined),
-    );
+  it("reads only the selected collection with end proof", async () => {
+    const read = vi.fn(async (request: DtcCatalogRead) => listing(request));
     const scan = new DtcBrandScan({ sites: [site], pages: { read } });
     const result = await scan.scan({ scanId: "thorne-only", sourceUrl }, signal());
     expect(result).toMatchObject({
@@ -87,8 +82,7 @@ describe("a multi-brand scan is exactly one brand's collection", () => {
       source: { brand: "Thorne", catalogUrl: sourceUrl },
     });
     expect(read.mock.calls.map(([request]) => request.url)).toEqual([
-      sourceUrl,
-      `${sourceUrl}?page=2`,
+      `${sourceUrl}/products.json?limit=250&page=1`,
     ]);
     expect(result.pages.flatMap((entry) => entry.products)).toEqual([
       expect.objectContaining({
@@ -97,24 +91,8 @@ describe("a multi-brand scan is exactly one brand's collection", () => {
         brandBasis: "page",
         url: `${origin}/products/mineral-1`,
       }),
-      expect.objectContaining({
-        brand: "Thorne",
-        seller: site.siteKey,
-        brandBasis: "page",
-        url: `${origin}/products/mineral-2`,
-      }),
     ]);
   });
-
-  it.each(["/collections/metagenics", "/collections/all"])(
-    "refuses pagination into %s",
-    async (next) => {
-      const read = vi.fn(async (request: DtcCatalogRead) => listing(request, next));
-      const scan = new DtcBrandScan({ sites: [site], pages: { read } });
-      await expect(scan.scan({ scanId: "bad-next", sourceUrl }, signal())).rejects.toThrow();
-      expect(read).toHaveBeenCalledTimes(1);
-    },
-  );
 
   it("rejects a redirect into another configured brand collection", async () => {
     const read = vi.fn(async (request: DtcCatalogRead) => ({

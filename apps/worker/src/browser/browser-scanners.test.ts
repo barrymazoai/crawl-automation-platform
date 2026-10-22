@@ -157,11 +157,11 @@ it("captures configured DTC catalogs in Ego, without Whole Foods preparation", a
   const sourceUrl = "https://shop.example/collections/all";
   const ego = new EgoPages({ cliPath: "/tmp/not-executed-ego", taskSpaceId: 1 });
   const read = vi.spyOn(ego, "read").mockResolvedValue({
-    url: sourceUrl,
+    url: `${sourceUrl}/products.json?limit=250&page=1`,
     status: 200,
     ready: true,
     scroll: { rounds: 2, ended: "stable" },
-    html: '<main><div id="product-grid"><a href="/products/sleep">Sleep</a></div></main>',
+    html: '<html><body><pre>{"products":[{"id":123,"handle":"sleep","title":"Sleep","vendor":"Shop"}]}</pre></body></html>',
   });
   const round = vi.spyOn(ego, "round").mockRejectedValue(new Error("Unexpected store preparation"));
   const publication = new RetainedPublication(memoryStore(), memoryStore());

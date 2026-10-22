@@ -7,13 +7,6 @@ import type { DtcSitePolicy } from "./site-policy.js";
 export type DtcScanDecision =
   { route: "platform"; site: string } | { route: "agent"; site: string; reason: string };
 
-/** Only catalog-shape verdicts can hand a platform site to the recorded agent method. */
-const CATALOG_SHAPE_FAILURES: ReadonlySet<string> = new Set([
-  "DTC.LISTING_UNVERIFIED",
-  "DTC.PLATFORM_UNVERIFIED",
-  "BRAND_SCAN.PAGINATION",
-]);
-
 export class DtcScanRoute {
   constructor(
     private readonly deps: {
@@ -40,7 +33,7 @@ export class DtcScanRoute {
       return await this.deps.platform.scan(request, signal);
     } catch (error) {
       const code = errorCodeOf(error);
-      if (signal.aborted || !code || !CATALOG_SHAPE_FAILURES.has(code)) {
+      if (signal.aborted || code !== "DTC.PLATFORM_UNVERIFIED") {
         throw error;
       }
       this.decide(request, { route: "agent", site: site.siteKey, reason: code });

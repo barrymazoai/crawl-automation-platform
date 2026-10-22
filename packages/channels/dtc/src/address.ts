@@ -1,4 +1,8 @@
-import { channelErrors, type ProductAddress } from "@crawl-automation/channels-core";
+import {
+  channelErrors,
+  platformPageErrors,
+  type ProductAddress,
+} from "@crawl-automation/channels-core";
 import type { DtcSitePolicy } from "./site-policy.js";
 import { dtcIdentityKey } from "./identity.js";
 import { dtcBrandSource } from "./brand-source.js";
@@ -51,6 +55,28 @@ export function dtcProductAddress(raw: string, sites: readonly DtcSitePolicy[]):
 export function catalogStartUrl(raw: string, site: DtcSitePolicy): string {
   const source = dtcBrandSource(raw, [site]);
   return catalogUrl(raw, site, source.catalogUrl);
+}
+
+/** The source chooses the collection; a single-brand non-collection source means the whole store. */
+export function shopifyCatalogPageUrl(
+  sourceUrl: string,
+  site: DtcSitePolicy,
+  page: number,
+): string {
+  siteForUrl(sourceUrl, [site]);
+  const source = new URL(sourceUrl);
+  const collection = /^\/collections\/[^/]+\/?$/.test(source.pathname)
+    ? source.pathname.replace(/\/$/, "")
+    : site.kind === "single-brand"
+      ? "/collections/all"
+      : null;
+  if (!collection) {
+    throw platformPageErrors.create("DTC.CATALOG_SCOPE_REQUIRED", { details: { sourceUrl } });
+  }
+  const url = new URL(`${collection}/products.json`, source.origin);
+  url.searchParams.set("limit", "250");
+  url.searchParams.set("page", String(page));
+  return url.href;
 }
 
 /** A browser brand scan starts at exactly the configured catalog entry. */

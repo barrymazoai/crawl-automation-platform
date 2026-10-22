@@ -22,17 +22,22 @@ const site = dtcSitePolicy({
   platform: "shopify",
   catalogUrl: "https://shop.example/collections/all",
 });
-const request = { site, url: site.catalogUrl ?? "", scanId: "scan-archive", position: 1 };
+const request = {
+  site,
+  url: "https://shop.example/collections/all/products.json?limit=250&page=1",
+  scanId: "scan-archive",
+  position: 1,
+};
 const signal = () => AbortSignal.timeout(5000);
 function setup() {
   const remote = new Memory();
   const publication = new RetainedPublication(new Memory(), remote);
   const read = vi.fn(async (request: BrowserRead): Promise<BrowserPage> => ({
     url: request.url,
-    html: '<main><div id="product-grid">é 🧪</div></main>',
+    html: '<html><body><pre>{"products":[]}</pre></body></html>',
     status: 200,
     ready: true,
-    scroll: { rounds: 3, ended: "stable" },
+    scroll: { rounds: 0, ended: "none" },
   }));
   const pages = new DtcCatalogPages({ browser: { read, provider: "ego-lite/2" }, publication });
   return { remote, read, pages };
@@ -54,7 +59,12 @@ describe("DTC catalog retained browser evidence", () => {
     for (const source of multi.brands) {
       results.push(
         await pages.read(
-          { ...request, site: multi, sourceUrl: source.catalogUrl, url: source.catalogUrl },
+          {
+            ...request,
+            site: multi,
+            sourceUrl: source.catalogUrl,
+            url: `${source.catalogUrl}/products.json?limit=250&page=1`,
+          },
           signal(),
         ),
       );
@@ -68,7 +78,8 @@ describe("DTC catalog retained browser evidence", () => {
     expect(Buffer.from(remote.data.get(result.archiveKey) ?? []).toString()).toBe(result.html);
     expect(await pages.read(request, signal())).toEqual(result);
     expect(read).toHaveBeenCalledTimes(1);
-    expect(read.mock.calls[0]?.[0].scroll).toEqual(site.scroll);
+    expect(read.mock.calls[0]?.[0]).toMatchObject({ readySelector: "body", url: request.url });
+    expect(read.mock.calls[0]?.[0].scroll).toBeUndefined();
   });
   it("does not refetch when original HTML exists but scroll proof is missing", async () => {
     const { pages, read, remote } = setup();
@@ -81,7 +92,7 @@ describe("DTC catalog retained browser evidence", () => {
     const { pages, read } = setup();
     read.mockResolvedValueOnce({
       url: request.url,
-      html: '<main><div id="product-grid"></div></main>',
+      html: '<html><body><pre>{"products":[]}</pre></body></html>',
       status: 200,
       ready: true,
       scroll: { rounds: 1, ended: "broken" },
@@ -104,7 +115,7 @@ describe("DTC catalog retained browser evidence", () => {
     await expect(pages.read(request, signal())).rejects.toThrow();
   });
   it("refuses an unready browser read", async () => {
-    const { pages, read } = setup();
+    const { pages, read, remote } = setup();
     read.mockResolvedValueOnce({
       url: request.url,
       html: "<main>loading</main>",
@@ -112,6 +123,39 @@ describe("DTC catalog retained browser evidence", () => {
       ready: false,
       scroll: { rounds: 0, ended: "none" },
     });
-    await expect(pages.read(request, signal())).rejects.toThrow();
+    await expect(pages.read(request, signal())).rejects.toMatchObject({
+      code: "DTC.CATALOG_READY_TIMEOUT",
+    });
+    expect([...remote.data.keys()].some((key) => key.endsWith("/original.html"))).toBe(true);
+  });
+  it("retains an HTTP error before reporting its catalog code", async () => {
+    const { pages, read, remote } = setup();
+    read.mockResolvedValueOnce({
+      url: request.url,
+      html: "<html><body>Not found</body></html>",
+      status: 404,
+      ready: true,
+      scroll: { rounds: 0, ended: "none" },
+    });
+    await expect(pages.read(request, signal())).rejects.toMatchObject({
+      code: "DTC.CATALOG_HTTP_STATUS",
+    });
+    expect([...remote.data.keys()].some((key) => key.endsWith("/original.html"))).toBe(true);
+    await expect(pages.read(request, signal())).rejects.toMatchObject({
+      code: "DTC.CATALOG_HTTP_STATUS",
+    });
+    expect(read).toHaveBeenCalledOnce();
+  });
+  it("maps a selector wait timeout to a catalog-specific failure", async () => {
+    const { pages, read } = setup();
+    const { egoErrors } = await import("@crawl-automation/platform");
+    read.mockRejectedValueOnce(
+      egoErrors.create("BROWSER.UNAVAILABLE", {
+        details: { failure: { message: "page.waitForSelector timed out after 75000ms: body" } },
+      }),
+    );
+    await expect(pages.read(request, signal())).rejects.toMatchObject({
+      code: "DTC.CATALOG_READY_TIMEOUT",
+    });
   });
 });

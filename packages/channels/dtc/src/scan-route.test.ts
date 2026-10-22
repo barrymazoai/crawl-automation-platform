@@ -74,29 +74,34 @@ describe("DTC brand scan route", () => {
     });
   });
 
-  it.each([
-    platformPageErrors.create("DTC.LISTING_UNVERIFIED"),
-    platformPageErrors.create("DTC.PLATFORM_UNVERIFIED"),
-    brandScanErrors.create("BRAND_SCAN.PAGINATION"),
-  ])("falls back to the agent for a recorded catalog shape error: %s", async (error) => {
-    const { route, platform, agent, onDecision } = setup();
-    platform.scan.mockRejectedValueOnce(error);
-    const input = request(shopify.catalogUrl ?? "");
-    expect(await route.scan(input, signal())).toEqual(result(input.sourceUrl, "agent"));
-    expect(agent.scan).toHaveBeenCalledOnce();
-    expect(onDecision).toHaveBeenLastCalledWith({
-      route: "agent",
-      site: shopify.siteKey,
-      reason: error.code,
-      sourceUrl: input.sourceUrl,
-      scanId: input.scanId,
-    });
-  });
+  it.each([platformPageErrors.create("DTC.PLATFORM_UNVERIFIED")])(
+    "falls back to the agent only for an unverified platform: %s",
+    async (error) => {
+      const { route, platform, agent, onDecision } = setup();
+      platform.scan.mockRejectedValueOnce(error);
+      const input = request(shopify.catalogUrl ?? "");
+      expect(await route.scan(input, signal())).toEqual(result(input.sourceUrl, "agent"));
+      expect(agent.scan).toHaveBeenCalledOnce();
+      expect(onDecision).toHaveBeenLastCalledWith({
+        route: "agent",
+        site: shopify.siteKey,
+        reason: error.code,
+        sourceUrl: input.sourceUrl,
+        scanId: input.scanId,
+      });
+    },
+  );
 
   it.each([
     brandScanErrors.create("BRAND_SCAN.CANCELLED"),
     brandScanErrors.create("BRAND_SCAN.ARCHIVE_UNVERIFIED"),
+    brandScanErrors.create("BRAND_SCAN.PAGINATION"),
     platformPageErrors.create("DTC.PAGE_LIMIT"),
+    platformPageErrors.create("DTC.CATALOG_JSON_INVALID"),
+    platformPageErrors.create("DTC.CATALOG_HTTP_STATUS"),
+    platformPageErrors.create("DTC.CATALOG_READY_TIMEOUT"),
+    platformPageErrors.create("DTC.CATALOG_SCOPE_REQUIRED"),
+    platformPageErrors.create("DTC.LISTING_UNVERIFIED"),
     new Error("browser transport failed"),
   ])("does not retry cancellation, archive, size, or transport failures: %s", async (error) => {
     const { route, platform, agent } = setup();

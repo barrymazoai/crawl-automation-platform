@@ -2,6 +2,7 @@ export * from "./types.js";
 export * from "./errors.js";
 export * from "./shopify.js";
 export * from "./shopify-data.js";
+export * from "./shopify-catalog.js";
 export * from "./woocommerce.js";
 export * from "./jsonld.js";
 export { object, string, parsePageJson } from "./json.js";
