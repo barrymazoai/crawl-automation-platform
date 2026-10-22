@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { factsFromHtml, factsTextComplete, factsTextFromHtml } from "./facts-text.js";
+import {
+  factsFromHtml,
+  factsTextComplete,
+  factsTextFromHtml,
+  nutritionInfoTableText,
+} from "./facts-text.js";
 
 // Swanson product page facts text (healthy-origins-vitamin-k2-mk-7-100-mcg-180-veg-sgels, 2026-09-28).
 const swanson =
@@ -47,5 +52,30 @@ describe("facts text completeness", () => {
       complete: false,
       missing: ["FACTS.TEXT_MISSING"],
     });
+  });
+
+  it.each(["Nutrition Info", "Nutrition Information", "Nutritional Information"])(
+    "reads a quantified medical nutrition table under %s without inventing a serving size",
+    (heading) => {
+      const html = `<section><h3>${heading}</h3><table><tr><th>Composition</th><th>Amount</th></tr>
+        <tr><td>Calories</td><td>250kcal</td></tr><tr><td>Sodium</td><td>160mg</td></tr>
+        <tr><td>Protein</td><td>9g</td></tr></table></section>
+        <section><p>Ingredients: Purified Water, Brown Rice Syrup Solids.</p></section>`;
+      const facts = factsFromHtml(html);
+      expect(facts).toMatchObject({ complete: true, missing: [] });
+      expect(facts.text).toContain("Calories\t250kcal");
+      expect(facts.text).toContain("Sodium\t160mg");
+      expect(facts.text).not.toMatch(/Serving Size/i);
+    },
+  );
+
+  it("accepts Nutrient / Per serving with two rows but rejects marketing summaries", () => {
+    const table = "Nutrient\tPer serving\nProtein\t9g\nSodium\t160mg\nIngredients: Water";
+    expect(nutritionInfoTableText(table)).toBe(true);
+    expect(factsTextComplete(table).complete).toBe(true);
+    expect(nutritionInfoTableText("Nutrition Info\n9g\nProtein\n250\nCalories")).toBe(false);
+    expect(factsTextComplete("Nutrition Info\nComposition\tAmount\nProtein\t9g").complete).toBe(
+      false,
+    );
   });
 });

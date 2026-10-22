@@ -1,5 +1,6 @@
 import { factsErrors } from "./facts-errors.js";
 import type { FactsText } from "../adapter.js";
+import { pageText } from "../page-text.js";
 
 /**
  * Whether a product page's own Supplement Facts text is complete enough to be the only formula source, so the product
@@ -8,6 +9,26 @@ import type { FactsText } from "../adapter.js";
  */
 const AMOUNT =
   /\b\d[\d,]*(?:\.\d+)?\s*(?:mg|mcg|µg|μg|g|kg|iu|cfu|billion|million|ml|kcal)\b|\b\d[\d,]*(?:\.\d+)?\s*%/gi;
+
+/**
+ * Medical formula / food tables: Kate Farms Pediatric Peptide 1.0 prints "Nutrition Info", a
+ * "Composition | Amount" header and six quantified rows, but no Serving Size line in that tab.
+ * Require two actual rows so a marketing heading and two summary badges cannot masquerade as a panel.
+ */
+export function nutritionInfoTableText(text: string | null): boolean {
+  if (!text) {
+    return false;
+  }
+  const lines = text.split(/\r?\n/).map((line) => line.trim());
+  const heading = lines.some((line) =>
+    /^(?:nutrition\s+info|nutrition(?:al)?\s+information)\s*:?$/i.test(line),
+  );
+  const columns = lines.some((line) =>
+    /^(?:composition\s*\t\s*amount|nutrient\s*\t\s*per\s+serving)\s*:?$/i.test(line),
+  );
+  const row = /^[A-Za-z][^\n\t]*?(?:\t|\s)\s*\d[\d,.]*\s*(?:kcal|g|mg|mcg|[µμ]g|iu)\b/i;
+  return (heading || columns) && lines.filter((line) => row.test(line)).length >= 2;
+}
 
 /** Decoded one after another, in this order, exactly as the planner always did (so decisions stay the same). */
 const ENTITIES: readonly (readonly [RegExp, string])[] = [
@@ -41,7 +62,8 @@ export function factsTextComplete(text: string | null): FactsVerdict {
     return { complete: false, reasons: [factsErrors.code("FACTS.TEXT_MISSING")], amounts: 0 };
   }
   const reasons: string[] = [];
-  if (!/Serving Size/i.test(text)) {
+  const nutritionTable = nutritionInfoTableText(text);
+  if (!nutritionTable && !/Serving Size/i.test(text)) {
     reasons.push(factsErrors.code("FACTS.SERVING_SIZE_MISSING"));
   }
   // Calories carry no unit and do not count; "% Daily Value" headings carry no number and do not match.
@@ -49,7 +71,10 @@ export function factsTextComplete(text: string | null): FactsVerdict {
   if (!amounts) {
     reasons.push(factsErrors.code("FACTS.AMOUNTS_MISSING"));
   }
-  if (!/Other Ingredients\s*:?\s*[A-Za-z(]/i.test(text)) {
+  if (
+    !/Other Ingredients\s*:?\s*[A-Za-z(]/i.test(text) &&
+    !(nutritionTable && /\bIngredients\s*:\s*[A-Za-z(]/i.test(text))
+  ) {
     reasons.push(factsErrors.code("FACTS.OTHER_INGREDIENTS_MISSING"));
   }
   return { complete: reasons.length === 0, reasons, amounts };
@@ -57,7 +82,10 @@ export function factsTextComplete(text: string | null): FactsVerdict {
 
 /** The shared facts judgement from facts HTML: the plain text and whether it alone can give the formula. */
 export function factsFromHtml(html: string | null): FactsText {
-  const text = html ? factsTextFromHtml(html) || null : null;
+  const structured = html ? pageText(html, { rowCells: true }) : null;
+  const text = html
+    ? (nutritionInfoTableText(structured) ? structured : factsTextFromHtml(html)) || null
+    : null;
   const verdict = factsTextComplete(text);
   return { text, complete: verdict.complete, missing: verdict.reasons };
 }

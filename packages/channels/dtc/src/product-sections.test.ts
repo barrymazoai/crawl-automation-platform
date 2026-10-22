@@ -131,6 +131,19 @@ describe.each([
     expect(product.facts.complete).toBe(true);
   });
 
+  it("joins an owned Nutrition Information table with its separate Ingredients section", () => {
+    const product = parse({
+      lower: `<section><h2>Nutrition Information</h2><table>
+        <tr><th>Nutrient</th><th>Per serving</th></tr>
+        <tr><td>Calories</td><td>250kcal</td></tr>
+        <tr><td>Sodium</td><td>160mg</td></tr></table></section>
+        <section><h2>Ingredients</h2><p>Ingredients: Purified Water, Brown Rice Syrup Solids.</p></section>`,
+    });
+    expect(product.facts.complete).toBe(true);
+    expect(product.facts.text).toContain("Sodium\t160mg");
+    expect(product.facts.text).toContain("Ingredients: Purified Water");
+  });
+
   it("preserves the root's complete facts and original image ordering", () => {
     const root = `<div class="facts">${sectionFacts}</div><img src="/label.jpg">`;
     const original = parse({ root });

@@ -3,6 +3,7 @@ import { LabelTextWireSchema } from "@crawl-automation/v3-contracts";
 import { simpleLabel, decodeSimple } from "../../testing/simple-label.js";
 import { decodeDrug, drugLines, drugWire } from "../../testing/drug-label-fixture.js";
 import { decodeLabelText } from "./label-decoder.js";
+import { labelHeadingAllowed } from "./label-headings.js";
 
 // bloodsugarfriendly.com protein bar, 2026-10-21: the FDA Added Sugars wording, with the amount before its name.
 const addedSugarsLines = [
@@ -48,6 +49,35 @@ const addedSugarsWire = () => {
 };
 
 describe("derived structural coverage", () => {
+  it.each([
+    {
+      heading: "Nutrition Info",
+      example: "Kate Farms Pediatric Peptide 1.0",
+      note: "medical formula panel",
+    },
+    {
+      heading: "Nutrition Information",
+      example: "food nutrition tab",
+      note: "expanded Info heading",
+    },
+    {
+      heading: "Nutritional Information",
+      example: "food nutrition tab",
+      note: "adjectival heading",
+    },
+    {
+      heading: "Composition\tAmount",
+      example: "Kate Farms Pediatric Peptide 1.0",
+      note: "two table columns",
+    },
+    {
+      heading: "Nutrient\tPer serving",
+      example: "medical formula table",
+      note: "per serving columns",
+    },
+  ])("allows $heading ($example: $note)", ({ heading }) => {
+    expect(labelHeadingAllowed(heading, decodeSimple(simpleLabel()).candidate)).toBe(true);
+  });
   it("recognizes inactive and contains headings only with cited ingredient items", () => {
     for (const heading of [
       "Inactive:",
@@ -118,6 +148,64 @@ describe("derived structural coverage", () => {
       expect(decodeSimple(simpleLabel({ heading })).codes).toEqual([]);
     },
   );
+  it("decodes Nutrition Info / Composition-Amount rows with an unknown serving size", () => {
+    const lines = [
+      "Nutrition Info",
+      "Composition\tAmount",
+      "Calories\t250kcal",
+      "Sodium\t160mg",
+      "Protein\t9g",
+      "Ingredients: Purified Water, Brown Rice Syrup Solids.",
+    ];
+    const anchor = (line: number, value: string) => ({ fromLine: line, toLine: line, text: value });
+    const row = (line: number, name: string, amount: string) => ({
+      kind: "nutrient" as const,
+      name: anchor(line, name),
+      amount: anchor(line, amount),
+      dailyValue: null,
+      amountStatus: "printed" as const,
+      parentRowIndex: null,
+    });
+    const wire = LabelTextWireSchema.parse({
+      codec: "label-extraction/1",
+      formula: {
+        servingSize: null,
+        servingsPerContainer: null,
+        columns: [
+          {
+            heading: anchor(2, "Composition\tAmount"),
+            rows: [
+              row(3, "Calories", "250kcal"),
+              row(4, "Sodium", "160mg"),
+              row(5, "Protein", "9g"),
+            ],
+          },
+        ],
+      },
+      otherIngredients: {
+        heading: anchor(6, "Ingredients:"),
+        items: [anchor(6, "Purified Water"), anchor(6, "Brown Rice Syrup Solids")],
+      },
+      formulaComplete: true,
+      ingredientsComplete: true,
+      exclusions: [],
+      issues: [],
+    });
+    const text = lines.join("\n");
+    const decoded = decodeLabelText({
+      text,
+      scope: { range: { start: 0, end: text.length } },
+      response: JSON.stringify(wire),
+      policyVersion: "label-text/6",
+    });
+    expect(decoded.codes).toEqual([]);
+    expect(decoded.candidate.formula?.servingSize).toBeNull();
+    expect(decoded.candidate.formula?.columns[0]?.rows.map((entry) => entry.amount?.text)).toEqual([
+      "250kcal",
+      "160mg",
+      "9g",
+    ]);
+  });
   it.each(["Zinc 5 mg", "Extra herb", "200 mg"])("still requires data %s", (missing) => {
     const fixture = simpleLabel();
     fixture.lines.push(missing);

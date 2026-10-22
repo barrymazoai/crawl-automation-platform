@@ -5,14 +5,16 @@ export interface LabelRange {
 }
 
 // Drug Facts are laid out differently (actives, uses, warnings, inactive ingredients): those pages stay whole.
-const HEADING = /^(supplement|nutrition)\s+facts\b/i;
+const HEADING =
+  /^(?:(?:supplement|nutrition)\s+facts|nutrition\s+info|nutrition(?:al)?\s+information)\b/i;
+const INFO_HEADING = /^nutrition\s+info(?:rmation)?\b|^nutritional\s+information\b/i;
 const DRUG_HEADING = /^drug\s+facts\b/i;
 const INGREDIENTS = /^(other\s+)?ingredients\b/i;
 const INGREDIENTS_HEADING = /^(other\s+)?ingredients\s*:?$/i;
 const TAIL = /^((other\s+)?ingredients\b|contains\b|allergen)/i;
 const FOOTNOTE = /(daily value|%\s*dv\b|^\*|^†)/i;
-const AMOUNT = /(\d+(?:\.\d+)?)\s*(mcg|mg|ml|g|iu|%)\b/gi;
-const HAS_AMOUNT = /\d+(?:\.\d+)?\s*(mcg|mg|ml|g|iu|%)\b/i;
+const AMOUNT = /(\d+(?:\.\d+)?)\s*(kcal|mcg|[µμ]g|mg|ml|g|iu|%)\b/gi;
+const HAS_AMOUNT = /\d+(?:\.\d+)?\s*(kcal|mcg|[µμ]g|mg|ml|g|iu|%)\b/i;
 const MAX_PANEL_LINES = 80;
 const MAX_TAIL_LINES = 40;
 const MAX_TAIL_GAP = 6;
@@ -79,6 +81,12 @@ const isFootnote = (value: string) =>
  * "% Daily Value" column heading comes before the rows; a later "40% of the Daily Value" sentence is not the panel.
  */
 function panelEnd(lines: string[], head: number, stop: number): number {
+  return INFO_HEADING.test(lines[head]?.trim() ?? "")
+    ? nutritionInfoEnd(lines, head, stop)
+    : factsPanelEnd(lines, head, stop);
+}
+
+function factsPanelEnd(lines: string[], head: number, stop: number): number {
   let rows = false;
   for (let line = head + 1; line < stop; line++) {
     const value = lines[line]?.trim() ?? "";
@@ -88,6 +96,34 @@ function panelEnd(lines: string[], head: number, stop: number): number {
     rows ||= HAS_AMOUNT.test(value) && !/^serving/i.test(value);
   }
   return head;
+}
+
+const QUANTIFIED_ROW = /^[A-Za-z][^\t\n]*\t\s*\d[\d,.]*\s*(?:kcal|g|mg|mcg|[µμ]g|iu)\b/i;
+
+/** Medical tables may end at their sibling Ingredients declaration without a Daily Value footnote. */
+function nutritionInfoEnd(lines: string[], head: number, stop: number): number {
+  let rows = 0;
+  for (let line = head + 1; line < stop; line++) {
+    const value = lines[line]?.trim() ?? "";
+    if (rows >= 2 && INGREDIENTS.test(value)) {
+      return nutritionIngredientEnd(lines, line);
+    }
+    if (rows >= 2 && isFootnote(value)) {
+      return footnoteBlockEnd(lines, line, stop);
+    }
+    if (QUANTIFIED_ROW.test(value)) {
+      rows++;
+    }
+  }
+  return head;
+}
+
+function nutritionIngredientEnd(lines: string[], line: number): number {
+  if (!INGREDIENTS_HEADING.test(lines[line]?.trim() ?? "")) {
+    return line;
+  }
+  const next = lines.findIndex((later, index) => index > line && index <= line + 2 && later.trim());
+  return next > line ? next : line;
 }
 
 function footnoteBlockEnd(lines: string[], first: number, stop: number): number {

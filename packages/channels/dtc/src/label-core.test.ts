@@ -1,8 +1,14 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { pageText } from "@crawl-automation/channels-core";
+import {
+  hasIngredientsSection,
+  pageText,
+  readShopifyProduct,
+} from "@crawl-automation/channels-core";
 import { LabelCorePolicySchema } from "@crawl-automation/v3-contracts";
 import { createDtcAdapter } from "./adapter.js";
 import { dtcLabelCore, extractDtcLabelCore } from "./label-core.js";
+import { dtcDocument } from "./product.js";
 
 describe("DTC label core v2", () => {
   it("removes Shopify chrome while keeping the entire Facts block", () => {
@@ -71,3 +77,36 @@ describe("DTC label core v2", () => {
     expect(createDtcAdapter().planning?.labelCore?.extract(html)).toBe("Ingredients: rice flour.");
   });
 });
+
+it.each([
+  ["5247029e3337cbe9", "250kcal", "160mg"],
+  ["fbe7438d1522a706", "375kcal", "200mg"],
+  ["126a4ade76669973", "300kcal", "160mg"],
+] as const)(
+  "bounds retained Kate Farms %s to Nutrition Info and its ingredient declaration",
+  (id, calories, sodium) => {
+    const html = readFileSync(
+      new URL(
+        `../../../../tools/diag-corpus/round8/html/nosource-katefarms--dtc-${id}.html`,
+        import.meta.url,
+      ),
+      "utf8",
+    );
+    const document = dtcDocument(html);
+    const url = document.querySelector('link[rel="canonical"]')?.getAttribute("href") ?? "";
+    const product = readShopifyProduct(document, {
+      url,
+      siteKey: "shop.katefarms.com",
+      imageOrigins: ["https://shop.katefarms.com", "https://cdn.shopify.com"],
+    });
+    expect(hasIngredientsSection(product.factsHtml ?? "")).toBe(true);
+    const core = extractDtcLabelCore(product.factsHtml ?? "");
+    expect(core.startsWith("Nutrition Info\nComposition\tAmount\n")).toBe(true);
+    expect(core).toContain(`Calories\t${calories}`);
+    expect(core).toContain(`Sodium\t${sodium}`);
+    expect(core).toContain("Ingredients: Purified Water");
+    expect(core).not.toContain("See More Nutrition Info");
+    expect(core).not.toContain("Certifications");
+    expect(core.length).toBeLessThan(2400);
+  },
+);

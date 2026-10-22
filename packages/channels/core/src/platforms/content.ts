@@ -1,21 +1,33 @@
 import { factsErrors } from "../facts/facts-errors.js";
-import { factsFromHtml } from "../facts/facts-text.js";
+import { factsFromHtml, nutritionInfoTableText } from "../facts/facts-text.js";
 import { pageText } from "../page-text.js";
 import type { FactsText } from "../adapter.js";
 import { platformPageErrors } from "./errors.js";
 import type { PlatformContext } from "./types.js";
-import { allowedContent, PRODUCT_CONTENT, type ContentIdentity } from "./content-policy.js";
+import { allowedContent, productRootOf, type ContentIdentity } from "./content-policy.js";
 import { ownContentHtml, type ProductContentScope } from "./content-scope.js";
 import { parseSrcset } from "srcset";
 import { observedImageSizes, shopifyThemeAsset } from "./observed-images.js";
 
 const SECTIONS =
-  'table, details, [id*="facts"], [class*="facts"], [id*="ingredients"], [class*="accordion"], [class*="description"]';
+  'table, details, [id*="facts"], [class*="facts"], [id*="nutrition"], [class*="nutrition"], ' +
+  '[id*="ingredients"], [class*="accordion"], [class*="description"]';
 const RENDERED_DETAILS =
-  'details, [id*="facts"], [class*="facts"], [id*="ingredients"], [class*="accordion"], [class*="description"]';
+  'details, [id*="facts"], [class*="facts"], [id*="nutrition"], [class*="nutrition"], ' +
+  '[id*="ingredients"], [class*="accordion"], [class*="description"]';
 
 export function productRoot(document: Document, context: PlatformContext): Element | null {
-  return document.querySelector(context.productSelector ?? PRODUCT_CONTENT.root);
+  return productRootOf(document, context.productSelector);
+}
+
+/** A rendered tab may have a hidden class; an inline display:none ancestor is an inactive product template. */
+function inactiveTemplate(node: Element): boolean {
+  for (let parent: Element | null = node; parent; parent = parent.parentElement) {
+    if (/display\s*:\s*none\b/i.test(parent.getAttribute("style") ?? "")) {
+      return true;
+    }
+  }
+  return false;
 }
 
 /** Use only readable description and accordion blocks owned by the rendered product root. */
@@ -23,6 +35,7 @@ export function renderedProductDetails(scope: ProductContentScope): string | nul
   const nodes = [...(scope.root?.querySelectorAll(RENDERED_DETAILS) ?? [])].filter(
     (node) =>
       allowedContent(node, scope.identity) &&
+      !inactiveTemplate(node) &&
       !node.closest("[inert]") &&
       Boolean(pageText(ownContentHtml(node, scope.identity))),
   );
@@ -34,19 +47,44 @@ export function renderedProductDetails(scope: ProductContentScope): string | nul
 
 export function factsSection(scope: ProductContentScope, description: string | null) {
   const sections = [...(scope.root?.querySelectorAll(SECTIONS) ?? [])]
-    .filter((node) => allowedContent(node, scope.identity))
+    .filter((node) => allowedContent(node, scope.identity) && !inactiveTemplate(node))
     .map((node) => ownContentHtml(node, scope.identity));
-  const extra = scope.sections.map((node) => ownContentHtml(node, scope.identity));
-  const candidates = [...sections, description ?? "", ...extra].filter((html) =>
-    /supplement facts|nutrition facts|serving size/i.test(pageText(html)),
+  const extra = scope.sections
+    .filter((node) => !inactiveTemplate(node))
+    .map((node) => ownContentHtml(node, scope.identity));
+  const candidates = [...sections, description ?? "", ...extra].filter(
+    (html) =>
+      /supplement facts|nutrition facts|serving size/i.test(pageText(html)) ||
+      nutritionInfoTableText(pageText(html, { rowCells: true })),
   );
   const joined = joinedFacts(candidates, extra);
+  const nutrition = joinedNutrition(candidates, [...sections, ...extra]);
   const html =
     candidates.find((candidate) => completeFacts(candidate).complete) ??
+    nutrition ??
     joined ??
     candidates[0] ??
     null;
   return { factsHtml: html, facts: completeFacts(html) };
+}
+
+/** A table and a sibling Ingredients tab are one product label when both belong to the same content scope. */
+function joinedNutrition(candidates: string[], sections: string[]): string | null {
+  const panel = candidates.find((html) =>
+    nutritionInfoTableText(pageText(html, { rowCells: true })),
+  );
+  const ingredients = [
+    ...new Map(
+      sections
+        .filter((html) => /^ingredients(?:\s*:|\s*\n+\s*ingredients\s*:)/i.test(pageText(html)))
+        .map((html) => [pageText(html), html]),
+    ).values(),
+  ];
+  if (!panel || ingredients.length !== 1) {
+    return null;
+  }
+  const html = `${panel}\n${ingredients[0]}`;
+  return completeFacts(html).complete ? html : null;
 }
 
 /** Join only one facts panel and one separate ingredients section; ambiguous panels stay on the image path. */
@@ -67,10 +105,14 @@ function joinedFacts(candidates: string[], extra: string[]): string | null {
 export function completeFacts(html: string | null): FactsText {
   const result = factsFromHtml(html);
   const missing = [...result.missing];
-  if (result.text && !/serving size\s*:?\s*\d/i.test(result.text)) {
+  if (
+    result.text &&
+    !nutritionInfoTableText(result.text) &&
+    !/serving size\s*:?\s*\d/i.test(result.text)
+  ) {
     missing.push(factsErrors.code("FACTS.SERVING_QUANTITY_MISSING"));
   }
-  if (result.text && !/\b\d[\d,.]*\s*(?:mg|mcg|[µμ]g|g|iu|cfu|ml)\b/i.test(result.text)) {
+  if (result.text && !/\b\d[\d,.]*\s*(?:kcal|mg|mcg|[µμ]g|g|iu|cfu|ml)\b/i.test(result.text)) {
     missing.push(factsErrors.code("FACTS.INGREDIENT_AMOUNTS_MISSING"));
   }
   return { ...result, complete: missing.length === 0, missing };

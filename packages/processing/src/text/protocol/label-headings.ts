@@ -1,13 +1,15 @@
 import type { LabelTextCandidate } from "@crawl-automation/v3-contracts";
 import type { Span } from "./evidence-lines.js";
 
+// Kate Farms Pediatric Peptide 1.0 (2026-10-22): "Nutrition Info" / "Composition | Amount" are
+// printed panel and column headings. They carry no serving-size claim; the table rows provide the amounts.
 const HEADING = new RegExp(
-  String.raw`^[*+†‡§¶\s]*(?:supplement\s+facts|nutrition\s+facts|view\s+nutrition\s+label|` +
+  String.raw`^[*+†‡§¶\s]*(?:supplement\s+facts|nutrition\s+facts|nutrition\s+info|nutrition(?:al)?\s+information|view\s+nutrition\s+label|` +
     String.raw`serving\s+size\s*:?|servings?\s+per\s+container\s*:?)\.?$`,
   "i",
 );
 const COLUMN =
-  String.raw`(?:(?:amt|amounts?)(?:\s+per\s+serving)?|ingredients?|per\s+serving|` +
+  String.raw`(?:(?:amt|amounts?)(?:\s+per\s+serving)?|composition|nutrient|ingredients?|per\s+serving|` +
   String.raw`%\s*dv|dv\s*%|(?:%\s*)?daily\s+value)`;
 const SYMBOLS = String.raw`[*+†‡§¶•■|/\s]`;
 const TABLE_HEADING = new RegExp(
@@ -124,7 +126,9 @@ function factsHeadingSpan(
   const headings = [
     ...text
       .slice(range.start, range.end)
-      .matchAll(/(?:^|\n)[ \t]*((?:Supplement|Nutrition|Drug)\s+Facts)[ \t]*(?=\n|$)/gi),
+      .matchAll(
+        /(?:^|\n)[ \t]*((?:(?:Supplement|Nutrition|Drug)\s+Facts|Nutrition\s+Info|Nutrition(?:al)?\s+Information))[ \t]*(?=\n|$)/gi,
+      ),
   ];
   const first = headings[0];
   const firstRow = formula.columns[0]?.rows[0]?.name;

@@ -3,6 +3,11 @@ export const PRODUCT_CONTENT = {
   root:
     'product-info, [id^="MainProduct-"], .product.type-product, [itemscope][itemtype$="/Product"], ' +
     'main .product:has(.product__media-list):has(form[action*="/cart/add"])',
+  /**
+   * Only when no root above exists: Kate Farms' Vue theme renders the product as a plain section with its title and
+   * tabbed details (Nutrition Info), 2026-10-22. Never part of `root`, so other pages' sections are not foreign roots.
+   */
+  fallbackRoot: 'main .shopify-section:has(h1):has([role="tabpanel"])',
   main: 'main, #MainContent, #main-content, .site-main, [role="main"]',
   section: 'section, article, details, .shopify-section, [role="region"]',
   heading: 'h1, h2, h3, h4, h5, h6, summary, [role="heading"], button[aria-controls]',
@@ -41,8 +46,19 @@ function productIds(node: Element | null | undefined): string[] {
     .filter((value): value is string => Boolean(value));
 }
 
+/** A configured selector is exact; otherwise the shared root, then the narrow fallback. */
+export function productRootOf(document: Document, productSelector?: string): Element | null {
+  if (productSelector) {
+    return document.querySelector(productSelector);
+  }
+  return (
+    document.querySelector(PRODUCT_CONTENT.root) ??
+    document.querySelector(PRODUCT_CONTENT.fallbackRoot)
+  );
+}
+
 export function contentHeading(node: Element): boolean {
-  return /^(?:(?:supplement|nutrition)\s+facts|(?:other\s+)?ingredients|(?:product\s+)?label)(?:\s|:|$)/i.test(
+  return /^(?:(?:supplement|nutrition)\s+facts|nutrition\s+info(?:rmation)?|nutritional\s+information|(?:other\s+)?ingredients|(?:product\s+)?label)(?:\s|:|$)/i.test(
     (node.textContent ?? "").trim(),
   );
 }
@@ -116,6 +132,7 @@ export function foreignProductLink(node: Element, identity: ContentIdentity): bo
 export function contentPolicyScript(): string {
   return [
     `const PRODUCT_CONTENT = ${JSON.stringify(PRODUCT_CONTENT)};`,
+    productRootOf.toString(),
     productIds.toString(),
     contentIdentity.toString(),
     contentHeading.toString(),

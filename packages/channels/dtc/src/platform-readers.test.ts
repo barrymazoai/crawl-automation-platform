@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
   completeFacts,
@@ -6,6 +7,9 @@ import {
   readWooCommerceProduct,
 } from "@crawl-automation/channels-core";
 import { dtcDocument } from "./product.js";
+import { dtcEvidence } from "./evidence.js";
+import { dtcBrandEvidence } from "./brand-evidence.js";
+import { dtcSitePolicy } from "./site-policy.js";
 
 const url = "https://woo.example/product/magnesium";
 const context = { url, siteKey: "woo.example", imageOrigins: ["https://woo.example"] };
@@ -171,4 +175,81 @@ describe("platform reader boundary cases (synthetic)", () => {
   ])("keeps incomplete facts on the image path: %s", (text) => {
     expect(completeFacts(text).complete).toBe(false);
   });
+});
+
+const kateSite = dtcSitePolicy({
+  siteKey: "shop.katefarms.com",
+  platform: "shopify",
+  catalogUrl: null,
+});
+const katePages = [
+  {
+    id: "5247029e3337cbe9",
+    title: "Pediatric Peptide 1.0",
+    calories: "250kcal",
+    sodium: "160mg",
+    protein: "9g",
+  },
+  {
+    id: "fbe7438d1522a706",
+    title: "Pediatric Peptide 1.5",
+    calories: "375kcal",
+    sodium: "200mg",
+    protein: "13g",
+  },
+  {
+    id: "126a4ade76669973",
+    title: "Pediatric Standard 1.2",
+    calories: "300kcal",
+    sodium: "160mg",
+    protein: "12g",
+  },
+] as const;
+
+describe("retained Kate Farms medical nutrition pages", () => {
+  it.each(katePages)(
+    "retains the $id nutrition table and sibling Ingredients tab",
+    ({ id, title, calories, sodium, protein }) => {
+      const html = readFileSync(
+        new URL(
+          `../../../../tools/diag-corpus/round8/html/nosource-katefarms--dtc-${id}.html`,
+          import.meta.url,
+        ),
+        "utf8",
+      );
+      const document = dtcDocument(html);
+      const url = document.querySelector('link[rel="canonical"]')?.getAttribute("href");
+      expect(url).toBeTruthy();
+      if (!url) {
+        throw new Error("retained page has no canonical product URL");
+      }
+      const product = readShopifyProduct(document, {
+        url,
+        siteKey: kateSite.siteKey,
+        imageOrigins: [...kateSite.imageOrigins],
+      });
+      const evidence = dtcEvidence(
+        product,
+        kateSite,
+        dtcBrandEvidence(kateSite, product.brandRaw, null),
+      );
+      expect(product.title).toContain(title);
+      expect(evidence.factsCandidates).toHaveLength(1);
+      expect(product.facts.complete).toBe(true);
+      expect(product.facts.missing).toEqual([]);
+      expect(product.facts.text).toContain(`Calories\t${calories}`);
+      expect(product.facts.text).toContain(`Sodium\t${sodium}`);
+      expect(product.facts.text).toContain(`Protein\t${protein}`);
+      expect(product.facts.text).toContain("Ingredients: Purified Water");
+      expect(product.facts.text).not.toMatch(/Serving Size/i);
+      if (id === "5247029e3337cbe9") {
+        expect(product.facts.text).toContain("Strawberry Flavor");
+        expect(product.facts.text).not.toContain("Vanilla Extract");
+      }
+      if (id === "126a4ade76669973") {
+        expect(product.facts.text).toContain("Dietary Fiber\t4g");
+        expect(product.facts.text).not.toContain("Dietary Fiber\t5g");
+      }
+    },
+  );
 });

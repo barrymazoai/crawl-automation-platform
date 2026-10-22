@@ -5,6 +5,7 @@ import {
   contentPolicyScript,
   foreignProductLink,
   PRODUCT_CONTENT,
+  productRootOf,
   type ContentIdentity,
 } from "./content-policy.js";
 
@@ -19,6 +20,7 @@ const contentPolicy = {
   contentHeading,
   contentIdentity,
   foreignProductLink,
+  productRootOf,
   PRODUCT_CONTENT,
 };
 
@@ -48,8 +50,8 @@ function findProductContent(
   own: { url: string; productId?: string; productSelector?: string },
   policy: typeof contentPolicy,
 ): ProductContentScope {
-  const { contentIdentity, PRODUCT_CONTENT } = policy;
-  const root = document.querySelector(own.productSelector ?? PRODUCT_CONTENT.root);
+  const { contentIdentity, productRootOf, PRODUCT_CONTENT } = policy;
+  const root = productRootOf(document, own.productSelector);
   const identity = contentIdentity(root, own);
   const main = root?.closest(PRODUCT_CONTENT.main) ?? document.querySelector(PRODUCT_CONTENT.main);
   const candidates = [
@@ -86,7 +88,7 @@ export function productContentScopeScript(): string {
     contentPolicyScript(),
     ownSection.toString(),
     findProductContent.toString(),
-    "const contentPolicy = { allowedContent, contentHeading, contentIdentity, foreignProductLink, PRODUCT_CONTENT };",
+    "const contentPolicy = { allowedContent, contentHeading, contentIdentity, foreignProductLink, productRootOf, PRODUCT_CONTENT };",
     "const productContentScope = (document, own) => findProductContent(document, own, contentPolicy);",
   ].join("\n");
 }
