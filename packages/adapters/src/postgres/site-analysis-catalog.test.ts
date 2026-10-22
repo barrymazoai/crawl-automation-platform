@@ -32,13 +32,15 @@ const brand = (name: string, url: string) =>
 function fixture(
   brands = [brand("Absorbed", catalogUrl), brand("Owner", "https://owner.example/collections/all")],
   existing = false,
+  analysis: { state?: "completed" | "needs-review"; reasons?: string[] } = {},
 ) {
+  const { state = "completed", reasons = [] } = analysis;
   const sourceId = randomUUID();
   const brandId = randomUUID();
   const scanId = randomUUID();
   const query = vi.fn(async (sql: string) => {
     if (sql.startsWith("SELECT state,brands")) {
-      return [{ state: "completed", brands }];
+      return [{ state, brands, limits: { maxBrands: 50, maxPages: 100, maxDomains: 50 }, reasons }];
     }
     if (sql.startsWith("SELECT id FROM brand")) {
       return [{ id: brandId }];
@@ -131,4 +133,37 @@ it("keeps unscoped single-brand apply behavior", async () => {
       brand: expect.objectContaining({ catalogUrl: "https://owner.example/collections/all" }),
     }),
   );
+});
+it("applies verified brands and reports an explicitly selected unverified brand", async () => {
+  const unverified = {
+    ...brand("Dherbs Active", "https://dherbsactive.example/store/"),
+    domain: "dherbsactive.example",
+    status: "needs-review" as const,
+    reason: "TLS failure",
+  };
+  const test = fixture([brand("Dherbs", "https://owner.example/store/"), unverified], false, {
+    state: "needs-review",
+    reasons: ["BRAND_VERIFICATION_INCOMPLETE"],
+  });
+  const result = await applySiteAnalysis(test.tx, {
+    analysisId: randomUUID(),
+    brands: ["Dherbs", "Dherbs Active"],
+  });
+  expect(result.created.map(({ name }) => name)).toEqual(["Dherbs"]);
+  expect(result.skipped).toEqual([
+    { name: "Dherbs Active", reason: "Brand not verified in this analysis: TLS failure" },
+  ]);
+  expect(
+    test.query.mock.calls.filter(([sql]) => sql.startsWith("INSERT INTO brand_source")),
+  ).toHaveLength(1);
+});
+it("refuses a capped needs-review analysis before touching brand sources", async () => {
+  const test = fixture([brand("Dherbs", "https://owner.example/store/")], false, {
+    state: "needs-review",
+    reasons: ["Sub-brand domain cap exceeded; nothing may be applied"],
+  });
+  await expect(applySiteAnalysis(test.tx, { analysisId: randomUUID() })).rejects.toMatchObject({
+    code: "SITE_ANALYSIS.NOT_APPLICABLE",
+  });
+  expect(test.query).toHaveBeenCalledOnce();
 });

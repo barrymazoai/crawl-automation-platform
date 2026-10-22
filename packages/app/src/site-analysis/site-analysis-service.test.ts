@@ -55,7 +55,7 @@ it("a terminal workflow failure reconciles a interrupted running analysis withou
   expect(store.finish).toHaveBeenCalledOnce();
   expect(gateway.start).not.toHaveBeenCalled();
 });
-it.each(["queued", "running", "needs-review", "failed"] as const)(
+it.each(["queued", "running", "failed"] as const)(
   "does not create anything for %s",
   async (state) => {
     const { service, store } = setup();
@@ -72,6 +72,30 @@ it("applies a completed analysis through its atomic repository operation", async
   const input = { requestId: analysisId, analysisId, brands: ["Alpha"] };
   expect(await service.apply(input)).toEqual({ created: [], matched: [], skipped: [] });
   expect(store.apply).toHaveBeenCalledWith(input);
+});
+it("passes a needs-review analysis to the repository for verified-brand selection", async () => {
+  const { service, store } = setup();
+  store.get.mockResolvedValue({
+    ...record,
+    state: "needs-review",
+    reasons: ["BRAND_VERIFICATION_INCOMPLETE: Dherbs Active TLS failure"],
+  });
+  const input = { requestId: analysisId, analysisId, brands: ["Dherbs", "Dherbs Active"] };
+  await service.apply(input);
+  expect(store.apply).toHaveBeenCalledExactlyOnceWith(input);
+});
+it.each([
+  "Sub-brand domain cap exceeded; nothing may be applied",
+  "Page limit of 100 reached; remaining brands unverified",
+  "DTC.ANALYSIS_LIMIT",
+  "SITE_ANALYSIS.LIMITS_REACHED",
+])("refuses a limits-reached analysis: %s", async (reason) => {
+  const { service, store } = setup();
+  store.get.mockResolvedValue({ ...record, state: "needs-review", reasons: [reason] });
+  await expect(service.apply({ requestId: analysisId, analysisId })).rejects.toMatchObject({
+    code: "SITE_ANALYSIS.NOT_APPLICABLE",
+  });
+  expect(store.apply).not.toHaveBeenCalled();
 });
 it("accepts explicit settings correction for a completed analysis", async () => {
   const { service, store } = setup();

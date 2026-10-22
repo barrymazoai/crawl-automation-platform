@@ -21,7 +21,7 @@ const input = SiteAnalysisSchema.parse({
   limits: {},
 });
 
-async function captured(analysis: unknown, reachable: boolean) {
+async function captured(analysis: unknown, reachable: boolean, limitsReached = false) {
   const root = await realpath(await mkdtemp(join(tmpdir(), "dtc-analysis-custom-")));
   roots.push(root);
   const pages = reachable
@@ -48,7 +48,7 @@ async function captured(analysis: unknown, reachable: boolean) {
       surface: "live_site",
       evidence: ["product.png"],
       verifier: "codex",
-      limitsReached: false,
+      limitsReached,
     }),
   );
   const files = pages.flatMap((page) => [
@@ -99,4 +99,16 @@ it("keeps an unreachable site in needs-review without page evidence", async () =
   );
   const result = await analyzeWithDtcAgent(agent, input, new AbortController().signal);
   expect(result).toMatchObject({ state: "needs-review", brands: [], reasons: ["TLS blocked"] });
+});
+it("persists a limit marker when the agent verification reached scope limits", async () => {
+  const agent = await captured(
+    { state: "needs-review", brands: [], archiveKeys: [], reasons: ["50-brand scope exhausted"] },
+    true,
+    true,
+  );
+  const result = await analyzeWithDtcAgent(agent, input, new AbortController().signal);
+  expect(result).toMatchObject({
+    state: "needs-review",
+    reasons: ["50-brand scope exhausted", "SITE_ANALYSIS.LIMITS_REACHED"],
+  });
 });

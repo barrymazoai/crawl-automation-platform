@@ -50,14 +50,25 @@ export async function analyzeWithDtcAgent(
   );
   verifyEvidence(pages, saved.files);
   verifyAnalysis({ result, pages, verification, files: saved.files }, input);
+  return verifiedResult(result, verification, saved.manifestKey);
+}
+
+function verifiedResult(
+  result: z.infer<typeof SiteAnalysisResultSchema>,
+  verification: z.infer<typeof Verification>,
+  manifestKey: string,
+) {
   const incomplete =
     verification.limitsReached ||
     !result.brands.length ||
     result.brands.some((brand) => brand.status !== "verified");
+  if (verification.limitsReached && !result.reasons.includes("SITE_ANALYSIS.LIMITS_REACHED")) {
+    result.reasons.push("SITE_ANALYSIS.LIMITS_REACHED");
+  }
   return {
     ...result,
     state: incomplete ? ("needs-review" as const) : result.state,
-    archiveKeys: [saved.manifestKey],
+    archiveKeys: [manifestKey],
   };
 }
 

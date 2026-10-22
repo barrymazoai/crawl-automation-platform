@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { expect, it, vi } from "vitest";
 import type { Queryable } from "@crawl-automation/platform";
 import { AnalyzedBrandSchema } from "@crawl-automation/v3-contracts";
-import { replaceAnalyzedSettings } from "./site-analysis-settings.js";
+import { replaceAnalyzedSettings, singleBrandSite } from "./site-analysis-settings.js";
 
 it("archives the locked old policy before updating a matched source", async () => {
   const sourceId = randomUUID();
@@ -53,4 +53,30 @@ it("archives the locked old policy before updating a matched source", async () =
       catalogUrl,
     }),
   ]);
+});
+it("counts only verified brands on the same domain for a single-brand site", async () => {
+  const main = AnalyzedBrandSchema.parse({
+    name: "Dherbs",
+    domain: "www.dherbs.com",
+    platform: "custom",
+    catalogUrl: "https://www.dherbs.com/store/",
+    productCount: 1,
+    countExact: false,
+    wholeCatalog: false,
+    discoveredFrom: "platform-data",
+    status: "verified",
+    reason: null,
+  });
+  const query = vi.fn(async () => []);
+  expect(
+    await singleBrandSite({ query } as unknown as Queryable, {
+      brand: main,
+      analysed: [
+        main,
+        { ...main, name: "Unverified sibling", status: "needs-review", reason: "TLS failure" },
+        { ...main, name: "Other domain", domain: "www.dherbsactive.com" },
+      ],
+    }),
+  ).toBe(true);
+  expect(query).toHaveBeenCalledOnce();
 });

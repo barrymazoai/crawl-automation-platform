@@ -6,6 +6,7 @@ import {
 import type { Database, Logger } from "@crawl-automation/platform";
 import {
   SiteAnalysisApplyResultSchema,
+  type SiteAnalysisApplyResult,
   type AnalyzeSiteSchema,
   type ApplySiteAnalysisSchema,
   type SiteAnalysisStore,
@@ -72,6 +73,7 @@ export class PostgresSiteAnalyses implements SiteAnalysisStore {
   async apply(input: z.infer<typeof ApplySiteAnalysisSchema>) {
     const { requestId, ...selection } = input;
     let applied = false;
+    let needsReview = false;
     const result = await this.database.transaction((tx) =>
       oncePerRequest(
         tx,
@@ -82,7 +84,9 @@ export class PostgresSiteAnalyses implements SiteAnalysisStore {
           parse: SiteAnalysisApplyResultSchema.parse,
         },
         async () => {
-          const result = await applySiteAnalysis(tx, selection);
+          const result = await applySiteAnalysis(tx, selection, (state) => {
+            needsReview = state === "needs-review";
+          });
           if (input.enqueue) {
             await enqueueAnalyzedBrands(tx, input.analysisId, result);
           }
@@ -92,14 +96,28 @@ export class PostgresSiteAnalyses implements SiteAnalysisStore {
       ),
     );
     if (applied) {
-      for (const correction of result.corrected ?? []) {
-        this.log?.info(
-          { analysisId: input.analysisId, ...correction },
-          "DTC source settings corrected",
-        );
-      }
+      this.logApplication(input.analysisId, result, needsReview);
     }
     return result;
+  }
+  private logApplication(
+    analysisId: string,
+    result: SiteAnalysisApplyResult,
+    needsReview: boolean,
+  ) {
+    if (needsReview && (result.created.length || result.matched.length)) {
+      this.log?.info(
+        {
+          analysisId,
+          appliedBrands: [...result.created, ...result.matched].map(({ name }) => name),
+          skippedBrands: result.skipped.map(({ name }) => name),
+        },
+        "Needs-review site analysis partially applied",
+      );
+    }
+    for (const correction of result.corrected ?? []) {
+      this.log?.info({ analysisId, ...correction }, "DTC source settings corrected");
+    }
   }
   tasks(analysisId: string) {
     return analyzedTasks(this.database, analysisId);

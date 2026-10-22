@@ -7,6 +7,6 @@ export const siteAnalysisErrors = defineErrors({
   },
   "SITE_ANALYSIS.NOT_APPLICABLE": {
     category: "VALIDATION",
-    message: "Only a completed, verified analysis can create sources.",
+    message: "Only an uncapped completed or needs-review analysis can apply verified brands.",
   },
 });

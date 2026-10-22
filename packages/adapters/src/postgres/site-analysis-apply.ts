@@ -2,11 +2,16 @@ import { conflictingCatalog, singleBrandSite, storeCatalog } from "./site-analys
 import { applyAnalyzedSource } from "./site-analysis-source.js";
 import {
   siteAnalysisErrors,
+  siteAnalysisLimitsReached,
   type SiteAnalysisApplyResult,
   type ApplySiteAnalysisSchema,
 } from "@crawl-automation/app";
 import type { Queryable } from "@crawl-automation/platform";
-import { AnalyzedBrandSchema, type AnalyzedBrand } from "@crawl-automation/v3-contracts";
+import {
+  AnalyzedBrandSchema,
+  SiteAnalysisLimitsSchema,
+  type AnalyzedBrand,
+} from "@crawl-automation/v3-contracts";
 import { z } from "zod";
 
 type BrandApplication = {
@@ -20,19 +25,14 @@ type BrandApplication = {
 export async function applySiteAnalysis(
   tx: Queryable,
   input: Omit<z.infer<typeof ApplySiteAnalysisSchema>, "requestId">,
+  onState?: (state: "completed" | "needs-review") => void,
 ): Promise<SiteAnalysisApplyResult> {
-  const rows = await tx.query<Record<string, unknown>>(
-    "SELECT state,brands FROM dtc_site_analysis WHERE id=$1 FOR UPDATE",
-    [input.analysisId],
-  );
-  if (rows[0]?.["state"] !== "completed") {
-    throw siteAnalysisErrors.create("SITE_ANALYSIS.NOT_APPLICABLE");
-  }
-  const brands = z.array(AnalyzedBrandSchema).parse(rows[0]?.["brands"]);
   const result: SiteAnalysisApplyResult = { created: [], matched: [], corrected: [], skipped: [] };
+  const { brands, applicable, state } = await applicableBrands(tx, input.analysisId, result);
+  onState?.(state);
   const selected = input.brands?.map((name) => name.toLowerCase());
   skippedSelections(brands, input.brands ?? [], result);
-  const catalogs = selectCatalog(brands, input.catalogUrl, result);
+  const catalogs = selectCatalog(applicable, input.catalogUrl, result);
   for (const brand of catalogs.sort((left, right) =>
     left.name.toLowerCase().localeCompare(right.name.toLowerCase()),
   )) {
@@ -44,7 +44,7 @@ export async function applySiteAnalysis(
       {
         analysisId: input.analysisId,
         brand,
-        analysed: brands,
+        analysed: applicable,
         scoped: !!input.catalogUrl,
         replaceSettings: input.replaceSettings === true,
       },
@@ -52,6 +52,46 @@ export async function applySiteAnalysis(
     );
   }
   return result;
+}
+
+async function applicableBrands(
+  tx: Queryable,
+  analysisId: string,
+  result: SiteAnalysisApplyResult,
+) {
+  const rows = await tx.query<Record<string, unknown>>(
+    "SELECT state,brands,limits,reasons FROM dtc_site_analysis WHERE id=$1 FOR UPDATE",
+    [analysisId],
+  );
+  const row = rows[0];
+  if (!row || (row["state"] !== "completed" && row["state"] !== "needs-review")) {
+    throw siteAnalysisErrors.create("SITE_ANALYSIS.NOT_APPLICABLE");
+  }
+  const state = row["state"] as "completed" | "needs-review";
+  const brands = z.array(AnalyzedBrandSchema).parse(row["brands"]);
+  if (
+    siteAnalysisLimitsReached({
+      brands,
+      limits: SiteAnalysisLimitsSchema.parse(row["limits"]),
+      reasons: z.array(z.string()).parse(row["reasons"]),
+    })
+  ) {
+    throw siteAnalysisErrors.create("SITE_ANALYSIS.NOT_APPLICABLE");
+  }
+  const applicable =
+    state === "needs-review"
+      ? brands.filter((brand) => {
+          if (brand.status === "verified") {
+            return true;
+          }
+          result.skipped.push({
+            name: brand.name,
+            reason: `Brand not verified in this analysis: ${brand.reason ?? "No reason provided"}`,
+          });
+          return false;
+        })
+      : brands;
+  return { brands, applicable, state };
 }
 
 function selectCatalog(

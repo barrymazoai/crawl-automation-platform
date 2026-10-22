@@ -96,7 +96,10 @@ export async function singleBrandSite(
   input: { brand: AnalyzedBrand; analysed: readonly AnalyzedBrand[] },
 ): Promise<boolean> {
   const { brand, analysed } = input;
-  if (analysed.filter((other) => other.domain === brand.domain).length !== 1) {
+  if (
+    analysed.filter((other) => other.status === "verified" && other.domain === brand.domain)
+      .length !== 1
+  ) {
     return false;
   }
   const others = await tx.query(

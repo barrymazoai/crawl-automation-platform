@@ -6,6 +6,7 @@ import {
   type SiteAnalysisResult,
 } from "@crawl-automation/v3-contracts";
 import { siteAnalysisErrors } from "./errors.js";
+import { siteAnalysisLimitsReached } from "./apply-limits.js";
 import { SiteAnalysisTaskSchema, type SiteAnalysisTaskProgress } from "./site-analysis-tasks.js";
 
 export const AnalyzeSiteSchema = z.strictObject({ requestId: z.uuid(), url: SiteUrlSchema });
@@ -100,7 +101,10 @@ export class SiteAnalysisService {
       throw siteAnalysisErrors.create("SITE_ANALYSIS.NOT_CONFIGURED");
     }
     const analysis = await this.get(input.analysisId);
-    if (analysis.state !== "completed") {
+    if (
+      (analysis.state !== "completed" && analysis.state !== "needs-review") ||
+      siteAnalysisLimitsReached(analysis)
+    ) {
       throw siteAnalysisErrors.create("SITE_ANALYSIS.NOT_APPLICABLE", {
         details: { state: analysis.state },
       });

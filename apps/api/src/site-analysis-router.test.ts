@@ -28,6 +28,27 @@ it.each([undefined, ["Alpha"]])("applies all or selected brands: %j", async (bra
   expect(response.status).toBe(200);
   expect(apply).toHaveBeenCalledWith(input);
 });
+it("returns skipped unverified brands from a partial apply", async () => {
+  const result = {
+    created: [{ name: "Dherbs", brandId: requestId, sourceId: requestId }],
+    matched: [],
+    skipped: [
+      {
+        name: "Dherbs Active",
+        reason: "Brand not verified in this analysis: TLS failure",
+      },
+    ],
+  };
+  const apply = vi.fn(async () => result);
+  const input = { requestId, analysisId: requestId, brands: ["Dherbs", "Dherbs Active"] };
+  const response = await appWith({ siteAnalyses: { apply } }).request(
+    "/trpc/brands.applySiteAnalysis",
+    post(input),
+  );
+  expect(response.status).toBe(200);
+  expect(await response.json()).toMatchObject({ result: { data: result } });
+  expect(apply).toHaveBeenCalledExactlyOnceWith(input);
+});
 it("passes a settings correction to the service and rejects correction with enqueue", async () => {
   const apply = vi.fn(async () => ({ created: [], matched: [], skipped: [] }));
   const app = appWith({ siteAnalyses: { apply } });

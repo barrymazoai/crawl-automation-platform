@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { afterAll, beforeAll, expect, it } from "vitest";
+import { afterAll, beforeAll, expect, it, vi } from "vitest";
 import { SiteAnalysisLimitsSchema, type AnalyzedBrand } from "@crawl-automation/v3-contracts";
 import { PostgresSiteAnalyses } from "../src/postgres/postgres-site-analyses.js";
 import { startTemporaryPostgres, type TemporaryPostgres } from "./temporary-postgres.js";
@@ -74,7 +74,7 @@ it("rejects applying a capped analysis in the transaction and refuses changed re
     state: "needs-review",
     brands: [brand("Overflow")],
     archiveKeys: [],
-    reasons: ["cap"],
+    reasons: ["Sub-brand domain cap exceeded; nothing may be applied"],
   });
   await expect(
     store.apply({ requestId: randomUUID(), analysisId: requestId }),
@@ -142,6 +142,79 @@ it("applies a verified custom store with an agent capture policy and an observed
     kind: "single-brand",
     catalogUrl: "https://www.dherbs.com/store/",
   });
+});
+it("applies a Dherbs-like verified main brand and skips an unverified external sub-brand", async () => {
+  const mainName = "Dherbs Partial";
+  const mainHome = "https://www.dherbs-partial.example/";
+  const mainCatalog = "https://www.dherbs-partial.example/store/";
+  const subName = "Dherbs Active Partial";
+  const created = await store.create(
+    { requestId: randomUUID(), url: mainHome },
+    SiteAnalysisLimitsSchema.parse({}),
+  );
+  await store.finish(created.analysisId, {
+    state: "needs-review",
+    brands: [
+      {
+        ...brand(mainName),
+        domain: "www.dherbs-partial.example",
+        platform: "custom",
+        catalogUrl: mainCatalog,
+        discoveredFrom: { page: mainHome, link: mainCatalog },
+      },
+      {
+        ...brand(subName),
+        domain: "www.dherbsactive-partial.example",
+        platform: "custom",
+        catalogUrl: "https://www.dherbsactive-partial.example/",
+        status: "needs-review",
+        reason: "TLS failure",
+      },
+    ],
+    archiveKeys: [],
+    reasons: [`BRAND_VERIFICATION_INCOMPLETE: ${subName}`],
+  });
+  const log = { info: vi.fn() };
+  const result = await new PostgresSiteAnalyses(postgres.database, log).apply({
+    requestId: randomUUID(),
+    analysisId: created.analysisId,
+    brands: [mainName, subName],
+  });
+  expect(result.created.map(({ name }) => name)).toEqual([mainName]);
+  expect(result.skipped).toEqual([
+    { name: subName, reason: "Brand not verified in this analysis: TLS failure" },
+  ]);
+  expect(log.info).toHaveBeenCalledExactlyOnceWith(
+    {
+      analysisId: created.analysisId,
+      appliedBrands: [mainName],
+      skippedBrands: [subName],
+    },
+    "Needs-review site analysis partially applied",
+  );
+  const source = await postgres.database.query<{ name: string; url: string; settings: unknown }>(
+    `SELECT brand.name, source.url, settings.settings FROM brand_source source
+     JOIN brand ON brand.id=source.brand_id
+     JOIN dtc_source_settings settings ON settings.source_id=source.id
+     WHERE source.id=$1`,
+    [result.created[0]?.sourceId],
+  );
+  expect(source).toEqual([
+    {
+      name: mainName,
+      url: mainCatalog,
+      settings: {
+        siteKey: "www.dherbs-partial.example",
+        platform: "custom",
+        capture: "agent",
+        kind: "single-brand",
+        catalogUrl: mainCatalog,
+      },
+    },
+  ]);
+  expect(
+    await postgres.database.query("SELECT id FROM brand WHERE name=$1", [subName]),
+  ).toHaveLength(0);
 });
 it("retains old settings while explicitly correcting a scoped Optibio-like source", async () => {
   const catalogUrl = "https://optibio.example/pages/shop";
