@@ -19,6 +19,7 @@
     "@crawl-automation/v3-contracts": "workspace:*",
     "acorn": "8.18.0",
     "acorn-walk": "8.3.5",
+    "date-fns": "^4.1.0",
     "linkedom": "0.18.13",
     "zod": "catalog:"
   },

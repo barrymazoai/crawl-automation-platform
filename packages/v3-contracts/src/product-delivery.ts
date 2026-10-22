@@ -1,6 +1,12 @@
 import { z } from "zod";
 
 const nullableString = z.string().nullable();
+/** Supply Smart ingestObservationBatch fields; listing date is independent of capturedAt. */
+export const ProductListingDateFieldsSchema = z.object({
+  listedAt: z.iso.datetime({ offset: true }).optional(),
+  listedAtSource: z.literal("amazon_dfa").optional(),
+});
+export type ProductListingDateFields = z.infer<typeof ProductListingDateFieldsSchema>;
 const image = z.looseObject({
   clientRef: z.string(),
   url: z.string(),

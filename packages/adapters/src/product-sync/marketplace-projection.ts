@@ -4,8 +4,11 @@ import type {
   MarketplaceHistory,
   MarketplaceProduct,
 } from "@crawl-automation/app/marketplace-mapping";
-import type { ObjectStore } from "@crawl-automation/platform";
 import { retainedProjection } from "../product-delivery/retained-projection.js";
+import {
+  marketplaceListingDate,
+  type ListingDateDependencies,
+} from "./marketplace-listing-date.js";
 
 type ProjectionInput = Pick<MarketplaceProduct, "collection" | "enrichment" | "channel"> & {
   history: MarketplaceHistory;
@@ -13,7 +16,7 @@ type ProjectionInput = Pick<MarketplaceProduct, "collection" | "enrichment" | "c
 
 /** The capture's parser owns identity recovery; a formula collection is not required to read its own page. */
 export async function marketplaceProjection(
-  deps: { objects: Pick<ObjectStore, "read">; channels: MarketplaceChannels },
+  deps: ListingDateDependencies,
   input: ProjectionInput,
   signal: AbortSignal,
 ) {
@@ -32,7 +35,9 @@ export async function marketplaceProjection(
   if (!product) {
     throw productDeliveryErrors.create("PRODUCT_DELIVERY.MATERIAL_MISSING");
   }
-  return product;
+  return input.channel === "amazon"
+    ? { product, ...(await marketplaceListingDate(deps, input.history, signal)) }
+    : { product };
 }
 
 function decodeProjection(channels: MarketplaceChannels, input: ProjectionInput, raw: unknown) {

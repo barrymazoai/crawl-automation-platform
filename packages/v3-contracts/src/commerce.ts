@@ -1,5 +1,6 @@
 import {z} from "zod";
 import {PurchaseConditionsSchema} from "./purchase-conditions.js";
+import {AmazonListingDateSchema} from "./amazon-listing-date.js";
 
 /** Optional public-page fields; omission keeps old retained captures readable. */
 export const CommerceEvidenceSchema=z.strictObject({
@@ -12,4 +13,5 @@ export const CommerceEvidenceSchema=z.strictObject({
   salesVolume:z.strictObject({text:z.string().max(1000),lowerBound:z.string().regex(/^[1-9]\d*$/),
     approximate:z.boolean(),period:z.enum(['past_month','past_week']),selector:z.string().max(300)}).nullable().optional(),
   purchaseConditions:PurchaseConditionsSchema.optional(),
+  dateFirstAvailable:AmazonListingDateSchema.nullable().optional(),
 });

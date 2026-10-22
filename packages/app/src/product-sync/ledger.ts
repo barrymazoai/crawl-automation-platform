@@ -1,3 +1,5 @@
+import type { ListingDateOriginalsReport, ListingDateSelection } from "./listing-date-originals.js";
+
 /**
  * The crawler's record of what is in Supply Smart (migration 061). "Already synced" means this ledger: a listing is
  * sent again only when its payload hash changes. Rows are keyed by channel, listing and website variant ('' none).
@@ -60,7 +62,7 @@ export interface ProductSyncLedger {
    * our formula; owner 2026-10-13). Ingest is idempotent, so a resend is safe. Nothing is deleted; the old outcome
    * stays on record until the next attempt overwrites it.
    */
-  reopen(filter: ReopenFilter): Promise<{ reopened: number }>;
+  reopen(filter: ReopenFilter): Promise<ReopenResult>;
   /** Per channel: completed products, those whose brand has a matched company, and those still to send. */
   overview(): Promise<SyncOverview[]>;
 }
@@ -75,9 +77,18 @@ export interface SyncOverview {
 export const variantKey = (variantId: string | null) => variantId ?? "";
 
 export type ReopenFilter = { channel?: MarketplaceChannel; limit: number } & (
+  | { listingDates: true; before: string; listingIds?: string[] | undefined; dryRun: boolean }
   | { reason: string }
   | { withoutLabel: true }
   | { unfinished: true }
   | { present: true }
   | { withLabel: true }
 );
+
+export interface ReopenResult {
+  reopened: number;
+  /** DFA control: total eligible identities before LIMIT; execution selects only actually reopened rows. */
+  eligible?: number;
+  selected?: ListingDateSelection[];
+  originals?: ListingDateOriginalsReport;
+}

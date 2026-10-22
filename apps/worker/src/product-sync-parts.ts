@@ -29,6 +29,7 @@ export function buildProductSyncSweep(
       database: parts.database,
       objects: parts.r2.store,
       channels: parts.registry,
+      log: parts.log,
     }),
     brands: new PostgresBrandCompany(parts.database),
     ledger: new PostgresProductSync(parts.database),

@@ -1,6 +1,10 @@
 import { defineErrors } from "@crawl-automation/platform";
 
 export const brandCompanyErrors = defineErrors({
+  "PRODUCT_SYNC.ORIGINALS_NOT_CONFIGURED": {
+    category: "RUNTIME",
+    message: "Retained-original inspection is not configured for listing-date backfill.",
+  },
   "PRODUCT_SYNC.NOT_CONFIGURED": {
     category: "RUNTIME",
     message: "Supply Smart company matching is not configured.",

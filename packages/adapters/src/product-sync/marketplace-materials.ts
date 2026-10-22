@@ -6,42 +6,22 @@ import {
 } from "@crawl-automation/app";
 import {
   MARKETPLACE_CHANNELS,
-  type MarketplaceChannels,
   type MarketplaceHistory,
   type MarketplaceProduct,
 } from "@crawl-automation/app/marketplace-mapping";
-import type { ObjectStore, Queryable } from "@crawl-automation/platform";
+import type { Queryable } from "@crawl-automation/platform";
 import { z } from "zod";
 import { checkedCollectedProduct } from "../postgres/postgres-collected-products.js";
 import { PostgresFormulaIndex } from "../postgres/postgres-formula-index.js";
 import { deliveryEnrichment } from "../product-delivery/delivery-enrichment.js";
 import { marketplaceProjection } from "./marketplace-projection.js";
-import {
-  MARKETPLACE_COLLECTION,
-  MARKETPLACE_HISTORY,
-  MARKETPLACE_LINKED_COLLECTION,
-} from "./marketplace-queries.js";
+import { marketplaceHistory } from "./marketplace-history.js";
+import type { ListingDateDependencies } from "./marketplace-listing-date.js";
+import { MARKETPLACE_COLLECTION, MARKETPLACE_LINKED_COLLECTION } from "./marketplace-queries.js";
 
-export interface MarketplaceReaderDependencies {
+export interface MarketplaceReaderDependencies extends ListingDateDependencies {
   database: Queryable;
-  objects: Pick<ObjectStore, "read">;
-  channels: MarketplaceChannels;
 }
-const History = z.object({
-  codec: z.literal("v3-capture-history/1"),
-  observationId: z.string().min(1),
-  capturedAt: z.iso.datetime({ offset: true }),
-  listing: z.object({ channel: z.string(), externalId: z.string(), url: z.url() }),
-  owner: z.object({
-    runId: z.string(),
-    sourceId: z.string(),
-    brandId: z.string(),
-    operationId: z.string(),
-  }),
-  capture: z.object({ variantId: z.string().nullable() }),
-  metrics: z.record(z.string(), z.unknown()),
-  evidence: z.array(z.object({ objectKey: z.string(), sha256: z.string() })),
-});
 interface CollectedRow {
   operation_id: string;
   observation_id: string;
@@ -53,23 +33,17 @@ export class MarketplaceMaterials {
   constructor(private readonly deps: MarketplaceReaderDependencies) {}
 
   async read(input: MarketplaceProduct, signal: AbortSignal): Promise<MarketplaceProduct> {
-    const history = await this.history(MARKETPLACE_HISTORY, [
-      input.channel,
-      input.runId,
-      input.sourceId,
-      input.url,
-      input.variantId,
-    ]);
+    const history = await marketplaceHistory(this.deps.database, input);
     const collection = await this.collected(input);
     const enrichment = collection
       ? await deliveryEnrichment(this.deps.database, collection, input.channel)
       : null;
-    const product = await marketplaceProjection(
+    const projection = await marketplaceProjection(
       this.deps,
       { history, collection, enrichment, channel: input.channel },
       signal,
     );
-    const own = { ...input, history, collection, enrichment, product };
+    const own = { ...input, history, collection, enrichment, ...projection };
     return collection ? own : this.withKnownFormula(own);
   }
 
@@ -144,20 +118,5 @@ export class MarketplaceMaterials {
     }
     const row = rows[0];
     return row ? checkedCollectedProduct(row, row.operation_id) : null;
-  }
-
-  private async history(sql: string, values: unknown[]): Promise<MarketplaceHistory> {
-    const rows = await this.deps.database.query<{ record: unknown; body_hash: string }>(
-      sql,
-      values,
-    );
-    const row = rows[0];
-    if (!row) {
-      throw productDeliveryErrors.create("PRODUCT_DELIVERY.MATERIAL_MISSING");
-    }
-    if (rows.length > 1 || canonicalHash(row.record) !== row.body_hash) {
-      throw productDeliveryErrors.create("PRODUCT_DELIVERY.INTEGRITY");
-    }
-    return History.parse(row.record);
   }
 }

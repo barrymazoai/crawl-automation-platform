@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { AmazonListingDate } from "@crawl-automation/v3-contracts";
 import { canonicalHash } from "../history/canonical.js";
 import type { ProductDeliveryRequest } from "../brand-enrichment/task-ports.js";
 import type { DeliveryProduct } from "./ports.js";
@@ -7,6 +8,8 @@ import { deliveryLabel } from "./label-mapping.js";
 import { deliverySemantics } from "./semantic-mapping.js";
 import type { DeliveryItem, MappedDelivery } from "./wire.js";
 import { productDeliveryErrors } from "./errors.js";
+import { listingDateDelivery } from "./listing-date.js";
+import type { ListingDateWarning } from "./listing-date-read.js";
 
 export function mapDeliveryProduct(
   input: DeliveryProduct,
@@ -44,14 +47,26 @@ function mapListing(input: ReadyDeliveryProduct, request: ProductDeliveryRequest
   });
 }
 
+type DeliveryMappingInput = Pick<
+  ReadyDeliveryProduct,
+  "product" | "history" | "enrichment" | "sourceId"
+> & {
+  collection: DeliveryProduct["collection"];
+  dateFirstAvailable?: AmazonListingDate | null | undefined;
+  dateFirstAvailableWarning?: ListingDateWarning | undefined;
+};
+
 /** Shared wire mapping; each caller validates its channel's ownership before entering. */
 export function deliveryItem(
-  input: Pick<ReadyDeliveryProduct, "product" | "history" | "enrichment" | "sourceId"> & {
-    collection: DeliveryProduct["collection"];
-  },
+  input: DeliveryMappingInput,
   target: { domain: string; siteKey?: string; clientRef: string },
 ): DeliveryItem {
   const { collection, product, history } = input;
+  const { extras, ...listingDate } = listingDateDelivery({
+    ...input,
+    channel: product.channel,
+    metrics: history.metrics,
+  });
   const variant = product.variants.find(
     (entry) => entry.listingId === product.listingId && entry.variantId === product.variantId,
   );
@@ -66,19 +81,24 @@ export function deliveryItem(
     capturedAt: z.iso.datetime({ offset: true }).parse(history.capturedAt),
     ...deliverySemantics(input.enrichment),
     ...observedMetrics(history.metrics),
+    ...listingDate,
     attrsRaw: {
       variantOptions: product.variantOptions,
       websiteVariants: product.variants,
       ...(variant ? { websiteVariant: variant } : {}),
     },
     extras: {
-      ...(history.metrics.extras as object),
+      ...extras,
       crawler: collectionIdentity(input.sourceId, collection),
     },
-    images: product.imageCandidates
-      .filter((image) => image.variantId === null || image.variantId === product.variantId)
-      .map((image, index) => ({ clientRef: `gallery-${index}`, url: image.url, role: "gallery" })),
+    images: galleryImages(product),
   };
+}
+
+function galleryImages(product: ReadyDeliveryProduct["product"]) {
+  return product.imageCandidates
+    .filter((image) => image.variantId === null || image.variantId === product.variantId)
+    .map((image, index) => ({ clientRef: `gallery-${index}`, url: image.url, role: "gallery" }));
 }
 
 function listingBrand(raw: string | null, siteKey: string) {

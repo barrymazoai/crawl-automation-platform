@@ -28,7 +28,7 @@ export const productSyncRouter = router({
   /** Failed products with this reason become pending again (after a fix); nothing is deleted. */
   reopen: procedure
     .input(ReopenSyncSchema)
-    .mutation(async ({ ctx, input }) => (await service(ctx)).reopen(input)),
+    .mutation(async ({ ctx, input, signal }) => (await service(ctx)).reopen(input, signal)),
   /** Records listings already in Supply Smart so the sweep does not send them again. */
   markPresent: procedure
     .input(MarkPresentSchema)

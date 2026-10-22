@@ -53,3 +53,44 @@ it("returns a registered error when Supply Smart is not configured", async () =>
   expect(response.status).toBe(500);
   expect(await response.text()).toContain("PRODUCT_SYNC.NOT_CONFIGURED");
 });
+
+it("defaults listing-date reopen to preview and returns the bounded selection", async () => {
+  const result = {
+    reopened: 0,
+    eligible: 23456,
+    selected: [{ listingId: "B0013LAQS6", variantId: null }],
+    originals: {
+      checked: 1,
+      noReadableOriginal: 1,
+      warnings: [{ listingId: "B0013LAQS6", runId: "capture", reason: "missing" }],
+    },
+  };
+  const reopen = vi.fn(async () => result);
+  const input = { channel: "amazon", listingDates: true, before: "2026-10-22T00:00:00Z", limit: 1 };
+  const response = await appWith({ productSync: { reopen } }).request(
+    "/trpc/productSync.reopen",
+    post(input),
+  );
+  expect(response.status).toBe(200);
+  expect(await response.json()).toEqual({ result: { data: result } });
+  expect(reopen).toHaveBeenCalledExactlyOnceWith(
+    { ...input, dryRun: true },
+    expect.any(AbortSignal),
+  );
+});
+
+it("rejects listing-date requests for another channel before service access", async () => {
+  const reopen = vi.fn();
+  const response = await appWith({ productSync: { reopen } }).request(
+    "/trpc/productSync.reopen",
+    post({
+      channel: "wholefoods",
+      listingDates: true,
+      before: "2026-10-22T00:00:00Z",
+      limit: 1,
+      dryRun: false,
+    }),
+  );
+  expect(response.status).toBe(400);
+  expect(reopen).not.toHaveBeenCalled();
+});

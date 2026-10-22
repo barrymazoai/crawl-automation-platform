@@ -5,6 +5,7 @@ import { commerceElements, commerceText, locationText, selectedOffer } from "./c
 import { amount, priceCandidates, priceStatus, priceText } from "./commerce-prices.js";
 import { purchaseConditions } from "./commerce-purchase.js";
 import { salesVolume } from "./commerce-sales.js";
+import { amazonListingDate } from "./listing-date.js";
 
 function rating(root: AmazonElement): string | null {
   const section = root.querySelector("#averageCustomerReviews");
@@ -59,5 +60,6 @@ export function amazonCommerce(root: AmazonElement, asin: string): CommerceEvide
     priceStatus: priceStatus({ prices, availability, root }),
     salesVolume: salesVolume(root),
     purchaseConditions: purchaseConditions(root, price),
+    dateFirstAvailable: amazonListingDate(root.ownerDocument),
   };
 }

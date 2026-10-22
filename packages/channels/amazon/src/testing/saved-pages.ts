@@ -21,9 +21,9 @@ export const savedPaths = {
  * R45 will relocate data. An explicit override accepts flat files or the same repository-relative
  * layout.
  */
-export function savedPage(relative: string) {
-  const candidates = external
-    ? [join(external, basename(relative)), join(external, relative)]
+export function savedPage(relative: string, directory = external) {
+  const candidates = directory
+    ? [join(directory, basename(relative)), join(directory, relative)]
     : [join(repository, relative)];
   const path = candidates.find(existsSync);
   const asin = basename(relative).match(/B[A-Z0-9]{9}/)?.[0] ?? "";

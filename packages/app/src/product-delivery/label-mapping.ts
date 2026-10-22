@@ -2,6 +2,7 @@ import type { LabelCollectedProduct } from "@crawl-automation/v3-contracts";
 import { productDeliveryErrors } from "./errors.js";
 import { canonicalHash } from "../history/canonical.js";
 import type { DeliveryItem, DeliveryLabel, DeliveryLabelContent } from "./wire.js";
+import { labelExtras } from "./listing-date.js";
 
 export function deliveryLabelContent(record: LabelCollectedProduct): DeliveryLabelContent {
   const columns = record.formula?.columns ?? [];
@@ -79,7 +80,15 @@ export function deliveryLabel(input: {
   channel: DeliveryLabel["channel"];
 }): DeliveryLabel {
   const { item, collection, company, channel } = input;
-  const { clientRef: _clientRef, domain: _domain, capturedAt, images, ...listing } = item;
+  const {
+    clientRef: _clientRef,
+    domain: _domain,
+    listedAt: _date,
+    listedAtSource: _source,
+    capturedAt,
+    images,
+    ...listing
+  } = item;
   const { schemaVersion: _schemaVersion, ...observation } = collection.observation;
   return {
     schemaVersion: 1,
@@ -95,7 +104,7 @@ export function deliveryLabel(input: {
     company,
     channel,
     source: "crawler-v3:product-delivery",
-    listing,
+    listing: { ...listing, extras: labelExtras(channel, listing.extras) },
     images: images.slice(0, 50),
     label: {
       content: deliveryLabelContent(collection),

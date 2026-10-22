@@ -7,9 +7,11 @@ import type {
   SyncOverview,
   MarketplaceChannel,
   ReopenFilter,
+  ReopenResult,
 } from "@crawl-automation/app";
 import type { Queryable } from "@crawl-automation/platform";
 import { PENDING_SYNC, settledMarketplace } from "../product-sync/marketplace-queries.js";
+import { reopenAmazonListingDates } from "./product-sync-listing-dates.js";
 
 interface Row {
   channel: MarketplaceChannel;
@@ -141,7 +143,10 @@ export class PostgresProductSync implements ProductSyncLedger {
     };
   }
 
-  async reopen(filter: ReopenFilter): Promise<{ reopened: number }> {
+  async reopen(filter: ReopenFilter): Promise<ReopenResult> {
+    if ("listingDates" in filter) {
+      return reopenAmazonListingDates(this.database, filter);
+    }
     const rows = await this.database.query<{ reopened: number }>(
       `WITH picked AS (
          SELECT channel, listing_id, variant_key FROM product_sync

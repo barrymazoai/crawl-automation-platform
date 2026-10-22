@@ -449,6 +449,9 @@ importers:
       acorn-walk:
         specifier: 8.3.5
         version: 8.3.5
+      date-fns:
+        specifier: ^4.1.0
+        version: 4.4.0
       linkedom:
         specifier: 0.18.13
         version: 0.18.13

@@ -1,4 +1,7 @@
-import type { LabelCollectedProduct } from "@crawl-automation/v3-contracts";
+import type {
+  LabelCollectedProduct,
+  ProductListingDateFields,
+} from "@crawl-automation/v3-contracts";
 
 export interface DeliveryRun {
   runId: string;
@@ -42,7 +45,7 @@ export interface DeliveryListing {
   extras: Record<string, unknown>;
   attrsRaw: Record<string, unknown>;
 }
-export interface DeliveryItem extends DeliveryListing {
+export interface DeliveryItem extends DeliveryListing, ProductListingDateFields {
   clientRef: string;
   domain: string;
   capturedAt: string;

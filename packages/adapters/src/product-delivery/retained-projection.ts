@@ -1,11 +1,10 @@
-import { createHash } from "node:crypto";
-import { productDeliveryErrors } from "@crawl-automation/app";
 import type { ObjectStore } from "@crawl-automation/platform";
 import {
   ChannelProductEvidenceSchema,
   type ChannelProductEvidence,
 } from "@crawl-automation/v3-contracts";
 import { z } from "zod";
+import { retainedValue } from "./retained-value.js";
 
 const WrappedProjection = z.object({
   codec: z.literal("dtc-product/2"),
@@ -22,16 +21,10 @@ export async function retainedProjection(
   signal: AbortSignal,
 ) {
   for (const reference of input.references) {
-    signal.throwIfAborted();
-    const bytes = await input.objects.read(reference.objectKey, 8 * 1024 * 1024, signal);
-    if (!bytes) {
+    const raw = await retainedValue(input.objects, reference, signal);
+    if (raw === undefined) {
       continue;
     }
-    if (createHash("sha256").update(bytes).digest("hex") !== reference.sha256) {
-      throw productDeliveryErrors.create("PRODUCT_DELIVERY.INTEGRITY");
-    }
-    const text = Buffer.from(bytes).toString("utf8").trimStart();
-    const raw: unknown = text.startsWith("{") ? JSON.parse(text) : text;
     const wrapped = WrappedProjection.safeParse(raw);
     const product = ChannelProductEvidenceSchema.safeParse(
       wrapped.success ? wrapped.data.evidence : raw,

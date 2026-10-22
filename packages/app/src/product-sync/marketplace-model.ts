@@ -3,9 +3,11 @@ import type {
   ChannelProductEvidence,
   LabelCollectedProduct,
   SharedEnrichmentRecord,
+  AmazonListingDate,
 } from "@crawl-automation/v3-contracts";
 import type { DeliveryHistory } from "../product-delivery/ports.js";
 import type { MarketplaceChannel } from "./ledger.js";
+import type { ListingDateWarning } from "../product-delivery/listing-date-read.js";
 export type { MarketplaceChannel } from "./ledger.js";
 
 export const MARKETPLACE_CHANNELS = ["amazon", "gnc", "swanson", "wholefoods", "costco"] as const;
@@ -48,6 +50,10 @@ export interface MarketplaceProduct {
   };
   /** Retained, selected-product structured identifiers/options, when available. */
   attributes?: Record<string, unknown>;
+  /** DFA reparsed from this capture's verified original, without mutating append-only history. */
+  dateFirstAvailable?: AmazonListingDate | null;
+  /** Optional DFA evidence failed; do not fall back to dates in historical metrics. */
+  dateFirstAvailableWarning?: ListingDateWarning;
   problem?: string;
 }
 export interface MarketplaceMappingOptions {
