@@ -58,6 +58,10 @@ function selectEntry(state: MergeState, entry: LabelEvidence, policy: MergePolic
     conflicts.forEach((code) => state.codes.add(code));
     const section = policy.split.sections.get(entry.id);
     if (section) {
+      // The split path skips reviewEntry, so retain the decoder's ingredient-list correction warning.
+      if (entry.kind === "text" && entry.candidate.ingredientParagraphReclassified) {
+        state.warnings.push({ id: entry.id, code: "LABEL.FORMULA_IS_INGREDIENT_LIST" });
+      }
       selectSections(state, section, policy);
       if (!section.candidate.formula && !conflicts.length) {
         // The section kept only its intact ingredients; its incomplete formula may still be the panel's other half.

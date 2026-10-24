@@ -1,4 +1,5 @@
 import type { ChannelPlanInput } from "@crawl-automation/v3-contracts";
+import type { NotSupplement } from "@crawl-automation/v3-contracts";
 import type { ChannelId } from "../adapter.js";
 import type { ProductFamily } from "../product-family.js";
 import type { CapturedPage } from "./captured-page.js";
@@ -68,4 +69,5 @@ export type ProductCaptureResult =
       listingId: string;
       variantId: string | null;
       sighting: ListingSighting;
-    };
+    }
+  | NotSupplement;

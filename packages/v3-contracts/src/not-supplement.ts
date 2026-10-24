@@ -2,9 +2,8 @@ import { z } from "zod";
 import { ExecutionIdSchema } from "./artifacts.js";
 
 /**
- * Owner 2026-10-08: a product its store files outside supplements (the breadcrumb is kept) whose label step went to
- * Review. It is done without a formula; its product data was recorded at capture. `reviewCode` keeps what the label
- * step reported.
+ * A store-filed product outside supplements. `reviewCode` keeps a label Review when the existing conditional rule
+ * completes it; null also covers an owner-approved category that ends at capture before any label work.
  */
 export const NotSupplementSchema = z.strictObject({
   status: z.literal("not-supplement"),

@@ -1,12 +1,12 @@
 import { pipelineErrors } from "@crawl-automation/platform/errors/activity";
 import { versionedResourceGate } from "./resources/versioned-gate.js";
 import { ApplicationFailure, patched, proxyActivities } from "@temporalio/workflow";
-import {
-  BrowserCaptureResultSchema,
-  type BrowserActivities,
-  type PipelineActivities,
-  type ProductPipelineInput,
+import type {
+  BrowserActivities,
+  PipelineActivities,
+  ProductPipelineInput,
 } from "./pipeline-model.js";
+import { BrowserCaptureResultSchema } from "./browser-capture-result.js";
 import { collectFamilyProduct } from "./family-product.js";
 import { once } from "./activity-options.js";
 import { collectCapturedProduct } from "./collect-captured-product.js";
@@ -85,5 +85,8 @@ async function captureInBrowser(input: ProductPipelineInput) {
       }).captureBrowserProduct(input),
     ),
   );
+  if (captured.status === "not-supplement" && !patched("dtc-never-collect-v1")) {
+    throw new Error("DTC category exclusion requires a versioned workflow");
+  }
   return captured;
 }

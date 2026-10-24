@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { sha256, type RetainedPublication } from "@crawl-automation/platform";
 import { nonSupplementPath, pageText } from "@crawl-automation/channels-core";
-import { DTC_BUNDLE_CATEGORIES } from "../adapter.js";
+import { DTC_BUNDLE_CATEGORIES, DTC_NON_SUPPLEMENT_CATEGORIES } from "../adapter.js";
 import {
   DtcGalleryRefSchema,
   DtcScopeExcludedSchema,
@@ -166,16 +166,19 @@ export function storeCategoryBundleOutcome(input: {
     : null;
 }
 
-/** The store's own kit filing decides first; otherwise the model scope review does. */
+/** Bundles end here; products already filed outside supplements do not need a model scope review. */
 export async function scopedOutcome(
   input: Parameters<typeof storeCategoryBundleOutcome>[0],
   review: () => ReturnType<DtcProductScope["review"]>,
 ) {
-  const { operationId, identity } = input;
-  return (
-    storeCategoryBundleOutcome(input) ??
-    scopeProductOutcome({ scope: await review(), operationId, identity })
-  );
+  const bundle = storeCategoryBundleOutcome(input);
+  if (bundle) {
+    return bundle;
+  }
+  if (nonSupplementPath(input.categories, DTC_NON_SUPPLEMENT_CATEGORIES)) {
+    return null;
+  }
+  return scopeProductOutcome({ scope: await review(), ...input });
 }
 
 export function validateProductScope(raw: unknown, fields: Record<string, string>) {

@@ -36,6 +36,12 @@ describe("settledOutcome remaining terminal and malformed cases", () => {
       state: "completed",
       reason: "PRODUCT.NOT_SUPPLEMENT",
     });
+    expect(
+      settledOutcome({
+        status: "COMPLETED",
+        result: { ...result, categories: ["Home", "Teas", "Herbal Tea"], reviewCode: null },
+      }),
+    ).toEqual({ state: "completed", reason: "PRODUCT.NOT_SUPPLEMENT" });
     expect(settledOutcome({ status: "COMPLETED", result: { ...result, categories: [] } })).toEqual({
       state: "review",
       reason: "QUEUE.OUTCOME_UNRECOGNIZED",

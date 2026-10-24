@@ -108,6 +108,28 @@ it("ends a DTC multi-product exclusion before formula planning, reuse or label w
   expect(pipeline.reviewProduct).not.toHaveBeenCalled();
 });
 
+it("completes a store-filed tea before planning or label work", async () => {
+  env.native = true;
+  const { browser, pipeline, plan } = setup();
+  const excluded = {
+    status: "not-supplement",
+    operationId: input.operationId,
+    listingId: "dtc-tea",
+    variantId: null,
+    reason: "PRODUCT.NOT_SUPPLEMENT",
+    policy: "store-category/1",
+    categories: ["Home", "Teas", "Herbal Tea"],
+    reviewCode: null,
+  };
+  browser.captureBrowserProduct.mockResolvedValue(excluded);
+  expect(await ProductPipelineWorkflow({ ...input, channel: "dtc", capture: "browser" })).toEqual(
+    excluded,
+  );
+  expect(plan.prepareChannelProduct).not.toHaveBeenCalled();
+  expect(pipeline.findKnownFormula).not.toHaveBeenCalled();
+  expect(pipeline.reviewProduct).not.toHaveBeenCalled();
+});
+
 it("replays a legacy Whole Foods browser capture and takes the formula of the same ASIN from its family", async () => {
   const { browser, pipeline, plan } = setup();
 

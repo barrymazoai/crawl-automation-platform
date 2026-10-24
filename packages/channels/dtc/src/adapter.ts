@@ -3,13 +3,15 @@ import {
   ANY_HTTPS_ORIGIN,
   completeFacts,
   channelErrors,
+  nonSupplementPath,
+  pageBreadcrumbs,
   type ChannelAdapter,
   type FetchedPage,
   type ParsedProduct,
 } from "@crawl-automation/channels-core";
 import { dtcBrandSourceUrl, dtcProductAddress, siteForUrl, siteForBrandUrl } from "./address.js";
 import { dtcEvidence, type DtcRendered } from "./evidence.js";
-import { dtcPageIdentity, readDtcProduct } from "./product.js";
+import { dtcDocument, dtcPageIdentity, readDtcProduct } from "./product.js";
 import { DTC_PAGE_LIMITS, DTC_SITES, type DtcSitePolicy } from "./site-policy.js";
 import { dtcBrandEvidence } from "./brand-evidence.js";
 import {
@@ -37,6 +39,7 @@ function parsedProduct(
   const evidence = dtcEvidence(product, site, brandEvidence);
   const selected = evidence.factsCandidates.find((entry) => entry.scope === "selected-product");
   const facts = completeFacts(selected?.html ?? null);
+  const neverCollect = neverCollectPath(pageBreadcrumbs(dtcDocument(page.html)), product.storeType);
   return {
     channel: "dtc",
     identity: { listingId: evidence.listingId, variantId: evidence.variantId },
@@ -64,7 +67,20 @@ function parsedProduct(
       .map((variant) => dtcProductAddress(variant.url, sites)),
     facts,
     ...(product.categories?.length ? { categories: product.categories } : {}),
+    ...(neverCollect ? { neverCollect } : {}),
   };
+}
+
+/** Owner 2026-10-24: store-filed teas are outside the supplement collection, before scope or label review. */
+export const DTC_NEVER_COLLECT_CATEGORIES: readonly string[] = ["Teas"];
+
+/** Match only a store breadcrumb or the platform product type; free-form tags stay out of this rule. */
+export function neverCollectPath(breadcrumb: string[], storeType?: string): string[] | null {
+  return (
+    (nonSupplementPath(breadcrumb.slice(0, -1), DTC_NEVER_COLLECT_CATEGORIES)
+      ? breadcrumb
+      : null) ?? nonSupplementPath(storeType ? [storeType] : [], DTC_NEVER_COLLECT_CATEGORIES)
+  );
 }
 
 /**

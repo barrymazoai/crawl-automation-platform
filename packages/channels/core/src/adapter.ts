@@ -62,6 +62,8 @@ export interface ParsedProduct<Rendered = unknown> {
   facts: FactsText;
   /** The store's own breadcrumb for the product, top level first; absent when the page states none. */
   categories?: string[];
+  /** A trusted breadcrumb or platform product type that ends collection before formula work. */
+  neverCollect?: string[];
 }
 
 /** How a channel's pages may be fetched over HTTP: only from these origins, within these limits. */

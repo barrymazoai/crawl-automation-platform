@@ -14,6 +14,7 @@ import { capturedPage } from "./captured-page.js";
 import { nonSupplementPath } from "../product-scope.js";
 import type { ProductSourcePlans } from "./source-plans.js";
 import type { CaptureMode } from "../capture.js";
+import { neverCollectResult } from "./never-collect.js";
 
 export interface ProductCaptureDeps {
   registry: ChannelRegistry;
@@ -46,6 +47,10 @@ export class ProductCapture {
     if (captured.status === "sighting") {
       const { listingId, variantId } = address;
       return { status: "sighted", listingId, variantId, sighting: captured.sighting };
+    }
+    const excluded = neverCollectResult(request, captured.parsed);
+    if (excluded) {
+      return excluded;
     }
     const sourcePlan = await this.deps.sourcePlans.publish(
       request,

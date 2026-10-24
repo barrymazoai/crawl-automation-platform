@@ -1,4 +1,5 @@
 export * from "./pipeline-model.js";
+export { BrowserCaptureResultSchema } from "./browser-capture-result.js";
 export * from "./failure-code.js";
 export * from "./label/label-model.js";
 export * from "./collection/collection-model.js";

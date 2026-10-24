@@ -73,6 +73,17 @@ describe("DTC adapter contracts (small synthetic boundary cases, not saved-page 
     expect(parsed.variants).toEqual([]);
     expect(parsed.evidence.variants[0]?.variantId).toBe("11");
   });
+  it("marks a Shopify Teas product type for immediate exclusion but ignores a Teas tag", () => {
+    const tea = adapter.parseProduct(
+      page({ data: { ...data, product_type: "Teas", tags: ["Supplements"] } }),
+    );
+    expect(tea.neverCollect).toEqual(["Teas"]);
+    const tagged = adapter.parseProduct(
+      page({ data: { ...data, product_type: "Supplements", tags: ["Teas"] } }),
+    );
+    expect(tagged.categories).toContain("Teas");
+    expect(tagged.neverCollect).toBeUndefined();
+  });
   it("takes gallery and accordion images without recommendations", () => {
     const images = adapter.parseProduct(page()).evidence.imageCandidates;
     const urls = images.map((image) => image.url);

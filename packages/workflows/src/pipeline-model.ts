@@ -1,7 +1,5 @@
 import {
   AcquisitionReviewSchema,
-  DtcVariantHandoffsSchema,
-  DtcScopeExcludedSchema,
   ChannelPlanInputSchema,
   ExecutionIdSchema,
   FileAcquireInputSchema,
@@ -239,22 +237,6 @@ export const ProductPlanRequestSchema = ChannelPlanInputSchema.safeExtend({
   sourceUrl: z.url().max(4096).optional(),
 });
 export type ProductPlanRequest = z.infer<typeof ProductPlanRequestSchema>;
-
-/** A page read in the browser (its metrics are recorded at capture), or the listing's unlisted sighting, or a Review. */
-export const BrowserCaptureResultSchema = z.discriminatedUnion("status", [
-  DtcScopeExcludedSchema,
-  z.strictObject({
-    status: z.literal("captured"),
-    listingId: z.string().min(1).max(200),
-    variantId: z.string().min(1).max(200).nullable(),
-    archiveKey: z.string().min(1).max(1024),
-    /** Browser adapters with their own formulas use the shared planning and Label path. */
-    planned: CaptureResultSchema.options[0].optional(),
-    variants: DtcVariantHandoffsSchema.optional(),
-  }),
-  AcquisitionReviewSchema,
-  ListingResultSchema,
-]);
 
 /** The browser worker's activity (Server 二): reads one product page in Ego and archives it before parsing. */
 export interface BrowserActivities {

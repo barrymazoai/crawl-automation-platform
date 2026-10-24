@@ -99,6 +99,9 @@ const signal = () => AbortSignal.timeout(10_000);
 
 /** A capture that read a product page (not a listing found unlisted). */
 function captured(result: ProductCaptureResult) {
+  if (result.status === "not-supplement") {
+    throw new Error(`expected a product page, got ${result.reason}`);
+  }
   if (result.status !== "captured") {
     throw new Error(`expected a product page, got a listing unlisted as ${result.sighting.reason}`);
   }

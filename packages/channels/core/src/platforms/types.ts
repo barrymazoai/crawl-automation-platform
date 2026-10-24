@@ -35,6 +35,8 @@ export interface PlatformProduct {
   images: string[];
   /** How the store files the product (Shopify product type and tags); absent when it states none. */
   categories?: string[];
+  /** Shopify product type alone, kept separate from free-form tags. */
+  storeType?: string;
 }
 
 export interface PlatformCatalog {

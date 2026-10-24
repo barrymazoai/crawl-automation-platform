@@ -17,6 +17,8 @@ import { capturedBrandSighting } from "./product-sighting.js";
 import { DtcVariantHandoffs } from "./variant-handoffs.js";
 import { nativeCaptureResult } from "./product-result.js";
 import { scopedOutcome, type DtcProductScope } from "./product-scope.js";
+import { neverCollectFromHtml } from "./never-collect.js";
+import { saveCapturedImages } from "./product-images.js";
 
 export class DtcAgentProductCapture {
   constructor(
@@ -39,10 +41,20 @@ export class DtcAgentProductCapture {
     if (sighting) {
       return sighting;
     }
-    await this.saveImages(
+    await saveCapturedImages(
+      this.deps.publication,
       { prefix: captured.prefix, url: request.url, images: retained.images },
       signal,
     );
+    const skipped = neverCollectFromHtml({
+      html: retained.html,
+      url: request.url,
+      site,
+      operationId: request.operationId,
+    });
+    if (skipped) {
+      return skipped;
+    }
     const parsed = capturedProductProjection({
       ...retained,
       site,
@@ -154,24 +166,6 @@ export class DtcAgentProductCapture {
       throw dtcAgentErrors.create("DTC.CAPTURE_EVIDENCE");
     }
     return planning;
-  }
-
-  private saveImages(
-    input: {
-      prefix: string;
-      url: string;
-      images: Awaited<ReturnType<typeof readCapturedProduct>>["images"];
-    },
-    signal: AbortSignal,
-  ) {
-    return this.deps.publication.publish(
-      `${input.prefix}/images.json`,
-      Buffer.from(
-        JSON.stringify({ version: "dtc-agent-images/1", url: input.url, images: input.images }),
-      ),
-      "application/json",
-      signal,
-    );
   }
 
   private archive(request: CaptureRequest) {

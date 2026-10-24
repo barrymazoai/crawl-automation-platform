@@ -58,6 +58,7 @@ export function readShopifyData(record: JsonObject, url: string) {
     throw platformPageErrors.create("DTC.IDENTITY_UNVERIFIED");
   }
   const categories = shopifyCategories(record);
+  const storeType = shopifyProductType(record);
   return {
     productId,
     title,
@@ -66,6 +67,7 @@ export function readShopifyData(record: JsonObject, url: string) {
     images: recordImages(record),
     detailsHtml: string(record.description) ?? string(record.body_html),
     ...(categories.length ? { categories } : {}),
+    ...(storeType ? { storeType } : {}),
   };
 }
 
@@ -78,7 +80,7 @@ function recordImages(record: JsonObject): string[] {
 
 /** The store's own filing: the product type (`product_type` in embedded data, `type` in `.js`) and its tags. */
 export function shopifyCategories(record: JsonObject): string[] {
-  const type = string(record.product_type) ?? string(record.type);
+  const type = shopifyProductType(record);
   const tags = Array.isArray(record.tags)
     ? record.tags.map(string)
     : typeof record.tags === "string"
@@ -88,4 +90,8 @@ export function shopifyCategories(record: JsonObject): string[] {
     .filter((name): name is string => name !== null)
     .map((name) => name.slice(0, 200));
   return [...new Set(names)].slice(0, 20);
+}
+
+function shopifyProductType(record: JsonObject): string | null {
+  return (string(record.product_type) ?? string(record.type))?.slice(0, 200) ?? null;
 }

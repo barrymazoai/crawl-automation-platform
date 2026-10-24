@@ -21,6 +21,7 @@ import { isWithinText, splitsCharacter } from "./text-range.js";
 import { textLimits } from "../limits.js";
 import { separateTextIngredientDeclarations } from "./ingredient-declarations.js";
 import { normalizeUndosedIngredientParagraph } from "./undosed-ingredient-normalization.js";
+import { normalizeNoFactsIngredientList } from "./no-facts-ingredient-list.js";
 
 type Wire = z.infer<typeof LabelTextWireSchema>;
 type WireRow = NonNullable<Wire["formula"]>["columns"][number]["rows"][number];
@@ -56,6 +57,7 @@ export function decodeLabelText(request: LabelTextRequest): DecodedLabel {
   const candidate = LabelTextCandidateSchema.parse(quotes.place(wire));
   const modelExclusions = candidate.exclusions.length;
   const ingredientHeading = normalizeUndosedIngredientParagraph(candidate, text, scope.range);
+  normalizeNoFactsIngredientList(candidate, text, scope.range);
   separateTextIngredientDeclarations(candidate);
   return validateCandidate({
     candidate,

@@ -3,6 +3,7 @@ import { equivalentFootnoteAllowed } from "./label-coverage.js";
 import { ingredientSubheadingAllowed } from "./label-headings.js";
 import { labelHeadingAllowed } from "./label-headings.js";
 import { ingredientGap } from "./ingredient-boundaries.js";
+import { noFactsCertifiedMarker, noFactsCommerceNote } from "./no-facts-ingredient-list.js";
 import { STANDARD_FOOTNOTE, labelSpecificFootnoteAllowed } from "./label-footnotes.js";
 import { labelMetadataAllowed, labelNoteAllowed } from "./label-notes.js";
 
@@ -14,6 +15,9 @@ export function specialStructuralExclusion(
   candidate: LabelTextCandidate,
   text: string,
 ): boolean {
+  if (noFactsCommerceNote(candidate, text, exclusion)) {
+    return true;
+  }
   if (exclusion.reason === "heading") {
     return (
       ingredientSubheadingAllowed(exclusion.quote.text.trim(), {
@@ -74,7 +78,9 @@ function ingredientOrganicLegend(
   candidate: LabelTextCandidate,
   text: string,
 ): boolean {
-  const marker = /^([*†‡])\s*organic\.?$/i.exec(exclusion.quote.text.trim())?.[1];
+  const value = exclusion.quote.text.trim();
+  const ordinary = /^([*†‡])\s*organic\.?$/i.exec(value)?.[1];
+  const marker = ordinary ?? noFactsCertifiedMarker(candidate, text, value);
   const items = candidate.otherIngredients?.items ?? [];
   const last = items.at(-1);
   return (
