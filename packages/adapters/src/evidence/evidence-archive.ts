@@ -28,6 +28,7 @@ export interface EvidenceDownload {
   status: number;
   capturedAt: string;
   fetchedVia: unknown;
+  creditCost?: number | null | undefined;
 }
 
 /** Immutable objects in a store scoped to testPrefix, with full bucket keys returned to callers. */
@@ -76,6 +77,7 @@ export class EvidenceArchive {
       capturedAt: download.capturedAt,
       finalUrl: download.finalUrl,
       status: download.status,
+      ...(download.creditCost === undefined ? {} : { creditCost: download.creditCost }),
     });
     const manifestKey = key.replace(/\.html$/, ".json");
     const manifest = Buffer.from(

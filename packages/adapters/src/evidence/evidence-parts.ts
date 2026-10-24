@@ -1,6 +1,7 @@
 import {
   EvidenceService,
   type EvidenceChannels,
+  type EvidencePages,
   type EvidencePageFactory,
 } from "@crawl-automation/app";
 import {
@@ -39,12 +40,29 @@ export function createEvidenceService(parts: {
   }
   const remote = createR2Objects({ ...storage.r2, prefix: testPrefix }, storage.r2Credentials);
   const archive = new EvidenceArchive(remote.store, testPrefix);
-  const pages = () => evidencePages(capture, parts.createPages);
+  const pages = (tier?: Tier) => evidencePages(capture, parts.createPages, tier);
   return new EvidenceService(new HttpEvidenceCapture({ channels, pages, archive }));
 }
 
-function evidencePages(capture: EvidenceHttpSettings, createPages: EvidencePageFactory) {
-  const { route, channels, scraperApi } = capture;
+type Tier = Parameters<EvidencePages>[0];
+
+/** A tier named for one request replaces premium / ultra premium in that channel's options, for that request. */
+function withTier(channels: EvidenceHttpSettings["channels"], named: Tier) {
+  if (!named?.tier) {
+    return channels;
+  }
+  const { channel, tier } = named;
+  const chosen = { premium: tier === "premium", ultraPremium: tier === "ultraPremium" };
+  return { ...channels, [channel]: { ...channels[channel], ...chosen } };
+}
+
+function evidencePages(
+  capture: EvidenceHttpSettings,
+  createPages: EvidencePageFactory,
+  tier?: Tier,
+) {
+  const { route, scraperApi } = capture;
+  const channels = withTier(capture.channels, tier);
   const client = singleRequestClient(new ScraperApiClient(scraperApi));
   return createPages(client, {
     routeId: route.routeId,

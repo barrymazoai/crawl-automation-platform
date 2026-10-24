@@ -52,6 +52,29 @@ describe("test storage composition", () => {
     expect(create).not.toHaveBeenCalled();
   });
 
+  it("uses the tier a request names for that channel only, in place of its configured one", async () => {
+    const parts = settings();
+    parts.capture.channels = { gnc: { premium: true }, amazon: { countryCode: "us" } } as never;
+    const store = new platform.R2Objects({ send: vi.fn() }, parts.storage.r2);
+    vi.spyOn(platform, "createR2Objects").mockReturnValue({ store, close: vi.fn() });
+    const address = {
+      url: "https://www.amazon.com/dp/B00SBZ2FFE",
+      listingId: "B00SBZ2FFE",
+      variantId: null,
+    };
+    parts.channels.forCapture.mockReturnValue({ productAddress: () => address, httpPolicy: {} });
+    // A non-HTTP fetcher stops the capture before any intent is stored or credit is spent.
+    parts.createPages.mockReturnValue({ mode: "browser" });
+    const service = createEvidenceService(parts);
+    await expect(
+      service.capture({ channel: "amazon", url: address.url, tier: "ultraPremium" }),
+    ).rejects.toMatchObject({ code: "EVIDENCE.BROWSER_CAPTURE_UNSUPPORTED" });
+    expect(parts.createPages.mock.calls[0]?.[1].channels).toEqual({
+      gnc: { premium: true },
+      amazon: { countryCode: "us", premium: false, ultraPremium: true },
+    });
+  });
+
   it.each(["testPrefix", "storage", "capture"] as const)(
     "refuses missing %s without opening R2",
     async (missing) => {

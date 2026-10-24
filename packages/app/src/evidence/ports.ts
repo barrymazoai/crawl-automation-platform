@@ -20,7 +20,10 @@ export interface EvidenceCapture {
 export type EvidenceChannels = Pick<ChannelRegistry, "forCapture">;
 
 /** Must refuse before fetching if the provider cannot guarantee a single paid request. */
-export type EvidencePages = () => PageFetcher;
+export type EvidencePages = (tier?: {
+  channel: EvidenceCaptureInput["channel"];
+  tier: EvidenceCaptureInput["tier"];
+}) => PageFetcher;
 
 export type EvidencePageFactory = (
   client: Pick<ScraperApiClient, "get" | "provider">,

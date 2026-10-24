@@ -11,6 +11,11 @@ export const EvidenceCaptureInputSchema = z.strictObject({
   channel: ChannelIdSchema,
   url: z.url().max(4096),
   note: z.string().max(2000).optional(),
+  /**
+   * ScraperAPI tier for this one request instead of the channel's configured one (owner 2026-10-24: compare tiers
+   * on pages Amazon answered with its verification interstitial).
+   */
+  tier: z.enum(["standard", "premium", "ultraPremium"]).optional(),
 });
 export type EvidenceCaptureInput = z.infer<typeof EvidenceCaptureInputSchema>;
 
@@ -22,5 +27,7 @@ export const EvidenceCaptureResultSchema = z.strictObject({
   finalUrl: z.url(),
   /** HTTP status of the captured page, not a processing outcome. */
   status: z.number().int().min(100).max(599),
+  /** Credits ScraperAPI charged for the request, when it said. */
+  creditCost: z.number().nonnegative().nullable().optional(),
 });
 export type EvidenceCaptureResult = z.infer<typeof EvidenceCaptureResultSchema>;

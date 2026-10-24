@@ -23,7 +23,7 @@ export class HttpEvidenceCapture implements EvidenceCapture {
     }
     const adapter = this.parts.channels.forCapture(request.channel, "http");
     const address = adapter.productAddress(request.url);
-    const pages = this.parts.pages();
+    const pages = this.parts.pages({ channel: request.channel, tier: request.tier });
     if (pages.mode !== "http") {
       throw appErrors.create("EVIDENCE.BROWSER_CAPTURE_UNSUPPORTED");
     }
@@ -42,6 +42,7 @@ export class HttpEvidenceCapture implements EvidenceCapture {
         status: 200,
         capturedAt: new Date().toISOString(),
         fetchedVia: fetched.fetchedVia,
+        creditCost: fetched.fetchedVia.creditCost,
       },
       signal,
     );
