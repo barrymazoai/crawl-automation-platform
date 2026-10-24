@@ -48,7 +48,10 @@ export async function runSiteCapture(input, globals) {
     captured.record, path => readFile(join(outDir, path), "utf8"));
   if (repeated.length) {
     // The region can be fixed in the learned method before any harvest/checkpoint is written.
-    throw new Error(`site_method_product_html_repeated_ids:${JSON.stringify(repeated)}`);
+    throw new Error(`site_method_product_html_repeated_ids:${JSON.stringify(repeated)}: each id occurs once on `
+      + "the full page but more than once in productHtml, so the method saved the same page element twice. Usually "
+      + "one saved node lies inside another saved node (deduplicating by node identity does not catch this); keep "
+      + "the outer node or drop the nested selection.");
   }
   if (!source.equals(await readFile(methodPath))) throw new Error("site_method_changed_during_capture");
   // Owner 2026-10-24: use the full page's own Product declarations. Retain those same
