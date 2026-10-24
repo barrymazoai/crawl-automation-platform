@@ -16,3 +16,8 @@ export const CaptureChannelSettingsSchema = z
       headers: { ...channels.wholefoods?.headers, ...WHOLE_FOODS_HTTP_OPTIONS.headers },
     },
   }));
+
+/** Owner 2026-10-24: Amazon asks once more at ultra premium after a verification answer; other channels never. */
+export const CaptureChallengeTiersSchema = z
+  .partialRecord(z.enum(CHANNEL_IDS), z.enum(["premium", "ultraPremium"]))
+  .default({ amazon: "ultraPremium" });

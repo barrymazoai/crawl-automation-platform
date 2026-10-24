@@ -9,6 +9,7 @@ import {
 } from "../pipeline/listing-sighting.js";
 import type { ArchivedHtml, OriginalHtmlArchive } from "./original-html-archive.js";
 import type { PageFetcher } from "./page-fetch.js";
+import { isVerification } from "./challenge-escalation.js";
 import { decodeHtml } from "./read-html.js";
 import { htmlCaptureErrors, type HtmlCaptureRecords } from "./html-capture-records.js";
 import type { HtmlCaptureRequest } from "./html-capture-model.js";
@@ -61,6 +62,12 @@ export class HttpCapture {
       return { status: "sighting", sighting: download.sighting };
     }
     const saved = download.page;
+    // A saved verification page (e.g. one archived before 2026-10-24) is never a sighting or a product.
+    if (isVerification(adapter.httpPolicy, { ...saved, url: archive.capture.url })) {
+      throw channelErrors.create("CAPTURE.ACCESS_CHALLENGE", {
+        details: { archiveKey: saved.source.objectKey },
+      });
+    }
     const moved = this.moved(adapter, archive, saved);
     if (moved) {
       return { status: "sighting", sighting: moved };

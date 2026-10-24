@@ -10,6 +10,7 @@ import { amazonBrandScan } from "./brand-scan.js";
 import { AMAZON_MAX_BYTES, amazonDocument, pageAsin, productRoot } from "./dom.js";
 import { amazonErrors } from "./errors.js";
 import { amazonFacts } from "./facts.js";
+import { isAmazonChallenge } from "./access-challenge.js";
 import { amazonProductFamily } from "./family.js";
 import { AMAZON_FILE_ORIGINS } from "./images.js";
 import { parseAmazonProduct, type AmazonRendered } from "./product.js";
@@ -47,6 +48,7 @@ export const AMAZON_HTTP_POLICY = {
   origins: [AMAZON_ORIGIN],
   maxBytes: AMAZON_MAX_BYTES,
   timeoutMs: 75_000,
+  accessChallenge: isAmazonChallenge,
 } as const;
 
 export const amazonAdapter: ChannelAdapter<AmazonRendered> = {

@@ -9,7 +9,7 @@ import {
   type HtmlCaptureRequest,
   type SavedHtmlOriginal,
 } from "@crawl-automation/app";
-import type { Database, Queryable } from "@crawl-automation/platform";
+import { isChallengeRedirect, type Database, type Queryable } from "@crawl-automation/platform";
 import { captureCreditCost, captureWasCalled, measureCaptureReuse } from "./html-capture-cost.js";
 import {
   inFlight,
@@ -43,7 +43,7 @@ export class PostgresHtmlCaptureRecords implements HtmlCaptureRecords {
         return { status: "reuse", original: saved };
       }
       const original = await recentOriginal(transaction, request, this.reuseWindowMs);
-      if (original) {
+      if (original && !landedOnVerification(original)) {
         await insertCapture(transaction, request, original);
         return { status: "reuse", original };
       }
@@ -157,4 +157,15 @@ export class PostgresHtmlCaptureRecords implements HtmlCaptureRecords {
       return work(transaction);
     });
   }
+}
+
+/**
+ * A page that landed on the site's human verification is not a verified original (owner 2026-10-24: Amazon's
+ * /checkpoint/ interstitial was archived as `done` before), so it is never reused; a new capture downloads.
+ */
+function landedOnVerification(original: SavedHtmlOriginal): boolean {
+  return (
+    original.finalUrl !== null &&
+    isChallengeRedirect(original.finalUrl, new URL(original.capture.url))
+  );
 }

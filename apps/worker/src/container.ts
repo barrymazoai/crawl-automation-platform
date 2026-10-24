@@ -32,11 +32,10 @@ import {
   ProductCapture,
   ProductPlans,
   ProductSourcePlans,
-  ScraperApiPages,
   DirectHttpsTransport,
   SystemHttpsTransport,
 } from "@crawl-automation/channels-core";
-import { createDatabase, createLogger, ScraperApiClient } from "@crawl-automation/platform";
+import { createDatabase, createLogger } from "@crawl-automation/platform";
 import {
   ArtifactResolver,
   createR2Objects,
@@ -49,6 +48,7 @@ import { asFunction, asValue, createContainer, InjectionMode, type AwilixContain
 import { buildBrowserParts, type BrowserParts } from "./browser/browser-parts.js";
 import { recordedPipelineCapture, recordedHttpCapture } from "./capture-records.js";
 import type { WorkerConfig } from "./config.js";
+import { capturePages } from "./capture-pages.js";
 import type { CoreParts } from "./core-parts.js";
 import { requireRoleSection } from "./processes/role-settings.js";
 import {
@@ -190,22 +190,9 @@ function registerServices(container: Parts): void {
 
 function captureService(parts: WorkerParts): ProductCapture {
   const { config, registry, publication, fileTransport } = parts;
-  const { route, scraperApi, channels, htmlReuseHours } = requireRoleSection(
-    config,
-    "capture",
-    "pipeline",
-  );
-  const pages = new ScraperApiPages(new ScraperApiClient(scraperApi), {
-    routeId: route.routeId,
-    egressId: route.egressId,
-    defaults: {
-      countryCode: route.countryCode,
-      sessionNumber: route.sessionNumber,
-      render: route.responseMode === "rendered-html",
-      premium: false,
-    },
-    channels,
-  });
+  const capture = requireRoleSection(config, "capture", "pipeline");
+  const pages = capturePages(capture);
+  const { htmlReuseHours } = capture;
   // Planned image downloads are bound to the file transport's egress.
   const plan = requireRoleSection(config, "plan", "pipeline");
   const settings = { ...plan, egressId: fileTransport.egressId };

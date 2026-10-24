@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { isAmazonChallenge } from "./access-challenge.js";
 import { amazonAdapter, amazonProductAddress } from "./index.js";
 
 describe("Amazon HTTP product addresses", () => {
@@ -40,6 +41,7 @@ describe("Amazon HTTP product addresses", () => {
       origins: ["https://www.amazon.com"],
       maxBytes: 6 * 1024 * 1024,
       timeoutMs: 75_000,
+      accessChallenge: isAmazonChallenge,
     });
     expect(amazonAdapter.planning?.channel).toBe("amazon");
     expect(amazonAdapter.brandScan?.maxPages).toBe(7);

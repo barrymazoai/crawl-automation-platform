@@ -71,6 +71,8 @@ export interface HttpPolicy {
   origins: readonly string[];
   maxBytes: number;
   timeoutMs: number;
+  /** The site's own human-verification page, recognised by its content (it answers 200 like a product page). */
+  accessChallenge?(html: string): boolean;
 }
 
 /** What a channel's planning hook reads back from its own page projection. */

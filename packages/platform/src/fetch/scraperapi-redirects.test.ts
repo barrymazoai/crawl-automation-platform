@@ -6,6 +6,10 @@ it.each([
   ["?page=1&__shopify_bv_challenge=token", true],
   ["/challenge", true],
   ["/cdn-cgi/challenge-platform/h/g", true],
+  // Amazon's "Continue shopping" interstitial and captcha (2026-10-24).
+  ["/checkpoint/continue?token=v1.abc", true],
+  ["/errors/validateCaptcha?amzn=1", true],
+  ["/clp/B0DZ582FSX", false],
   ["/products/challenge-capsules", false],
   ["?page=2&utm_source=challenge", false],
   ["https://other.test/challenge", false],

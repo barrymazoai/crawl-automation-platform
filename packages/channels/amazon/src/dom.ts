@@ -3,6 +3,7 @@ import { parseHTML } from "linkedom";
 import { amazonErrors } from "./errors.js";
 import { isAsin } from "./address.js";
 import { fallbackAsins } from "./asin-fallback.js";
+import { isAmazonChallenge } from "./access-challenge.js";
 
 export const AMAZON_MAX_BYTES = 6 * 1024 * 1024;
 export type AmazonDocument = ReturnType<typeof parseHTML>["document"];
@@ -17,13 +18,10 @@ export function amazonDocument(html: string): AmazonDocument {
   if (Buffer.byteLength(html) > AMAZON_MAX_BYTES) {
     throw channelErrors.create("CAPTURE.PAGE_LIMIT");
   }
-  const document = parseHTML(html).document;
-  const captcha = document.querySelector('form[action*="validateCaptcha"], #captchacharacters');
-  const title = textOf(document.querySelector("title"));
-  if (captcha || /Robot Check/i.test(title)) {
+  if (isAmazonChallenge(html)) {
     throw channelErrors.create("CAPTURE.ACCESS_CHALLENGE");
   }
-  return document;
+  return parseHTML(html).document;
 }
 
 /** Excludes static hidden offer templates, but keeps aria-hidden price digits for price readers. */

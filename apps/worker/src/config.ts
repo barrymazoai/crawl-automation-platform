@@ -28,7 +28,10 @@ import {
 import { z } from "zod";
 import { WholeFoodsHttpScanSettingsSchema } from "@crawl-automation/channels-wholefoods";
 import { SwansonBrandScanSettingsSchema } from "@crawl-automation/channel-swanson";
-import { CaptureChannelSettingsSchema } from "./capture-channel-settings.js";
+import {
+  CaptureChallengeTiersSchema,
+  CaptureChannelSettingsSchema,
+} from "./capture-channel-settings.js";
 import { BrowserSettingsSchema } from "./browser/browser-settings.js";
 import { validateBrowserWorker } from "./browser/browser-worker-config.js";
 import { ProcessingSettingsSchema } from "./label/processing-settings.js";
@@ -79,6 +82,11 @@ export const WorkerConfigSchema = z
         scraperApi: ScraperApiAccessSchema,
         /** A channel's own ScraperAPI options over the route's, e.g. `{ "gnc": { "premium": true } }`. */
         channels: CaptureChannelSettingsSchema,
+        /**
+         * The tier a channel asks for once when the site answered with human verification (owner 2026-10-24:
+         * Amazon → ultra premium; 19 of 20 interstitial pages passed). Other channels are never escalated.
+         */
+        challengeTiers: CaptureChallengeTiersSchema,
         /** How long a saved product page is reused instead of a new paid download (default 7 days). */
         htmlReuseHours: z
           .number()

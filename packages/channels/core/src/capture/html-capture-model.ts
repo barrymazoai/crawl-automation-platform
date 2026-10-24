@@ -27,6 +27,15 @@ export const FetchedViaSchema = z.strictObject({
   creditCost: z.number().nonnegative().nullable().optional(),
   finalUrl: z.url().max(4096).optional(),
   preparation: PagePreparationSchema.optional(),
+  /** The page came from a second request at a stronger tier after the first met a verification (owner 2026-10-24). */
+  escalation: z
+    .strictObject({
+      tier: z.enum(["premium", "ultraPremium"]),
+      cause: z.enum(["redirect", "page"]),
+      creditCost: z.number().nonnegative().nullable().optional(),
+      finalUrl: z.url().max(4096).optional(),
+    })
+    .optional(),
 });
 export type FetchedVia = z.infer<typeof FetchedViaSchema>;
 

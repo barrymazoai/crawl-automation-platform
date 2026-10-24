@@ -12,7 +12,11 @@ export function isChallengeRedirect(location: string | null, target: URL): boole
   return (
     [...url.searchParams.keys()].some(
       (key) => key === "__shopify_bv_challenge" || key.startsWith("__cf_chl_"),
-    ) || /^\/(?:challenge(?:\/|$)|cdn-cgi\/challenge-platform\/)/i.test(url.pathname)
+    ) ||
+    // Amazon's "Continue shopping" interstitial and its captcha (owner 2026-10-24: recorded as delistings before).
+    /^\/(?:challenge(?:\/|$)|cdn-cgi\/challenge-platform\/|checkpoint\/|errors\/validatecaptcha)/i.test(
+      url.pathname,
+    )
   );
 }
 

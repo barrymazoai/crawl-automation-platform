@@ -1,4 +1,8 @@
-import { RetainedPublication, type ObjectStore } from "@crawl-automation/platform";
+import {
+  RetainedPublication,
+  scraperApiErrors,
+  type ObjectStore,
+} from "@crawl-automation/platform";
 import type { ScraperApiPage, ScraperApiRequest } from "@crawl-automation/platform";
 import { describe, expect, it, vi } from "vitest";
 import type { ChannelAdapter } from "../adapter.js";
@@ -112,6 +116,74 @@ describe("product pages through ScraperAPI", () => {
     await expect(
       new ScraperApiPages(fake, settings).fetchPage({ channel: "gnc", url, policy }, signal()),
     ).rejects.toMatchObject({ code });
+  });
+
+  describe("a verification answer", () => {
+    const amazon = "https://www.amazon.com";
+    const product = `${amazon}/dp/B00SBZ2FFE`;
+    const interstitial = Buffer.from(
+      '<form method="POST" action="/checkpoint/validate" id="checkpointForm">',
+    );
+    const challengePolicy = {
+      ...policy,
+      origins: [amazon],
+      accessChallenge: (html: string) => html.includes("checkpointForm"),
+    };
+    const ask = { channel: "amazon" as const, url: product, policy: challengePolicy };
+    const tiers = { ...settings, challengeTiers: { amazon: "ultraPremium" as const } };
+    const redirected = () =>
+      scraperApiErrors.create("SOURCE.ACCESS_CHALLENGE", { details: { status: 200 } });
+
+    it("is asked for once more at the channel's tier, and the receipt names both requests", async () => {
+      const { fake } = client();
+      fake.get.mockImplementationOnce(async (request) => ({
+        status: 200,
+        url: request.target,
+        contentType: "text/html",
+        contentEncoding: null,
+        creditCost: 5,
+        bytes: interstitial,
+      }));
+      const page = await new ScraperApiPages(fake, tiers).fetchPage(ask, signal());
+      const asked = fake.get.mock.calls.map(([call]) => call.options);
+      expect(asked.map((options) => options.ultraPremium)).toEqual([undefined, true]);
+      expect(asked[1]?.premium).toBe(false);
+      expect(page.fetchedVia.escalation).toEqual({
+        tier: "ultraPremium",
+        cause: "page",
+        creditCost: 5,
+      });
+      // Both requests' credits: 5 for the verification page and 10 for the escalated one.
+      expect(page.fetchedVia.creditCost).toBe(15);
+      expect(Buffer.from(page.bytes).toString()).toContain("GNC product");
+    });
+
+    it("after a redirect to verification is asked once more, and a second verification is refused", async () => {
+      const { fake } = client();
+      fake.get.mockRejectedValueOnce(redirected()).mockRejectedValueOnce(redirected());
+      await expect(new ScraperApiPages(fake, tiers).fetchPage(ask, signal())).rejects.toMatchObject(
+        {
+          code: "CAPTURE.ACCESS_CHALLENGE",
+          details: { escalation: { tier: "ultraPremium", cause: "redirect", creditCost: null } },
+        },
+      );
+      expect(fake.get).toHaveBeenCalledTimes(2);
+    });
+
+    it("is never escalated for a channel without a tier, and other failures never are", async () => {
+      const { fake } = client({ bytes: interstitial });
+      const page = await new ScraperApiPages(fake, settings).fetchPage(ask, signal());
+      expect(fake.get).toHaveBeenCalledOnce();
+      expect(page.fetchedVia).not.toHaveProperty("escalation");
+      const failing = client();
+      failing.fake.get.mockRejectedValueOnce(
+        scraperApiErrors.create("SCRAPERAPI.PROVIDER_FAILURE", { details: { status: 500 } }),
+      );
+      await expect(
+        new ScraperApiPages(failing.fake, tiers).fetchPage(ask, signal()),
+      ).rejects.toMatchObject({ code: "SCRAPERAPI.PROVIDER_FAILURE" });
+      expect(failing.fake.get).toHaveBeenCalledOnce();
+    });
   });
 
   it("never asks ScraperAPI for a page off the channel's sites", async () => {
@@ -290,6 +362,14 @@ describe("HttpCapture", () => {
         observedListingId: null,
         finalUrl: landed,
       },
+    });
+  });
+
+  it("never records a landing on verification as a sighting, even from an archived page", async () => {
+    await expect(
+      captureWith({ url: `${ORIGIN}/checkpoint/continue?token=v1.x` }),
+    ).rejects.toMatchObject({
+      code: "CAPTURE.ACCESS_CHALLENGE",
     });
   });
 
