@@ -26,6 +26,7 @@ export * from "./postgres/postgres-product-store.js";
 export * from "./postgres/postgres-history-reader.js";
 export * from "./postgres/postgres-queue-store.js";
 export * from "./postgres/postgres-channel-queue-store.js";
+export * from "./postgres/postgres-history-recapture.js";
 export * from "./postgres/postgres-queue-dispatch.js";
 export * from "./postgres/postgres-review-store.js";
 export * from "./postgres/postgres-execution-registry.js";

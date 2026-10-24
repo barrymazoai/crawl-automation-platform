@@ -1,6 +1,7 @@
 import { configuredDtcSites } from "@crawl-automation/channel-dtc";
 import {
   PostgresChannelQueueStore,
+  PostgresHistoryRecapture,
   PostgresBrandScans,
   PostgresListingStates,
   PostgresProductRunStore,
@@ -37,7 +38,8 @@ export function productRuns(parts: {
   });
 }
 
-/** Every channel uses the shared queue; Amazon's legacy store only supplies a migration preview. */
+/** Every channel uses the shared queue; Amazon's legacy store only supplies a migration preview. History supplies
+ * the captured products a round never queued. */
 export function queueService({
   database,
   log,
@@ -50,6 +52,7 @@ export function queueService({
   return new QueueService({
     amazonHistory: new PostgresQueueStore(database),
     channels: new PostgresChannelQueueStore(database),
+    history: new PostgresHistoryRecapture(database),
     log,
     scanAdmission: { recentScanSkipHours: config.queue.recentScanSkipHours },
   });

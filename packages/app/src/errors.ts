@@ -104,6 +104,11 @@ export const appErrors = defineErrors({
     category: "VALIDATION",
     message: "Only settled or withdrawn products can be queued again.",
   },
+  "QUEUE.RECAPTURE_SELECTION_CHANGED": {
+    category: "VALIDATION",
+    message:
+      "The recapture selection differs from the previewed batch; preview again and send its batchId.",
+  },
   "QUEUE.SOURCE_CHANNEL_MISMATCH": {
     category: "VALIDATION",
     message: "A product's brand source does not exist or belongs to another channel.",

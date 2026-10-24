@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { listIdFrom } from "./list-id.js";
 import type { AddToQueue, QueuedProduct } from "./queue-model.js";
 import type { QueueAddResult } from "./scan-admission.js";
 
@@ -10,11 +10,9 @@ export interface DiscoveredVariantStore {
 
 const LABEL = "Variants named on a captured product page";
 
-/** One list per run (UUID-shaped), so a replayed activity adds nothing twice. */
-function runBatchId(runId: string, channel: string): string {
-  const hex = createHash("sha256").update(`discovered-variants:${channel}:${runId}`).digest("hex");
-  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-5${hex.slice(13, 16)}-8${hex.slice(17, 20)}-${hex.slice(20, 32)}`;
-}
+/** One list per run, so a replayed activity adds nothing twice. */
+const runBatchId = (runId: string, channel: string) =>
+  listIdFrom(`discovered-variants:${channel}:${runId}`);
 
 /**
  * Variants a captured page names (Whole Foods variation ASINs, Costco child items) join the channel's queue under the

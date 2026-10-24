@@ -24,6 +24,7 @@ export * from "./fleet/job-ports.js";
 export * from "./fleet/job-service.js";
 export * from "./queue/queue-model.js";
 export * from "./queue/queue-service.js";
+export * from "./queue/history-recapture.js";
 export * from "./queue/dispatch-model.js";
 export * from "./queue/queue-dispatcher.js";
 export * from "./queue/discovered-variants.js";

@@ -1,6 +1,13 @@
 import type { Logger } from "@crawl-automation/platform";
 import { appErrors } from "../errors.js";
 import type { FamilyFormulaQuery } from "./family-formula-outcome.js";
+import {
+  recaptureHistory,
+  RecaptureHistorySchema,
+  type HistoryRecaptureStore,
+  type RecaptureHistory,
+  type RecaptureHistoryResult,
+} from "./history-recapture.js";
 import { reconcileFamilyFormulas } from "./reconcile-family-formulas.js";
 import { ScanAdmissionSettingsSchema, type ScanAdmissionSettings } from "./scan-admission.js";
 import type {
@@ -24,6 +31,8 @@ import type {
 
 export interface QueueServiceDeps {
   amazonHistory: AmazonQueueHistory;
+  /** Captured products a round never queued (Amazon). */
+  history?: HistoryRecaptureStore;
   /** The shared queue tables every channel uses. */
   channels: QueueStore;
   log: Logger;
@@ -119,6 +128,24 @@ export class QueueService {
     this.deps.log.info(
       { channel: input.channel, batches: result.byBatch.map((batch) => batch.batchId), ...result },
       input.dryRun ? "queue withdrawal preview" : "queue items withdrawn",
+    );
+    return result;
+  }
+
+  /** Queues products captured before a round that the round never queued; preview unless dryRun is false. */
+  async recaptureHistory(input: RecaptureHistory): Promise<RecaptureHistoryResult> {
+    const store = this.deps.history;
+    if (!store) {
+      throw appErrors.create("QUEUE.NOT_CONFIGURED");
+    }
+    const result = await recaptureHistory(
+      { store, add: (products) => this.add(products) },
+      RecaptureHistorySchema.parse(input),
+    );
+    const { bySource: _bySource, unresolvedBrands: _brands, sample: _sample, ...counts } = result;
+    this.deps.log.info(
+      { channel: input.channel, ...counts },
+      result.dryRun ? "history recapture preview" : "history recapture queued",
     );
     return result;
   }

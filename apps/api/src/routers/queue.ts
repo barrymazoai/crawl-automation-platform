@@ -6,6 +6,7 @@ import {
   QueueLimitsSchema,
   SourcePrioritySchema,
   QueueSummaryQuerySchema,
+  RecaptureHistorySchema,
   RequeueSchema,
   FamilyFormulaQuerySchema,
   WithdrawSchema,
@@ -64,6 +65,14 @@ export const queueRouter = router({
 
   /** Explicit IDs keep the existing behavior; a bounded Review filter defaults to a read-only preview. */
   requeue: procedure.input(RequeueSchema).mutation(({ ctx, input }) => ctx.queue.requeue(input)),
+
+  /**
+   * Amazon products captured before a round that the round never queued, queued again under the enabled brand
+   * source their page names; preview unless dryRun is false (owner 2026-10-24, KAN-226).
+   */
+  recaptureHistory: procedure
+    .input(RecaptureHistorySchema)
+    .mutation(({ ctx, input }) => ctx.queue.recaptureHistory(input)),
 
   /** Preview or withdraw unstarted requests from one channel. */
   withdraw: procedure.input(WithdrawSchema).mutation(({ ctx, input }) => ctx.queue.withdraw(input)),

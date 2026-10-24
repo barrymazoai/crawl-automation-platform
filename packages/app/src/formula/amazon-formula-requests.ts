@@ -1,5 +1,5 @@
-import { createHash } from "node:crypto";
 import { appErrors } from "../errors.js";
+import { listIdFrom } from "../queue/list-id.js";
 import type { QueuedProduct } from "../queue/queue-model.js";
 import type {
   FamilyMetrics,
@@ -26,11 +26,8 @@ export type AmazonFormulaRequest =
 
 const LABEL = "ASIN seen on Whole Foods without an Amazon formula";
 
-/** A stable list ID per ASIN (UUID-shaped), so asking again for the same ASIN adds nothing. */
-function requestBatchId(asin: string): string {
-  const hex = createHash("sha256").update(`amazon-formula-request:${asin}`).digest("hex");
-  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-5${hex.slice(13, 16)}-8${hex.slice(17, 20)}-${hex.slice(20, 32)}`;
-}
+/** A stable list ID per ASIN, so asking again for the same ASIN adds nothing. */
+const requestBatchId = (asin: string) => listIdFrom(`amazon-formula-request:${asin}`);
 
 /**
  * A product seen on a channel that shares Amazon's formulas (Whole Foods) whose ASIN has no Amazon formula yet:
