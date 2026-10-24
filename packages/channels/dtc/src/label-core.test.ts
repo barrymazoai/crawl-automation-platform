@@ -7,10 +7,16 @@ import {
 } from "@crawl-automation/channels-core";
 import { LabelCorePolicySchema } from "@crawl-automation/v3-contracts";
 import { createDtcAdapter } from "./adapter.js";
-import { dtcLabelCore, dtcLabelCoreV2, dtcLabelCoreV3, extractDtcLabelCore } from "./label-core.js";
+import {
+  dtcLabelCore,
+  dtcLabelCoreV2,
+  dtcLabelCoreV3,
+  dtcLabelCoreV4,
+  extractDtcLabelCore,
+} from "./label-core.js";
 import { dtcDocument } from "./product.js";
 
-describe("DTC label core v3", () => {
+describe("DTC label core v4", () => {
   it("removes Shopify chrome while keeping the entire Facts block", () => {
     const html = `
       <nav aria-label="Breadcrumb"><a>Home</a><a>Supplements</a></nav>
@@ -79,6 +85,21 @@ describe("DTC label core v3", () => {
     expect(dtcLabelCoreV2.extract(html)).not.toContain("CHAMOMILE FLOWER");
   });
 
+  it("keeps each ingredient body when copied accordions repeat their panel ids", () => {
+    const accordion = (ingredient: string) => `<div id="accordionFlushExample" class="accordion">
+      <div class="accordion-item"><h2><a aria-controls="flush-collapseThree">Ingredients</a></h2>
+        <div id="flush-collapseThree" class="accordion-collapse" data-bs-parent="#accordionFlushExample">
+          <p>${ingredient}</p></div></div></div>`;
+    const html = `${accordion("KELP ALGAE, SAW PALMETTO BERRY")}
+      ${accordion("CHAMOMILE FLOWER, GINGER ROOT")}`;
+    const current = dtcLabelCoreV4.extract(html);
+    expect(current.match(/Ingredients\n/g)).toHaveLength(2);
+    expect(current).toMatch(/Ingredients\n+KELP ALGAE, SAW PALMETTO BERRY/);
+    expect(current).toMatch(/Ingredients\n+CHAMOMILE FLOWER, GINGER ROOT/);
+    expect(dtcLabelCoreV3.extract(html)).toMatch(/Ingredients\s*$/);
+    expect(dtcLabelCoreV3.extract(html)).not.toContain("CHAMOMILE FLOWER");
+  });
+
   it("keeps an ingredient details body and a linked tab panel", () => {
     const details = `<details><summary>Other Ingredients:</summary><p>Rice flour, cellulose.</p></details>`;
     expect(extractDtcLabelCore(details)).toContain("Rice flour, cellulose.");
@@ -120,14 +141,15 @@ describe("DTC label core v3", () => {
     expect(extractDtcLabelCore(html)).toBe(pageText(html, { rowCells: true }));
   });
 
-  it("keeps historical readers while the adapter selects v3", () => {
+  it("keeps historical readers while the adapter selects v4", () => {
     expect(LabelCorePolicySchema.safeParse("dtc-label-core/1").success).toBe(true);
     expect(LabelCorePolicySchema.safeParse("dtc-label-core/2").success).toBe(true);
     expect(LabelCorePolicySchema.safeParse("dtc-label-core/3").success).toBe(true);
-    expect(createDtcAdapter().planning?.corePolicy).toBe("dtc-label-core/3");
+    expect(LabelCorePolicySchema.safeParse("dtc-label-core/4").success).toBe(true);
+    expect(createDtcAdapter().planning?.corePolicy).toBe("dtc-label-core/4");
     const html = `<button>Add to cart</button><p>Ingredients: rice flour.</p>`;
     expect(dtcLabelCore.extract(html)).toBe(pageText(html, { rowCells: true }));
-    expect(createDtcAdapter().planning?.labelCore).toBe(dtcLabelCoreV3);
+    expect(createDtcAdapter().planning?.labelCore).toBe(dtcLabelCoreV4);
     expect(createDtcAdapter().planning?.labelCore?.extract(html)).toBe("Ingredients: rice flour.");
   });
 });

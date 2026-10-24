@@ -4,7 +4,12 @@ import { OcrResults, TextEvidence, noResult } from "@crawl-automation/processing
 import { ArtifactResolver, createR2Objects } from "@crawl-automation/platform";
 import { swansonLabelCore } from "@crawl-automation/channel-swanson";
 import { gncLabelCore } from "@crawl-automation/channels-gnc";
-import { dtcLabelCore, dtcLabelCoreV2, dtcLabelCoreV3 } from "@crawl-automation/channel-dtc";
+import {
+  dtcLabelCore,
+  dtcLabelCoreV2,
+  dtcLabelCoreV3,
+  dtcLabelCoreV4,
+} from "@crawl-automation/channel-dtc";
 import type { ApiConfig } from "./config.js";
 
 const apiErrors = defineErrors({
@@ -18,13 +23,14 @@ const refuseWrite = async (): Promise<never> => {
   throw apiErrors.create("API.READ_ONLY_STORAGE");
 };
 
-/** Each channel's label-core readers by policy name; DTC keeps /1 and /2 for published documents. */
+/** Each channel's label-core readers by policy name; DTC keeps /1–/3 for published documents. */
 const labelCores = {
   "swanson-label-core/1": swansonLabelCore,
   "gnc-label-core/1": gncLabelCore,
   "dtc-label-core/1": dtcLabelCore,
   "dtc-label-core/2": dtcLabelCoreV2,
   "dtc-label-core/3": dtcLabelCoreV3,
+  "dtc-label-core/4": dtcLabelCoreV4,
 };
 
 /**

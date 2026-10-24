@@ -1,12 +1,14 @@
 export const INGREDIENT_HEADING = /^(?:(?:plant[- ]based|other)\s+)?ingredients\s*:?$/i;
 
-/** Owner 2026-10-24 (dherbs.com): a named accordion header can control its ingredient body as a sibling. */
-export function ingredientChromePanels(root: Element): Set<Element> {
+/** A named accordion header can control its ingredient body as a sibling; false retains /3 ID lookup. */
+export function ingredientChromePanels(root: Element, scopedIds = false): Set<Element> {
   const headings = root.querySelectorAll("h2, h3, h4, summary, [role='tab']");
-  return new Set([...headings].flatMap((heading) => ingredientChromePanel(heading, root)));
+  return new Set(
+    [...headings].flatMap((heading) => ingredientChromePanel(heading, root, scopedIds)),
+  );
 }
 
-function ingredientChromePanel(heading: Element, root: Element): Element[] {
+function ingredientChromePanel(heading: Element, root: Element, scopedIds: boolean): Element[] {
   if (
     !INGREDIENT_HEADING.test(heading.textContent?.trim() ?? "") ||
     heading.closest('[class*="faq"]')
@@ -14,7 +16,9 @@ function ingredientChromePanel(heading: Element, root: Element): Element[] {
     return [];
   }
   const header = ingredientChromeHeader(heading);
-  const body = header.matches("details") ? header : ingredientChromeBody(heading, header, root);
+  const body = header.matches("details")
+    ? header
+    : ingredientChromeBody(heading, header, { root, scopedIds });
   return ingredientChromeBounded(body, header) ? [header, body] : [];
 }
 
@@ -43,11 +47,34 @@ function ingredientBodyText(body: Element, header: Element): boolean {
   );
 }
 
-function ingredientChromeBody(heading: Element, header: Element, root: Element): Element | null {
+function followsHeading(heading: Element, candidate: Element, root: Element): boolean {
+  for (let node: Element | null = heading; node && node !== root; node = node.parentElement) {
+    for (let next = node.nextElementSibling; next; next = next.nextElementSibling) {
+      if (next === candidate || next.contains(candidate)) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+function ingredientChromeBody(
+  heading: Element,
+  header: Element,
+  options: { root: Element; scopedIds: boolean },
+): Element | null {
   const control = heading.querySelector("[aria-controls], [data-bs-target]") ?? heading;
   const targetId =
     control.getAttribute("aria-controls") ?? control.getAttribute("data-bs-target")?.slice(1);
-  const linked =
-    targetId && /^[\w-]+$/.test(targetId) ? root.ownerDocument.getElementById(targetId) : null;
+  let linked: Element | null = null;
+  if (targetId && /^[\w-]+$/.test(targetId)) {
+    linked = options.scopedIds
+      ? ([...options.root.querySelectorAll(`[id="${targetId}"]`)].find(
+          (candidate) =>
+            followsHeading(heading, candidate, options.root) &&
+            ingredientChromeBounded(candidate, header),
+        ) ?? null)
+      : options.root.ownerDocument.getElementById(targetId);
+  }
   return linked ?? heading.nextElementSibling ?? header.nextElementSibling;
 }

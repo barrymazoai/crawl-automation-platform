@@ -1,4 +1,4 @@
-import { dtcLabelCoreV3 } from "./label-core.js";
+import { dtcLabelCoreV4 } from "./label-core.js";
 import {
   ANY_HTTPS_ORIGIN,
   completeFacts,
@@ -192,8 +192,8 @@ function dtcPlanning(
     projectionModule: "dtc.browser-projection",
     projection: dtcProjection,
     read: (projection, url, owner) => readDtcProjection(projection, { url, owner }, scope),
-    corePolicy: "dtc-label-core/3",
-    labelCore: dtcLabelCoreV3,
+    corePolicy: "dtc-label-core/4",
+    labelCore: dtcLabelCoreV4,
   };
 }
 

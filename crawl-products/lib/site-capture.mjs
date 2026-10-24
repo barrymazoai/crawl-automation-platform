@@ -7,7 +7,7 @@ import { runHarvest } from "./run-harvest.mjs";
 import { withNativeExtractionBoundary } from "./native-extraction-boundary.mjs";
 import { normalizePlatformVariants } from "./platform-variants.mjs";
 import { assertMaterialVariantIds } from "./material-variants.mjs";
-import { missingSiteMethodFields } from "./site-method-record.mjs";
+import { missingSiteMethodFields, repeatedSiteMethodMaterialIds } from "./site-method-record.mjs";
 import { declaredProductGallery } from "./declared-product-images.mjs";
 
 /** Stable host launcher around the original harvest. Only the learned site method varies. */
@@ -44,6 +44,12 @@ export async function runSiteCapture(input, globals) {
     throw new Error("capture_contains_parsed_product_fields");
   }
   assertMaterialVariantIds(captured.record.variants ?? [], captured.materials, observedVariants);
+  const repeated = await repeatedSiteMethodMaterialIds(captured.materials, captured.notes,
+    captured.record, path => readFile(join(outDir, path), "utf8"));
+  if (repeated.length) {
+    // The region can be fixed in the learned method before any harvest/checkpoint is written.
+    throw new Error(`site_method_product_html_repeated_ids:${JSON.stringify(repeated)}`);
+  }
   if (!source.equals(await readFile(methodPath))) throw new Error("site_method_changed_during_capture");
   // Owner 2026-10-24: use the full page's own Product declarations. Retain those same
   // page bytes in runHarvest; the region HTML alone may omit structured data.

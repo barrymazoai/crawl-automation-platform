@@ -4,7 +4,7 @@ import { OcrRegistrationSchema } from "./registration.js";
 import { LabelTextCandidateSchema } from "./label-extraction.js";
 export const TextDocumentSchema = z.strictObject({ ...ObservationSchema.shape,
     producer: z.enum(["page.prepare", "pdf.text", "label.core.prepare"]), source: ArtifactRefSchema,
-    corePolicy: z.enum(["gnc-label-core/1", "swanson-label-core/1", "dtc-label-core/1", "dtc-label-core/2", "dtc-label-core/3"]).optional(),
+    corePolicy: z.enum(["gnc-label-core/1", "swanson-label-core/1", "dtc-label-core/1", "dtc-label-core/2", "dtc-label-core/3", "dtc-label-core/4"]).optional(),
     pageIndex: z.number().int().nonnegative().nullable(), text: z.string().min(1).max(200000),
 }).refine(d => {
     try {

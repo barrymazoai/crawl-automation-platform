@@ -138,12 +138,13 @@ function boundedIngredientParent(heading: Element): Element | null {
   return body.matches("section, article, div, ul, p") && body.textContent?.trim() ? parent : null;
 }
 
-function labelPageText(html: string, preserveIngredientPanels = false): string {
+function labelPageText(html: string, panelPolicy: "none" | "legacy" | "scoped"): string {
   // The channel plan supplies an HTML fragment; wrapping it gives linkedom a stable body for DOM pruning.
   const { document } = parseHTML(`<!doctype html><html><body>${html}</body></html>`);
-  const ingredientPanels = preserveIngredientPanels
-    ? ingredientChromePanels(document.body)
-    : new Set<Element>();
+  const ingredientPanels =
+    panelPolicy !== "none"
+      ? ingredientChromePanels(document.body, panelPolicy === "scoped")
+      : new Set<Element>();
   for (const child of [...document.body.children]) {
     pruneChrome(child, ingredientPanels);
   }
@@ -162,18 +163,25 @@ function labelPageText(html: string, preserveIngredientPanels = false): string {
  * A page without a Facts panel keeps its whole text unless a single ingredient section has an explicit DOM boundary.
  */
 export function extractDtcLabelCore(html: string): string {
-  return extractDtcLabelCoreWithPanels(html, true);
+  return extractDtcLabelCoreWithPanels(html, "scoped");
 }
 
 function extractDtcLabelCoreV2(html: string): string {
-  return extractDtcLabelCoreWithPanels(html, false);
+  return extractDtcLabelCoreWithPanels(html, "none");
 }
 
-function extractDtcLabelCoreWithPanels(html: string, preserveIngredientPanels: boolean): string {
+function extractDtcLabelCoreV3(html: string): string {
+  return extractDtcLabelCoreWithPanels(html, "legacy");
+}
+
+function extractDtcLabelCoreWithPanels(
+  html: string,
+  panelPolicy: "none" | "legacy" | "scoped",
+): string {
   if (Buffer.byteLength(html) > MAX_BYTES) {
     throw labelCoreFailure("LABEL_CORE.SOURCE_LIMIT");
   }
-  return boundedCore(labelPageText(html, preserveIngredientPanels));
+  return boundedCore(labelPageText(html, panelPolicy));
 }
 
 function extractDtcLabelCoreV1(html: string): string {
@@ -206,8 +214,15 @@ export const dtcLabelCoreV2: LabelCoreReader = {
   extract: extractDtcLabelCoreV2,
 };
 
-/** Current DTC reader for pages the shared product pipeline produced. */
+/** Historical /3 reader is retained for verification of already published documents. */
 export const dtcLabelCoreV3: LabelCoreReader = {
+  sourceModule: "channel.product-input",
+  sourceVersion: "channel-plan/1",
+  extract: extractDtcLabelCoreV3,
+};
+
+/** Current DTC reader for pages the shared product pipeline produced. */
+export const dtcLabelCoreV4: LabelCoreReader = {
   sourceModule: "channel.product-input",
   sourceVersion: "channel-plan/1",
   extract: extractDtcLabelCore,

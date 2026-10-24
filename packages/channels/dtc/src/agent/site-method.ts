@@ -6,7 +6,10 @@ import { sha256 } from "@crawl-automation/platform";
 import { captureFile } from "./archive.js";
 import { dtcAgentErrors } from "./errors.js";
 import { prepareMethodFeedback } from "./method-feedback.js";
-import { missingSiteMethodFields } from "../../../../../crawl-products/lib/site-method-record.mjs";
+import {
+  missingSiteMethodFields,
+  repeatedSiteMethodMaterialIds,
+} from "../../../../../crawl-products/lib/site-method-record.mjs";
 
 const Receipt = z.strictObject({
   codec: z.literal("dtc-site-method/1"),
@@ -98,7 +101,18 @@ async function validMethodRecord(root: string, url: string): Promise<boolean> {
     (await captureFile(root, "evidence/records.json")).toString(),
   );
   const record = Array.isArray(records) && records.length === 1 ? records[0] : null;
-  return missingSiteMethodFields(record, url).length === 0;
+  if (missingSiteMethodFields(record, url).length) {
+    return false;
+  }
+  const materials = JSON.parse((await captureFile(root, "materials.json")).toString());
+  const notes = JSON.parse((await captureFile(root, "capture-notes.json")).toString());
+  const repeated = await repeatedSiteMethodMaterialIds(
+    materials,
+    notes,
+    record,
+    async (path: string) => (await captureFile(root, path)).toString(),
+  );
+  return repeated.length === 0;
 }
 
 async function savedMethod(root: string, url: string) {
