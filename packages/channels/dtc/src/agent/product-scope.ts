@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { sha256, type RetainedPublication } from "@crawl-automation/platform";
-import { pageText } from "@crawl-automation/channels-core";
+import { nonSupplementPath, pageText } from "@crawl-automation/channels-core";
+import { DTC_BUNDLE_CATEGORIES } from "../adapter.js";
 import {
   DtcGalleryRefSchema,
   DtcScopeExcludedSchema,
@@ -138,6 +139,43 @@ export function scopeProductOutcome(input: {
         evidence: scope.evidence,
       })
     : null;
+}
+
+/** Owner 2026-10-24: the retained store breadcrumb decides store-filed kits before the model scope step. */
+export function storeCategoryBundleOutcome(input: {
+  categories?: string[] | undefined;
+  source: DtcGalleryRef;
+  operationId: string;
+  identity: { listingId: string; variantId: string | null };
+}) {
+  const categories = nonSupplementPath(input.categories, DTC_BUNDLE_CATEGORIES);
+  return categories
+    ? DtcScopeExcludedSchema.parse({
+        status: "scope-excluded",
+        operationId: input.operationId,
+        ...input.identity,
+        reason: "DTC.MULTI_PRODUCT_BUNDLE",
+        policy: "store-category/1",
+        evidence: {
+          objectKey: input.source.objectKey,
+          sha256: input.source.sha256,
+          byteSize: input.source.byteSize,
+        },
+        categories,
+      })
+    : null;
+}
+
+/** The store's own kit filing decides first; otherwise the model scope review does. */
+export async function scopedOutcome(
+  input: Parameters<typeof storeCategoryBundleOutcome>[0],
+  review: () => ReturnType<DtcProductScope["review"]>,
+) {
+  const { operationId, identity } = input;
+  return (
+    storeCategoryBundleOutcome(input) ??
+    scopeProductOutcome({ scope: await review(), operationId, identity })
+  );
 }
 
 export function validateProductScope(raw: unknown, fields: Record<string, string>) {

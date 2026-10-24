@@ -1,5 +1,11 @@
 import { ChannelProductEvidenceSchema } from "@crawl-automation/v3-contracts";
-import { completeFacts, schemaCommerce, type ParsedProduct } from "@crawl-automation/channels-core";
+import {
+  completeFacts,
+  pageBreadcrumbs,
+  schemaCommerce,
+  type ParsedProduct,
+} from "@crawl-automation/channels-core";
+import { parseHTML } from "linkedom";
 import { dtcProductAddress } from "../address.js";
 import { assertDtcBrandVerified, dtcBrandEvidence } from "../brand-evidence.js";
 import { dtcBrandSource } from "../brand-source.js";
@@ -37,6 +43,9 @@ export function capturedProductProjection(input: ProjectionInput): ParsedProduct
   const factsHtml = stringField(record, "supplement_facts") ?? stringField(record, "facts_table");
   const facts = completeFacts(unassigned(input) ? null : factsHtml);
   const evidence = productEvidence(input, brandEvidence.observedBrand);
+  const categories = input.html
+    ? pageBreadcrumbs(parseHTML(Buffer.from(input.html).toString()).document)
+    : [];
   return {
     channel: "dtc",
     identity,
@@ -46,6 +55,7 @@ export function capturedProductProjection(input: ProjectionInput): ParsedProduct
     variants: record.variants.flatMap((variant) =>
       variant.url ? [dtcProductAddress(variant.url, [site])] : [],
     ),
+    ...(categories.length ? { categories } : {}),
     rendered: {
       siteKey: site.siteKey,
       productId: address.listingId,

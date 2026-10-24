@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { ArtifactRefSchema, ObservationSchema, assertArtifactBelongsTo } from "./artifacts.js";
 /** The label-core policies the channels supply (owner 2026-10-20: DTC's narrows a page to its Facts panel). */
-export const LABEL_CORE_POLICIES = ["gnc-label-core/1", "swanson-label-core/1", "dtc-label-core/1", "dtc-label-core/2"] as const;
+export const LABEL_CORE_POLICIES = ["gnc-label-core/1", "swanson-label-core/1", "dtc-label-core/1", "dtc-label-core/2", "dtc-label-core/3"] as const;
 export const LabelCorePolicySchema = z.enum(LABEL_CORE_POLICIES);
 // corePolicy names the channel's policy: DTC and Swanson pages share one producer, so it cannot be told from the page.
 export const LabelCoreInputSchema = z.strictObject({ owner: ObservationSchema, fullDocument: ArtifactRefSchema,

@@ -37,6 +37,8 @@ export function createEgoBrowser({ task, page, targetId = page.targetId, listTas
       domSnapshot: () => call("snapshot", { scope: "full_page" }),
       waitForTimeout: ms => call("waitForTimeout", ms),
       waitForLoadState: (options = {}) => call("waitForLoadState", options.state ?? "load", { timeout: options.timeoutMs }),
+      // Dherbs 2026-10-24: Codex's corrected methods await this; without it the single allowed retry always failed.
+      waitForSelector: (selector, options) => options === undefined ? call("waitForSelector", selector) : call("waitForSelector", selector, options),
     },
     async goto(url, options = {}) {
       await call("goto", url, { waitUntil: options.waitUntil ?? "domcontentloaded", timeout: options.timeoutMs ?? 30_000 });

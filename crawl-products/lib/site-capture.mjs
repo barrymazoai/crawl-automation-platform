@@ -8,6 +8,7 @@ import { withNativeExtractionBoundary } from "./native-extraction-boundary.mjs";
 import { normalizePlatformVariants } from "./platform-variants.mjs";
 import { assertMaterialVariantIds } from "./material-variants.mjs";
 import { missingSiteMethodFields } from "./site-method-record.mjs";
+import { declaredProductGallery } from "./declared-product-images.mjs";
 
 /** Stable host launcher around the original harvest. Only the learned site method varies. */
 export async function runSiteCapture(input, globals) {
@@ -44,13 +45,35 @@ export async function runSiteCapture(input, globals) {
   }
   assertMaterialVariantIds(captured.record.variants ?? [], captured.materials, observedVariants);
   if (!source.equals(await readFile(methodPath))) throw new Error("site_method_changed_during_capture");
+  // Owner 2026-10-24: use the full page's own Product declarations. Retain those same
+  // page bytes in runHarvest; the region HTML alone may omit structured data.
+  let gallery = { urls: captured.galleryUrls, replacements: [] };
+  const fetchPageHtml = browser.harvestHooks.fetchPageHtml;
+  if (captured.galleryUrls.some(url => /resized_\d+_\d+_/i.test(url))
+    && typeof fetchPageHtml === "function") {
+    try {
+      const html = await fetchPageHtml(productUrl);
+      if (typeof html === "string") {
+        gallery = declaredProductGallery(html, productUrl, captured.galleryUrls);
+        browser.harvestHooks.fetchPageHtml = url =>
+          url === productUrl ? Promise.resolve(html) : fetchPageHtml(url);
+      }
+    } catch { /* keep the observed gallery when the optional larger source is unavailable */ }
+  }
+  // The original gallery URLs stay visible in the page HTML and capture-notes substitution map.
+  const upgradedUrl = new Map(gallery.replacements.map(item => [item.galleryUrl, item.declaredUrl]));
+  const upgradeList = urls => [...new Set(urls.map(url => upgradedUrl.get(url) ?? url))];
+  captured.galleryUrls = gallery.urls;
+  captured.materials.variants = captured.materials.variants.map(scope =>
+    Array.isArray(scope.galleryUrls) ? { ...scope, galleryUrls: upgradeList(scope.galleryUrls) } : scope);
   // Preserve the exact executed method alongside the old raw output, before any post-capture work.
   await writeFile(join(outDir, "site-method.mjs"), source, { flag: "wx" });
   await writeFile(join(outDir, "method-use.json"), JSON.stringify({
     codec: "dtc-site-method-use/1", origin: new URL(productUrl).origin, productUrl,
     sha256: digest, path: "site-method.mjs",
   }), { flag: "wx" });
-  await writeFile(join(outDir, "capture-notes.json"), JSON.stringify(captured.notes ?? {}), { flag: "wx" });
+  await writeFile(join(outDir, "capture-notes.json"), JSON.stringify({ ...captured.notes,
+    galleryUpgrades: gallery.replacements }), { flag: "wx" });
   await writeFile(join(outDir, "materials.json"), JSON.stringify(captured.materials), { flag: "wx" });
   const plan = {
     site: { origin: new URL(productUrl).origin, entryUrl: productUrl, browserMode: "ego-native" },

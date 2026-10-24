@@ -1,6 +1,7 @@
 import { sha256, type RetainedPublication } from "@crawl-automation/platform";
 import {
   ProductFamilySchema,
+  nonSupplementPath,
   type CaptureRequest,
   type ProductSourcePlans,
   type ChannelPlanning,
@@ -8,6 +9,7 @@ import {
 import { DtcVariantHandoffsSchema, type DtcVariantHandoff } from "@crawl-automation/v3-contracts";
 import type { DtcSitePolicy } from "../site-policy.js";
 import { capturedProductProjection } from "./product-projection.js";
+import { DTC_NON_SUPPLEMENT_CATEGORIES } from "../adapter.js";
 import { readVariantRecord, type VariantRecordInput } from "./variant-record.js";
 import type { readCapturedProduct } from "./product-record.js";
 
@@ -70,6 +72,10 @@ export class DtcVariantHandoffs {
       };
     }
     const sourcePlan = await this.publishPlan(input, { ...member, scoped }, signal);
+    const nonSupplement = nonSupplementPath(
+      scoped.parsed.categories,
+      DTC_NON_SUPPLEMENT_CATEGORIES,
+    );
     return {
       ...member,
       status: scoped.context.status === "mixed" ? "mixed" : "ready",
@@ -80,6 +86,7 @@ export class DtcVariantHandoffs {
         factsComplete: scoped.parsed.facts.complete,
         labelText: scoped.parsed.facts.text,
         family: family(input, scoped.context, member.variant),
+        ...(nonSupplement ? { nonSupplement } : {}),
       },
     };
   }

@@ -1,4 +1,4 @@
-import { dtcLabelCoreV2 } from "./label-core.js";
+import { dtcLabelCoreV3 } from "./label-core.js";
 import {
   ANY_HTTPS_ORIGIN,
   completeFacts,
@@ -113,6 +113,17 @@ export const DTC_NON_SUPPLEMENT_CATEGORIES: readonly string[] = [
   "Vitamin C Serum",
   "Neck and Decollete cream",
   "Eye Cream",
+  // dherbs.com 2026-10-24: exact store breadcrumb categories outside supplements.
+  "Ebooks",
+  "Gift Certificates",
+  "Aromatherapy Inhalers",
+  "Hygiene And Beauty",
+];
+
+/** Owner 2026-10-24: dherbs.com files kits as multi-product bundles. */
+export const DTC_BUNDLE_CATEGORIES: readonly string[] = [
+  "Cleanses and Regimens",
+  "Dherbs 180 Challenge",
 ];
 
 /** One registry entry for all configured DTC sites. BrowserPages/Ego is the only capture path. */
@@ -165,8 +176,8 @@ function dtcPlanning(
     projectionModule: "dtc.browser-projection",
     projection: dtcProjection,
     read: (projection, url, owner) => readDtcProjection(projection, { url, owner }, scope),
-    corePolicy: "dtc-label-core/2",
-    labelCore: dtcLabelCoreV2,
+    corePolicy: "dtc-label-core/3",
+    labelCore: dtcLabelCoreV3,
   };
 }
 

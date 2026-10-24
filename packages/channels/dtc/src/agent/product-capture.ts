@@ -16,7 +16,7 @@ import { dtcAgentErrors } from "./errors.js";
 import { capturedBrandSighting } from "./product-sighting.js";
 import { DtcVariantHandoffs } from "./variant-handoffs.js";
 import { nativeCaptureResult } from "./product-result.js";
-import { scopeProductOutcome, type DtcProductScope } from "./product-scope.js";
+import { scopedOutcome, type DtcProductScope } from "./product-scope.js";
 
 export class DtcAgentProductCapture {
   constructor(
@@ -49,11 +49,7 @@ export class DtcAgentProductCapture {
       url: request.url,
       sourceUrl: request.sourceUrl,
     });
-    const excluded = await this.scope(
-      request,
-      { retained, original, identity: parsed.identity },
-      signal,
-    );
+    const excluded = await this.scope(request, { retained, original, parsed }, signal);
     if (excluded) {
       return excluded;
     }
@@ -68,25 +64,27 @@ export class DtcAgentProductCapture {
     input: {
       retained: Awaited<ReturnType<typeof readCapturedProduct>>;
       original: ArchivedHtml;
-      identity: { listingId: string; variantId: string | null };
+      parsed: ReturnType<typeof capturedProductProjection>;
     },
     signal: AbortSignal,
   ) {
-    const { retained, original, identity } = input;
-    const scope = await this.deps.productScope.review(
-      {
-        operationId: request.operationId,
-        url: request.url,
-        source: original.source,
-        fields: {
-          ...retained.record.fields,
-          ...(retained.detailsHtml ? { html: retained.detailsHtml } : {}),
+    const { retained, original, parsed } = input;
+    const { operationId, url } = request;
+    return scopedOutcome({ ...parsed, source: original.source, operationId }, () =>
+      this.deps.productScope.review(
+        {
+          operationId,
+          url,
+          source: original.source,
+          fields: {
+            ...retained.record.fields,
+            ...(retained.detailsHtml ? { html: retained.detailsHtml } : {}),
+          },
+          variants: retained.record.variants,
         },
-        variants: retained.record.variants,
-      },
-      signal,
+        signal,
+      ),
     );
-    return scopeProductOutcome({ scope, operationId: request.operationId, identity });
   }
 
   private async complete(

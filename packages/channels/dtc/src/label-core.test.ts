@@ -7,10 +7,10 @@ import {
 } from "@crawl-automation/channels-core";
 import { LabelCorePolicySchema } from "@crawl-automation/v3-contracts";
 import { createDtcAdapter } from "./adapter.js";
-import { dtcLabelCore, extractDtcLabelCore } from "./label-core.js";
+import { dtcLabelCore, dtcLabelCoreV2, dtcLabelCoreV3, extractDtcLabelCore } from "./label-core.js";
 import { dtcDocument } from "./product.js";
 
-describe("DTC label core v2", () => {
+describe("DTC label core v3", () => {
   it("removes Shopify chrome while keeping the entire Facts block", () => {
     const html = `
       <nav aria-label="Breadcrumb"><a>Home</a><a>Supplements</a></nav>
@@ -61,6 +61,58 @@ describe("DTC label core v2", () => {
     expect(extractDtcLabelCore(html)).toBe("Ingredients: rice flour.\n\nTake 2 VegCaps daily.");
   });
 
+  it("keeps the full Dherbs ingredient body linked from a nested accordion heading", () => {
+    const html = `<div class="accordion accordion-flush">
+      <div class="accordion-item"><h2 class="accordion-header"><a class="product-info-accordion collapsed"
+        aria-controls="overview" data-bs-target="#overview"><span>Overview</span></a></h2></div>
+      <div id="overview" class="accordion-collapse collapse"><p>General wellness description.</p></div>
+      <div class="accordion-item"><h2 class="accordion-header"><a class="product-info-accordion collapsed"
+        aria-controls="ingredients" data-bs-target="#ingredients"><span>Ingredients</span></a></h2></div>
+      <div id="ingredients" class="accordion-collapse collapse"><div class="pt-8 pb-3">
+        <p><span class="PRODUCT-INGREDIENT ACTIVE">CHAMOMILE FLOWER</span>,
+        <span class="PRODUCT-INGREDIENT ACTIVE">GINGER ROOT</span></p>
+      </div></div>
+    </div>`;
+    const result = extractDtcLabelCore(html);
+    expect(result).toMatch(/Ingredients\n+CHAMOMILE FLOWER, GINGER ROOT/);
+    expect(result).not.toContain("General wellness description");
+    expect(dtcLabelCoreV2.extract(html)).not.toContain("CHAMOMILE FLOWER");
+  });
+
+  it("keeps an ingredient details body and a linked tab panel", () => {
+    const details = `<details><summary>Other Ingredients:</summary><p>Rice flour, cellulose.</p></details>`;
+    expect(extractDtcLabelCore(details)).toContain("Rice flour, cellulose.");
+    const tab = `<div><div role="tablist"><button role="tab" aria-controls="ingredient-tab">Plant-based Ingredients</button></div>
+      <div id="ingredient-tab" role="tabpanel" class="accordion-panel"><p>Chamomile flower, ginger root.</p></div></div>`;
+    expect(extractDtcLabelCore(tab)).toContain("Chamomile flower, ginger root.");
+    expect(dtcLabelCoreV2.extract(tab)).not.toContain("Chamomile flower, ginger root.");
+  });
+
+  it("keeps the rest of a page when a newly preserved details panel has ingredients", () => {
+    const html = `<h1>Red Clover Blossom 375mg</h1><div class="product__accordion accordion">
+      <details><summary aria-controls="ingredients"><div><h2>Ingredients</h2></div></summary>
+        <div id="ingredients" class="accordion__content"><p>Red Clover blossom, vegetable cellulose.</p></div>
+      </details></div>`;
+    const result = extractDtcLabelCore(html);
+    expect(result).toContain("Red Clover Blossom 375mg");
+    expect(result).toContain("Red Clover blossom, vegetable cellulose.");
+  });
+
+  it("does not change an empty ingredient details panel", () => {
+    const html = `<h1>Vitamin Capsules</h1><div class="accordion"><details>
+      <summary><h2>Ingredients</h2></summary><div class="accordion__content">  </div>
+    </details></div>`;
+    expect(extractDtcLabelCore(html)).toBe(dtcLabelCoreV2.extract(html));
+  });
+
+  it("does not keep an FAQ answer that merely mentions ingredients", () => {
+    const html = `<section class="faq"><h2>Frequently Asked Questions</h2>
+      <div class="accordion-item"><h3><button aria-controls="answer">What are the ingredients?</button></h3></div>
+      <div id="answer" class="accordion-collapse"><p>The answer is on the package.</p></div>
+    </section>`;
+    expect(extractDtcLabelCore(html)).not.toContain("The answer is on the package.");
+  });
+
   it("preserves line structure when the label text has no page chrome", () => {
     const html = `<section><h2>Protein Bar Reimagined™</h2><p>The stack, in every 60 g bar</p>
       <div><span>20 g protein (40% DV)</span><span>4 g creatine monohydrate</span></div>
@@ -68,12 +120,14 @@ describe("DTC label core v2", () => {
     expect(extractDtcLabelCore(html)).toBe(pageText(html, { rowCells: true }));
   });
 
-  it("accepts both DTC core policy versions while the adapter selects v2", () => {
+  it("keeps historical readers while the adapter selects v3", () => {
     expect(LabelCorePolicySchema.safeParse("dtc-label-core/1").success).toBe(true);
     expect(LabelCorePolicySchema.safeParse("dtc-label-core/2").success).toBe(true);
-    expect(createDtcAdapter().planning?.corePolicy).toBe("dtc-label-core/2");
+    expect(LabelCorePolicySchema.safeParse("dtc-label-core/3").success).toBe(true);
+    expect(createDtcAdapter().planning?.corePolicy).toBe("dtc-label-core/3");
     const html = `<button>Add to cart</button><p>Ingredients: rice flour.</p>`;
     expect(dtcLabelCore.extract(html)).toBe(pageText(html, { rowCells: true }));
+    expect(createDtcAdapter().planning?.labelCore).toBe(dtcLabelCoreV3);
     expect(createDtcAdapter().planning?.labelCore?.extract(html)).toBe("Ingredients: rice flour.");
   });
 });

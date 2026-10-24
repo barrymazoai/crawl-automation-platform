@@ -6,6 +6,7 @@ import {
   type LabelCoreReader,
 } from "@crawl-automation/channels-core";
 import { parseHTML } from "linkedom";
+import { INGREDIENT_HEADING, ingredientChromePanels } from "./label-ingredient-panels.js";
 
 const MAX_BYTES = 4 * 1024 * 1024;
 const MAX_TEXT_LENGTH = 200_000;
@@ -59,9 +60,17 @@ function labelParagraph(node: Element): boolean {
   return (paragraph || leafBlock) && labelMatter(node.textContent ?? "");
 }
 
+function wholePanel(node: Element, ingredientPanels: ReadonlySet<Element>): boolean {
+  return factsPanel(node) || ingredientPanels.has(node);
+}
+
 /** Remove a whole chrome subtree only when it contains no label paragraph; otherwise prune its unrelated children. */
-function pruneChrome(node: Element, inChrome = false): void {
-  if (factsPanel(node)) {
+function pruneChrome(
+  node: Element,
+  ingredientPanels: ReadonlySet<Element>,
+  inChrome = false,
+): void {
+  if (wholePanel(node, ingredientPanels)) {
     return;
   }
   const chrome = inChrome || chromeContainer(node);
@@ -73,13 +82,17 @@ function pruneChrome(node: Element, inChrome = false): void {
     return;
   }
   for (const child of [...node.childNodes]) {
-    pruneChromeChild(child, chrome);
+    pruneChromeChild(child, chrome, ingredientPanels);
   }
 }
 
-function pruneChromeChild(child: ChildNode, chrome: boolean): void {
+function pruneChromeChild(
+  child: ChildNode,
+  chrome: boolean,
+  ingredientPanels: ReadonlySet<Element>,
+): void {
   if (child.nodeType === 1) {
-    pruneChrome(child as Element, chrome);
+    pruneChrome(child as Element, ingredientPanels, chrome);
   } else if (chrome && child.nodeType === 3 && !labelMatter(child.textContent ?? "")) {
     child.parentNode?.removeChild(child);
   }
@@ -95,17 +108,15 @@ function withoutChromeLines(text: string): string {
 }
 
 /** A single named ingredient panel has a DOM boundary even when the page has no Facts table. */
-function ingredientPanel(root: Element): Element | null {
+function ingredientPanel(root: Element, preservedPanels: ReadonlySet<Element>): Element | null {
   const panels = [...root.querySelectorAll("h2, h3, h4, summary")]
     .map(ingredientHeadingPanel)
-    .filter((panel): panel is Element => panel !== null);
+    .filter((panel): panel is Element => panel !== null && !preservedPanels.has(panel));
   return panels.length === 1 ? (panels[0] ?? null) : null;
 }
 
 function ingredientHeadingPanel(heading: Element): Element | null {
-  if (
-    !/^(?:(?:plant[- ]based|other)\s+)?ingredients\s*:?$/i.test(heading.textContent?.trim() ?? "")
-  ) {
+  if (!INGREDIENT_HEADING.test(heading.textContent?.trim() ?? "")) {
     return null;
   }
   return boundedIngredientParent(heading);
@@ -127,17 +138,20 @@ function boundedIngredientParent(heading: Element): Element | null {
   return body.matches("section, article, div, ul, p") && body.textContent?.trim() ? parent : null;
 }
 
-function labelPageText(html: string): string {
+function labelPageText(html: string, preserveIngredientPanels = false): string {
   // The channel plan supplies an HTML fragment; wrapping it gives linkedom a stable body for DOM pruning.
   const { document } = parseHTML(`<!doctype html><html><body>${html}</body></html>`);
+  const ingredientPanels = preserveIngredientPanels
+    ? ingredientChromePanels(document.body)
+    : new Set<Element>();
   for (const child of [...document.body.children]) {
-    pruneChrome(child);
+    pruneChrome(child, ingredientPanels);
   }
   const full = withoutChromeLines(pageText(document.body.innerHTML, { rowCells: true }));
   if (labelRange(full)) {
     return full;
   }
-  const panel = ingredientPanel(document.body);
+  const panel = ingredientPanel(document.body, ingredientPanels);
   return panel ? withoutChromeLines(pageText(panel.innerHTML, { rowCells: true })) : full;
 }
 
@@ -148,10 +162,18 @@ function labelPageText(html: string): string {
  * A page without a Facts panel keeps its whole text unless a single ingredient section has an explicit DOM boundary.
  */
 export function extractDtcLabelCore(html: string): string {
+  return extractDtcLabelCoreWithPanels(html, true);
+}
+
+function extractDtcLabelCoreV2(html: string): string {
+  return extractDtcLabelCoreWithPanels(html, false);
+}
+
+function extractDtcLabelCoreWithPanels(html: string, preserveIngredientPanels: boolean): string {
   if (Buffer.byteLength(html) > MAX_BYTES) {
     throw labelCoreFailure("LABEL_CORE.SOURCE_LIMIT");
   }
-  return boundedCore(labelPageText(html));
+  return boundedCore(labelPageText(html, preserveIngredientPanels));
 }
 
 function extractDtcLabelCoreV1(html: string): string {
@@ -177,8 +199,15 @@ export const dtcLabelCore: LabelCoreReader = {
   extract: extractDtcLabelCoreV1,
 };
 
-/** Current DTC reader for pages the shared product pipeline produced. */
+/** Historical /2 reader is retained for verification of already published documents. */
 export const dtcLabelCoreV2: LabelCoreReader = {
+  sourceModule: "channel.product-input",
+  sourceVersion: "channel-plan/1",
+  extract: extractDtcLabelCoreV2,
+};
+
+/** Current DTC reader for pages the shared product pipeline produced. */
+export const dtcLabelCoreV3: LabelCoreReader = {
   sourceModule: "channel.product-input",
   sourceVersion: "channel-plan/1",
   extract: extractDtcLabelCore,

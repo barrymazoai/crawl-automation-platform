@@ -5,6 +5,14 @@
  */
 const MAX_CRUMBS = 20;
 
+const BREADCRUMB_TYPE = /^(?:https?:\/\/schema\.org\/)?BreadcrumbList\/?$/i;
+
+function breadcrumbList(type: unknown): boolean {
+  return (Array.isArray(type) ? type : [type]).some(
+    (name) => typeof name === "string" && BREADCRUMB_TYPE.test(name),
+  );
+}
+
 /** The names of a schema.org BreadcrumbList in parsed JSON-LD values, in position order. */
 export function breadcrumbNames(values: unknown[]): string[] {
   const lists: Record<string, unknown>[] = [];
@@ -20,8 +28,7 @@ export function breadcrumbNames(values: unknown[]): string[] {
       return;
     }
     const record = value as Record<string, unknown>;
-    const types = Array.isArray(record["@type"]) ? record["@type"] : [record["@type"]];
-    if (types.includes("BreadcrumbList")) {
+    if (breadcrumbList(record["@type"])) {
       lists.push(record);
       return;
     }
@@ -81,4 +88,37 @@ export function jsonLdBreadcrumbs(scripts: string[]): string[] {
     }
   });
   return breadcrumbNames(values);
+}
+
+/** Read the store's own schema.org breadcrumb from a product page (JSON-LD or microdata). */
+export function pageBreadcrumbs(document: Document): string[] {
+  const scripts = [...document.querySelectorAll('script[type="application/ld+json"]')].map(
+    (script) => script.textContent ?? "",
+  );
+  const jsonLd = jsonLdBreadcrumbs(scripts);
+  if (jsonLd.length) {
+    return jsonLd;
+  }
+  const list = [...document.querySelectorAll("[itemscope][itemtype]")].find((node) =>
+    breadcrumbList(node.getAttribute("itemtype")),
+  );
+  if (!list) {
+    return [];
+  }
+  return [...list.querySelectorAll('[itemprop="itemListElement"][itemscope]')]
+    .filter((node) => node.closest('[itemtype$="BreadcrumbList"]') === list)
+    .map((node, index) => {
+      const name = [...node.querySelectorAll('[itemprop="name"]')].find(
+        (candidate) => candidate.closest('[itemprop="itemListElement"]') === node,
+      );
+      const position = node.querySelector('[itemprop="position"]')?.getAttribute("content");
+      return {
+        name: crumb(name?.getAttribute("content") ?? name?.textContent),
+        position: position && /^\d+$/.test(position) ? Number(position) : index + 1,
+      };
+    })
+    .filter((item): item is { name: string; position: number } => item.name !== null)
+    .sort((left, right) => left.position - right.position)
+    .map((item) => item.name)
+    .slice(0, MAX_CRUMBS);
 }
