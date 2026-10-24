@@ -74,7 +74,6 @@ export class DtcCaptureAgent {
   ) {
     const { prefix, manifestKey, root } = output;
     const { url, warning } = at;
-    const { publication } = this.deps;
     const result = { ...output, captureContract: "dtc-materials/1" as const };
     try {
       await readCapturedProduct({ ...result, url });
@@ -92,7 +91,7 @@ export class DtcCaptureAgent {
       root,
       url,
     });
-    await publication.publish(
+    await this.deps.publication.publish(
       `${prefix}/handoff.json`,
       Buffer.from(
         JSON.stringify({
@@ -100,6 +99,7 @@ export class DtcCaptureAgent {
           capture: manifestKey,
           materials: output.files.find((file) => file.path === "materials.json"),
           method,
+          ...(!method ? { methodReview: "validation_record_missing_required_fields" } : {}),
           ...(warning ? { agentWarning: warning } : {}),
         }),
       ),

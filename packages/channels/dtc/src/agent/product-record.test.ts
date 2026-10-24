@@ -66,6 +66,17 @@ it("uses the harvested gallery, excluding unrelated HTML badges", async () => {
   expect(parsed.evidence.detailsHtml).toContain("Original product description");
 });
 
+it("reports a missing required record URL as coded Review", async () => {
+  await writeFile(
+    join(root, "evidence/records.json"),
+    JSON.stringify([{ ...record, productUrl: undefined }]),
+  );
+  await expect(readCapturedProduct({ root, files, url })).rejects.toMatchObject({
+    code: "DTC.CAPTURE_REVIEW",
+    details: { reason: "invalid_product_record" },
+  });
+});
+
 it.each(["missing", "wrong-product", "partial", "wrong-variant"])(
   "rejects %s evidence before downstream planning",
   async (failure) => {

@@ -6,6 +6,7 @@ import { sha256 } from "@crawl-automation/platform";
 import { captureFile } from "./archive.js";
 import { dtcAgentErrors } from "./errors.js";
 import { prepareMethodFeedback } from "./method-feedback.js";
+import { missingSiteMethodFields } from "../../../../../crawl-products/lib/site-method-record.mjs";
 
 const Receipt = z.strictObject({
   codec: z.literal("dtc-site-method/1"),
@@ -58,6 +59,10 @@ export async function retainSiteMethod(input: { profileDir: string; root: string
       details: { reason: "site_method_receipt_mismatch" },
     });
   }
+  if (!(await validMethodRecord(input.root, input.url))) {
+    // Preserve the product capture, but never promote an incomplete method to the shared profile.
+    return null;
+  }
   const prior = await savedMethod(input.profileDir, input.url);
   const samples = prior?.receipt.sha256 === digest ? prior.receipt.samples : [];
   const product = new URL(input.url);
@@ -86,6 +91,14 @@ export async function retainSiteMethod(input: { profileDir: string; root: string
   await writeFile(`${file}.tmp`, JSON.stringify(receipt));
   await rename(`${file}.tmp`, file);
   return receipt;
+}
+
+async function validMethodRecord(root: string, url: string): Promise<boolean> {
+  const records: unknown = JSON.parse(
+    (await captureFile(root, "evidence/records.json")).toString(),
+  );
+  const record = Array.isArray(records) && records.length === 1 ? records[0] : null;
+  return missingSiteMethodFields(record, url).length === 0;
 }
 
 async function savedMethod(root: string, url: string) {

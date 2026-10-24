@@ -7,6 +7,7 @@ import { runHarvest } from "./run-harvest.mjs";
 import { withNativeExtractionBoundary } from "./native-extraction-boundary.mjs";
 import { normalizePlatformVariants } from "./platform-variants.mjs";
 import { assertMaterialVariantIds } from "./material-variants.mjs";
+import { missingSiteMethodFields } from "./site-method-record.mjs";
 
 /** Stable host launcher around the original harvest. Only the learned site method varies. */
 export async function runSiteCapture(input, globals) {
@@ -32,6 +33,11 @@ export async function runSiteCapture(input, globals) {
   if (captured?.record?.sourceUrl !== productUrl || !captured.record.fields
     || !captured.materials || !Array.isArray(captured.galleryUrls) || !captured.galleryUrls.length) {
     throw new Error("site_method_product_output_invalid");
+  }
+  const missing = missingSiteMethodFields(captured.record, productUrl, captured.galleryUrls);
+  if (missing.length) {
+    // Still before runHarvest/checkpoint: the agent can repair this learned step locally.
+    throw new Error(`site_method_required_fields_missing:${missing.join(",")}`);
   }
   if (Object.keys(captured.record.fields).some(key => !["title", "brand", "currency"].includes(key))) {
     throw new Error("capture_contains_parsed_product_fields");

@@ -89,10 +89,9 @@ async function verifyArchivedCapture(input: { root: string; files: CaptureFile[]
 
 async function readRecordAndReview(input: Parameters<typeof readCapturedProduct>[0]) {
   const { root, url } = input;
-  const records = z
-    .array(RecordSchema)
-    .length(1)
-    .parse(JSON.parse((await captureFile(root, "evidence/records.json")).toString()));
+  const records = parseHarvestRecords(
+    JSON.parse((await captureFile(root, "evidence/records.json")).toString()),
+  );
   const record = records[0];
   if (!record) {
     throw dtcAgentErrors.create("DTC.CAPTURE_EVIDENCE");
@@ -111,6 +110,19 @@ async function readRecordAndReview(input: Parameters<typeof readCapturedProduct>
     throw dtcAgentErrors.create("DTC.CAPTURE_EVIDENCE");
   }
   return { record, ...materials };
+}
+
+function parseHarvestRecords(raw: unknown): HarvestRecord[] {
+  const parsed = z.array(RecordSchema).length(1).safeParse(raw);
+  if (!parsed.success) {
+    throw dtcAgentErrors.create("DTC.CAPTURE_REVIEW", {
+      details: {
+        reason: "invalid_product_record",
+        issues: parsed.error.issues.map((issue) => ({ path: issue.path, code: issue.code })),
+      },
+    });
+  }
+  return parsed.data;
 }
 
 export async function verifyMethod(

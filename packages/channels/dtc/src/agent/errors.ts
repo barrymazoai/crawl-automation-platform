@@ -1,6 +1,10 @@
 import { defineErrors } from "@crawl-automation/platform";
 
 export const dtcAgentErrors = defineErrors({
+  "DTC.PRODUCT_TITLE_MISSING": {
+    category: "SOURCE",
+    message: "The retained product page and capture record have no usable product title.",
+  },
   "DTC.PRODUCT_SCOPE_UNRESOLVED": {
     category: "SOURCE",
     message: "The retained website evidence does not establish a single-product processing scope.",

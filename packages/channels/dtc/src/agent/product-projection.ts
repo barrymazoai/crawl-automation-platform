@@ -7,6 +7,8 @@ import type { DtcSitePolicy } from "../site-policy.js";
 import type { DtcRendered } from "../evidence.js";
 import type { HarvestRecord, CaptureReview } from "./product-record.js";
 import { capturedProductBrand } from "./product-brand.js";
+import { retainedProductTitle } from "./product-title.js";
+import { dtcAgentErrors } from "./errors.js";
 
 /** Converts retained harvest evidence only; no fixed DOM/gallery selector or new website fetch. */
 interface ProjectionInput {
@@ -66,28 +68,17 @@ function productEvidence(input: ProjectionInput, observedBrand: string | null) {
   const { record, site } = input;
   const address = dtcProductAddress(input.url, [site]);
   const factsHtml = stringField(record, "supplement_facts") ?? stringField(record, "facts_table");
-  return ChannelProductEvidenceSchema.parse({
+  const title = retainedProductTitle(input);
+  const candidate = {
     codec: "channel-product/1",
     channel: "dtc",
     listingId: address.listingId,
     variantId: captureVariant(input),
     url: input.url,
-    title: stringField(record, "title"),
+    title: title.title,
     brandRaw: observedBrand,
     variantOptions: capturedVariantOptions(input),
-    variants: record.variants.map((variant) => ({
-      listingId: address.listingId,
-      variantId: variant.variantId ?? null,
-      title: variant.title ?? null,
-      url: variant.url ?? input.url,
-      sku: variant.sku,
-      options: variant.options,
-      price: variant.price,
-      currency: variant.currency,
-      availability: variant.availability,
-      available: variant.available,
-      imageUrl: variant.imageUrl,
-    })),
+    variants: capturedVariants(record, address.listingId, input.url),
     detailsHtml: input.detailsHtml ?? details(record),
     factsCandidates: factsHtml
       ? [
@@ -99,8 +90,38 @@ function productEvidence(input: ProjectionInput, observedBrand: string | null) {
         ]
       : [],
     imageCandidates: capturedImages(input),
-    warnings: record.flags,
-  });
+    warnings: title.source ? [...record.flags, title.source] : record.flags,
+  };
+  return verifiedProductEvidence(candidate);
+}
+
+function capturedVariants(record: HarvestRecord, listingId: string, url: string) {
+  return record.variants.map((variant) => ({
+    listingId,
+    variantId: variant.variantId ?? null,
+    title: variant.title ?? null,
+    url: variant.url ?? url,
+    sku: variant.sku,
+    options: variant.options,
+    price: variant.price,
+    currency: variant.currency,
+    availability: variant.availability,
+    available: variant.available,
+    imageUrl: variant.imageUrl,
+  }));
+}
+
+function verifiedProductEvidence(candidate: unknown) {
+  const result = ChannelProductEvidenceSchema.safeParse(candidate);
+  if (!result.success) {
+    throw dtcAgentErrors.create("DTC.CAPTURE_REVIEW", {
+      details: {
+        reason: "invalid_product_projection",
+        issues: result.error.issues.map((issue) => ({ path: issue.path, code: issue.code })),
+      },
+    });
+  }
+  return result.data;
 }
 
 function unassigned(input: ProjectionInput) {
