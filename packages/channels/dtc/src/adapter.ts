@@ -134,6 +134,13 @@ export const DTC_NON_SUPPLEMENT_CATEGORIES: readonly string[] = [
   "Gift Certificates",
   "Aromatherapy Inhalers",
   "Hygiene And Beauty",
+  // dherbs.com 2026-10-25 (owner: change it): shirts, hoodies and tights, aura sprays, bath drops, candles and the
+  // Club Dherbs membership reached the label stage and ended in Review (13 of the 48 after the full requeue).
+  "Activewear",
+  "Aura Sprays",
+  "Bath Drops (Essential Oil)",
+  "Candles",
+  "Club Dherbs",
 ];
 
 /** Owner 2026-10-24: dherbs.com files kits as multi-product bundles. */
