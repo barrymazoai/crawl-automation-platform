@@ -1,12 +1,15 @@
-import { mkdtemp, mkdir, readFile, realpath, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, readdir, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, expect, it } from "vitest";
+import { pathToFileURL } from "node:url";
+import { afterEach, expect, it, vi } from "vitest";
 import { RetainedPublication, sha256, type ObjectStore } from "@crawl-automation/platform";
 import type { ProductSourcePlans } from "@crawl-automation/channels-core";
+import { agentPagePreparationModule } from "../../../../platform/src/browser/ego-agent-preparation.js";
 import { dtcSitePolicy } from "../site-policy.js";
 import { DtcCaptureAgent, type AgentCaptureDependencies } from "./runner.js";
 import { DtcAgentProductCapture } from "./product-capture.js";
+import { readMovedOriginal } from "./moved-original.js";
 
 const requestedUrl = "https://www.dherbs.com/store/full-body-cleanse-p-1.html";
 const actualUrl = "https://www.dherbs.com/featured/dherbs-full-body-cleanse/";
@@ -52,6 +55,102 @@ async function outputWithMovedReceipt() {
     manifestKey: "v3/dtc-agent/test/capture.json",
   };
 }
+
+// Owner 2026-10-25: exercise the generated Ego module and host receipt reader together.
+async function navigationMovedOriginal(
+  mode: "normal" | "committed",
+  landed = { href: actualUrl, redirectCount: 1 },
+  expectMove = true,
+) {
+  const cwd = await realpath(await mkdtemp(join(tmpdir(), "dtc-navigation-moved-")));
+  roots.push(cwd);
+  const root = join(cwd, "capture");
+  await mkdir(root);
+  const modulePath = join(cwd, "browser-preparation.mjs");
+  await writeFile(
+    modulePath,
+    agentPagePreparationModule(
+      { taskSpaceId: 6, label: "product", targetId: "owned" },
+      {
+        outDir: root,
+        workDir: cwd,
+        nativeOriginalsModuleUrl: new URL(
+          "../../../../../crawl-products/lib/ego-native-originals.mjs",
+          import.meta.url,
+        ).href,
+      },
+    ),
+  );
+  const { prepareBrowserRound } = await import(pathToFileURL(modulePath).href);
+  const html = "<html><body>Navigation landed here</body></html>";
+  const page = {
+    cdp: vi.fn(async () => ({})),
+    evaluate: vi
+      .fn()
+      .mockResolvedValueOnce({ installed: true, url: requestedUrl, notification: "denied" })
+      .mockResolvedValueOnce({ ...landed, html, readyState: "complete" }),
+    goto:
+      mode === "normal"
+        ? vi.fn(async () => "navigated")
+        : vi.fn(async () => {
+            throw Object.assign(new Error("navigation committed at destination"), {
+              name: "PageNavigationTimeoutError",
+            });
+          }),
+  };
+  const { navigate } = await prepareBrowserRound({
+    taskSpace: async () => ({
+      tabs: async () => [{ label: "product", targetId: "owned", openedBy: "agent" }],
+      page: () => page,
+    }),
+    listTaskSpaces: async () => [{ id: 6, ownership: "agent" }],
+  });
+  if (expectMove) {
+    await expect(navigate(requestedUrl)).rejects.toThrow("SOURCE.PAGE_MOVED");
+  } else {
+    await expect(navigate(requestedUrl)).resolves.toBe("navigated");
+    await expect(readdir(join(cwd, "native-originals"))).rejects.toMatchObject({ code: "ENOENT" });
+    return null;
+  }
+  expect(page.goto).toHaveBeenCalledWith(requestedUrl, {
+    waitUntil: "domcontentloaded",
+    timeout: 15000,
+  });
+  const files = await readdir(join(cwd, "native-originals"));
+  const evidenceFiles = await Promise.all(
+    files.map(async (name: string) => {
+      const path = `native-originals/${name}`;
+      const bytes = await readFile(join(cwd, path));
+      return {
+        path: `../${path}`,
+        objectKey: `test/${path}`,
+        sha256: sha256(bytes),
+        byteSize: bytes.length,
+        mediaType: name.endsWith(".html") ? "text/html" : "application/json",
+      };
+    }),
+  );
+  return readMovedOriginal({ root, evidenceFiles, requestedUrl });
+}
+
+it.each(["normal", "committed"] as const)(
+  "accepts a %s navigation-written moved receipt through the host reader",
+  async (mode) => {
+    expect(await navigationMovedOriginal(mode)).toMatchObject({
+      status: "moved",
+      requestedUrl,
+      actualUrl,
+      html: Buffer.from("<html><body>Navigation landed here</body></html>"),
+    });
+  },
+);
+
+it.each([
+  { name: "zero redirect count", href: actualUrl, redirectCount: 0 },
+  { name: "different origin", href: "https://other.example/featured/one", redirectCount: 1 },
+])("does not retain a moved receipt for $name", async ({ href, redirectCount }) => {
+  expect(await navigationMovedOriginal("normal", { href, redirectCount }, false)).toBeNull();
+});
 
 it("uses the retained moved receipt even when the model gives a different reason", async () => {
   const agent = new DtcCaptureAgent({} as AgentCaptureDependencies);

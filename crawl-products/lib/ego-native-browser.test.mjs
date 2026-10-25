@@ -77,7 +77,7 @@ describe("native Ego harvest adapter", () => {
       const requested = "https://shop.example/store/one.html";
       const { page, task } = fixture();
       page.url = vi.fn(async () => actual);
-      page.evaluate.mockResolvedValueOnce(true).mockResolvedValue("<html><body>moved product</body></html>");
+      page.evaluate.mockResolvedValueOnce(1).mockResolvedValue("<html><body>moved product</body></html>");
       const browser = createEgoBrowser({ task, page, workDir,
         listTaskSpaces: async () => [{ id: 6, ownership: "agent" }] });
       await expect(browser.harvestHooks.fetchPageSource(requested)).rejects.toThrow("SOURCE.PAGE_MOVED");

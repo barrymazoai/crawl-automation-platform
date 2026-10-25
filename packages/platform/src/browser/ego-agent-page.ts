@@ -28,7 +28,9 @@ export class EgoAgentPage {
     return this.page.label;
   }
 
-  preparationModule(paths: { outDir?: string } = {}) {
+  preparationModule(
+    paths: { outDir?: string; workDir?: string; nativeOriginalsModuleUrl?: string } = {},
+  ) {
     return agentPagePreparationModule(
       { taskSpaceId: this.settings.taskSpaceId, ...this.page },
       paths,

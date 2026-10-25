@@ -26,3 +26,16 @@ export async function retainNativeOriginal(workDir, { url, kind, bytes, observat
   await writeFile(join(workDir, "native-originals", `${randomUUID()}.receipt.json`), JSON.stringify(receipt), { flag: "wx", mode: 0o400 });
   return receipt;
 }
+
+// Owner 2026-10-25: navigation and harvest use the same moved-page receipt writer.
+export function isRecordedProductMove(requestedUrl, actualUrl, redirectCount) {
+  const requested = new URL(requestedUrl), actual = new URL(actualUrl);
+  return requested.origin === actual.origin
+    && requested.pathname.replace(/\/$/, "") !== actual.pathname.replace(/\/$/, "")
+    && redirectCount > 0;
+}
+
+export function retainMovedOriginal(workDir, { requestedUrl, actualUrl, html, targetId }) {
+  return retainNativeOriginal(workDir, { url: actualUrl, kind: "html", bytes: html,
+    observation: { kind: "moved", requestedUrl, actualUrl, targetId } });
+}

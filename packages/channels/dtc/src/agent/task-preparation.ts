@@ -1,5 +1,6 @@
 import { writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 import type { EgoAgentPage } from "@crawl-automation/platform";
 import type { AgentCaptureRequest } from "./request.js";
 import { prepareSiteMethod } from "./site-method.js";
@@ -16,9 +17,15 @@ export async function prepareCaptureTask(
     taskSpaceId: number;
   },
 ) {
+  // Owner 2026-10-25: bind the task directory and shared receipt writer into every Ego round.
   await writeFile(
     join(input.cwd, "browser-preparation.mjs"),
-    input.page.preparationModule({ outDir: input.outDir }),
+    input.page.preparationModule({
+      outDir: input.outDir,
+      workDir: input.cwd,
+      nativeOriginalsModuleUrl: pathToFileURL(join(input.skillRoot, "lib/ego-native-originals.mjs"))
+        .href,
+    }),
     {
       flag: "wx",
     },
