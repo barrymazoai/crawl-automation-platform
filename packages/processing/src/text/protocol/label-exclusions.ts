@@ -8,6 +8,8 @@ import {
   specialStructuralExclusion,
 } from "./label-structural-exclusions.js";
 import { DOSE, rowExclusionAllowed } from "./label-rows.js";
+import { noFactsOutsideListExclusion } from "./no-facts-ingredient-list.js";
+import { isFieldPrefix } from "./label-exclusion-field-prefix.js";
 import { labelValidationErrors } from "../../label/validation-errors.js";
 import type { LabelTextCandidateSchema } from "@crawl-automation/v3-contracts";
 import type { z } from "zod";
@@ -63,26 +65,14 @@ function isIngredientHeadingField(exclusion: Exclusion, judged: Judged): boolean
   );
 }
 
-/** "Serving Size" or "Servings Per Container", printed right before its own field's value. */
-function isFieldPrefix(exclusion: Exclusion, judged: Judged): boolean {
-  if (exclusion.reason !== "metadata") {
-    return false;
-  }
-  const value = exclusion.quote.text.trim();
-  const formula = judged.candidate.formula;
-  const field = /^Serving Size\s*:?$/i.test(value)
-    ? formula?.servingSize
-    : /^Servings? Per Container\s*:?$/i.test(value)
-      ? formula?.servingsPerContainer
-      : null;
-  if (!field || exclusion.quote.end > field.start) {
-    return false;
-  }
-  return /^\s*:?\s*$/.test(judged.text.slice(exclusion.quote.end, field.start));
-}
-
 /** Label structure, not content: headings, standard footnotes and notes, list connectors, marker legends. */
 function structuralExclusion(exclusion: Exclusion, judged: Judged): boolean {
+  if (
+    judged.policyVersion === "label-text/6" &&
+    noFactsOutsideListExclusion(judged.candidate, judged.text, exclusion)
+  ) {
+    return true;
+  }
   if (specialStructuralExclusion(exclusion, judged.candidate, judged.text)) {
     return true;
   }

@@ -1,5 +1,5 @@
 import type { LabelTextCandidate } from "@crawl-automation/v3-contracts";
-import { completeIngredientItem, ingredientGap } from "./ingredient-boundaries.js";
+import { completeList, secondHeading, titleLine, wholeLine } from "./no-facts-list-citations.js";
 
 type Quote = { text: string; start: number; end: number };
 type Column = NonNullable<LabelTextCandidate["formula"]>["columns"][number];
@@ -8,6 +8,8 @@ const FACTS_HEADING =
   /^\s*(?:(?:Supplement|Nutrition|Drug)\s+Facts|Nutrition(?:al)?\s+(?:Info|Information)|Amount\s+Per\s+Serving(?:\s+%\s+Daily\s+Value)?)\s*:?\s*$/imu;
 const SERVING_LINE = /^\s*Servings?\s+(?:Size|Per\s+Container)\b/imu;
 const PRINTED_DOSE = /\b\d+(?:[.,]\d+)?\s*(?:mcg|µg|mg|g|kg|iu|cfu|ml)\b|\b\d+(?:[.,]\d+)?\s*%/iu;
+// Owner 2026-10-25: a cited ingredient name may print a percentage ("100% … SULFUR"); a unit amount is still a dose.
+const UNIT_DOSE = /\b\d+(?:[.,]\d+)?\s*(?:mcg|µg|mg|g|kg|iu|cfu|ml)\b/iu;
 
 /** A supplied range with no panel heading, serving line, or answered printed row dose/DV. */
 export function noFactsEvidence(
@@ -27,16 +29,29 @@ export function noFactsEvidence(
     !formula.drugFacts &&
     !formula.servingSize &&
     !formula.servingsPerContainer &&
-    !formula.columns.some((column) => column.rows.some(printedRowDose))
+    !formula.columns.some((column) =>
+      column.rows.some((row) => printedRowDose(row, candidate, { text, range })),
+    )
   );
 }
 
-function printedRowDose(row: Column["rows"][number]): boolean {
+function printedRowDose(
+  row: Column["rows"][number],
+  candidate: LabelTextCandidate,
+  source: { text: string; range: { start: number; end: number } },
+): boolean {
+  const other = candidate.otherIngredients;
+  const citedName =
+    candidate.ingredientsComplete &&
+    !!other &&
+    /^Ingredients\s*:?$/iu.test(other.heading.text.trim()) &&
+    completeList(other, source.text, source.range) &&
+    other.items.some((item) => item.start === row.name.start && item.end === row.name.end);
   return (
     row.amount !== null ||
     row.dailyValue !== null ||
     row.amountStatus === "printed" ||
-    PRINTED_DOSE.test(row.name.text)
+    (citedName ? UNIT_DOSE : PRINTED_DOSE).test(row.name.text)
   );
 }
 
@@ -49,6 +64,7 @@ export function normalizeNoFactsIngredientList(
   if (!noFactsEvidence(candidate, text, range)) {
     return;
   }
+  normalizeRepeatedHeading(candidate, text, range);
   const formula = candidate.formula;
   const column = formula?.columns.length === 1 ? formula.columns[0] : undefined;
   if (!column || !undosedRows(column)) {
@@ -60,6 +76,57 @@ export function normalizeNoFactsIngredientList(
   }
 
   reclassify(candidate, other);
+}
+
+function normalizeRepeatedHeading(
+  candidate: LabelTextCandidate,
+  text: string,
+  range: { start: number; end: number },
+): void {
+  const other = candidate.otherIngredients;
+  const first = other?.items[0];
+  if (!other || !first || !/^Ingredients\s*:?$/iu.test(other.heading.text.trim())) {
+    return;
+  }
+  const duplicate = secondHeading(other.heading, first, text);
+  if (duplicate && completeList({ ...other, heading: duplicate }, text, range)) {
+    candidate.otherIngredients = { ...other, heading: duplicate };
+  }
+}
+
+/** Page content lies wholly outside a complete cited no-Facts Ingredients list. */
+export function noFactsOutsideListExclusion(
+  candidate: LabelTextCandidate,
+  text: string,
+  exclusion: LabelTextCandidate["exclusions"][number],
+): boolean {
+  const other = eligibleOutsideList(candidate, text);
+  if (!other) {
+    return false;
+  }
+  const quote = exclusion.quote;
+  const last = other.items.at(-1);
+  return (
+    (quote.end <= other.heading.start || (!!last && quote.start >= last.end)) &&
+    text.slice(quote.start, quote.end) === quote.text &&
+    !other.items.some((item) => quote.start < item.end && quote.end > item.start)
+  );
+}
+
+function eligibleOutsideList(candidate: LabelTextCandidate, text: string): Other | null {
+  const other = candidate.otherIngredients;
+  const range = { start: 0, end: text.length };
+  if (
+    !other ||
+    candidate.formula !== null ||
+    !candidate.ingredientsComplete ||
+    !/^Ingredients\s*:?$/iu.test(other.heading.text.trim()) ||
+    !completeList(other, text, range) ||
+    !noFactsEvidence(candidate, text, range)
+  ) {
+    return null;
+  }
+  return other;
 }
 
 function undosedRows(column: Column): boolean {
@@ -148,70 +215,4 @@ export function noFactsCertifiedMarker(
 ): string | null {
   const marker = /^([*†‡])\s*certified\s+organic\.?$/iu.exec(value)?.[1];
   return marker && noFactsEvidence(candidate, text, { start: 0, end: text.length }) ? marker : null;
-}
-
-function secondHeading(heading: Quote, first: Quote, text: string): Quote | null {
-  const gap = text.slice(heading.end, first.start);
-  const match = /^\s*(Ingredients)\s*$/iu.exec(gap);
-  const label = match?.[1];
-  if (!label) {
-    return null;
-  }
-  const start = heading.end + gap.indexOf(label);
-  return { text: label, start, end: start + label.length };
-}
-
-function completeList(other: Other, text: string, range: { start: number; end: number }): boolean {
-  const { heading, items } = other;
-  const first = items[0],
-    last = items.at(-1);
-  if (!first || !last) {
-    return false;
-  }
-  if (
-    heading.start < range.start ||
-    last.end > range.end ||
-    !/^\s*:?\s*$/u.test(text.slice(heading.end, first.start))
-  ) {
-    return false;
-  }
-  if (!listItemsAreCited(items, text)) {
-    return false;
-  }
-  // The last citation must reach the end of its printed list line; no uncited trailing item can be dropped.
-  return /^\s*\.?\s*$/u.test(text.slice(last.end).split(/\r?\n/u, 1)[0] ?? "");
-}
-
-function listItemsAreCited(items: Other["items"], text: string): boolean {
-  for (const [index, item] of items.entries()) {
-    if (
-      text.slice(item.start, item.end) !== item.text ||
-      !completeIngredientItem(item.text, items.length > 1)
-    ) {
-      return false;
-    }
-    const previous = items[index - 1];
-    if (previous && !ingredientGap(text, previous, item)) {
-      return false;
-    }
-  }
-  return true;
-}
-
-function wholeLine(text: string, quote: Quote): boolean {
-  const start = text.lastIndexOf("\n", quote.start - 1) + 1;
-  const lineEnd = text.indexOf("\n", quote.end);
-  const end = lineEnd < 0 ? text.length : lineEnd;
-  return /^\s*$/u.test(text.slice(start, quote.start)) && /^\s*$/u.test(text.slice(quote.end, end));
-}
-
-function titleLine(text: string, quote: Quote): boolean {
-  const start = text.lastIndexOf("\n", quote.start - 1) + 1;
-  const lineEnd = text.indexOf("\n", quote.end);
-  const end = lineEnd < 0 ? text.length : lineEnd;
-  return (
-    /^\s*$/u.test(text.slice(start, quote.start)) &&
-    /\bFormula$/iu.test(quote.text.trim()) &&
-    /^\t\S/u.test(text.slice(quote.end, end))
-  );
 }
