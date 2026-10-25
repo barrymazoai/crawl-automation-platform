@@ -18,7 +18,7 @@ import {
 } from "./merge-state.js";
 import { reviewEntry } from "./merge-entry-review.js";
 import { checkAgainstPackaging } from "./packaging-serving-check.js";
-import { partialLabelConflicts } from "./partial-label.js";
+import { splitConflictsFor } from "./partial-label.js";
 import { selectOtherIngredients } from "./ingredient-selection.js";
 import { deferSeparateSection, joinPendingSections } from "./partial-image-selection.js";
 type Candidate = LabelEvidence["candidate"];
@@ -42,6 +42,7 @@ export function selectLabel(
   const ordered = [...provenance].sort(
     (left, right) => priority(left) - priority(right) || byText(left.id, right.id),
   );
+  state.anyFormula = provenance.some((entry) => entry.candidate.formula !== null);
   for (const entry of ordered) {
     selectEntry(state, entry, policy);
   }
@@ -49,14 +50,11 @@ export function selectLabel(
 }
 
 function selectEntry(state: MergeState, entry: LabelEvidence, policy: MergePolicy): void {
-  if (policy.split) {
-    const conflicts = partialLabelConflicts(
-      entry.candidate,
-      policy.split.complete.candidate,
-      policy.split.parts,
-    );
+  const split = policy.split;
+  if (split) {
+    const conflicts = splitConflictsFor(entry, split, state.warnings);
     conflicts.forEach((code) => state.codes.add(code));
-    const section = policy.split.sections.get(entry.id);
+    const section = split.sections.get(entry.id);
     if (section) {
       // The split path skips reviewEntry, so retain the decoder's ingredient-list correction warning.
       if (entry.kind === "text" && entry.candidate.ingredientParagraphReclassified) {
@@ -65,7 +63,7 @@ function selectEntry(state: MergeState, entry: LabelEvidence, policy: MergePolic
       selectSections(state, section, policy);
       if (!section.candidate.formula && !conflicts.length) {
         // The section kept only its intact ingredients; its incomplete formula may still be the panel's other half.
-        deferSeparateSection(state, entry, [policy.split.complete]);
+        deferSeparateSection(state, entry, [split.complete]);
       }
       return;
     }

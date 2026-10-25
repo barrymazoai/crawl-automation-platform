@@ -3,7 +3,11 @@ import type { SourceFailure } from "./ordered-model.js";
 import type { DiagnosedOrderedEvidence } from "./ordered-source-outcome.js";
 import { noSourceSummary, sourceOutcome } from "./ordered-source-outcome.js";
 
-/** A formula-only image waits for the remaining sources to supply a usable ingredient section. */
+/**
+ * A formula-only image waits for the remaining sources to supply a usable ingredient section; once no source is
+ * left untried it is a formula-only product, like an ingredients-only one (owner 2026-10-06, again 2026-10-25:
+ * ingredients, health functions and form are enough).
+ */
 export function progressCompletion(
   merged: MergedLabel | null,
   evidence: DiagnosedOrderedEvidence,
@@ -18,7 +22,7 @@ export function progressCompletion(
     ingredientsMissing,
     complete:
       !evidence.terminal &&
-      !ingredientsMissing &&
+      (!ingredientsMissing || untried === 0) &&
       merged?.status === "ready" &&
       ((merged.parts?.formulaFound ?? true) || untried === 0),
   };
@@ -32,7 +36,10 @@ function needsIngredients(merged: MergedLabel | null, formulaSourceFound: boolea
   );
 }
 
-/** Once both sections are present, their former per-image missing-section codes are resolved. */
+/**
+ * Once the label completes (both sections, or one part after every source), the per-image missing-section codes are
+ * resolved.
+ */
 export function resolvedPartialFailure(failure: SourceFailure, evidence: DiagnosedOrderedEvidence) {
   const section = evidence.sourceDiagnostics?.find(
     (item) => item.sourceId === failure.sourceId,

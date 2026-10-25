@@ -5,84 +5,21 @@ import {
   isFullIngredientsHeading,
   isOrderedEvidencePolicy,
   labelAgreementIngredients,
-  pageIngredientsIncludeActives,
-  projectLabelProductCandidate,
   type IngredientRelation,
 } from "@crawl-automation/v3-contracts";
 import { assemblyErrors } from "./assembly-errors.js";
-import { selectedFormulaNames, type LabelEvidence, type MergeState } from "./merge-state.js";
+import type { MergeState } from "./merge-state.js";
+import {
+  acceptPageWithActives,
+  pageImagePair,
+  resolvePageDifference,
+  selectPicked,
+  warnIngredients as warn,
+  type IngredientPick,
+} from "./page-ingredient-difference.js";
 
-interface Pick {
-  entry: LabelEvidence;
-  candidate: LabelEvidence["candidate"];
-  projected: ReturnType<typeof projectLabelProductCandidate>;
-  secondaryText: boolean;
-}
+type Pick = IngredientPick;
 type Compared = { shape: string[] | null; relation: IngredientRelation };
-type PageImagePair = {
-  imageItems: string[];
-  pageItems: string[];
-  pageId: string;
-  imageIsCurrent: boolean;
-};
-
-function warn(
-  state: MergeState,
-  id: string,
-  code:
-    | "LABEL_PRODUCT.INGREDIENTS_SUBSET"
-    | "LABEL_PRODUCT.INGREDIENTS_PAGE_INCLUDES_ACTIVES"
-    | "LABEL_PRODUCT.INGREDIENTS_REORDERED"
-    | "LABEL_PRODUCT.SOURCE_WORDING_DIFFERS"
-    | "LABEL_PRODUCT.SECONDARY_TEXT_INGREDIENTS_CONFLICT",
-) {
-  state.warnings.push({ id, code: assemblyErrors.code(code) });
-}
-
-function pageImagePair(
-  state: MergeState,
-  pick: Pick,
-  shape: string[] | null,
-): PageImagePair | null {
-  if (state.otherSourceId === null || state.otherShape === null || shape === null) {
-    return null;
-  }
-  const selectedKind = state.sources.get(state.otherSourceId)?.kind;
-  if (pick.entry.kind === "text" && selectedKind === "image") {
-    return {
-      imageItems: state.otherShape,
-      pageItems: shape,
-      pageId: pick.entry.id,
-      imageIsCurrent: false,
-    };
-  }
-  if (pick.entry.kind === "image" && selectedKind === "text") {
-    return {
-      imageItems: shape,
-      pageItems: state.otherShape,
-      pageId: state.otherSourceId,
-      imageIsCurrent: true,
-    };
-  }
-  return null;
-}
-
-function acceptPageWithActives(state: MergeState, pick: Pick, shape: string[] | null): boolean {
-  const pair = pageImagePair(state, pick, shape);
-  if (
-    !pair ||
-    !pageIngredientsIncludeActives(pair.imageItems, pair.pageItems, selectedFormulaNames(state))
-  ) {
-    return false;
-  }
-  warn(state, pair.pageId, "LABEL_PRODUCT.INGREDIENTS_PAGE_INCLUDES_ACTIVES");
-  if (pair.imageIsCurrent) {
-    state.otherShape = shape;
-    state.otherSourceId = pick.entry.id;
-    state.otherIngredients = pick.projected.otherIngredients;
-  }
-  return true;
-}
 
 function hasUnattributedPageExtras(state: MergeState, pick: Pick, compared: Compared): boolean {
   const pair = pageImagePair(state, pick, compared.shape);
@@ -106,9 +43,7 @@ function acceptSubset(state: MergeState, pick: Pick, compared: Compared): boolea
     warn(state, shorterId, "LABEL_PRODUCT.INGREDIENTS_SUBSET");
   }
   if (longer && !pick.secondaryText) {
-    state.otherShape = shape;
-    state.otherSourceId = pick.entry.id;
-    state.otherIngredients = pick.projected.otherIngredients;
+    selectPicked(state, pick, shape);
   }
   return true;
 }
@@ -131,11 +66,12 @@ function compareSelected(state: MergeState, pick: Pick, compared: Compared): voi
     warn(state, pick.entry.id, "LABEL_PRODUCT.SOURCE_WORDING_DIFFERS");
     return;
   }
-  // A full page Ingredients list with unexplained items remains a conflict.
+  // A page that differs yields to the printed image; images that disagree, two pages, or a page against an
+  // image confirming no other ingredients remain a conflict.
   const secondary = secondaryTextDifference(state, pick);
   if (secondary) {
     warn(state, pick.entry.id, "LABEL_PRODUCT.SECONDARY_TEXT_INGREDIENTS_CONFLICT");
-  } else {
+  } else if (!resolvePageDifference(state, pick, shape)) {
     state.codes.add(assemblyErrors.code("LABEL_PRODUCT.INGREDIENTS_CONFLICT"));
   }
 }
@@ -154,16 +90,20 @@ export function selectOtherIngredients(state: MergeState, pick: Pick): void {
     return;
   }
   const shape = labelAgreementIngredients(pick.candidate);
-  if (acceptPageWithActives(state, pick, shape)) {
-    return;
+  if (!acceptPageWithActives(state, pick, shape)) {
+    compareOtherIngredients(state, pick, shape);
   }
-  compareOtherIngredients(state, pick, shape);
+  if (pick.entry.kind === "image" && shape?.length) {
+    state.imageLists.push({ id: pick.entry.id, shape });
+  }
 }
 
 function compareOtherIngredients(state: MergeState, pick: Pick, shape: string[] | null): void {
   const relation = ingredientListRelation(state.otherShape, shape);
   if (hasUnattributedPageExtras(state, pick, { shape, relation })) {
-    state.codes.add(assemblyErrors.code("LABEL_PRODUCT.INGREDIENTS_CONFLICT"));
+    if (!resolvePageDifference(state, pick, shape)) {
+      state.codes.add(assemblyErrors.code("LABEL_PRODUCT.INGREDIENTS_CONFLICT"));
+    }
     return;
   }
   if (acceptSubset(state, pick, { shape, relation })) {
@@ -173,8 +113,6 @@ function compareOtherIngredients(state: MergeState, pick: Pick, shape: string[] 
     compareSelected(state, pick, { shape, relation });
   }
   if (state.otherShape === null && !pick.secondaryText) {
-    state.otherShape = shape;
-    state.otherSourceId = pick.entry.id;
-    state.otherIngredients = pick.projected.otherIngredients;
+    selectPicked(state, pick, shape);
   }
 }

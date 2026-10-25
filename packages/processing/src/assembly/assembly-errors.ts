@@ -28,6 +28,12 @@ export const assemblyErrors = defineErrors({
   "LABEL_PRODUCT.INGREDIENTS_PAGE_INCLUDES_ACTIVES": validation(
     "The page ingredient list includes formula rows; the image's other ingredients were selected.",
   ),
+  "LABEL_PRODUCT.INGREDIENTS_PAGE_WITHOUT_FORMULA": validation(
+    "No source gave a formula; the page's full ingredient list, which holds every image item, was selected.",
+  ),
+  "LABEL_PRODUCT.INGREDIENTS_PAGE_DIFFERS": validation(
+    "The page ingredient list differs from the label image; the image's list was kept.",
+  ),
   "LABEL_PRODUCT.INGREDIENTS_SUBSET": validation(
     "A shorter ingredient list was covered by a longer source.",
   ),

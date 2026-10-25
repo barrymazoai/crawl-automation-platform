@@ -47,6 +47,8 @@ export function beginMerge(
     pendingSections: [],
     otherShape: null,
     otherSourceId: null,
+    imageLists: [],
+    anyFormula: false,
   };
   if (!!manifest.admission !== !!rawPackaging) {
     throw assemblyFailure("LABEL_PRODUCT.PACKAGING_UNVERIFIED");

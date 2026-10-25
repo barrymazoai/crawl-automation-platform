@@ -43,7 +43,7 @@ export function orderedProgress(
     ? ranked.filter((entry) => !resolvedPartialFailure(entry.failure, evidence))
     : ranked;
   const reason = finalReason({
-    ingredientsMissing,
+    ingredientsMissing: ingredientsMissing && !complete,
     formulaSource,
     untried,
     policy: request.input.failurePolicy,
@@ -59,7 +59,7 @@ export function orderedProgress(
     conflicts: conflictDetails,
     outcomes,
     codes: merged?.codes ?? [],
-    ingredientsMissing,
+    ingredientsMissing: ingredientsMissing && !complete,
     untried,
   });
 }

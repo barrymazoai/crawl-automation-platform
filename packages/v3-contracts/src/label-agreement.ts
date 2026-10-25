@@ -451,6 +451,8 @@ const ingredientShape = (items: string[]) => items
   .map(item => ingredientWordingKey(item.replace(/\bcontains\s*:\s*.*$/iu, "")))
   .filter(Boolean);
 export const ingredientComparisonSize = (items: string[]) => new Set(ingredientShape(items)).size;
+/** The comparison keys of an ingredient list (wording, case and marks normalized). */
+export const ingredientComparisonKeys = (items: string[]) => new Set(ingredientShape(items));
 
 function conjunctionSegmentation(left: string[], right: string[]): boolean {
   if (left.length + 1 !== right.length) return false;

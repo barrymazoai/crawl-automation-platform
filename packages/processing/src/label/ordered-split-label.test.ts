@@ -287,7 +287,7 @@ it("continues from a reviewed Facts image to an Ingredients image and keeps each
   expect(test.inspection.image).not.toHaveBeenCalled();
 });
 
-it("reports the Facts source when every attempted image still lacks Other Ingredients", async () => {
+it("collects a formula-only label once every source is tried without Other Ingredients", async () => {
   const facts = reviewedFactsPanel();
   const test = await orderedFixture({
     pageHasLabelSection: false,
@@ -313,17 +313,41 @@ it("reports the Facts source when every attempted image still lacks Other Ingred
     ],
   });
   const result = await test.selection.inspect(request, AbortSignal.timeout(5_000));
-  expect(result).toMatchObject({
-    complete: false,
-    terminal: false,
-    reason: { sourceId: "source-0", code: "LABEL.INGREDIENTS_INCOMPLETE" },
-  });
-  expect(vi.mocked(test.plans.publish).mock.lastCall?.[1]).toMatchObject({
-    codes: expect.arrayContaining(["LABEL.INGREDIENTS_INCOMPLETE"]),
+  // Owner 2026-10-06, again 2026-10-25: a formula-only label is a product, like an ingredients-only one.
+  expect(result).toMatchObject({ complete: true, terminal: false });
+  const report = vi.mocked(test.plans.publish).mock.lastCall?.[1] as { codes: string[] };
+  expect(report).toMatchObject({
     sourceDiagnostics: expect.arrayContaining([
       expect.objectContaining({ sourceId: "source-0", reason: "partial: formula only" }),
     ]),
   });
+  expect(report.codes).not.toContain("LABEL.INGREDIENTS_INCOMPLETE");
+});
+
+it("keeps looking for Other Ingredients while a source is untried", async () => {
+  const facts = reviewedFactsPanel();
+  const test = await orderedFixture({
+    pageHasLabelSection: false,
+    candidates: [facts, factsPanel(), factsPanel()],
+  });
+  const source = defined(test.tasks.get("source-0"));
+  const review = splitReview(source, facts);
+  vi.mocked(test.inspection.review).mockResolvedValue(review);
+  test.inspection.readReviewedImage = vi.fn(async ({ task }) => ({
+    candidate: facts,
+    record: LabelReviewedImageRecordSchema.parse({
+      codec: "vision-reviewed/1",
+      ...task,
+      review,
+      result: defined(test.entries.get("source-0")).record.result,
+    }),
+  }));
+  const request = OrderedProgressSchema.parse({
+    input: { ...test.input, evidencePolicy: "label-image-first/7" },
+    states: [{ id: "source-0", status: "review", reviewId: review.reviewId }],
+  });
+  const result = await test.selection.inspect(request, AbortSignal.timeout(5_000));
+  expect(result).toMatchObject({ complete: false, terminal: false });
 });
 
 it("also combines Ingredients first and Facts second", async () => {

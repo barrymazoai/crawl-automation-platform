@@ -4,7 +4,7 @@ import type { MergePolicy } from "./merge-policy.js";
 import { fail, type MergeState, type LabelEvidence } from "./merge-state.js";
 import { applySourceReview } from "./source-without-label.js";
 import { selectPartialImage } from "./partial-image-selection.js";
-import { partialLabelCodes, partialLabelConflicts } from "./partial-label.js";
+import { partialLabelCodes, splitConflictsFor } from "./partial-label.js";
 
 /** Apply quality and incomplete-source rules before any formula can be selected. */
 export function reviewEntry(state: MergeState, entry: LabelEvidence, policy: MergePolicy): boolean {
@@ -31,7 +31,7 @@ export function reviewEntry(state: MergeState, entry: LabelEvidence, policy: Mer
     return true;
   }
   if (assessed.status === "review") {
-    if (unusedPart(policy) && !splitConflicts(entry, policy).length) {
+    if (unusedPart(policy) && !splitConflicts(state, entry, policy).length) {
       assessed.codes.forEach((code) => state.warnings.push({ id: entry.id, code }));
     } else {
       applySourceReview(state, { id: entry.id, codes: assessed.codes }, policy.completeLabel);
@@ -44,9 +44,9 @@ export function reviewEntry(state: MergeState, entry: LabelEvidence, policy: Mer
 /** /7: beside a selected formula or ingredient list, an unused source's own problems only warn. */
 const unusedPart = (policy: MergePolicy) => policy.onePart && policy.completeLabel;
 
-function splitConflicts(entry: LabelEvidence, policy: MergePolicy): string[] {
+function splitConflicts(state: MergeState, entry: LabelEvidence, policy: MergePolicy): string[] {
   const split = policy.split;
-  return split ? partialLabelConflicts(entry.candidate, split.complete.candidate, split.parts) : [];
+  return split ? splitConflictsFor(entry, split, state.warnings) : [];
 }
 
 /** Preserve /3–/5 text fallback semantics for historical results. */

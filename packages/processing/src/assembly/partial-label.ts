@@ -1,6 +1,7 @@
 import {
   assessLabelCandidate,
   completeLabelSections,
+  labelAgreementIngredients,
   partialLabelValidationCodes,
   type LabelCandidate,
 } from "@crawl-automation/v3-contracts";
@@ -135,6 +136,64 @@ export function partialLabelConflicts(
     codes.push(assemblyErrors.code("LABEL_PRODUCT.INGREDIENTS_CONFLICT"));
   }
   return codes;
+}
+
+type Split = NonNullable<ReturnType<typeof splitLabel>>;
+
+/** The kind of source whose printed list the split selected (the formula's owner may be another source). */
+function ingredientOwnerKind(split: Split): LabelEvidence["kind"] | null {
+  const list = split.complete.candidate.otherIngredients;
+  if (!list) {
+    return null;
+  }
+  return (
+    [...split.sections.values()].find((entry) => entry.candidate.otherIngredients === list)?.kind ??
+    null
+  );
+}
+
+/** The warning a page carries when its list yields to the image's printed list; recorded once. */
+export function warnPageYields(warnings: { id: string; code: string }[], pageId: string): void {
+  const code = assemblyErrors.code("LABEL_PRODUCT.INGREDIENTS_PAGE_DIFFERS");
+  if (!warnings.some((warning) => warning.id === pageId && warning.code === code)) {
+    warnings.push({ id: pageId, code });
+  }
+}
+
+/**
+ * The split's conflicts for one source. A page whose list differs from the image's printed list is not one (owner
+ * 2026-10-25: the image wins) and carries the yield warning. An image against the page's list is left to ingredient
+ * selection only when the image's own whole section is selected there; otherwise it stays a conflict, so the page
+ * never wins silently. Two images, or an image with no printed list, stay conflicts too.
+ */
+export function splitConflictsFor(
+  entry: Pick<LabelEvidence, "id" | "kind" | "candidate">,
+  split: Split,
+  warnings?: { id: string; code: string }[],
+): string[] {
+  const conflict = assemblyErrors.code("LABEL_PRODUCT.INGREDIENTS_CONFLICT");
+  const all = partialLabelConflicts(entry.candidate, split.complete.candidate, split.parts);
+  if (!all.includes(conflict) || !pageAgainstImage(entry, split)) {
+    return all;
+  }
+  if (warnings && entry.kind === "text") {
+    warnPageYields(warnings, entry.id);
+  }
+  return all.filter((code) => code !== conflict);
+}
+
+/** A page against the image's list, or an image whose whole section ingredient selection compares with the page. */
+function pageAgainstImage(entry: Pick<LabelEvidence, "id" | "kind" | "candidate">, split: Split) {
+  const owner = ingredientOwnerKind(split);
+  if (entry.kind === "text") {
+    return (
+      owner === "image" && (labelAgreementIngredients(split.complete.candidate)?.length ?? 0) > 0
+    );
+  }
+  const section = split.sections.get(entry.id);
+  return (
+    owner === "text" && !!section && (labelAgreementIngredients(section.candidate)?.length ?? 0) > 0
+  );
 }
 
 /** Refuse ambiguous content and all errors beyond the explicitly allowed incomplete-panel codes. */

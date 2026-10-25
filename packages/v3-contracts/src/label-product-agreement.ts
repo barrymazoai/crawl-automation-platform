@@ -108,7 +108,10 @@ export function collectedSourcesAgree(record: CollectedAgreement, accepted: Sour
       pageIngredientsIncludeActives(other, sourceOther, formulaNames);
     const relation = source.candidate.otherIngredients
       ? ingredientListRelation(other, sourceOther) : "exact";
-    const unexplainedFullPage = source.kind === "text" &&
+    // Owner 2026-10-25: a page list that differs from the selected image's printed list yields to it (warned).
+    const pageYields = source.kind === "text" && !!other?.length && record.warnings.some(warning =>
+      warning.id === source.id && warning.code === "LABEL_PRODUCT.INGREDIENTS_PAGE_DIFFERS");
+    const unexplainedFullPage = !pageYields && source.kind === "text" &&
       isFullIngredientsHeading(source.candidate.otherIngredients?.heading.text) &&
       !pageHasActives && (relation === "conflict" ||
         relation === "subset" && other && sourceOther &&
@@ -116,7 +119,7 @@ export function collectedSourcesAgree(record: CollectedAgreement, accepted: Sour
     if (unexplainedFullPage) return false;
     const shorterId = relation === "subset" && other && sourceOther &&
       ingredientComparisonSize(other) < ingredientComparisonSize(sourceOther) ? otherId : source.id;
-    const ingredientWarning = pageHasActives
+    const ingredientWarning = pageYields ? true : pageHasActives
       ? record.warnings.some(warning => warning.id === source.id && warning.code ===
           "LABEL_PRODUCT.INGREDIENTS_PAGE_INCLUDES_ACTIVES")
       : relation === "subset" || relation === "reordered"

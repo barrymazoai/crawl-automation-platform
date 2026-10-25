@@ -10,6 +10,7 @@ import { servingSizeEquivalences } from "./serving-size.js";
 import { bracketedMayContainIsNotADeclarationRule } from "./bracketed-may-contain-is-not-a-declaration.js";
 import { servingsPerContainerUncertaintyIsAWarningRule } from "./servings-per-container-uncertainty-is-a-warning.js";
 import { drugFactsHeadingAbsenceIsAWarningRule } from "./drug-facts-heading-absence-is-a-warning.js";
+import { pageListWithoutFormulaRule } from "./page-list-without-formula.js";
 
 export * from "./rule.js";
 export type { LabelRow, RowSubject } from "./rows.js";
@@ -46,6 +47,8 @@ export {
   type DrugFactsHeadingAbsenceSubject,
 } from "./drug-facts-heading-absence-is-a-warning.js";
 
+export { pageListWithoutFormulaRule, type PageListSubject } from "./page-list-without-formula.js";
+
 /** Every rule in the table, by kind; the table test requires examples for each ID. */
 export const labelRuleTable = {
   rows: [parentRule, blendPercentageRule, amountEnclosedInNameRule],
@@ -56,5 +59,6 @@ export const labelRuleTable = {
   ingredientRoles: [bracketedMayContainIsNotADeclarationRule],
   servingUncertainty: [servingsPerContainerUncertaintyIsAWarningRule],
   drugFactsHeadingAbsence: [drugFactsHeadingAbsenceIsAWarningRule],
+  pageListWithoutFormula: [pageListWithoutFormulaRule],
   servingSize: servingSizeEquivalences,
 } as const;

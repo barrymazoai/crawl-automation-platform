@@ -100,19 +100,22 @@ describe("label source wording agreement", () => {
     });
   });
 
-  it("keeps a non-formula page difference in Review", async () => {
+  it("keeps the image's list when the page lists an item the image does not (owner 2026-10-25)", async () => {
     const page = cinnamonImage();
     defined(page.otherIngredients).heading = agreementField("Ingredients:");
     defined(page.otherIngredients).items = [cinnamon, "Water", "Malt Syrup"].map(agreementField);
     const setup = await mergeSetup([cinnamonImage()], page);
     setup.join.manifest.evidencePolicy = "label-image-first/7";
-    expect(merge(setup)).toMatchObject({
-      status: "review",
-      codes: ["LABEL_PRODUCT.INGREDIENTS_CONFLICT"],
+    const result = merge(setup);
+    expect(result).toMatchObject({
+      status: "ready",
+      codes: [],
+      warnings: [{ id: "a-text", code: "LABEL_PRODUCT.INGREDIENTS_PAGE_DIFFERS" }],
     });
+    expect(result.otherIngredients?.items.map((item) => item.text)).toEqual(excipients);
   });
 
-  it("keeps Cinnamon Bark Oil distinct from a Cinnamon Extract formula row", async () => {
+  it("keeps Cinnamon Bark Oil distinct from a Cinnamon Extract formula row, so the image's list wins", async () => {
     const image = agreementCandidate("Cinnamon Extract", ["Organic Glycerin", "Water"]);
     const page = agreementCandidate("Cinnamon Extract", [
       "Cinnamon Bark Oil",
@@ -122,10 +125,16 @@ describe("label source wording agreement", () => {
     defined(page.otherIngredients).heading = agreementField("Ingredients:");
     const setup = await mergeSetup([image], page);
     setup.join.manifest.evidencePolicy = "label-image-first/7";
-    expect(merge(setup)).toMatchObject({
-      status: "review",
-      codes: ["LABEL_PRODUCT.INGREDIENTS_CONFLICT"],
+    const result = merge(setup);
+    expect(result).toMatchObject({
+      status: "ready",
+      codes: [],
+      warnings: [{ id: "a-text", code: "LABEL_PRODUCT.INGREDIENTS_PAGE_DIFFERS" }],
     });
+    expect(result.otherIngredients?.items.map((item) => item.text)).toEqual([
+      "Organic Glycerin",
+      "Water",
+    ]);
   });
 
   it("accepts the same items in another order with an explicit warning", async () => {

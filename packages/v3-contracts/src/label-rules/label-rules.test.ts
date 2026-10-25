@@ -12,6 +12,7 @@ import { undosedIngredientParagraphExamples } from "./examples/undosed-ingredien
 import { bracketedMayContainExamples } from "./examples/bracketed-may-contain-is-not-a-declaration.js";
 import { servingUncertaintyExamples } from "./examples/servings-per-container-uncertainty-is-a-warning.js";
 import { drugFactsHeadingAbsenceExamples } from "./examples/drug-facts-heading-absence-is-a-warning.js";
+import { pageListWithoutFormulaExamples } from "./examples/page-list-without-formula.js";
 
 const examples: Record<
   string,
@@ -28,6 +29,7 @@ const examples: Record<
   [labelRuleTable.ingredientRoles[0].id]: bracketedMayContainExamples,
   [labelRuleTable.servingUncertainty[0].id]: servingUncertaintyExamples,
   [labelRuleTable.drugFactsHeadingAbsence[0].id]: drugFactsHeadingAbsenceExamples,
+  [labelRuleTable.pageListWithoutFormula[0].id]: pageListWithoutFormulaExamples,
 };
 const checkRules: LabelRule<unknown>[] = [
   ...labelRuleTable.rows,
@@ -40,6 +42,7 @@ const checkRules: LabelRule<unknown>[] = [
 ] as LabelRule<unknown>[];
 const warningRules: LabelRule<unknown>[] = [
   ...labelRuleTable.drugFactsHeadingAbsence,
+  ...labelRuleTable.pageListWithoutFormula,
 ] as LabelRule<unknown>[];
 const allRules = [...checkRules, ...warningRules];
 

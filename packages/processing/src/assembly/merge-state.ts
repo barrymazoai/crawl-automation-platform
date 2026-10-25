@@ -65,6 +65,10 @@ export interface MergeState {
   pendingSections: LabelEvidence[];
   otherShape: string[] | null;
   otherSourceId: string | null;
+  /** Every image ingredient list compared so far: a page never lets one image replace another that disagrees. */
+  imageLists: { id: string; shape: string[] }[];
+  /** Whether any source carries a formula, known before selection starts. */
+  anyFormula: boolean;
 }
 
 export const words = (text: string) => text.replace(/\s+/gu, " ").trim();

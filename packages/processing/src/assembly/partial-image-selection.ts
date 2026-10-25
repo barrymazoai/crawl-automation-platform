@@ -6,7 +6,7 @@ import {
 } from "@crawl-automation/v3-contracts";
 import { assemblyErrors } from "./assembly-errors.js";
 import type { MergePolicy } from "./merge-policy.js";
-import { isPartialLabel, partialLabelConflicts } from "./partial-label.js";
+import { isPartialLabel, partialLabelConflicts, splitConflictsFor } from "./partial-label.js";
 import {
   fail,
   joinVerifiedFormulaSections,
@@ -32,9 +32,9 @@ export function selectPartialImage(
     return false;
   }
   const complete = policy.split ? [policy.split.complete] : policy.complete;
-  const conflicts = complete.flatMap((full) =>
-    partialLabelConflicts(entry.candidate, full.candidate, policy.split?.parts),
-  );
+  const conflicts = policy.split
+    ? splitConflictsFor(entry, policy.split)
+    : complete.flatMap((full) => partialLabelConflicts(entry.candidate, full.candidate));
   conflicts.forEach((code) => fail(state, entry.id, code));
   if (conflicts.length) {
     return true;
