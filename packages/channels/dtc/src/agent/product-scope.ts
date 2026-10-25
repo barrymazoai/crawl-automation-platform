@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { sha256, type RetainedPublication } from "@crawl-automation/platform";
 import { nonSupplementPath, pageText } from "@crawl-automation/channels-core";
-import { DTC_BUNDLE_CATEGORIES, DTC_NON_SUPPLEMENT_CATEGORIES } from "../adapter.js";
+import { DTC_BUNDLE_CATEGORIES, DTC_OUTSIDE_SUPPLEMENT_CATEGORIES } from "../adapter.js";
 import {
   DtcGalleryRefSchema,
   DtcScopeExcludedSchema,
@@ -177,7 +177,7 @@ export async function scopedOutcome(
   if (bundle) {
     return bundle;
   }
-  if (nonSupplementPath(input.categories, DTC_NON_SUPPLEMENT_CATEGORIES)) {
+  if (nonSupplementPath(input.categories, DTC_OUTSIDE_SUPPLEMENT_CATEGORIES)) {
     return null;
   }
   return scopeProductOutcome({ scope: await review(), ...input });

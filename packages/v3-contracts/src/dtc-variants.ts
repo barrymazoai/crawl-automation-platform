@@ -14,6 +14,7 @@ export const DtcVariantHandoffSchema = z.discriminatedUnion("status", [
     status: z.literal("captured"), sourcePlan: ChannelPlanInputSchema,
     factsComplete: z.boolean(), labelText: z.string().max(200_000).nullable(),
     family: z.unknown(),
+    nonSupplement: z.array(z.string().min(1).max(200)).min(1).max(20).optional(),
   }) }),
   z.strictObject({ ...member, status: z.literal("review"),
     code: z.literal("DTC.VARIANT_EVIDENCE"), reason: z.string().min(1).max(4000) }),

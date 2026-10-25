@@ -105,9 +105,14 @@ export async function DtcVariantWorkflow(raw: unknown) {
     ...once,
   });
   try {
+    // A new variant history may turn a label Review into the store-category outcome.
+    const planned =
+      member.planned.nonSupplement && !patched("dtc-variant-not-supplement-v1")
+        ? { ...member.planned, nonSupplement: undefined }
+        : member.planned;
     return await enrichCollectedResult(
       input,
-      await collectCapturedProduct(input, pipeline, member.planned),
+      await collectCapturedProduct(input, pipeline, planned),
     );
   } catch (error) {
     if (isCancellation(error)) {

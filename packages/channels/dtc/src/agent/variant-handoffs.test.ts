@@ -1,6 +1,7 @@
 import { readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { DtcVariantHandoffSchema } from "@crawl-automation/v3-contracts";
 import { DtcAgentFileTransport } from "./file-transport.js";
 import { variantCaptureFixture } from "./variant-capture-fixture.js";
 
@@ -67,6 +68,19 @@ it("isolates mixed flavour text/images and preserves every website variant inclu
   }
   expect(test.input.record.fields).not.toHaveProperty("sku");
   expect(test.input.record.gallery).toHaveLength(2);
+});
+
+it("accepts a retained non-supplement path in a ready variant handoff", async () => {
+  const [member] = await test.publish();
+  if (!member || member.status === "review") {
+    throw new Error("fixture");
+  }
+  expect(
+    DtcVariantHandoffSchema.parse({
+      ...member,
+      planned: { ...member.planned, nonSupplement: ["Home", "Beauty", "Sample"] },
+    }),
+  ).toMatchObject({ planned: { nonSupplement: ["Home", "Beauty", "Sample"] } });
 });
 
 it("reads legacy single-brand projections while rejecting a mismatched native brand proof", async () => {

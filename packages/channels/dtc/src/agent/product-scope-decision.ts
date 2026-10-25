@@ -55,12 +55,17 @@ export function validateProductScope(raw: unknown, fields: Record<string, string
 }
 
 function normalizeQuote(text: string) {
-  return text
-    .normalize("NFKC")
-    .replace(/[\u2018-\u201B\u2032]/gu, "'")
-    .replace(/[\u201C-\u201F\u2033]/gu, '"')
-    .replace(/[\u2013\u2014]/gu, "-")
-    .replace(/[\u200B-\u200D\u2060\uFEFF]/gu, "")
-    .replace(/\s+/gu, " ")
-    .trim();
+  return (
+    text
+      .normalize("NFKC")
+      .replace(/[\u2018-\u201B\u2032]/gu, "'")
+      .replace(/[\u201C-\u201F\u2033]/gu, '"')
+      .replace(/[\u2013\u2014]/gu, "-")
+      .replace(/[\u200B-\u200D\u2060\uFEFF]/gu, "")
+      // Owner 2026-10-25: models emit stray control characters inside quotes ("UTERUS\x06 TEA", "Blood Cleanse\x02\x00").
+      // eslint-disable-next-line no-control-regex
+      .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/gu, " ")
+      .replace(/\s+/gu, " ")
+      .trim()
+  );
 }

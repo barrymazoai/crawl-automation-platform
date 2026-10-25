@@ -1,5 +1,9 @@
 import { NotSupplementSchema } from "@crawl-automation/v3-contracts";
-import { pageBreadcrumbs } from "@crawl-automation/channels-core";
+import {
+  embeddedShopifyProducts,
+  pageBreadcrumbs,
+  readShopifyData,
+} from "@crawl-automation/channels-core";
 import { parseHTML } from "linkedom";
 import { dtcProductAddress } from "../address.js";
 import { neverCollectPath } from "../adapter.js";
@@ -12,10 +16,14 @@ export function neverCollectFromHtml(input: {
   site: DtcSitePolicy;
   operationId: string;
 }) {
-  const categories = pageBreadcrumbs(parseHTML(Buffer.from(input.html).toString()).document);
+  const document = parseHTML(Buffer.from(input.html).toString()).document;
+  const categories = pageBreadcrumbs(document);
+  const storeType =
+    input.site.platform === "shopify" ? ownShopifyType(document, input.url) : undefined;
   const { listingId, variantId } = dtcProductAddress(input.url, [input.site]);
   return neverCollectOutcome({
     categories,
+    storeType,
     operationId: input.operationId,
     identity: { listingId, variantId },
   });
@@ -24,10 +32,11 @@ export function neverCollectFromHtml(input: {
 /** A retained store breadcrumb ends collection before scope, planning, OCR or label work. */
 export function neverCollectOutcome(input: {
   categories?: string[] | undefined;
+  storeType?: string | undefined;
   operationId: string;
   identity: { listingId: string; variantId: string | null };
 }) {
-  const categories = neverCollectPath(input.categories ?? []);
+  const categories = neverCollectPath(input.categories ?? [], input.storeType);
   return categories
     ? NotSupplementSchema.parse({
         status: "not-supplement",
@@ -39,4 +48,17 @@ export function neverCollectOutcome(input: {
         reviewCode: null,
       })
     : null;
+}
+
+function ownShopifyType(document: Document, url: string): string | undefined {
+  const handle = new URL(url).pathname.split("/products/")[1]?.replace(/\/$/, "");
+  const matches = embeddedShopifyProducts(document).filter((record) => record.handle === handle);
+  if (new Set(matches.map((record) => String(record.id))).size !== 1) {
+    return undefined;
+  }
+  try {
+    return readShopifyData(matches[0] ?? {}, url).storeType;
+  } catch {
+    return undefined;
+  }
 }

@@ -272,6 +272,66 @@ it("runs the existing Label and enrichment pipeline inside the variant without r
   expect(test.pipeline.captureProduct).not.toHaveBeenCalled();
 });
 
+it.each([true, false])(
+  "converts a variant label Review only with the variant store-category patch: %s",
+  async (enabled) => {
+    const test = await variantSetup();
+    const member = test.variants[0];
+    if (!member || member.status !== "ready") {
+      throw new Error("fixture");
+    }
+    member.planned.nonSupplement = ["Home", "Beauty", "Sample"];
+    env.patched.mockImplementation(
+      (marker: string) => marker !== "dtc-variant-not-supplement-v1" || enabled,
+    );
+    test.pipeline.prepareChannelProduct.mockResolvedValue({
+      status: "review",
+      operationId: member.operationId,
+      reviewId: "label-review",
+      code: "CHANNEL.LABEL_NO_SOURCE",
+      evidenceKey: "retained/review.json",
+      automaticRetry: false,
+    });
+    const input = { ...test.input, operationId: member.operationId, url: member.variant.url };
+    expect(await DtcVariantWorkflow({ input, member })).toMatchObject(
+      enabled
+        ? {
+            status: "not-supplement",
+            operationId: member.operationId,
+            variantId: "11",
+            categories: member.planned.nonSupplement,
+            reviewCode: "CHANNEL.LABEL_NO_SOURCE",
+          }
+        : { status: "review", code: "CHANNEL.LABEL_NO_SOURCE" },
+    );
+    expect(env.patched).toHaveBeenCalledWith("dtc-variant-not-supplement-v1");
+    expect(env.execute).not.toHaveBeenCalled();
+  },
+);
+
+it("collects a broad-category variant when its label succeeds", async () => {
+  const test = await variantSetup();
+  const member = test.variants[0];
+  if (!member || member.status !== "ready") {
+    throw new Error("fixture");
+  }
+  member.planned.nonSupplement = ["Home", "Beauty", "Sample"];
+  env.start.mockResolvedValue({
+    signal: vi.fn(),
+    result: async () => ({
+      status: "collected",
+      operationId: "label-variant",
+      observation: member.planned.sourcePlan.owner,
+    }),
+  });
+  env.execute.mockResolvedValue({ status: "registered" });
+  const input = { ...test.input, operationId: member.operationId, url: member.variant.url };
+  expect(await DtcVariantWorkflow({ input, member })).toMatchObject({
+    status: "collected",
+    enrichment: { status: "registered" },
+  });
+});
+
 it("sends a DTC browser capture through planning and the normal Label workflow", async () => {
   const test = await setup();
   expect(await ProductPipelineWorkflow(test.input)).toEqual({ status: "collected" });

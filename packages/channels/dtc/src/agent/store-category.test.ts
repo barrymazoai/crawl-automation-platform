@@ -25,18 +25,18 @@ const expected = [
   ["detox-formula-p-646", "model-scope"],
   ["female-breast-formula-p-30", "model-scope"],
   ["female-health-tea-p-242", "not-collected"],
-  ["full-body-cleanse-companion-ebook-p-227", "skip-scope-for-label"],
+  ["full-body-cleanse-companion-ebook-p-227", "not-collected"],
   ["garcinia-cambogia-p-254", "model-scope"],
-  ["gift-certificate-50-p-602", "skip-scope-for-label"],
+  ["gift-certificate-50-p-602", "not-collected"],
   ["joint-aid-tea-p-280", "not-collected"],
   ["male-hormonal-formula-p-46", "model-scope"],
   ["nervecalming-tea-p-237", "not-collected"],
   ["nerves-cleanse-regimen-p-486", "bundle"],
-  ["passion-inhaler-p-124", "skip-scope-for-label"],
+  ["passion-inhaler-p-124", "not-collected"],
   ["sea-moss-combo-p-835", "model-scope"],
   ["soothing-tea-p-449", "not-collected"],
   ["the-i-can-home-challenge-p-736", "bundle"],
-  ["weight-release-inhaler-p-268", "skip-scope-for-label"],
+  ["weight-release-inhaler-p-268", "not-collected"],
 ] as const;
 
 it.each(expected)("%s: retained breadcrumb routes to %s", async (name, route) => {
@@ -74,6 +74,52 @@ it.each(expected)("%s: retained breadcrumb routes to %s", async (name, route) =>
     expect(outcome).toBeNull();
   }
   expect(review).toHaveBeenCalledTimes(route === "model-scope" ? 1 : 0);
+});
+
+it.each([
+  ["Bath Drops (Essential Oil)", "not-supplement"],
+  ["Beauty", null],
+])("ends %s at capture only when its category is clear", (category, status) => {
+  const html = `<script type="application/ld+json">${JSON.stringify({
+    "@type": "BreadcrumbList",
+    itemListElement: ["Home", category, "Sample"].map((name, index) => ({
+      position: index + 1,
+      name,
+    })),
+  })}</script>`;
+  expect(
+    neverCollectFromHtml({
+      html: Buffer.from(html),
+      url: "https://www.dherbs.com/store/sample-p-1.html",
+      site,
+      operationId: "sample",
+    })?.status ?? null,
+  ).toBe(status);
+});
+
+it("uses the own Shopify product type before projection without treating tags as store type", () => {
+  const shopifySite = dtcSitePolicy({
+    siteKey: "shop.example",
+    platform: "shopify",
+    catalogUrl: "https://shop.example/collections/all",
+  });
+  const record = {
+    id: 123,
+    handle: "sample",
+    title: "Sample",
+    variants: [{ id: 456 }],
+    product_type: "Aroma Spray",
+    tags: ["Beauty"],
+  };
+  const html = `<script type="application/json">${JSON.stringify(record)}</script>`;
+  expect(
+    neverCollectFromHtml({
+      html: Buffer.from(html),
+      url: "https://shop.example/products/sample",
+      site: shopifySite,
+      operationId: "shopify-sample",
+    }),
+  ).toMatchObject({ status: "not-supplement", categories: ["Aroma Spray"] });
 });
 
 it("uses Shopify product type but ignores a free-form Teas tag", () => {

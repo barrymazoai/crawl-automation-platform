@@ -71,32 +71,22 @@ function parsedProduct(
   };
 }
 
-/** Owner 2026-10-24: store-filed teas are outside the supplement collection, before scope or label review. */
-export const DTC_NEVER_COLLECT_CATEGORIES: readonly string[] = ["Teas"];
-
-/** Match only a store breadcrumb or the platform product type; free-form tags stay out of this rule. */
-export function neverCollectPath(breadcrumb: string[], storeType?: string): string[] | null {
-  return (
-    (nonSupplementPath(breadcrumb.slice(0, -1), DTC_NEVER_COLLECT_CATEGORIES)
-      ? breadcrumb
-      : null) ?? nonSupplementPath(storeType ? [storeType] : [], DTC_NEVER_COLLECT_CATEGORIES)
-  );
-}
-
 /**
- * Owner 2026-10-20: store filings outside supplements on DTC sites (Shopify product type and tags, JSON-LD
- * breadcrumbs). A product under one whose label step would go to Review ends as "not a supplement": the 69
- * `CHANNEL.LABEL_NO_SOURCE` attempts since 2026-10-05 were essential oils, gift cards and the like. Exact names,
- * case-insensitive; pet supplements are deliberately not listed.
+ * Store filings outside supplements, exact names, case-insensitive; pet supplements are deliberately not listed.
+ * Owner 2026-10-20: the names came from store product types, tags and breadcrumbs (69 `CHANNEL.LABEL_NO_SOURCE`
+ * attempts since 2026-10-05 were essential oils, gift cards and the like). Owner 2026-10-24: teas. Owner 2026-10-25:
+ * a store breadcrumb or product type naming one of these ends the product at capture; a free-form tag naming one
+ * still only turns a label Review into "not a supplement" (DTC_OUTSIDE_SUPPLEMENT_CATEGORIES below).
  */
-export const DTC_NON_SUPPLEMENT_CATEGORIES: readonly string[] = [
+export const DTC_NEVER_COLLECT_CATEGORIES: readonly string[] = [
+  "Teas",
+  // Owner 2026-10-25: clear non-supplement categories end at capture; the three broad categories below wait for label Review.
   "Gift Card",
   "Gift Cards",
   "Apparel",
   "Clothing",
   "Merchandise",
   "Merch",
-  "Accessories",
   "Essential Oil",
   "Essential Oils",
   "Aromatherapy",
@@ -112,7 +102,6 @@ export const DTC_NON_SUPPLEMENT_CATEGORIES: readonly string[] = [
   "Skincare",
   "Hair Care",
   "Body Care",
-  "Beauty",
   "Cosmetics",
   "Books",
   "Equipment",
@@ -133,7 +122,6 @@ export const DTC_NON_SUPPLEMENT_CATEGORIES: readonly string[] = [
   "Ebooks",
   "Gift Certificates",
   "Aromatherapy Inhalers",
-  "Hygiene And Beauty",
   // dherbs.com 2026-10-25 (owner: change it): shirts, hoodies and tights, aura sprays, bath drops, candles and the
   // Club Dherbs membership reached the label stage and ended in Review (13 of the 48 after the full requeue).
   "Activewear",
@@ -141,6 +129,28 @@ export const DTC_NON_SUPPLEMENT_CATEGORIES: readonly string[] = [
   "Bath Drops (Essential Oil)",
   "Candles",
   "Club Dherbs",
+];
+
+/** Match only a store breadcrumb or the platform product type; free-form tags stay out of this rule. */
+export function neverCollectPath(breadcrumb: string[], storeType?: string): string[] | null {
+  return (
+    (nonSupplementPath(breadcrumb.slice(0, -1), DTC_NEVER_COLLECT_CATEGORIES)
+      ? breadcrumb
+      : null) ?? nonSupplementPath(storeType ? [storeType] : [], DTC_NEVER_COLLECT_CATEGORIES)
+  );
+}
+
+/** Broad store categories end only when their label step returns Review. */
+export const DTC_NON_SUPPLEMENT_CATEGORIES: readonly string[] = [
+  "Beauty",
+  "Hygiene And Beauty",
+  "Accessories",
+];
+
+/** Every outside-supplement name, for the label-Review rule (tags included) and skipping the scope model. */
+export const DTC_OUTSIDE_SUPPLEMENT_CATEGORIES: readonly string[] = [
+  ...DTC_NEVER_COLLECT_CATEGORIES,
+  ...DTC_NON_SUPPLEMENT_CATEGORIES,
 ];
 
 /** Owner 2026-10-24: dherbs.com files kits as multi-product bundles. */
@@ -185,7 +195,7 @@ export function createDtcAdapter(
     externalId: (parsed) => parsed.identity.listingId,
     // Step 2 (owner 2026-10-21): one variant per URL, as Swanson; a captured page's other variants join the queue.
     discoversVariants: true,
-    nonSupplementCategories: DTC_NON_SUPPLEMENT_CATEGORIES,
+    nonSupplementCategories: DTC_OUTSIDE_SUPPLEMENT_CATEGORIES,
     planning: dtcPlanning(scope),
   };
 }

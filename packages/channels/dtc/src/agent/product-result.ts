@@ -8,7 +8,7 @@ import type { DtcVariantHandoff } from "@crawl-automation/v3-contracts";
 import type { capturedProductProjection } from "./product-projection.js";
 import { variantPages } from "./variant-pages.js";
 import { nonSupplementPath } from "@crawl-automation/channels-core";
-import { DTC_NON_SUPPLEMENT_CATEGORIES } from "../adapter.js";
+import { DTC_OUTSIDE_SUPPLEMENT_CATEGORIES } from "../adapter.js";
 
 export function nativeCaptureResult(
   input: Parameters<typeof captureResult>[0] & {
@@ -38,7 +38,7 @@ function captureResult(input: {
   original: ArchivedHtml;
 }): Extract<BrowserCaptureResult, { status: "captured" }> {
   const { request, parsed, sourcePlan, original } = input;
-  const nonSupplement = nonSupplementPath(parsed.categories, DTC_NON_SUPPLEMENT_CATEGORIES);
+  const nonSupplement = nonSupplementPath(parsed.categories, DTC_OUTSIDE_SUPPLEMENT_CATEGORIES);
   const page = {
     channel: "dtc" as const,
     url: request.url,
