@@ -74,8 +74,14 @@ it("retains an evidence-backed semantic bundle decision and never repeats the mo
     expect.arrayContaining([result.evidence.objectKey]),
   );
   expect(context.model.mock.calls[0]?.[0]).toMatchObject({
-    prompt: expect.stringContaining("not by URL/title keywords"),
+    prompt: expect.stringContaining(
+      "An offer whose page names two or more separate formulas or products",
+    ),
   });
+  const inputKey = [...context.data.keys()].find((key) => key.endsWith("/input.json"));
+  expect(JSON.parse(Buffer.from(context.data.get(inputKey ?? "") ?? []).toString()).policy).toBe(
+    "dtc-product-scope/2",
+  );
 });
 
 it("retains a single-product Travel Pack with two servings options despite its name", async () => {
@@ -103,21 +109,53 @@ it("normalizes an original ArtifactRef to its immutable byte reference", async (
   );
 });
 
-it("preserves the answer and blocks a second provider call after invalid citations", async () => {
-  const context = fixture({
+it("saves the raw answer before citation validation and blocks a second provider call", async () => {
+  const invalidAnswer = {
     ...bundle,
     evidence: [{ field: "description", quote: "invented bundle" }],
-  });
-  await expect(context.review.review(context.input, signal)).rejects.toMatchObject({
+  };
+  const context = fixture(invalidAnswer);
+  const failure: unknown = await context.review
+    .review(context.input, signal)
+    .catch((error: unknown) => error);
+  expect(failure).toMatchObject({
     code: "DTC.PRODUCT_SCOPE_UNRESOLVED",
     details: { reason: "citation_not_in_retained_field" },
   });
-  expect([...context.data.keys()].some((key) => key.endsWith("/answer.json"))).toBe(true);
+  const savedKey = [...context.data.keys()].find((key) => key.endsWith("/answer.json"));
+  expect(savedKey).toBeDefined();
+  expect(failure).toMatchObject({ details: { evidenceKeys: [savedKey] } });
+  expect(JSON.parse(Buffer.from(context.data.get(savedKey ?? "") ?? []).toString())).toEqual({
+    answer: JSON.stringify(invalidAnswer),
+  });
   await expect(context.review.review(context.input, signal)).rejects.toMatchObject({
     code: "DTC.PRODUCT_SCOPE_UNRESOLVED",
     details: { reason: "execution_unknown" },
   });
   expect(context.model).toHaveBeenCalledOnce();
+});
+
+it("matches plain whitespace and apostrophes against retained typography", () => {
+  const retained = "Formula\u00A0One\u2019s\ningredient\tlist";
+  const decision = {
+    ...single,
+    evidence: [{ field: "description", quote: "Formula One's ingredient list" }],
+  };
+  expect(validateProductScope(decision, { description: retained })).toEqual(decision);
+});
+
+it("rejects a genuinely absent quote after typography normalization", () => {
+  expect(() =>
+    validateProductScope(
+      { ...single, evidence: [{ field: "description", quote: "Missing formula" }] },
+      { description: "Formula\u00A0One\u2019s ingredients" },
+    ),
+  ).toThrow(
+    expect.objectContaining({
+      code: "DTC.PRODUCT_SCOPE_UNRESOLVED",
+      details: { reason: "citation_not_in_retained_field" },
+    }),
+  );
 });
 
 it("does not repeat an uncertain failed model operation", async () => {

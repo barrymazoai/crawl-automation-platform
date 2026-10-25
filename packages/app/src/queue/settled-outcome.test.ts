@@ -9,13 +9,16 @@ describe("settledOutcome remaining terminal and malformed cases", () => {
       listingId: "offer",
       variantId: null,
       reason: "DTC.MULTI_PRODUCT_BUNDLE",
-      policy: "dtc-product-scope/1",
+      policy: "dtc-product-scope/2",
       evidence: { objectKey: "scope/result.json", sha256: "a".repeat(64), byteSize: 120 },
     };
     expect(settledOutcome({ status: "COMPLETED", result })).toEqual({
       state: "completed",
       reason: "DTC.MULTI_PRODUCT_BUNDLE",
     });
+    expect(
+      settledOutcome({ status: "COMPLETED", result: { ...result, policy: "dtc-product-scope/1" } }),
+    ).toEqual({ state: "completed", reason: "DTC.MULTI_PRODUCT_BUNDLE" });
     expect(settledOutcome({ status: "COMPLETED", result: { ...result, evidence: null } })).toEqual({
       state: "review",
       reason: "QUEUE.OUTCOME_UNRECOGNIZED",

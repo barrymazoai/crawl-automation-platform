@@ -9,7 +9,7 @@ export const DtcScopeExcludedSchema = z.strictObject({
   listingId: z.string().min(1),
   variantId: z.string().nullable(),
   reason: z.literal("DTC.MULTI_PRODUCT_BUNDLE"),
-  policy: z.enum(["dtc-product-scope/1", "store-category/1"]),
+  policy: z.enum(["dtc-product-scope/1", "dtc-product-scope/2", "store-category/1"]),
   evidence: DtcGalleryRefSchema,
   categories: z.array(z.string().min(1).max(200)).min(1).max(20).optional(),
 });
