@@ -25,6 +25,7 @@ export async function collectInBrowser(
 ): Promise<unknown> {
   const captured = await captureInBrowser(input);
   if (captured.status !== "captured") {
+    await queueMovedFromBrowser(input, pipeline, captured);
     return captured;
   }
   await queueDiscoveredFromBrowser(input, pipeline, captured);
@@ -40,6 +41,22 @@ export async function collectInBrowser(
     return collectCapturedProduct(input, pipeline, captured.planned);
   }
   return collectFamilyProduct(input, pipeline, captured);
+}
+
+/** Owner 2026-10-25: old histories replay without the moved-address queue command. */
+async function queueMovedFromBrowser(
+  input: ProductPipelineInput,
+  pipeline: PipelineActivities,
+  captured: Exclude<Awaited<ReturnType<typeof captureInBrowser>>, { status: "captured" }>,
+): Promise<void> {
+  if (
+    input.channel === "dtc" &&
+    captured.status === "listing" &&
+    captured.movedTo &&
+    patched("dtc-moved-address-v1")
+  ) {
+    await queueDiscovered(input, pipeline, [captured.movedTo]);
+  }
 }
 
 /**

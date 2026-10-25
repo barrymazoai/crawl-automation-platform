@@ -97,8 +97,10 @@ it("captures the selected rendered state without navigating back to a base URL",
   expect(source.receipt.observation.kind).toBe("rendered-dom");
   expect(source.text).toContain("Selected 22, expanded.");
   await expect(browser.harvestHooks.fetchPageHtml(base + "?variant=12")).rejects.toThrow("SOURCE.PAGE_VARIANT");
+  await expect(browser.harvestHooks.fetchPageHtml("https://other.test/products/zinc")).rejects.toThrow("SOURCE.PAGE_IDENTITY");
+  // No recorded redirect: another path on the same site is still not this page.
   await expect(browser.harvestHooks.fetchPageHtml(base + "-foreign")).rejects.toThrow("SOURCE.PAGE_IDENTITY");
-  expect(page.evaluate).toHaveBeenCalledTimes(1);
+  expect(page.evaluate).toHaveBeenCalledTimes(2);
 });
 
 it.each(["foreign-product", "http-error", "non-json"])("retains a %s response before refusing platform mapping", async kind => {

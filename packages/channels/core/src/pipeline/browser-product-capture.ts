@@ -29,7 +29,14 @@ export type BrowserCaptureResult =
       /** What the page showed, for the metrics history (recorded by the pipeline, not passed to the workflow). */
       page: CapturedPage;
     }
-  | { status: "sighted"; listingId: string; variantId: string | null; sighting: ListingSighting }
+  | {
+      status: "sighted";
+      listingId: string;
+      variantId: string | null;
+      sighting: ListingSighting;
+      /** DTC agent route only: a same-site product address reached after a redirect. */
+      movedTo?: { url: string; listingId: string; variantId: null };
+    }
   | DtcScopeExcluded
   | NotSupplement;
 

@@ -1,4 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
+import { mkdtemp, readFile, readdir, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { createEgoBrowser } from "./ego-native-browser.mjs";
 import { normalizeHarvestPlan } from "./harvest-plan.mjs";
 
@@ -59,5 +62,33 @@ describe("native Ego harvest adapter", () => {
     task.tabs.mockResolvedValue([{ targetId: "user", openedBy: "unknown" }]);
     await expect(browser.tab.playwright.evaluate(() => 1)).rejects.toThrow("SOURCE.TARGET_MISSING");
     expect(page.evaluate).not.toHaveBeenCalled();
+  });
+  it("keeps a different path without a recorded redirect as a page identity error", async () => {
+    const { page, task } = fixture();
+    page.url = vi.fn(async () => "https://shop.example/collections/all");
+    page.evaluate.mockResolvedValue(false);
+    const browser = createEgoBrowser({ task, page, listTaskSpaces: async () => [{ id: 6, ownership: "agent" }] });
+    await expect(browser.harvestHooks.fetchPageSource("https://shop.example/store/one.html")).rejects.toThrow("SOURCE.PAGE_IDENTITY");
+  });
+  it("retains the rendered landing DOM before reporting a same-origin moved path", async () => {
+    const workDir = await mkdtemp(join(tmpdir(), "dtc-moved-"));
+    try {
+      const actual = "https://shop.example/featured/one/";
+      const requested = "https://shop.example/store/one.html";
+      const { page, task } = fixture();
+      page.url = vi.fn(async () => actual);
+      page.evaluate.mockResolvedValueOnce(true).mockResolvedValue("<html><body>moved product</body></html>");
+      const browser = createEgoBrowser({ task, page, workDir,
+        listTaskSpaces: async () => [{ id: 6, ownership: "agent" }] });
+      await expect(browser.harvestHooks.fetchPageSource(requested)).rejects.toThrow("SOURCE.PAGE_MOVED");
+      const receipts = (await readdir(join(workDir, "native-originals"))).filter(name => name.endsWith(".receipt.json"));
+      expect(receipts).toHaveLength(1);
+      const receipt = JSON.parse(await readFile(join(workDir, "native-originals", receipts[0]), "utf8"));
+      expect(receipt).toMatchObject({ kind: "html", url: actual,
+        observation: { kind: "moved", requestedUrl: requested, actualUrl: actual, targetId: "owned" } });
+      expect(await readFile(join(workDir, receipt.path), "utf8")).toBe("<html><body>moved product</body></html>");
+    } finally {
+      await rm(workDir, { recursive: true, force: true });
+    }
   });
 });

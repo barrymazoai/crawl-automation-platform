@@ -26,6 +26,8 @@ export interface SightedProduct {
   listingId: string;
   variantId: string | null;
   causeCode: string;
+  /** DTC browser capture may name the new address reached by a moved product. */
+  movedTo?: { url: string; listingId: string; variantId: null };
 }
 
 type Sighted = {
@@ -33,6 +35,7 @@ type Sighted = {
   listingId: string;
   variantId: string | null;
   sighting: ListingSighting;
+  movedTo?: { url: string; listingId: string; variantId: null };
 };
 
 /**
@@ -69,7 +72,7 @@ export class PipelineCapture<
     if (!isSighted(captured)) {
       return this.withRecords(request, captured as Exclude<Captured, Sighted>);
     }
-    const { sighting, listingId, variantId } = captured;
+    const { sighting, listingId, variantId, movedTo } = captured;
     const observation = await this.deps.listings.record({
       channel: request.channel,
       listingId,
@@ -98,6 +101,7 @@ export class PipelineCapture<
       listingId,
       variantId,
       causeCode: sighting.causeCode,
+      ...(movedTo ? { movedTo } : {}),
     };
   }
 

@@ -33,6 +33,45 @@ const sighted = (sighting: ListingSighting): ProductCaptureResult => ({
 });
 
 describe("PipelineCapture", () => {
+  it("carries a DTC moved address through the recorded listing result", async () => {
+    const movedTo = {
+      url: "https://www.dherbs.com/featured/full-body-cleanse",
+      listingId: "new",
+      variantId: null,
+    };
+    const listings = {
+      record: vi.fn(async () => ({ observationId: "b".repeat(64) }) as ListingObservation),
+    };
+    const pipeline = new PipelineCapture({
+      listings,
+      capture: {
+        capture: async () => ({
+          status: "sighted" as const,
+          listingId: "old",
+          variantId: null,
+          movedTo,
+          sighting: {
+            state: "unlisted" as const,
+            reason: "redirected_to_other_product" as const,
+            causeCode: "LISTING.REDIRECTED_TO_OTHER_PRODUCT",
+            httpStatus: 200,
+            observedListingId: "new",
+            finalUrl: movedTo.url,
+            archiveKey: "html/original",
+          },
+        }),
+      },
+    });
+    expect(await pipeline.capture({ ...request, channel: "dtc" }, signal())).toMatchObject({
+      status: "listing",
+      movedTo,
+    });
+    expect(listings.record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        evidence: expect.objectContaining({ finalUrl: movedTo.url, artifactKey: "html/original" }),
+      }),
+    );
+  });
   it("records each website variant under its own history and listing identity", async () => {
     const page = {
       channel: "dtc" as const,

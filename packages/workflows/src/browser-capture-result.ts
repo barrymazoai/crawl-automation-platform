@@ -20,5 +20,14 @@ export const BrowserCaptureResultSchema = z.discriminatedUnion("status", [
     variants: DtcVariantHandoffsSchema.optional(),
   }),
   AcquisitionReviewSchema,
-  ListingResultSchema,
+  // Only browser captures can carry the DTC agent's moved product address; HTTP results keep their old schema.
+  ListingResultSchema.extend({
+    movedTo: z
+      .strictObject({
+        url: z.url().max(4096),
+        listingId: z.string().min(1).max(200),
+        variantId: z.null(),
+      })
+      .optional(),
+  }),
 ]);

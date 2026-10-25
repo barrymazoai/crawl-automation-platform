@@ -5,27 +5,15 @@ import { EgoAgentPage, runCodexCapture, sha256 } from "@crawl-automation/platfor
 import type { AgentCaptureDependencies } from "./settings.js";
 export type { AgentCaptureDependencies } from "./settings.js";
 import { captureOutputFiles, retainCaptureDirectory, type CaptureFile } from "./archive.js";
+import type { AgentCaptureOutput } from "./capture-output.js";
+export type { AgentCaptureOutput } from "./capture-output.js";
 import { capturePrompt } from "./prompt.js";
 import { ResultSchema, verifyAgentResult, type AgentWarning } from "./agent-result.js";
-import { dtcAgentErrors } from "./errors.js";
 import type { AgentCaptureRequest } from "./request.js";
-import { retainSiteMethod } from "./site-method.js";
 import { prepareCaptureTask } from "./task-preparation.js";
-import { readCapturedProduct } from "./product-record.js";
+import { finishProductOutput } from "./product-output.js";
 import { promoteCatalogProfile } from "../../../../../crawl-products/lib/catalog-profile.mjs";
 import { retainCatalogScript } from "../../../../../crawl-products/lib/catalog-script-store.mjs";
-
-interface AgentCaptureOutput {
-  root: string;
-  prefix: string;
-  files: CaptureFile[];
-  evidenceFiles: CaptureFile[];
-  manifestKey: string;
-  requireDetailCoverage?: boolean;
-  captureContract?: "dtc-materials/1";
-  /** The model's own doubt; a catalog with one is never read as complete. */
-  agentWarning?: AgentWarning;
-}
 
 export class DtcCaptureAgent {
   constructor(private readonly deps: AgentCaptureDependencies) {}
@@ -72,41 +60,7 @@ export class DtcCaptureAgent {
     at: { url: string; warning: AgentWarning | null },
     signal: AbortSignal,
   ) {
-    const { prefix, manifestKey, root } = output;
-    const { url, warning } = at;
-    const result = { ...output, captureContract: "dtc-materials/1" as const };
-    try {
-      await readCapturedProduct({ ...result, url });
-    } catch (error) {
-      // The model doubted the capture and the retained materials do not verify: keep both reasons.
-      if (warning) {
-        throw dtcAgentErrors.create("DTC.CAPTURE_REVIEW", {
-          details: { result: warning, prefix, verification: String(error).slice(0, 2000) },
-        });
-      }
-      throw error;
-    }
-    const method = await retainSiteMethod({
-      profileDir: join(this.deps.settings.codex.workRoot, "site-profiles"),
-      root,
-      url,
-    });
-    await this.deps.publication.publish(
-      `${prefix}/handoff.json`,
-      Buffer.from(
-        JSON.stringify({
-          captureContract: result.captureContract,
-          capture: manifestKey,
-          materials: output.files.find((file) => file.path === "materials.json"),
-          method,
-          ...(!method ? { methodReview: "validation_record_missing_required_fields" } : {}),
-          ...(warning ? { agentWarning: warning } : {}),
-        }),
-      ),
-      "application/json",
-      signal,
-    );
-    return result;
+    return finishProductOutput({ deps: this.deps, output, at, signal });
   }
 
   private async prepare(request: AgentCaptureRequest) {

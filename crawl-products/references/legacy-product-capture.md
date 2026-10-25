@@ -72,6 +72,7 @@ undefined或错对象字段，再开始保存与收割；不新增逐商品证�
 若有宿主写入的 `method-feedback.json`，先读取它：其中反馈严格绑定站点 origin 和当前方法 SHA，来自已确认缺陷及留存证据。只修反馈指出的失效步骤，继续复用其它动作；缓存样本表示采集原件已存档，不保证下游正确。不要修改反馈文件、复制其中的旧商品值、为每个商品再写证明或加入采后复核。修正后的实际方法按原流程留存，新版本不会自动继承旧 SHA 的缺陷。
 
 实际展开相关折叠、嵌套FAQ和懒加载，再保存当前完整页面与商品区域。`browser.harvestHooks.fetchPageSource` 不导航；不同状态另存。需要的平台响应仅通过明确观察过的 `fetchProductSource` 取得。切换过规格时，收割前恢复初始选中状态；单规格或页面没有规格控件时从未切换，跳过恢复，不能因找不到控件而失败。
+`SOURCE.PAGE_MOVED` 表示网站把该商品移到新地址；不要修方法或重试，立即返回 needs_review，reasonCode 为 `SOURCE.PAGE_MOVED`。
 
 先 `node --check site-method.mjs`，再用 Ego `nodejs -e` import 固定启动器绝对file URL。宿主保存实际执行脚本和散列；材料完整存档后保留该方法，后续同站商品复用，不手改成功计数。一个样本通过不代表全站验证。
 

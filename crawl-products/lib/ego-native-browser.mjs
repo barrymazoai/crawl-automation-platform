@@ -65,6 +65,17 @@ export function createEgoBrowser({ task, page, targetId = page.targetId, listTas
   const hooks = {
     fetchPageSource: async url => {
       const actual = await tab.url();
+      const current = new URL(actual), requested = new URL(url);
+      if (current.origin === requested.origin && current.pathname.replace(/\/$/, "") !== requested.pathname.replace(/\/$/, "")
+        && await tab.playwright.evaluate(() => (performance.getEntriesByType("navigation")[0]?.redirectCount ?? 0) > 0) === true) {
+        // Owner 2026-10-25: the site redirected this address (dherbs /store/… 302 → /featured/…); retain the landed
+        // page before reporting the move. Without a recorded redirect a different path stays SOURCE.PAGE_IDENTITY.
+        const html = await tab.playwright.evaluate(() => document.documentElement.outerHTML);
+        if (await tab.url() !== actual) throw new Error("SOURCE.PAGE_STATE_CHANGED");
+        await retainNativeOriginal(workDir, { url: actual, kind: "html", bytes: html,
+          observation: { kind: "moved", requestedUrl: url, actualUrl: actual, targetId } });
+        throw new Error("SOURCE.PAGE_MOVED");
+      }
       assertPageState(actual, url);
       const html = await tab.playwright.evaluate(() => document.documentElement.outerHTML);
       const after = await tab.url();

@@ -1,6 +1,10 @@
 import { beforeEach, expect, it, vi } from "vitest";
 
-const env = vi.hoisted(() => ({ activities: {} as Record<string, unknown>, native: false }));
+const env = vi.hoisted(() => ({
+  activities: {} as Record<string, unknown>,
+  native: false,
+  movedPatch: true,
+}));
 
 vi.mock("@temporalio/workflow", () => {
   class ApplicationFailure extends Error {
@@ -22,12 +26,14 @@ vi.mock("@temporalio/workflow", () => {
     patched: (marker: string) =>
       marker === "capture-mode-v1"
         ? env.native
-        : ![
-            "browser-resource-routing-v1",
-            "capture-mode-v1",
-            "family-formula-outcomes-v1",
-            "product-enrichment-v1",
-          ].includes(marker),
+        : marker === "dtc-moved-address-v1"
+          ? env.movedPatch
+          : ![
+              "browser-resource-routing-v1",
+              "capture-mode-v1",
+              "family-formula-outcomes-v1",
+              "product-enrichment-v1",
+            ].includes(marker),
     sleep: async () => undefined,
     isCancellation: (error: unknown) => (error as { type?: string }).type === "CANCELLED",
     CancellationScope: { nonCancellable: (run: () => unknown) => run() },
@@ -68,6 +74,7 @@ function setup() {
     })),
   };
   const pipeline = {
+    queueDiscoveredVariants: vi.fn(async () => undefined),
     findKnownFormula: vi.fn(async (): Promise<unknown> => ({ operationId: "amazon-formula-1" })),
     reviewProduct: vi.fn(async () => ({ status: "review", code: "TEST.REVIEW" })),
     requestAmazonFormula: vi.fn(async (): Promise<unknown> => ({ status: "queued" })),
@@ -80,7 +87,51 @@ function setup() {
 beforeEach(() => {
   vi.clearAllMocks();
   env.native = false;
+  env.movedPatch = true;
 });
+
+it.each([true, false])(
+  "queues a DTC moved address only with the workflow patch (%s)",
+  async (enabled) => {
+    env.native = true;
+    env.movedPatch = enabled;
+    const { browser, pipeline } = setup();
+    const movedTo = {
+      url: "https://www.dherbs.com/featured/full-body-cleanse",
+      listingId: "new",
+      variantId: null,
+    };
+    const listing = {
+      status: "listing",
+      state: "unlisted",
+      reason: "redirected_to_other_product",
+      operationId: input.operationId,
+      observationId: "a".repeat(64),
+      listingId: "old",
+      variantId: null,
+      causeCode: "LISTING.REDIRECTED_TO_OTHER_PRODUCT",
+      movedTo,
+    };
+    browser.captureBrowserProduct.mockResolvedValue(listing);
+    expect(
+      await ProductPipelineWorkflow({
+        ...input,
+        channel: "dtc",
+        capture: "browser",
+        url: "https://www.dherbs.com/store/full-body-cleanse-p-1.html",
+      }),
+    ).toEqual(listing);
+    expect(pipeline.queueDiscoveredVariants).toHaveBeenCalledTimes(enabled ? 1 : 0);
+    if (enabled) {
+      expect(pipeline.queueDiscoveredVariants).toHaveBeenCalledWith(
+        expect.objectContaining({
+          channel: "dtc",
+          variants: [movedTo],
+        }),
+      );
+    }
+  },
+);
 
 it("ends a DTC multi-product exclusion before formula planning, reuse or label work", async () => {
   env.native = true;

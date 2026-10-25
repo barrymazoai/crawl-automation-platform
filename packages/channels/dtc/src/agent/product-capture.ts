@@ -1,5 +1,4 @@
 import {
-  OriginalHtmlArchive,
   type BrowserCaptureResult,
   type CaptureRequest,
   type ProductSourcePlans,
@@ -10,6 +9,8 @@ import { createDtcAdapter } from "../adapter.js";
 import { siteForUrl } from "../address.js";
 import type { DtcSitePolicy } from "../site-policy.js";
 import type { DtcCaptureAgent } from "./runner.js";
+import { movedProductSighting } from "./moved-product.js";
+import { agentHtmlArchive, saveAgentOriginal } from "./html-archive.js";
 import { readCapturedProduct } from "./product-record.js";
 import { capturedProductProjection } from "./product-projection.js";
 import { dtcAgentErrors } from "./errors.js";
@@ -35,14 +36,17 @@ export class DtcAgentProductCapture {
 
   async capture(request: CaptureRequest, signal: AbortSignal): Promise<BrowserCaptureResult> {
     const planning = { ...this.planning(request), parserVersion: "dtc-agent/1" as const };
-    const { captured, retained, original } = await this.harvest(request, signal);
+    const harvested = await this.harvest(request, signal);
+    if ("moved" in harvested) {
+      return harvested.moved;
+    }
+    const { captured, retained, original } = harvested;
     const site = siteForUrl(request.url, this.deps.sites);
     const sighting = this.sighting(request, { site, retained, original });
     if (sighting) {
       return sighting;
     }
-    await saveCapturedImages(
-      this.deps.publication,
+    await this.saveImages(
       { prefix: captured.prefix, url: request.url, images: retained.images },
       signal,
     );
@@ -140,7 +144,7 @@ export class DtcAgentProductCapture {
   }
 
   private async harvest(request: CaptureRequest, signal: AbortSignal) {
-    const archive = this.archive(request);
+    const archive = agentHtmlArchive(this.deps, request);
     await archive.beginDownload(signal);
     const captured = await this.deps.agent.capture(
       {
@@ -151,12 +155,31 @@ export class DtcAgentProductCapture {
       },
       signal,
     );
+    if (captured.moved) {
+      return {
+        moved: await movedProductSighting({
+          request,
+          archive,
+          moved: captured.moved,
+          sites: this.deps.sites,
+          routeId: this.deps.routeId,
+          egressId: this.deps.egressId,
+          signal,
+        }),
+      };
+    }
     const retained = await readCapturedProduct({
       ...captured,
       url: request.url,
       requireObservedMethod: captured.captureContract !== "dtc-materials/1",
     });
-    const original = await this.saveOriginal(archive, retained, signal);
+    const original = await saveAgentOriginal({
+      archive,
+      retained,
+      routeId: this.deps.routeId,
+      egressId: this.deps.egressId,
+      signal,
+    });
     return { captured, retained, original };
   }
 
@@ -168,36 +191,14 @@ export class DtcAgentProductCapture {
     return planning;
   }
 
-  private archive(request: CaptureRequest) {
-    const adapter = createDtcAdapter(this.deps.sites, request.sourceUrl);
-    const address = adapter.productAddress(request.url);
-    return new OriginalHtmlArchive(this.deps.publication, {
-      channel: "dtc",
-      maxBytes: adapter.httpPolicy.maxBytes,
-      capture: {
-        operationId: request.operationId,
-        sessionId: request.operationId,
-        sourceId: request.sourceId,
-        ...address,
-      },
-    });
-  }
-
-  private saveOriginal(
-    archive: OriginalHtmlArchive,
-    retained: Awaited<ReturnType<typeof readCapturedProduct>>,
+  private saveImages(
+    input: {
+      prefix: string;
+      url: string;
+      images: Parameters<typeof saveCapturedImages>[1]["images"];
+    },
     signal: AbortSignal,
   ) {
-    return archive.save(
-      retained.html,
-      {
-        mode: "browser",
-        provider: "codex-ego-native/1",
-        routeId: this.deps.routeId,
-        egressId: this.deps.egressId,
-        finalUrl: retained.record.productUrl,
-      },
-      signal,
-    );
+    return saveCapturedImages(this.deps.publication, input, signal);
   }
 }
