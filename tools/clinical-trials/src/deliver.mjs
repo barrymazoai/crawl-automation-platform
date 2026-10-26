@@ -2,12 +2,14 @@
 // run for `pnpm -F @supply-smart/product-db import:clinical-trials -- --run=<dir>` (KAN-217):
 //
 //   manifest.json  trials.jsonl  trial_company_links.jsonl  trial_product_links.jsonl
-//   trial_ingredient_links.jsonl   (KAN-214 draft; no importer yet)
+//   trial_ingredient_links.jsonl   (clinicalTrial.ingest, SUPPLYSMAR-463)
 //   review/        unmatched industry sponsors, ambiguous sponsor names, rejected weak ingredient terms
 //
 // The importer treats a run as authoritative for the trials it lists and deletes their link pairs that
-// are missing, so trials delivered last time are listed again even when nothing links to them any more:
-// that is how a wrong link that the matcher stopped making disappears from Supply Smart.
+// are missing, so every trial ever delivered with a link is listed again even when nothing links to it any
+// more: that is how a wrong link that the matcher stopped making disappears from Supply Smart. The list only
+// grows: a delivery that was never pushed (a dry run, a failed push) must not make the next one forget a
+// trial (2026-10-26: a dry run's delivery dropped 910 trials from the next, and 40 wrong links stayed).
 import { join } from 'node:path';
 import { loadIndex, readState, readStudy, writeJson, writeJsonl, writeState } from './store.mjs';
 import { matchProducts } from './match/products.mjs';
@@ -137,7 +139,7 @@ export async function deliver({ dataDir, runDir, runId, supplySmart, entities, m
   await writeJsonl(join(runDir, 'review', 'ambiguous_sponsors.jsonl'), ambiguous);
   await writeJsonl(join(runDir, 'review', 'rejected_ingredient_terms.jsonl'), rejectedTerms);
   await writeJson(join(runDir, 'manifest.json'), manifest);
-  await writeState(dataDir, { ...state, delivered_nct_ids: [...linked].sort(), last_delivery: { run_id: runId, at: new Date().toISOString(), dir: runDir } });
+  await writeState(dataDir, { ...state, delivered_nct_ids: listed, last_delivery: { run_id: runId, at: new Date().toISOString(), dir: runDir } });
   log.info(manifest.counts, 'delivery written');
   return manifest;
 }
