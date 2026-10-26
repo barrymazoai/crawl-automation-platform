@@ -38,7 +38,7 @@ const ENGLISH = new Set(englishWords);
 export function isOrdinaryTerm(term) {
   const t = normalize(term);
   const letters = t.match(/^[a-z]+/)?.[0] ?? '';
-  if (STRAIN.test(t) && !(letters.length >= 3 && ENGLISH.has(letters))) return false;
+  if (STRAIN.test(t)) return letters.length >= 3 && ENGLISH.has(letters);
   return t.split(' ').every((w) => w.length <= 1 || /^\d+$/.test(w) || ENGLISH.has(w) || ORDINARY.has(w));
 }
 /** "cla" for "conjugated linoleic acid (60%)": the initials of consecutive words of the generic name. */
