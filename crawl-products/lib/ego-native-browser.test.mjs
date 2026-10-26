@@ -8,7 +8,7 @@ import { normalizeHarvestPlan } from "./harvest-plan.mjs";
 function fixture() {
   let ownership = "agent";
   const page = { targetId: "owned", evaluate: vi.fn(async () => 200), goto: vi.fn(),
-    close: vi.fn(), cdp: vi.fn(), click: vi.fn(), events: vi.fn(async () => []) };
+    url: vi.fn(async () => "https://shop.example/products/one"), close: vi.fn(), cdp: vi.fn(), click: vi.fn(), events: vi.fn(async () => []) };
   const task = { spaceId: 6, tabs: vi.fn(async () => [{ targetId: "owned", openedBy: "agent" }]) };
   const browser = createEgoBrowser({ task, page, workDir: "/tmp/unused", listTaskSpaces: async () => [{ id: 6, ownership }],
     productUrl: "https://shop.example/products/one" });
@@ -90,5 +90,33 @@ describe("native Ego harvest adapter", () => {
     } finally {
       await rm(workDir, { recursive: true, force: true });
     }
+  });
+  it("records the move when a learned method opens the product address itself", async () => {
+    const workDir = await mkdtemp(join(tmpdir(), "dtc-moved-"));
+    try {
+      const requested = "https://shop.example/store/one.html";
+      const actual = "https://shop.example/featured/one/";
+      const { page, task } = fixture();
+      page.url = vi.fn(async () => actual);
+      page.evaluate.mockResolvedValueOnce(1).mockResolvedValue("<html><body>moved product</body></html>");
+      const browser = createEgoBrowser({ task, page, workDir, productUrl: requested,
+        listTaskSpaces: async () => [{ id: 6, ownership: "agent" }] });
+      await expect(browser.tab.goto(requested)).rejects.toThrow("SOURCE.PAGE_MOVED");
+      const receipts = (await readdir(join(workDir, "native-originals"))).filter(name => name.endsWith(".receipt.json"));
+      const receipt = JSON.parse(await readFile(join(workDir, "native-originals", receipts[0]), "utf8"));
+      expect(receipt).toMatchObject({ observation: { kind: "moved", requestedUrl: requested, actualUrl: actual } });
+    } finally {
+      await rm(workDir, { recursive: true, force: true });
+    }
+  });
+  it("leaves other addresses and unredirected product pages to the method", async () => {
+    const { page, task } = fixture();
+    const browser = createEgoBrowser({ task, page, workDir: "/tmp/unused", productUrl: "https://shop.example/store/one.html",
+      listTaskSpaces: async () => [{ id: 6, ownership: "agent" }] });
+    page.url = vi.fn(async () => "https://shop.example/featured/two/");
+    expect((await browser.tab.goto("https://shop.example/store/two.html")).status()).toBe(200);
+    page.url = vi.fn(async () => "https://shop.example/featured/one/");
+    page.evaluate.mockResolvedValueOnce(0).mockResolvedValueOnce(200);
+    expect((await browser.tab.goto("https://shop.example/store/one.html?ref=x")).status()).toBe(200);
   });
 });

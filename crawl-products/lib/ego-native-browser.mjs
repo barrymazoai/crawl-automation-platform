@@ -42,6 +42,9 @@ export function createEgoBrowser({ task, page, targetId = page.targetId, listTas
     },
     async goto(url, options = {}) {
       await call("goto", url, { waitUntil: options.waitUntil ?? "domcontentloaded", timeout: options.timeoutMs ?? 30_000 });
+      // Dherbs 2026-10-25: a learned method navigates itself and then waits for the old page's selectors, so a moved
+      // product timed out before the harvest could record the move. Opening this product's own address records it here.
+      if (productUrl && samePath(url, productUrl)) await retainIfMoved(url);
       const status = await call("evaluate", () => performance.getEntriesByType("navigation")[0]?.responseStatus ?? 0);
       return { ok: () => status >= 200 && status < 400, status: () => status };
     },
@@ -62,19 +65,22 @@ export function createEgoBrowser({ task, page, targetId = page.targetId, listTas
       readEvents: createEventReader(scoped, guard),
     } : null },
   };
+  // Owner 2026-10-25: the site redirected this address (dherbs /store/… 302 → /featured/…); retain the landed page
+  // before reporting the move. Without a recorded redirect a different path stays SOURCE.PAGE_IDENTITY.
+  const retainIfMoved = async url => {
+    const actual = await tab.url();
+    if (new URL(actual).origin !== new URL(url).origin || samePath(actual, url)
+      || !isRecordedProductMove(url, actual, await tab.playwright.evaluate(() => performance.getEntriesByType("navigation")[0]?.redirectCount ?? 0))) {
+      return actual;
+    }
+    const html = await tab.playwright.evaluate(() => document.documentElement.outerHTML);
+    if (await tab.url() !== actual) throw new Error("SOURCE.PAGE_STATE_CHANGED");
+    await retainMovedOriginal(workDir, { requestedUrl: url, actualUrl: actual, html, targetId });
+    throw new Error("SOURCE.PAGE_MOVED");
+  };
   const hooks = {
     fetchPageSource: async url => {
-      const actual = await tab.url();
-      const current = new URL(actual), requested = new URL(url);
-      if (current.origin === requested.origin && current.pathname.replace(/\/$/, "") !== requested.pathname.replace(/\/$/, "")
-        && isRecordedProductMove(url, actual, await tab.playwright.evaluate(() => performance.getEntriesByType("navigation")[0]?.redirectCount ?? 0))) {
-        // Owner 2026-10-25: the site redirected this address (dherbs /store/… 302 → /featured/…); retain the landed
-        // page before reporting the move. Without a recorded redirect a different path stays SOURCE.PAGE_IDENTITY.
-        const html = await tab.playwright.evaluate(() => document.documentElement.outerHTML);
-        if (await tab.url() !== actual) throw new Error("SOURCE.PAGE_STATE_CHANGED");
-        await retainMovedOriginal(workDir, { requestedUrl: url, actualUrl: actual, html, targetId });
-        throw new Error("SOURCE.PAGE_MOVED");
-      }
+      const actual = await retainIfMoved(url);
       assertPageState(actual, url);
       const html = await tab.playwright.evaluate(() => document.documentElement.outerHTML);
       const after = await tab.url();
@@ -113,6 +119,11 @@ export function createEgoBrowser({ task, page, targetId = page.targetId, listTas
     new: async () => { await guard(); return tab; },
     list: async () => { await guard(); return [tab]; },
   }, disconnect: async () => { await guard(); } };
+}
+
+function samePath(left, right) {
+  const a = new URL(left), b = new URL(right);
+  return a.origin === b.origin && a.pathname.replace(/\/$/, "") === b.pathname.replace(/\/$/, "");
 }
 
 function assertPageState(actual, expected) {

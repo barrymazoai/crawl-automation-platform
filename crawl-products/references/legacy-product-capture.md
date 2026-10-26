@@ -73,7 +73,7 @@ undefined或错对象字段，再开始保存与收割；不新增逐商品证�
 
 实际展开相关折叠、嵌套FAQ和懒加载，再保存当前完整页面与商品区域。`browser.harvestHooks.fetchPageSource` 不导航；不同状态另存。需要的平台响应仅通过明确观察过的 `fetchProductSource` 取得。切换过规格时，收割前恢复初始选中状态；单规格或页面没有规格控件时从未切换，跳过恢复，不能因找不到控件而失败。
 `SOURCE.PAGE_MOVED` 表示网站把该商品移到新地址；不要修方法或重试，立即返回 needs_review，reasonCode 为 `SOURCE.PAGE_MOVED`。
-商品地址发生已记录的重定向时，导航助手 `navigate` 自身会抛出 `SOURCE.PAGE_MOVED`。
+商品地址发生已记录的重定向时，导航助手 `navigate` 和站点方法里的 `tab.goto` 打开本商品地址时都会自身抛出 `SOURCE.PAGE_MOVED`。
 
 先 `node --check site-method.mjs`，再用 Ego `nodejs -e` import 固定启动器绝对file URL。宿主保存实际执行脚本和散列；材料完整存档后保留该方法，后续同站商品复用，不手改成功计数。一个样本通过不代表全站验证。
 
