@@ -85,10 +85,10 @@ node src/check-sync.mjs --data-dir ~/ingredient-intel-data --webhook-file ~/apps
 node src/add-alias.mjs --data-dir ~/ingredient-intel-data --id ING174 --alias "Nu–Mag" --reason "<what was checked>"
 ```
 
-The proposed crontab (installed only after the owner approves the first full run):
+The crontab on Server 一 (`~/apps/ingredient-intel`; installed 2026-10-26, `--push` added the same day after the owner checked the first push):
 
 ```
-0 19 * * 2,5 cd $HOME/apps/<clone>/tools/ingredient-intel && PATH=$HOME/.local/bin:/usr/bin:/bin node src/sync.mjs --data-dir $HOME/ingredient-intel-data --supply-smart-env … --trials-data-dir $HOME/clinical-trials-data --luna-model gpt-5.6-luna --luna-effort medium --webhook-file $HOME/apps/regulatory-private/feishu.webhook >> $HOME/ingredient-intel-data/logs/cron.log 2>&1
+0 19 * * 2,5 cd $HOME/apps/<clone>/tools/ingredient-intel && PATH=$HOME/.local/bin:/usr/bin:/bin node src/sync.mjs --data-dir $HOME/ingredient-intel-data --supply-smart-env … --trials-data-dir $HOME/clinical-trials-data --luna-model gpt-5.6-luna --luna-effort medium --push --webhook-file $HOME/apps/regulatory-private/feishu.webhook >> $HOME/ingredient-intel-data/logs/cron.log 2>&1
 0 12 * * * cd $HOME/apps/<clone>/tools/ingredient-intel && PATH=$HOME/.local/bin:/usr/bin:/bin node src/check-sync.mjs --data-dir $HOME/ingredient-intel-data --webhook-file $HOME/apps/regulatory-private/feishu.webhook >> $HOME/ingredient-intel-data/logs/check.log 2>&1
 ```
 
