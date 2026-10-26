@@ -19,7 +19,20 @@ const Receipt = z.strictObject({
   // These samples confirm archived captures, not downstream content correctness.
   samples: z.array(z.url()).min(1),
 });
-const key = (url: string) => sha256(Buffer.from(new URL(url).origin));
+/**
+ * Owner 2026-10-26: dherbs.com serves /store/ product pages and /featured/ kit pages in two different layouts, and one
+ * shared method was rewritten back and forth between them (Iron Formula failed on the /featured/ revision). Each
+ * first path segment there keeps its own method; every other site keeps one method per origin.
+ */
+const PATH_SCOPED_METHOD_ORIGINS = new Set(["https://www.dherbs.com"]);
+
+function key(url: string) {
+  const { origin, pathname } = new URL(url);
+  const scope = PATH_SCOPED_METHOD_ORIGINS.has(origin)
+    ? `${origin}/${pathname.split("/")[1]}`
+    : origin;
+  return sha256(Buffer.from(scope));
+}
 
 export async function prepareSiteMethod(input: {
   profileDir: string;
