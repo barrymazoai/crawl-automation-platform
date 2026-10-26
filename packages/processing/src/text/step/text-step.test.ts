@@ -51,6 +51,51 @@ describe("TextStep", () => {
     expect(review?.rawError.details).toMatchObject({ cause: "turn did not finish" });
   });
 
+  it("an answer cut off at the output limit is asked again, at most twice", async () => {
+    const cutOff =
+      "stream disconnected before completion: Incomplete response returned, reason: max_output_tokens | other";
+    const given = textFixture();
+    const answer = given.model.interpret.bind(given.model);
+    let asked = 0;
+    given.model.interpret = async (...args) => {
+      asked++;
+      if (asked < 3) {
+        throw new CodexError("TEXT.CODEX_TURN_FAILED", "unknown", cutOff);
+      }
+      return answer(...args);
+    };
+    expect(await given.step.run(given.input, signal())).toMatchObject({ status: "registered" });
+    expect(asked).toBe(3);
+
+    const again = textFixture();
+    let cut = 0;
+    again.model.interpret = async () => {
+      cut++;
+      throw new CodexError("TEXT.CODEX_TURN_FAILED", "unknown", cutOff);
+    };
+    expect(await again.step.run(again.input, signal())).toMatchObject({
+      code: "TEXT.CODEX_TURN_FAILED",
+    });
+    expect(cut).toBe(3);
+  });
+
+  it("any other failed turn is not asked again", async () => {
+    const given = textFixture();
+    let asked = 0;
+    given.model.interpret = async () => {
+      asked++;
+      throw new CodexError(
+        "TEXT.CODEX_TURN_FAILED",
+        "unknown",
+        "Selected model is at capacity. | serverOverloaded",
+      );
+    };
+    expect(await given.step.run(given.input, signal())).toMatchObject({
+      code: "TEXT.CODEX_TURN_FAILED",
+    });
+    expect(asked).toBe(1);
+  });
+
   it("an unrelated error that merely has a code is recorded as unclassified", async () => {
     const given = textFixture();
     given.model.interpret = async () => {

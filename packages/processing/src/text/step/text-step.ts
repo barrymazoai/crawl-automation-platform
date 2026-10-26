@@ -7,6 +7,7 @@ import {
   type TextOutput,
   type TextRecord,
 } from "@crawl-automation/v3-contracts";
+import { CodexError } from "@crawl-automation/platform";
 import type { ReviewReader, ReviewWriter } from "../../step/review-ledger.js";
 import { ProcessingStep, type StepAttempt, type StepFailure } from "../../step/processing-step.js";
 import type { ExecutionFact } from "../../step/step-failure.js";
@@ -32,13 +33,33 @@ export interface TextStepDeps {
   mode?: "register" | "upload-only";
 }
 
+/**
+ * Owner 2026-10-26: an answer the model cut off at its output limit returned nothing, so the step asks again, at most
+ * twice (Iron Formula: 6 of 8 identical requests cut off, the other 2 answered in ~700 tokens). Every other model
+ * failure still ends the call. No re-ask starts after 5 minutes, so the last one (timeoutMs 240 s) ends inside the
+ * 12-minute activity.
+ */
+const TRUNCATED_REASKS = 2;
+const REASK_WINDOW_MS = 5 * 60_000;
+
+function isTruncatedAnswer(error: unknown): boolean {
+  return (
+    error instanceof CodexError &&
+    error.code === "TEXT.CODEX_TURN_FAILED" &&
+    (error.detail?.includes("reason: max_output_tokens") ?? false)
+  );
+}
+
 const handoffCodes = {
   incomplete: "TEXT.HANDOFF_INCOMPLETE",
   unknown: "TEXT.HANDOFF_UNKNOWN",
   reviewUnknown: "TEXT.REVIEW_UNKNOWN",
 } as const;
 
-/** The text step: calls the model once on the task's source text and checks every quote of its answer. */
+/**
+ * The text step: calls the model on the task's source text (again only for a cut-off answer) and checks every quote
+ * of its answer.
+ */
 export class TextStep extends ProcessingStep<
   TextInput,
   TextOutput,
@@ -76,7 +97,7 @@ export class TextStep extends ProcessingStep<
       prompt,
       outputSchema: textOutputSchema(input),
     };
-    const response = await this.deps.model.interpret(request, signal);
+    const response = await this.interpret(request, signal);
     attempt.fact = "executed";
     if (Buffer.byteLength(response) > textLimits.responseBytes) {
       throw textFailure("TEXT.OUTPUT_LIMIT", "executed");
@@ -92,6 +113,20 @@ export class TextStep extends ProcessingStep<
     });
     attempt.candidate = { schema: "text-output/1", value: output };
     return output;
+  }
+
+  private async interpret(request: Parameters<TextModel["interpret"]>[0], signal: AbortSignal) {
+    const started = Date.now();
+    for (let reasked = 0; ; reasked++) {
+      try {
+        return await this.deps.model.interpret(request, signal);
+      } catch (error) {
+        const late = Date.now() - started >= REASK_WINDOW_MS;
+        if (reasked >= TRUNCATED_REASKS || late || signal.aborted || !isTruncatedAnswer(error)) {
+          throw error;
+        }
+      }
+    }
   }
 
   protected settled(input: TextInput, record: TextRecord, registered: boolean) {
