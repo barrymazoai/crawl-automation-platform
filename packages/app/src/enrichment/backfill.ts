@@ -32,6 +32,19 @@ export class EnrichmentBackfill {
     return this.repository.outdated(z.number().int().min(1).max(100).parse(limit));
   }
 
+  /** Only workflows this backfill starts: `product-enrichment-<sha256>`. */
+  workflow(workflowId: string) {
+    if (!this.starter.status) {
+      throw enrichmentErrors.create("ENRICH.SETTINGS_MISSING");
+    }
+    return this.starter.status(
+      z
+        .string()
+        .regex(/^product-enrichment-[a-f0-9]{64}$/)
+        .parse(workflowId),
+    );
+  }
+
   result(raw: EnrichmentRequest) {
     if (!this.repository.readSubject) {
       throw enrichmentErrors.create("ENRICH.SETTINGS_MISSING");

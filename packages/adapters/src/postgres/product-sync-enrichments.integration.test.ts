@@ -131,5 +131,10 @@ describe.skipIf(!connectionString)("products whose enrichment is current", () =>
         (row) => row.supplySmartProductId,
       ),
     ).toEqual([product(4)]);
+    expect(
+      (
+        await refreshedEnrichments({ query }, { productIds: [product(5), product(3)], limit: 10 })
+      ).map((row) => row.supplySmartProductId),
+    ).toEqual([product(5)]);
   });
 });

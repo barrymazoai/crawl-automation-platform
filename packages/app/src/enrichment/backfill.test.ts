@@ -69,3 +69,16 @@ it("fails closed if a selection adapter exceeds the approved count", async () =>
   });
   expect(state.starter.start).not.toHaveBeenCalled();
 });
+
+it("reads a backfill workflow's status only for its own workflow IDs", async () => {
+  const repository = { missing: vi.fn(), outdated: vi.fn() };
+  const status = vi.fn(async () => ({ status: "COMPLETED", outcome: { status: "registered" } }));
+  const service = new EnrichmentBackfill(repository, { start: vi.fn(), status });
+  const id = `product-enrichment-${"a".repeat(64)}`;
+  expect(await service.workflow(id)).toEqual({
+    status: "COMPLETED",
+    outcome: { status: "registered" },
+  });
+  expect(status).toHaveBeenCalledWith(id);
+  expect(() => service.workflow("product-run-x")).toThrow();
+});

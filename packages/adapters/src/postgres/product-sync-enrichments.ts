@@ -1,4 +1,4 @@
-import type { RefreshedEnrichment } from "@crawl-automation/app";
+import type { RefreshedEnrichment, RefreshedEnrichmentFilter } from "@crawl-automation/app";
 import type { Queryable } from "@crawl-automation/platform";
 import { SHARED_ENRICHMENT_PROTOCOL } from "@crawl-automation/v3-contracts";
 
@@ -17,7 +17,8 @@ const REFRESHED_ENRICHMENTS = `
       FROM product_sync ps
      WHERE ps.supply_smart_product_id IS NOT NULL AND ps.status IN ('verified', 'sent', 'failed')
        AND ps.collected_operation_id IS NOT NULL
-       AND ($1::uuid IS NULL OR ps.supply_smart_product_id > $1::uuid)),
+       AND ($1::uuid IS NULL OR ps.supply_smart_product_id > $1::uuid)
+       AND ($4::uuid[] IS NULL OR ps.supply_smart_product_id = ANY($4::uuid[]))),
   latest AS MATERIALIZED (
     SELECT o.product_id, o.status, o.updated_at, l.channel, l.listing_id, l.variant_id, l.enrichment_id,
            l.protocol, l.registered_at
@@ -78,12 +79,13 @@ interface Row {
 
 export async function refreshedEnrichments(
   database: Queryable,
-  filter: { after?: string; limit: number },
+  filter: RefreshedEnrichmentFilter,
 ): Promise<RefreshedEnrichment[]> {
   const rows = await database.query<Row>(REFRESHED_ENRICHMENTS, [
     filter.after ?? null,
     filter.limit,
     SHARED_ENRICHMENT_PROTOCOL,
+    filter.productIds ?? null,
   ]);
   return rows.map((row) => ({
     supplySmartProductId: row.product_id,

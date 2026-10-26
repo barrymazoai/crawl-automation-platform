@@ -44,5 +44,14 @@ export interface EnrichmentDependencies {
 
 export interface EnrichmentStarter {
   start(request: EnrichmentRequest): Promise<{ workflowId: string }>;
+  /** A started workflow's state and, once completed, its outcome (manual backfills pace themselves on it). */
+  status?(workflowId: string): Promise<EnrichmentWorkflowStatus>;
+}
+
+export interface EnrichmentWorkflowStatus {
+  /** Temporal's execution status (RUNNING, COMPLETED, FAILED, …), or NOT_FOUND. */
+  status: string;
+  /** The workflow's result when COMPLETED: registered, reused, review or pending. */
+  outcome?: unknown;
 }
 export type EnrichmentRun = (request: EnrichmentRequest) => Promise<SharedEnrichmentOutcome>;

@@ -23,6 +23,10 @@ export const enrichmentRouter = router({
   outdated: procedure
     .input(z.strictObject({ limit: z.number().int().min(1).max(100) }))
     .query(({ ctx, input }) => service(ctx.enrichment).outdated(input.limit)),
+  /** A backfill workflow's state and, once completed, its outcome. */
+  workflow: procedure
+    .input(z.strictObject({ workflowId: z.string().min(1).max(200) }))
+    .query(({ ctx, input }) => service(ctx.enrichment).workflow(input.workflowId)),
   run: procedure
     .input(EnrichmentBackfillSchema)
     .mutation(({ ctx, input }) => service(ctx.enrichment).run(input)),

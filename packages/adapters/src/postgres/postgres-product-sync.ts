@@ -9,6 +9,7 @@ import type {
   SyncOverview,
   MarketplaceChannel,
   RefreshedEnrichment,
+  RefreshedEnrichmentFilter,
   ReopenFilter,
   ReopenResult,
 } from "@crawl-automation/app";
@@ -163,7 +164,7 @@ export class PostgresProductSync implements ProductSyncLedger {
     return notSupplementsDelivered(this.database, filter);
   }
 
-  refreshedEnrichments(filter: { after?: string; limit: number }): Promise<RefreshedEnrichment[]> {
+  refreshedEnrichments(filter: RefreshedEnrichmentFilter): Promise<RefreshedEnrichment[]> {
     return refreshedEnrichments(this.database, filter);
   }
 

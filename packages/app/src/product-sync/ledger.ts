@@ -77,7 +77,7 @@ export interface ProductSyncLedger {
    * Supply Smart products, in ID order, whose every enriched listing's latest enrichment is of the current protocol,
    * with the names those enrichments send and the names earlier enrichments of the same listings sent.
    */
-  refreshedEnrichments(filter: { after?: string; limit: number }): Promise<RefreshedEnrichment[]>;
+  refreshedEnrichments(filter: RefreshedEnrichmentFilter): Promise<RefreshedEnrichment[]>;
 }
 
 export interface NotSupplementFilter {
@@ -92,6 +92,14 @@ export interface NotSupplementDelivered extends SyncKey {
   supplySmartListingId: string | null;
   /** Another row of this ledger already removed the same Supply Smart product. */
   productRemoved: boolean;
+}
+
+export interface RefreshedEnrichmentFilter {
+  /** Supply Smart product IDs strictly after this one. */
+  after?: string;
+  /** Only these Supply Smart products. */
+  productIds?: string[];
+  limit: number;
 }
 
 /** The names delivery sends from an enrichment: form (not unknown/other), health functions, main ingredients. */

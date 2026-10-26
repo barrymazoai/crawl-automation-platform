@@ -6,6 +6,8 @@ export const UpdateEnrichmentSchema = z.strictObject({
   limit: z.number().int().min(1).max(100),
   /** The previous answer's `next` (a Supply Smart product ID). */
   after: z.uuid().optional(),
+  /** Only these Supply Smart products (a backfill batch); without it, every product in ID order. */
+  productIds: z.array(z.uuid()).min(1).max(100).optional(),
   dryRun: z.boolean().default(true),
 });
 export type UpdateEnrichment = z.input<typeof UpdateEnrichmentSchema>;
@@ -114,6 +116,7 @@ export class EnrichmentUpdate {
     const input = UpdateEnrichmentSchema.parse(raw);
     const products = await this.deps.ledger.refreshedEnrichments({
       ...(input.after ? { after: input.after } : {}),
+      ...(input.productIds ? { productIds: input.productIds } : {}),
       limit: input.limit,
     });
     const changes = products.map(enrichmentChange).filter((change) => change !== null);

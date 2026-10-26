@@ -5,7 +5,11 @@ import {
   SHARED_ENRICHMENT_PROTOCOL,
   type EnrichmentRequest,
 } from "@crawl-automation/v3-contracts";
-import { WorkflowExecutionAlreadyStartedError, type Client } from "@temporalio/client";
+import {
+  WorkflowExecutionAlreadyStartedError,
+  WorkflowNotFoundError,
+  type Client,
+} from "@temporalio/client";
 
 /**
  * Manual enrichment dispatch alongside its repository. The protocol is in the ID so that a product enriched under an
@@ -40,5 +44,26 @@ export class EnrichmentWorkflowStarter implements EnrichmentStarter {
       }
     }
     return { workflowId };
+  }
+
+  async status(workflowId: string): Promise<{ status: string; outcome?: unknown }> {
+    const handle = this.client.workflow.getHandle(workflowId);
+    try {
+      const { status } = await this.client.connection.withDeadline(Date.now() + 15_000, () =>
+        handle.describe(),
+      );
+      if (status.name !== "COMPLETED") {
+        return { status: status.name };
+      }
+      const outcome: unknown = await this.client.connection.withDeadline(Date.now() + 15_000, () =>
+        handle.result(),
+      );
+      return { status: status.name, outcome };
+    } catch (error) {
+      if (error instanceof WorkflowNotFoundError) {
+        return { status: "NOT_FOUND" };
+      }
+      throw error;
+    }
   }
 }
