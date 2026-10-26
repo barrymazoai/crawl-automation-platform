@@ -49,3 +49,17 @@ curl -s -X POST http://127.0.0.1:4188/trpc/productSync.removeNotSupplements \
 ```
 
 Deploy with `--migrate` (067). Products from legacy imports (group B) and NIH products are not touched.
+
+## Run on 2026-10-26 (Supply Smart test)
+
+Deleted **2,624** products (Amazon 2,355, GNC 143, Swanson 124, Costco 2); a read-only check found none of them,
+nor any of their listings, left. 2,581 were on the audit's group-A list; the other 43 were delivered after the
+audit export and before the sync change, and passed the same checks. Kept, by distinct product: 327
+`KEEP_NOT_CRAWLER_CREATED` (legacy imports, group B), 99 `KEEP_OTHER_LISTINGS`, 2 `KEEP_HAS_FORMULA`.
+
+The run was interrupted once at 03:44 UTC when another session deployed an older commit (`17f1990`) to both
+servers; after `12649db` was deployed again it continued from the last page's `next`. No failure was reported.
+
+Deferred by the owner: most `KEEP_OTHER_LISTINGS` products are not variants but duplicate Amazon ASINs with the
+same title that Supply Smart merged into one product (e.g. Real Aloe spray B003OJ5RP2 / B003OKBZRK). Whole Foods
+listings have no store-category check, so a Whole Foods copy of a removed product stays (e.g. B00016WUEW).
