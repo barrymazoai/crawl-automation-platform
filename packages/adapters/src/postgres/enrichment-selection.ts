@@ -57,7 +57,8 @@ export async function missingEnrichment(
 /**
  * Sent marketplace products (the sync ledger) whose collection has no enrichment of the current protocol for the
  * channel delivery reads: Whole Foods carries its Amazon ASIN's collection and reads the Amazon subject. Never
- * enriched first, then /2 (no main ingredients), then the rest.
+ * enriched first, then /2 (no main ingredients), then the rest. Set-based, and each collection record is read once:
+ * a per-row lookup into the large records took 7 s on 50k sent products (2026-10-26).
  */
 export const OUTDATED_ENRICHMENT = `
   WITH sent AS (
@@ -65,17 +66,19 @@ export const OUTDATED_ENRICHMENT = `
            CASE ps.channel WHEN 'wholefoods' THEN 'amazon' ELSE ps.channel END AS channel
       FROM product_sync ps
      WHERE ps.collected_operation_id IS NOT NULL AND ps.status IN ('verified', 'sent')),
-  targets AS (
-    SELECT t.operation_id, t.channel, p.record->'observation'->>'listingId' AS listing_id,
-           p.record->'observation'->>'variantId' AS variant_id
-      FROM sent t JOIN collected_product p ON p.operation_id = t.operation_id)
+  targets AS MATERIALIZED (
+    SELECT t.operation_id, t.channel, o."listingId" AS listing_id, o."variantId" AS variant_id
+      FROM sent t JOIN collected_product p ON p.operation_id = t.operation_id
+      CROSS JOIN LATERAL jsonb_to_record(p.record->'observation') AS o("listingId" text, "variantId" text)),
+  latest AS (
+    SELECT DISTINCT ON (s.collection_operation_id, s.channel, s.listing_id, s.variant_id)
+           s.collection_operation_id, s.channel, s.listing_id, s.variant_id, e.protocol AS codec
+      FROM product_enrichment_subject s JOIN product_enrichment e USING (enrichment_id)
+     ORDER BY s.collection_operation_id, s.channel, s.listing_id, s.variant_id,
+              s.registered_at DESC, s.subject_id DESC)
   SELECT t.*, latest.codec FROM targets t
-  LEFT JOIN LATERAL (
-    SELECT e.record->>'codec' AS codec FROM product_enrichment_subject s
-      JOIN product_enrichment e USING (enrichment_id)
-     WHERE s.collection_operation_id = t.operation_id AND s.channel = t.channel
-       AND s.listing_id = t.listing_id AND s.variant_id IS NOT DISTINCT FROM t.variant_id
-     ORDER BY s.registered_at DESC, s.subject_id DESC LIMIT 1) latest ON true
+  LEFT JOIN latest ON latest.collection_operation_id = t.operation_id AND latest.channel = t.channel
+   AND latest.listing_id = t.listing_id AND latest.variant_id IS NOT DISTINCT FROM t.variant_id
   WHERE latest.codec IS DISTINCT FROM $2
   ORDER BY CASE WHEN latest.codec IS NULL THEN 0 WHEN latest.codec = 'product-enrichment/2' THEN 1 ELSE 2 END,
     t.channel, t.listing_id, t.variant_id NULLS FIRST, t.operation_id

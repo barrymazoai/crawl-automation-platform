@@ -18,7 +18,7 @@ const REOPEN_SYNC = `WITH picked AS (
              SELECT 1 FROM product_enrichment_subject s JOIN product_enrichment e USING (enrichment_id)
               WHERE s.collection_operation_id = product_sync.collected_operation_id
                 AND s.channel = CASE product_sync.channel WHEN 'wholefoods' THEN 'amazon' ELSE product_sync.channel END
-                AND e.record->>'codec' = $9 AND s.registered_at > product_sync.updated_at)))
+                AND e.protocol = $9 AND s.registered_at > product_sync.updated_at)))
          ORDER BY updated_at LIMIT $3),
        moved AS (
          UPDATE product_sync ps SET material_at = '-infinity', updated_at = clock_timestamp()

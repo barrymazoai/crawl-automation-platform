@@ -34,7 +34,7 @@ describe.skipIf(!connectionString)("product sync ledger and migrations 061, 067"
     }
     // reopen `enriched` reads the enrichment tables, which every crawler database has.
     await client.query(`
-      CREATE TABLE product_enrichment(enrichment_id text PRIMARY KEY, record jsonb);
+      CREATE TABLE product_enrichment(enrichment_id text PRIMARY KEY, protocol text);
       CREATE TABLE product_enrichment_subject(subject_id text, enrichment_id text, channel text,
         collection_operation_id text, registered_at timestamptz)`);
     const query: Queryable["query"] = async (sql, values) =>
@@ -279,8 +279,8 @@ describe.skipIf(!connectionString)("product sync ledger and migrations 061, 067"
       sent("B000000003", "amazon", "op-v3"), // enriched again, but under an older protocol
     ]);
     await client.query(`
-      INSERT INTO product_enrichment VALUES ('e-new', '{"codec":"product-enrichment/4"}'),
-        ('e-old', '{"codec":"product-enrichment/4"}'), ('e-v3', '{"codec":"product-enrichment/3"}');
+      INSERT INTO product_enrichment VALUES ('e-new', 'product-enrichment/4'),
+        ('e-old', 'product-enrichment/4'), ('e-v3', 'product-enrichment/3');
       INSERT INTO product_enrichment_subject VALUES
         ('s1', 'e-new', 'amazon', 'op-new', now() + interval '1 hour'),
         ('s2', 'e-old', 'amazon', 'op-old', now() - interval '1 hour'),
