@@ -3,6 +3,7 @@ import {
   ListSyncBrandsSchema,
   MarkPresentSchema,
   MatchBrandsSchema,
+  RemoveNotSupplementsSchema,
   ReopenSyncSchema,
 } from "@crawl-automation/app";
 import { procedure, router, type ApiContext } from "../trpc.js";
@@ -29,6 +30,15 @@ export const productSyncRouter = router({
   reopen: procedure
     .input(ReopenSyncSchema)
     .mutation(async ({ ctx, input, signal }) => (await service(ctx)).reopen(input, signal)),
+  /**
+   * Deletes Supply Smart products of listings outside supplements that the crawler created (dry run by default);
+   * a page at a time, continued with the answer's `next`.
+   */
+  removeNotSupplements: procedure
+    .input(RemoveNotSupplementsSchema)
+    .mutation(async ({ ctx, input, signal }) =>
+      (await service(ctx)).removeNotSupplements(input, signal),
+    ),
   /** Records listings already in Supply Smart so the sweep does not send them again. */
   markPresent: procedure
     .input(MarkPresentSchema)

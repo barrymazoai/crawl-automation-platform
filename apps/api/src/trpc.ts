@@ -1,5 +1,6 @@
 import type {
   BrandCompanyService,
+  NotSupplementRemoval,
   ProductSyncControl,
   BrandEnrichmentService,
   UsageService,
@@ -24,7 +25,9 @@ import { initTRPC, TRPCError } from "@trpc/server";
 
 /** Brand matching plus the database-only sync controls; sending runs in the worker's sweep. */
 export type ProductSyncApi = Pick<BrandCompanyService, "matchBrands" | "brands"> &
-  Pick<ProductSyncControl, "status" | "markPresent" | "reopen">;
+  Pick<ProductSyncControl, "status" | "markPresent" | "reopen"> & {
+    removeNotSupplements: NotSupplementRemoval["run"];
+  };
 
 export interface ApiContext {
   productSync?: ProductSyncApi | Promise<ProductSyncApi | undefined> | undefined;

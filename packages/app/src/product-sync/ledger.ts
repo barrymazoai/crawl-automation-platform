@@ -5,7 +5,8 @@ import type { ListingDateOriginalsReport, ListingDateSelection } from "./listing
  * sent again only when its payload hash changes. Rows are keyed by channel, listing and website variant ('' none).
  */
 export type MarketplaceChannel = "amazon" | "gnc" | "swanson" | "wholefoods" | "costco";
-export type SyncStatus = "present" | "waiting_company" | "sent" | "verified" | "failed";
+/** `removed`: the crawler deleted the Supply Smart product of a listing outside supplements (migration 067). */
+export type SyncStatus = "present" | "waiting_company" | "sent" | "verified" | "failed" | "removed";
 
 export interface SyncKey {
   channel: MarketplaceChannel;
@@ -65,6 +66,27 @@ export interface ProductSyncLedger {
   reopen(filter: ReopenFilter): Promise<ReopenResult>;
   /** Per channel: completed products, those whose brand has a matched company, and those still to send. */
   overview(): Promise<SyncOverview[]>;
+  /** The row's Supply Smart product was deleted: only its status changes; IDs and material time stay on record. */
+  markRemoved(key: SyncKey): Promise<void>;
+  /**
+   * Listings whose latest queue item is `PRODUCT.NOT_SUPPLEMENT` and whose Supply Smart product is on record and not
+   * yet removed, in key order.
+   */
+  notSupplementsDelivered(filter: NotSupplementFilter): Promise<NotSupplementDelivered[]>;
+}
+
+export interface NotSupplementFilter {
+  channel?: MarketplaceChannel;
+  /** Keys strictly after this one. */
+  after?: SyncKey;
+  limit: number;
+}
+
+export interface NotSupplementDelivered extends SyncKey {
+  supplySmartProductId: string;
+  supplySmartListingId: string | null;
+  /** Another row of this ledger already removed the same Supply Smart product. */
+  productRemoved: boolean;
 }
 
 export interface SyncOverview {

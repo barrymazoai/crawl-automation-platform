@@ -69,6 +69,7 @@ export * from "./supply-smart/supply-smart-brand-requests.js";
 export * from "./supply-smart/supply-smart-companies.js";
 export * from "./supply-smart/supply-smart-contacts.js";
 export * from "./supply-smart/supply-smart-listing-states.js";
+export * from "./supply-smart/supply-smart-products.js";
 export * from "./apollo/apollo-client.js";
 export * from "./postgres/postgres-brand-enrichment-runs.js";
 export * from "./postgres/postgres-brand-company.js";

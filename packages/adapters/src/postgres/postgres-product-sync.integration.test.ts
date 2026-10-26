@@ -9,14 +9,16 @@ import { PostgresProductSync } from "./postgres-product-sync.js";
 
 // Runs against CRAWL_TEST_DATABASE_URL; all DDL/data live in a rolled-back private schema.
 const connectionString = process.env["CRAWL_TEST_DATABASE_URL"];
-const migration = new URL("../../../../database/v3/061_product_sync.sql", import.meta.url);
+const migrations = ["061_product_sync.sql", "067_product_sync_removed.sql"].map(
+  (file) => new URL(`../../../../database/v3/${file}`, import.meta.url),
+);
 let client: Client;
 let ledger: PostgresProductSync;
 const asin = { channel: "amazon" as const, listingId: "B00F42FV5I", variantId: null };
 const materialAt = "2026-10-12T00:00:00.000Z";
 const variant = { channel: "swanson" as const, listingId: "solgar-omega-3", variantId: "123" };
 
-describe.skipIf(!connectionString)("product sync ledger and migration 061", () => {
+describe.skipIf(!connectionString)("product sync ledger and migrations 061, 067", () => {
   beforeEach(async () => {
     client = new Client({ connectionString });
     await client.connect();
@@ -24,10 +26,12 @@ describe.skipIf(!connectionString)("product sync ledger and migration 061", () =
     const schema = `product_sync_${randomUUID().replaceAll("-", "")}`;
     await client.query(`CREATE SCHEMA ${schema}`);
     await client.query(`SET LOCAL search_path = ${schema}`);
-    const ddl = (await readFile(migration, "utf8"))
-      .replace(/^(BEGIN|COMMIT);$/gm, "")
-      .replace(/^SET LOCAL search_path = public;$/m, "");
-    await client.query(ddl);
+    for (const migration of migrations) {
+      const ddl = (await readFile(migration, "utf8"))
+        .replace(/^(BEGIN|COMMIT);$/gm, "")
+        .replace(/^SET LOCAL search_path = public;$/m, "");
+      await client.query(ddl);
+    }
     const query: Queryable["query"] = async (sql, values) =>
       (await client.query(sql, [...(values ?? [])])).rows;
     ledger = new PostgresProductSync({ query });
@@ -97,7 +101,8 @@ describe.skipIf(!connectionString)("product sync ledger and migration 061", () =
       CREATE TABLE brand(id uuid PRIMARY KEY, name text);
       CREATE TABLE brand_source(id uuid PRIMARY KEY, brand_id uuid, channel text);
       CREATE TABLE queue_item(item_id text PRIMARY KEY, channel text, listing_id text, variant_id text,
-        source_id uuid, state text, run_id uuid, created_at timestamptz, url text, follows_item_id text);
+        source_id uuid, state text, run_id uuid, created_at timestamptz, url text, follows_item_id text,
+        reason text);
       CREATE TABLE queue_attempt(run_id uuid, item_id text, channel text, settled_at timestamptz, outcome text);
       CREATE TABLE supply_smart_brand_company(brand_id uuid PRIMARY KEY, status text);
       CREATE TABLE listing_state_observation(run_id uuid, state text);`);
@@ -134,6 +139,11 @@ describe.skipIf(!connectionString)("product sync ledger and migration 061", () =
     await product("b", sources.matched);
     await product("c", sources.waiting);
     await product("d", sources.matched, "review");
+    // Outside supplements: completed, but neither completed for the sync nor pending (2026-10-26).
+    await product("e", sources.matched);
+    await client.query(
+      `UPDATE queue_item SET reason = 'PRODUCT.NOT_SUPPLEMENT' WHERE item_id = 'e'`,
+    );
     await ledger.record([
       {
         channel: "gnc",
@@ -279,6 +289,67 @@ describe.skipIf(!connectionString)("product sync ledger and migration 061", () =
     expect(ids.get("costco-variant")).toEqual(["382521"]);
     expect(ids.get("amazon")).toEqual([asin.listingId]);
     expect(ids.get("never-synced")).toEqual(["444776"]);
+  });
+
+  it("lists delivered products outside supplements by their latest queue item, a page at a time", async () => {
+    await client.query(`
+      CREATE TABLE queue_item(item_id text PRIMARY KEY, channel text, listing_id text, variant_id text,
+        reason text, created_at timestamptz)`);
+    // whey: judged a supplement by a later capture, so not a candidate; never-sent: no Supply Smart product.
+    await client.query(`INSERT INTO queue_item VALUES
+      ('socks', 'gnc', '574389', NULL, 'PRODUCT.NOT_SUPPLEMENT', now()),
+      ('shaker-1', 'gnc', '610673', 'black', 'PRODUCT.NOT_SUPPLEMENT', now()),
+      ('shaker-2', 'gnc', '610673', 'white', 'PRODUCT.NOT_SUPPLEMENT', now()),
+      ('whey-old', 'gnc', '533916', NULL, 'PRODUCT.NOT_SUPPLEMENT', now() - interval '2 days'),
+      ('whey-new', 'gnc', '533916', NULL, NULL, now()),
+      ('never-sent', 'gnc', '604899', NULL, 'PRODUCT.NOT_SUPPLEMENT', now())`);
+    const [socks, shaker] = [randomUUID(), randomUUID()];
+    const sent = (listingId: string, variantId: string | null, product: string | null) => ({
+      channel: "gnc" as const,
+      listingId,
+      variantId,
+      status: "verified" as const,
+      materialAt,
+      payloadHash: "f".repeat(64),
+      ingestRunId: "run-6",
+      ...(product ? { supplySmartProductId: product, supplySmartListingId: randomUUID() } : {}),
+    });
+    await ledger.record([
+      sent("574389", null, socks),
+      sent("610673", "black", shaker),
+      sent("610673", "white", shaker),
+      sent("533916", null, randomUUID()),
+      sent("604899", null, null),
+    ]);
+    const first = await ledger.notSupplementsDelivered({ channel: "gnc", limit: 2 });
+    expect(first.map((row) => [row.listingId, row.variantId])).toEqual([
+      ["574389", null],
+      ["610673", "black"],
+    ]);
+    expect(first[0]).toMatchObject({ supplySmartProductId: socks, productRemoved: false });
+    // Removing one variant's product marks the other variant row as pointing at a removed product.
+    await ledger.markRemoved({ channel: "gnc", listingId: "610673", variantId: "black" });
+    const rest = await ledger.notSupplementsDelivered({
+      channel: "gnc",
+      after: { channel: "gnc", listingId: "574389", variantId: null },
+      limit: 10,
+    });
+    expect(rest).toEqual([
+      expect.objectContaining({ listingId: "610673", variantId: "white", productRemoved: true }),
+    ]);
+    // The removed row keeps its material time and product ID.
+    const [row] = (
+      await client.query(
+        `SELECT status, material_at = $1::timestamptz AS same_material, supply_smart_product_id::text
+         FROM product_sync WHERE variant_key = 'black'`,
+        [materialAt],
+      )
+    ).rows;
+    expect(row).toEqual({
+      status: "removed",
+      same_material: true,
+      supply_smart_product_id: shaker,
+    });
   });
 
   it("refuses a verified row without its payload and run", async () => {

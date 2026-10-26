@@ -1,4 +1,6 @@
 import type {
+  NotSupplementDelivered,
+  NotSupplementFilter,
   ProductSyncLedger,
   SyncChange,
   SyncKey,
@@ -12,6 +14,7 @@ import type {
 import type { Queryable } from "@crawl-automation/platform";
 import { PENDING_SYNC, settledMarketplace } from "../product-sync/marketplace-queries.js";
 import { reopenAmazonListingDates } from "./product-sync-listing-dates.js";
+import { markRemoved, notSupplementsDelivered } from "./product-sync-removals.js";
 
 interface Row {
   channel: MarketplaceChannel;
@@ -176,6 +179,14 @@ export class PostgresProductSync implements ProductSyncLedger {
       ],
     );
     return { reopened: rows[0]?.reopened ?? 0 };
+  }
+
+  markRemoved(key: SyncKey): Promise<void> {
+    return markRemoved(this.database, key);
+  }
+
+  notSupplementsDelivered(filter: NotSupplementFilter): Promise<NotSupplementDelivered[]> {
+    return notSupplementsDelivered(this.database, filter);
   }
 
   async counts(): Promise<{ channel: MarketplaceChannel; status: SyncStatus; count: number }[]> {

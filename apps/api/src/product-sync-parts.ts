@@ -4,9 +4,14 @@ import {
   PostgresProductSync,
   RetainedListingDateOriginals,
   SupplySmartCompaniesClient,
+  SupplySmartProductsClient,
   SupplySmartRpc,
 } from "@crawl-automation/adapters";
-import { BrandCompanyService, ProductSyncControl } from "@crawl-automation/app";
+import {
+  BrandCompanyService,
+  NotSupplementRemoval,
+  ProductSyncControl,
+} from "@crawl-automation/app";
 import type { Database, Logger, ObjectStore } from "@crawl-automation/platform";
 import { ChannelRegistry } from "@crawl-automation/channels-core";
 import { amazonAdapter } from "@crawl-automation/channel-amazon";
@@ -24,12 +29,37 @@ export async function productSyncService(parts: {
     return undefined;
   }
   const secrets = await loadBrandEnrichmentSecrets(settings.secretsFile);
+  const rpc = new SupplySmartRpc(secrets.supplySmart);
   const brands = new BrandCompanyService({
     brands: new PostgresBrandCompany(parts.database),
-    companies: new SupplySmartCompaniesClient(new SupplySmartRpc(secrets.supplySmart)),
+    companies: new SupplySmartCompaniesClient(rpc),
   });
-  const control = new ProductSyncControl({
-    ledger: new PostgresProductSync(parts.database),
+  const ledger = new PostgresProductSync(parts.database);
+  const control = syncControl(parts, ledger);
+  const removal = new NotSupplementRemoval({
+    ledger,
+    products: new SupplySmartProductsClient(rpc),
+  });
+  return {
+    matchBrands: brands.matchBrands.bind(brands),
+    brands: brands.brands.bind(brands),
+    status: () => control.status(),
+    markPresent: control.markPresent.bind(control),
+    reopen: control.reopen.bind(control),
+    removeNotSupplements: removal.run.bind(removal),
+  };
+}
+
+function syncControl(
+  parts: {
+    database: Database;
+    storageReaders?: { objects: Pick<ObjectStore, "read"> } | null;
+    log?: Logger;
+  },
+  ledger: PostgresProductSync,
+) {
+  return new ProductSyncControl({
+    ledger,
     ...(parts.storageReaders
       ? {
           listingDateOriginals: new RetainedListingDateOriginals({
@@ -41,11 +71,4 @@ export async function productSyncService(parts: {
         }
       : {}),
   });
-  return {
-    matchBrands: brands.matchBrands.bind(brands),
-    brands: brands.brands.bind(brands),
-    status: () => control.status(),
-    markPresent: control.markPresent.bind(control),
-    reopen: control.reopen.bind(control),
-  };
 }

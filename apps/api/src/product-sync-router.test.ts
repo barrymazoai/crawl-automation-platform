@@ -94,3 +94,30 @@ it("rejects listing-date requests for another channel before service access", as
   expect(response.status).toBe(400);
   expect(reopen).not.toHaveBeenCalled();
 });
+
+it("removal of products outside supplements is a dry run unless told otherwise", async () => {
+  const report = { dryRun: true, checked: 0, removable: 0, removed: 0, sameProduct: 0, kept: [] };
+  const removeNotSupplements = vi.fn(async () => ({ ...report, failure: null, next: null }));
+  const response = await appWith({ productSync: { removeNotSupplements } }).request(
+    "/trpc/productSync.removeNotSupplements",
+    post({ channel: "gnc", limit: 1 }),
+  );
+  expect(response.status).toBe(200);
+  expect(removeNotSupplements).toHaveBeenCalledExactlyOnceWith(
+    { channel: "gnc", limit: 1, dryRun: true },
+    expect.any(AbortSignal),
+  );
+});
+
+it.each([{ limit: 501 }, { limit: 1, channel: "dtc" }])(
+  "refuses removal input %j before calling the service",
+  async (input) => {
+    const removeNotSupplements = vi.fn();
+    const response = await appWith({ productSync: { removeNotSupplements } }).request(
+      "/trpc/productSync.removeNotSupplements",
+      post(input),
+    );
+    expect(response.status).toBe(400);
+    expect(removeNotSupplements).not.toHaveBeenCalled();
+  },
+);

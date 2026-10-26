@@ -24,3 +24,28 @@ Products already in Supply Smart are not removed by this change; removal is a se
   git; it fails without the new condition and passes with it. The formula and materials suites also passed.
 - Read-only on the crawler database (Server 一), the selection drops 3,095 settled products: Amazon 2,808,
   GNC 152, Swanson 133, Costco 2; Whole Foods is unchanged.
+
+## Removing the products already sent (`productSync.removeNotSupplements`)
+
+The owner approved deleting group A (2026-10-26): products the crawler created in Supply Smart for listings outside
+supplements. The API operation reads the ledger rows whose latest queue item is `PRODUCT.NOT_SUPPLEMENT` and whose
+Supply Smart product is on record, in key order, and for each one:
+
+1. reads `product.getDetail` and keeps the product unless its `source` is `enrichment`, its one listing is this
+   listing (same channel and Supply Smart listing ID) and it has no current formula and no formula observation
+   (kept reasons `PRODUCT_SYNC.KEEP_NOT_CRAWLER_CREATED`, `KEEP_OTHER_LISTINGS`, `KEEP_HAS_FORMULA`);
+2. deletes it with `product.delete` (Supply Smart removes its listings, images, snapshots and observations);
+3. marks the ledger row `removed` (migration 067); IDs and material time stay on record.
+
+Another row pointing at a product already removed (another variant) is only marked. The first failure stops the run
+and is reported; nothing is retried. `dryRun` defaults to true and deletes nothing; `limit` is at most 500 and the
+answer's `next` continues after kept products. A later capture judged a supplement is sent again by the sweep.
+
+```sh
+curl -s -X POST http://127.0.0.1:4188/trpc/productSync.removeNotSupplements \
+  -H 'content-type: application/json' -d '{"limit":500}'                    # dry run
+curl -s -X POST http://127.0.0.1:4188/trpc/productSync.removeNotSupplements \
+  -H 'content-type: application/json' -d '{"limit":1,"dryRun":false}'      # delete one, then check it
+```
+
+Deploy with `--migrate` (067). Products from legacy imports (group B) and NIH products are not touched.
