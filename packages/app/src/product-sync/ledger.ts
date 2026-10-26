@@ -73,6 +73,22 @@ export interface ProductSyncLedger {
    * yet removed, in key order.
    */
   notSupplementsDelivered(filter: NotSupplementFilter): Promise<NotSupplementDelivered[]>;
+  /**
+   * Supply Smart products, in ID order, all of whose sent listings were sent again after a current-protocol
+   * enrichment, with the health function names those enrichments send and the names earlier ones sent.
+   */
+  refreshedHealthFunctions(filter: {
+    after?: string;
+    limit: number;
+  }): Promise<RefreshedHealthFunctions[]>;
+}
+
+export interface RefreshedHealthFunctions {
+  supplySmartProductId: string;
+  /** Sent by the current enrichments of the product's listings (printed, or else inferred). */
+  current: string[];
+  /** Sent by earlier enrichments of the same listings (printed only: inferred ones were never sent before /4). */
+  previous: string[];
 }
 
 export interface NotSupplementFilter {

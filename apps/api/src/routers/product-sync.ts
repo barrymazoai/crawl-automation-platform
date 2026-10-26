@@ -4,6 +4,7 @@ import {
   MarkPresentSchema,
   MatchBrandsSchema,
   RemoveNotSupplementsSchema,
+  CleanHealthFunctionsSchema,
   ReopenSyncSchema,
 } from "@crawl-automation/app";
 import { procedure, router, type ApiContext } from "../trpc.js";
@@ -38,6 +39,15 @@ export const productSyncRouter = router({
     .input(RemoveNotSupplementsSchema)
     .mutation(async ({ ctx, input, signal }) =>
       (await service(ctx)).removeNotSupplements(input, signal),
+    ),
+  /**
+   * Unlinks, in Supply Smart, health function names that only an earlier enrichment sent, from products sent again
+   * with the current one (dry run by default); a page at a time, continued with the answer's `next`.
+   */
+  cleanHealthFunctions: procedure
+    .input(CleanHealthFunctionsSchema)
+    .mutation(async ({ ctx, input, signal }) =>
+      (await service(ctx)).cleanHealthFunctions(input, signal),
     ),
   /** Records listings already in Supply Smart so the sweep does not send them again. */
   markPresent: procedure

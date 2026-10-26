@@ -1,5 +1,6 @@
 import type {
   BrandCompanyService,
+  HealthFunctionCleanup,
   NotSupplementRemoval,
   ProductSyncControl,
   BrandEnrichmentService,
@@ -27,6 +28,7 @@ import { initTRPC, TRPCError } from "@trpc/server";
 export type ProductSyncApi = Pick<BrandCompanyService, "matchBrands" | "brands"> &
   Pick<ProductSyncControl, "status" | "markPresent" | "reopen"> & {
     removeNotSupplements: NotSupplementRemoval["run"];
+    cleanHealthFunctions: HealthFunctionCleanup["run"];
   };
 
 export interface ApiContext {

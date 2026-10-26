@@ -8,11 +8,13 @@ import type {
   SyncStatus,
   SyncOverview,
   MarketplaceChannel,
+  RefreshedHealthFunctions,
   ReopenFilter,
   ReopenResult,
 } from "@crawl-automation/app";
 import type { Queryable } from "@crawl-automation/platform";
 import { PENDING_SYNC, settledMarketplace } from "../product-sync/marketplace-queries.js";
+import { refreshedHealthFunctions } from "./product-sync-health-functions.js";
 import { reopenAmazonListingDates } from "./product-sync-listing-dates.js";
 import { reopenSync } from "./product-sync-reopen.js";
 import { markRemoved, notSupplementsDelivered } from "./product-sync-removals.js";
@@ -159,6 +161,13 @@ export class PostgresProductSync implements ProductSyncLedger {
 
   notSupplementsDelivered(filter: NotSupplementFilter): Promise<NotSupplementDelivered[]> {
     return notSupplementsDelivered(this.database, filter);
+  }
+
+  refreshedHealthFunctions(filter: {
+    after?: string;
+    limit: number;
+  }): Promise<RefreshedHealthFunctions[]> {
+    return refreshedHealthFunctions(this.database, filter);
   }
 
   async counts(): Promise<{ channel: MarketplaceChannel; status: SyncStatus; count: number }[]> {

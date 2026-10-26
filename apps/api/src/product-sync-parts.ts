@@ -4,11 +4,13 @@ import {
   PostgresProductSync,
   RetainedListingDateOriginals,
   SupplySmartCompaniesClient,
+  SupplySmartHealthFunctionsClient,
   SupplySmartProductsClient,
   SupplySmartRpc,
 } from "@crawl-automation/adapters";
 import {
   BrandCompanyService,
+  HealthFunctionCleanup,
   NotSupplementRemoval,
   ProductSyncControl,
 } from "@crawl-automation/app";
@@ -40,6 +42,10 @@ export async function productSyncService(parts: {
     ledger,
     products: new SupplySmartProductsClient(rpc),
   });
+  const cleanup = new HealthFunctionCleanup({
+    ledger,
+    healthFunctions: new SupplySmartHealthFunctionsClient(rpc),
+  });
   return {
     matchBrands: brands.matchBrands.bind(brands),
     brands: brands.brands.bind(brands),
@@ -47,6 +53,7 @@ export async function productSyncService(parts: {
     markPresent: control.markPresent.bind(control),
     reopen: control.reopen.bind(control),
     removeNotSupplements: removal.run.bind(removal),
+    cleanHealthFunctions: cleanup.run.bind(cleanup),
   };
 }
 
