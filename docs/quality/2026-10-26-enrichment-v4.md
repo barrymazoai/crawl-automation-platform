@@ -40,13 +40,15 @@ read); the Whole Foods gap is Amazon collections that were never enriched.
 Read-only count on 2026-10-26 (crawler database): never enriched 710 (Amazon 452, GNC 236, Swanson 22), /2 1,016,
 /3 46,774. Supply Smart keeps its existing 46k health function names; cleaning them is Supply Smart's data.
 
-3. `productSync.cleanHealthFunctions {limit, after?, dryRun}` (dry run by default, 200 per page, `next` cursor):
-   for products all of whose sent listings were verified after a /4 enrichment, unlinks in Supply Smart
-   (`product.removeProductHealthFunction`) the names that earlier enrichments of those listings sent and no current
-   one sends. A name the crawler never sent is never touched.
+3. `productSync.updateEnrichment {limit ≤ 100, after?, dryRun}` (dry run by default, `next` cursor) calls Supply
+   Smart's `product.updateEnrichmentBatch` (SUPPLYSMAR-464, owner 2026-10-26: a new endpoint rather than changing
+   ingest; a resent ingest with a new body is an `idempotency_conflict`). Per product: add the current enrichment's
+   form, health functions and main ingredients; remove the names earlier enrichments of the same listings sent and
+   no current one sends. Supply Smart deletes links only. Products already up to date are skipped. This replaces
+   `productSync.reopen {enriched: true}` for re-enriched products.
 4. Health function names left without any product are Supply Smart's to delete: `deleteHealthFunction` cascades to
    every product's link in their database (`product_health_function` FK `ON DELETE CASCADE`, checked read-only
-   2026-10-26) and there is no usage count in their API, so the crawler never calls it.
+   2026-10-26), so the crawler never calls it.
 
 ## Found while validating (2026-10-26)
 

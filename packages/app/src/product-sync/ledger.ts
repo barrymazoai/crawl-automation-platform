@@ -74,21 +74,10 @@ export interface ProductSyncLedger {
    */
   notSupplementsDelivered(filter: NotSupplementFilter): Promise<NotSupplementDelivered[]>;
   /**
-   * Supply Smart products, in ID order, all of whose sent listings were sent again after a current-protocol
-   * enrichment, with the health function names those enrichments send and the names earlier ones sent.
+   * Supply Smart products, in ID order, whose every enriched listing's latest enrichment is of the current protocol,
+   * with the names those enrichments send and the names earlier enrichments of the same listings sent.
    */
-  refreshedHealthFunctions(filter: {
-    after?: string;
-    limit: number;
-  }): Promise<RefreshedHealthFunctions[]>;
-}
-
-export interface RefreshedHealthFunctions {
-  supplySmartProductId: string;
-  /** Sent by the current enrichments of the product's listings (printed, or else inferred). */
-  current: string[];
-  /** Sent by earlier enrichments of the same listings (printed only: inferred ones were never sent before /4). */
-  previous: string[];
+  refreshedEnrichments(filter: { after?: string; limit: number }): Promise<RefreshedEnrichment[]>;
 }
 
 export interface NotSupplementFilter {
@@ -103,6 +92,23 @@ export interface NotSupplementDelivered extends SyncKey {
   supplySmartListingId: string | null;
   /** Another row of this ledger already removed the same Supply Smart product. */
   productRemoved: boolean;
+}
+
+/** The names delivery sends from an enrichment: form (not unknown/other), health functions, main ingredients. */
+export interface EnrichmentNames {
+  forms: string[];
+  healthFunctions: string[];
+  mainIngredients: string[];
+}
+
+export interface RefreshedEnrichment {
+  supplySmartProductId: string;
+  /** Sent by the current enrichments (health functions printed, or else inferred); newest form first. */
+  current: EnrichmentNames;
+  /** Sent by earlier enrichments of the same listings (printed health functions only: inferred were never sent). */
+  previous: EnrichmentNames;
+  /** A listing was sent before its current enrichment, or never verified, so Supply Smart lacks some names. */
+  sentBeforeCurrent: boolean;
 }
 
 export interface SyncOverview {

@@ -58,7 +58,7 @@ function memoryLedger(): ProductSyncLedger & { rows: Map<string, SyncRecord> } {
     reopen: async () => ({ reopened: 0 }),
     markRemoved: async () => undefined,
     notSupplementsDelivered: async () => [],
-    refreshedHealthFunctions: async () => [],
+    refreshedEnrichments: async () => [],
   };
 }
 

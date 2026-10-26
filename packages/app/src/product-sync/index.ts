@@ -9,5 +9,5 @@ export * from "./sync-sweep.js";
 export * from "./brand-sweep.js";
 export * from "./sync-control.js";
 export * from "./not-supplement-removal.js";
-export * from "./health-function-cleanup.js";
+export * from "./enrichment-update.js";
 export * from "./listing-date-originals.js";
