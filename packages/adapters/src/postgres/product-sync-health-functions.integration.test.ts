@@ -40,12 +40,15 @@ describe.skipIf(!connectionString)("products refreshed with the current enrichme
     await client.query(
       `
       INSERT INTO product_sync (channel, listing_id, status, payload_hash, ingest_run_id, supply_smart_product_id,
-                                material_at, updated_at)
-      SELECT ch, id, st, repeat('a', 64), 'run', pid::uuid, now(), now()
-        FROM (VALUES ('amazon', 'B1', 'verified', $1), ('wholefoods', 'B1', 'verified', $1),
-                     ('amazon', 'B2', 'verified', $2), ('amazon', 'B3', 'verified', $3),
-                     ('amazon', 'B4', 'verified', $4), ('amazon', 'B5', 'sent', $5)) AS v(ch, id, st, pid)`,
-      [product(1), product(2), product(3), product(4), product(5)],
+                                collected_operation_id, material_at, updated_at)
+      SELECT ch, id, st, repeat('a', 64), 'run', pid::uuid, op, now(), now()
+        FROM (VALUES ('amazon', 'B1', 'verified', $1, 'op1'), ('wholefoods', 'B1', 'verified', $1, 'op1'),
+                     ('amazon', 'B2', 'verified', $2, 'op2'), ('amazon', 'B3', 'verified', $3, 'op3'),
+                     ('amazon', 'B4', 'verified', $4, 'op4'), ('amazon', 'B5', 'sent', $5, 'op5'),
+                     -- the ledger has the page slug, the subject the store's numeric ID
+                     ('swanson', 'milk-thistle-16-oz', 'verified', $6, 'op6'))
+             AS v(ch, id, st, pid, op)`,
+      [product(1), product(2), product(3), product(4), product(5), product(6)],
     );
     const candidate = (printed: string[], inferred: string[] = []) =>
       JSON.stringify({
@@ -67,14 +70,17 @@ describe.skipIf(!connectionString)("products refreshed with the current enrichme
     );
     await client.query(`
       INSERT INTO product_enrichment_subject VALUES
-        ('s1a', 'e1-old', 'amazon', 'op1', now() - interval '2 days', 'B1', null),
+        -- an earlier collection of the same listing
+        ('s1a', 'e1-old', 'amazon', 'op1-old', now() - interval '2 days', 'B1', null),
         ('s1b', 'e1-new', 'amazon', 'op1', now() - interval '1 hour', 'B1', null),
         -- enriched again after the send: not resent yet
         ('s2', 'e2-new', 'amazon', 'op2', now() + interval '1 hour', 'B2', null),
         ('s3', 'e3-old', 'amazon', 'op3', now() - interval '1 hour', 'B3', null),
         ('s4', 'e4-new', 'amazon', 'op4', now() - interval '1 hour', 'B4', null),
         -- outcome unknown: not verified
-        ('s5', 'e5-new', 'amazon', 'op5', now() - interval '1 hour', 'B5', null)`);
+        ('s5', 'e5-new', 'amazon', 'op5', now() - interval '1 hour', 'B5', null),
+        ('s6a', 'e3-old', 'swanson', 'op6', now() - interval '2 hours', '8572', '4631'),
+        ('s6b', 'e4-new', 'swanson', 'op6', now() - interval '1 hour', '8572', '4631')`);
     expect(await refreshedHealthFunctions({ query }, { limit: 10 })).toEqual([
       {
         supplySmartProductId: product(1),
@@ -82,8 +88,9 @@ describe.skipIf(!connectionString)("products refreshed with the current enrichme
         previous: ["Joint Health", "supports healthy joints"],
       },
       { supplySmartProductId: product(4), current: ["Calm Support"], previous: [] },
+      { supplySmartProductId: product(6), current: ["Calm Support"], previous: ["old"] },
     ]);
-    expect(await refreshedHealthFunctions({ query }, { after: product(1), limit: 10 })).toEqual([
+    expect(await refreshedHealthFunctions({ query }, { after: product(1), limit: 1 })).toEqual([
       { supplySmartProductId: product(4), current: ["Calm Support"], previous: [] },
     ]);
   });

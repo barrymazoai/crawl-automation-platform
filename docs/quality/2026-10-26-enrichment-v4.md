@@ -39,3 +39,26 @@ read); the Whole Foods gap is Amazon collections that were never enriched.
 
 Read-only count on 2026-10-26 (crawler database): never enriched 710 (Amazon 452, GNC 236, Swanson 22), /2 1,016,
 /3 46,774. Supply Smart keeps its existing 46k health function names; cleaning them is Supply Smart's data.
+
+3. `productSync.cleanHealthFunctions {limit, after?, dryRun}` (dry run by default, 200 per page, `next` cursor):
+   for products all of whose sent listings were verified after a /4 enrichment, unlinks in Supply Smart
+   (`product.removeProductHealthFunction`) the names that earlier enrichments of those listings sent and no current
+   one sends. A name the crawler never sent is never touched.
+4. Health function names left without any product are Supply Smart's to delete: `deleteHealthFunction` cascades to
+   every product's link in their database (`product_health_function` FK `ON DELETE CASCADE`, checked read-only
+   2026-10-26) and there is no usage count in their API, so the crawler never calls it.
+
+## Found while validating (2026-10-26)
+
+- `enrichment.outdated` timed out (7 s): per-row lookup into large records. Now set-based and reads the `protocol`
+  column (480ec64).
+- Every backfill failed with a statement timeout: without a capture operation the title lookup scanned all of
+  `product_history_source` (1.3 GB, 4.7 s). This is also why the never-enriched products stayed that way. Backfills
+  now reuse the page material (title, description, website variant) of the collection's latest enrichment, and the
+  history lookup has an index (migration 068, 983932d). Products never enriched have no stored description and use
+  the title and label only.
+- The migration's backup failed: the dump passed 2 GiB (2,149,509,407 bytes), more than `readFile` returns; the
+  digest is now streamed (503af15). A deploy-tool fix only applies when the deploy runs from a release that has it.
+- A re-run could not start a workflow that had already ended (REJECT_DUPLICATE); manual re-runs now may (1ce0195).
+- 30 products validated (10 never enriched, 10 /2, 10 /3): sentences became categories ("support healthy liver
+  function" → "Liver Support"), missing forms filled (unknown → softgel/liquid/powder).
