@@ -10,7 +10,7 @@ import { readJson, statePath } from './lib/state.mjs';
 export const usableModelAlias = (alias) => key(alias).length >= (/\d/.test(alias) ? 4 : 5);
 
 /** The aliases the matcher uses: the reviewed ones, and the model's that are long enough. */
-function activeAliases(row) {
+export function activeAliases(row) {
   const added = new Set((row.aliases_added ?? []).map((a) => a.alias));
   return row.aliases.filter((a) => !added.has(a) || usableModelAlias(a));
 }

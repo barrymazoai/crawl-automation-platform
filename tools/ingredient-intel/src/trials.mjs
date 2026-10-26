@@ -8,6 +8,10 @@ import { execa } from 'execa';
 import { readJson } from './lib/state.mjs';
 
 const lastLine = (output) => output?.trim().split('\n').at(-1)?.slice(0, 300) ?? '';
+// An incremental collect reads a few days of updates (minutes); a hung one must not hold the ingredient steps.
+const TIMEOUT_MS = { collect: 2 * 60 * 60_000, deliver: 30 * 60_000 };
+const failure = (result, step) => (result.timedOut ? `超时（${TIMEOUT_MS[step] / 60_000} 分钟）被停止` : `退出码 ${result.exitCode}：${lastLine(result.all)}`);
+const collectRuns = async (trialsDir) => (await readdir(join(trialsDir, 'runs')).catch(() => [])).filter((d) => d.startsWith('collect-'));
 
 export async function refreshTrials({ toolDir, trialsDir, envFile, log, problem }) {
   const collectorDir = resolve(toolDir, '../clinical-trials');
@@ -21,17 +25,24 @@ export async function refreshTrials({ toolDir, trialsDir, envFile, log, problem 
       cwd: collectorDir,
       all: true,
       reject: false,
+      timeout: TIMEOUT_MS[step],
     });
 
+  const earlier = new Set(await collectRuns(trialsDir));
   const collected = await run('collect', ['--mode', 'incremental']);
   if (collected.exitCode !== 0) {
-    problem(`临床试验采集退出码 ${collected.exitCode}：${lastLine(collected.all)}`);
-    return { collect: { exit_code: collected.exitCode } };
+    problem(`临床试验采集${failure(collected, 'collect')}`);
+    return { collect: { exit_code: collected.exitCode ?? null, timed_out: collected.timedOut } };
   }
-  // The collector names its runs collect-<ISO time>; the latest is this one, complete or not (the state
-  // file only records complete runs).
-  const runId = (await readdir(join(trialsDir, 'runs'))).filter((d) => d.startsWith('collect-')).sort().at(-1);
-  const collectManifest = await readJson(join(trialsDir, 'runs', runId, 'manifest.json'));
+  // The collector names its runs collect-<ISO time>, complete or not (the state file only records complete
+  // runs). Ours is the new one with a manifest: a collect started by hand meanwhile stops at the lock without one.
+  let runId = null;
+  for (const d of (await collectRuns(trialsDir)).filter((d) => !earlier.has(d)).sort().reverse())
+    if (await readJson(join(trialsDir, 'runs', d, 'manifest.json'))) {
+      runId = d;
+      break;
+    }
+  const collectManifest = runId ? await readJson(join(trialsDir, 'runs', runId, 'manifest.json')) : null;
   const out = {
     collect: {
       exit_code: collected.exitCode,
@@ -45,8 +56,8 @@ export async function refreshTrials({ toolDir, trialsDir, envFile, log, problem 
 
   const delivered = await run('deliver');
   if (delivered.exitCode !== 0) {
-    problem(`临床试验交付退出码 ${delivered.exitCode}：${lastLine(delivered.all)}`);
-    out.deliver = { exit_code: delivered.exitCode };
+    problem(`临床试验交付${failure(delivered, 'deliver')}`);
+    out.deliver = { exit_code: delivered.exitCode ?? null, timed_out: delivered.timedOut };
     return out;
   }
   const { last_delivery: last } = await readJson(stateFile);

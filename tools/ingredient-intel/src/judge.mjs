@@ -11,7 +11,7 @@ import { createHash } from 'node:crypto';
 import { join } from 'node:path';
 import { codexJson } from '../../regulatory/src/lib/codex.mjs';
 import { key } from './rules.mjs';
-import { usableModelAlias } from './registry.mjs';
+import { activeAliases, usableModelAlias } from './registry.mjs';
 import { readJsonl, statePath, writeJson, writeJsonGz, writeJsonl } from './lib/state.mjs';
 
 export const PROMPT_VERSION = 'spelling-class-v1';
@@ -80,7 +80,8 @@ ${items.map((i) => JSON.stringify({ spelling: i.spelling, products: i.products, 
 export async function judgeSpellings({ dataDir, runDir, runId, supplySmart, registry, links, fresh, spellings, seen, model, effort, maxBatches, now, log, problem }) {
   const verdictsFile = statePath(dataDir, 'verdicts.jsonl');
   const verdicts = new Map((await readJsonl(verdictsFile)).map((v) => [v.key, v]));
-  const aliasKeys = new Set(registry.ingredients.flatMap((r) => [r.ingredient, ...r.aliases]).map(key));
+  // Only aliases the matcher uses: a model alias too short to match (registry.mjs) goes to review again.
+  const aliasKeys = new Set(registry.ingredients.flatMap((r) => [r.ingredient, ...activeAliases(r)]).map(key));
 
   const outcome = new Map(); // spelling key → 'alias' | 'reused' | 'asked' | 'unanswered'
   const toAsk = [];
@@ -92,8 +93,9 @@ export async function judgeSpellings({ dataDir, runDir, runId, supplySmart, regi
     else outcome.set(s.key, 'reused');
   }
 
-  // Products and brands, for what the model reads and for the "unsure on ≥ 2 products" rule.
-  const lookup = [...toAsk, ...unsure];
+  // Products and brands, for what the model reads, the "unsure on ≥ 2 products" rule and the candidate list.
+  const reusedSupplier = [...spellings.values()].filter((s) => outcome.get(s.key) === 'reused' && verdicts.get(s.key).class === 'supplier_ingredient');
+  const lookup = [...toAsk, ...unsure, ...reusedSupplier];
   const ids = [...new Set(lookup.flatMap((s) => s.nameIds))];
   const products = ids.length ? await supplySmart.productsUsing(ids) : [];
   const productsOf = new Map();
@@ -182,7 +184,7 @@ export async function judgeSpellings({ dataDir, runDir, runId, supplySmart, regi
   // The 10-15 batches could only name the ingredients that existed when they ran, so an old judgement often
   // has no existing_id although its canonical name is registered today: resolve it by name.
   const byName = new Map();
-  for (const r of registry.ingredients) for (const n of [r.ingredient, ...r.aliases]) if (!byName.has(key(n))) byName.set(key(n), r);
+  for (const r of registry.ingredients) for (const n of [r.ingredient, ...activeAliases(r)]) if (!byName.has(key(n))) byName.set(key(n), r);
   for (const s of spellings.values()) {
     const state = outcome.get(s.key);
     const v = verdicts.get(s.key);
@@ -195,12 +197,15 @@ export async function judgeSpellings({ dataDir, runDir, runId, supplySmart, regi
         covered += 1;
         continue;
       }
-      if (state === 'asked' && v.confidence === 'high' && usableModelAlias(s.spelling)) {
+      // A judgement of this prompt counts whether it was made now or by a run that stopped before saving the
+      // registry; the 10-15 judgements were made for review, not to add aliases.
+      const ours = v.prompt_version === PROMPT_VERSION;
+      if (ours && v.confidence === 'high' && usableModelAlias(s.spelling)) {
         row.aliases.push(s.spelling);
         row.aliases_added = [...(row.aliases_added ?? []), { alias: s.spelling, run_id: runId, decided_by: v.decided_by }];
         aliasesAdded.push({ external_key: target, ingredient: row.ingredient, alias: s.spelling, names: s.nameIds.length });
       } else {
-        const reason = state !== 'asked' ? 'old_verdict_not_alias' : v.confidence !== 'high' ? 'existing_not_high_confidence' : 'alias_too_short';
+        const reason = !ours ? 'old_verdict_not_alias' : v.confidence !== 'high' ? 'existing_not_high_confidence' : 'alias_too_short';
         review.push({ reason, spelling: s.spelling, external_key: target, ingredient: row.ingredient, verdict: v, names: s.nameIds.length, contexts: s.contexts });
       }
     } else {

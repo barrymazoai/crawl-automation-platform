@@ -29,7 +29,9 @@ export async function supplySmartFromEnvFile(file, { log, requestsPerMinute = 12
           }),
         );
         const body = await response.json().catch(() => null);
-        if (response.ok) return body?.json;
+        // A 200 whose body does not parse (cut off on the way) is retried like a server error.
+        if (response.ok && body?.json === undefined) throw new Error(`${path}: HTTP 200 without a readable answer`);
+        if (response.ok) return body.json;
         const error = new Error(`${path}: HTTP ${response.status} ${body?.json?.code ?? ''} ${body?.json?.message ?? ''}`.trim());
         throw RETRYABLE.has(response.status) ? error : new AbortError(error);
       },

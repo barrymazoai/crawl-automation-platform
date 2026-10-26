@@ -5,7 +5,8 @@
 // The scheduled job (owner 2026-10-26: Tuesday and Friday, one hour after the regulatory sync, Server 一):
 //   1. trials: the ClinicalTrials.gov collector, incremental collect + delivery (src/trials.mjs);
 //   2. names: every Supply Smart ingredient name matched to the branded ingredients; the links that changed
-//      since the last run go to runs/<id>/changes/alias_links.jsonl (src/names.mjs);
+//      since the last run go to runs/<id>/changes/alias_links.jsonl, saved only when steps 2–3 succeed
+//      (src/names.mjs);
 //   3. judge: ®/™ spellings of new names, prior judgements first, the rest by Luna (src/judge.mjs); a
 //      spelling tied to a registered ingredient becomes an alias, so step 2 runs again for it;
 //   4. <dir>/last-sync.json and a card to the 「Supply Smart 服务通知」 Feishu group.
@@ -20,7 +21,7 @@ import pino from 'pino';
 import lockfile from 'proper-lockfile';
 import { feishuNotifier } from '../../notify/feishu.mjs';
 import { judgeSpellings } from './judge.mjs';
-import { linkNames } from './names.mjs';
+import { linkNames, saveLinks } from './names.mjs';
 import { refreshTrials } from './trials.mjs';
 import { supplySmartFromEnvFile } from './lib/supply-smart.mjs';
 import { writeJson } from './lib/state.mjs';
@@ -44,6 +45,8 @@ if (!args['data-dir']) throw new Error('--data-dir (or INGREDIENT_INTEL_DATA_DIR
 if (!args['supply-smart-env']) throw new Error('--supply-smart-env <file> is required');
 if (!args['skip-trials'] && !args['trials-data-dir']) throw new Error('--trials-data-dir is required (or --skip-trials)');
 if (!args['no-model'] && (!args['luna-model'] || !args['luna-effort'])) throw new Error('--luna-model and --luna-effort are required (or --no-model)');
+const maxBatches = Number(args['max-model-batches']);
+if (!Number.isInteger(maxBatches) || maxBatches < 0) throw new Error('--max-model-batches must be a whole number');
 
 const dataDir = resolve(args['data-dir']);
 const startedAt = new Date().toISOString();
@@ -78,7 +81,7 @@ async function ingredients(supplySmart) {
   const step = { dataDir, runDir, supplySmart, names, now: startedAt, log, problem };
   const linked = await linkNames(step);
   report.names = linked.summary;
-  if (args['no-model']) return;
+  if (args['no-model']) return saveLinks({ ...step, ...linked });
   const judged = await judgeSpellings({
     ...step,
     runId,
@@ -89,11 +92,15 @@ async function ingredients(supplySmart) {
     seen: linked.seen,
     model: args['luna-model'],
     effort: args['luna-effort'],
-    maxBatches: Number(args['max-model-batches']),
+    maxBatches,
   });
   report.judge = judged.summary;
-  // New aliases link old and new names at once; the second pass reports only those links.
-  if (judged.aliasesAdded.length) report.relinked = (await linkNames(step)).summary;
+  // New aliases link old and new names at once; the second pass reports only those links (its problems were
+  // already reported by the first).
+  if (!judged.aliasesAdded.length) return saveLinks({ ...step, ...linked });
+  const relinked = await linkNames({ ...step, problem: () => {}, previous: linked.map });
+  report.relinked = relinked.summary;
+  await saveLinks({ ...step, ...relinked, changes: [...linked.changes, ...relinked.changes] });
 }
 
 // ── Message ────────────────────────────────────────────────────────────────
@@ -111,7 +118,8 @@ function message() {
   const n = report.names;
   if (n) {
     const added = n.added + (report.relinked?.added ?? 0);
-    lines.push(`原料名：共 ${n.names.toLocaleString('en-US')} 个，新出现 ${n.new_names.toLocaleString('en-US')} 个（带 ®/™ ${n.new_marked_names}）；映射新增 ${added}、取消 ${n.removed}，现有 ${(report.relinked ?? n).links.toLocaleString('en-US')} 条`);
+    const removed = n.removed + (report.relinked?.removed ?? 0);
+    lines.push(`原料名：共 ${n.names.toLocaleString('en-US')} 个，新出现 ${n.new_names.toLocaleString('en-US')} 个（带 ®/™ ${n.new_marked_names}）；映射新增 ${added}、取消 ${removed}，现有 ${(report.relinked ?? n).links.toLocaleString('en-US')} 条`);
   }
   const j = report.judge;
   if (j) {
