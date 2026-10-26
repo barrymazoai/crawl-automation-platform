@@ -34,6 +34,26 @@ export async function enrichmentSource(
   const variantId =
     request.variantId === undefined ? collection.observation.variantId : request.variantId;
   await verifyFormulaOwner(database, { request, listingId, variantId, channels });
+  const identity = {
+    channel: request.channel,
+    listingId,
+    variantId,
+    collectionOperationId: collection.operationId,
+    observation: collection.observation,
+  };
+  const page =
+    (request.captureOperationId || request.sourcePlan
+      ? null
+      : await earlierPage(database, identity)) ??
+    (await historyPage(database, identity, request.captureOperationId ?? null));
+  return { collection, subject: EnrichmentSubjectSchema.parse({ ...identity, ...page }) };
+}
+
+async function historyPage(
+  database: Queryable,
+  identity: { channel: string; listingId: string; variantId: string | null },
+  captureOperationId: string | null,
+) {
   const rows = await database.query<HistoryRow>(
     `
     SELECT source_record_id, body_hash, record FROM product_history_source
@@ -42,22 +62,14 @@ export async function enrichmentSource(
        AND ($4::text IS NULL OR source_key = $4)
        AND record->>'codec' LIKE 'v3-capture-history/%'
      ORDER BY record->>'capturedAt' DESC NULLS LAST, source_record_id DESC LIMIT 1`,
-    [request.channel, listingId, variantId, request.captureOperationId ?? null],
+    [identity.channel, identity.listingId, identity.variantId, captureOperationId],
   );
-  const history = checkedHistory(rows[0]);
-  const title = historyTitle(history);
-  const subject = EnrichmentSubjectSchema.parse({
-    channel: request.channel,
-    listingId,
-    variantId,
-    collectionOperationId: collection.operationId,
-    observation: collection.observation,
-    title,
+  return {
+    title: historyTitle(checkedHistory(rows[0])),
     titleEvidence: rows[0]
       ? { sourceId: rows[0].source_record_id, sha256: rows[0].body_hash }
       : null,
-  });
-  return { collection, subject };
+  };
 }
 
 async function verifyFormulaOwner(
@@ -88,6 +100,41 @@ async function verifyFormulaOwner(
       throw enrichmentErrors.create("ENRICH.INPUT_MISSING");
     }
   }
+}
+
+/**
+ * A backfill carries no capture to read (owner 2026-10-26): the page material read from the capture for this
+ * collection's latest enrichment stands in, so the description and website variant are not lost on a re-run.
+ */
+async function earlierPage(
+  database: Queryable,
+  identity: {
+    channel: string;
+    listingId: string;
+    variantId: string | null;
+    collectionOperationId: string;
+  },
+) {
+  const rows = await database.query<{ subject: unknown }>(
+    `
+    SELECT subject FROM product_enrichment_subject
+     WHERE channel = $1 AND listing_id = $2 AND variant_id IS NOT DISTINCT FROM $3
+       AND collection_operation_id = $4 AND subject->>'title' IS NOT NULL
+     ORDER BY registered_at DESC, subject_id DESC LIMIT 1`,
+    [identity.channel, identity.listingId, identity.variantId, identity.collectionOperationId],
+  );
+  if (!rows[0]) {
+    return null;
+  }
+  const { title, titleEvidence, description, websiteVariant } = EnrichmentSubjectSchema.parse(
+    rows[0].subject,
+  );
+  return {
+    title,
+    titleEvidence,
+    ...(description === undefined ? {} : { description }),
+    ...(websiteVariant ? { websiteVariant } : {}),
+  };
 }
 
 function historyTitle(history: z.infer<typeof HistorySchema> | null) {
