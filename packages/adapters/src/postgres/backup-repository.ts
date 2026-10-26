@@ -1,9 +1,10 @@
 import { execFile } from "node:child_process";
-import { chmod, mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { createReadStream } from "node:fs";
+import { chmod, mkdtemp, writeFile } from "node:fs/promises";
 import { isAbsolute, join } from "node:path";
 import { promisify } from "node:util";
 import { migrationErrors } from "@crawl-automation/app";
-import { migrationDigest } from "../migrations/sql-catalog.js";
 import type { MigrationQuery } from "./migration-history-repository.js";
 
 const execute = promisify(execFile);
@@ -44,7 +45,7 @@ export class BackupRepository {
         format: 1,
         database: this.connection.database,
         createdAt: new Date().toISOString(),
-        sha256: migrationDigest(await readFile(file)),
+        sha256: await fileDigest(file),
         applied,
         recovery: "quarantine-required",
       };
@@ -99,4 +100,13 @@ export class BackupRepository {
       PGOPTIONS: "-c search_path=public -c statement_timeout=0",
     };
   }
+}
+
+/** Streamed: the 2026-10-26 dump passed 2 GiB, the most `readFile` returns, and stopped migration 068. */
+async function fileDigest(file: string): Promise<string> {
+  const hash = createHash("sha256");
+  for await (const chunk of createReadStream(file)) {
+    hash.update(chunk as Buffer);
+  }
+  return hash.digest("hex");
 }
