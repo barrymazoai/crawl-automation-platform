@@ -19,6 +19,10 @@ export const enrichmentRouter = router({
   missing: procedure
     .input(z.strictObject({ limit: z.number().int().min(1).max(100) }))
     .query(({ ctx, input }) => service(ctx.enrichment).list(input.limit)),
+  /** Sent products whose enrichment is missing or from an older protocol, most needed first. */
+  outdated: procedure
+    .input(z.strictObject({ limit: z.number().int().min(1).max(100) }))
+    .query(({ ctx, input }) => service(ctx.enrichment).outdated(input.limit)),
   run: procedure
     .input(EnrichmentBackfillSchema)
     .mutation(({ ctx, input }) => service(ctx.enrichment).run(input)),

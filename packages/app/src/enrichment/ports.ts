@@ -23,6 +23,11 @@ export interface EnrichmentRepository {
   register(record: SharedEnrichmentRecord): Promise<void>;
   attach(subject: EnrichmentSubject, inputHash: string): Promise<void>;
   missing(limit: number): Promise<EnrichmentRequest[]>;
+  /**
+   * Products already sent to Supply Smart whose enrichment is missing or from an older protocol: none first, then
+   * /2, then the rest (owner 2026-10-26). A Whole Foods product is enriched as its Amazon ASIN, whose page it shares.
+   */
+  outdated(limit: number): Promise<EnrichmentRequest[]>;
 }
 
 export interface EnrichmentDependencies {

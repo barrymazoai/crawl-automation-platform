@@ -105,6 +105,7 @@ export type ReopenFilter = { channel?: MarketplaceChannel; limit: number } & (
   | { unfinished: true }
   | { present: true }
   | { withLabel: true }
+  | { enriched: true }
 );
 
 export interface ReopenResult {

@@ -69,6 +69,7 @@ it.skipIf(!directory)(
       repository: {
         source: async () => ({ collection, subject: original }),
         missing: async () => [],
+        outdated: async () => [],
         claim: async () => true,
         read: async (key) => records.get(key) ?? null,
         register: async (record) => {

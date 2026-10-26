@@ -11,12 +11,14 @@ export const EnrichmentBackfillSchema = z.strictObject({
   limit: z.number().int().min(1).max(100),
   approvedCount: z.number().int().min(1).max(100),
   products: z.array(EnrichmentRequestSchema).min(1).max(100).optional(),
+  /** Without `products`: never-enriched collections (default) or sent products on an older protocol. */
+  selection: z.enum(["missing", "outdated"]).default("missing"),
 });
 
 /** Manual, bounded dispatch only. No timer, polling loop, capture or business retry. */
 export class EnrichmentBackfill {
   constructor(
-    private readonly repository: Pick<EnrichmentRepository, "missing"> & {
+    private readonly repository: Pick<EnrichmentRepository, "missing" | "outdated"> & {
       readSubject?(request: EnrichmentRequest): Promise<SharedEnrichmentRecord | null>;
     },
     private readonly starter: EnrichmentStarter,
@@ -26,6 +28,10 @@ export class EnrichmentBackfill {
     return this.repository.missing(z.number().int().min(1).max(100).parse(limit));
   }
 
+  outdated(limit: number) {
+    return this.repository.outdated(z.number().int().min(1).max(100).parse(limit));
+  }
+
   result(raw: EnrichmentRequest) {
     if (!this.repository.readSubject) {
       throw enrichmentErrors.create("ENRICH.SETTINGS_MISSING");
@@ -33,7 +39,7 @@ export class EnrichmentBackfill {
     return this.repository.readSubject(EnrichmentRequestSchema.parse(raw));
   }
 
-  async run(raw: z.infer<typeof EnrichmentBackfillSchema>) {
+  async run(raw: z.input<typeof EnrichmentBackfillSchema>) {
     const input = EnrichmentBackfillSchema.parse(raw);
     if (
       input.limit !== input.approvedCount ||
@@ -41,7 +47,11 @@ export class EnrichmentBackfill {
     ) {
       throw enrichmentErrors.create("ENRICH.BACKFILL_INVALID");
     }
-    const selected = input.products ?? (await this.list(input.limit));
+    const selected =
+      input.products ??
+      (await (input.selection === "outdated"
+        ? this.outdated(input.limit)
+        : this.list(input.limit)));
     if (selected.length > input.approvedCount) {
       throw enrichmentErrors.create("ENRICH.BACKFILL_INVALID");
     }

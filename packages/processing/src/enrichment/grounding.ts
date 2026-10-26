@@ -1,4 +1,4 @@
-import type { EnrichmentCandidate } from "@crawl-automation/v3-contracts";
+import type { EnrichmentCandidate, HealthFunctionClaim } from "@crawl-automation/v3-contracts";
 import { enrichmentErrors } from "./errors.js";
 import { groundForm } from "./form.js";
 import type { EnrichmentContent } from "./protocol.js";
@@ -37,7 +37,7 @@ export function groundedCandidate(
     : input.title;
   warnings.push(
     ...groundQuantities(candidate, quantities, Boolean(input.websiteVariant)),
-    ...groundForm(candidate, source),
+    ...groundForm(candidate, printed),
     ...groundIngredients(candidate, printedStrings(input.label)),
   );
   if (warnings.length) {
@@ -47,28 +47,66 @@ export function groundedCandidate(
 }
 
 /**
- * A health function must be printed word for word; any other claim is optional data that is dropped with a warning
- * instead of refusing the whole product (2026-10-12: 7 DTC products sat in Review over one unprinted claim).
+ * A health function's printed words must be printed word for word; any other claim is optional data that is dropped
+ * with a warning instead of refusing the whole product (2026-10-12: 7 DTC products sat in Review over one unprinted
+ * claim). Its name is a short category (owner 2026-10-26) and need not be printed; a sentence is dropped.
  */
 function groundHealthFunctions(
   candidate: EnrichmentCandidate,
   evidence: { printed: string[]; source: Set<string> },
 ) {
   const warnings: string[] = [];
-  candidate.healthFunctions = candidate.healthFunctions.filter((claim) => {
-    const word = unsupportedWord(claim, evidence.source);
+  const kept: HealthFunctionClaim[] = [];
+  for (const claim of candidate.healthFunctionEvidence ?? []) {
+    const word = unsupportedWord(claim.printed, evidence.source);
     const reason = word
       ? `unsupported-word:healthFunctions:${word}`
-      : evidence.printed.some((text) => text.includes(normalizedText(claim)))
-        ? null
-        : `health-function-not-printed:${claim.slice(0, 80)}`;
+      : !evidence.printed.some((text) => text.includes(normalizedText(claim.printed)))
+        ? `health-function-not-printed:${claim.printed.slice(0, 80)}`
+        : healthFunctionNameProblem(claim.name);
     if (reason) {
       warnings.push(reason);
+    } else if (!kept.some((entry) => sameName(entry.name, claim.name))) {
+      kept.push(claim);
     }
-    return !reason;
-  });
+  }
+  candidate.healthFunctionEvidence = kept;
+  candidate.healthFunctions = kept.map((claim) => claim.name);
+  const inferred = candidate.inferredHealthFunctions ?? [];
+  const named = inferred.filter((name) => !healthFunctionNameProblem(name));
+  if (named.length < inferred.length) {
+    warnings.push("inferred-health-function-not-a-name");
+  }
+  candidate.inferredHealthFunctions = named.filter(
+    (name, index) => named.findIndex((other) => sameName(other, name)) === index,
+  );
   return warnings;
 }
+
+/** A category is a short noun phrase ("Joint Health"); a printed claim copied as the name starts with its verb. */
+const MAX_NAME_WORDS = 4;
+const CLAIM_VERBS = new Set([
+  "supports",
+  "promotes",
+  "helps",
+  "maintains",
+  "provides",
+  "boosts",
+  "enhances",
+  "improves",
+  "reduces",
+  "contains",
+  "may",
+  "for",
+  "to",
+]);
+function healthFunctionNameProblem(name: string) {
+  const parts = words(name);
+  return parts.length > MAX_NAME_WORDS || CLAIM_VERBS.has(parts[0] ?? "")
+    ? `health-function-not-a-name:${name.slice(0, 80)}`
+    : null;
+}
+const sameName = (left: string, right: string) => words(left).join(" ") === words(right).join(" ");
 
 /**
  * Owner 2026-10-08: main ingredients must be copied from the label's own names (anything else is dropped with a

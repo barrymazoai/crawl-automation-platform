@@ -1,5 +1,9 @@
 import type { Queryable } from "@crawl-automation/platform";
-import { EnrichmentRequestSchema, type EnrichmentRequest } from "@crawl-automation/v3-contracts";
+import {
+  EnrichmentRequestSchema,
+  SHARED_ENRICHMENT_PROTOCOL,
+  type EnrichmentRequest,
+} from "@crawl-automation/v3-contracts";
 
 /** Own collections and verified formula links, regardless of their collection age. */
 export const MISSING_ENRICHMENT = `
@@ -40,6 +44,53 @@ export async function missingEnrichment(
     listing_id: string;
     variant_id: string | null;
   }>(sql, [limit]);
+  return rows.map((row) =>
+    EnrichmentRequestSchema.parse({
+      collectionOperationId: row.operation_id,
+      channel: row.channel,
+      listingId: row.listing_id,
+      variantId: row.variant_id,
+    }),
+  );
+}
+
+/**
+ * Sent marketplace products (the sync ledger) whose collection has no enrichment of the current protocol for the
+ * channel delivery reads: Whole Foods carries its Amazon ASIN's collection and reads the Amazon subject. Never
+ * enriched first, then /2 (no main ingredients), then the rest.
+ */
+export const OUTDATED_ENRICHMENT = `
+  WITH sent AS (
+    SELECT DISTINCT ps.collected_operation_id AS operation_id,
+           CASE ps.channel WHEN 'wholefoods' THEN 'amazon' ELSE ps.channel END AS channel
+      FROM product_sync ps
+     WHERE ps.collected_operation_id IS NOT NULL AND ps.status IN ('verified', 'sent')),
+  targets AS (
+    SELECT t.operation_id, t.channel, p.record->'observation'->>'listingId' AS listing_id,
+           p.record->'observation'->>'variantId' AS variant_id
+      FROM sent t JOIN collected_product p ON p.operation_id = t.operation_id)
+  SELECT t.*, latest.codec FROM targets t
+  LEFT JOIN LATERAL (
+    SELECT e.record->>'codec' AS codec FROM product_enrichment_subject s
+      JOIN product_enrichment e USING (enrichment_id)
+     WHERE s.collection_operation_id = t.operation_id AND s.channel = t.channel
+       AND s.listing_id = t.listing_id AND s.variant_id IS NOT DISTINCT FROM t.variant_id
+     ORDER BY s.registered_at DESC, s.subject_id DESC LIMIT 1) latest ON true
+  WHERE latest.codec IS DISTINCT FROM $2
+  ORDER BY CASE WHEN latest.codec IS NULL THEN 0 WHEN latest.codec = 'product-enrichment/2' THEN 1 ELSE 2 END,
+    t.channel, t.listing_id, t.variant_id NULLS FIRST, t.operation_id
+  LIMIT $1`;
+
+export async function outdatedEnrichment(
+  database: Queryable,
+  limit: number,
+): Promise<EnrichmentRequest[]> {
+  const rows = await database.query<{
+    operation_id: string;
+    channel: string;
+    listing_id: string;
+    variant_id: string | null;
+  }>(OUTDATED_ENRICHMENT, [limit, SHARED_ENRICHMENT_PROTOCOL]);
   return rows.map((row) =>
     EnrichmentRequestSchema.parse({
       collectionOperationId: row.operation_id,

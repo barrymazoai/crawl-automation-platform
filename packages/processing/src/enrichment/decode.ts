@@ -26,5 +26,13 @@ export function decodeEnrichment(response: string, input: EnrichmentContent["inp
       details: { reason: "schema", issues },
     });
   }
-  return groundedCandidate(parsed.data, input);
+  const { healthFunctions: claims, ...output } = parsed.data;
+  return groundedCandidate(
+    {
+      ...output,
+      healthFunctions: claims.map((claim) => claim.name),
+      healthFunctionEvidence: claims,
+    },
+    input,
+  );
 }

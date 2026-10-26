@@ -9,7 +9,7 @@ import {
   type SharedEnrichmentRecord,
 } from "@crawl-automation/v3-contracts";
 import { enrichmentSource } from "./enrichment-source.js";
-import { missingEnrichment } from "./enrichment-selection.js";
+import { missingEnrichment, outdatedEnrichment } from "./enrichment-selection.js";
 
 /** Attempts, successful results and their subjects are all append-only. */
 export class PostgresEnrichmentRepository implements EnrichmentRepository {
@@ -27,6 +27,9 @@ export class PostgresEnrichmentRepository implements EnrichmentRepository {
   }
   missing(limit: number) {
     return missingEnrichment(this.database, limit);
+  }
+  outdated(limit: number) {
+    return outdatedEnrichment(this.database, limit);
   }
 
   async readSubject(request: EnrichmentRequest): Promise<SharedEnrichmentRecord | null> {

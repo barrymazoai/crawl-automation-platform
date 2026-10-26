@@ -4,7 +4,10 @@ import type { SharedEnrichmentRecord } from "@crawl-automation/v3-contracts";
 
 const product = { collectionOperationId: "collection", channel: "gnc" as const };
 function setup() {
-  const repository = { missing: vi.fn(async () => [product]) };
+  const repository = {
+    missing: vi.fn(async () => [product]),
+    outdated: vi.fn(async () => [{ ...product, listingId: "outdated" }]),
+  };
   const starter = { start: vi.fn(async () => ({ workflowId: "enrich-one" })) };
   return { repository, starter, service: new EnrichmentBackfill(repository, starter) };
 }
@@ -36,9 +39,22 @@ it("without an explicit list, selects at most the approved count", async () => {
   expect(state.repository.missing).toHaveBeenCalledWith(1);
   expect(state.starter.start).toHaveBeenCalledWith(product);
 });
+it("selects sent products on an older protocol only when asked (owner 2026-10-26)", async () => {
+  const state = setup();
+  await state.service.run({ limit: 3, approvedCount: 3, selection: "outdated" });
+  expect(state.repository.outdated).toHaveBeenCalledWith(3);
+  expect(state.repository.missing).not.toHaveBeenCalled();
+  expect(state.starter.start).toHaveBeenCalledWith({ ...product, listingId: "outdated" });
+  expect(await state.service.outdated(5)).toEqual([{ ...product, listingId: "outdated" }]);
+  expect(() => state.service.outdated(101)).toThrow();
+});
 it("returns the persisted enrichment without dispatching a workflow", async () => {
   const record = { candidate: { unifiedName: "Vitamin D" } } as SharedEnrichmentRecord;
-  const repository = { missing: vi.fn(async () => []), readSubject: vi.fn(async () => record) };
+  const repository = {
+    missing: vi.fn(async () => []),
+    outdated: vi.fn(async () => []),
+    readSubject: vi.fn(async () => record),
+  };
   const starter = { start: vi.fn() };
   const service = new EnrichmentBackfill(repository, starter);
   expect(await service.result(product)).toEqual(record);

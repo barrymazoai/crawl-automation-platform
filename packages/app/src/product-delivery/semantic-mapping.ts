@@ -27,7 +27,7 @@ export function deliverySemantics(
   return {
     baseName: candidate.baseName,
     ...(form ? { productForm: form } : {}),
-    healthFunctions: candidate.healthFunctions,
+    healthFunctions: healthFunctions(candidate),
     ...mainIngredients(candidate.functionalIngredients),
     ...(Object.keys(variant).length
       ? {
@@ -37,6 +37,16 @@ export function deliverySemantics(
         }
       : {}),
   };
+}
+
+/**
+ * Printed health functions; when none is printed, those inferred from the main ingredients (owner 2026-10-26).
+ * Grounding keeps inferred ones only when none is printed and main ingredients exist.
+ */
+function healthFunctions(candidate: SharedEnrichmentRecord["candidate"]) {
+  return candidate.healthFunctions.length
+    ? candidate.healthFunctions
+    : (candidate.inferredHealthFunctions ?? []);
 }
 
 function mainIngredients(value: string[] | undefined) {

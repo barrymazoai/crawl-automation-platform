@@ -25,7 +25,8 @@ export type MarkPresent = z.infer<typeof MarkPresentSchema>;
  * Products to send again after a fix: failures with a reason, e.g. `PRODUCT_DELIVERY.MATERIAL_MISSING`, verified
  * products sent without a formula (`withoutLabel`), or attempts whose outcome never arrived (`unfinished`, a batch
  * cut off by a 429), 2026-10-12, the `present` baseline (listings Supply Smart had without our formula, 2026-10-13),
- * or verified products sent with a formula (`withLabel`: resend with the label confidence, 2026-10-16).
+ * or verified products sent with a formula (`withLabel`: resend with the label confidence, 2026-10-16), or verified
+ * products enriched again after they were sent (`enriched`: form and health functions of a newer protocol, 2026-10-26).
  * Exactly one of them.
  */
 export const ReopenSyncSchema = z.union([
@@ -67,6 +68,12 @@ export const ReopenSyncSchema = z.union([
   z.strictObject({
     channel: channel.optional(),
     withLabel: z.literal(true),
+    limit: z.number().int().min(1).max(20_000),
+  }),
+  // Verified products whose enrichment of the current protocol is newer than the send (owner 2026-10-26).
+  z.strictObject({
+    channel: channel.optional(),
+    enriched: z.literal(true),
     limit: z.number().int().min(1).max(20_000),
   }),
 ]);

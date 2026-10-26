@@ -22,10 +22,12 @@ const candidate: EnrichmentCandidate = {
 
 const decode = (value: unknown, evidence = input) =>
   decodeEnrichment(JSON.stringify(value), evidence);
+/** What a model answer without health functions decodes to: names and their (empty) printed evidence. */
+const grounded = <T extends object>(value: T) => ({ ...value, healthFunctionEvidence: [] });
 
 describe("enrichment refusals", () => {
   it("preserves grounded output and null optional fields", () => {
-    expect(decode(candidate)).toEqual(candidate);
+    expect(decode(candidate)).toEqual(grounded(candidate));
   });
   it.each([
     ["not-json", { reason: "schema", issues: [{ path: [], code: "invalid_json" }] }],
@@ -50,7 +52,7 @@ describe("enrichment refusals", () => {
   it("accepts exactly 64 KB, with the same byte boundary used by answer retention", () => {
     const response = JSON.stringify(candidate);
     expect(decodeEnrichment(response.padEnd(ENRICHMENT_RESPONSE_BYTES, " "), input)).toEqual(
-      candidate,
+      grounded(candidate),
     );
   });
   it("does not let model-supplied warnings bypass grounding", () => {
@@ -76,14 +78,44 @@ describe("enrichment refusals", () => {
     ["no sugar", "health-function-not-printed:no sugar"],
   ])("drops an unsupported health claim and keeps the product: %s", (claim, warning) => {
     const evidence = { ...input, label: ["Supports bones", "no artificial color", "sugar"] };
-    const result = decode({ ...candidate, healthFunctions: ["Supports bones", claim] }, evidence);
-    expect(result.healthFunctions).toEqual(["Supports bones"]);
+    const bones = { name: "Bone Health", printed: "Supports bones" };
+    const result = decode(
+      { ...candidate, healthFunctions: [bones, { name: "Other Claim", printed: claim }] },
+      evidence,
+    );
+    expect(result.healthFunctions).toEqual(["Bone Health"]);
+    expect(result.healthFunctionEvidence).toEqual([bones]);
     expect(result.warnings).toContain(warning);
     expect(result.unifiedName).toBe(candidate.unifiedName);
   });
-  it("preserves an explicitly printed health claim", () => {
-    const value = { ...candidate, healthFunctions: ["Supports BONES"] };
-    expect(decode(value, { ...input, label: "Supports bones" })).toEqual(value);
+  it("names an explicitly printed health claim by its short category (product-enrichment/4)", () => {
+    const claim = { name: "Bone Health", printed: "Supports BONES" };
+    const value = { ...candidate, healthFunctions: [claim] };
+    expect(decode(value, { ...input, label: "Supports bones" })).toEqual({
+      ...candidate,
+      healthFunctions: ["Bone Health"],
+      healthFunctionEvidence: [claim],
+    });
+  });
+  it("drops a sentence given as a name and merges two claims under one name", () => {
+    const evidence = {
+      ...input,
+      label: ["Supports bones", "Promotes strong bones", "Supports healthy joint function"],
+    };
+    const result = decode(
+      {
+        ...candidate,
+        healthFunctions: [
+          { name: "Bone Health", printed: "Supports bones" },
+          { name: "bone health", printed: "Promotes strong bones" },
+          { name: "Supports healthy joint function", printed: "Supports healthy joint function" },
+          { name: "Bone Joint Muscle Heart Health", printed: "Promotes strong bones" },
+        ],
+      },
+      evidence,
+    );
+    expect(result.healthFunctions).toEqual(["Bone Health"]);
+    expect(result.warnings).toContain("health-function-not-a-name:Supports healthy joint function");
   });
 });
 
@@ -97,7 +129,7 @@ describe("optional enrichment grounding", () => {
   });
   it("retains explicit flavor and strength from label text", () => {
     const value = { ...candidate, variant: { ...candidate.variant, flavor: "Orange" } };
-    expect(decode(value, { ...input, label: ["Orange", "1 capsule"] })).toEqual(value);
+    expect(decode(value, { ...input, label: ["Orange", "1 capsule"] })).toEqual(grounded(value));
   });
   it("keeps warnings even when model notes already fill the allowed length", () => {
     const value = { ...candidate, form: "liquid", notes: "a".repeat(1000) };
@@ -171,7 +203,7 @@ describe("package quantities", () => {
         variant: { ...candidate.variant, count: 31, strength: null },
       };
       expect(decode(value, { ...input, title })).toEqual({
-        ...value,
+        ...grounded(value),
         variant: { ...value.variant, count: null },
         warnings: ["count-not-in-title"],
       });
@@ -190,7 +222,7 @@ describe("package quantities", () => {
   it.each(["Vitamin D 60ct 25 mcg", "Vitamin D 60 capsules (30 Servings) 25 mcg"])(
     "retains explicit package unit counts: %s",
     (title) => {
-      expect(decode(candidate, { ...input, title })).toEqual(candidate);
+      expect(decode(candidate, { ...input, title })).toEqual(grounded(candidate));
     },
   );
   it.each([
@@ -247,7 +279,7 @@ describe("dosage form", () => {
       },
     };
     expect(decode(value, evidence)).toEqual({
-      ...value,
+      ...grounded(value),
       form: "unknown",
       variant: { ...value.variant, count: null },
       warnings: ["count-not-in-title", "form-not-printed:liquid"],
@@ -304,11 +336,27 @@ describe("main ingredients and health functions (product-enrichment/3, owner 202
     const inferred = {
       ...candidate,
       functionalIngredients: ["Glucosamine Sulfate"],
-      inferredHealthFunctions: ["joint health"],
+      inferredHealthFunctions: ["Joint Health", "joint health"],
     };
-    expect(decode(inferred, label).inferredHealthFunctions).toEqual(["joint health"]);
+    expect(decode(inferred, label).inferredHealthFunctions).toEqual(["Joint Health"]);
     const none = decode({ ...inferred, functionalIngredients: [] }, label);
     expect(none.inferredHealthFunctions).toEqual([]);
+  });
+
+  it("drops an inferred health function written as a sentence", () => {
+    const decoded = decode(
+      {
+        ...candidate,
+        functionalIngredients: ["Glucosamine Sulfate"],
+        inferredHealthFunctions: [
+          "Joint Health",
+          "helps maintain healthy joint cartilage and comfort",
+        ],
+      },
+      label,
+    );
+    expect(decoded.inferredHealthFunctions).toEqual(["Joint Health"]);
+    expect(decoded.warnings).toContain("inferred-health-function-not-a-name");
   });
 
   it("reads printed health functions and form from the page description", () => {
@@ -324,11 +372,11 @@ describe("main ingredients and health functions (product-enrichment/3, owner 202
         baseName: "Joint Formula",
         variant: { count: null, size: null, flavor: null, strength: null },
         form: "tablet",
-        healthFunctions: ["Supports joint health"],
+        healthFunctions: [{ name: "Joint Health", printed: "Supports joint health" }],
       },
       described,
     );
-    expect(decoded.healthFunctions).toEqual(["Supports joint health"]);
+    expect(decoded.healthFunctions).toEqual(["Joint Health"]);
     expect(decoded.form).toBe("tablet");
   });
 });

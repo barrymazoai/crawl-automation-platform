@@ -4,7 +4,7 @@ import { deliveryProduct, deliveryRequest } from "./product.fixture.js";
 import { deliveryEnrichmentFixture } from "./enrichment.fixture.js";
 
 describe("settled DTC observation mapping", () => {
-  it("maps only grounded enrichment and never treats unit count as servings or inferred functions as observations", () => {
+  it("maps only grounded enrichment, never treats unit count as servings, and prefers printed functions", () => {
     const source = deliveryProduct();
     if (!source.collection) {
       throw new Error("fixture");
@@ -23,6 +23,17 @@ describe("settled DTC observation mapping", () => {
     expect(item.variant).not.toHaveProperty("pack");
     expect(item.variant).not.toHaveProperty("servings");
     expect(item.healthFunctions).not.toContain("Sleep");
+  });
+
+  it("sends the functions inferred from the main ingredients when none is printed (owner 2026-10-26)", () => {
+    const source = deliveryProduct();
+    if (!source.collection) {
+      throw new Error("fixture");
+    }
+    const enrichment = deliveryEnrichmentFixture(source.collection);
+    enrichment.candidate = { ...enrichment.candidate, healthFunctions: [] };
+    source.enrichment = enrichment;
+    expect(mapDeliveryProduct(source, deliveryRequest).item.healthFunctions).toEqual(["Sleep"]);
   });
 
   it("keeps a valid ingredients-only result without inventing Facts", () => {

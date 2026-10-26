@@ -44,7 +44,7 @@ including inside an otherwise completed DTC page. Internal optional-source Revie
 | Enrichment `baseName`, known `form`                          | `baseName`, `productForm`, `variant.form`                                |
 | Enrichment flavor, strength, size; unit count if no size     | `variant.flavor`, `strength`, `size` (count is **not** pack or servings) |
 | Enrichment confidence in 0–1                                 | `variantConfidence` in 0–100, `variantSource = ai_extract`               |
-| Printed health functions, grounded functional ingredients    | `healthFunctions`, `mainIngredients`                                     |
+| Printed (else inferred) health functions, main ingredients   | `healthFunctions`, `mainIngredients`                                     |
 | Capture history timestamp and non-null normalized metrics    | `capturedAt`, price/currency/stock/rating/reviews/rank/sales fields      |
 | Own/shared product gallery URLs, excluding other variants    | `images[]` with stable gallery handles                                   |
 | Website options / variants, retained commerce extras         | `attrsRaw`, `extras`                                                     |
@@ -79,7 +79,7 @@ completion is domain-scoped and could otherwise deactivate another sub-brand. On
 - Label confidence is a fixed 100 for every label that passed our checks (owner 2026-10-16): Supply Smart makes a
   formula the current one only with a confidence of at least 70. `LABEL_SUBMISSION` in the label's IDs makes the
   resend with confidence a new submission there.
-- Inferred (not printed) health functions are not submitted as observations.
+- Health functions inferred from the main ingredients are submitted only when none is printed (owner 2026-10-26).
 - Full labels do not use the lossy v1 `facts.rows` endpoint. Drug Facts extensions unsupported by the copied
   Supply Smart label schema are refused rather than silently removed. Ingredients-only v5 labels remain valid.
 - Old schemas without a current collected label, metric-only/formula-link outcomes without an exact owned label,

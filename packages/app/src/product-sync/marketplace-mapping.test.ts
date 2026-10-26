@@ -79,7 +79,8 @@ describe.skipIf(!marketplaceSamplesPath)("mapping the 15 supplied marketplace ru
       variant: { size: "30 count", form: "capsule" },
       variantSource: "ai_extract",
     });
-    expect(itemOf("B00551W73C").healthFunctions).toEqual([]);
+    // Nothing printed: the function inferred from its main ingredients is sent (owner 2026-10-26).
+    expect(itemOf("B00551W73C").healthFunctions).toEqual(["heart health"]);
   });
   it("keeps Swanson's queue handle/history SKU/website variant in their own namespaces", () => {
     const input = sample("country-life-core-daily-1-women-50-60-tabs");

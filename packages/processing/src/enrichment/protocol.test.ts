@@ -71,7 +71,7 @@ describe("enrichment protocol", () => {
       }).inputHash,
     ).not.toBe(current.inputHash);
     expect(old.input).toEqual({
-      protocol: "product-enrichment/3",
+      protocol: "product-enrichment/4",
       title: "Zinc Copper",
       label: { formula: {}, ingredients: [], otherIngredients: null },
     });

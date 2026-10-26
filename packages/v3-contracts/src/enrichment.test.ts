@@ -20,10 +20,25 @@ it("preserves optional decoder warnings through JSON storage", () => {
   expect(EnrichmentCandidateSchema.parse(JSON.parse(JSON.stringify(stored)))).toEqual(stored);
 });
 
-it("keeps warnings out of the unchanged model output contract", () => {
-  expect(EnrichmentModelOutputSchema.parse(candidate)).toEqual(candidate);
+it("keeps warnings out of the model output contract", () => {
+  const output = { ...candidate, functionalIngredients: [], inferredHealthFunctions: [] };
+  expect(EnrichmentModelOutputSchema.parse(output)).toEqual(output);
   expect(
-    EnrichmentModelOutputSchema.safeParse({ ...candidate, warnings: ["form-not-printed:liquid"] })
+    EnrichmentModelOutputSchema.safeParse({ ...output, warnings: ["form-not-printed:liquid"] })
       .success,
   ).toBe(false);
+});
+
+it("asks the model for each health function as a name with its printed words (product-enrichment/4)", () => {
+  const output = { ...candidate, functionalIngredients: [], inferredHealthFunctions: [] };
+  const claim = { name: "Bone Health", printed: "Supports bones" };
+  expect(EnrichmentModelOutputSchema.parse({ ...output, healthFunctions: [claim] })).toMatchObject({
+    healthFunctions: [claim],
+  });
+  expect(
+    EnrichmentModelOutputSchema.safeParse({ ...output, healthFunctions: ["Supports bones"] }).success,
+  ).toBe(false);
+  // Stored /3 candidates keep plain names and no evidence.
+  expect(EnrichmentCandidateSchema.parse({ ...candidate, healthFunctions: ["Supports bones"] }))
+    .toMatchObject({ healthFunctions: ["Supports bones"] });
 });

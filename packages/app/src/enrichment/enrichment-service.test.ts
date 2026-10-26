@@ -62,6 +62,7 @@ function setup() {
     repository: {
       source: vi.fn(async () => source),
       missing: vi.fn(async () => [request]),
+      outdated: vi.fn(async () => []),
       claim: vi.fn(async (hash) => {
         if (claims.has(hash)) {
           return false;
@@ -221,6 +222,7 @@ it("persists and reuses warnings without changing notes, raw answers or collecte
     ...answer,
     form: "unknown",
     notes: "Check dosage form",
+    healthFunctionEvidence: [],
     warnings: ["form-not-printed:liquid"],
   };
   expect(first).toMatchObject({ status: "registered", candidate, reused: false });

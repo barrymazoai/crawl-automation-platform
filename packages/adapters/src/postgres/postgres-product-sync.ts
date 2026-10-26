@@ -14,6 +14,7 @@ import type {
 import type { Queryable } from "@crawl-automation/platform";
 import { PENDING_SYNC, settledMarketplace } from "../product-sync/marketplace-queries.js";
 import { reopenAmazonListingDates } from "./product-sync-listing-dates.js";
+import { reopenSync } from "./product-sync-reopen.js";
 import { markRemoved, notSupplementsDelivered } from "./product-sync-removals.js";
 
 interface Row {
@@ -146,39 +147,10 @@ export class PostgresProductSync implements ProductSyncLedger {
     };
   }
 
-  async reopen(filter: ReopenFilter): Promise<ReopenResult> {
-    if ("listingDates" in filter) {
-      return reopenAmazonListingDates(this.database, filter);
-    }
-    const rows = await this.database.query<{ reopened: number }>(
-      `WITH picked AS (
-         SELECT channel, listing_id, variant_key FROM product_sync
-         WHERE ($1::text IS NULL OR channel = $1) AND (
-           (status = 'failed' AND error->>'reason' = $2)
-           -- Sent without a formula: the ledger keeps the formula's operation for every product that carried one.
-           OR ($4::boolean AND status = 'verified' AND collected_operation_id IS NULL)
-           -- Outcome never recorded; old enough that no batch is still sending it.
-           OR ($5::boolean AND status = 'sent' AND updated_at < now() - interval '10 minutes')
-           OR ($6::boolean AND status = 'present')
-           OR ($7::boolean AND status = 'verified' AND collected_operation_id IS NOT NULL))
-         ORDER BY updated_at LIMIT $3),
-       moved AS (
-         UPDATE product_sync ps SET material_at = '-infinity', updated_at = clock_timestamp()
-         FROM picked WHERE ps.channel = picked.channel AND ps.listing_id = picked.listing_id
-           AND ps.variant_key = picked.variant_key
-         RETURNING 1)
-       SELECT count(*)::int AS reopened FROM moved`,
-      [
-        filter.channel ?? null,
-        "reason" in filter ? filter.reason : null,
-        filter.limit,
-        "withoutLabel" in filter,
-        "unfinished" in filter,
-        "present" in filter,
-        "withLabel" in filter,
-      ],
-    );
-    return { reopened: rows[0]?.reopened ?? 0 };
+  reopen(filter: ReopenFilter): Promise<ReopenResult> {
+    return "listingDates" in filter
+      ? reopenAmazonListingDates(this.database, filter)
+      : reopenSync(this.database, filter);
   }
 
   markRemoved(key: SyncKey): Promise<void> {

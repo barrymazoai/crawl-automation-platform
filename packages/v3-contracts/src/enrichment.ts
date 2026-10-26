@@ -10,6 +10,16 @@ export const ENRICHMENT_PROTOCOL = "product-enrichment/1";
 export const EnrichmentInputSchema = z.strictObject({ schemaVersion: z.literal(1), collectionOperationId: ExecutionIdSchema });
 export type EnrichmentInput = z.infer<typeof EnrichmentInputSchema>;
 
+/**
+ * product-enrichment/4 (owner 2026-10-26): a printed health function as a short category name (2 to 4 words, e.g.
+ * "Joint Health"), with the printed words it stands for. Only the name is sent; the printed words are its evidence.
+ */
+export const HealthFunctionClaimSchema = z.strictObject({
+  name: z.string().trim().min(1).max(60),
+  printed: z.string().trim().min(1).max(300),
+});
+export type HealthFunctionClaim = z.infer<typeof HealthFunctionClaimSchema>;
+
 export const DosageFormSchema = z.enum(["capsule", "softgel", "tablet", "chewable", "gummy", "powder", "liquid", "drops", "spray", "bar", "lozenge", "other", "unknown"]);
 /** Model output. Every value is derived from the product's own title, formula and ingredients; nothing is guessed from brand lore. */
 export const EnrichmentCandidateSchema = z.strictObject({
@@ -23,6 +33,8 @@ export const EnrichmentCandidateSchema = z.strictObject({
     strength: z.string().trim().min(1).max(100).nullable(),
   }),
   healthFunctions: z.array(z.string().trim().min(1).max(100)).max(12),
+  /** product-enrichment/4: the printed words behind each health function name. Absent earlier. */
+  healthFunctionEvidence: z.array(HealthFunctionClaimSchema).max(12).optional(),
   /**
    * product-enrichment/3 (owner 2026-10-08): the main ingredients that matter for the product, copied from its own
    * formula/ingredient names, without ordinary items (panel basics, fillers, capsule materials, sweeteners...).
@@ -37,7 +49,8 @@ export const EnrichmentCandidateSchema = z.strictObject({
   warnings: z.array(z.string().min(1).max(500)).max(10).optional(),
 });
 export type EnrichmentCandidate = z.infer<typeof EnrichmentCandidateSchema>;
-export const EnrichmentModelOutputSchema = EnrichmentCandidateSchema.omit({ warnings: true }).extend({
+export const EnrichmentModelOutputSchema = EnrichmentCandidateSchema.omit({ warnings: true, healthFunctionEvidence: true }).extend({
+  healthFunctions: z.array(HealthFunctionClaimSchema).max(12),
   functionalIngredients: z.array(z.string().trim().min(1).max(300)).max(60),
   inferredHealthFunctions: z.array(z.string().trim().min(1).max(100)).max(12),
 });
@@ -74,7 +87,7 @@ export const RecentAttemptSchema = z.strictObject({ schemaVersion: z.literal(1),
 export type RecentAttempt = z.infer<typeof RecentAttemptSchema>;
 
 /** Shared pipeline protocol: hashes the actual title and label, independently of provenance. */
-export const SHARED_ENRICHMENT_PROTOCOL = "product-enrichment/3";
+export const SHARED_ENRICHMENT_PROTOCOL = "product-enrichment/4";
 export const EnrichmentRequestSchema = z.strictObject({
   collectionOperationId: ExecutionIdSchema,
   channel: ChannelIdSchema,
@@ -110,8 +123,9 @@ export const EnrichmentSubjectSchema = z.strictObject({
 export type EnrichmentSubject = z.infer<typeof EnrichmentSubjectSchema>;
 
 export const SharedEnrichmentRecordSchema = z.strictObject({
-  // /2 records stay readable; /3 adds the page description, main ingredients and inferred health functions.
-  codec: z.enum(["product-enrichment/2", SHARED_ENRICHMENT_PROTOCOL]),
+  // /2 and /3 records stay readable; /3 adds the page description, main ingredients and inferred health functions;
+  // /4 names health functions as short categories with their printed evidence and reads form synonyms.
+  codec: z.enum(["product-enrichment/2", "product-enrichment/3", SHARED_ENRICHMENT_PROTOCOL]),
   enrichmentId: Sha256Schema,
   formulaHash: Sha256Schema,
   inputHash: Sha256Schema,

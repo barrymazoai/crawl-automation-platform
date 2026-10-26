@@ -121,3 +121,16 @@ it.each([{ limit: 501 }, { limit: 1, channel: "dtc" }])(
     expect(removeNotSupplements).not.toHaveBeenCalled();
   },
 );
+
+it("reopens products enriched again after their send, bounded by a limit", async () => {
+  const reopen = vi.fn(async () => ({ reopened: 3 }));
+  const response = await appWith({ productSync: { reopen } }).request(
+    "/trpc/productSync.reopen",
+    post({ enriched: true, limit: 100 }),
+  );
+  expect(response.status).toBe(200);
+  expect(reopen).toHaveBeenCalledExactlyOnceWith(
+    { enriched: true, limit: 100 },
+    expect.any(AbortSignal),
+  );
+});

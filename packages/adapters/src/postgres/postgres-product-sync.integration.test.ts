@@ -32,6 +32,11 @@ describe.skipIf(!connectionString)("product sync ledger and migrations 061, 067"
         .replace(/^SET LOCAL search_path = public;$/m, "");
       await client.query(ddl);
     }
+    // reopen `enriched` reads the enrichment tables, which every crawler database has.
+    await client.query(`
+      CREATE TABLE product_enrichment(enrichment_id text PRIMARY KEY, record jsonb);
+      CREATE TABLE product_enrichment_subject(subject_id text, enrichment_id text, channel text,
+        collection_operation_id text, registered_at timestamptz)`);
     const query: Queryable["query"] = async (sql, values) =>
       (await client.query(sql, [...(values ?? [])])).rows;
     ledger = new PostgresProductSync({ query });
@@ -255,6 +260,38 @@ describe.skipIf(!connectionString)("product sync ledger and migrations 061, 067"
       { listing_id: asin.listingId, status: "present", reopened: true },
       { listing_id: variant.listingId, status: "verified", reopened: false },
     ]);
+  });
+
+  it("reopen enriched re-pends verified products enriched again under the current protocol", async () => {
+    const sent = (listingId: string, channel: "amazon" | "wholefoods", operation: string) => ({
+      channel,
+      listingId,
+      variantId: null,
+      status: "verified" as const,
+      materialAt,
+      payloadHash: "a".repeat(64),
+      ingestRunId: "run-7",
+      collectedOperationId: operation,
+    });
+    await ledger.record([
+      sent("B000000001", "wholefoods", "op-new"), // its Amazon ASIN was enriched again: resent
+      sent("B000000002", "amazon", "op-old"), // enriched before the send: unchanged
+      sent("B000000003", "amazon", "op-v3"), // enriched again, but under an older protocol
+    ]);
+    await client.query(`
+      INSERT INTO product_enrichment VALUES ('e-new', '{"codec":"product-enrichment/4"}'),
+        ('e-old', '{"codec":"product-enrichment/4"}'), ('e-v3', '{"codec":"product-enrichment/3"}');
+      INSERT INTO product_enrichment_subject VALUES
+        ('s1', 'e-new', 'amazon', 'op-new', now() + interval '1 hour'),
+        ('s2', 'e-old', 'amazon', 'op-old', now() - interval '1 hour'),
+        ('s3', 'e-v3', 'amazon', 'op-v3', now() + interval '1 hour')`);
+    expect(await ledger.reopen({ enriched: true, limit: 10 })).toEqual({ reopened: 1 });
+    const rows = (
+      await client.query(
+        "SELECT listing_id FROM product_sync WHERE material_at = '-infinity' ORDER BY listing_id",
+      )
+    ).rows;
+    expect(rows).toEqual([{ listing_id: "B000000001" }]);
   });
 
   it("a delisting covers every ID its listing was synced under", async () => {

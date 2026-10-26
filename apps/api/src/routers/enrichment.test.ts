@@ -20,3 +20,23 @@ it("validates bounded count and exposes the candidate returned by the service", 
     selected: 1,
   });
 });
+
+it("lists outdated enrichment and runs it only by an explicit selection (owner 2026-10-26)", async () => {
+  const product = { channel: "amazon" as const, collectionOperationId: "collection" };
+  const enrichment = {
+    outdated: vi.fn(async () => [product]),
+    run: vi.fn(async () => ({ selected: 1 })),
+  } as unknown as EnrichmentBackfill;
+  const caller = enrichmentRouter.createCaller({ enrichment } as ApiContext);
+  expect(await caller.outdated({ limit: 100 })).toEqual([product]);
+  await expect(caller.outdated({ limit: 101 })).rejects.toThrow();
+  await caller.run({ limit: 5, approvedCount: 5, selection: "outdated" });
+  expect(enrichment.run).toHaveBeenCalledWith({
+    limit: 5,
+    approvedCount: 5,
+    selection: "outdated",
+  });
+  await expect(
+    caller.run({ limit: 5, approvedCount: 5, selection: "everything" as never }),
+  ).rejects.toThrow();
+});
