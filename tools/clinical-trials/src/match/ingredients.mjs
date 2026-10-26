@@ -3,14 +3,20 @@
 //
 //   distinctive term in an intervention or arm field   high
 //   distinctive term only in a title / keyword         medium
-//   weak term (≤4 letters, a strain code like "La-14", or an ordinary word) only counts with
-//   context: a word of the generic name in the same field, or the supplier's name in the record → medium;
-//   without context it is rejected and kept for review.
+//   a word that is not a brand on its own — an English word ("collective", "phase 2", "mediator"), a word of
+//   the ingredient's own generic name ("krill", "ribose"), a term that mostly occurs in trials testing no
+//   supplement ("activin", "somato-sensory"), or ≤ 4 letters without a digit ("CLA") — counts only when it
+//   is written with ®/™ in that field (as above), or the supplier is named in the record (→ medium);
+//   a strain code ("La-14", "BB-12") counts with a word of the generic name in the same field (the
+//   species) or the supplier's name in the record → medium.
+//   Anything else is rejected and kept for review. (2026-10-26: the first push linked 1,037 trials, most
+//   of them through such words; owner: take them back and fix the rule.)
 //
 // Generic and active-compound matches (KAN-213, Lavitol → taxifolin) are not made here yet:
 // Supply Smart has no active_compounds field to read them from.
-import { core, legalStripped, nameVariants, normalize, phrases, quoteAround, words } from './names.mjs';
-import { interventions, isPlacebo, namedFields, parties } from '../ctgov/study.mjs';
+import englishWords from 'an-array-of-english-words' with { type: 'json' };
+import { core, legalStripped, markedAfter, nameVariants, normalize, phrases, quoteAround, words } from './names.mjs';
+import { interventions, isDietarySupplement, isPlacebo, namedFields, parties } from '../ctgov/study.mjs';
 
 const ORDINARY = new Set([
   'liver', 'inside', 'peak', 'krill', 'spectra', 'phase', 'pure', 'active', 'balance', 'focus', 'calm', 'sleep',
@@ -23,6 +29,13 @@ export function isWeakTerm(term) {
   const t = normalize(term);
   return t.replace(/ /g, '').length <= 4 || STRAIN.test(t) || (!t.includes(' ') && ORDINARY.has(t));
 }
+
+const ENGLISH = new Set(englishWords);
+/** Every word an English word, a number or a single letter: "phase 2", "life s", "collective". */
+export const isOrdinaryTerm = (term) => normalize(term).split(' ').every((w) => w.length <= 1 || /^\d+$/.test(w) || ENGLISH.has(w) || ORDINARY.has(w));
+// A term in at least this many stored trials, under a fifth of them testing a dietary supplement, is a
+// biomedical word ("activin" in 43 trials, 2 of them supplements); brands such as MitoQ are mostly tested as supplements.
+const BIOMEDICAL = { minTrials: 10, maxSupplementShare: 0.2 };
 
 const strength = (confidence, basis) => (confidence === 'high' ? 2 : 0) + (basis === 'brand' ? 1 : 0);
 
@@ -40,12 +53,34 @@ export function createIngredientMatcher(brandedIngredients) {
     // Generic name words of at least 5 letters, and the supplier's names, are the context for weak terms.
     const context = new Set(words(bi.genericName ?? '').filter((w) => w.length >= 5 && !['extract', 'powder', 'complex'].includes(w)));
     const supplierCores = bi.supplier ? [core(bi.supplier.name), legalStripped(bi.supplier.name)].filter(Boolean) : [];
+    const genericWords = new Set(words(bi.genericName ?? ''));
     for (const [term, basis] of terms) {
       if (term.replace(/ /g, '').length < 3) continue;
       if (!index.has(term)) index.set(term, []);
-      index.get(term).push({ bi, basis, weak: isWeakTerm(term), context, supplierCores });
+      const weak = isWeakTerm(term);
+      const ordinary = isOrdinaryTerm(term) || (!term.includes(' ') && genericWords.has(term)) || (weak && !/\d/.test(term));
+      index.get(term).push({ bi, basis, weak, ordinary, context, supplierCores });
     }
   }
+
+  // How many stored trials each term occurs in, and how many of them test a dietary supplement: count() runs
+  // over every study before the first matchStudy().
+  const seenIn = new Map();
+  function count(study) {
+    const found = new Set();
+    for (const f of namedFields(study)) for (const { phrase } of phrases(f.text)) if (index.has(phrase)) found.add(phrase);
+    const supplement = isDietarySupplement(study);
+    for (const t of found) {
+      const c = seenIn.get(t) ?? { trials: 0, supplement: 0 };
+      c.trials += 1;
+      if (supplement) c.supplement += 1;
+      seenIn.set(t, c);
+    }
+  }
+  const biomedical = (term) => {
+    const c = seenIn.get(term);
+    return !!c && c.trials >= BIOMEDICAL.minTrials && c.supplement < c.trials * BIOMEDICAL.maxSupplementShare;
+  };
 
   /** Ingredient links and rejected weak hits of one study. */
   function matchStudy(study) {
@@ -63,7 +98,18 @@ export function createIngredientMatcher(brandedIngredients) {
           const inIntervention = f.field.startsWith('interventions') || f.field.startsWith('armGroups');
           let confidence = inIntervention ? 'high' : 'medium';
           let reviewNote = null;
-          if (entry.weak) {
+          const notABrand = entry.ordinary ? 'not a brand on its own' : biomedical(phrase) ? 'mostly in trials testing no supplement' : null;
+          if (notABrand) {
+            const supplierSeen = entry.supplierCores.some((s) => allText.includes(` ${s} `));
+            if (!markedAfter(f.text, phrase)) {
+              if (!supplierSeen) {
+                rejected.push({ nct_id: null, branded_ingredient_id: bi.id, name: bi.name, term: phrase, field: f.field, reason: `"${phrase}" is ${notABrand}: no ®/™ and no supplier name in the record` });
+                continue;
+              }
+              confidence = 'medium';
+              reviewNote = `"${phrase}" is ${notABrand}; accepted with the supplier name in the record`;
+            }
+          } else if (entry.weak) {
             // The species / generic word must be in the same field ("L. acidophilus La-14"); the
             // supplier may be named anywhere in the record.
             const fieldText = ` ${normalize(f.text)} `;
@@ -97,7 +143,7 @@ export function createIngredientMatcher(brandedIngredients) {
     return { links: [...links.values()], rejected };
   }
 
-  return { matchStudy };
+  return { count, matchStudy };
 }
 
 /** sole: the only tested product; combination: named with other actives; unclear otherwise. */

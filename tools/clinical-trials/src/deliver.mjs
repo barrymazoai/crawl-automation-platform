@@ -24,6 +24,9 @@ export async function deliver({ dataDir, runDir, runId, supplySmart, entities, m
   const index = await loadIndex(dataDir);
   const live = [...index.values()].filter((e) => !e.removed_at);
 
+  // Pass 0: how often each ingredient term occurs, and in supplement trials (match/ingredients.mjs).
+  for (const entry of live) matchers.ingredients.count(await readStudy(dataDir, entry.nct_id));
+
   // Pass 1: brand and ingredient links of every stored study.
   const found = new Map();
   const unmatchedSponsors = new Map();

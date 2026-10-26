@@ -111,3 +111,9 @@ export function quoteAround(text, term, radius = 120) {
 }
 
 const escapeRegExp = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/** Whether `term` occurs in `text` with ® / ™ / (R) / (TM) right after it: written as a trademark. */
+export function markedAfter(text, term) {
+  const pattern = normalize(term).split(' ').map(escapeRegExp).join('[^a-zA-Z0-9]+');
+  return new RegExp(`(^|[^a-zA-Z0-9])${pattern}\\s*(?:[®™]|\\((?:R|TM)\\))`, 'i').test(String(text ?? ''));
+}

@@ -11,6 +11,9 @@ importers:
       '@orpc/client':
         specifier: ^1.12.2
         version: 1.15.7
+      an-array-of-english-words:
+        specifier: ^2.0.0
+        version: 2.0.0
       date-fns:
         specifier: ^4.4.0
         version: 4.4.0
@@ -57,6 +60,10 @@ packages:
 
   '@pinojs/redact@0.4.0':
     resolution: {integrity: sha512-k2ENnmBugE/rzQfEcdWHcCY+/FM3VLzH9cYEsbdsoqrvzAKRhUZeRNhAZvB8OitQJ1TBed3yqWtdjzS6wJKBwg==}
+
+  an-array-of-english-words@2.0.0:
+    resolution: {integrity: sha512-FXnNvZSOI27kkKXeLSquhaTGP7z198UOQ4txaYO9fCfrjCh+D5SV7G7XqzEH0229+pAi4cjBEZ4WIQYgjKtO7Q==}
+    hasBin: true
 
   atomic-sleep@1.0.0:
     resolution: {integrity: sha512-kNOjDqAh7px0XWNI+4QbzoiR/nTkHAWNud2uvnJquD1/x5a7EQZMJT0AczqK0Qn67oY/TTQ1LbUKajZpp3I9tQ==}
@@ -180,6 +187,8 @@ snapshots:
       - '@opentelemetry/api'
 
   '@pinojs/redact@0.4.0': {}
+
+  an-array-of-english-words@2.0.0: {}
 
   atomic-sleep@1.0.0: {}
 
