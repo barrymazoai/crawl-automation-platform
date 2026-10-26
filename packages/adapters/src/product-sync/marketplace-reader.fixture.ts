@@ -67,7 +67,7 @@ export const readerTables = `
   CREATE TABLE brand(id uuid PRIMARY KEY, name text);
   CREATE TABLE brand_source(id uuid PRIMARY KEY, channel text, brand_id uuid);
   CREATE TABLE queue_item(item_id text PRIMARY KEY, source_id uuid, channel text, listing_id text,
-    variant_id text, url text, state text, run_id uuid, created_at timestamptz, follows_item_id text);
+    variant_id text, url text, state text, run_id uuid, created_at timestamptz, follows_item_id text, reason text);
   CREATE TABLE queue_attempt(run_id uuid PRIMARY KEY, item_id text, channel text, settled_at timestamptz, outcome text);
   CREATE TABLE formula_link(channel text, listing_id text, variant_id text, formula_operation_id text, created_at timestamptz);
   CREATE TABLE collected_product(operation_id text, observation_id text, record_hash text, record jsonb, collected_at timestamptz);

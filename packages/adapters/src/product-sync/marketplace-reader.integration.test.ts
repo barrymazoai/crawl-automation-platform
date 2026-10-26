@@ -61,7 +61,7 @@ it.skipIf(!connectionString || !readerSamplesPath)(
         }
       }
       await pendingOnly(client, reader);
-      await unlistedIsNotSent(client, reader);
+      await unsentCompletions(client, reader);
       await followerUsesLeaderMaterial(client, reader);
       await rejectsLatestStates(client, reader);
       await wholeFoodsJoin(client, reader, { inputs, objects });
@@ -143,8 +143,11 @@ function verifyRealMaterial(product: MarketplaceProduct) {
     );
   }
 }
-/** A revisit that found the page gone completes, but it is a delisting, not a product (2026-10-12). */
-async function unlistedIsNotSent(client: Client, reader: PostgresMarketplaceReader) {
+/**
+ * A revisit that found the page gone completes, but it is a delisting, not a product (2026-10-12); a product the
+ * store files outside supplements completes too and is never sent either (2026-10-26).
+ */
+async function unsentCompletions(client: Client, reader: PostgresMarketplaceReader) {
   const listings = async () =>
     (await reader.read({ channel: "gnc", limit: 200 }, signal())).products.map(
       (entry) => entry.listingId,
@@ -158,6 +161,13 @@ async function unlistedIsNotSent(client: Client, reader: PostgresMarketplaceRead
   );
   expect(await listings()).toEqual(before.filter((listingId) => listingId !== gone));
   await client.query("UPDATE listing_state_observation SET state = 'live'");
+  expect(await listings()).toEqual(before);
+  await client.query(
+    `UPDATE queue_item SET reason = 'PRODUCT.NOT_SUPPLEMENT' WHERE channel = 'gnc' AND listing_id = $1`,
+    [gone],
+  );
+  expect(await listings()).toEqual(before.filter((listingId) => listingId !== gone));
+  await client.query("UPDATE queue_item SET reason = NULL");
   expect(await listings()).toEqual(before);
 }
 
