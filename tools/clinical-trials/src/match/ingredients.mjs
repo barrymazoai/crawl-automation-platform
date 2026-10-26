@@ -24,6 +24,8 @@ export function isWeakTerm(term) {
   return t.replace(/ /g, '').length <= 4 || STRAIN.test(t) || (!t.includes(' ') && ORDINARY.has(t));
 }
 
+const strength = (confidence, basis) => (confidence === 'high' ? 2 : 0) + (basis === 'brand' ? 1 : 0);
+
 export function createIngredientMatcher(brandedIngredients) {
   const index = new Map();
   for (const bi of brandedIngredients) {
@@ -74,10 +76,11 @@ export function createIngredientMatcher(brandedIngredients) {
             confidence = 'medium';
             reviewNote = `weak term "${phrase}" accepted with ${supplierSeen ? 'supplier name' : 'generic name'} in the record`;
           }
-          const key = `${bi.id}|${entry.basis}`;
-          const prev = links.get(key);
-          if (prev && (prev.confidence === 'high' || confidence !== 'high')) continue;
-          links.set(key, {
+          // One link per branded ingredient (Supply Smart keeps one row per pair): the strongest evidence,
+          // high before medium, then the brand name before an alias, then the first one found.
+          const prev = links.get(bi.id);
+          if (prev && strength(prev.confidence, prev.match_basis) >= strength(confidence, entry.basis)) continue;
+          links.set(bi.id, {
             bi,
             match_basis: entry.basis,
             matched_term: phrase,
