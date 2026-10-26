@@ -3,10 +3,10 @@
 //
 //   distinctive term in an intervention or arm field   high
 //   distinctive term only in a title / keyword         medium
-//   a word that is not a brand on its own — an English word ("collective", "phase 2", "mediator"), a word of
-//   the ingredient's own generic name ("krill", "ribose"), a term that mostly occurs in trials testing no
-//   supplement ("activin", "somato-sensory"), or ≤ 4 letters without a digit ("CLA") — counts only when it
-//   is written with ®/™ in that field (as above), or the supplier is named in the record (→ medium);
+//   a word that is not a brand on its own — English words ("collective", "phase 2", "krill", "ribose"),
+//   a term that mostly occurs in trials testing no supplement ("activin", "somato-sensory"), or the initials
+//   of the ingredient's own generic name ("CLA", conjugated linoleic acid) — counts only when it is written
+//   with ®/™ in that field (as above), or the supplier is named in the record (→ medium);
 //   a strain code ("La-14", "BB-12") counts with a word of the generic name in the same field (the
 //   species) or the supplier's name in the record → medium.
 //   Anything else is rejected and kept for review. (2026-10-26: the first push linked 1,037 trials, most
@@ -31,11 +31,26 @@ export function isWeakTerm(term) {
 }
 
 const ENGLISH = new Set(englishWords);
-/** Every word an English word, a number or a single letter: "phase 2", "life s", "collective". */
-export const isOrdinaryTerm = (term) => normalize(term).split(' ').every((w) => w.length <= 1 || /^\d+$/.test(w) || ENGLISH.has(w) || ORDINARY.has(w));
-// A term in at least this many stored trials, under a fifth of them testing a dietary supplement, is a
-// biomedical word ("activin" in 43 trials, 2 of them supplements); brands such as MitoQ are mostly tested as supplements.
-const BIOMEDICAL = { minTrials: 10, maxSupplementShare: 0.2 };
+/**
+ * Every word an English word, a number or a single letter: "phase 2", "life s", "collective". A strain code
+ * whose letters are not a word of 3 letters or more stays a code: "La-14", "Bi-07", "GR-1".
+ */
+export function isOrdinaryTerm(term) {
+  const t = normalize(term);
+  const letters = t.match(/^[a-z]+/)?.[0] ?? '';
+  if (STRAIN.test(t) && !(letters.length >= 3 && ENGLISH.has(letters))) return false;
+  return t.split(' ').every((w) => w.length <= 1 || /^\d+$/.test(w) || ENGLISH.has(w) || ORDINARY.has(w));
+}
+/** "cla" for "conjugated linoleic acid (60%)": the initials of consecutive words of the generic name. */
+function isInitialsOf(term, genericName) {
+  const t = normalize(term).replace(/ /g, '');
+  const initials = words(genericName ?? '').filter((w) => /^[a-z]/.test(w)).map((w) => w[0]).join('');
+  return /^[a-z]{2,4}$/.test(t) && initials.includes(t);
+}
+// A term in at least this many stored trials, under a tenth of them testing a dietary supplement, is a
+// biomedical word ("activin": 43 trials, 2 supplements); brands such as MitoQ are mostly tested as supplements,
+// and a few brands are tested as drugs ("Sunphenon": 13 trials, 2 supplements).
+const BIOMEDICAL = { minTrials: 10, maxSupplementShare: 0.1 };
 
 const strength = (confidence, basis) => (confidence === 'high' ? 2 : 0) + (basis === 'brand' ? 1 : 0);
 
@@ -53,12 +68,11 @@ export function createIngredientMatcher(brandedIngredients) {
     // Generic name words of at least 5 letters, and the supplier's names, are the context for weak terms.
     const context = new Set(words(bi.genericName ?? '').filter((w) => w.length >= 5 && !['extract', 'powder', 'complex'].includes(w)));
     const supplierCores = bi.supplier ? [core(bi.supplier.name), legalStripped(bi.supplier.name)].filter(Boolean) : [];
-    const genericWords = new Set(words(bi.genericName ?? ''));
     for (const [term, basis] of terms) {
       if (term.replace(/ /g, '').length < 3) continue;
       if (!index.has(term)) index.set(term, []);
       const weak = isWeakTerm(term);
-      const ordinary = isOrdinaryTerm(term) || (!term.includes(' ') && genericWords.has(term)) || (weak && !/\d/.test(term));
+      const ordinary = isOrdinaryTerm(term) || isInitialsOf(term, bi.genericName);
       index.get(term).push({ bi, basis, weak, ordinary, context, supplierCores });
     }
   }
