@@ -17,14 +17,17 @@ Smart is read through its API with the service key product sync uses; no databas
 2. **Names**: every Supply Smart ingredient name (`ingredient.listAll`, ≈213k, one call) is matched against the
    branded ingredients' aliases again, about a second. Only the difference from the last reported links goes to
    `runs/<id>/changes/alias_links.jsonl`. The rules are those of supplier-intel `scripts/ss_ingredient_match.py`,
-   ported unchanged (`src/rules.mjs`); `src/rules-check.mjs` replays them on the 10-16 files and reproduces
-   Supply Smart's 14,600 links exactly.
+   ported unchanged (`src/rules.mjs`) except that invisible characters (zero-width spaces, soft hyphens) are
+   ignored; `src/rules-check.mjs` replays them on the 10-16 files and reproduces Supply Smart's 14,600 links
+   exactly. Links are saved only when the run succeeds, and a Supply Smart answer with under 90% of the last
+   run's names or branded ingredients stops the run.
 3. **Judge**: the ®/™ spellings of names not seen before, cheapest source first: an existing alias, then a
    judgement already made (the 10-15 run's 4,731, rejected ones included, and every later one), and only then
    the model, 50 spellings per call. A supplier ingredient the model ties to a registered one with high
    confidence becomes an alias when it has at least 5 letters and digits, or 4 with a digit (shorter ones such as "mag" go to review:
    they linked unrelated names in the first run); step 2 then runs again for it; an unregistered one is a candidate in
-   `changes/ingredient_candidates.jsonl`; anything less certain goes to `review.jsonl`.
+   `changes/ingredient_candidates.jsonl`; anything less certain goes to `review.jsonl`. A reviewed alias is
+   added by hand with `src/add-alias.mjs` (below) and is never turned off by the length rule.
 
 The model and effort have no defaults (owner rule: never the machine's Codex default). The crontab line passes
 them, `gpt-5.6-luna` / `medium` (owner 2026-10-26: simple judgements on Luna, Server 一's current version).
@@ -34,7 +37,7 @@ A failed step is reported and does not stop the others.
 
 | Path | What |
 |---|---|
-| `state/registry.json` | the branded ingredients and their match aliases; aliases the job adds carry `aliases_added` |
+| `state/registry.json` | the branded ingredients and their match aliases; aliases the job adds carry `aliases_added`, reviewed ones `aliases_manual` |
 | `state/verdicts.jsonl` | one judgement per spelling (key: lower case, letters and digits only), with who decided and when |
 | `state/map.json` | ingredient id → external keys, as last reported |
 | `state/seen-names.json.gz` | ingredient ids whose spellings are settled; a name with a spelling still waiting is retried next run |
@@ -68,6 +71,9 @@ node src/sync.mjs --data-dir ~/ingredient-intel-data \
 # --skip-trials, --no-model, --max-model-batches N (default 40; the rest waits for the next run)
 
 node src/check-sync.mjs --data-dir ~/ingredient-intel-data --webhook-file ~/apps/regulatory-private/feishu.webhook
+
+# A reviewed alias (kept in aliases_manual with the reason; the next sync links its names)
+node src/add-alias.mjs --data-dir ~/ingredient-intel-data --id ING174 --alias "Nu–Mag" --reason "<what was checked>"
 ```
 
 The proposed crontab (installed only after the owner approves the first full run):

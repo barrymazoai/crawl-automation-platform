@@ -2,6 +2,8 @@
 // still need a judgement. Both rules are ported unchanged from the 2026-10-16 supplier-intel run
 // (~/Documents/supplier-intel/scripts/ss_ingredient_match.py and ss_marked_candidates.py), which built
 // the 14,600 links Supply Smart holds; src/rules-check.mjs replays them against that run's files.
+// One addition (2026-10-26, still 14,600 on the 10-16 files): invisible characters are ignored, so
+// "VEGADELI\u200b\u200bGHT®" in a label line is VegaDELIGHT.
 //
 // A name matches a branded ingredient when one of its aliases (or its canonical name, or a part of an
 // "A / B" name) appears as a whole word, separators "-" and " " optional. A strict alias counts only
@@ -10,7 +12,7 @@
 // ribose / spectra / s7, and words of another ingredient's generic name (krill, ubiquinol, …).
 import AhoCorasick from 'modern-ahocorasick';
 
-export const RULES_VERSION = 'ss-ingredient-match-2026-10-16';
+export const RULES_VERSION = 'ss-ingredient-match-2026-10-26';
 
 export const key = (s) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
 // What a match ignores: case, and "-" / " " where the alias has one (they are optional there).
@@ -22,6 +24,8 @@ const ALWAYS_STRICT = new Set(['ribose', 'spectra', 's7']);
 const MARK_AFTER = /^\s*(?:®|™|\((?:r|tm)\))/;
 const genericWords = (text) => new Set((text ?? '').toLowerCase().match(/[a-z][a-z'-]+/g) ?? []);
 const isUpper = (s) => s !== s.toLowerCase() && s === s.toUpperCase();
+// Zero-width spaces and joiners, word joiner, byte-order mark, soft hyphen: invisible in a label, copied in by OCR.
+const INVISIBLE = /[\u00ad\u200b-\u200d\u2060\ufeff]/g;
 const escapeChar = (c) => (c === '-' || c === ' ' ? '[- ]?' : c.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
 
 /**
@@ -71,7 +75,8 @@ export function createMatcher(registry) {
   const keywords = [...byKeyword.keys()];
   const ac = new AhoCorasick(keywords);
 
-  function hits(text) {
+  function hits(raw) {
+    const text = raw.replace(INVISIBLE, '');
     const out = new Set();
     const candidates = new Set();
     for (const m of ac.search(squeeze(text))) for (const p of byKeyword.get(m.pattern)) candidates.add(p);

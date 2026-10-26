@@ -9,10 +9,11 @@ import { readJson, statePath } from './lib/state.mjs';
 // "GHT Proprietary Blend" to Nu-MAG and VegaDELIGHT.
 export const usableModelAlias = (alias) => key(alias).length >= (/\d/.test(alias) ? 4 : 5);
 
-/** The aliases the matcher uses: the reviewed ones, and the model's that are long enough. */
+/** The aliases the matcher uses: the reviewed ones (aliases_manual, add-alias.mjs), and the model's that are long enough. */
 export function activeAliases(row) {
   const added = new Set((row.aliases_added ?? []).map((a) => a.alias));
-  return row.aliases.filter((a) => !added.has(a) || usableModelAlias(a));
+  const manual = new Set((row.aliases_manual ?? []).map((a) => a.alias));
+  return row.aliases.filter((a) => !added.has(a) || manual.has(a) || usableModelAlias(a));
 }
 
 export async function loadRegistry(dataDir) {
