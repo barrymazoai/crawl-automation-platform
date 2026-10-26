@@ -4,11 +4,13 @@
 //   distinctive term in an intervention or arm field   high
 //   distinctive term only in a title / keyword         medium
 //   a word that is not a brand on its own — English words ("collective", "phase 2", "krill", "ribose"),
-//   a term that mostly occurs in trials testing no supplement ("activin", "somato-sensory"), or the initials
-//   of the ingredient's own generic name ("CLA", conjugated linoleic acid) — counts only when it is written
+//   a term that mostly occurs in trials testing no supplement ("activin", "ESC", "QUALI"), the initials
+//   of the ingredient's own generic name ("CLA", conjugated linoleic acid), or an alias that is a word of the
+//   generic name and not of the brand ("irvingia" for IGOB131) — counts only when it is written
 //   with ®/™ in that field (as above), or the supplier is named in the record (→ medium);
 //   a strain code ("La-14", "BB-12") counts with a word of the generic name in the same field (the
 //   species) or the supplier's name in the record → medium.
+//   A term followed by "-" and a number is part of another code ("Rosell" in "Rosell-52") and never counts.
 //   Anything else is rejected and kept for review. (2026-10-26: the first push linked 1,037 trials, most
 //   of them through such words; owner: take them back and fix the rule.)
 //
@@ -48,9 +50,12 @@ function isInitialsOf(term, genericName) {
   return /^[a-z]{2,4}$/.test(t) && initials.includes(t);
 }
 // A term in at least this many stored trials, under a tenth of them testing a dietary supplement, is a
-// biomedical word ("activin": 43 trials, 2 supplements); brands such as MitoQ are mostly tested as supplements,
-// and a few brands are tested as drugs ("Sunphenon": 13 trials, 2 supplements).
-const BIOMEDICAL = { minTrials: 10, maxSupplementShare: 0.1 };
+// biomedical word or a study acronym ("activin": 43 trials, 2 supplements; "ESC": 7, none); brands such as
+// MitoQ are mostly tested as supplements, and a few brands are tested as drugs ("Sunphenon": 13 trials, 2).
+const BIOMEDICAL = { minTrials: 3, maxSupplementShare: 0.1 };
+/** "rosell" in "Rosell®-52": the term is the start of a longer code. */
+const partOfCode = (text, term) =>
+  new RegExp(`(^|[^a-zA-Z0-9])${term.split(' ').map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('[^a-zA-Z0-9]+')}\\s*[®™]?\\s*-\\s*\\d`, 'i').test(String(text ?? ''));
 
 const strength = (confidence, basis) => (confidence === 'high' ? 2 : 0) + (basis === 'brand' ? 1 : 0);
 
@@ -72,7 +77,8 @@ export function createIngredientMatcher(brandedIngredients) {
       if (term.replace(/ /g, '').length < 3) continue;
       if (!index.has(term)) index.set(term, []);
       const weak = isWeakTerm(term);
-      const ordinary = isOrdinaryTerm(term) || isInitialsOf(term, bi.genericName);
+      const genericAlias = basis === 'alias' && !term.includes(' ') && !/\d/.test(term) && words(bi.genericName ?? '').includes(term) && !words(bi.name).includes(term);
+      const ordinary = isOrdinaryTerm(term) || isInitialsOf(term, bi.genericName) || genericAlias;
       index.get(term).push({ bi, basis, weak, ordinary, context, supplierCores });
     }
   }
@@ -112,6 +118,10 @@ export function createIngredientMatcher(brandedIngredients) {
           const inIntervention = f.field.startsWith('interventions') || f.field.startsWith('armGroups');
           let confidence = inIntervention ? 'high' : 'medium';
           let reviewNote = null;
+          if (partOfCode(f.text, phrase)) {
+            rejected.push({ nct_id: null, branded_ingredient_id: bi.id, name: bi.name, term: phrase, field: f.field, reason: `"${phrase}" is the start of a longer code here` });
+            continue;
+          }
           const notABrand = entry.ordinary ? 'not a brand on its own' : biomedical(phrase) ? 'mostly in trials testing no supplement' : null;
           if (notABrand) {
             const supplierSeen = entry.supplierCores.some((s) => allText.includes(` ${s} `));
