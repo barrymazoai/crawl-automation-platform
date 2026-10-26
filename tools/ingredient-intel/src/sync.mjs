@@ -163,7 +163,7 @@ function message() {
   const pt = report.push?.trials;
   if (pt && !pt.error) {
     const il = (pt.counts ?? pt.dry_run).ingredientLinks ?? {};
-    lines.push(`推送试验${pt.dry_run ? '（dry run）' : ''}：${pt.trials} 项（新 ${(pt.counts ?? pt.dry_run).trials?.inserted ?? 0}）；品牌原料关联新增 ${il.inserted ?? 0}、恢复 ${il.restored ?? 0}、撤销 ${(il.removed ?? 0) + (il.removedSupplierIntel ?? 0)}`);
+    lines.push(`推送试验${pt.dry_run ? '（dry run）' : ''}：${pt.trials} 项（新 ${(pt.counts ?? pt.dry_run).trials?.inserted ?? 0}）；品牌原料关联新增 ${il.inserted ?? 0}、恢复 ${il.restored ?? 0}、撤销 ${il.removed ?? 0}（其中 10-16 旧行 ${il.removedSupplierIntel ?? 0}）`);
   }
   lines.push(`文件：${runDir}`);
   return { title, markdown: lines.join('\n'), color: report.ok ? 'purple' : 'red' };
