@@ -11,6 +11,7 @@ import { createHash } from 'node:crypto';
 import { join } from 'node:path';
 import { codexJson } from '../../regulatory/src/lib/codex.mjs';
 import { key } from './rules.mjs';
+import { usableModelAlias } from './registry.mjs';
 import { readJsonl, statePath, writeJson, writeJsonGz, writeJsonl } from './lib/state.mjs';
 
 export const PROMPT_VERSION = 'spelling-class-v1';
@@ -194,12 +195,12 @@ export async function judgeSpellings({ dataDir, runDir, runId, supplySmart, regi
         covered += 1;
         continue;
       }
-      if (state === 'asked' && v.confidence === 'high') {
+      if (state === 'asked' && v.confidence === 'high' && usableModelAlias(s.spelling)) {
         row.aliases.push(s.spelling);
         row.aliases_added = [...(row.aliases_added ?? []), { alias: s.spelling, run_id: runId, decided_by: v.decided_by }];
         aliasesAdded.push({ external_key: target, ingredient: row.ingredient, alias: s.spelling, names: s.nameIds.length });
       } else {
-        const reason = state === 'asked' ? 'existing_not_high_confidence' : 'old_verdict_not_alias';
+        const reason = state !== 'asked' ? 'old_verdict_not_alias' : v.confidence !== 'high' ? 'existing_not_high_confidence' : 'alias_too_short';
         review.push({ reason, spelling: s.spelling, external_key: target, ingredient: row.ingredient, verdict: v, names: s.nameIds.length, contexts: s.contexts });
       }
     } else {

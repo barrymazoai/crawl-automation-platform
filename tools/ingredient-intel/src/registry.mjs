@@ -1,8 +1,19 @@
 // The branded ingredients the matcher knows (state/registry.json). A row the 10-16 USPTO check showed to be
 // another ingredient keeps its aliases but reports the ingredient it duplicates (duplicate_of), as the
 // supplier-intel export did; Supply Smart only holds the surviving external keys.
-import { createMatcher } from './rules.mjs';
+import { createMatcher, key } from './rules.mjs';
 import { readJson, statePath } from './lib/state.mjs';
+
+// An alias the model proposed counts only with at least this many letters and digits: in the first run
+// (2026-10-26) "mag" and "ght" linked "Vor-Mag™ Water" and "GHT Proprietary Blend" to Nu-MAG and VegaDELIGHT.
+export const MIN_MODEL_ALIAS = 5;
+export const usableModelAlias = (alias) => key(alias).length >= MIN_MODEL_ALIAS;
+
+/** The aliases the matcher uses: the reviewed ones, and the model's that are long enough. */
+function activeAliases(row) {
+  const added = new Set((row.aliases_added ?? []).map((a) => a.alias));
+  return row.aliases.filter((a) => !added.has(a) || usableModelAlias(a));
+}
 
 export async function loadRegistry(dataDir) {
   const file = statePath(dataDir, 'registry.json');
@@ -14,7 +25,7 @@ export async function loadRegistry(dataDir) {
     externalKeys: new Set(target.values()),
     /** hits(name) → the external keys Supply Smart knows, sorted */
     matcher() {
-      const m = createMatcher(registry.ingredients);
+      const m = createMatcher(registry.ingredients.map((r) => ({ ...r, aliases: activeAliases(r) })));
       return { ...m, keys: (name) => [...new Set([...m.hits(name)].map((id) => target.get(id)))].sort() };
     },
   };
