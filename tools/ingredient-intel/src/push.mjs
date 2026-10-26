@@ -36,7 +36,7 @@ async function send(batches, call, dryRun) {
 }
 
 /** Links: syncState ↔ state/map.json; adds what is missing, takes back what the rules no longer make. */
-export async function pushLinks({ dataDir, runId, now, supplySmart, names, log }) {
+export async function pushLinks({ dataDir, runId, now, supplySmart, names, log, dryOnly = false }) {
   const map = await readJson(statePath(dataDir, 'map.json'));
   const ours = (await loadRegistry(dataDir)).externalKeys;
   const before = await supplySmart.syncState();
@@ -77,6 +77,7 @@ export async function pushLinks({ dataDir, runId, now, supplySmart, names, log }
   // An add the database already has, or a remove it doesn't, means syncState and the push disagree.
   if ((d.added ?? 0) + (d.restored ?? 0) + (d.skippedUnknownIngredient ?? 0) !== adds.length || (d.removed ?? 0) !== removes.length)
     throw new Error(`映射 dry run 的结果和计划对不上（计划新增 ${adds.length}、撤销 ${removes.length}；dry run ${JSON.stringify(d)}），没有推送`);
+  if (dryOnly) return { ...summary, batches: batches.length, dry_run: d, unknown_ingredient_ids: dry.unknown, after: active.size };
   const real = await send(batches, supplySmart.ingestLinks, false);
   const r = real.counts.aliasLink;
   const after = await supplySmart.syncState();
@@ -93,7 +94,7 @@ export async function pushLinks({ dataDir, runId, now, supplySmart, names, log }
 }
 
 /** Trials: one delivery of tools/clinical-trials, 100 trials per batch with every link of those trials. */
-export async function pushTrials({ deliveryDir, supplySmart, log }) {
+export async function pushTrials({ deliveryDir, supplySmart, log, dryOnly = false }) {
   const manifest = await readJson(join(deliveryDir, 'manifest.json'));
   const trials = await readJsonl(join(deliveryDir, 'trials.jsonl'));
   const byTrial = async (file) => {
@@ -115,7 +116,8 @@ export async function pushTrials({ deliveryDir, supplySmart, log }) {
     trials: part,
     ...Object.fromEntries(Object.entries(links).map(([kind, m]) => [kind, part.flatMap((t) => m.get(t.nct_id) ?? [])])),
   }));
-  await send(batches, supplySmart.ingestTrials, true);
+  const dry = await send(batches, supplySmart.ingestTrials, true);
+  if (dryOnly) return { delivery: run.runId, trials: trials.length, batches: batches.length, dry_run: dry.counts, unknown_ids: dry.unknown };
   const real = await send(batches, supplySmart.ingestTrials, false);
   log.info({ run: run.runId, trials: trials.length, counts: real.counts }, 'trials pushed');
   return { delivery: run.runId, trials: trials.length, batches: batches.length, counts: real.counts, unknown_ids: real.unknown };

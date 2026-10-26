@@ -77,7 +77,7 @@ node src/sync.mjs --data-dir ~/ingredient-intel-data \
   --trials-data-dir ~/clinical-trials-data \
   --luna-model gpt-5.6-luna --luna-effort medium \
   --webhook-file ~/apps/regulatory-private/feishu.webhook
-# --skip-trials, --no-model, --max-model-batches N (default 40; the rest waits for the next run), --push
+# --skip-trials, --no-model, --max-model-batches N (default 40; the rest waits for the next run), --push, --push-dry-run (the dry runs only, nothing written)
 
 node src/check-sync.mjs --data-dir ~/ingredient-intel-data --webhook-file ~/apps/regulatory-private/feishu.webhook
 

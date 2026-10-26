@@ -1,6 +1,6 @@
 // node src/sync.mjs --data-dir <dir> --supply-smart-env <file> --trials-data-dir <dir>
 //   --luna-model gpt-5.6-luna --luna-effort medium [--webhook-file <file>]
-//   [--skip-trials] [--no-model] [--max-model-batches 40] [--push]
+//   [--skip-trials] [--no-model] [--max-model-batches 40] [--push [--push-dry-run]]
 //
 // The scheduled job (owner 2026-10-26: Tuesday and Friday, one hour after the regulatory sync, Server 一):
 //   1. trials: the ClinicalTrials.gov collector, incremental collect + delivery (src/trials.mjs);
@@ -43,6 +43,8 @@ const { values: args } = parseArgs({
     'no-model': { type: 'boolean', default: false },
     'max-model-batches': { type: 'string', default: '40' },
     push: { type: 'boolean', default: false },
+    // The dry runs only, nothing written: for a first look at a push.
+    'push-dry-run': { type: 'boolean', default: false },
   },
 });
 if (!args['data-dir']) throw new Error('--data-dir (or INGREDIENT_INTEL_DATA_DIR) is required');
@@ -120,7 +122,7 @@ async function ingredients(supplySmart) {
 async function push(kind, run) {
   try {
     report.push[kind] = await run();
-    report.pushed = true;
+    report.pushed = !args['push-dry-run'];
     if (report.push[kind].after_matches === false) problem(`推送映射后读回的总数 ${report.push[kind].after} 和预期对不上`);
   } catch (error) {
     report.push[kind] = { error: error.message };
@@ -132,7 +134,7 @@ async function push(kind, run) {
 
 function message() {
   const when = new Date(startedAt).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false });
-  const title = `品牌原料同步${args.push ? '' : '（只出报告，未推送）'}${report.ok ? '完成' : '有问题'} ${when}`;
+  const title = `品牌原料同步${!args.push ? '（只出报告，未推送）' : args['push-dry-run'] ? '（推送只做了 dry run）' : ''}${report.ok ? '完成' : '有问题'} ${when}`;
   const lines = [];
   if (!report.ok) lines.push('**问题**', ...report.problems.map((p) => `- ${p}`), '');
   const t = report.trials;
@@ -154,12 +156,14 @@ function message() {
     lines.push(`新别名 ${j.aliases_added}；候选新品牌原料 ${j.candidates}；待人工看 ${j.review}`);
   }
   const l = report.push?.links;
-  if (l && !l.error)
-    lines.push(`推送映射：新增 ${l.pushed?.added ?? 0}、恢复 ${l.pushed?.restored ?? 0}、撤销 ${l.pushed?.removed ?? 0}${l.unknown_ingredient_ids?.length ? `、原料已不在 ${l.unknown_ingredient_ids.length}` : ''}；Supply Smart 现有 ${l.after.toLocaleString('en-US')} 条`);
+  if (l && !l.error) {
+    const c = l.pushed ?? l.dry_run ?? {};
+    lines.push(`推送映射${l.dry_run ? '（dry run）' : ''}：新增 ${c.added ?? 0}、恢复 ${c.restored ?? 0}、撤销 ${c.removed ?? 0}${l.unknown_ingredient_ids?.length ? `、原料已不在 ${l.unknown_ingredient_ids.length}` : ''}；Supply Smart 现有 ${l.after.toLocaleString('en-US')} 条`);
+  }
   const pt = report.push?.trials;
   if (pt && !pt.error) {
-    const il = pt.counts.ingredientLinks ?? {};
-    lines.push(`推送试验：${pt.trials} 项（新 ${pt.counts.trials?.inserted ?? 0}）；品牌原料关联新增 ${il.inserted ?? 0}、恢复 ${il.restored ?? 0}、撤销 ${(il.removed ?? 0) + (il.removedSupplierIntel ?? 0)}`);
+    const il = (pt.counts ?? pt.dry_run).ingredientLinks ?? {};
+    lines.push(`推送试验${pt.dry_run ? '（dry run）' : ''}：${pt.trials} 项（新 ${(pt.counts ?? pt.dry_run).trials?.inserted ?? 0}）；品牌原料关联新增 ${il.inserted ?? 0}、恢复 ${il.restored ?? 0}、撤销 ${(il.removed ?? 0) + (il.removedSupplierIntel ?? 0)}`);
   }
   lines.push(`文件：${runDir}`);
   return { title, markdown: lines.join('\n'), color: report.ok ? 'purple' : 'red' };
@@ -184,9 +188,9 @@ try {
       problem(`临床试验这一步中断：${error.message}`, { stack: error.stack });
       return null;
     });
-  if (args.push && report.trials?.deliver?.exit_code === 0) await push('trials', () => pushTrials({ deliveryDir: report.trials.deliver.dir, supplySmart, log }));
+  if (args.push && report.trials?.deliver?.exit_code === 0) await push('trials', () => pushTrials({ deliveryDir: report.trials.deliver.dir, supplySmart, log, dryOnly: args['push-dry-run'] }));
   const names = await ingredients(supplySmart);
-  if (args.push) await push('links', () => pushLinks({ dataDir, runId, now: startedAt, supplySmart, names, log }));
+  if (args.push) await push('links', () => pushLinks({ dataDir, runId, now: startedAt, supplySmart, names, log, dryOnly: args['push-dry-run'] }));
 } catch (error) {
   if (release) problem(`同步中断：${error.message}`, { stack: error.stack });
 } finally {
