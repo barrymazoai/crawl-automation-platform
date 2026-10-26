@@ -1,4 +1,4 @@
-import { errorCodeOf } from "@crawl-automation/platform";
+import { errorCodeOf, landingPageListing } from "@crawl-automation/platform";
 import type { ChannelAdapter, FetchedPage, ParsedProduct } from "../adapter.js";
 import { channelErrors } from "../errors.js";
 import {
@@ -65,7 +65,10 @@ export class HttpCapture {
     // A saved verification page (e.g. one archived before 2026-10-24) is never a sighting or a product.
     if (isVerification(adapter.httpPolicy, { ...saved, url: archive.capture.url })) {
       throw channelErrors.create("CAPTURE.ACCESS_CHALLENGE", {
-        details: { archiveKey: saved.source.objectKey },
+        details: {
+          archiveKey: saved.source.objectKey,
+          evidence: { objectKey: saved.source.objectKey },
+        },
       });
     }
     const moved = this.moved(adapter, archive, saved);
@@ -184,7 +187,10 @@ export class HttpCapture {
     return { page: saved };
   }
 
-  /** A page a same-site redirect moved to another listing, or to no product at all. */
+  /**
+   * A page a same-site redirect moved to another listing, or to no product at all. A landing page that shows the
+   * requested listing (Amazon `/clp/<ASIN>`) is neither: it is not a sighting and not a product page, so a Review.
+   */
   private moved(
     adapter: ChannelAdapter,
     archive: OriginalHtmlArchive,
@@ -194,6 +200,18 @@ export class HttpCapture {
       return null;
     }
     const { url, listingId, variantId } = archive.capture;
+    const shown = landingPageListing(saved.finalUrl, new URL(url));
+    if (shown?.toUpperCase() === listingId.toUpperCase()) {
+      // `evidence` and `reason` are what the Review keeps (workflows' failureDetails).
+      throw channelErrors.create("CAPTURE.LANDING_PAGE", {
+        details: {
+          finalUrl: saved.finalUrl,
+          archiveKey: saved.source.objectKey,
+          reason: `landing page /clp/${shown}`,
+          evidence: { objectKey: saved.source.objectKey },
+        },
+      });
+    }
     const requested = { url, listingId, variantId };
     const moved = { finalUrl: saved.finalUrl, archiveKey: saved.source.objectKey };
     return movedSighting(adapter, requested, moved);

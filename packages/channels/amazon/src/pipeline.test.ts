@@ -189,6 +189,54 @@ it("marks a different fallback ASIN as unlisted before product parsing", async (
   expect(setup.client.get).toHaveBeenCalledTimes(1);
 });
 
+describe("Amazon's /clp/ landing page (owner 2026-10-26)", () => {
+  // Only the address matters: the check runs before the page is parsed.
+  const landing = {
+    url: request.url,
+    html: "<main>Your pick</main>",
+    capturedAt: "2026-10-26T00:00:00.000Z",
+  };
+
+  it("is a Review for the requested ASIN, not a delisting", async () => {
+    const finalUrl = "https://www.amazon.com/clp/B0013LAQS6";
+    const setup = captureSetup(landing, { finalUrl });
+    await expect(setup.capture.capture(request, AbortSignal.timeout(10_000))).rejects.toMatchObject(
+      {
+        code: "CAPTURE.LANDING_PAGE",
+        details: {
+          finalUrl,
+          archiveKey: expect.any(String),
+          reason: "landing page /clp/B0013LAQS6",
+          evidence: { objectKey: expect.any(String) },
+        },
+      },
+    );
+    expect(setup.client.get).toHaveBeenCalledTimes(1);
+  });
+
+  it("is a Review again when its saved page is read back, whatever the case of the ASIN", async () => {
+    const setup = captureSetup(landing, { finalUrl: "https://www.amazon.com/clp/b0013laqs6" });
+    const signal = AbortSignal.timeout(10_000);
+    for (let read = 0; read < 2; read += 1) {
+      await expect(setup.capture.capture(request, signal)).rejects.toMatchObject({
+        code: "CAPTURE.LANDING_PAGE",
+      });
+    }
+    expect(setup.client.get).toHaveBeenCalledTimes(1);
+  });
+
+  it("is still redirected_away when it shows another ASIN", async () => {
+    const finalUrl = "https://www.amazon.com/clp/B002CQU532";
+    const setup = captureSetup(landing, { finalUrl });
+    await expect(
+      setup.capture.capture(request, AbortSignal.timeout(10_000)),
+    ).resolves.toMatchObject({
+      status: "sighted",
+      sighting: { state: "unlisted", reason: "redirected_away", finalUrl },
+    });
+  });
+});
+
 describe.skipIf(!fixture.available)(`${fixture.name}: shared capture and planning pipeline`, () => {
   it("archives bytes, forwards HTTP options and reuses the saved capture", async () => {
     const page = fixture.read();

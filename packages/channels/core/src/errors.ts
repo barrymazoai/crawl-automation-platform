@@ -49,6 +49,10 @@ export const channelErrors = defineErrors({
     category: "SOURCE",
     message: "The site answered with a bot challenge.",
   },
+  "CAPTURE.LANDING_PAGE": {
+    category: "SOURCE",
+    message: "The site showed a landing page for this product instead of its product page.",
+  },
   "CAPTURE.NOT_FOUND": { category: "SOURCE", message: "The page no longer exists." },
   "CAPTURE.HTTP_STATUS": {
     category: "SOURCE",

@@ -1,5 +1,10 @@
 import { expect, it, vi } from "vitest";
-import { allowedHop, isChallengeRedirect, redirectFacts } from "./scraperapi-redirects.js";
+import {
+  allowedHop,
+  isChallengeRedirect,
+  landingPageListing,
+  redirectFacts,
+} from "./scraperapi-redirects.js";
 import * as settings from "./scraperapi-settings.js";
 
 it.each([
@@ -20,6 +25,21 @@ it.each([
   if (expected) {
     expect(allowedHop(location, target, [target.origin])).toBeNull();
   }
+});
+
+it.each([
+  // Amazon's "Your pick" landing page, as ScraperAPI reported it for B0DZ582FSX (2026-10-26).
+  ["https://www.amazon.com/clp/B0DZ582FSX", "B0DZ582FSX"],
+  ["/clp/B0DZ582FSX/", "B0DZ582FSX"],
+  ["/clp/B0DZ582FSX/ref=sr_1_1?th=1", "B0DZ582FSX"],
+  ["/clp/B0DZ582FSX/reviews", null],
+  ["/dp/B0DZ582FSX", null],
+  ["/s?k=clp", null],
+  ["https://www.amazon.co.uk/clp/B0DZ582FSX", null],
+  [null, null],
+])("names the listing a same-site landing page shows: %s", (location, expected) => {
+  const target = new URL("https://www.amazon.com/dp/B0DZ582FSX");
+  expect(landingPageListing(location, target)).toBe(expected);
 });
 
 it("treats SOURCE.ORIGIN_BLOCKED as a refused hop and never exposes provider keys", () => {

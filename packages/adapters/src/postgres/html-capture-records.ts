@@ -9,7 +9,12 @@ import {
   type HtmlCaptureRequest,
   type SavedHtmlOriginal,
 } from "@crawl-automation/app";
-import { isChallengeRedirect, type Database, type Queryable } from "@crawl-automation/platform";
+import {
+  isChallengeRedirect,
+  landingPageListing,
+  type Database,
+  type Queryable,
+} from "@crawl-automation/platform";
 import { captureCreditCost, captureWasCalled, measureCaptureReuse } from "./html-capture-cost.js";
 import {
   inFlight,
@@ -43,7 +48,7 @@ export class PostgresHtmlCaptureRecords implements HtmlCaptureRecords {
         return { status: "reuse", original: saved };
       }
       const original = await recentOriginal(transaction, request, this.reuseWindowMs);
-      if (original && !landedOnVerification(original)) {
+      if (original && !landedOffProduct(original)) {
         await insertCapture(transaction, request, original);
         return { status: "reuse", original };
       }
@@ -160,12 +165,18 @@ export class PostgresHtmlCaptureRecords implements HtmlCaptureRecords {
 }
 
 /**
- * A page that landed on the site's human verification is not a verified original (owner 2026-10-24: Amazon's
- * /checkpoint/ interstitial was archived as `done` before), so it is never reused; a new capture downloads.
+ * A page that landed on the site's human verification (owner 2026-10-24: Amazon's /checkpoint/ interstitial was
+ * archived as `done` before) or on a landing page instead of the product page (owner 2026-10-26: Amazon `/clp/`)
+ * is not a verified original, so it is never reused; a new capture downloads. Any `/clp/` page is refused, whatever
+ * ASIN it shows: it is never a product page to reuse, even when it was a valid `redirected_away` sighting.
  */
-function landedOnVerification(original: SavedHtmlOriginal): boolean {
+function landedOffProduct(original: SavedHtmlOriginal): boolean {
+  if (original.finalUrl === null) {
+    return false;
+  }
+  const target = new URL(original.capture.url);
   return (
-    original.finalUrl !== null &&
-    isChallengeRedirect(original.finalUrl, new URL(original.capture.url))
+    isChallengeRedirect(original.finalUrl, target) ||
+    landingPageListing(original.finalUrl, target) !== null
   );
 }

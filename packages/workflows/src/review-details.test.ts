@@ -28,3 +28,24 @@ it("redacts a bare error message used as the reason", () => {
   expect(reason).toMatch(/^fetch \[/u);
   expect(reason).not.toContain("t1");
 });
+
+it("keeps the archived page of a capture that landed off the product page (CAPTURE.LANDING_PAGE)", () => {
+  const objectKey = "v3/amazon-html/op-1/original.html";
+  const details = failureDetails({
+    message: "activity failed",
+    cause: {
+      details: [
+        {
+          finalUrl: "https://www.amazon.com/clp/B0DZ582FSX",
+          archiveKey: objectKey,
+          reason: "landing page /clp/B0DZ582FSX",
+          evidence: { objectKey },
+        },
+      ],
+    },
+  });
+  expect(details).toMatchObject({
+    reason: "landing page /clp/B0DZ582FSX",
+    evidenceKeys: [objectKey],
+  });
+});

@@ -129,6 +129,18 @@ describe.skipIf(!hasPostgres || process.env.V3_TEST_SKIP_POSTGRES === "1")(
       expect(rows[0]?.captured_at.toISOString()).toBe(saved.capturedAt);
     });
 
+    it.each([
+      ["human verification", "https://example.com/checkpoint/continue?token=v1"],
+      [
+        "a landing page for the listing (Amazon /clp/, 2026-10-26)",
+        "https://example.com/clp/B0DZ582FSX",
+      ],
+    ])("never reuses an original that landed on %s", async (_, finalUrl) => {
+      const producer = request();
+      await records.complete(producer, { ...original(producer), finalUrl });
+      expect(await records.admit(next(producer))).toEqual({ status: "download" });
+    });
+
     it("downloads when the original is at least as old as the reuse window", async () => {
       const producer = request();
       await seedOriginal(producer, HTML_REUSE_WINDOW_MS);

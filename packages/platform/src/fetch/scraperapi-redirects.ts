@@ -21,6 +21,20 @@ export function isChallengeRedirect(location: string | null, target: URL): boole
 }
 
 /**
+ * The listing a same-site landing page shows instead of its product page: Amazon's "Your pick" page `/clp/<ASIN>`
+ * (page type ContextualLandingPage; owner 2026-10-26: 96 such redirects were recorded as delistings), optionally
+ * with Amazon's `/ref=…` segment. Null for any other address. Kept beside the challenge markers because both the
+ * capture (channels-core) and the reuse admission (Postgres adapter, which knows only the channel id) need it.
+ */
+export function landingPageListing(location: string | null, target: URL): string | null {
+  const url = location ? URL.parse(location, target) : null;
+  if (!url || url.origin !== target.origin) {
+    return null;
+  }
+  return /^\/clp\/([^/]+)(?:\/ref=[^/]*)?\/?$/i.exec(url.pathname)?.[1] ?? null;
+}
+
+/**
  * Where a refused redirect pointed, for the Review: the site-side address only (up to 300 characters). An address
  * on ScraperAPI itself, or one carrying a key, is never kept.
  */
