@@ -8,8 +8,11 @@ import {
 import { WorkflowExecutionAlreadyStartedError, type Client } from "@temporalio/client";
 
 /**
- * Manual enrichment dispatch alongside its repository; never restarts an existing workflow of the same protocol.
- * The protocol is in the ID so that a product enriched under an older one can be enriched again (owner 2026-10-26).
+ * Manual enrichment dispatch alongside its repository. The protocol is in the ID so that a product enriched under an
+ * older one can be enriched again (owner 2026-10-26). A running workflow is never started twice; an ended one may run
+ * again on the owner's request, because the enrichment itself reuses a registered answer or a recorded Review and
+ * never calls the model twice for a claimed input (30 re-runs on 2026-10-26 ended on a database timeout before any
+ * claim and could not be run again).
  */
 export class EnrichmentWorkflowStarter implements EnrichmentStarter {
   constructor(
@@ -26,7 +29,7 @@ export class EnrichmentWorkflowStarter implements EnrichmentStarter {
           workflowId,
           taskQueue: this.activitiesQueue,
           args: [{ request, activitiesQueue: this.activitiesQueue }],
-          workflowIdReusePolicy: "REJECT_DUPLICATE",
+          workflowIdReusePolicy: "ALLOW_DUPLICATE",
           workflowIdConflictPolicy: "FAIL",
           retry: { maximumAttempts: 1 },
         }),
