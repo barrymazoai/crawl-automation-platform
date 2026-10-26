@@ -10,7 +10,8 @@
 //   with ®/™ in that field (as above), or the supplier is named in the record (→ medium);
 //   a strain code ("La-14", "BB-12") counts with a word of the generic name in the same field (the
 //   species) or the supplier's name in the record → medium.
-//   A term followed by "-" and a number is part of another code ("Rosell" in "Rosell-52") and never counts.
+//   A term followed by "-" and a number that make another branded ingredient's name is that ingredient
+//   ("Rosell" in "Rosell-52" is not Rosell-418; "Fibersol-2" is still Fibersol).
 //   Anything else is rejected and kept for review. (2026-10-26: the first push linked 1,037 trials, most
 //   of them through such words; owner: take them back and fix the rule.)
 //
@@ -53,9 +54,12 @@ function isInitialsOf(term, genericName) {
 // biomedical word or a study acronym ("activin": 43 trials, 2 supplements; "ESC": 7, none); brands such as
 // MitoQ are mostly tested as supplements, and a few brands are tested as drugs ("Sunphenon": 13 trials, 2).
 const BIOMEDICAL = { minTrials: 3, maxSupplementShare: 0.1 };
-/** "rosell" in "Rosell®-52": the term is the start of a longer code. */
-const partOfCode = (text, term) =>
-  new RegExp(`(^|[^a-zA-Z0-9])${term.split(' ').map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('[^a-zA-Z0-9]+')}\\s*[®™]?\\s*-\\s*\\d`, 'i').test(String(text ?? ''));
+/** "rosell 52" for "Rosell®-52": the term with the number that follows it after "-", or null. */
+function codeAfter(text, term) {
+  const pattern = term.split(' ').map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('[^a-zA-Z0-9]+');
+  const m = new RegExp(`(?:^|[^a-zA-Z0-9])${pattern}\\s*[®™]?\\s*-\\s*(\\d+)`, 'i').exec(String(text ?? ''));
+  return m ? `${term} ${m[1]}` : null;
+}
 
 const strength = (confidence, basis) => (confidence === 'high' ? 2 : 0) + (basis === 'brand' ? 1 : 0);
 
@@ -118,8 +122,9 @@ export function createIngredientMatcher(brandedIngredients) {
           const inIntervention = f.field.startsWith('interventions') || f.field.startsWith('armGroups');
           let confidence = inIntervention ? 'high' : 'medium';
           let reviewNote = null;
-          if (partOfCode(f.text, phrase)) {
-            rejected.push({ nct_id: null, branded_ingredient_id: bi.id, name: bi.name, term: phrase, field: f.field, reason: `"${phrase}" is the start of a longer code here` });
+          const code = codeAfter(f.text, phrase);
+          if (code && (index.get(code) ?? []).some((e) => e.bi.id !== bi.id)) {
+            rejected.push({ nct_id: null, branded_ingredient_id: bi.id, name: bi.name, term: phrase, field: f.field, reason: `"${phrase}" is part of "${code}", another branded ingredient` });
             continue;
           }
           const notABrand = entry.ordinary ? 'not a brand on its own' : biomedical(phrase) ? 'mostly in trials testing no supplement' : null;
