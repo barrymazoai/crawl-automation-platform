@@ -22,7 +22,7 @@ Smart is read through its API with the service key product sync uses; no databas
 3. **Judge**: the ®/™ spellings of names not seen before, cheapest source first: an existing alias, then a
    judgement already made (the 10-15 run's 4,731, rejected ones included, and every later one), and only then
    the model, 50 spellings per call. A supplier ingredient the model ties to a registered one with high
-   confidence becomes an alias when it has at least 5 letters and digits (shorter ones such as "mag" go to review:
+   confidence becomes an alias when it has at least 5 letters and digits, or 4 with a digit (shorter ones such as "mag" go to review:
    they linked unrelated names in the first run); step 2 then runs again for it; an unregistered one is a candidate in
    `changes/ingredient_candidates.jsonl`; anything less certain goes to `review.jsonl`.
 

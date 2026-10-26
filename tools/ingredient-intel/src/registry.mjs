@@ -4,10 +4,10 @@
 import { createMatcher, key } from './rules.mjs';
 import { readJson, statePath } from './lib/state.mjs';
 
-// An alias the model proposed counts only with at least this many letters and digits: in the first run
-// (2026-10-26) "mag" and "ght" linked "Vor-Mag™ Water" and "GHT Proprietary Blend" to Nu-MAG and VegaDELIGHT.
-export const MIN_MODEL_ALIAS = 5;
-export const usableModelAlias = (alias) => key(alias).length >= MIN_MODEL_ALIAS;
+// An alias the model proposed counts only with at least 5 letters and digits, or 4 when one is a digit (strain
+// codes such as Ls-33, LI-23): in the first run (2026-10-26) "mag" and "ght" linked "Vor-Mag™ Water" and
+// "GHT Proprietary Blend" to Nu-MAG and VegaDELIGHT.
+export const usableModelAlias = (alias) => key(alias).length >= (/\d/.test(alias) ? 4 : 5);
 
 /** The aliases the matcher uses: the reviewed ones, and the model's that are long enough. */
 function activeAliases(row) {
