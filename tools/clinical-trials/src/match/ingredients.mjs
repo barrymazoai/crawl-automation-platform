@@ -35,13 +35,13 @@ export function isWeakTerm(term) {
 
 const ENGLISH = new Set(englishWords);
 /**
- * Every word an English word, a number or a single letter: "phase 2", "life s", "collective". A strain code
- * whose letters are not a word of 3 letters or more stays a code: "La-14", "Bi-07", "GR-1".
+ * Every word an English word, a number or a single letter: "phase 2", "life s", "collective". A code stays a
+ * code unless its letters are an English word of 5 letters or more: "La-14", "Lab4", "MEG-3" are codes.
  */
 export function isOrdinaryTerm(term) {
   const t = normalize(term);
   const letters = t.match(/^[a-z]+/)?.[0] ?? '';
-  if (STRAIN.test(t)) return letters.length >= 3 && ENGLISH.has(letters);
+  if (STRAIN.test(t)) return letters.length >= 5 && ENGLISH.has(letters);
   return t.split(' ').every((w) => w.length <= 1 || /^\d+$/.test(w) || ENGLISH.has(w) || ORDINARY.has(w));
 }
 /** "cla" for "conjugated linoleic acid (60%)": the initials of consecutive words of the generic name. */
@@ -101,7 +101,9 @@ export function createIngredientMatcher(brandedIngredients) {
       seenIn.set(t, c);
     }
   }
+  // Words only: a code with a number ("EPs 7630") names one product even when it is tested as a drug.
   const biomedical = (term) => {
+    if (/\d/.test(term)) return false;
     const c = seenIn.get(term);
     return !!c && c.trials >= BIOMEDICAL.minTrials && c.supplement < c.trials * BIOMEDICAL.maxSupplementShare;
   };
