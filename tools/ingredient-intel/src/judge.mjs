@@ -209,14 +209,25 @@ export async function judgeSpellings({ dataDir, runDir, runId, supplySmart, regi
         review.push({ reason, spelling: s.spelling, external_key: target, ingredient: row.ingredient, verdict: v, names: s.nameIds.length, contexts: s.contexts });
       }
     } else {
-      const c = candidates.get(v.canonical ?? s.spelling) ?? { kind: 'ingredient_candidate', canonical: v.canonical ?? s.spelling, spellings: [], supplier: v.supplier, generic_name: v.generic_name, confidence: v.confidence, products: 0, names: 0, contexts: [], detected_at: now };
+      const c = candidates.get(v.canonical ?? s.spelling) ?? { kind: 'ingredient_candidate', canonical: v.canonical ?? s.spelling, spellings: [], supplier: v.supplier, generic_name: v.generic_name, confidence: v.confidence, products: 0, label_products: null, names: 0, ingredient_ids: [], contexts: [], detected_at: now };
       c.spellings.push(s.spelling);
       c.products += s.products ?? 0;
       c.names += s.nameIds.length;
+      c.ingredient_ids.push(...s.nameIds);
       c.contexts.push(...s.contexts.slice(0, 5 - c.contexts.length));
       candidates.set(c.canonical, c);
     }
   }
+  // Products whose label lists a candidate (ingredient.productCounts, SUPPLYSMAR-463), summed over its names:
+  // a product listing two of them counts twice. Not there yet → left empty, the list is still written.
+  const candidateIds = [...new Set([...candidates.values()].flatMap((c) => c.ingredient_ids))];
+  const counts = candidateIds.length
+    ? await supplySmart.productCounts(candidateIds).catch((error) => {
+        log.warn({ err: error.message }, 'product counts not available');
+        return null;
+      })
+    : null;
+  if (counts) for (const c of candidates.values()) c.label_products = c.ingredient_ids.reduce((n, id) => n + (counts.get(id)?.labelProducts ?? 0), 0);
   if (aliasesAdded.length)
     await writeJson(statePath(dataDir, 'registry.json'), { imported_from: registry.imported_from, imported_at: registry.imported_at, ingredients: registry.ingredients });
   await writeJsonl(join(runDir, 'changes', 'ingredient_candidates.jsonl'), [...candidates.values()].sort((a, b) => b.products - a.products));

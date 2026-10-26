@@ -1,6 +1,7 @@
 // Supply Smart's product-database gateway, read with the service key product sync uses
 // (SUPPLY_SMART_DATABASE_RPC_URL and SUPPLY_SMART_API_KEY in a private env file; the key is never logged).
-// Read-only procedures that exist today; writing waits for the ingest procedure (P4).
+// The writes are the ingest procedures for the crawler (SUPPLYSMAR-463: service key only; a re-sent batch is
+// counted once, so a timeout or 5xx is retried with the same batch).
 // oRPC wraps the body and the answer in {"json": ...}.
 import { readFile } from 'node:fs/promises';
 import { parseEnv } from 'node:util';
@@ -33,6 +34,7 @@ export async function supplySmartFromEnvFile(file, { log, requestsPerMinute = 12
         if (response.ok && body?.json === undefined) throw new Error(`${path}: HTTP 200 without a readable answer`);
         if (response.ok) return body.json;
         const error = new Error(`${path}: HTTP ${response.status} ${body?.json?.code ?? ''} ${body?.json?.message ?? ''}`.trim());
+        Object.assign(error, { status: response.status, data: body?.json?.data });
         throw RETRYABLE.has(response.status) ? error : new AbortError(error);
       },
       {
@@ -53,6 +55,29 @@ export async function supplySmartFromEnvFile(file, { log, requestsPerMinute = 12
     /** Every ingredient name: [{ id, name, createdAt }] (≈212k rows, ≈56 MB, one call) */
     async ingredientNames() {
       return (await call('ingredient/listAll')).data;
+    },
+    /** Every branded ingredient with its links not removed: { items, totals, asOf } (all pages) */
+    async syncState() {
+      const items = [];
+      let cursor = null;
+      let page;
+      do {
+        page = await call('brandedIngredient/syncState', { cursor, limit: 500 });
+        items.push(...page.items);
+        cursor = page.nextCursor;
+      } while (cursor);
+      return { items, totals: page.totals, asOf: page.asOf };
+    },
+    /** brandedIngredient.ingest: { run: { runId }, batchId, dryRun, records } */
+    ingestLinks: (body) => call('brandedIngredient/ingest', body),
+    /** clinicalTrial.ingest: { run: { runId, fetchedAt, sourceDb }, batchId, dryRun, trials, companyLinks, productLinks, ingredientLinks } */
+    ingestTrials: (body) => call('clinicalTrial/ingest', body),
+    /** Map ingredient id → { mainProducts, labelProducts } (product_ingredient / the current label formula) */
+    async productCounts(ingredientIds) {
+      const out = new Map();
+      for (let i = 0; i < ingredientIds.length; i += 500)
+        for (const c of (await call('ingredient/productCounts', { ingredientIds: ingredientIds.slice(i, i + 500) })).data) out.set(c.ingredientId, c);
+      return out;
     },
     /** Products whose ingredient list holds any of the ids: [{ id, name, company, ingredientIds }] */
     async productsUsing(ingredientIds) {

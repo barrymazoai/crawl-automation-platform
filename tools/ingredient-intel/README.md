@@ -5,10 +5,11 @@ Keeps Supply Smart's branded-ingredient data (KAN-208) current after the one-off
 regulatory sync (owner 2026-10-26). Plan: `docs/spark/2026-10-26-branded-ingredient-refresh-plan.md`; this
 first phase: `docs/spark/2026-10-26-ingredient-intel-p1-plan.md`.
 
-**Phase 1 writes files only.** Nothing is sent to Supply Smart until it offers an ingest procedure (P4). Supply
-Smart is read through its API with the service key product sync uses; no database connection.
+**Without `--push` it writes files only.** With `--push` (P4) the trial delivery and the links go to Supply
+Smart's ingest procedures (SUPPLYSMAR-463). Supply Smart is read and written through its API with the service
+key product sync uses; no database connection.
 
-## One job, three steps (`src/sync.mjs`)
+## One job, four steps (`src/sync.mjs`)
 
 1. **Trials**: the ClinicalTrials.gov collector (`tools/clinical-trials`), unchanged and in its own process: an
    incremental collect, then a delivery. The owner wants trials refreshed together with the branded ingredients.
@@ -28,6 +29,14 @@ Smart is read through its API with the service key product sync uses; no databas
    they linked unrelated names in the first run); step 2 then runs again for it; an unregistered one is a candidate in
    `changes/ingredient_candidates.jsonl`; anything less certain goes to `review.jsonl`. A reviewed alias is
    added by hand with `src/add-alias.mjs` (below) and is never turned off by the length rule.
+4. **Push** (`--push`, `src/push.mjs`), each part only when its own step succeeded in this run:
+   - trials: the delivery, 100 trials per batch with every link of those trials (`clinicalTrial.ingest`);
+   - links: `brandedIngredient.syncState` is compared with `state/map.json`; the missing links are added and the
+     ones the rules no longer make are taken back (`brandedIngredient.ingest`, 500 per batch). Links a person
+     made, and links of branded ingredients the crawler doesn't match, are never taken back. More than 2% of
+     Supply Smart's links to take back (and more than 20) stops the push with a red card.
+   Every batch goes as a dry run first; the real batches go only when all pass with the expected counts, and
+   the links are read back afterwards.
 
 The model and effort have no defaults (owner rule: never the machine's Codex default). The crontab line passes
 them, `gpt-5.6-luna` / `medium` (owner 2026-10-26: simple judgements on Luna, Server 一's current version).
@@ -68,7 +77,7 @@ node src/sync.mjs --data-dir ~/ingredient-intel-data \
   --trials-data-dir ~/clinical-trials-data \
   --luna-model gpt-5.6-luna --luna-effort medium \
   --webhook-file ~/apps/regulatory-private/feishu.webhook
-# --skip-trials, --no-model, --max-model-batches N (default 40; the rest waits for the next run)
+# --skip-trials, --no-model, --max-model-batches N (default 40; the rest waits for the next run), --push
 
 node src/check-sync.mjs --data-dir ~/ingredient-intel-data --webhook-file ~/apps/regulatory-private/feishu.webhook
 
