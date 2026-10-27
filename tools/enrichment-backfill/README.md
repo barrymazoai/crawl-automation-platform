@@ -16,7 +16,8 @@ three at a time so the crawl keeps its model slots. Background: `docs/quality/20
    refused product, or a write that differs from its preview, stops the run; the next start finishes that update first.
 4. It stops at a checkpoint (`--stop-after`, default 5,000 products per start), when a batch has more than 10%
    failed enrichments, when the 5-minute load of Server 一 passes 28, on a crawler API or Supply Smart error, or
-   when the file `STOP` exists in the state folder (in-flight products finish first).
+   when the file `STOP` exists in the state folder (in-flight products finish first). A crawler API that does not
+   answer at all (fetch failed, as while a deploy restarts it) is asked again every minute for up to 30 minutes first.
 
 ```sh
 cd ~/apps/crawler-v3/releases/<sha>/source/tools/enrichment-backfill

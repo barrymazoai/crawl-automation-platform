@@ -105,7 +105,27 @@ function supplySmartProducts(requests) {
 }
 
 // ── crawler API ──────────────────────────────────────────────────────────────
+/**
+ * A deploy restarts the crawler API: a request it never answered (fetch failed, connection refused or reset) is sent
+ * again every minute for up to 30 minutes (owner 2026-10-27). An answer, even an error (a Supply Smart refusal), and
+ * the 5-minute timeout are never retried. The calls are safe to repeat: a status read, an idempotent update, and an
+ * enrichment start (at worst the product is enriched once more).
+ */
 async function api(path, input, method = 'POST') {
+  const deadline = Date.now() + 30 * 60_000;
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      return await apiOnce(path, input, method);
+    } catch (error) {
+      const unreachable = error instanceof TypeError && error.message === 'fetch failed';
+      if (!unreachable || Date.now() + 60_000 > deadline) throw error;
+      log(`${path}: crawler API unreachable (${error.cause?.code ?? error.cause?.message ?? 'fetch failed'}), try ${attempt + 1} in 60 s`);
+      await sleep(60_000);
+    }
+  }
+}
+
+async function apiOnce(path, input, method) {
   const url = new URL(`/trpc/${path}`, args.api);
   const init = { method, headers: { 'content-type': 'application/json' }, signal: AbortSignal.timeout(300_000) };
   if (method === 'GET') url.searchParams.set('input', JSON.stringify(input));
