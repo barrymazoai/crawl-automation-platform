@@ -129,7 +129,8 @@ export function imageUrls(values: readonly string[], context: PlatformContext): 
     )
     .map((url) => url.href);
   const result = observedImageSizes(urls);
-  if (result.length > 100) {
+  // A full gallery is kept (BioHealth Precision ISO: 128 images across 26 flavour/size variants, 2026-10-27).
+  if (result.length > 200) {
     throw platformPageErrors.create("DTC.PAGE_LIMIT");
   }
   return result;

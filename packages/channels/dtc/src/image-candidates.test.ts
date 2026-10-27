@@ -129,8 +129,8 @@ describe("observed product image renditions", () => {
   });
 
   it("applies the image limit to distinct candidates, while keeping the limit", () => {
-    const sizes = Array.from({ length: 110 }, (_, index) => `${hero}&width=${index + 1}`);
-    expect(imageUrls(sizes, context)).toEqual([absolute(`${hero}&width=110`)]);
+    const sizes = Array.from({ length: 210 }, (_, index) => `${hero}&width=${index + 1}`);
+    expect(imageUrls(sizes, context)).toEqual([absolute(`${hero}&width=210`)]);
     const distinct = sizes.map((_, index) => `/cdn/shop/files/${index}.jpg`);
     expect(() => imageUrls(distinct, context)).toThrowError(
       expect.objectContaining({ code: "DTC.PAGE_LIMIT" }),

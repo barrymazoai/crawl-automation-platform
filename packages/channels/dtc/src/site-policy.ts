@@ -49,7 +49,10 @@ type SiteInput = Pick<DtcSitePolicy, "siteKey" | "platform"> &
 
 export const DTC_PAGE_LIMITS = { maxBytes: 6 * 1024 * 1024, timeoutMs: 75_000 };
 export const DTC_BROWSER_POLICY = {
-  readySelector: "main, #MainContent, .site-main",
+  // A theme names its main content its own way (Blocks #main-content, Bevko .main-content: every read waited the whole
+  // 75 s and was cancelled, 2026-10-27); every Shopify theme renders its sections in the server HTML.
+  readySelector:
+    'main, #MainContent, .site-main, #main-content, .main-content, [role="main"], [id^="shopify-section-"]',
   preparationScript: dtcPreparationScript(),
 };
 
