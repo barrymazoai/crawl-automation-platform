@@ -196,3 +196,7 @@ packages/adapters/src/product-delivery/delivery-service.test.ts`，再执行 `pn
 | `apps/api/src/amazon-listing-date.test.ts`, `amazon-listing-date-backfill.test.ts`, `amazon-listing-date.fixture.ts`, `product-sync-router.test.ts` | 离线真实页面全链路、原件不可用的降级、预览/执行计数和 API 默认只读行为 |
 | `packages/adapters/src/postgres/product-sync-listing-dates.test.ts` | 确认预览无写入、执行仅改变同步水位 |
 | 本文 | 操作步骤、影响范围、证据与验收限制 |
+
+## 10-27 补记：重发必须换 snapshot source
+
+Supply Smart 的 `listing_snapshot` 以 (listing_id, captured_at, source) 唯一，冲突 `onConflictDoNothing`。10-25/26 用 `productSync.reopen` 重发的旧抓取里只有 247 条落库（它们原来的快照 source 是流水线的 `crawler-v3:product-delivery`），其余都被丢弃，我们这边却因回读成功而标 verified。10-27 起 `sync-send.ts` 的 source 带批次内容指纹（`batchSource`），已回填过的商品要用新的 `before` 再 reopen 一次，销量回填会顺带补齐上架日期。

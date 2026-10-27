@@ -8,9 +8,22 @@ import {
 import type { DeliveryRun } from "../product-delivery/wire.js";
 import type { ProductVerifyBatchAnswer } from "@crawl-automation/v3-contracts";
 import { reasonText, sentChange, type PlannedSync, type SyncTally } from "./sync-model.js";
+import { canonicalHash } from "../history/canonical.js";
 
-/** Stable across runs: Supply Smart's snapshot replay key includes the source (review 2026-10-12). */
+/**
+ * Supply Smart keeps one snapshot per listing, capture time and source (a unique key; a conflict is dropped without
+ * an error). The source was fixed across runs so that a retry stays one snapshot (review 2026-10-12), which also
+ * dropped every resend of a retained original: the listing-date and units backfills reached the ledger, not Supply
+ * Smart (found 2026-10-27, 0 of 175 verified resends stored). The source now carries the fingerprint of the batch's
+ * observation items (not their labels, which have their own idempotency): a batch of unchanged items sent again is
+ * still one snapshot each; a changed item at the same capture time is a new one. The source belongs to the run, so
+ * an unchanged item resent in a differently composed batch gains a duplicate snapshot with the same values.
+ */
 const SOURCE = "crawl-automation:marketplace-sync";
+export function batchSource(planned: readonly { item: unknown }[]) {
+  const hashes = planned.map((entry) => canonicalHash(entry.item)).sort();
+  return `${SOURCE}:${canonicalHash(hashes).slice(0, 12)}`;
+}
 const NEEDS_REVIEW = "needs_review";
 const RUN_OPEN = "run_not_completed";
 
@@ -34,7 +47,8 @@ export async function sendBatch(batch: Batch, tally: SyncTally, signal: AbortSig
     closed.found && closed.scope === "partial" && closed.problems.length === 0;
 }
 
-function partialRun(batch: Batch): DeliveryRun {
+/** The ingest run of one batch: earliest capture as its start, the batch content as its snapshot source. */
+export function partialRun(batch: Pick<Batch, "runId" | "planned">): DeliveryRun {
   const times = batch.planned.map((entry) => entry.item.capturedAt);
   const [startedAt] = times.sort((left, right) => Date.parse(left) - Date.parse(right));
   return {
@@ -42,7 +56,7 @@ function partialRun(batch: Batch): DeliveryRun {
     channel: batch.planned[0].product.channel,
     scope: "partial",
     startedAt: startedAt ?? batch.planned[0].item.capturedAt,
-    source: SOURCE,
+    source: batchSource(batch.planned),
   };
 }
 

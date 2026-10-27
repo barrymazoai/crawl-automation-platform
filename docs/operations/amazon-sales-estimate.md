@@ -45,7 +45,16 @@ curl -s -X POST http://127.0.0.1:4188/trpc/productSync.reopen -H 'content-type: 
 # 真跑：加 "dryRun":false；每批 ≤200，已有 sweep 会重发，带上排名和估算
 ```
 
-约 1,300 个/小时；3.5 万个 Amazon 商品约一天。重发走观测 ingest，label 不重发。回填后抽查 Supply Smart 测试库：`badge` / `rank_model` / `floor` 各 20 个。
+10-27 实测符合条件 45,046 个（含规格），每次最多 200，重发约 1,300 个/小时，全量约 35 小时。重发走观测 ingest；label 也会随每个商品重发，10-26 enrichment /4 之后约 12% 会报 `idempotency_conflict`（label 请求体的语义字段变了，owner 10-26 决定不改 operationId），这些行在 `product_sync` 里落 `failed`，但观测在 label 之前已经发出，不影响销量。
+
+**Supply Smart 的快照键是 (listing, captured_at, source)，冲突静默丢弃。** 重发用原件、captured_at 不变，所以 source 必须随内容变：`sync-send.ts` 的 `batchSource` 用整批 payload hash 的指纹做后缀（10-27 之前是固定值，当天第一批 175 个 verified 在 Supply Smart 里 0 条快照；10-25/26 的上架日期回填同理只落了 247 条）。回填结果要在 Supply Smart 测试库核对，不能只看我们这边的 verified：
+
+```sql
+SELECT extras->'salesEstimate'->>'source', count(*) FROM listing_snapshot
+WHERE created_at >= '<回填开始时间>' AND extras ? 'salesEstimate' GROUP BY 1;
+```
+
+回填后抽查 `badge` / `rank_model` / `floor` 各 20 个。
 
 ## 本地验证
 
