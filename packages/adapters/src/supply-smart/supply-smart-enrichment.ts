@@ -6,6 +6,13 @@ import type {
 import { z } from "zod";
 import type { SupplySmartRpc } from "./supply-smart-rpc.js";
 
+const CALL_SIZE = 20;
+const RETRY_SIZE = 5;
+const chunks = <T>(items: T[], size: number) =>
+  Array.from({ length: Math.ceil(items.length / size) }, (_, index) =>
+    items.slice(index * size, (index + 1) * size),
+  );
+
 const ChangesSchema = z.looseObject({
   added: z.array(z.string()),
   removed: z.array(z.string()),
@@ -40,7 +47,33 @@ const BatchSchema = z.looseObject({
 export class SupplySmartEnrichmentClient implements SupplySmartEnrichment {
   constructor(private readonly rpc: Pick<SupplySmartRpc, "call">) {}
 
+  /**
+   * Supply Smart takes about 0.5 s a product, so a call of 100 passed the 60 s request timeout (2026-10-26, backfill
+   * batch 5): calls go 20 products at a time. A call that still fails is tried once more in calls of 5; the update
+   * is idempotent, so a write cut off by the timeout is safe to repeat. A second failure is thrown.
+   */
   async update(
+    changes: EnrichmentChange[],
+    dryRun: boolean,
+    signal: AbortSignal,
+  ): Promise<EnrichmentOutcome[]> {
+    const outcomes: EnrichmentOutcome[] = [];
+    for (const chunk of chunks(changes, CALL_SIZE)) {
+      try {
+        outcomes.push(...(await this.call(chunk, dryRun, signal)));
+      } catch (error) {
+        if (signal.aborted) {
+          throw error;
+        }
+        for (const smaller of chunks(chunk, RETRY_SIZE)) {
+          outcomes.push(...(await this.call(smaller, dryRun, signal)));
+        }
+      }
+    }
+    return outcomes;
+  }
+
+  private async call(
     changes: EnrichmentChange[],
     dryRun: boolean,
     signal: AbortSignal,
