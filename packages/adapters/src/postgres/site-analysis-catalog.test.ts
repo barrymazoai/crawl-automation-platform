@@ -31,22 +31,23 @@ const brand = (name: string, url: string) =>
 
 function fixture(
   brands = [brand("Absorbed", catalogUrl), brand("Owner", "https://owner.example/collections/all")],
-  existing = false,
-  analysis: { state?: "completed" | "needs-review"; reasons?: string[] } = {},
+  existing: string | false = false,
+  analysis: { state?: "completed" | "needs-review"; reasons?: string[]; url?: string } = {},
 ) {
-  const { state = "completed", reasons = [] } = analysis;
+  const { state = "completed", reasons = [], url = "https://owner.example/" } = analysis;
   const sourceId = randomUUID();
   const brandId = randomUUID();
   const scanId = randomUUID();
   const query = vi.fn(async (sql: string) => {
     if (sql.startsWith("SELECT state,brands")) {
-      return [{ state, brands, limits: { maxBrands: 50, maxPages: 100, maxDomains: 50 }, reasons }];
+      const limits = { maxBrands: 50, maxPages: 100, maxDomains: 50 };
+      return [{ state, brands, limits, reasons, url }];
     }
     if (sql.startsWith("SELECT id FROM brand")) {
       return [{ id: brandId }];
     }
-    if (sql.startsWith("SELECT id,channel FROM brand_source")) {
-      return existing ? [{ id: sourceId, channel: "dtc" }] : [];
+    if (sql.startsWith("SELECT id,channel,url FROM brand_source")) {
+      return existing ? [{ id: sourceId, channel: "dtc", url: existing }] : [];
     }
     if (sql.startsWith("INSERT INTO brand_source")) {
       return [{ id: sourceId }];
@@ -81,7 +82,10 @@ it("applies and queues only the selected collection using the existing per-brand
 });
 
 it("corrects only a matched source and reports the kind transition", async () => {
-  const test = fixture([brand("Owner", "https://owner.example/pages/shop")], true);
+  const test = fixture(
+    [brand("Owner", "https://owner.example/pages/shop")],
+    "https://owner.example/pages/shop",
+  );
   vi.mocked(replaceAnalyzedSettings).mockClear();
   const analysisId = randomUUID();
   const result = await applySiteAnalysis(test.tx, { analysisId, replaceSettings: true });
@@ -134,6 +138,45 @@ it("keeps unscoped single-brand apply behavior", async () => {
     }),
   );
 });
+it("scans a home-page store's whole catalog, not the collection the analysis looked at", async () => {
+  const test = fixture([brand("Owner", "https://owner.example/collections/pre-workout")]);
+  vi.mocked(insertAnalyzedSettings).mockClear();
+  await applySiteAnalysis(test.tx, { analysisId: randomUUID() });
+  expect(insertAnalyzedSettings).toHaveBeenCalledWith(
+    test.tx,
+    expect.objectContaining({
+      brand: expect.objectContaining({ catalogUrl: "https://owner.example/collections/all" }),
+    }),
+  );
+});
+
+it("keeps a submitted collection as the catalog", async () => {
+  const submitted = "https://owner.example/collections/pre-workout";
+  const test = fixture([brand("Owner", submitted)], false, { url: submitted });
+  vi.mocked(insertAnalyzedSettings).mockClear();
+  await applySiteAnalysis(test.tx, { analysisId: randomUUID() });
+  expect(insertAnalyzedSettings).toHaveBeenCalledWith(
+    test.tx,
+    expect.objectContaining({ brand: expect.objectContaining({ catalogUrl: submitted }) }),
+  );
+});
+
+it("moves a source stored at the observed collection to the whole store on correction", async () => {
+  const observed = "https://owner.example/collections/pre-workout";
+  const test = fixture([brand("Owner", observed)], observed);
+  const result = await applySiteAnalysis(test.tx, {
+    analysisId: randomUUID(),
+    replaceSettings: true,
+  });
+  expect(result.matched).toEqual([
+    { name: "Owner", brandId: test.brandId, sourceId: test.sourceId },
+  ]);
+  expect(test.query).toHaveBeenCalledWith("UPDATE brand_source SET url=$2 WHERE id=$1", [
+    test.sourceId,
+    "https://owner.example/collections/all",
+  ]);
+});
+
 it("applies verified brands and reports an explicitly selected unverified brand", async () => {
   const unverified = {
     ...brand("Dherbs Active", "https://dherbsactive.example/store/"),

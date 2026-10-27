@@ -78,16 +78,28 @@ export async function replaceAnalyzedSettings(tx: Queryable, input: SettingsInpu
   return { oldKind, newKind: settings.kind };
 }
 
-/** A brand's own Shopify store lists every product at /collections/all, never at the bare collection index. */
-export function storeCatalog(brand: AnalyzedBrand, singleBrand: boolean): AnalyzedBrand {
+/**
+ * A brand's own Shopify store lists every product at /collections/all. The analysis confirms the brand on whichever
+ * collection it looked at (AfterDark's pre-workout, DryWater's hydration-powder, 2026-10-27), so a store submitted at
+ * its home page scans the whole store; a submitted collection stays that collection.
+ */
+export function storeCatalog(
+  brand: AnalyzedBrand,
+  singleBrand: boolean,
+  entryUrl: string,
+): AnalyzedBrand {
   if (!singleBrand || brand.platform !== "shopify" || !brand.catalogUrl) {
     return brand;
   }
   const url = new URL(brand.catalogUrl);
-  if (url.pathname.replace(/\/$/, "") !== "/collections" || url.search) {
+  if (!/^\/collections(\/[^/]+)?\/?$/.test(url.pathname) || isCollection(entryUrl)) {
     return brand;
   }
   return { ...brand, catalogUrl: new URL("/collections/all", url).href };
+}
+
+function isCollection(url: string) {
+  return new URL(url).pathname.startsWith("/collections/");
 }
 
 /** One brand on the domain in this analysis and no other brand's source there: a brand-owned store. */
@@ -111,29 +123,33 @@ export async function singleBrandSite(
   return others.length === 0;
 }
 
-/** A second brand never joins a domain stored as one brand's own store. */
+/**
+ * A second brand never joins a domain stored as one brand's own store.
+ * The collection the analysis looked at is this brand's own source, not a conflict, when storeCatalog widened it.
+ */
 export async function conflictingCatalog(
   tx: Queryable,
   brand: AnalyzedBrand,
-  allowMatchedCorrection = false,
+  options: { observedUrl: string; allowMatchedCorrection: boolean },
 ): Promise<string | null> {
+  const { observedUrl, allowMatchedCorrection } = options;
   const rows = await tx.query(
     `SELECT 1 FROM brand_source source JOIN brand ON brand.id=source.brand_id
     WHERE source.channel='dtc' AND (
-      (source.url=$1 AND lower(brand.name)<>lower($2)) OR
-      (lower(brand.name)=lower($2) AND source.region='US' AND source.url<>$1
+      (source.url=ANY($1::text[]) AND lower(brand.name)<>lower($2)) OR
+      (lower(brand.name)=lower($2) AND source.region='US' AND source.url<>ALL($1::text[])
         AND (source.url=$3 OR starts_with(source.url,$3 || '/'))))
     UNION ALL SELECT 1 FROM dtc_source_settings settings
       JOIN brand_source source ON source.id=settings.source_id
       JOIN brand owner ON owner.id=source.brand_id
       WHERE settings.settings->>'siteKey'=$4 AND settings.settings->>'platform'<>$5
         AND NOT ($6::boolean AND source.channel='dtc' AND source.region='US'
-          AND source.url=$1 AND lower(owner.name)=lower($2))
+          AND source.url=ANY($1::text[]) AND lower(owner.name)=lower($2))
     UNION ALL SELECT 1 FROM dtc_source_settings settings JOIN brand_source source ON source.id=settings.source_id
-      WHERE settings.settings->>'siteKey'=$4 AND source.url<>$1
+      WHERE settings.settings->>'siteKey'=$4 AND source.url<>ALL($1::text[])
         AND settings.settings->>'kind'='single-brand' LIMIT 1`,
     [
-      brand.catalogUrl,
+      [brand.catalogUrl, observedUrl],
       brand.name,
       `https://${brand.domain}`,
       brand.domain,

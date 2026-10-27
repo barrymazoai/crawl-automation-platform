@@ -18,6 +18,8 @@ type BrandApplication = {
   analysisId: string;
   brand: AnalyzedBrand;
   analysed: readonly AnalyzedBrand[];
+  /** The page the analysis was asked to look at. */
+  entryUrl: string;
   scoped: boolean;
   replaceSettings: boolean;
 };
@@ -28,7 +30,11 @@ export async function applySiteAnalysis(
   onState?: (state: "completed" | "needs-review") => void,
 ): Promise<SiteAnalysisApplyResult> {
   const result: SiteAnalysisApplyResult = { created: [], matched: [], corrected: [], skipped: [] };
-  const { brands, applicable, state } = await applicableBrands(tx, input.analysisId, result);
+  const { brands, applicable, state, entryUrl } = await applicableBrands(
+    tx,
+    input.analysisId,
+    result,
+  );
   onState?.(state);
   const selected = input.brands?.map((name) => name.toLowerCase());
   skippedSelections(brands, input.brands ?? [], result);
@@ -45,6 +51,7 @@ export async function applySiteAnalysis(
         analysisId: input.analysisId,
         brand,
         analysed: applicable,
+        entryUrl,
         scoped: !!input.catalogUrl,
         replaceSettings: input.replaceSettings === true,
       },
@@ -60,7 +67,7 @@ async function applicableBrands(
   result: SiteAnalysisApplyResult,
 ) {
   const rows = await tx.query<Record<string, unknown>>(
-    "SELECT state,brands,limits,reasons FROM dtc_site_analysis WHERE id=$1 FOR UPDATE",
+    "SELECT state,brands,limits,reasons,url FROM dtc_site_analysis WHERE id=$1 FOR UPDATE",
     [analysisId],
   );
   const row = rows[0];
@@ -91,7 +98,7 @@ async function applicableBrands(
           return false;
         })
       : brands;
-  return { brands, applicable, state };
+  return { brands, applicable, state, entryUrl: z.string().parse(row["url"]) };
 }
 
 function selectCatalog(
@@ -124,8 +131,11 @@ async function applyBrand(tx: Queryable, input: BrandApplication, result: SiteAn
   );
   // A collection-scoped analysis does not establish that the entire store belongs to this brand.
   const singleBrand = !input.scoped && (await singleBrandSite(tx, input));
-  const brand = storeCatalog(found, singleBrand);
-  const conflict = await conflictingCatalog(tx, brand, input.replaceSettings);
+  const brand = storeCatalog(found, singleBrand, input.entryUrl);
+  const conflict = await conflictingCatalog(tx, brand, {
+    observedUrl: found.catalogUrl,
+    allowMatchedCorrection: input.replaceSettings,
+  });
   if (conflict) {
     result.skipped.push({ name: brand.name, reason: conflict });
     return;
@@ -134,6 +144,7 @@ async function applyBrand(tx: Queryable, input: BrandApplication, result: SiteAn
     tx,
     {
       brand,
+      observedUrl: found.catalogUrl,
       analysisId: input.analysisId,
       singleBrand,
       replaceSettings: input.replaceSettings,

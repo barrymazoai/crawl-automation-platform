@@ -6,6 +6,8 @@ import { insertAnalyzedSettings, replaceAnalyzedSettings } from "./site-analysis
 
 type SourceInput = {
   brand: AnalyzedBrand;
+  /** The collection the analysis looked at, before storeCatalog widened it to the whole store. */
+  observedUrl: string;
   analysisId: string;
   singleBrand: boolean;
   replaceSettings: boolean;
@@ -25,9 +27,11 @@ export async function applyAnalyzedSource(
     result.skipped.push({ name: brand.name, reason: "No existing brand to correct" });
     return;
   }
+  // A source stored at the observed collection is the same source; a correction moves it to the whole store.
   const existing = await tx.query<Record<string, unknown>>(
-    "SELECT id,channel FROM brand_source WHERE brand_id=$1 AND region='US' AND url=$2",
-    [brandId, brand.catalogUrl],
+    `SELECT id,channel,url FROM brand_source WHERE brand_id=$1 AND region='US' AND url=ANY($2::text[])
+    ORDER BY url=$3 DESC LIMIT 1`,
+    [brandId, [brand.catalogUrl, input.observedUrl], brand.catalogUrl],
   );
   if (existing[0]) {
     await matchSource(tx, { ...input, row: existing[0], brandId }, result);
@@ -91,6 +95,9 @@ async function matchSource(
       brand,
       singleBrand,
     });
+    if (row["url"] !== brand.catalogUrl) {
+      await tx.query("UPDATE brand_source SET url=$2 WHERE id=$1", [sourceId, brand.catalogUrl]);
+    }
     if (correction) {
       result.corrected?.push({ name: brand.name, brandId, sourceId, ...correction });
     }
