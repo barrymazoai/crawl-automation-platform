@@ -116,6 +116,12 @@ function salesOf(metrics: Metrics, value: unknown): void {
   metrics.extras = { ...metrics.extras, salesVolume: sales };
 }
 
+/** The root Best Sellers Rank the Amazon reader keeps in `commerce.salesRank` (KAN-226); other channels have none. */
+function salesRankOf(value: unknown): string | null {
+  const rank = value && typeof value === "object" ? (value as Row)["rank"] : null;
+  return typeof rank === "number" && Number.isSafeInteger(rank) && rank > 0 ? String(rank) : null;
+}
+
 /**
  * The metrics of one page's commerce evidence, by the same rules as the earlier history projection: nothing is
  * inferred, a value the page does not show stays null, and the whole commerce record is kept in `extras`.
@@ -128,8 +134,7 @@ export function commerceMetrics(raw: unknown): Metrics {
     listPrice: amount(commerce["listPrice"]),
     rating: rating(commerce["rating"]),
     reviewCount: reviewCount(commerce["reviewCount"]),
-    // The legacy Amazon reader did not extract Best Sellers Rank; no verified rank source yet.
-    salesRank: null,
+    salesRank: salesRankOf(commerce["salesRank"]),
     inStock: inStock(commerce["availability"]),
     unitsSold: null,
     unitsSoldPeriod: null,

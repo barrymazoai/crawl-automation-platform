@@ -4,6 +4,7 @@ import type {
   LabelCollectedProduct,
   SharedEnrichmentRecord,
   AmazonListingDate,
+  AmazonSalesRank,
 } from "@crawl-automation/v3-contracts";
 import type { DeliveryHistory } from "../product-delivery/ports.js";
 import type { MarketplaceChannel } from "./ledger.js";
@@ -52,6 +53,8 @@ export interface MarketplaceProduct {
   attributes?: Record<string, unknown>;
   /** DFA reparsed from this capture's verified original, without mutating append-only history. */
   dateFirstAvailable?: AmazonListingDate | null;
+  /** Root Best Sellers Rank from the same reparse (KAN-226); absent when no original was read. */
+  salesRank?: AmazonSalesRank | null;
   /** Optional DFA evidence failed; do not fall back to dates in historical metrics. */
   dateFirstAvailableWarning?: ListingDateWarning;
   problem?: string;

@@ -35,6 +35,14 @@ it.each([
     capturedAt,
     extras: { amazonDfa: sample.parsed.commerce?.dateFirstAvailable },
   });
+  // The same reparse carries the root rank; the delivered units name their source (KAN-226).
+  const rank = sample.parsed.commerce?.salesRank?.rank;
+  expect(rank).toBeGreaterThan(0);
+  expect(product.salesRank).toEqual(sample.parsed.commerce?.salesRank);
+  expect(item.salesRank).toBe(rank);
+  expect(item.unitsSold).toBeGreaterThan(0);
+  expect(item.unitsSoldPeriod).toBe("trailing_30d");
+  expect(item.extras["salesEstimate"]).toMatchObject({ rank, units: item.unitsSold });
   expect(canonicalHash(prior.raw)).toBe(prior.before);
   expect(product.history?.metrics).toEqual(prior.raw.metrics);
   expect(product.history?.capturedAt).toBe(capturedAt);

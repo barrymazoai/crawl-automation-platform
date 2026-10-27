@@ -45,15 +45,19 @@ export function listingDateDelivery(input: {
   };
 }
 
-/** DFA goes through observation ingest only; existing immutable label request bodies must stay identical. */
+/**
+ * DFA, the sales rank and the units estimate go through observation ingest only; existing immutable label request
+ * bodies must stay identical.
+ */
 export function labelExtras(channel: string, extras: Record<string, unknown>) {
   if (channel !== "amazon") {
     return extras;
   }
-  const { amazonDfa: _dfa, ...original } = extras;
-  if (!("dateFirstAvailable" in record(original["commerce"]))) {
+  const { amazonDfa: _dfa, salesEstimate: _estimate, ...original } = extras;
+  const commerce = record(original["commerce"]);
+  if (!("dateFirstAvailable" in commerce) && !("salesRank" in commerce)) {
     return original;
   }
-  const { dateFirstAvailable: _date, ...commerce } = record(extras["commerce"]);
-  return { ...original, commerce };
+  const { dateFirstAvailable: _date, salesRank: _rank, ...rest } = commerce;
+  return { ...original, commerce: rest };
 }

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { AmazonListingDate } from "@crawl-automation/v3-contracts";
+import type { AmazonListingDate, AmazonSalesRank } from "@crawl-automation/v3-contracts";
 import { canonicalHash } from "../history/canonical.js";
 import type { ProductDeliveryRequest } from "../brand-enrichment/task-ports.js";
 import type { DeliveryProduct } from "./ports.js";
@@ -9,6 +9,7 @@ import { deliverySemantics } from "./semantic-mapping.js";
 import type { DeliveryItem, MappedDelivery } from "./wire.js";
 import { productDeliveryErrors } from "./errors.js";
 import { listingDateDelivery } from "./listing-date.js";
+import { salesEstimateDelivery } from "./sales-estimate.js";
 import type { ListingDateWarning } from "./listing-date-read.js";
 
 export function mapDeliveryProduct(
@@ -54,6 +55,8 @@ type DeliveryMappingInput = Pick<
   collection: DeliveryProduct["collection"];
   dateFirstAvailable?: AmazonListingDate | null | undefined;
   dateFirstAvailableWarning?: ListingDateWarning | undefined;
+  /** From the same retained-original reparse as DFA; undefined means "use the capture's own metrics". */
+  salesRank?: AmazonSalesRank | null | undefined;
 };
 
 /** Shared wire mapping; each caller validates its channel's ownership before entering. */
@@ -62,11 +65,7 @@ export function deliveryItem(
   target: { domain: string; siteKey?: string; clientRef: string },
 ): DeliveryItem {
   const { collection, product, history } = input;
-  const { extras, ...listingDate } = listingDateDelivery({
-    ...input,
-    channel: product.channel,
-    metrics: history.metrics,
-  });
+  const { extras, ...amazonFields } = amazonDerivedFields(input);
   const variant = product.variants.find(
     (entry) => entry.listingId === product.listingId && entry.variantId === product.variantId,
   );
@@ -81,7 +80,7 @@ export function deliveryItem(
     capturedAt: z.iso.datetime({ offset: true }).parse(history.capturedAt),
     ...deliverySemantics(input.enrichment),
     ...observedMetrics(history.metrics),
-    ...listingDate,
+    ...amazonFields,
     attrsRaw: {
       variantOptions: product.variantOptions,
       websiteVariants: product.variants,
@@ -93,6 +92,24 @@ export function deliveryItem(
     },
     images: galleryImages(product),
   };
+}
+
+/** Listing date and monthly units: observation-ingest fields for Amazon, a pass-through for every other channel. */
+function amazonDerivedFields(input: DeliveryMappingInput) {
+  const { product, history } = input;
+  const { extras: dated, ...listingDate } = listingDateDelivery({
+    ...input,
+    channel: product.channel,
+    metrics: history.metrics,
+  });
+  const { extras, ...units } = salesEstimateDelivery({
+    channel: product.channel,
+    metrics: history.metrics,
+    siblings: product.variants.length,
+    salesRank: input.salesRank,
+    extras: dated,
+  });
+  return { ...units, ...listingDate, extras };
 }
 
 function galleryImages(product: ReadyDeliveryProduct["product"]) {

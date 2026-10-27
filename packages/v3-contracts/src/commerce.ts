@@ -1,6 +1,7 @@
 import {z} from "zod";
 import {PurchaseConditionsSchema} from "./purchase-conditions.js";
 import {AmazonListingDateSchema} from "./amazon-listing-date.js";
+import {AmazonSalesRankSchema} from "./amazon-sales-rank.js";
 
 /** Optional public-page fields; omission keeps old retained captures readable. */
 export const CommerceEvidenceSchema=z.strictObject({
@@ -14,4 +15,6 @@ export const CommerceEvidenceSchema=z.strictObject({
     approximate:z.boolean(),period:z.enum(['past_month','past_week']),selector:z.string().max(300)}).nullable().optional(),
   purchaseConditions:PurchaseConditionsSchema.optional(),
   dateFirstAvailable:AmazonListingDateSchema.nullable().optional(),
+  // Root Best Sellers Rank (KAN-226); absent in captures before 2026-10-27, null when the page shows none.
+  salesRank:AmazonSalesRankSchema.nullable().optional(),
 });

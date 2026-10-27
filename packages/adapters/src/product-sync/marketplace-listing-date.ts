@@ -78,7 +78,10 @@ function parseOriginal(
       observationId: history.observationId,
     });
   }
-  return { dateFirstAvailable: parsed.commerce?.dateFirstAvailable ?? null };
+  return {
+    dateFirstAvailable: parsed.commerce?.dateFirstAvailable ?? null,
+    salesRank: parsed.commerce?.salesRank ?? null,
+  };
 }
 
 export function unavailableListingDate(
