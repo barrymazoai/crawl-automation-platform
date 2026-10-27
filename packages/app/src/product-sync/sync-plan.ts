@@ -65,8 +65,9 @@ function planOne(at: {
     const item = marketplaceItem(product, options);
     const label = marketplaceLabel(product, options);
     const hash = canonicalHash({ item, label });
-    if (prior?.status === "verified" && prior.payloadHash === hash) {
-      // Checked again after a newer settlement: record that, or it would stay first in every pending page.
+    if (prior?.status === "verified" && !prior.reopened && prior.payloadHash === hash) {
+      // Checked again after a newer settlement: record that, or it would stay first in every pending page. A reopened
+      // row is sent again whatever its hash (the last send may have been dropped by Supply Smart, 2026-10-27).
       tally.result.unchanged += 1;
       tally.touched.push({ ...key, materialAt: materialOf(product) });
       return null;

@@ -34,6 +34,7 @@ interface Row {
   attempts: number;
   updated_at: Date;
   material_at: Date | null;
+  reopened: boolean;
 }
 
 const keyArrays = (keys: SyncKey[]) => [
@@ -56,6 +57,7 @@ function toRecord(row: Row): SyncRecord {
     error: row.error,
     attempts: row.attempts,
     updatedAt: row.updated_at.toISOString(),
+    reopened: row.reopened,
   };
 }
 
@@ -68,7 +70,7 @@ export class PostgresProductSync implements ProductSyncLedger {
       return [];
     }
     const rows = await this.database.query<Row>(
-      `SELECT ps.* FROM product_sync ps
+      `SELECT ps.*, coalesce(ps.material_at = '-infinity'::timestamptz, false) AS reopened FROM product_sync ps
        JOIN unnest($1::text[], $2::text[], $3::text[]) AS k(channel, listing_id, variant_key)
          ON ps.channel = k.channel AND ps.listing_id = k.listing_id AND ps.variant_key = k.variant_key`,
       keyArrays(keys),

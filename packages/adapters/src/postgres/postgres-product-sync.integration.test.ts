@@ -188,6 +188,11 @@ describe.skipIf(!connectionString)("product sync ledger and migrations 061, 067"
       expect.objectContaining({ listing_id: variant.listingId, reopened: false }),
     ]);
     expect(rows[0].error).toEqual({ reason: "PRODUCT_DELIVERY.MATERIAL_MISSING" });
+    // The ledger read carries the reopen, so the planner sends the row again whatever its hash (2026-10-27).
+    expect(await ledger.read([asin, variant])).toEqual([
+      expect.objectContaining({ listingId: asin.listingId, reopened: true }),
+      expect.objectContaining({ listingId: variant.listingId, reopened: false }),
+    ]);
   });
 
   it("reopen withoutLabel picks verified products sent without a formula", async () => {

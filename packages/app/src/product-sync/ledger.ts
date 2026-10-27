@@ -24,6 +24,8 @@ export interface SyncRecord extends SyncKey {
   error: Record<string, unknown> | null;
   attempts: number;
   updatedAt: string;
+  /** The watermark was reset by a reopen: send again even when the payload hash is unchanged (2026-10-27). */
+  reopened: boolean;
 }
 
 export type SyncChange = SyncKey &

@@ -44,6 +44,7 @@ function memoryLedger(): ProductSyncLedger & { rows: Map<string, SyncRecord> } {
           supplySmartProductId: null,
           supplySmartListingId: null,
           error: null,
+          reopened: false,
           ...prior,
           ...Object.fromEntries(Object.entries(change).filter(([, value]) => value !== undefined)),
           attempts: (prior?.attempts ?? 0) + (change.status === "sent" ? 1 : 0),
@@ -299,6 +300,13 @@ describe.skipIf(!marketplaceSamplesPath)("marketplace product sync", () => {
     const again = await service.sync({ channel: "gnc", limit: 50, dryRun: false }, signal());
     expect(again).toMatchObject({ unchanged: 2, toSend: 0 });
     expect(writer.ingest).toHaveBeenCalledTimes(1);
+    // A reopened row is sent again although its payload hash is unchanged (2026-10-27).
+    for (const row of ledger.rows.values()) {
+      row.reopened = true;
+    }
+    const reopened = await service.sync({ channel: "gnc", limit: 50, dryRun: false }, signal());
+    expect(reopened).toMatchObject({ unchanged: 0, toSend: 2, verified: 2 });
+    expect(writer.ingest).toHaveBeenCalledTimes(2);
   });
 
   it("only the pending selection can send; a plain read is a count", async () => {

@@ -54,6 +54,10 @@ SELECT extras->'salesEstimate'->>'source', count(*) FROM listing_snapshot
 WHERE created_at >= '<回填开始时间>' AND extras ? 'salesEstimate' GROUP BY 1;
 ```
 
+sweep 对"verified 且 payload hash 和上次一样"的行只 touch 不发；10-27 起 ledger 读取时带 `reopened`（`material_at = -infinity`），reopen 过的行不走这个捷径，所以已经发过一次、被 Supply Smart 丢掉的行再 reopen 会真的重发。（不能改成清 `payload_hash`：`061_product_sync.sql` 约束 verified 行必须有 hash。）这条对所有 reopen 入口生效：`withoutLabel` / `withLabel` / `enriched` 过滤器重开的 verified 行以后也会真发一次（ingest + label + 回读），内容没变时 label 回 replayed、快照被 Supply Smart 去重，只多花调用；发送失败的行会从 verified 变 failed，但 ID 和 hash 保留。
+
+sweep 节奏（worker 私有配置 `brandEnrichment.productSync`）：每 15 分钟一轮，每批 50，一轮最多 10 批；一批里一个都不用发就停到下一轮。实际发送约每分钟 50 个，上限约 2,000/小时。
+
 回填后抽查 `badge` / `rank_model` / `floor` 各 20 个。
 
 ## 本地验证
