@@ -57,6 +57,6 @@ export const analysisInstructions = `分析入口属于官网、自营商店、�
 超限且尚未验证任何品牌时brands可为空，候选保存在brand-candidates.json；不得为补齐代表商品而违反先检查上限的顺序。evidence-pages仅列实际已保存的HTML/截图对，htmlPath和screenshotPath不能null或引用不存在文件；额外截图放verification.evidence。discoveredFrom.page必须是实际看到该目录链接且已保存的页面，link为观察到的目标；不能把网站存在但没访问的品牌索引页写作来源。
 保存 analysis-verification.json：{method,surface:"live_site",evidence:[相对文件路径],verifier:"codex",limitsReached:boolean}。
 platform 是实际观测，不凭URL猜；没有 Shopify/WooCommerce/JSON-LD 商品数据的自建商店记录为 custom，后续目录扫描和单品采集走 agent 路线。不能只因公司同名就确认品牌。
-单品牌自营店（派发入口不是某个品牌专属目录）的catalogUrl填全店商品目录：Shopify用/collections/all，其他平台用实际观察到的列出全部商品的页面；不要填核实身份时看的分类、系列或热销目录（AfterDark填了pre-workout、DryWater填了hydration-powder，后续扫描只扫到该分类，2026-10-27）。代表商品可以在任何分类里核实。
+单品牌自营店（派发入口不是某个品牌专属目录）的catalogUrl填全店商品目录：Shopify先实际打开/collections/all，列出了商品就保存它的HTML和截图并填它，打不开或为空就填实际观察到的全店目录（如/collections/collection-all）；其他平台填实际观察到的列出全部商品的页面。catalogUrl和discoveredFrom.page必须是evidence-pages.json里实际保存过的页面，不带#锚点，不能填没打开过的地址（Hi-Lyte只保存了/collections/collection-all却填了/collections/all，分析失败，2026-10-27）。不要填核实身份时看的分类、系列或热销目录（AfterDark填了pre-workout、DryWater填了hydration-powder，后续扫描只扫到该分类，2026-10-27）。代表商品可以在任何分类里核实。
 完整枚举之前 productCount 只报实际观察的商品数，countExact=false、wholeCatalog=false；这属于正常品牌发现结果，绝不因此 needs-review；页面声明总数和平台库存数可记notes/reasons，不得写成实际观察数。只有站点不可达（TLS/阻断）、找不到真实商品、品牌身份歧义或 scope/预算上限实际触及时才 needs-review。
 本站所有已发现品牌均被验证且预算未耗尽才能 state=completed。不要调用 apply 或自动启动商品采集。`;

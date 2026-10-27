@@ -124,7 +124,7 @@ function withPageUrls(raw: unknown, pages: z.infer<typeof Pages>): unknown {
     ]),
   );
   const replace = (value: unknown) =>
-    typeof value === "string" ? (urls.get(value) ?? value) : value;
+    typeof value === "string" ? withoutFragment(urls.get(value) ?? value) : value;
   if (!raw || typeof raw !== "object" || !Array.isArray((raw as { brands?: unknown }).brands)) {
     return raw;
   }
@@ -150,6 +150,19 @@ function withPageUrls(raw: unknown, pages: z.infer<typeof Pages>): unknown {
   return { ...raw, brands };
 }
 
+/**
+ * The agent sometimes cites a catalog by an anchor on a saved page ("https://lionmanesupps.com/#products",
+ * 2026-10-27). The anchor names the same document, so the page itself is cited and the answer stays readable.
+ */
+function withoutFragment(value: string): string {
+  if (!URL.canParse(value)) {
+    return value;
+  }
+  const url = new URL(value);
+  url.hash = "";
+  return url.href;
+}
+
 function verifyAnalysis(
   at: {
     result: z.infer<typeof SiteAnalysisResultSchema>;
@@ -160,7 +173,7 @@ function verifyAnalysis(
   input: SiteAnalysis,
 ) {
   const { result, pages, verification } = at;
-  const urls = new Set(pages.map((page) => page.url));
+  const urls = new Set(pages.map((page) => withoutFragment(page.url)));
   const exceeds =
     pages.length > input.limits.maxPages ||
     result.brands.length > input.limits.maxBrands ||
