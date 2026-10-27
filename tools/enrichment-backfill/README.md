@@ -11,8 +11,9 @@ three at a time so the crawl keeps its model slots. Background: `docs/quality/20
 2. Batches of 100: each product goes through `enrichment.run` and is followed with `enrichment.workflow` until its
    workflow ends (at most 30 minutes); at most `--concurrency` at a time.
 3. After a batch, the Supply Smart products of its enriched collections are previewed with
-   `productSync.updateEnrichment {productIds, dryRun: true}` and then written with the same request. A refused
-   product, or a write that differs from its preview, stops the run; the next start finishes that update first.
+   `productSync.updateEnrichment {productIds, dryRun: true}` and then written with the same request. A product
+   Supply Smart no longer has (`NOT_FOUND`) is recorded in `failures.jsonl` and skipped (owner 2026-10-27); any other
+   refused product, or a write that differs from its preview, stops the run; the next start finishes that update first.
 4. It stops at a checkpoint (`--stop-after`, default 5,000 products per start), when a batch has more than 10%
    failed enrichments, when the 5-minute load of Server 一 passes 28, on a crawler API or Supply Smart error, or
    when the file `STOP` exists in the state folder (in-flight products finish first).

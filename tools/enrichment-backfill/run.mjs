@@ -150,13 +150,26 @@ async function updateSupplySmart(batchNumber, requests) {
   const ids = supplySmartProducts(requests);
   const totals = { products: ids.length, updated: 0, skipped: 0, added: {}, removed: {} };
   for (let start = 0; start < ids.length; start += 100) {
-    const productIds = ids.slice(start, start + 100);
-    const input = { limit: 100, productIds };
-    const preview = await api('productSync.updateEnrichment', { ...input, dryRun: true });
+    let productIds = ids.slice(start, start + 100);
+    let preview = await api('productSync.updateEnrichment', { limit: 100, productIds, dryRun: true });
+    // A product Supply Smart no longer has (owner 2026-10-27: skip it) is recorded and left out; the rest is previewed
+    // again without it, so the write still has an exact preview. Any other refusal stops.
+    const missing = preview.failures.filter((failure) => failure.code === 'NOT_FOUND');
+    if (missing.length && missing.length === preview.failures.length) {
+      for (const failure of missing) {
+        appendJson(files.failures, { at: new Date().toISOString(), batch: batchNumber, stage: 'supply-smart', ...failure });
+      }
+      const gone = new Set(missing.map((failure) => failure.productId));
+      productIds = productIds.filter((id) => !gone.has(id));
+      totals.missing = (totals.missing ?? 0) + missing.length;
+      if (!productIds.length) continue;
+      preview = await api('productSync.updateEnrichment', { limit: 100, productIds, dryRun: true });
+    }
     if (preview.failures.length) {
       appendJson(files.updates, { batch: batchNumber, stage: 'preview', preview });
       return { stop: `Supply Smart refused ${preview.failures.length} product(s) in the preview` };
     }
+    const input = { limit: 100, productIds };
     const written = await api('productSync.updateEnrichment', { ...input, dryRun: false });
     const same =
       written.updated === preview.updated &&
