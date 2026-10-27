@@ -58,6 +58,8 @@ sweep 对"verified 且 payload hash 和上次一样"的行只 touch 不发；10-
 
 sweep 节奏（worker 私有配置 `brandEnrichment.productSync`）：每 15 分钟一轮，每批 50，一轮最多 10 批；一批里一个都不用发就停到下一轮。实际发送约每分钟 50 个，上限约 2,000/小时。
 
+10-27 11:31Z 起的全量回填：Server 一 `~/kan226-backfill.sh`（nohup），每 5 分钟 reopen 200，`before` 固定 `2026-10-27T11:15:00Z`，日志 `~/kan226-backfill.log`，建 `~/kan226-backfill.STOP` 即停；选不出时自动结束。它只是一个 curl 循环，不是仓库脚本。
+
 回填后抽查 `badge` / `rank_model` / `floor` 各 20 个。
 
 ## 本地验证
