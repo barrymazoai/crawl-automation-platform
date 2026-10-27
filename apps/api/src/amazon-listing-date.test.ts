@@ -42,7 +42,14 @@ it.each([
   expect(item.salesRank).toBe(rank);
   expect(item.unitsSold).toBeGreaterThan(0);
   expect(item.unitsSoldPeriod).toBe("trailing_30d");
-  expect(item.extras["salesEstimate"]).toMatchObject({ rank, units: item.unitsSold });
+  // Both saved pages show a badge; the reparsed rank still reaches the item although the metrics hold none.
+  expect(item.extras["salesEstimate"]).toMatchObject({
+    source: "badge",
+    rankRead: true,
+    rank,
+    units: item.unitsSold,
+  });
+  expect(prior.raw.metrics["salesRank"]).toBeNull();
   expect(canonicalHash(prior.raw)).toBe(prior.before);
   expect(product.history?.metrics).toEqual(prior.raw.metrics);
   expect(product.history?.capturedAt).toBe(capturedAt);

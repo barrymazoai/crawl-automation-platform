@@ -47,8 +47,30 @@ export function listingDateDelivery(input: {
 
 /**
  * DFA, the sales rank and the units estimate go through observation ingest only; existing immutable label request
- * bodies must stay identical.
+ * bodies must stay identical. The listing keeps `unitsSold` only when it is the page badge the metrics always carried.
  */
+export function labelListing<
+  T extends {
+    extras: Record<string, unknown>;
+    salesRank?: number | undefined;
+    unitsSold?: number | undefined;
+    unitsSoldPeriod?: string | undefined;
+  },
+>(channel: string, listing: T): T {
+  if (channel !== "amazon") {
+    return listing;
+  }
+  const { salesRank: _rank, ...rest } = listing;
+  const estimate = record(listing.extras["salesEstimate"]);
+  const extras = labelExtras(channel, listing.extras);
+  if (!("source" in estimate) || estimate["source"] === "badge") {
+    return { ...rest, extras } as T;
+  }
+  const { unitsSold: _units, unitsSoldPeriod: _period, ...original } = rest;
+  return { ...original, extras } as T;
+}
+
+/** The extras part of `labelListing`. */
 export function labelExtras(channel: string, extras: Record<string, unknown>) {
   if (channel !== "amazon") {
     return extras;

@@ -35,6 +35,11 @@ describe.skipIf(!marketplaceSamplesPath)("mapping the 15 supplied marketplace ru
       expect(item.productName).toBe(required(input.enrichment).candidate.unifiedName);
       expect(item.titleRaw).toBe(required(input.enrichment).subject.title);
       expect(item.capturedAt).toBe(required(input.history).capturedAt);
+      if (input.channel !== "amazon") {
+        // KAN-226 adds units and a rank to Amazon items only.
+        expect(item.extras).not.toHaveProperty("salesEstimate");
+        expect(item.unitsSold).toBe(required(input.history).metrics["unitsSold"] ?? undefined);
+      }
       expect(label.channel).toBe(input.channel);
       expect(label.label.content.formula).toEqual(required(input.collection).formula);
       expect(label.label.content.otherIngredients).toEqual(

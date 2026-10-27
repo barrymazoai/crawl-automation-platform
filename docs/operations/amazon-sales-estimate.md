@@ -13,7 +13,9 @@
 | 交付 | `packages/app/src/product-delivery/sales-estimate.ts` | 见下表；只对 amazon，其他渠道原样 |
 | 回填 | `packages/adapters/src/product-sync/marketplace-listing-date.ts` | 重解析原件时与上架日期同一次解析顺带得到 `salesRank`，挂在 `MarketplaceProduct.salesRank`，交付时优先于历史 metrics |
 
-`extras.salesEstimate` 只走观测 ingest；label 请求体里连同 `commerce.salesRank` 一起剥掉（`labelExtras`），已发送的 label 字节不变。
+`extras.salesEstimate` 只走观测 ingest。label 请求体由 `labelListing` 整理：剥掉 `extras.salesEstimate`、`extras.commerce.salesRank` 和顶层 `salesRank`；`unitsSold`/`unitsSoldPeriod` 只在来源是 `badge`（metrics 本来就带的标签数）时保留，估算出来的 25 或曲线值不进 label。已发送的 label 字节不变（`listing-date.test.ts` 用真实 collected-product 对比整份请求体）。
+
+解析只认 amazon.com 的英文写法（`See Top 100 in …`，区分大小写）；其他站点没有这一条，得 null。
 
 ## 交付规则（owner 2026-10-27）
 
@@ -24,7 +26,9 @@
 | 无标签，单规格，根排名 < 20,000，根类目有系数 | 曲线值 | `trailing_30d` | `rank_model`，附 `estimate.range80` |
 | 其余（排名 ≥ 20,000、无排名、旧存档无排名、无系数类目） | 25 | `trailing_30d` | `floor` |
 
-Supply Smart 按 `unitsSold` 原样显示（owner：线上不区分）；哪个数是估算只在爬虫这边的 `extras.salesEstimate` 里。
+Supply Smart 按 `unitsSold` 原样显示（owner：线上不区分）；哪个数是估算只在爬虫这边的 `extras.salesEstimate` 里。`salesEstimate.rankRead` 为 false 表示这次根本没读到排名（10-27 以前的存档、且重发时原件不可用），这种 `floor` 和"页面真没排名"的 `floor` 以此区分，回填时可据此找出来再送一次。
+
+交付项（观测 ingest）的 `salesRank` 是本次决策用的排名：新抓取来自历史 metrics，重发来自原件重解析；原件说没有排名时为空。
 
 类目系数：Health & Household 1、Beauty & Personal Care 1、Grocery & Gourmet Food 0.5、Pet Supplies 0.17；其他根类目不估。
 

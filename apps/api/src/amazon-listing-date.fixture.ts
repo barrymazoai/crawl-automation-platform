@@ -64,9 +64,11 @@ export function fixtureHtml(asin: string, bytes: Buffer) {
 
 export function reader(sample: ReturnType<typeof fixture>, label?: SavedLabel) {
   const raw = structuredClone(sample.history.raw) as unknown as MarketplaceHistory;
-  // A controlled pre-fix record: the original HTML is unchanged; only the new parser field is absent.
+  // A controlled pre-fix record: the original HTML is unchanged; only the new parser fields are absent.
   const extras = raw.metrics["extras"] as { commerce: Record<string, unknown> };
   delete extras.commerce["dateFirstAvailable"];
+  delete extras.commerce["salesRank"];
+  raw.metrics["salesRank"] = null;
   const before = canonicalHash(raw);
   const query = vi.fn(async (sql: string) => {
     if (sql.includes("FROM done d")) {
