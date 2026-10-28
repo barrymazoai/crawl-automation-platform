@@ -7,6 +7,8 @@ import {
   DtcBrandScan,
   DtcCatalogPages,
   DtcScanRoute,
+  DtcScanRelevance,
+  dtcAgentErrors,
   DTC_BROWSER_POLICY,
   type DtcSitePolicy,
 } from "@crawl-automation/channel-dtc";
@@ -26,6 +28,7 @@ import { workerErrors } from "../errors.js";
 import { requireRoleSection } from "../processes/role-settings.js";
 import type { BrowserScanners } from "./browser-scanners.js";
 import { buildBrowserScanners } from "./scan-wiring.js";
+import { dtcModelCall, verifyDtcModelPermit } from "./dtc-model.js";
 
 /** Product capture plus capability-selected brand scans on either browser worker. */
 export interface BrowserParts {
@@ -102,7 +105,21 @@ function routedDtcScanner(deps: {
     }),
     agent,
     sites,
+    relevance: scanRelevance(parts),
     onDecision: (decision) => parts.log.info(decision, "DTC scan routed"),
+  });
+}
+
+/** The DTC scan permit holds the agent's model resource; without it the scan queues everything as before. */
+function scanRelevance(parts: CoreParts) {
+  const call = dtcModelCall(parts, () => dtcAgentErrors.create("DTC.AGENT_REQUIRED"));
+  return new DtcScanRelevance({
+    publication: parts.publication,
+    model: async (input, signal) => {
+      await verifyDtcModelPermit(parts);
+      return call(input, signal);
+    },
+    onJudged: (judged) => parts.log.info(judged, "DTC scan judged"),
   });
 }
 

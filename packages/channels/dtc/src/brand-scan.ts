@@ -19,6 +19,10 @@ export interface DtcListedProduct extends ListedProduct {
   seller: string;
   brandBasis: "page" | "source";
   brandEvidence: DtcBrandEvidence;
+  /** The store's own filing, for the scan's supplement judgement; absent where the scan cannot read it. */
+  productTitle?: string;
+  productType?: string | null;
+  tags?: string[];
 }
 
 export interface DtcListingPage extends ListingPage {
@@ -61,6 +65,9 @@ function listingPage(
               ? ("page" as const)
               : ("source" as const),
           brandEvidence: dtcBrandEvidence(site, product.brandRaw, source),
+          productTitle: product.title,
+          productType: product.productType,
+          tags: product.tags,
         };
       }),
     ),

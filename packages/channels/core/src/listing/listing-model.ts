@@ -12,6 +12,18 @@ export interface ListedProduct {
   variantId: string | null;
   title: string | null;
   kind: "product" | "family";
+  /** Judged outside supplements by the scan: still listed (never "missing"), but not queued. */
+  excluded?: ListingExclusion;
+}
+
+/**
+ * Owner 2026-10-28: a store's apparel, equipment and gift cards are judged before they are queued (DMoose: 923 of
+ * 1,027 scanned variants), from the store's own filing or one model call per scan.
+ */
+export interface ListingExclusion {
+  basis: "store-category" | "model";
+  reason: string;
+  evidenceKey?: string;
 }
 
 /** What one listing page shows. */

@@ -2,6 +2,7 @@ import type { BrowserScanRequest } from "@crawl-automation/channels-core";
 import { errorCodeOf } from "@crawl-automation/platform";
 import { siteForBrandUrl } from "./address.js";
 import type { DtcBrandScanResult } from "./brand-scan.js";
+import type { DtcScanRelevance } from "./scan-relevance.js";
 import type { DtcSitePolicy } from "./site-policy.js";
 
 export type DtcScanDecision =
@@ -17,12 +18,22 @@ export class DtcScanRoute {
         scan(request: BrowserScanRequest, signal: AbortSignal): Promise<DtcBrandScanResult>;
       };
       sites: readonly DtcSitePolicy[];
+      /** Owner 2026-10-28: both routes' products are judged before the API queues them. */
+      relevance?: Pick<DtcScanRelevance, "judge"> | undefined;
       onDecision?:
         ((decision: DtcScanDecision & { sourceUrl: string; scanId: string }) => void) | undefined;
     },
   ) {}
 
   async scan(request: BrowserScanRequest, signal: AbortSignal): Promise<DtcBrandScanResult> {
+    const result = await this.route(request, signal);
+    return this.deps.relevance ? this.deps.relevance.judge(result, signal) : result;
+  }
+
+  private async route(
+    request: BrowserScanRequest,
+    signal: AbortSignal,
+  ): Promise<DtcBrandScanResult> {
     const site = siteForBrandUrl(request.sourceUrl, this.deps.sites);
     if (site.capture !== "platform") {
       this.decide(request, { route: "agent", site: site.siteKey, reason: "site_policy" });

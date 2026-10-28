@@ -12,6 +12,11 @@ const ShopifyCatalogProduct = z.object({
   handle: z.string().regex(/^[^/?#]+$/),
   title: z.string().min(1),
   vendor: z.string().nullable().optional(),
+  product_type: z.string().nullable().optional(),
+  tags: z
+    .union([z.array(z.string()), z.string()])
+    .nullable()
+    .optional(),
   variants: z.array(ShopifyCatalogVariant).min(1),
 });
 const ShopifyCatalogPage = z.object({ products: z.array(ShopifyCatalogProduct) });
@@ -36,10 +41,18 @@ export function readShopifyCatalogPage(json: string | undefined) {
     handle: product.handle,
     title: product.title,
     brandRaw: product.vendor?.trim() || null,
+    productType: product.product_type?.trim() || null,
+    tags: catalogTags(product.tags),
     variants: product.variants.map((variant) => ({
       id: String(variant.id),
       title: variant.title,
       ...(variant.available === undefined ? {} : { available: variant.available }),
     })),
   }));
+}
+
+/** The store's own tags: products.json lists them, a theme's own JSON may join them with commas. */
+function catalogTags(tags: string[] | string | null | undefined): string[] {
+  const names = typeof tags === "string" ? tags.split(",") : (tags ?? []);
+  return [...new Set(names.map((name) => name.trim().slice(0, 200)).filter(Boolean))].slice(0, 20);
 }

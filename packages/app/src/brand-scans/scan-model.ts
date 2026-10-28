@@ -85,8 +85,27 @@ export interface ScanResult {
   /** Known listings a full scan no longer showed; each is queued for a direct revisit. */
   missing: number;
   queued: number;
+  /** Listed products judged outside supplements and not queued (owner 2026-10-28); absent before then. */
+  excluded?: ScanExclusions | undefined;
   credits: number;
   code: string | null;
+}
+
+/**
+ * One entry per listed product (its variants share the judgement). The product URL queued again through
+ * `queue.add` brings its variants back through capture's own variant discovery.
+ */
+export interface ScanExclusions {
+  products: number;
+  variants: number;
+  items: {
+    listingId: string;
+    url: string;
+    title: string | null;
+    basis: "store-category" | "model";
+    reason: string;
+    evidenceKey?: string | undefined;
+  }[];
 }
 
 /**

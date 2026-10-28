@@ -17,6 +17,7 @@ import { hasScanTotalProof } from "./scan-completeness.js";
 import { readListing, type BrandListing } from "./scan-listing.js";
 import type { ScanReaders } from "./scan-listing.js";
 import type { ScanChannel, ScanRecord, ScanResult } from "./scan-model.js";
+import { scanExclusions } from "./scan-exclusions.js";
 import type { AmazonScanQueue } from "./amazon-scan-queue.js";
 import { appErrors } from "../errors.js";
 import type { GatedBrandListing } from "./scan-permits.js";
@@ -162,10 +163,12 @@ export class BrandScanRunner {
       return cancelledScanResult(result);
     }
     const admission = await this.queueAll(scan, listing);
+    const excluded = scanExclusions(listing);
     Object.assign(result, {
       newListings: counts.newListings,
       knownListings: counts.knownListings,
       queued: admission.added,
+      ...(excluded ? { excluded } : {}),
       metrics: scanQueueMetrics(admission, listing.metrics),
     });
     if (await this.deps.store.isCancellationRequested(scan.scanId)) {
@@ -191,14 +194,16 @@ export class BrandScanRunner {
 
   /** The scan's ID makes replay return its admission receipt without inserting again. */
   private async queueAll(scan: ScanRecord, listing: BrandListing): Promise<QueueAddResult> {
-    if (listing.products.length === 0) {
+    // Excluded products stay in the listing, so a later full scan never revisits them as missing.
+    const listed = listing.products.filter((product) => !product.excluded);
+    if (listed.length === 0) {
       return { added: 0 };
     }
     const channel = scan.source.channel as ScanChannel;
     if (channel === "amazon") {
-      return this.amazonQueue().add(scan, listing.products, scan.scanId);
+      return this.amazonQueue().add(scan, listed, scan.scanId);
     }
-    const products = listing.products.map(toQueued(scan));
+    const products = listed.map(toQueued(scan));
     const label = `brand scan: ${scan.source.brandName}`.slice(0, 200);
     return this.deps.queue.add({ channel, batchId: scan.scanId, label, products });
   }

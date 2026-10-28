@@ -25,6 +25,10 @@ export const dtcAgentErrors = defineErrors({
     category: "ARTIFACT",
     message: "The capture path is outside its owned workspace or is not a regular file.",
   },
+  "DTC.SCAN_RELEVANCE_UNRESOLVED": {
+    category: "SOURCE",
+    message: "The scan's supplement judgement did not answer each product exactly once.",
+  },
   "DTC.CAPTURE_LIMIT": {
     category: "ARTIFACT",
     message: "The retained capture exceeds its byte or file limit.",
