@@ -128,6 +128,18 @@ describe("BrowserPages", () => {
     });
   });
 
+  it("archives a drawn page whose script wrote U+0000, read as U+FFFD like any HTML parser", async () => {
+    const remote = new Memory();
+    const html =
+      '<html><body><h1>Omega</h1><span data-dk-option-key="\0">Save\0</span></body></html>';
+    const capturer = new HttpCapture(new BrowserPages(browser({ html }), settings));
+    expect(await capturer.capture(adapter, archive(remote), signal())).toMatchObject({
+      status: "page",
+    });
+    const saved = Buffer.from(remote.data.get("v3/wholefoods-html/wf-op/original.html") ?? []);
+    expect(saved.toString()).toBe(html.replaceAll("\0", "\uFFFD"));
+  });
+
   it("reports a page that no longer exists as unlisted, like any other capture", async () => {
     const capturer = new HttpCapture(new BrowserPages(browser({ status: 404 }), settings));
     expect(await capturer.capture(adapter, archive(), signal())).toMatchObject({

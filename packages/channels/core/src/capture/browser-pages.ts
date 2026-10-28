@@ -55,7 +55,7 @@ export class BrowserPages implements PageFetcher {
       ...(own.preparationScript ? { preparationScript: own.preparationScript } : {}),
     };
     const page = await this.browser.read(read, signal);
-    const bytes = Buffer.from(page.html);
+    const bytes = Buffer.from(drawnHtml(page.html));
     if (bytes.byteLength > policy.maxBytes) {
       throw channelErrors.create("CAPTURE.PAGE_LIMIT", { details: { maxBytes: policy.maxBytes } });
     }
@@ -85,4 +85,13 @@ export class BrowserPages implements PageFetcher {
       ...preparation,
     };
   }
+}
+
+/**
+ * A drawn page is the browser's serialization of the live document, not downloaded bytes. A site script may write
+ * U+0000 into it (prolonlife.com's sticky cart, 2026-10-28: 93 products ended as ARTIFACT.MEDIA_TYPE); an HTML parser
+ * reads that character as U+FFFD, so the archived page carries U+FFFD and stays valid text.
+ */
+function drawnHtml(html: string): string {
+  return html.replaceAll("\0", "\uFFFD");
 }
