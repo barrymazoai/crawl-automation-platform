@@ -11,7 +11,7 @@ export const DtcBrandEvidenceSchema = z.strictObject({
 });
 export type DtcBrandEvidence = z.infer<typeof DtcBrandEvidenceSchema>;
 
-/** Only trim/case are normalized; aliases or similar names never merge brands. */
+/** Only trim, case and accent marks are normalized (sameDtcBrand); aliases or similar names never merge brands. */
 export function dtcBrandEvidence(
   site: DtcSitePolicy,
   observedBrand: string | null,

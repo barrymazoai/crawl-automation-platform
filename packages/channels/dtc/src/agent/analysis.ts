@@ -3,8 +3,10 @@ import { SiteAnalysisResultSchema, type SiteAnalysis } from "@crawl-automation/v
 import type { DtcCaptureAgent } from "./runner.js";
 import { captureFile, type CaptureFile } from "./archive.js";
 import { dtcAgentErrors } from "./errors.js";
+import { capturePath, methodText, withTextReasons } from "./analysis-answer.js";
 
-const Page = z.object({ url: z.url(), htmlPath: z.string(), screenshotPath: z.string() });
+const CapturePath = z.string().transform(capturePath);
+const Page = z.object({ url: z.url(), htmlPath: CapturePath, screenshotPath: CapturePath });
 const Pages = z
   .union([z.array(Page), z.record(z.string(), z.array(Page))])
   .transform((pages) => {
@@ -13,9 +15,9 @@ const Pages = z
   })
   .pipe(z.array(Page));
 const Verification = z.object({
-  method: z.string().min(1),
+  method: z.preprocess(methodText, z.string().min(1)),
   surface: z.literal("live_site"),
-  evidence: z.array(z.string()).min(1),
+  evidence: z.array(CapturePath).min(1),
   verifier: z.literal("codex"),
   limitsReached: z.boolean(),
 });
@@ -91,28 +93,6 @@ function unreachableSite(raw: unknown, pages: z.infer<typeof Pages>) {
 }
 
 /**
- * The agent sometimes writes a reason as an object ({code, message, …}; bloodsugarfriendly.com 2026-10-20, an Ego
- * screenshot timeout) instead of a sentence. Its words are kept as text, so the answer is not lost as unreadable.
- */
-function withTextReasons(raw: unknown): unknown {
-  if (!raw || typeof raw !== "object" || !Array.isArray((raw as { reasons?: unknown }).reasons)) {
-    return raw;
-  }
-  return { ...raw, reasons: (raw as { reasons: unknown[] }).reasons.map(reasonText) };
-}
-
-function reasonText(reason: unknown): string {
-  if (typeof reason === "string") {
-    return reason;
-  }
-  const { code, message } = (reason ?? {}) as { code?: unknown; message?: unknown };
-  if (typeof message === "string") {
-    return typeof code === "string" ? `${code}: ${message}` : message;
-  }
-  return JSON.stringify(reason);
-}
-
-/**
  * The agent sometimes cites a saved page by its file name ("entry-001.html") instead of its URL. Its own
  * evidence-pages list maps each saved file to the page URL, so only names on that list are replaced.
  */
@@ -124,7 +104,7 @@ function withPageUrls(raw: unknown, pages: z.infer<typeof Pages>): unknown {
     ]),
   );
   const replace = (value: unknown) =>
-    typeof value === "string" ? withoutFragment(urls.get(value) ?? value) : value;
+    typeof value === "string" ? withoutFragment(urls.get(capturePath(value)) ?? value) : value;
   if (!raw || typeof raw !== "object" || !Array.isArray((raw as { brands?: unknown }).brands)) {
     return raw;
   }

@@ -55,6 +55,14 @@ export function assertDtcBrandSource(
   }
 }
 
+/**
+ * Trim, case and accent marks only (owner 2026-10-28: zinzino.com's brand Bodē Pro prints "Bode Pro" on its pages);
+ * aliases or similar names never merge brands.
+ */
 export function sameDtcBrand(left: string, right: string): boolean {
-  return left.trim().toLowerCase() === right.trim().toLowerCase();
+  return brandText(left) === brandText(right);
+}
+
+function brandText(name: string): string {
+  return name.normalize("NFD").replace(/\p{M}/gu, "").trim().toLowerCase();
 }
