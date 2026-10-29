@@ -1,5 +1,6 @@
 import { isOrderedEvidencePolicy } from "@crawl-automation/v3-contracts";
-import { noLabelSources, orderedProgress } from "./ordered-progress.js";
+import { orderedProgress } from "./ordered-progress.js";
+import { skippedSources } from "./ordered-skipped.js";
 import {
   ORDERED_DIAGNOSTICS_LIMIT,
   OrderedDiagnosticsSchema,
@@ -112,13 +113,13 @@ export class LabelOrderedSelection {
     if (!orderedProgress(request, evidence, order.length - attempted.length).complete) {
       throw labelFailure("CHANNEL.LABEL_SELECTION_UNVERIFIED");
     }
-    const withoutLabel = noLabelSources(evidence);
-    const sources = evidence.sources.filter((source) => !withoutLabel.has(source.id));
+    const { withoutLabel, variants, skipped: left } = skippedSources(request, evidence);
+    const sources = evidence.sources.filter((source) => !left.has(source.id));
     const selected = new Set(sources.map((source) => source.id));
     const skipped = selection.states
       .filter((state) => !selected.has(state.id))
       .map((state) => state.id);
-    const decisions = decisionsFor(loaded, selection.states, { selected, withoutLabel });
+    const decisions = decisionsFor(loaded, selection.states, { selected, withoutLabel, variants });
     await this.plans.publish(
       labelKeys.selection(selection.input),
       { request: selection, decisions },
@@ -178,7 +179,7 @@ function assertCoverage(loaded: LoadedPlan, states: { id: string }[]) {
 function decisionsFor(
   loaded: LoadedPlan,
   states: { id: string; status: string; reason?: string | undefined }[],
-  verdict: { selected: Set<string>; withoutLabel: Set<string> },
+  verdict: { selected: Set<string>; withoutLabel: Set<string>; variants: Set<string> },
 ) {
   const eligible = new Set(orderedSources(loaded));
   return states.map((state) => ({
@@ -188,10 +189,12 @@ function decisionsFor(
       ? "verified_label_source"
       : verdict.withoutLabel.has(state.id)
         ? "model_no_label"
-        : !eligible.has(state.id)
-          ? "no_label_section"
-          : state.status === "not_started"
-            ? "complete_label_already_selected"
-            : (state.reason ?? state.status),
+        : verdict.variants.has(state.id)
+          ? "variant_panel_of_first"
+          : !eligible.has(state.id)
+            ? "no_label_section"
+            : state.status === "not_started"
+              ? "complete_label_already_selected"
+              : (state.reason ?? state.status),
   }));
 }

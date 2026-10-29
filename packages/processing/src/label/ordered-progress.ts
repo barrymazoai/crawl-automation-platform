@@ -5,7 +5,6 @@ import {
   type VerifiedLabelSource,
 } from "../assembly/label-merge.js";
 import { assemblyErrors } from "../assembly/assembly-errors.js";
-import { imageReviewWithoutLabel } from "../assembly/source-without-label.js";
 import {
   progressCompletion,
   progressReport,
@@ -17,6 +16,7 @@ import {
   type DiagnosedOrderedEvidence,
 } from "./ordered-source-outcome.js";
 import type { OrderedProgress, SourceFailure } from "./ordered-model.js";
+import { skippedSources } from "./ordered-skipped.js";
 
 export type OrderedFailurePolicy = NonNullable<OrderedProgress["input"]["failurePolicy"]>;
 
@@ -65,12 +65,12 @@ export function orderedProgress(
 }
 
 function mergeProgressEvidence(request: OrderedProgress, evidence: DiagnosedOrderedEvidence) {
-  const withoutLabel = noLabelSources(evidence);
+  const { withoutLabel, skipped } = skippedSources(request, evidence);
   const eligible = {
-    entries: evidence.entries,
-    failures: evidence.failures.filter((failure) => !withoutLabel.has(failure.id)),
+    entries: evidence.entries.filter((entry) => !skipped.has(entry.id)),
+    failures: evidence.failures.filter((failure) => !skipped.has(failure.id)),
   };
-  const sources = evidence.sources.filter((source) => !withoutLabel.has(source.id));
+  const sources = evidence.sources.filter((source) => !skipped.has(source.id));
   const merged = sources.length
     ? mergeLabelProduct(
         {
@@ -127,16 +127,6 @@ function conflictLists(
       ? formulaConflictDetails(sources)
       : []),
   ].filter((conflict) => conflict.sources.length);
-}
-
-export function noLabelSources(evidence: DiagnosedOrderedEvidence) {
-  const ids = evidence.failures.filter(imageReviewWithoutLabel).map((failure) => failure.id);
-  for (const diagnostic of evidence.sourceDiagnostics ?? []) {
-    if (diagnostic.status === "review" && diagnostic.reason === "model_no_label") {
-      ids.push(diagnostic.sourceId);
-    }
-  }
-  return new Set(ids);
 }
 
 function noSourceDiagnostics(
