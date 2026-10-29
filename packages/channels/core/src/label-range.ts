@@ -21,6 +21,18 @@ const MAX_TAIL_GAP = 6;
 const MAX_FOOTNOTE_GAP = 2;
 const SAME_LABEL_SHARE = 0.8;
 
+/**
+ * `markerCells` (dtc-label-core/5): a line of footnote markers alone ("**", "†") with another row right after it is
+ * that row's Daily Value cell, not the footnote. EarthNutri's div-built chart (2026-10-26) prints each cell on its own
+ * line, so "**" after the second row ended the panel and the rows after it were cut off. A last "*" stays the end
+ * (Natrol prints its marker cell right before Other Ingredients).
+ */
+export interface LabelRangeOptions {
+  markerCells?: boolean;
+}
+
+const MARKERS_ONLY = /^[*†‡]+$/;
+
 interface Panel {
   head: number;
   end: number;
@@ -37,12 +49,12 @@ interface Panel {
  * different amounts (two strengths, a kit), or ingredients the chosen panel does not reach. Simulated on 3,000
  * retained pages: no ingredient statement lost.
  */
-export function labelRange(text: string): LabelRange | null {
+export function labelRange(text: string, options: LabelRangeOptions = {}): LabelRange | null {
   const lines = text.split("\n");
   if (lines.some((line) => DRUG_HEADING.test(line.trim()))) {
     return null;
   }
-  const found = panels(lines);
+  const found = panels(lines, options);
   const ended = found.filter((panel) => panel.footnote);
   const [first] = ended;
   if (!first || !sameLabel(lines, found)) {
@@ -61,11 +73,11 @@ export function labelRange(text: string): LabelRange | null {
   return { start, end };
 }
 
-function panels(lines: string[]): Panel[] {
+function panels(lines: string[], options: LabelRangeOptions): Panel[] {
   const heads = lines.flatMap((line, index) => (HEADING.test(line.trim()) ? [index] : []));
   return heads.map((head, index) => {
     const stop = Math.min(heads[index + 1] ?? lines.length, head + MAX_PANEL_LINES);
-    const end = panelEnd(lines, head, stop);
+    const end = panelEnd(lines, { head, stop, options });
     return { head, footnote: end > head, ...tail(lines, end) };
   });
 }
@@ -76,21 +88,30 @@ const COLUMN_HEADING = /^(amount\s+per\s+serving\s*)?%\s*(daily\s+value|dv)\*?$/
 const isFootnote = (value: string) =>
   FOOTNOTE.test(value) && !HAS_AMOUNT.test(value) && !COLUMN_HEADING.test(value);
 
+const MARKER_ROW_LOOKAHEAD = 3;
+
+interface PanelSpan {
+  head: number;
+  stop: number;
+  options: LabelRangeOptions;
+}
+
 /**
  * The panel ends at its footnote block: the first footnote after a row, and the footnote lines right after it. A
  * "% Daily Value" column heading comes before the rows; a later "40% of the Daily Value" sentence is not the panel.
  */
-function panelEnd(lines: string[], head: number, stop: number): number {
-  return INFO_HEADING.test(lines[head]?.trim() ?? "")
-    ? nutritionInfoEnd(lines, head, stop)
-    : factsPanelEnd(lines, head, stop);
+function panelEnd(lines: string[], span: PanelSpan): number {
+  return INFO_HEADING.test(lines[span.head]?.trim() ?? "")
+    ? nutritionInfoEnd(lines, span)
+    : factsPanelEnd(lines, span);
 }
 
-function factsPanelEnd(lines: string[], head: number, stop: number): number {
+function factsPanelEnd(lines: string[], span: PanelSpan): number {
+  const { head, stop } = span;
   let rows = false;
   for (let line = head + 1; line < stop; line++) {
     const value = lines[line]?.trim() ?? "";
-    if (rows && isFootnote(value)) {
+    if (rows && isFootnote(value) && !markerCell(lines, line, span)) {
       return footnoteBlockEnd(lines, line, stop);
     }
     rows ||= HAS_AMOUNT.test(value) && !/^serving/i.test(value);
@@ -101,14 +122,15 @@ function factsPanelEnd(lines: string[], head: number, stop: number): number {
 const QUANTIFIED_ROW = /^[A-Za-z][^\t\n]*\t\s*\d[\d,.]*\s*(?:kcal|g|mg|mcg|[µμ]g|iu)\b/i;
 
 /** Medical tables may end at their sibling Ingredients declaration without a Daily Value footnote. */
-function nutritionInfoEnd(lines: string[], head: number, stop: number): number {
+function nutritionInfoEnd(lines: string[], span: PanelSpan): number {
+  const { head, stop } = span;
   let rows = 0;
   for (let line = head + 1; line < stop; line++) {
     const value = lines[line]?.trim() ?? "";
     if (rows >= 2 && INGREDIENTS.test(value)) {
       return nutritionIngredientEnd(lines, line);
     }
-    if (rows >= 2 && isFootnote(value)) {
+    if (rows >= 2 && isFootnote(value) && !markerCell(lines, line, span)) {
       return footnoteBlockEnd(lines, line, stop);
     }
     if (QUANTIFIED_ROW.test(value)) {
@@ -124,6 +146,21 @@ function nutritionIngredientEnd(lines: string[], line: number): number {
   }
   const next = lines.findIndex((later, index) => index > line && index <= line + 2 && later.trim());
   return next > line ? next : line;
+}
+
+/** A markers-only line followed, within a few printed lines, by another row with an amount. */
+function markerCell(lines: string[], line: number, { stop, options }: PanelSpan): boolean {
+  if (!options.markerCells || !MARKERS_ONLY.test(lines[line]?.trim() ?? "")) {
+    return false;
+  }
+  const next = lines
+    .slice(line + 1, stop)
+    .map((value) => value.trim())
+    .filter(Boolean)
+    .slice(0, MARKER_ROW_LOOKAHEAD);
+  return next.some(
+    (value) => HAS_AMOUNT.test(value) && !isFootnote(value) && !/^serving/i.test(value),
+  );
 }
 
 function footnoteBlockEnd(lines: string[], first: number, stop: number): number {

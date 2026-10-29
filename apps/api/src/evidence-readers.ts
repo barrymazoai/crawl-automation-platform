@@ -9,6 +9,7 @@ import {
   dtcLabelCoreV2,
   dtcLabelCoreV3,
   dtcLabelCoreV4,
+  dtcLabelCoreV5,
 } from "@crawl-automation/channel-dtc";
 import type { ApiConfig } from "./config.js";
 
@@ -23,7 +24,7 @@ const refuseWrite = async (): Promise<never> => {
   throw apiErrors.create("API.READ_ONLY_STORAGE");
 };
 
-/** Each channel's label-core readers by policy name; DTC keeps /1–/3 for published documents. */
+/** Each channel's label-core readers by policy name; DTC keeps /1–/4 for published documents. */
 const labelCores = {
   "swanson-label-core/1": swansonLabelCore,
   "gnc-label-core/1": gncLabelCore,
@@ -31,6 +32,7 @@ const labelCores = {
   "dtc-label-core/2": dtcLabelCoreV2,
   "dtc-label-core/3": dtcLabelCoreV3,
   "dtc-label-core/4": dtcLabelCoreV4,
+  "dtc-label-core/5": dtcLabelCoreV5,
 };
 
 /**
