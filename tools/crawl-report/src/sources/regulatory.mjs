@@ -65,6 +65,8 @@ function report({ runId, manifest, results, sync, startedAt, finishedAt, crawler
     runId,
     server: 'server-1',
     crawler,
+    // Tuesday and Friday (crontab on Server 一).
+    schedule: { everyDays: 3.5 },
     startedAt,
     finishedAt,
     status,
@@ -109,6 +111,8 @@ function failed(last, crawler) {
     runId: last.crawl?.run_id ?? last.sync_id,
     server: 'server-1',
     crawler,
+    // Tuesday and Friday (crontab on Server 一).
+    schedule: { everyDays: 3.5 },
     startedAt: last.started_at,
     finishedAt: last.finished_at ?? last.started_at,
     status: 'failed',

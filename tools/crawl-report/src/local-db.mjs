@@ -1,5 +1,5 @@
 // Local test only (KAN-229, before the endpoint is deployed): writes the reports straight into a local Supply
-// Smart product database's crawl_report table (migration 0086), with no API key. Supply Smart's own counts
+// Smart product database's crawl_report table (migrations 0086, 0087), with no API key. Supply Smart's own counts
 // (new records, brands, companies) are left empty: only crawlReport.submit computes them. The connection comes
 // from Supply Smart's packages/product-db/.env (DB_HOST, DB_PORT, DB_NAME, DB_USER, DB_PASSWORD) and must be
 // localhost; the password is never logged.
@@ -25,9 +25,11 @@ export async function localDbFromEnvFile(file) {
     async submit(r) {
       const { rows } = await client.query(
         `INSERT INTO crawl_report (source, run_key, ingest_run_keys, server, crawler, started_at, finished_at, status,
-           scope, schedule_every_days, targets, fetched, failed, pushed, breakdown, error_code, error_message)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+           scope, schedule_every_days, targets, fetched, failed, pushed, breakdown, error_code, error_message,
+           ingest_from, ingest_to)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
          ON CONFLICT (source, run_key) DO UPDATE SET ingest_run_keys = EXCLUDED.ingest_run_keys,
+           ingest_from = EXCLUDED.ingest_from, ingest_to = EXCLUDED.ingest_to,
            server = EXCLUDED.server, crawler = EXCLUDED.crawler, started_at = EXCLUDED.started_at,
            finished_at = EXCLUDED.finished_at, status = EXCLUDED.status, scope = EXCLUDED.scope,
            schedule_every_days = EXCLUDED.schedule_every_days, targets = EXCLUDED.targets,
@@ -38,7 +40,7 @@ export async function localDbFromEnvFile(file) {
         [
           r.source,
           r.runId,
-          r.ingestRunIds ?? [r.runId],
+          r.ingestRunIds ?? (r.ingestWindow ? [] : [r.runId]),
           r.server,
           r.crawler ?? null,
           r.startedAt,
@@ -53,6 +55,8 @@ export async function localDbFromEnvFile(file) {
           r.breakdown ?? null,
           r.error?.code ?? null,
           r.error?.message ?? null,
+          r.ingestWindow?.from ?? null,
+          r.ingestWindow?.to ?? null,
         ],
       );
       return { reportId: rows[0].id, duplicate: rows[0].duplicate, counted: null, warnings: [] };

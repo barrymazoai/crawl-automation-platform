@@ -1,6 +1,7 @@
 # KAN-229 爬虫侧：每轮报告推给 Supply Smart（统计口径与数据来源）
 
-状态：本地已跑通（dry-run + 本地 Supply Smart 产品库直写）；**未部署**，Server 一 的 API 和 crontab 都没动。
+状态：2026-10-29 上线。API 8230b5e9 部署在 Server 一；工具 `~/apps/crawl-report`，crontab 每周六 20:30 CT（owner：每周一次）。
+Supply Smart 契约在 0087 采纳了下面的意见：营销/DTC 发 `ingestWindow`，Regulatory 按 `sync_run_ids` 对，`schedule.everyDays` 可填小数（Regulatory / 原料发 3.5）。
 
 契约：supply-smart-mono `KAN-229-data-update-dashboard` 的 `docs/packages/database-api/domains/crawl-run-report.md`
 （`crawlReport.submit`）。按契约 §0，**新增条数 / 新品牌 / 新公司由 Supply Smart 用 run id 在自己的账本里数**，
@@ -40,10 +41,10 @@
 
 ## 各渠道口径
 
-| source | runId | targets / fetched / failed | pushed / ingestRunIds | status | 数据来源 |
+| source | runId | targets / fetched / failed | pushed / 对账方式 | status | 数据来源 |
 |---|---|---|---|---|---|
-| amazon / costco / gnc / swanson / wholefoods | `<渠道>-<开始时间到分钟>` | 本轮清单里的队列商品（去重）/ 当前 completed / 当前 review | 窗口内 `product_sync` verified 行数；这些行的 `ingest_run_id` | review 占比 > 5% → partial，否则 completed | `link_batch`、`queue_item`、`queue_attempt`(attempt=1)、`brand_scan`、`product_sync` |
-| dtc | 同上 | 同上 | 窗口内 brand enrichment `products*` 步骤的 `delivered`；`brand-enrichment-<run>` | 同上 | 同上 + `brand_enrichment_step` |
+| amazon / costco / gnc / swanson / wholefoods | `<渠道>-<开始时间到分钟>` | 本轮清单里的队列商品（去重）/ 当前 completed / 当前 review | 窗口内 `product_sync` verified 行数；发 `ingestWindow` [本轮开始, 下一轮开始)，最新一轮到当前时间 | review 占比 > 5% → partial，否则 completed | `link_batch`、`queue_item`、`queue_attempt`(attempt=1)、`brand_scan`、`product_sync` |
+| dtc | 同上 | 同上 | 窗口内 brand enrichment `products*` 步骤的 `delivered`；同上发 `ingestWindow` | 同上 | 同上 + `brand_enrichment_step` |
 | regulatory | 推送的抓取 run id（regulatory.ingest 带的 runId） | 页面请求数 total / ok / failed+blocked | 推送事件数（各批 `received`） | 有来源不是 ok → partial | `~/regulatory-data/sync/runs/*`、`runs/*/manifest.json`、`last-sync.json` |
 | branded_ingredient | ingredient-intel 的 run id | 重新匹配的 Supply Smart 原料名数；failed = 模型未答 | 链接 added + restored + removed | problems → partial，失败 → failed | `~/ingredient-intel-data/runs/*/report.json` |
 | clinical_trial | 交付 id `deliver-…`（clinicalTrial.ingest 带的 runId） | ClinicalTrials.gov 读到的试验数；failed = 失败请求 | 推送的试验数 | 同上 | 同上 |

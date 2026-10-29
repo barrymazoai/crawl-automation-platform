@@ -33,6 +33,8 @@ function common(run, crawler) {
   return {
     server: 'server-1',
     crawler,
+    // Tuesday and Friday (crontab on Server 一).
+    schedule: { everyDays: 3.5 },
     startedAt: run.started_at,
     finishedAt: run.finished_at ?? run.started_at,
     status: run.ok === false ? 'failed' : problems.length ? 'partial' : 'completed',

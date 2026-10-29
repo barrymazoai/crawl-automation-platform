@@ -11,6 +11,7 @@ node src/report.mjs --state-dir <dir> [--dry-run] [--out <file>]
   [--supply-smart-env <file> | --local-db-env <file>]
   [--crawler-api http://127.0.0.1:4188/trpc | --rounds-file <rounds.list answer>]
   [--regulatory-data <dir>] [--ingredient-intel-data <dir>] [--days 120] [--partial-share 0.05]
+  [--only <runId,…>]
 ```
 
 | Source | Read from | Report `runId` |
@@ -26,6 +27,11 @@ node src/report.mjs --state-dir <dir> [--dry-run] [--out <file>]
 - `<state-dir>/sent.json` keeps a hash per `(source, runId)`. An unchanged report is not sent again;
   a failed send is not recorded, so the next run retries it. The crawler version is not hashed.
 - A source that cannot be read is logged and the others are still reported; the run then exits 1.
+- Sales channels and DTC send `ingestWindow` [round start, next round start) (the latest round: up to
+  now, so it is sent again every run); Supply Smart sums every ingest run of the channel in it,
+  listing-state runs included. Regulatory is matched by `breakdown.supply_smart_push.sync_run_ids`.
+  Regulatory and ingredient-intel send `schedule.everyDays: 3.5` (Tuesday and Friday).
+- `--only` handles just the listed runIds, e.g. to check one round by hand.
 - `--dry-run` prints every report (`would` = would be sent) and writes no state.
 - `--local-db-env` (local test only): writes into a **localhost** Supply Smart product database's
   `crawl_report` table, read from its `packages/product-db/.env`. Supply Smart's counts stay empty.

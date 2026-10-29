@@ -19,6 +19,9 @@ export function problems(report) {
     if (!Number.isInteger(report.counts?.[key]) || report.counts[key] < 0) out.push(`counts.${key} must be a non-negative integer`);
   }
   if (report.status !== 'completed' && !report.error?.code) out.push(`a ${report.status} report needs an error`);
+  if (report.ingestWindow && !(Date.parse(report.ingestWindow.to) > Date.parse(report.ingestWindow.from))) {
+    out.push('ingestWindow.to must be after from');
+  }
   if (report.ingestRunIds && (!report.ingestRunIds.length || report.ingestRunIds.some((id) => !id || id.length > 200))) {
     out.push('ingestRunIds must be non-empty run ids');
   }

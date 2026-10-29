@@ -9,6 +9,7 @@
 // Supply Smart replaces a report with the same (source, runId).
 //   --dry-run   print what would be sent; nothing is sent and no state is written
 //   --out       also write the reports as JSON (works with --dry-run)
+//   --only      comma-separated runIds: handle only these reports (a manual check of one round)
 //   --local-db-env  local test: write into a local Supply Smart product DB (its packages/product-db/.env)
 //                   instead of calling the API; keep a separate --state-dir for it
 import { execFile } from 'node:child_process';
@@ -40,6 +41,7 @@ const { values: args } = parseArgs({
     'ingredient-intel-data': { type: 'string' },
     days: { type: 'string', default: '120' },
     'partial-share': { type: 'string', default: '0.05' },
+    only: { type: 'string' },
   },
 });
 const log = pino({ base: null, timestamp: pino.stdTimeFunctions.isoTime });
@@ -159,7 +161,8 @@ try {
   const state = await readState();
   const invalid = reports.filter((r) => reportProblems(r).length);
   for (const r of invalid) log.error({ source: r.source, runId: r.runId, problems: reportProblems(r) }, 'report not sent: invalid');
-  const valid = reports.filter((r) => !reportProblems(r).length);
+  const only = args.only ? new Set(args.only.split(',')) : null;
+  const valid = reports.filter((r) => !reportProblems(r).length && (!only || only.has(r.runId)));
   const changed = valid.filter((r) => state[`${r.source}|${r.runId}`]?.hash !== fingerprint(r));
   if (args.out) await writeFile(args.out, `${JSON.stringify(valid, null, 1)}\n`);
   for (const r of valid) console.log(line(r, changed.includes(r) ? (DRY ? 'would' : 'send') : 'same'));

@@ -20,17 +20,21 @@ export async function crawlerRounds({ api, roundsFile, since, log }) {
 
 /** Unfinished rounds are left out; they are sent once their last product's first run has settled. */
 export function crawlerReports(answer, { crawler, partialShare }) {
-  return answer.rounds.filter((round) => round.finishedAt).map((round) => report(round, { crawler, partialShare }));
+  return answer.rounds
+    .filter((round) => round.finishedAt)
+    .map((round) => report(round, { crawler, partialShare, now: answer.readAt }));
 }
 
-function report(round, { crawler, partialShare }) {
+function report(round, { crawler, partialShare, now }) {
   const { products, brandScans, lists, pushed } = round;
   const share = products.targets ? products.review / products.targets : 0;
   const partial = share > partialShare;
   return {
     source: round.channel,
     runId: round.roundId,
-    ...(pushed.runIds.length ? { ingestRunIds: pushed.runIds } : {}),
+    // Product sync pushes every few minutes under its own run ids, so Supply Smart sums every run of the channel
+    // that started in [this round's start, next round's start); the latest round's window ends now.
+    ingestWindow: { from: round.startedAt, to: round.windowEnd ?? now },
     server: SERVER[round.channel] ?? 'server-1',
     crawler,
     startedAt: round.startedAt,
