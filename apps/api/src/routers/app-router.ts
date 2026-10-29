@@ -11,12 +11,14 @@ import { productsRouter, reviewsRouter } from "./results.js";
 import { runsRouter } from "./runs.js";
 import { storageRouter } from "./storage.js";
 import { usageRouter } from "./usage.js";
+import { roundsRouter } from "./rounds.js";
 import { enrichmentRouter } from "./enrichment.js";
 
 export const appRouter = router({
   brandEnrichment: brandEnrichmentRouter,
   productSync: productSyncRouter,
   usage: usageRouter,
+  rounds: roundsRouter,
   enrichment: enrichmentRouter,
   evidence: evidenceRouter,
   runs: runsRouter,

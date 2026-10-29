@@ -5,6 +5,7 @@ import type {
   ProductSyncControl,
   BrandEnrichmentService,
   UsageService,
+  RoundReportService,
   EnrichmentBackfill,
   BrandScanService,
   BrandService,
@@ -37,6 +38,7 @@ export interface ApiContext {
     BrandEnrichmentService | Promise<BrandEnrichmentService | undefined> | undefined;
   siteAnalyses?: SiteAnalysisService | undefined;
   usage?: UsageService | undefined;
+  rounds?: RoundReportService | undefined;
   enrichment?: EnrichmentBackfill;
   runs: RunService;
   queue: QueueService;

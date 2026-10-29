@@ -1,10 +1,12 @@
 import type { ApiParts } from "./container.js";
 import type { ApiContext } from "./trpc.js";
+import { roundReportService } from "./round-report-parts.js";
 
 /** Select services explicitly: spreading the awilix cradle would resolve every registration. */
 export function apiContext(parts: ApiParts): ApiContext {
   return {
     usage: parts.usage,
+    rounds: roundReportService(parts),
     enrichment: parts.enrichment,
     brandEnrichment: parts.brandEnrichment,
     productSync: parts.productSync,
