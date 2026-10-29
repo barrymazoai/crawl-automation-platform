@@ -3,7 +3,11 @@ import { uncoveredSpans } from "./coverage.js";
 import type { Span } from "./evidence-lines.js";
 import { ingredientGap } from "./ingredient-boundaries.js";
 import { STANDARD_FOOTNOTE } from "./label-footnotes.js";
-import { anchoredHeadings, isolatedIngredientsHeadings } from "./label-headings.js";
+import {
+  anchoredHeadings,
+  columnHeaderText,
+  isolatedIngredientsHeadings,
+} from "./label-headings.js";
 
 const COLUMN_LABEL = /(?:Amt\s+Per\s+Serving\s*:|%\s*Daily\s+Value\s*:)/gi;
 const PARAGRAPH_TAG = /<\/?p>/gi;
@@ -35,7 +39,9 @@ export function labelCoverage(
     covered.push(...columnLabels(candidate.formula, text));
     for (const gap of uncoveredSpans(range, covered)) {
       const value = text.slice(gap.start, gap.end).trim();
-      if (STANDARD_FOOTNOTE.test(value) || ROW_CONNECTOR.test(value)) {
+      // A whole column-header line the answer did not quote ("1 Scoop | % DV* | 2 Scoops | % DV*", Boba Tea Protein
+      // 2026-10-29) holds no row, dose or ingredient.
+      if (STANDARD_FOOTNOTE.test(value) || ROW_CONNECTOR.test(value) || columnHeaderText(value)) {
         covered.push(gap);
       }
     }

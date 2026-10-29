@@ -73,7 +73,12 @@ export function resolveAnchor(anchor: Anchor, source: QuoteSource, context?: Anc
 }
 
 function citedLines(anchor: Anchor, lines: readonly EvidenceLine[]): Cited {
-  const words = anchor.text.trim().split(/\s+/u);
+  // The model sometimes writes a control character where the page prints a no-break space
+  // ("Take one capsule\u0002daily", Hayat Vitamins 2026-10-29); it is whitespace between the quoted words.
+  const words = anchor.text
+    .replace(/\p{Cc}/gu, " ")
+    .trim()
+    .split(/\s+/u);
   const tooLong = anchor.toLine - anchor.fromLine > MAX_CITED_LINES;
   if (
     !lines[anchor.fromLine - 1] ||

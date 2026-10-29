@@ -86,13 +86,27 @@ function structuralExclusion(exclusion: Exclusion, judged: Judged): boolean {
 
 /** Page text the model may leave out around a label, whichever of these reasons it gives (owner 2026-10-07). */
 const AROUND_LABEL = new Set(["marketing", "directions", "metadata", "heading", "noise"]);
+/**
+ * A store's own allergen line around the label ("Allergens: Gluten-Free, Vegan", "Food Sensitivity: Does NOT contain
+ * dairy…", Aspire Nutrition and Hayat Vitamins 2026-10-29) is page text too, when it names an allergen: "May also
+ * contain rice powder and magnesium stearate" names ingredients and stays for Review.
+ */
+const ALLERGEN_WORD =
+  /\b(?:allergens?|milk|dairy|lactose|eggs?|fish|shellfish|crustaceans?|(?:tree\s+)?nuts?|peanuts?|almonds?|walnuts?|coconut|wheat|gluten|soy|sesame)\b/i;
+
+function aroundLabelReason(exclusion: Exclusion): boolean {
+  return (
+    AROUND_LABEL.has(exclusion.reason) ||
+    (exclusion.reason === "allergen" && ALLERGEN_WORD.test(exclusion.quote.text))
+  );
+}
 
 function allowedExclusion(exclusion: Exclusion, judged: Judged): boolean {
   const value = exclusion.quote.text.trim();
   if (structuralExclusion(exclusion, judged)) {
     return true;
   }
-  if (AROUND_LABEL.has(exclusion.reason) && outsideLabel(exclusion, judged)) {
+  if (aroundLabelReason(exclusion) && outsideLabel(exclusion, judged)) {
     return true;
   }
   if (rowExclusionAllowed(exclusion, judged.candidate)) {
@@ -183,8 +197,7 @@ function labelQuotes(candidate: Candidate): Quote[] {
  * entirely before the label's first quoted part or after its last. Anything left out inside the label still needs Review, so label content is never hidden.
  */
 function outsideLabel(exclusion: Exclusion, judged: Judged): boolean {
-  // A line opening with a footnote marker belongs to the label and keeps the footnote rules.
-  if (judged.candidate.formula?.drugFacts || FOOTNOTE_MARKER.test(exclusion.quote.text)) {
+  if (judged.candidate.formula?.drugFacts) {
     return false;
   }
   const quotes = labelQuotes(judged.candidate);
@@ -193,6 +206,11 @@ function outsideLabel(exclusion: Exclusion, judged: Judged): boolean {
   }
   const first = Math.min(...quotes.map((quote) => quote.start));
   const last = Math.max(...quotes.map((quote) => quote.end));
+  // A line opening with a footnote marker belongs to the label and keeps the footnote rules, unless it is page text
+  // wholly before the label without a dose ("*NEW name, SAME great formula!*", Aspire Nutrition 2026-10-29).
+  if (FOOTNOTE_MARKER.test(exclusion.quote.text)) {
+    return exclusion.quote.end <= first && !DOSE.test(exclusion.quote.text);
+  }
   // After the label, a line with an amount may be label content ("Supplying 300 mg"): it stays for Review, except
   // directions, whose doses ("take 2 teaspoons (10 mL)") are how to use the product.
   return (

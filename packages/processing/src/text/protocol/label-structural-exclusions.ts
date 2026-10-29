@@ -30,6 +30,9 @@ export function specialStructuralExclusion(
   if (exclusion.reason === "marketing") {
     return ingredientOrganicLegend(exclusion, candidate, text);
   }
+  if (exclusion.reason === "metadata" && productOptionLine(exclusion, candidate)) {
+    return true;
+  }
   if (exclusion.reason === "noise") {
     return (
       ingredientOrganicLegend(exclusion, candidate, text) ||
@@ -70,6 +73,26 @@ function blendSubheadingAllowed(
       ingredientGap(text, previous, { next: item, headings: [exclusion.quote] }) !== null
     );
   });
+}
+
+const PRODUCT_OPTION = /^(?:weight|flavou?r)\s*:\s*\S[^\n]{0,60}$/i;
+
+/**
+ * A store's own option line between the serving header and the first row ("Serving Size: 1 Scoop / Servings Per
+ * Container: 30 / Weight: 1.33 g / Flavor: Unflavored", Aspire Nutrition 2026-10-29): it sits above every row, so it
+ * cannot hide one.
+ */
+function productOptionLine(exclusion: Exclusion, candidate: LabelTextCandidate): boolean {
+  const formula = candidate.formula;
+  const header = [formula?.servingSize, formula?.servingsPerContainer].filter((field) => !!field);
+  const rows = formula?.columns.flatMap((column) => column.rows) ?? [];
+  return (
+    PRODUCT_OPTION.test(exclusion.quote.text.trim()) &&
+    header.length > 0 &&
+    rows.length > 0 &&
+    header.every((field) => field.end <= exclusion.quote.start) &&
+    rows.every((row) => exclusion.quote.end <= row.name.start)
+  );
 }
 
 /** A model may tag the printed organic marker legend as marketing or noise rather than a footnote. */

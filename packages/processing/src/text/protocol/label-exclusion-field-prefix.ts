@@ -2,7 +2,7 @@ import type { LabelTextCandidate } from "@crawl-automation/v3-contracts";
 
 type Exclusion = LabelTextCandidate["exclusions"][number];
 
-/** "Serving Size" or "Servings Per Container", printed right before its own field's value. */
+/** "Serving Size" or "Servings Per Container" (or "Server Per Container"), printed right before its own value. */
 export function isFieldPrefix(
   exclusion: Exclusion,
   judged: { candidate: LabelTextCandidate; text: string },
@@ -14,7 +14,7 @@ export function isFieldPrefix(
   const formula = judged.candidate.formula;
   const field = /^Serving Size\s*:?$/i.test(value)
     ? formula?.servingSize
-    : /^Servings? Per Container\s*:?$/i.test(value)
+    : /^Serv(?:ings?|ers?) Per Container\s*:?$/i.test(value)
       ? formula?.servingsPerContainer
       : null;
   if (!field || exclusion.quote.end > field.start) {

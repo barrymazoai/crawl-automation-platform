@@ -4,9 +4,11 @@ import { minorIngredientHeading } from "./ingredient-boundaries.js";
 
 // Kate Farms Pediatric Peptide 1.0 (2026-10-22): "Nutrition Info" / "Composition | Amount" are
 // printed panel and column headings. They carry no serving-size claim; the table rows provide the amounts.
+// Hayat Vitamins prints its servings field as "Server Per Container" (2026-10-29).
+const SERVINGS_PER_CONTAINER = String.raw`serv(?:ings?|ers?)\s+per\s+container`;
 const HEADING = new RegExp(
   String.raw`^[*+†‡§¶\s]*(?:supplement\s+facts|nutrition\s+facts|nutrition\s+info|nutrition(?:al)?\s+information|view\s+nutrition\s+label|` +
-    String.raw`serving\s+size\s*:?|servings?\s+per\s+container\s*:?)\.?$`,
+    String.raw`serving\s+size\s*:?|${SERVINGS_PER_CONTAINER}\s*:?)\.?$`,
   "i",
 );
 const COLUMN =
@@ -17,11 +19,34 @@ const TABLE_HEADING = new RegExp(
   String.raw`^${SYMBOLS}*${COLUMN}(?:${SYMBOLS}+${COLUMN})*${SYMBOLS}*:?\.?$`,
   "i",
 );
-const SERVING_HEADER = /^(Serving Size|Servings? Per Container)\s*:\s*(\S[\s\S]*)$/i;
+const SERVING_HEADER = /^(Serving Size|Serv(?:ings?|ers?) Per Container)\s*:\s*(\S[\s\S]*)$/i;
+// Column headers naming the serving of each column ("Amount Per Serving | 1 Stick | % DV*", Boba Tea Protein;
+// "1 Scoop | % DV* | 2 Scoops | % DV*") or the DV basis ("2000-Calorie Diet | % DV", Hayat Vitamins), 2026-10-29.
+const SERVING_COUNT = String.raw`\d+\s+(?:scoops?|sticks?|capsules?|caplets?|tablets?|softgels?|gummies|packets?|servings?)`;
+const CALORIE_DIET = String.raw`2,?000[-\s]calorie\s+diet`;
+const COLUMN_CELL = String.raw`(?:${COLUMN}|${SERVING_COUNT}|${CALORIE_DIET})`;
+const SERVING_COLUMNS = new RegExp(
+  String.raw`^${SYMBOLS}*${COLUMN_CELL}(?:${SYMBOLS}+${COLUMN_CELL})*${SYMBOLS}*:?\.?$`,
+  "i",
+);
+const COLUMN_HEADER_WORD = new RegExp(
+  String.raw`%\s*dv|dv\s*%|daily\s+value|amount|${CALORIE_DIET}`,
+  "i",
+);
+
+/**
+ * A whole column-header line. A serving count alone ("2 Capsules") is not one: it may be the serving size value, so a
+ * header needs a DV, amount or calorie-diet word.
+ */
+export function columnHeaderText(value: string): boolean {
+  return (
+    TABLE_HEADING.test(value) || (SERVING_COLUMNS.test(value) && COLUMN_HEADER_WORD.test(value))
+  );
+}
 
 /** Only table vocabulary, or a serving header whose complete value is already captured. */
 export function labelHeadingAllowed(value: string, candidate: LabelTextCandidate): boolean {
-  if (HEADING.test(value) || TABLE_HEADING.test(value)) {
+  if (HEADING.test(value) || columnHeaderText(value)) {
     return true;
   }
   const header = SERVING_HEADER.exec(value);
@@ -64,7 +89,7 @@ function capsuleHeadingBeforeRow(source: {
   return !!next && /^[\s:,;]*$/.test(source.text.slice(source.span.end, next.start));
 }
 
-/** A sole facts heading before the extracted panel, and prefixes immediately adjoining their values. */
+/** Facts headings above the extracted panel, and prefixes immediately adjoining their values. */
 export function anchoredHeadings(candidate: LabelTextCandidate, text: string, range: Span): Span[] {
   const formula = candidate.formula;
   if (!formula) {
@@ -73,7 +98,7 @@ export function anchoredHeadings(candidate: LabelTextCandidate, text: string, ra
   const spans = factsHeadingSpan(formula, text, range);
   for (const [key, prefix] of [
     ["servingSize", /Serving Size\s*:?\s*$/i],
-    ["servingsPerContainer", /Servings? Per Container\s*:?\s*$/i],
+    ["servingsPerContainer", /Serv(?:ings?|ers?) Per Container\s*:?\s*$/i],
   ] as const) {
     const field = formula[key];
     const match = field && prefix.exec(text.slice(range.start, field.start));
@@ -129,15 +154,22 @@ function factsHeadingSpan(
         /(?:^|\n)[ \t]*((?:(?:Supplement|Nutrition|Drug)\s+Facts|Nutrition\s+Info|Nutrition(?:al)?\s+Information))[ \t]*(?=\n|$)/gi,
       ),
   ];
-  const first = headings[0];
   const firstRow = formula.columns[0]?.rows[0]?.name;
-  if (headings.length !== 1 || !first || !firstRow) {
+  if (
+    !firstRow ||
+    headings.some((heading) => /\bDrug\s+Facts/i.test(heading[0]) && !formula.drugFacts)
+  ) {
     return [];
   }
-  if (/\bDrug\s+Facts/i.test(first[0]) && !formula.drugFacts) {
-    return [];
+  const spans = headings.map((heading) => ({
+    start: heading.index + range.start,
+    end: heading.index + range.start + heading[0].length,
+  }));
+  // A store page may print the heading twice above one panel, as a tab title and on the panel (Aspire Nutrition
+  // 2026-10-29). Every heading above the first row is structural; one below it may open a second panel, and that
+  // still keeps the answer incomplete.
+  if (spans.length === 1 || spans.every((span) => span.end <= firstRow.start)) {
+    return spans.filter((span) => span.end <= firstRow.start);
   }
-  const start = first.index + range.start;
-  const end = start + first[0].length;
-  return end <= firstRow.start ? [{ start, end }] : [];
+  return [];
 }
