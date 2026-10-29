@@ -10,6 +10,21 @@ import { pageText } from "../page-text.js";
 const AMOUNT =
   /\b\d[\d,]*(?:\.\d+)?\s*(?:mg|mcg|µg|μg|g|kg|iu|cfu|billion|million|ml|kcal)\b|\b\d[\d,]*(?:\.\d+)?\s*%/gi;
 
+const FACTS_HEADING = /\b(?:Supplement|Nutrition|Drug)\s+Facts\b/i;
+/** The serving's own weight ("Serving Size: 1 Scoop (10.8g)") is not an ingredient amount. */
+const SERVING_SIZE_VALUE =
+  /\bServing\s+Size\s*:?\s*(?:\d[\d.,/]*\s*[^\s\d(]*\s*)?(?:\([^)\n]{0,40}\))?/gi;
+
+/**
+ * Ingredient amounts count only from the Facts heading on. EarthNutri (2026-10-26) printed a Facts heading with only
+ * its serving lines and Other Ingredients, the rows were in an image, and "TeaCrine 250mg" in the marketing above
+ * made the text look complete, so no image was read. Rows may follow Other Ingredients (EarthNutri's feature chart).
+ */
+function panelText(text: string): string {
+  const heading = FACTS_HEADING.exec(text);
+  return heading ? text.slice(heading.index) : text;
+}
+
 /**
  * Medical formula / food tables: Kate Farms Pediatric Peptide 1.0 prints "Nutrition Info", a
  * "Composition | Amount" header and six quantified rows, but no Serving Size line in that tab.
@@ -67,7 +82,7 @@ export function factsTextComplete(text: string | null): FactsVerdict {
     reasons.push(factsErrors.code("FACTS.SERVING_SIZE_MISSING"));
   }
   // Calories carry no unit and do not count; "% Daily Value" headings carry no number and do not match.
-  const amounts = (text.match(AMOUNT) ?? []).length;
+  const amounts = (panelText(text).replace(SERVING_SIZE_VALUE, " ").match(AMOUNT) ?? []).length;
   if (!amounts) {
     reasons.push(factsErrors.code("FACTS.AMOUNTS_MISSING"));
   }

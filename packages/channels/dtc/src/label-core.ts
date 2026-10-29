@@ -3,6 +3,7 @@ import {
   labelCoreFailure,
   labelRange,
   pageText,
+  type LabelRangeOptions,
   type LabelCoreReader,
 } from "@crawl-automation/channels-core";
 import { parseHTML } from "linkedom";
@@ -53,6 +54,25 @@ function chromeContainer(node: Element): boolean {
   return node.matches(DTC_LABEL_CHROME.containers) || faqContainer(node) || !allowedContent(node);
 }
 
+/** What the chrome pruning keeps whole: label panels, and (/5) chrome sections that hold a Facts heading. */
+interface Pruning {
+  ingredientPanels: ReadonlySet<Element>;
+  factsSections: boolean;
+}
+
+const HEADING_ELEMENTS = "h1, h2, h3, h4, h5, h6, summary, caption, [role='heading']";
+
+/**
+ * /5: EarthNutri (2026-10-26) prints its Facts heading, serving lines and Other Ingredients in one column and the rows
+ * in a div-built chart beside it, all inside an accordion-classed section. Read cell by cell, a name cell
+ * ("AminoBlast") has no label word, so every row was pruned and the model got a Facts heading without rows.
+ */
+function holdsFactsHeading(node: Element): boolean {
+  return [...node.querySelectorAll(HEADING_ELEMENTS)].some((heading) =>
+    /^(?:supplement|nutrition)\s+facts\b/i.test(heading.textContent?.trim() ?? ""),
+  );
+}
+
 function labelParagraph(node: Element): boolean {
   const paragraph = node.matches("p, li, tr, td, th");
   const leafBlock =
@@ -60,21 +80,21 @@ function labelParagraph(node: Element): boolean {
   return (paragraph || leafBlock) && labelMatter(node.textContent ?? "");
 }
 
-function wholePanel(node: Element, ingredientPanels: ReadonlySet<Element>): boolean {
-  return factsPanel(node) || ingredientPanels.has(node);
+function wholePanel(node: Element, pruning: Pruning): boolean {
+  return factsPanel(node) || pruning.ingredientPanels.has(node);
+}
+
+function keptChrome(node: Element, pruning: Pruning): boolean {
+  return labelParagraph(node) || (pruning.factsSections && holdsFactsHeading(node));
 }
 
 /** Remove a whole chrome subtree only when it contains no label paragraph; otherwise prune its unrelated children. */
-function pruneChrome(
-  node: Element,
-  ingredientPanels: ReadonlySet<Element>,
-  inChrome = false,
-): void {
-  if (wholePanel(node, ingredientPanels)) {
+function pruneChrome(node: Element, pruning: Pruning, inChrome = false): void {
+  if (wholePanel(node, pruning)) {
     return;
   }
   const chrome = inChrome || chromeContainer(node);
-  if (chrome && labelParagraph(node)) {
+  if (chrome && keptChrome(node, pruning)) {
     return;
   }
   if (chrome && !labelMatter(node.textContent ?? "")) {
@@ -82,17 +102,13 @@ function pruneChrome(
     return;
   }
   for (const child of [...node.childNodes]) {
-    pruneChromeChild(child, chrome, ingredientPanels);
+    pruneChromeChild(child, chrome, pruning);
   }
 }
 
-function pruneChromeChild(
-  child: ChildNode,
-  chrome: boolean,
-  ingredientPanels: ReadonlySet<Element>,
-): void {
+function pruneChromeChild(child: ChildNode, chrome: boolean, pruning: Pruning): void {
   if (child.nodeType === 1) {
-    pruneChrome(child as Element, ingredientPanels, chrome);
+    pruneChrome(child as Element, pruning, chrome);
   } else if (chrome && child.nodeType === 3 && !labelMatter(child.textContent ?? "")) {
     child.parentNode?.removeChild(child);
   }
@@ -138,18 +154,28 @@ function boundedIngredientParent(heading: Element): Element | null {
   return body.matches("section, article, div, ul, p") && body.textContent?.trim() ? parent : null;
 }
 
-function labelPageText(html: string, panelPolicy: "none" | "legacy" | "scoped"): string {
+type PanelPolicy = "none" | "legacy" | "scoped";
+
+/** How one reader version reads a page: which ingredient panels and (/5) Facts sections it keeps whole. */
+interface CoreVersion {
+  panels: PanelPolicy;
+  /** /5: Facts sections kept whole, and their div-built rows read with marker cells (label-range.ts). */
+  factsCharts: boolean;
+}
+
+function labelPageText(html: string, version: CoreVersion): string {
   // The channel plan supplies an HTML fragment; wrapping it gives linkedom a stable body for DOM pruning.
   const { document } = parseHTML(`<!doctype html><html><body>${html}</body></html>`);
   const ingredientPanels =
-    panelPolicy !== "none"
-      ? ingredientChromePanels(document.body, panelPolicy === "scoped")
+    version.panels !== "none"
+      ? ingredientChromePanels(document.body, version.panels === "scoped")
       : new Set<Element>();
+  const pruning = { ingredientPanels, factsSections: version.factsCharts };
   for (const child of [...document.body.children]) {
-    pruneChrome(child, ingredientPanels);
+    pruneChrome(child, pruning);
   }
   const full = withoutChromeLines(pageText(document.body.innerHTML, { rowCells: true }));
-  if (labelRange(full)) {
+  if (labelRange(full, { markerCells: version.factsCharts })) {
     return full;
   }
   const panel = ingredientPanel(document.body, ingredientPanels);
@@ -163,36 +189,37 @@ function labelPageText(html: string, panelPolicy: "none" | "legacy" | "scoped"):
  * A page without a Facts panel keeps its whole text unless a single ingredient section has an explicit DOM boundary.
  */
 export function extractDtcLabelCore(html: string): string {
-  return extractDtcLabelCoreWithPanels(html, "scoped");
+  return extractDtcLabelCoreWithPanels(html, { panels: "scoped", factsCharts: true });
 }
 
 function extractDtcLabelCoreV2(html: string): string {
-  return extractDtcLabelCoreWithPanels(html, "none");
+  return extractDtcLabelCoreWithPanels(html, { panels: "none", factsCharts: false });
 }
 
 function extractDtcLabelCoreV3(html: string): string {
-  return extractDtcLabelCoreWithPanels(html, "legacy");
+  return extractDtcLabelCoreWithPanels(html, { panels: "legacy", factsCharts: false });
 }
 
-function extractDtcLabelCoreWithPanels(
-  html: string,
-  panelPolicy: "none" | "legacy" | "scoped",
-): string {
+function extractDtcLabelCoreV4(html: string): string {
+  return extractDtcLabelCoreWithPanels(html, { panels: "scoped", factsCharts: false });
+}
+
+function extractDtcLabelCoreWithPanels(html: string, version: CoreVersion): string {
   if (Buffer.byteLength(html) > MAX_BYTES) {
     throw labelCoreFailure("LABEL_CORE.SOURCE_LIMIT");
   }
-  return boundedCore(labelPageText(html, panelPolicy));
+  return boundedCore(labelPageText(html, version), { markerCells: version.factsCharts });
 }
 
 function extractDtcLabelCoreV1(html: string): string {
   if (Buffer.byteLength(html) > MAX_BYTES) {
     throw labelCoreFailure("LABEL_CORE.SOURCE_LIMIT");
   }
-  return boundedCore(pageText(html, { rowCells: true }));
+  return boundedCore(pageText(html, { rowCells: true }), {});
 }
 
-function boundedCore(text: string): string {
-  const range = labelRange(text);
+function boundedCore(text: string, options: LabelRangeOptions): string {
+  const range = labelRange(text, options);
   const core = range ? text.slice(range.start, range.end) : text;
   if (core.length > MAX_TEXT_LENGTH) {
     throw labelCoreFailure("LABEL_CORE.OUTPUT_LIMIT");
@@ -200,30 +227,17 @@ function boundedCore(text: string): string {
   return core;
 }
 
-/** Historical /1 reader is retained for verification of already published documents. */
-export const dtcLabelCore: LabelCoreReader = {
+const reader = (extract: (html: string) => string): LabelCoreReader => ({
   sourceModule: "channel.product-input",
   sourceVersion: "channel-plan/1",
-  extract: extractDtcLabelCoreV1,
-};
+  extract,
+});
 
-/** Historical /2 reader is retained for verification of already published documents. */
-export const dtcLabelCoreV2: LabelCoreReader = {
-  sourceModule: "channel.product-input",
-  sourceVersion: "channel-plan/1",
-  extract: extractDtcLabelCoreV2,
-};
-
-/** Historical /3 reader is retained for verification of already published documents. */
-export const dtcLabelCoreV3: LabelCoreReader = {
-  sourceModule: "channel.product-input",
-  sourceVersion: "channel-plan/1",
-  extract: extractDtcLabelCoreV3,
-};
+/** Historical /1–/4 readers are retained for verification of already published documents. */
+export const dtcLabelCore = reader(extractDtcLabelCoreV1);
+export const dtcLabelCoreV2 = reader(extractDtcLabelCoreV2);
+export const dtcLabelCoreV3 = reader(extractDtcLabelCoreV3);
+export const dtcLabelCoreV4 = reader(extractDtcLabelCoreV4);
 
 /** Current DTC reader for pages the shared product pipeline produced. */
-export const dtcLabelCoreV4: LabelCoreReader = {
-  sourceModule: "channel.product-input",
-  sourceVersion: "channel-plan/1",
-  extract: extractDtcLabelCore,
-};
+export const dtcLabelCoreV5 = reader(extractDtcLabelCore);

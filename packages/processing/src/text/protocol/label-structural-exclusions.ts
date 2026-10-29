@@ -15,7 +15,7 @@ export function specialStructuralExclusion(
   candidate: LabelTextCandidate,
   text: string,
 ): boolean {
-  if (noFactsCommerceNote(candidate, text, exclusion)) {
+  if (pageLayoutExclusion(exclusion, candidate, text)) {
     return true;
   }
   if (exclusion.reason === "heading") {
@@ -40,6 +40,17 @@ export function specialStructuralExclusion(
     );
   }
   return exclusion.reason === "footnote" && equivalentFootnoteAllowed(exclusion, candidate, text);
+}
+
+/** Page layout around the label, not its content: a commerce note, or a chart column's own label cell. */
+function pageLayoutExclusion(
+  exclusion: Exclusion,
+  candidate: LabelTextCandidate,
+  text: string,
+): boolean {
+  return (
+    noFactsCommerceNote(candidate, text, exclusion) || columnLabelCell(exclusion, candidate, text)
+  );
 }
 
 function inactiveConnectorAllowed(
@@ -91,6 +102,33 @@ function productOptionLine(exclusion: Exclusion, candidate: LabelTextCandidate):
     header.length > 0 &&
     rows.length > 0 &&
     header.every((field) => field.end <= exclusion.quote.start) &&
+    rows.every((row) => exclusion.quote.end <= row.name.start)
+  );
+}
+
+const COLUMN_LABEL_REASONS = new Set(["heading", "metadata", "marketing", "noise"]);
+const AMOUNT_PER = /^\s*Amount\s+Per\s+(?:Serving|Container)\b/i;
+const CELL_AMOUNT = /\d\s*(?:mcg|[µμ]g|mg|kg|g|ml|iu|cfu|kcal|%)(?![a-z])/i;
+
+/**
+ * The column's own label cell right before its "Amount Per Serving" heading ("Sunset Vibe", "CHOCOLATE", "1 Serving";
+ * EarthNutri's div-built chart, dtc-label-core/5, 2026-10-29): one short line without an amount, above every row, so
+ * it cannot hide one. The answers tagged it marketing, metadata, heading or noise.
+ */
+function columnLabelCell(
+  exclusion: Exclusion,
+  candidate: LabelTextCandidate,
+  text: string,
+): boolean {
+  const value = exclusion.quote.text.trim();
+  const rows = candidate.formula?.columns.flatMap((column) => column.rows) ?? [];
+  return (
+    COLUMN_LABEL_REASONS.has(exclusion.reason) &&
+    value.length <= 40 &&
+    !value.includes("\n") &&
+    !CELL_AMOUNT.test(value) &&
+    AMOUNT_PER.test(text.slice(exclusion.quote.end)) &&
+    rows.length > 0 &&
     rows.every((row) => exclusion.quote.end <= row.name.start)
   );
 }

@@ -12,6 +12,7 @@ import {
   dtcLabelCoreV2,
   dtcLabelCoreV3,
   dtcLabelCoreV4,
+  dtcLabelCoreV5,
   extractDtcLabelCore,
 } from "./label-core.js";
 import { dtcDocument } from "./product.js";
@@ -141,15 +142,16 @@ describe("DTC label core v4", () => {
     expect(extractDtcLabelCore(html)).toBe(pageText(html, { rowCells: true }));
   });
 
-  it("keeps historical readers while the adapter selects v4", () => {
+  it("keeps historical readers while the adapter selects v5", () => {
     expect(LabelCorePolicySchema.safeParse("dtc-label-core/1").success).toBe(true);
     expect(LabelCorePolicySchema.safeParse("dtc-label-core/2").success).toBe(true);
     expect(LabelCorePolicySchema.safeParse("dtc-label-core/3").success).toBe(true);
     expect(LabelCorePolicySchema.safeParse("dtc-label-core/4").success).toBe(true);
-    expect(createDtcAdapter().planning?.corePolicy).toBe("dtc-label-core/4");
+    expect(LabelCorePolicySchema.safeParse("dtc-label-core/5").success).toBe(true);
+    expect(createDtcAdapter().planning?.corePolicy).toBe("dtc-label-core/5");
     const html = `<button>Add to cart</button><p>Ingredients: rice flour.</p>`;
     expect(dtcLabelCore.extract(html)).toBe(pageText(html, { rowCells: true }));
-    expect(createDtcAdapter().planning?.labelCore).toBe(dtcLabelCoreV4);
+    expect(createDtcAdapter().planning?.labelCore).toBe(dtcLabelCoreV5);
     expect(createDtcAdapter().planning?.labelCore?.extract(html)).toBe("Ingredients: rice flour.");
   });
 });
