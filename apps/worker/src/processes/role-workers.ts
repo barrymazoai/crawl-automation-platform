@@ -21,6 +21,10 @@ import {
   dtcGalleryPipelineActivities,
   dtcGalleryModelActivities,
 } from "../activities/dtc-gallery-activities.js";
+import {
+  dtcReviewScopeModelActivities,
+  dtcReviewScopePipelineActivities,
+} from "../activities/dtc-review-scope-activities.js";
 
 type RoleWork = Pick<WorkerSpec, "activities" | "workflowBundlePath">;
 
@@ -38,6 +42,7 @@ const roleWork: Record<WorkerRole, (parts: WorkerParts) => RoleWork> = {
       ...pipelineActivities(parts),
       ...enrichmentPipelineActivities(parts),
       ...dtcGalleryPipelineActivities(parts),
+      ...dtcReviewScopePipelineActivities(parts),
       ...collectionActivities(parts),
       ...brandListingActivities(parts),
     },
@@ -52,6 +57,7 @@ const roleWork: Record<WorkerRole, (parts: WorkerParts) => RoleWork> = {
       ...brandEnrichmentModelActivities(parts),
       ...enrichmentModelActivities(parts),
       ...dtcGalleryModelActivities(parts),
+      ...dtcReviewScopeModelActivities(parts),
     },
   }),
   resources: (parts) => ({ activities: resourceActivities(parts) }),

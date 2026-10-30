@@ -6,6 +6,7 @@ import { EnrichmentRequestSchema } from "@crawl-automation/v3-contracts";
 import { z } from "zod";
 import type { WorkerParts } from "../container.js";
 import { guarded } from "./activity-guard.js";
+import { textModelRoute } from "./text-model-route.js";
 import { measuredProvider } from "@crawl-automation/platform";
 
 function service(
@@ -60,16 +61,11 @@ const ReviewSchema = z.strictObject({
 /** Routing and failure recording need storage but never open a model client. */
 export function enrichmentPipelineActivities(parts: WorkerParts) {
   const prepare = async () => {
-    const settings = parts.config.label?.shared;
-    const resources = settings?.resources;
-    const needs = resources?.activities["interpretText"];
-    if (!settings || !resources || !needs?.length) {
+    const route = textModelRoute(parts, "enrichCollectedProduct");
+    if (!route) {
       throw enrichmentErrors.create("ENRICH.SETTINGS_MISSING");
     }
-    return {
-      queue: settings.queues.model,
-      resources: { ...resources, activities: { enrichCollectedProduct: needs } },
-    };
+    return route;
   };
   const review = async (raw: unknown) => {
     const { input, code } = ReviewSchema.parse(raw);

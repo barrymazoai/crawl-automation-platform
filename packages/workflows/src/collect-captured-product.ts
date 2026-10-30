@@ -29,6 +29,7 @@ import {
 import { reuseSiblingFormula } from "./sibling-reuse.js";
 import { streamLabel } from "./stream-label.js";
 import { notSupplement } from "./not-supplement.js";
+import { dtcReviewScope } from "./dtc-review-scope.js";
 
 /** The same formula planning, reuse and Label steps follow HTTP and browser captures. */
 export async function collectCapturedProduct(
@@ -83,12 +84,18 @@ async function extractFormula(
   },
 ): Promise<unknown> {
   const { captured, outcome } = planned;
-  if (outcome.status === "review") {
-    return notSupplement(input, captured, outcome) ?? outcome;
-  }
   const { sourcePlan } = captured;
+  if (outcome.status === "review") {
+    return (
+      notSupplement(input, captured, outcome) ??
+      (await dtcReviewScope(input, sourcePlan, outcome)) ??
+      outcome
+    );
+  }
   const result = await streamLabel({ input, pipeline, sourcePlan, manifest: outcome.manifest });
-  return withEnrichmentSource(notSupplement(input, captured, result) ?? result, sourcePlan);
+  const outside =
+    notSupplement(input, captured, result) ?? (await dtcReviewScope(input, sourcePlan, result));
+  return withEnrichmentSource(outside ?? result, sourcePlan);
 }
 
 /** The verified projection carries the selected product's title even before history projection repair. */

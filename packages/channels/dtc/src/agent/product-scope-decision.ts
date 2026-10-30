@@ -12,9 +12,26 @@ export const ProductScopeDecisionSchema = z.strictObject({
 });
 export type ProductScopeDecision = z.infer<typeof ProductScopeDecisionSchema>;
 
-export function validateAnswer(answer: string, fields: Record<string, string>, answerKey: string) {
+/**
+ * dtc-review-scope/1 (owner 2026-10-30): after a label Review the same offer question also asks whether the product is
+ * a supplement at all. `category` names what a not_supplement product is ("T-shirt", "gift card").
+ */
+export const ReviewScopeDecisionSchema = ProductScopeDecisionSchema.extend({
+  kind: z.enum(["single_product", "multi_product_bundle", "not_supplement", "unresolved"]),
+  category: z.string().min(1).max(200).nullable(),
+});
+export type ReviewScopeDecision = z.infer<typeof ReviewScopeDecisionSchema>;
+
+type Validate<Decision> = (raw: unknown, fields: Record<string, string>) => Decision;
+
+export function validateAnswer<Decision = ProductScopeDecision>(
+  answer: string,
+  at: { fields: Record<string, string>; answerKey: string },
+  validate: Validate<Decision> = validateProductScope as Validate<Decision>,
+) {
+  const { fields, answerKey } = at;
   try {
-    return validateProductScope(JSON.parse(answer), fields);
+    return validate(JSON.parse(answer), fields);
   } catch (error) {
     if (dtcAgentErrors.is(error, "DTC.PRODUCT_SCOPE_UNRESOLVED")) {
       throw dtcAgentErrors.create("DTC.PRODUCT_SCOPE_UNRESOLVED", {
@@ -27,7 +44,24 @@ export function validateAnswer(answer: string, fields: Record<string, string>, a
 }
 
 export function validateProductScope(raw: unknown, fields: Record<string, string>) {
-  const decision = ProductScopeDecisionSchema.parse(raw);
+  return checkedDecision(ProductScopeDecisionSchema.parse(raw), fields);
+}
+
+export function validateReviewScope(raw: unknown, fields: Record<string, string>) {
+  const decision = checkedDecision(ReviewScopeDecisionSchema.parse(raw), fields);
+  if (decision.kind === "not_supplement" && !decision.category?.trim()) {
+    throw dtcAgentErrors.create("DTC.PRODUCT_SCOPE_UNRESOLVED", {
+      details: { reason: "missing_category" },
+    });
+  }
+  return decision;
+}
+
+/** Every quote must be in its retained field; a decided offer cites at least one, a bundle two distinct parts. */
+function checkedDecision<Decision extends ProductScopeDecision | ReviewScopeDecision>(
+  decision: Decision,
+  fields: Record<string, string>,
+): Decision {
   const citations = [...decision.evidence, ...decision.components.map((part) => part.evidence)];
   if (
     citations.some(
