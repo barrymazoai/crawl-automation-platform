@@ -1,6 +1,7 @@
 export { ProductPipelineWorkflow, ProductEnrichmentWorkflow } from "./product-pipeline-workflow.js";
 export { DtcVariantWorkflow } from "./dtc-variants.js";
 export { DtcGalleryWorkflow } from "./dtc-gallery.js";
+export { DtcReviewScopeWorkflow } from "./dtc-review-scope.js";
 export { LabelWorkflow } from "./label/label-workflow.js";
 export { BrowserScanWorkflow } from "./browser-scan-workflow.js";
 export { CollectionWorkflow } from "./collection/collection-workflow.js";

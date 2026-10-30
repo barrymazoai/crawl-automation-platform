@@ -305,7 +305,10 @@ it.each([true, false])(
         : { status: "review", code: "CHANNEL.LABEL_NO_SOURCE" },
     );
     expect(env.patched).toHaveBeenCalledWith("dtc-variant-not-supplement-v1");
-    expect(env.execute).not.toHaveBeenCalled();
+    // Without the store-category answer the Review asks the offer question (dtc-review-scope, owner 2026-10-30).
+    expect(env.execute.mock.calls.map(([type]) => type)).toEqual(
+      enabled ? [] : ["DtcReviewScopeWorkflow"],
+    );
   },
 );
 
