@@ -238,6 +238,25 @@ const progress = JSON.parse(readFileSync(files.progress, 'utf8'));
 const saveProgress = () => writeFileSync(files.progress, JSON.stringify(progress));
 let processedThisRun = 0;
 let stopReason = null;
+
+// Owner 2026-10-30: Codex answers 429 Too Many Requests in bursts and the worker never retries it, so a product fails
+// at once with TEXT.CODEX_TURN_FAILED. The first such failure stops new products; the batch ends with those in
+// flight, waits 10 minutes, and goes on with one product alone; when that one is enriched the batches go on as before.
+// Still failing after 6 pauses (an hour) stops the run. These failures are not counted in the batch failure rate.
+const CODEX_LIMITED = 'TEXT.CODEX_TURN_FAILED';
+const CODEX_PAUSE_MS = 10 * 60_000;
+const CODEX_MAX_PAUSES = 6;
+let codexPauses = 0;
+let probing = false;
+const codexLimited = (result) => result.outcome?.code === CODEX_LIMITED;
+
+/** Waits out a Codex pause a minute at a time, so a STOP file still ends it. */
+async function codexPause() {
+  for (let waited = 0; waited < CODEX_PAUSE_MS; waited += 60_000) {
+    if (existsSync(files.stop)) return;
+    await sleep(60_000);
+  }
+}
 log(`start at ${progress.next}/${plan.length}, concurrency ${concurrency}, batch ${batchSize}, stop after ${stopAfter}`);
 
 /** A batch is enriched before Supply Smart is updated; an update cut short is finished first on the next start. */
@@ -269,15 +288,17 @@ while (!stopReason && progress.next < plan.length) {
     break;
   }
   const first = progress.next;
-  const items = plan.slice(first, first + batchSize);
+  const items = plan.slice(first, first + (probing ? 1 : batchSize));
   const results = [];
   let cursor = 0;
+  let limited = false;
   const worker = async () => {
-    while (cursor < items.length) {
+    while (cursor < items.length && !limited) {
       const offset = cursor++;
       const result = await enrich(items[offset], first + offset);
       appendJson(files.outcomes, { at: new Date().toISOString(), ...result });
       if (!result.ok) appendJson(files.failures, { at: new Date().toISOString(), ...result });
+      if (codexLimited(result)) limited = true;
       results.push(result);
     }
   };
@@ -288,8 +309,10 @@ while (!stopReason && progress.next < plan.length) {
     break;
   }
   const failed = results.filter((result) => !result.ok).length;
+  const counted = results.filter((result) => !result.ok && !codexLimited(result)).length;
   progress.batches += 1;
-  progress.next = first + items.length;
+  // Every product started has ended: with a Codex pause the batch is the products started before it.
+  progress.next = first + cursor;
   progress.done += results.length - failed;
   progress.failed += failed;
   processedThisRun += items.length;
@@ -298,10 +321,24 @@ while (!stopReason && progress.next < plan.length) {
   log(`batch ${progress.batches}: products ${first}–${progress.next - 1}, enriched ${results.length - failed}, failed ${failed}`);
   stopReason = await finishUpdate();
   if (stopReason) break;
-  if (failed / items.length > Number(args['max-failure-rate'])) {
-    stopReason = `batch ${progress.batches}: ${failed}/${items.length} enrichments failed`;
+  if (!probing && counted / results.length > Number(args['max-failure-rate'])) {
+    stopReason = `batch ${progress.batches}: ${counted}/${results.length} enrichments failed (not counting Codex 429)`;
     break;
   }
+  if (limited) {
+    codexPauses += 1;
+    if (codexPauses > CODEX_MAX_PAUSES) {
+      stopReason = `Codex still rate limited (${CODEX_LIMITED}) after ${CODEX_MAX_PAUSES} pauses of 10 minutes`;
+      break;
+    }
+    log(`Codex rate limited (${CODEX_LIMITED}): pause ${codexPauses}/${CODEX_MAX_PAUSES} for 10 minutes, then one product alone`);
+    await codexPause();
+    probing = true;
+    continue;
+  }
+  if (probing) log('Codex answers again: batches go on');
+  probing = false;
+  codexPauses = 0;
   if (processedThisRun >= stopAfter) {
     stopReason = `checkpoint: ${processedThisRun} products this run`;
     break;

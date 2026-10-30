@@ -18,6 +18,11 @@ three at a time so the crawl keeps its model slots. Background: `docs/quality/20
    failed enrichments, when the 5-minute load of Server 一 passes 28, on a crawler API or Supply Smart error, or
    when the file `STOP` exists in the state folder (in-flight products finish first). A crawler API that does not
    answer at all (fetch failed, as while a deploy restarts it) is asked again every minute for up to 30 minutes first.
+5. Codex rate limits (owner 2026-10-30): the worker never retries an OpenAI 429, so it fails a product at once with
+   `TEXT.CODEX_TURN_FAILED`. The first such failure stops new products; the batch ends with those in flight (its
+   Supply Smart update still runs), the run waits 10 minutes and goes on with one product alone, and when that one is
+   enriched the batches go on as before. Six pauses in a row (an hour) stop the run. These failures stay in
+   `failures.jsonl` for the final re-run and are not counted in the 10% batch failure rate.
 
 ```sh
 cd ~/apps/crawler-v3/releases/<sha>/source/tools/enrichment-backfill
