@@ -2,7 +2,7 @@ import type { CommerceEvidence } from "@crawl-automation/channels-core";
 import type { AmazonElement } from "./dom.js";
 import { commerceVisibleText as textOf } from "./commerce-dom.js";
 import { commerceElements, commerceText, locationText, selectedOffer } from "./commerce-dom.js";
-import { amount, priceCandidates, priceStatus, priceText } from "./commerce-prices.js";
+import { amount, otherOffer, priceCandidates, priceStatus, priceText } from "./commerce-prices.js";
 import { purchaseConditions } from "./commerce-purchase.js";
 import { salesVolume } from "./commerce-sales.js";
 import { amazonListingDate } from "./listing-date.js";
@@ -39,11 +39,12 @@ function contextOf(root: AmazonElement): string[] {
  */
 export function amazonCommerce(root: AmazonElement, asin: string): CommerceEvidence {
   const prices = priceCandidates(root);
-  const price = prices.length === 1 ? amount(prices[0]) : null;
+  const pickup = otherOffer(root);
+  const price = !pickup && prices.length === 1 ? amount(prices[0]) : null;
   const availability = commerceText(root, "#availability")?.slice(0, 1000) ?? null;
   const lists = commerceElements(
     root,
-    '#corePriceDisplay_desktop_feature_div [data-a-strike="true"], #corePriceDisplay_desktop_feature_div .apex-basisprice-value',
+    '#corePriceDisplay_desktop_feature_div [data-a-strike="true"], #corePriceDisplay_desktop_feature_div .apex-basisprice-value, #corePriceDisplay_desktop_feature_div .basisPrice .a-text-price',
   );
   const listPrices = [
     ...new Set(lists.map((element) => amount(priceText(element))).filter(Boolean)),
@@ -58,7 +59,8 @@ export function amazonCommerce(root: AmazonElement, asin: string): CommerceEvide
     reviewCount: reviewCount(root),
     availability,
     context: contextOf(root),
-    priceStatus: priceStatus({ prices, availability, root }),
+    priceStatus: priceStatus({ prices, availability, root, otherOffer: !!pickup }),
+    ...(pickup ? { otherOffer: pickup } : {}),
     salesVolume: salesVolume(root),
     purchaseConditions: purchaseConditions(root, price),
     dateFirstAvailable: amazonListingDate(root.ownerDocument),

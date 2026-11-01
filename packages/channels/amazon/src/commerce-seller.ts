@@ -26,9 +26,7 @@ function labelled(offer: AmazonElement, labels: string[]): string | null {
 export function purchaseSeller(offer: AmazonElement, out: PurchaseConditions): void {
   const links = commerceElements(offer, "#sellerProfileTriggerId");
   const combined = labelled(offer, ["Shipper / Seller", "Ships from and sold by"]);
-  out.seller.name = links.length
-    ? uniqueCommerce(links.map(textOf))
-    : uniqueCommerce([labelled(offer, ["Sold by"]), combined]);
+  out.seller.name = selectedSeller(offer);
   out.shipsFrom = uniqueCommerce([labelled(offer, ["Ships from"]), combined]);
   const urls = links.filter((link) => textOf(link) === out.seller.name).flatMap(sellerUrl);
   out.seller.id = uniqueCommerce(urls.map((item) => item.id));
@@ -40,6 +38,16 @@ export function purchaseSeller(offer: AmazonElement, out: PurchaseConditions): v
       text: out.seller.name,
     });
   }
+}
+
+export function selectedSeller(offer: AmazonElement): string | null {
+  const links = commerceElements(offer, "#sellerProfileTriggerId");
+  return links.length
+    ? uniqueCommerce(links.map(textOf))
+    : uniqueCommerce([
+        labelled(offer, ["Sold by"]),
+        labelled(offer, ["Shipper / Seller", "Ships from and sold by"]),
+      ]);
 }
 
 function sellerUrl(link: AmazonElement): { id: string; url: string }[] {

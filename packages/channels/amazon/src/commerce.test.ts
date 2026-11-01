@@ -137,4 +137,59 @@ describe("Amazon retained commerce (synthetic)", () => {
     expect(result).toMatchObject({ price: null, priceStatus: "ambiguous" });
     expect(result.purchaseConditions?.promotions).toEqual([]);
   });
+
+  it("keeps a Whole Foods pickup quote as evidence without treating it as a product price", () => {
+    const result = read(`<div id="buybox"><div id="corePrice_feature_div">
+      <span class="a-price"><span class="a-offscreen">$29.99</span></span></div>
+      Pickup FREE pickup Details Whole Foods Market - Ashburn • 1.7 mi
+      <span class="tabular-buybox-text">Sold by</span><span>Whole Foods Market</span></div>`);
+    expect(result).toMatchObject({
+      price: null,
+      priceStatus: "other_offer",
+      otherOffer: {
+        price: "29.99",
+        seller: "Whole Foods Market",
+        store: expect.stringContaining("Ashburn"),
+      },
+    });
+    expect(result.purchaseConditions?.seller.name).toBe("Whole Foods Market");
+    expect(result.context.join(" ")).toContain("Pickup FREE pickup");
+  });
+
+  it("rejects the generic Buy Box fallback when the main price is absent", () => {
+    expect(
+      read(`<div id="buybox"><div id="corePrice_feature_div">
+      <span class="a-price"><span class="a-offscreen">$29.99</span></span></div>
+      <span class="tabular-buybox-text">Sold by</span><span>Ordinary Seller</span></div>`),
+    ).toMatchObject({ price: null, priceStatus: "not_observed" });
+  });
+
+  it("recognizes a pickup store without a seller and a seller even when a main price is present", () => {
+    expect(
+      read(`<div id="buybox">Pickup FREE pickup Details Amazon Fresh - Seattle • 2.4 mi
+      ${price("12.00")}</div>`),
+    ).toMatchObject({ price: null, priceStatus: "other_offer" });
+    expect(
+      read(`<div id="corePriceDisplay_desktop_feature_div">${price("12.00")}</div>
+      <div id="buybox"><span class="tabular-buybox-text">Sold by</span><span>AmazonFresh</span></div>`),
+    ).toMatchObject({ price: null, priceStatus: "other_offer" });
+  });
+
+  it("captures the crossed-out basis price on a half-off bundle promotion", () => {
+    const result = read(`<div id="corePriceDisplay_desktop_feature_div">
+      ${price("15.99")} with 50 percent savings
+      <span class="basisPrice"><span class="a-price a-text-price"><span class="a-offscreen">$31.98</span></span></span>
+      Bundle Savings: $15.99</div>`);
+    expect(result).toMatchObject({ price: "15.99", listPrice: "31.98", priceStatus: "observed" });
+  });
+
+  it.each(["WFMOA_10259", "AmazonFresh", "WholeFoodsMarketUFG"])(
+    "treats %s as a fresh offer",
+    (seller) => {
+      expect(
+        read(`<div id="corePriceDisplay_desktop_feature_div">${price("12.00")}</div>
+          <div id="buybox"><span class="tabular-buybox-text">Sold by</span><span>${seller}</span></div>`),
+      ).toMatchObject({ price: null, priceStatus: "other_offer", otherOffer: { seller } });
+    },
+  );
 });

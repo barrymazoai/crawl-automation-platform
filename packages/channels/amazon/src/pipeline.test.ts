@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- capture pipeline cases share one in-memory archive and provider setup. */
 import { describe, expect, it, vi } from "vitest";
 import { parseHTML } from "linkedom";
 import {
@@ -111,6 +112,99 @@ function captureSetup(page: FetchedPage, response: { status?: number; finalUrl?:
 }
 
 const identityInput = '<input id="ASIN" value="B0013LAQS6">';
+it("archives one pickup quote, changes ScraperAPI session once, and uses the second price", async () => {
+  const first = `<div id="ppd">${identityInput}<span id="productTitle">Example supplement</span>
+    <div id="buybox"><div id="corePrice_feature_div"><span class="a-price"><span class="a-offscreen">$29.99</span></span></div>
+    Pickup FREE pickup Details Whole Foods Market - Ashburn • 1.7 mi
+    <span class="tabular-buybox-text">Sold by</span><span>Whole Foods Market</span></div></div>`;
+  const second = `<div id="ppd">${identityInput}<span id="productTitle">Example supplement</span>
+    <div id="corePriceDisplay_desktop_feature_div"><span class="a-price priceToPay"><span class="a-offscreen">$22.95</span></span></div>
+    <div id="buybox"><div id="corePrice_feature_div"><span class="a-price priceToPay"><span class="a-offscreen">$22.95</span></span></div>
+    <span class="tabular-buybox-text">Sold by</span><span>Amazon.com</span></div></div>`;
+  const setup = captureSetup({
+    url: request.url,
+    html: second,
+    capturedAt: "2026-11-01T00:00:00.000Z",
+  });
+  setup.client.get.mockImplementationOnce(async (input) => ({
+    status: 200,
+    url: input.target,
+    contentType: "text/html",
+    contentEncoding: null,
+    bytes: Buffer.from(first),
+    creditCost: 0,
+  }));
+  const result = await setup.capture.capture(request, AbortSignal.timeout(10_000));
+  expect(result.status).toBe("captured");
+  if (result.status !== "captured") {
+    throw new Error("Expected capture");
+  }
+  expect(result.page.commerce).toMatchObject({ price: "22.95", priceStatus: "observed" });
+  expect(setup.client.get).toHaveBeenCalledTimes(2);
+  const firstOptions = setup.client.get.mock.calls[0]?.[0].options;
+  const secondOptions = setup.client.get.mock.calls[1]?.[0].options;
+  expect(firstOptions?.sessionNumber).toBeNull();
+  expect(secondOptions?.sessionNumber).not.toBeNull();
+  const prefix = `v3/amazon-html/${request.operationId}`;
+  expect(setup.remote.data.get(`${prefix}/original.html`)).toEqual(Buffer.from(first));
+  expect(setup.remote.data.get(result.page.archive.objectKey)).toEqual(Buffer.from(second));
+  const receipt = JSON.parse(
+    Buffer.from(
+      setup.remote.data.get(
+        result.page.archive.objectKey.replace("original.html", "original.json"),
+      ) ?? [],
+    ).toString(),
+  );
+  expect(receipt.fetchedVia.otherOfferRetryOf.objectKey).toBe(`${prefix}/original.html`);
+  await setup.capture.capture(request, AbortSignal.timeout(10_000));
+  expect(setup.client.get).toHaveBeenCalledTimes(2);
+});
+
+it("uses null when the second session still shows a pickup quote", async () => {
+  const html = `<div id="ppd">${identityInput}<span id="productTitle">Example supplement</span>
+    <div id="buybox"><span class="a-price"><span class="a-offscreen">$29.99</span></span>
+    Pickup FREE pickup Details Whole Foods Market - Ashburn • 1.7 mi
+    <span class="tabular-buybox-text">Sold by</span><span>Whole Foods Market</span></div></div>`;
+  const setup = captureSetup({ url: request.url, html, capturedAt: "2026-11-01T00:00:00.000Z" });
+  const result = await setup.capture.capture(request, AbortSignal.timeout(10_000));
+  expect(result.status).toBe("captured");
+  if (result.status !== "captured") {
+    throw new Error("Expected capture");
+  }
+  expect(result.page.commerce).toMatchObject({ price: null, priceStatus: "other_offer" });
+  expect(setup.client.get).toHaveBeenCalledTimes(2);
+});
+
+it("keeps a failed second exit from turning a verified pickup listing into a delisting", async () => {
+  const html = `<div id="ppd">${identityInput}<span id="productTitle">Example supplement</span>
+    <div id="buybox">Pickup FREE pickup Details Whole Foods Market - Ashburn • 1.7 mi
+    <span class="tabular-buybox-text">Sold by</span><span>Whole Foods Market</span></div></div>`;
+  const setup = captureSetup({ url: request.url, html, capturedAt: "2026-11-01T00:00:00.000Z" });
+  setup.client.get
+    .mockImplementationOnce(async (input) => ({
+      status: 200,
+      url: input.target,
+      contentType: "text/html",
+      contentEncoding: null,
+      bytes: Buffer.from(html),
+      creditCost: 0,
+    }))
+    .mockImplementationOnce(async (input) => ({
+      status: 404,
+      url: input.target,
+      contentType: "text/html",
+      contentEncoding: null,
+      bytes: Buffer.from("gone"),
+      creditCost: 0,
+    }));
+  await expect(setup.capture.capture(request, AbortSignal.timeout(10_000))).rejects.toMatchObject({
+    code: "CAPTURE.DOWNLOAD_UNRESOLVED",
+  });
+  expect(setup.client.get).toHaveBeenCalledTimes(2);
+  expect(setup.remote.data.get(`v3/amazon-html/${request.operationId}/original.html`)).toEqual(
+    Buffer.from(html),
+  );
+});
 it.each([
   ["ppd-missing", "<main>Unavailable</main>"],
   ["ppd-not-unique", '<div id="ppd"></div><div id="ppd"></div>'],

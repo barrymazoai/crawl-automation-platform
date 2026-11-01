@@ -5,24 +5,32 @@ import type { LabelPlans } from "@crawl-automation/processing";
 import { activityIdentity } from "./activity-identity.js";
 
 export function measuredPages(pages: PageFetcher): PageFetcher {
+  const retry = pages.fetchOtherOfferRetry?.bind(pages);
   return {
     mode: pages.mode,
     fetchPage: (request, signal) =>
-      measuredCall(
-        {
-          kind: "capture",
-          step: "fetchPage",
-          channel: request.channel,
-          providerCall: true,
-          cacheHit: false,
-        },
-        () => pages.fetchPage(request, signal),
-        (page) => ({
-          creditCost: page.fetchedVia.creditCost ?? null,
-          sourceHash: sha256(page.bytes),
-        }),
-      ),
+      measuredPage("fetchPage", request, () => pages.fetchPage(request, signal)),
+    ...(retry
+      ? {
+          fetchOtherOfferRetry: (
+            request: Parameters<PageFetcher["fetchPage"]>[0],
+            signal: AbortSignal,
+          ) => measuredPage("fetchOtherOfferRetry", request, () => retry(request, signal)),
+        }
+      : {}),
   };
+}
+
+function measuredPage(
+  step: string,
+  request: Parameters<PageFetcher["fetchPage"]>[0],
+  fetch: () => ReturnType<PageFetcher["fetchPage"]>,
+) {
+  return measuredCall(
+    { kind: "capture", step, channel: request.channel, providerCall: true, cacheHit: false },
+    fetch,
+    (page) => ({ creditCost: page.fetchedVia.creditCost ?? null, sourceHash: sha256(page.bytes) }),
+  );
 }
 
 /** Per-request costs, including failed reads, separate from a scan's aggregate result. */

@@ -36,6 +36,7 @@ export const FetchedViaSchema = z.strictObject({
       finalUrl: z.url().max(4096).optional(),
     })
     .optional(),
+  otherOfferRetryOf: ArtifactRefSchema.optional(),
 });
 export type FetchedVia = z.infer<typeof FetchedViaSchema>;
 

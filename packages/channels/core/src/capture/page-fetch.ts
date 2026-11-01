@@ -35,6 +35,7 @@ export interface FetchedHtml {
 export interface PageFetcher {
   readonly mode: CaptureMode;
   fetchPage(request: PageRequest, signal: AbortSignal): Promise<FetchedHtml>;
+  fetchOtherOfferRetry?(request: PageRequest, signal: AbortSignal): Promise<FetchedHtml>;
 }
 
 /** Where ScraperAPI fetches run, and each channel's options over the shared defaults. */
@@ -67,6 +68,24 @@ export class ScraperApiPages implements PageFetcher {
    */
   async fetchPage(request: PageRequest, abort: AbortSignal): Promise<FetchedHtml> {
     const options = channelOptions(this.settings.defaults, this.settings.channels[request.channel]);
+    return this.fetchWithOptions(request, options, abort);
+  }
+
+  async fetchOtherOfferRetry(request: PageRequest, abort: AbortSignal): Promise<FetchedHtml> {
+    const options = channelOptions(this.settings.defaults, this.settings.channels[request.channel]);
+    const previous = options.sessionNumber;
+    const next =
+      previous === null
+        ? Math.floor(Math.random() * 2_147_483_648)
+        : (previous + 1) % 2_147_483_648;
+    return this.fetchWithOptions(request, { ...options, sessionNumber: next }, abort);
+  }
+
+  private async fetchWithOptions(
+    request: PageRequest,
+    options: ScraperApiOptions,
+    abort: AbortSignal,
+  ): Promise<FetchedHtml> {
     const tier = this.settings.challengeTiers?.[request.channel];
     const fetchFirst = () => this.fetchOnce(request, options, abort);
     const first = await challenged(fetchFirst, request.policy, request.url);

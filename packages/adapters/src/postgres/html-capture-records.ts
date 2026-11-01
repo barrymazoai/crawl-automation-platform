@@ -15,7 +15,12 @@ import {
   type Database,
   type Queryable,
 } from "@crawl-automation/platform";
-import { captureCreditCost, captureWasCalled, measureCaptureReuse } from "./html-capture-cost.js";
+import {
+  captureCreditCost,
+  captureWasCalled,
+  measureCaptureReuse,
+  sameCaptureOperation,
+} from "./html-capture-cost.js";
 import {
   inFlight,
   insertCapture,
@@ -101,7 +106,7 @@ export class PostgresHtmlCaptureRecords implements HtmlCaptureRecords {
           original,
           original.capturedAt,
           captureCreditCost(request, original),
-          original.capture.operationId !== request.capture.operationId,
+          !sameCaptureOperation(request, original),
         ],
       );
     });

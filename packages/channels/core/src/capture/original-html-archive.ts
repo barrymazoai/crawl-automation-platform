@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- archive identity, receipts and retry originals share one immutable format. */
 import { isDeepStrictEqual } from "node:util";
 import { RetainedPublication, sha256, verifyBytes } from "@crawl-automation/platform";
 import { ArtifactRefSchema, type ArtifactRef } from "@crawl-automation/v3-contracts";
@@ -45,6 +46,19 @@ export class OriginalHtmlArchive {
         (ref) => ref.kind === "source-html" && ref.byteSize <= target.maxBytes,
       ),
       fetchedVia: FetchedViaSchema,
+    });
+  }
+
+  /** A separately retained second original, within the same admitted product operation. */
+  otherOfferRetry(): OriginalHtmlArchive {
+    const operationId = this.capture.operationId;
+    const suffix = `-other-offer-${sha256(encode(operationId)).slice(0, 12)}`;
+    return new OriginalHtmlArchive(this.publication, {
+      ...this.target,
+      capture: {
+        ...this.capture,
+        operationId: `${operationId.slice(0, 200 - suffix.length)}${suffix}`,
+      },
     });
   }
 

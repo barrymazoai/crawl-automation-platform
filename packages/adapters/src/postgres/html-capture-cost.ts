@@ -3,7 +3,7 @@ import type { HtmlCaptureRequest, SavedHtmlOriginal } from "@crawl-automation/ap
 
 /** Unknown remains null; an original reused by another operation incurs zero new credits. */
 export function captureCreditCost(request: HtmlCaptureRequest, original: SavedHtmlOriginal | null) {
-  if (original && original.capture.operationId !== request.capture.operationId) {
+  if (original && !sameCaptureOperation(request, original)) {
     return 0;
   }
   const events = currentMeasurement()?.events.filter((event) => event.kind === "capture") ?? [];
@@ -11,6 +11,14 @@ export function captureCreditCost(request: HtmlCaptureRequest, original: SavedHt
     return null;
   }
   return events.reduce((total, event) => total + (event.creditCost ?? 0), 0);
+}
+
+/** A different original with the same sessionId is the authorized second page of this capture. */
+export function sameCaptureOperation(request: HtmlCaptureRequest, original: SavedHtmlOriginal) {
+  return (
+    original.capture.operationId === request.capture.operationId ||
+    original.capture.sessionId === request.capture.operationId
+  );
 }
 
 export function captureWasCalled(): boolean {

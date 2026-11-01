@@ -1,8 +1,8 @@
 import type { CommerceEvidence } from "@crawl-automation/channels-core";
 import { commerceElements, commerceVisibleText, selectedOffer } from "./commerce-dom.js";
+import { selectedSeller } from "./commerce-seller.js";
 import { cleanText, textOf, type AmazonElement } from "./dom.js";
 
-const SUBSCRIPTION = '#subscriptionPrice, [id*="sns"], [id*="subscribe"]';
 const digits = (element: AmazonElement, selector: string) =>
   cleanText(element.querySelector(selector)?.textContent ?? "");
 
@@ -42,23 +42,50 @@ export function priceCandidates(root: AmazonElement): string[] {
   if (selected.length > 0) {
     return selected;
   }
-  const fallback = commerceElements(
-    root,
-    "#corePrice_feature_div .a-price:not(.a-text-price), #priceblock_ourprice, #priceblock_dealprice, #price_inside_buybox",
-  ).filter(
-    (element) =>
-      !element.closest(SUBSCRIPTION) &&
-      (!element.closest("#buyBoxAccordion") || offer?.contains(element)),
-  );
-  return [...new Set(fallback.map(priceText).filter(Boolean))];
+  return [];
+}
+
+/** A store pickup quote is evidence, never a deliverable Amazon product price. */
+export function otherOffer(root: AmazonElement) {
+  const offer = selectedOffer(root);
+  if (!offer) {
+    return null;
+  }
+  const text = commerceVisibleText(offer);
+  const seller = selectedSeller(offer);
+  const store =
+    text.match(
+      /\bPickup\b[\s\S]{0,300}?\b(?:Details\s+)?([^\n]{1,120}?\s*•\s*\d+(?:\.\d+)?\s*mi)\b/i,
+    )?.[1] ?? null;
+  if (
+    !/^(?:Whole Foods Market|WFMOA_|AmazonFresh|WholeFoodsMarketUFG)/i.test(seller ?? "") &&
+    !store
+  ) {
+    return null;
+  }
+  const quotes = [
+    ...new Set(
+      commerceElements(
+        offer,
+        ".a-price:not(.a-text-price), #priceblock_ourprice, #priceblock_dealprice, #price_inside_buybox",
+      )
+        .map((element) => amount(priceText(element)))
+        .filter((value): value is string => !!value),
+    ),
+  ];
+  return { price: quotes.length === 1 ? (quotes[0] ?? null) : null, seller, store };
 }
 
 export function priceStatus(input: {
   prices: string[];
   availability: string | null;
   root: AmazonElement;
+  otherOffer: boolean;
 }): CommerceEvidence["priceStatus"] {
   const { prices, availability, root } = input;
+  if (input.otherOffer) {
+    return "other_offer";
+  }
   if (prices.length === 1 && amount(prices[0])) {
     return "observed";
   }

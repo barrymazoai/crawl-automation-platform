@@ -1,8 +1,7 @@
-import { errorCodeOf, landingPageListing } from "@crawl-automation/platform";
+import { errorCodeOf } from "@crawl-automation/platform";
 import type { ChannelAdapter, FetchedPage, ParsedProduct } from "../adapter.js";
 import { channelErrors } from "../errors.js";
 import {
-  movedSighting,
   identitySighting,
   notFoundSighting,
   type ListingSighting,
@@ -14,6 +13,8 @@ import { decodeHtml } from "./read-html.js";
 import { htmlCaptureErrors, type HtmlCaptureRecords } from "./html-capture-records.js";
 import type { HtmlCaptureRequest } from "./html-capture-model.js";
 import { recoverOriginal } from "./recover-original.js";
+import { captureOtherOfferRetry } from "./other-offer-retry.js";
+import { movedPage } from "./moved-page.js";
 
 export interface CapturedProduct {
   parsed: ParsedProduct;
@@ -52,12 +53,7 @@ export class HttpCapture {
         details: { channel: adapter.id, mode: this.pages.mode },
       });
     }
-    const archived = await archive.inspect(signal);
-    const request = { channel: adapter.id, capture: archive.capture };
-    if (archived) {
-      await this.records?.complete(request, archive.reference(archived));
-    }
-    const download = archived ? { page: archived } : await this.acquire(adapter, archive, signal);
+    const download = await this.archivedOrAcquire(adapter, archive, signal);
     if ("sighting" in download) {
       return { status: "sighting", sighting: download.sighting };
     }
@@ -71,11 +67,29 @@ export class HttpCapture {
         },
       });
     }
-    const moved = this.moved(adapter, archive, saved);
+    const moved = movedPage(adapter, archive, saved);
     if (moved) {
       return { status: "sighting", sighting: moved };
     }
     return this.readProduct(adapter, archive, saved);
+  }
+
+  private async archivedOrAcquire(
+    adapter: ChannelAdapter,
+    archive: OriginalHtmlArchive,
+    signal: AbortSignal,
+  ): Promise<Download> {
+    const first = await archive.inspect(signal);
+    if (!first) {
+      return this.acquire(adapter, archive, signal);
+    }
+    const retryArchive = adapter.id === "amazon" ? archive.otherOfferRetry() : null;
+    const retry = await retryArchive?.inspect(signal);
+    await this.records?.complete(
+      { channel: adapter.id, capture: archive.capture },
+      retry && retryArchive ? retryArchive.reference(retry) : archive.reference(first),
+    );
+    return { page: retry ?? first };
   }
 
   /** Page-owned identity is checked before facts, images or formula planning can turn a wrong page into a Review. */
@@ -179,41 +193,33 @@ export class HttpCapture {
     await archive.beginDownload(signal);
     const request = { channel: adapter.id, url: archive.capture.url, policy: adapter.httpPolicy };
     const page = await this.pages.fetchPage(request, signal);
-    const saved = await archive.save(page.bytes, page.fetchedVia, signal);
+    const first = await archive.save(page.bytes, page.fetchedVia, signal);
+    const retry = await captureOtherOfferRetry({
+      pages: this.pages,
+      adapter,
+      archive,
+      first,
+      signal,
+      isOtherOffer: () => {
+        try {
+          if (movedPage(adapter, archive, first)) {
+            return false;
+          }
+          const observed = this.readProduct(adapter, archive, first);
+          return (
+            observed.status === "page" && observed.parsed.commerce?.priceStatus === "other_offer"
+          );
+        } catch {
+          return false;
+        }
+      },
+    });
+    const saved = retry?.page ?? first;
+    const selectedArchive = retry?.archive ?? archive;
     await this.records?.complete(
       { channel: adapter.id, capture: archive.capture },
-      archive.reference(saved),
+      selectedArchive.reference(saved),
     );
     return { page: saved };
-  }
-
-  /**
-   * A page a same-site redirect moved to another listing, or to no product at all. A landing page that shows the
-   * requested listing (Amazon `/clp/<ASIN>`) is neither: it is not a sighting and not a product page, so a Review.
-   */
-  private moved(
-    adapter: ChannelAdapter,
-    archive: OriginalHtmlArchive,
-    saved: ArchivedHtml,
-  ): ListingSighting | null {
-    if (!saved.finalUrl) {
-      return null;
-    }
-    const { url, listingId, variantId } = archive.capture;
-    const shown = landingPageListing(saved.finalUrl, new URL(url));
-    if (shown?.toUpperCase() === listingId.toUpperCase()) {
-      // `evidence` and `reason` are what the Review keeps (workflows' failureDetails).
-      throw channelErrors.create("CAPTURE.LANDING_PAGE", {
-        details: {
-          finalUrl: saved.finalUrl,
-          archiveKey: saved.source.objectKey,
-          reason: `landing page /clp/${shown}`,
-          evidence: { objectKey: saved.source.objectKey },
-        },
-      });
-    }
-    const requested = { url, listingId, variantId };
-    const moved = { finalUrl: saved.finalUrl, archiveKey: saved.source.objectKey };
-    return movedSighting(adapter, requested, moved);
   }
 }

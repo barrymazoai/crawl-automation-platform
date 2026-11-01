@@ -5,7 +5,7 @@ import {
   type SavedHtmlOriginal,
 } from "@crawl-automation/app";
 import type { Queryable } from "@crawl-automation/platform";
-import { captureCreditCost } from "./html-capture-cost.js";
+import { captureCreditCost, sameCaptureOperation } from "./html-capture-cost.js";
 
 const IDENTITY = "channel=$1 AND listing_id=$2 AND variant_id IS NOT DISTINCT FROM $3";
 
@@ -76,7 +76,7 @@ export async function insertCapture(
       original,
       original?.capturedAt ?? null,
       captureCreditCost(request, original),
-      original ? original.capture.operationId !== request.capture.operationId : false,
+      original ? !sameCaptureOperation(request, original) : false,
     ],
   );
 }
