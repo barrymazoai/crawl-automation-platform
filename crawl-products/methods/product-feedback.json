@@ -27,6 +27,14 @@
       "observation": "这一修订已正确补入原始 sliderNutritionFacts 区块，继续保留该修正。仍未落实上一反馈：readState 里 || new URL(location.href).searchParams.get('variant') || null 把请求参数当实际选中状态，后面的 selectedVariantId !== variantId 又依赖这个假状态；notes 把上次七张图库写成固定断言。",
       "correction": "局部删除 selectedVariantId 的 URL query 兜底，实际控件未给出状态时留 null。不要再用这个已删除的兜底作为变体页面可保存的门槛：沿网站真实 variant.url 保存观察到的页面，未知选择状态也保留原件，材料独立性另按真实网页观察决定；真实页面身份冲突才 unresolved。仅一个网站 variant 时直接沿原单商品路径，materials.variants 可为空，不必额外导航或写 mixed。多规格时保留所有真实选项和各自URL；当前模板无明确独立资料关联才 mixed，若实际模板有控件/资料变化则局部观察再决定，不能对所有未来模板恒定 mixed。notes 的图片数量从当前 galleryUrls.length 取得或省略具体数量，不为新商品改写常量。不要重做已正确的原始板块保存。",
       "evidence": "run b3ba1835-dd38-4ab6-8060-6ae3e26f92a3 的已执行 site-method.mjs、materials.json；Server二 manual-releases/crosssite206-natrol-b12-region-proof.json；docs/quality/2026-10-04-dtc-natrol-products.md"
+    },
+    {
+      "origin": "https://www.tranont.com",
+      "sha256": ["a3068a8f1273a7c1595efdd14691210a55ba1a96915cc58f1d687aabd6c94c30"],
+      "tickets": ["CRAWLV3-151", "CRAWLV3-183"],
+      "observation": "商品说明区 How To 之后的“Supplement Facts”一行（Info 图标）点击后打开一个固定定位弹窗，弹窗里是这件商品完整的 Supplement Facts 原图（Boost 页为 Boost2_8c280f1f88.jpg，2136×3378）。弹窗在页面加载时已预渲染并隐藏，挂在 body 下、不在 state() 选取的 hero/sections 节点里，所以 productHtml 和 galleryUrls 都没有它：Tranont 36 件 Review 的图片全部 not_matched，文字只剩一个“Supplement Facts”标题。另外 galleryUrls/productHtml 还带进了其他商品的主图（Boost 页上有 Enrich26_Hero、Focus_Hero、Balance_Hero），不属于当前商品。页面上的 attentive_creative 订阅弹窗 iframe 会挡住指针点击。",
+      "correction": "在当前已观察的商品页上打开“Supplement Facts”这一行对应的弹窗（指针点击被订阅弹窗挡住时，对这一行节点做 DOM click），以实际打开后可见的弹窗确认它属于当前商品，把弹窗节点的 outerHTML 追加进 productHtml，把其中图片加入 galleryUrls，然后关闭弹窗继续。各规格状态照此保存。不要按图片文件名或关键词猜成分表图，弹窗里有什么图就全部保留，内容由后续读图判断。同时把含其他商品标题、链接或价格的推荐/搭配商品块排除在 productHtml 和 galleryUrls 之外，依据实际节点结构，不按文件名。已正确的规格选择、页面原件保存与 mixed 判断不要重做。",
+      "evidence": "run c8a4ddd4-bf6d-442a-9baf-c213afe7c648 的 v3/dtc-products/product-c8a4ddd4-bf6d-442a-9baf-c213afe7c648/projection.json：imageCandidates 22 张，无成分表图，含 Enrich/Focus/Balance 主图；2026-11-01 用 MacBook Ego 打开 https://www.tranont.com/en-US/shop/product/boost 核对，DOM click“Supplement Facts”行后弹窗显示 Boost2_8c280f1f88.jpg（Supplement Facts：L-Arginine Alpha-Ketoglutarate 750 mg、Fitnox 250 mg、S7 50 mg）。"
     }
   ]
 }
