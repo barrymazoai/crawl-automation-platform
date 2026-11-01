@@ -12,6 +12,7 @@ import { channelOptions, type ChannelOptions } from "./channel-options.js";
 import {
   bothCosts,
   challenged,
+  isVerification,
   stillChallenged,
   type ChallengeTier,
 } from "./challenge-escalation.js";
@@ -74,11 +75,19 @@ export class ScraperApiPages implements PageFetcher {
   async fetchOtherOfferRetry(request: PageRequest, abort: AbortSignal): Promise<FetchedHtml> {
     const options = channelOptions(this.settings.defaults, this.settings.channels[request.channel]);
     const previous = options.sessionNumber;
-    const next =
-      previous === null
-        ? Math.floor(Math.random() * 2_147_483_648)
-        : (previous + 1) % 2_147_483_648;
-    return this.fetchWithOptions(request, { ...options, sessionNumber: next }, abort);
+    const random = Math.floor(Math.random() * 2_147_483_648);
+    const next = random === previous ? (random + 1) % 2_147_483_648 : random;
+    const page = await this.fetchOnce(request, { ...options, sessionNumber: next }, abort);
+    if (
+      isVerification(request.policy, {
+        ...page,
+        url: request.url,
+        finalUrl: page.fetchedVia.finalUrl,
+      })
+    ) {
+      throw channelErrors.create("CAPTURE.ACCESS_CHALLENGE");
+    }
+    return page;
   }
 
   private async fetchWithOptions(

@@ -54,9 +54,12 @@ export function otherOffer(root: AmazonElement) {
   const text = commerceVisibleText(offer);
   const seller = selectedSeller(offer);
   const store =
-    text.match(
-      /\bPickup\b[\s\S]{0,300}?\b(?:Details\s+)?([^\n]{1,120}?\s*•\s*\d+(?:\.\d+)?\s*mi)\b/i,
-    )?.[1] ?? null;
+    text
+      .match(
+        /\bPickup\b[\s\S]{0,300}?\b((?:Whole Foods Market|Amazon Fresh)\s*-\s*[^•]{1,80}•\s*\d+(?:\.\d+)?\s*mi)\b/i,
+      )?.[1]
+      ?.replace(/\s+/g, " ")
+      .trim() ?? null;
   if (
     !/^(?:Whole Foods Market|WFMOA_|AmazonFresh|WholeFoodsMarketUFG)/i.test(seller ?? "") &&
     !store

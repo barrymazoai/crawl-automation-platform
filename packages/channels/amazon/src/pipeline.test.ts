@@ -10,6 +10,7 @@ import {
   ProductSourcePlans,
   ScraperApiPages,
   type FetchedPage,
+  type HtmlCaptureRecords,
   type PlanSettings,
 } from "@crawl-automation/channels-core";
 import type { ScraperApiRequest } from "@crawl-automation/platform";
@@ -81,7 +82,11 @@ const request = {
  * Fake provider and fake object stores only: these tests never download, invoke a model or use
  * credentials.
  */
-function captureSetup(page: FetchedPage, response: { status?: number; finalUrl?: string } = {}) {
+function captureSetup(
+  page: FetchedPage,
+  response: { status?: number; finalUrl?: string } = {},
+  records?: HtmlCaptureRecords,
+) {
   const client = {
     provider: "scraperapi-sync/1" as const,
     get: vi.fn(async (input: ScraperApiRequest) => ({
@@ -104,7 +109,7 @@ function captureSetup(page: FetchedPage, response: { status?: number; finalUrl?:
   const { remote } = publication;
   const capture = new ProductCapture({
     registry: new ChannelRegistry([amazonAdapter]),
-    http: new HttpCapture(pages),
+    http: new HttpCapture(pages, records),
     publication,
     sourcePlans: new ProductSourcePlans(publication, settings),
   });
@@ -112,6 +117,35 @@ function captureSetup(page: FetchedPage, response: { status?: number; finalUrl?:
 }
 
 const identityInput = '<input id="ASIN" value="B0013LAQS6">';
+function strictCaptureRecords() {
+  const states = new Map<string, { state: "pending" | "done" | "failed"; key?: string }>();
+  const records: HtmlCaptureRecords = {
+    reuseWindowMs: 24 * 60 * 60 * 1000,
+    admit: vi.fn(async ({ capture }) => {
+      const prior = states.get(capture.operationId);
+      if (prior) {
+        return { status: "unresolved" as const };
+      }
+      states.set(capture.operationId, { state: "pending" });
+      return { status: "download" as const };
+    }),
+    complete: vi.fn(async ({ capture }, original) => {
+      const prior = states.get(capture.operationId);
+      if (
+        prior?.state === "failed" ||
+        (prior?.state === "done" && prior.key !== original.source.objectKey)
+      ) {
+        throw new Error("CAPTURE.RECORD_CONFLICT");
+      }
+      states.set(capture.operationId, { state: "done", key: original.source.objectKey });
+    }),
+    fail: vi.fn(async ({ capture }) => {
+      states.set(capture.operationId, { state: "failed" });
+    }),
+  };
+  return { records, states };
+}
+
 it("archives one pickup quote, changes ScraperAPI session once, and uses the second price", async () => {
   const first = `<div id="ppd">${identityInput}<span id="productTitle">Example supplement</span>
     <div id="buybox"><div id="corePrice_feature_div"><span class="a-price"><span class="a-offscreen">$29.99</span></span></div>
@@ -156,7 +190,12 @@ it("archives one pickup quote, changes ScraperAPI session once, and uses the sec
     ).toString(),
   );
   expect(receipt.fetchedVia.otherOfferRetryOf.objectKey).toBe(`${prefix}/original.html`);
-  await setup.capture.capture(request, AbortSignal.timeout(10_000));
+  const replay = await setup.capture.capture(request, AbortSignal.timeout(10_000));
+  expect(replay.status).toBe("captured");
+  if (replay.status !== "captured") {
+    throw new Error("Expected capture");
+  }
+  expect(replay.page.commerce?.price).toBe("22.95");
   expect(setup.client.get).toHaveBeenCalledTimes(2);
 });
 
@@ -179,7 +218,12 @@ it("keeps a failed second exit from turning a verified pickup listing into a del
   const html = `<div id="ppd">${identityInput}<span id="productTitle">Example supplement</span>
     <div id="buybox">Pickup FREE pickup Details Whole Foods Market - Ashburn • 1.7 mi
     <span class="tabular-buybox-text">Sold by</span><span>Whole Foods Market</span></div></div>`;
-  const setup = captureSetup({ url: request.url, html, capturedAt: "2026-11-01T00:00:00.000Z" });
+  const { records, states } = strictCaptureRecords();
+  const setup = captureSetup(
+    { url: request.url, html, capturedAt: "2026-11-01T00:00:00.000Z" },
+    {},
+    records,
+  );
   setup.client.get
     .mockImplementationOnce(async (input) => ({
       status: 200,
@@ -197,14 +241,83 @@ it("keeps a failed second exit from turning a verified pickup listing into a del
       bytes: Buffer.from("gone"),
       creditCost: 0,
     }));
-  await expect(setup.capture.capture(request, AbortSignal.timeout(10_000))).rejects.toMatchObject({
-    code: "CAPTURE.DOWNLOAD_UNRESOLVED",
+  const result = await setup.capture.capture(request, AbortSignal.timeout(10_000));
+  expect(result.status).toBe("captured");
+  if (result.status !== "captured") {
+    throw new Error("Expected capture");
+  }
+  expect(result.page.commerce).toMatchObject({
+    price: null,
+    priceStatus: "other_offer",
+    purchaseConditions: {
+      warnings: expect.arrayContaining(["PURCHASE.OTHER_OFFER_RETRY_FAILED:CAPTURE.NOT_FOUND"]),
+    },
   });
   expect(setup.client.get).toHaveBeenCalledTimes(2);
   expect(setup.remote.data.get(`v3/amazon-html/${request.operationId}/original.html`)).toEqual(
     Buffer.from(html),
   );
+  expect(states.get(request.operationId)).toEqual({
+    state: "done",
+    key: `v3/amazon-html/${request.operationId}/original.html`,
+  });
+  expect(records.fail).not.toHaveBeenCalled();
+  const replay = await setup.capture.capture(request, AbortSignal.timeout(10_000));
+  expect(replay.status).toBe("captured");
+  expect(setup.client.get).toHaveBeenCalledTimes(2);
 });
+
+it.each([
+  ["same-ASIN /clp/ landing", "https://www.amazon.com/clp/B0013LAQS6", "<main>Your pick</main>"],
+  [
+    "different ASIN",
+    "https://www.amazon.com/dp/B002CQU532",
+    '<div id="ppd"><input id="ASIN" value="B002CQU532"><span id="productTitle">Other product</span></div>',
+  ],
+])(
+  "keeps the first pickup result when the second exit lands on %s",
+  async (_case, finalUrl, second) => {
+    const first = `<div id="ppd">${identityInput}<span id="productTitle">Example supplement</span>
+    <div id="buybox">Pickup FREE pickup Details Whole Foods Market - Ashburn • 1.7 mi
+    <span class="tabular-buybox-text">Sold by</span><span>Whole Foods Market</span></div></div>`;
+    const { records } = strictCaptureRecords();
+    const setup = captureSetup(
+      { url: request.url, html: first, capturedAt: "2026-11-01T00:00:00.000Z" },
+      {},
+      records,
+    );
+    setup.client.get
+      .mockImplementationOnce(async (input) => ({
+        status: 200,
+        url: input.target,
+        contentType: "text/html",
+        contentEncoding: null,
+        bytes: Buffer.from(first),
+        creditCost: 0,
+      }))
+      .mockImplementationOnce(async () => ({
+        status: 200,
+        url: finalUrl,
+        contentType: "text/html",
+        contentEncoding: null,
+        bytes: Buffer.from(second),
+        creditCost: 0,
+      }));
+    const result = await setup.capture.capture(request, AbortSignal.timeout(10_000));
+    expect(result.status).toBe("captured");
+    if (result.status !== "captured") {
+      throw new Error("Expected capture");
+    }
+    expect(result.page.commerce).toMatchObject({ price: null, priceStatus: "other_offer" });
+    expect(result.page.archive.objectKey).toBe(
+      `v3/amazon-html/${request.operationId}/original.html`,
+    );
+    expect(setup.client.get).toHaveBeenCalledTimes(2);
+    const replay = await setup.capture.capture(request, AbortSignal.timeout(10_000));
+    expect(replay.status).toBe("captured");
+    expect(setup.client.get).toHaveBeenCalledTimes(2);
+  },
+);
 it.each([
   ["ppd-missing", "<main>Unavailable</main>"],
   ["ppd-not-unique", '<div id="ppd"></div><div id="ppd"></div>'],

@@ -36,6 +36,8 @@ HTTP; the source URL is only used by brand scans). Queued products follow the no
 known formula only refresh metrics, the 24-hour paid fetch admission applies, a vanished page is recorded as
 unlisted with its reason.
 
+KAN-235 生鲜自提报价重抓只换一次随机 ScraperAPI session，重抓遇验证页不升级，因此单次 capture 最多支付三次请求（首次验证升级最多两次，加重抓一次）。
+
 ## Run
 
 Preview (default, read-only; returns `batchId` for the selection):

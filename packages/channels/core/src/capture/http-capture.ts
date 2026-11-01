@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- shared admission, replay, and retry selection stay in one capture boundary. */
 import { errorCodeOf } from "@crawl-automation/platform";
 import type { ChannelAdapter, FetchedPage, ParsedProduct } from "../adapter.js";
 import { channelErrors } from "../errors.js";
@@ -13,8 +14,9 @@ import { decodeHtml } from "./read-html.js";
 import { htmlCaptureErrors, type HtmlCaptureRecords } from "./html-capture-records.js";
 import type { HtmlCaptureRequest } from "./html-capture-model.js";
 import { recoverOriginal } from "./recover-original.js";
-import { captureOtherOfferRetry } from "./other-offer-retry.js";
+import { markOtherOfferRetryFailure, resolveOtherOfferRetry } from "./other-offer-retry.js";
 import { movedPage } from "./moved-page.js";
+import { existingOriginal } from "./existing-original.js";
 
 export interface CapturedProduct {
   parsed: ParsedProduct;
@@ -28,7 +30,7 @@ export interface CapturedProduct {
 export type HttpCaptureResult =
   ({ status: "page" } & CapturedProduct) | { status: "sighting"; sighting: ListingSighting };
 
-type Download = { page: ArchivedHtml } | { sighting: ListingSighting };
+type Download = { page: ArchivedHtml; retryFailure?: string } | { sighting: ListingSighting };
 
 /**
  * Product-page capture for any channel, through its page fetcher (ScraperAPI; the browser only for the channels
@@ -71,7 +73,11 @@ export class HttpCapture {
     if (moved) {
       return { status: "sighting", sighting: moved };
     }
-    return this.readProduct(adapter, archive, saved);
+    const result = this.readProduct(adapter, archive, saved);
+    if (result.status === "page") {
+      markOtherOfferRetryFailure(result.parsed, download.retryFailure);
+    }
+    return result;
   }
 
   private async archivedOrAcquire(
@@ -79,17 +85,15 @@ export class HttpCapture {
     archive: OriginalHtmlArchive,
     signal: AbortSignal,
   ): Promise<Download> {
-    const first = await archive.inspect(signal);
-    if (!first) {
-      return this.acquire(adapter, archive, signal);
-    }
-    const retryArchive = adapter.id === "amazon" ? archive.otherOfferRetry() : null;
-    const retry = await retryArchive?.inspect(signal);
-    await this.records?.complete(
-      { channel: adapter.id, capture: archive.capture },
-      retry && retryArchive ? retryArchive.reference(retry) : archive.reference(first),
+    return (
+      (await existingOriginal({
+        adapter,
+        archive,
+        records: this.records,
+        signal,
+        readProduct: (original, page) => this.readProduct(adapter, original, page).status,
+      })) ?? this.acquire(adapter, archive, signal)
     );
-    return { page: retry ?? first };
   }
 
   /** Page-owned identity is checked before facts, images or formula planning can turn a wrong page into a Review. */
@@ -194,7 +198,7 @@ export class HttpCapture {
     const request = { channel: adapter.id, url: archive.capture.url, policy: adapter.httpPolicy };
     const page = await this.pages.fetchPage(request, signal);
     const first = await archive.save(page.bytes, page.fetchedVia, signal);
-    const retry = await captureOtherOfferRetry({
+    const selected = await resolveOtherOfferRetry({
       pages: this.pages,
       adapter,
       archive,
@@ -213,13 +217,15 @@ export class HttpCapture {
           return false;
         }
       },
+      readProduct: (original, saved) => this.readProduct(adapter, original, saved).status,
     });
-    const saved = retry?.page ?? first;
-    const selectedArchive = retry?.archive ?? archive;
     await this.records?.complete(
       { channel: adapter.id, capture: archive.capture },
-      selectedArchive.reference(saved),
+      selected.archive.reference(selected.page),
     );
-    return { page: saved };
+    return {
+      page: selected.page,
+      ...(selected.retryFailure ? { retryFailure: selected.retryFailure } : {}),
+    };
   }
 }

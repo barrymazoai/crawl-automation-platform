@@ -184,6 +184,24 @@ describe("product pages through ScraperAPI", () => {
       ).rejects.toMatchObject({ code: "SCRAPERAPI.PROVIDER_FAILURE" });
       expect(failing.fake.get).toHaveBeenCalledOnce();
     });
+
+    it("uses a random second session and never upgrades its verification answer", async () => {
+      const random = vi.spyOn(Math, "random").mockReturnValue(0.5);
+      try {
+        const fixed = { ...tiers, defaults: { ...tiers.defaults, sessionNumber: 42 } };
+        const normal = client();
+        await new ScraperApiPages(normal.fake, fixed).fetchOtherOfferRetry(ask, signal());
+        expect(normal.calls[0]?.options.sessionNumber).toBe(1_073_741_824);
+        expect(normal.fake.get).toHaveBeenCalledOnce();
+        const challenge = client({ bytes: interstitial });
+        await expect(
+          new ScraperApiPages(challenge.fake, fixed).fetchOtherOfferRetry(ask, signal()),
+        ).rejects.toMatchObject({ code: "CAPTURE.ACCESS_CHALLENGE" });
+        expect(challenge.fake.get).toHaveBeenCalledOnce();
+      } finally {
+        random.mockRestore();
+      }
+    });
   });
 
   it("never asks ScraperAPI for a page off the channel's sites", async () => {

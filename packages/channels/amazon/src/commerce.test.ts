@@ -149,7 +149,7 @@ describe("Amazon retained commerce (synthetic)", () => {
       otherOffer: {
         price: "29.99",
         seller: "Whole Foods Market",
-        store: expect.stringContaining("Ashburn"),
+        store: "Whole Foods Market - Ashburn • 1.7 mi",
       },
     });
     expect(result.purchaseConditions?.seller.name).toBe("Whole Foods Market");
@@ -173,6 +173,14 @@ describe("Amazon retained commerce (synthetic)", () => {
       read(`<div id="corePriceDisplay_desktop_feature_div">${price("12.00")}</div>
       <div id="buybox"><span class="tabular-buybox-text">Sold by</span><span>AmazonFresh</span></div>`),
     ).toMatchObject({ price: null, priceStatus: "other_offer" });
+  });
+
+  it("keeps Amazon's own price when pickup means an Amazon Hub Locker", () => {
+    const result = read(`<div id="corePriceDisplay_desktop_feature_div">${price("22.95")}</div>
+      <div id="buybox">Pickup FREE pickup Details Amazon Hub Locker - Main Street • 1.7 mi
+      <span class="tabular-buybox-text">Sold by</span><span>Amazon.com</span></div>`);
+    expect(result).toMatchObject({ price: "22.95", priceStatus: "observed" });
+    expect(result.otherOffer).toBeUndefined();
   });
 
   it("captures the crossed-out basis price on a half-off bundle promotion", () => {

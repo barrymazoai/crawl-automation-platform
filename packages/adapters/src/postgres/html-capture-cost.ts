@@ -13,7 +13,7 @@ export function captureCreditCost(request: HtmlCaptureRequest, original: SavedHt
   return events.reduce((total, event) => total + (event.creditCost ?? 0), 0);
 }
 
-/** A different original with the same sessionId is the authorized second page of this capture. */
+/** ProductCapture sets sessionId === operationId; its second original retains that sessionId. */
 export function sameCaptureOperation(request: HtmlCaptureRequest, original: SavedHtmlOriginal) {
   return (
     original.capture.operationId === request.capture.operationId ||
