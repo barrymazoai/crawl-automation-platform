@@ -43,6 +43,12 @@ function fakeStore(): QueueStore {
       skipped: { running: 0, settled: 0, notFound: 0 },
       byBatch: [],
     })),
+    settleReview: vi.fn(async (input) => ({
+      dryRun: input.dryRun,
+      matched: 1,
+      settled: 1,
+      skipped: { notReview: 0, collected: 0, notFound: 0 },
+    })),
   };
 }
 

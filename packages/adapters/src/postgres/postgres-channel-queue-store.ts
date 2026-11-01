@@ -11,6 +11,7 @@ import {
   type QueueSummaryQuery,
   type ScanAdmissionSettings,
   type SourcePriority,
+  type SettleReview,
   type Withdraw,
 } from "@crawl-automation/app";
 import type { Database, Queryable } from "@crawl-automation/platform";
@@ -22,6 +23,7 @@ import { QUEUE_ORDER, channelQueueStatus, lockChannelQueue } from "./channel-que
 import { PostgresQueueReader } from "./postgres-queue-reader.js";
 import { PostgresQueueRequeue } from "./postgres-queue-requeue.js";
 import { PostgresQueueSummary } from "./postgres-queue-summary.js";
+import { PostgresQueueOwnerSettle } from "./postgres-queue-owner-settle.js";
 import { PostgresQueueWithdraw } from "./postgres-queue-withdraw.js";
 
 import { PostgresQueueAdd } from "./postgres-queue-add.js";
@@ -176,6 +178,10 @@ export class PostgresChannelQueueStore implements QueueStore {
 
   withdraw(input: Withdraw) {
     return this.locked(input.channel, (tx) => new PostgresQueueWithdraw(tx).withdraw(input));
+  }
+
+  settleReview(input: SettleReview) {
+    return this.locked(input.channel, (tx) => new PostgresQueueOwnerSettle(tx).settle(input));
   }
 
   private locked<Result>(

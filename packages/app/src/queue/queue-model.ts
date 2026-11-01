@@ -131,6 +131,29 @@ export interface WithdrawResult {
   byBatch: { batchId: string; label: string; count: number }[];
 }
 
+/**
+ * Owner 2026-11-01: finish exact Review items as the owner decided, without a new run (Prolon fasting kits are not
+ * supplements). Only a product-scope outcome the pipeline itself can reach; preview is the default.
+ */
+export const SettleReviewSchema = z.strictObject({
+  channel: QueueChannelSchema,
+  itemIds: z
+    .array(z.string().regex(/^[a-f0-9]{64}$/))
+    .min(1)
+    .max(1_000),
+  reason: z.literal("PRODUCT.NOT_SUPPLEMENT"),
+  note: z.string().trim().min(1).max(200),
+  dryRun: z.boolean().default(true),
+});
+export type SettleReview = z.infer<typeof SettleReviewSchema>;
+export interface SettleReviewResult {
+  dryRun: boolean;
+  matched: number;
+  settled: number;
+  /** collected: its listing already has a collected product, which this outcome would contradict. */
+  skipped: { notReview: number; collected: number; notFound: number };
+}
+
 export type QueueMode = "running" | "paused" | "draining" | "stopping";
 
 export interface QueueStatus {
@@ -160,6 +183,9 @@ export interface QueueItemView {
   /** Original withdrawal note and time, kept even if the item is later requeued. */
   withdrawNote?: string | undefined;
   withdrawnAt?: string | undefined;
+  /** The owner's note and time when the owner finished this item without a run. */
+  ownerNote?: string | undefined;
+  ownerSettledAt?: string | undefined;
   /** The active request this batch follows; followers never create their own execution. */
   followsItemId?: string | null | undefined;
 }
@@ -177,4 +203,5 @@ export interface QueueStore extends Partial<FamilyFormulaOutcomes> {
   resume(channel: QueueChannel): Promise<void>;
   requeue(input: Requeue): Promise<RequeueResult>;
   withdraw(input: Withdraw): Promise<WithdrawResult>;
+  settleReview(input: SettleReview): Promise<SettleReviewResult>;
 }

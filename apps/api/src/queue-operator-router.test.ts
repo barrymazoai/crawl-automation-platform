@@ -41,6 +41,48 @@ describe("queue operator API without authentication", () => {
     ).toBe(400);
     expect(withdraw).not.toHaveBeenCalled();
   });
+
+  it("previews an owner settlement by default, then accepts explicit execution", async () => {
+    const result = {
+      dryRun: true,
+      matched: 2,
+      settled: 1,
+      skipped: { notReview: 0, collected: 1, notFound: 0 },
+    };
+    const settleReview = vi
+      .fn()
+      .mockResolvedValueOnce(result)
+      .mockResolvedValueOnce({ ...result, dryRun: false });
+    const app = appWith({ queue: { settleReview } });
+    const input = {
+      channel: "dtc",
+      itemIds: ["a".repeat(64), "b".repeat(64)],
+      reason: "PRODUCT.NOT_SUPPLEMENT",
+      note: "Prolon fasting kits are not supplements",
+    };
+    expect((await app.request("/trpc/queue.settleReview", post(input))).status).toBe(200);
+    expect(settleReview).toHaveBeenCalledExactlyOnceWith({ ...input, dryRun: true });
+    expect(
+      (await app.request("/trpc/queue.settleReview", post({ ...input, dryRun: false }))).status,
+    ).toBe(200);
+    expect(settleReview).toHaveBeenLastCalledWith({ ...input, dryRun: false });
+  });
+
+  it.each([
+    { channel: "dtc", itemIds: ["a".repeat(64)], reason: "PRODUCT.NOT_SUPPLEMENT" },
+    { channel: "dtc", itemIds: ["a".repeat(64)], reason: "QUEUE.RUN_FAILED", note: "x" },
+    { channel: "dtc", itemIds: [], reason: "PRODUCT.NOT_SUPPLEMENT", note: "x" },
+    { channel: "dtc", itemIds: ["bad"], reason: "PRODUCT.NOT_SUPPLEMENT", note: "x" },
+    { channel: "dtc", itemIds: ["a".repeat(64)], reason: "PRODUCT.NOT_SUPPLEMENT", note: " " },
+    { channel: "dtc", batchIds: [requestId], reason: "PRODUCT.NOT_SUPPLEMENT", note: "x" },
+  ])("rejects invalid owner settlement input: %j", async (input) => {
+    const settleReview = vi.fn();
+    expect(
+      (await appWith({ queue: { settleReview } }).request("/trpc/queue.settleReview", post(input)))
+        .status,
+    ).toBe(400);
+    expect(settleReview).not.toHaveBeenCalled();
+  });
   it("returns filtered Review items and their source, attempt and update time", async () => {
     const item = {
       itemId: "a".repeat(64),

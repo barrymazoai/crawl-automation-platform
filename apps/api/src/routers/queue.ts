@@ -9,6 +9,7 @@ import {
   RecaptureHistorySchema,
   RequeueSchema,
   FamilyFormulaQuerySchema,
+  SettleReviewSchema,
   WithdrawSchema,
 } from "@crawl-automation/app";
 import { procedure, router } from "../trpc.js";
@@ -76,4 +77,9 @@ export const queueRouter = router({
 
   /** Preview or withdraw unstarted requests from one channel. */
   withdraw: procedure.input(WithdrawSchema).mutation(({ ctx, input }) => ctx.queue.withdraw(input)),
+
+  /** Preview or finish exact Review items as the owner decided, without a new run. */
+  settleReview: procedure
+    .input(SettleReviewSchema)
+    .mutation(({ ctx, input }) => ctx.queue.settleReview(input)),
 });

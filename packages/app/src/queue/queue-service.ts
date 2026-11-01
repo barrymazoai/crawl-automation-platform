@@ -24,6 +24,8 @@ import type {
   Requeue,
   RequeueResult,
   QueueSummaryQuery,
+  SettleReview,
+  SettleReviewResult,
   SourcePriority,
   Withdraw,
   WithdrawResult,
@@ -128,6 +130,15 @@ export class QueueService {
     this.deps.log.info(
       { channel: input.channel, batches: result.byBatch.map((batch) => batch.batchId), ...result },
       input.dryRun ? "queue withdrawal preview" : "queue items withdrawn",
+    );
+    return result;
+  }
+
+  async settleReview(input: SettleReview): Promise<SettleReviewResult> {
+    const result = await this.deps.channels.settleReview(input);
+    this.deps.log.info(
+      { channel: input.channel, reason: input.reason, note: input.note, ...result },
+      input.dryRun ? "owner settlement preview" : "review items settled by the owner",
     );
     return result;
   }
