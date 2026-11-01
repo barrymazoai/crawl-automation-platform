@@ -3,11 +3,11 @@ import type { MappedDelivery } from "./wire.js";
 import type { ProductLabelReadAnswer } from "@crawl-automation/v3-contracts";
 
 export async function deliverLabel(
-  input: { writer: ProductObservationWriter; product: MappedDelivery; source: string },
+  input: { writer: ProductObservationWriter; product: MappedDelivery },
   signal: AbortSignal,
 ): Promise<string | null> {
   const { writer, product } = input;
-  const answer = await writer.label({ ...product.label, source: input.source }, signal);
+  const answer = await writer.label(product.label, signal);
   if (answer.error) {
     return `${answer.error.code}: ${answer.error.message}`;
   }

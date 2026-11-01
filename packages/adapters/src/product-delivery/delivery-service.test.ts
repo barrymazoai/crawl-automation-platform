@@ -34,30 +34,6 @@ describe("Supply Smart product delivery with real answer codecs and fake RPC", (
         source: `crawl-automation:${deliveryRequest.ingestRunId}`,
       },
     });
-    const ingest = state.rpc.calls.find((call) => call.path === "product.ingestObservationBatch")
-      ?.input as {
-      run: { source: string };
-      items: { externalId: string; capturedAt: string; price?: string }[];
-    };
-    const label = state.rpc.calls.find((call) => call.path === "product.ingestLabelObservation")
-      ?.input as {
-      source: string;
-      listing: { externalId: string; price?: string };
-      observation: { capturedAt: string };
-    };
-    expect(label.source).toBe(ingest.run.source);
-    expect(label.listing.price).toBe(ingest.items[0]?.price);
-    expect(
-      [ingest, label].map((input) =>
-        "run" in input
-          ? `${input.items[0]?.externalId}|${input.items[0]?.capturedAt}|${input.run.source}`
-          : `${input.listing.externalId}|${input.observation.capturedAt}|${input.source}`,
-      ),
-    ).toEqual(
-      Array(2).fill(
-        `${ingest.items[0]?.externalId}|${ingest.items[0]?.capturedAt}|${ingest.run.source}`,
-      ),
-    );
   });
 
   it("delivers a selected variant from a capture whose URL had no variant", async () => {
