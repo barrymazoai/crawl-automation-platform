@@ -105,9 +105,8 @@ export class ProductDeliveryService implements ProductDelivery {
     );
     const accepted: MappedDelivery[] = [];
     for (const entry of acceptedItems(answer, { runId: run.runId, products })) {
-      const reason =
-        entry.reason ??
-        (await deliverLabel({ writer: this.deps.writer, product: entry.product }, signal));
+      const label = { writer: this.deps.writer, product: entry.product, source: run.source };
+      const reason = entry.reason ?? (await deliverLabel(label, signal));
       if (reason) {
         result.refused.push({ externalId: entry.product.item.externalId, reason });
       } else {

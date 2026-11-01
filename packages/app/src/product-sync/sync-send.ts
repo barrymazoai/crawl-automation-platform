@@ -8,22 +8,8 @@ import {
 import type { DeliveryRun } from "../product-delivery/wire.js";
 import type { ProductVerifyBatchAnswer } from "@crawl-automation/v3-contracts";
 import { reasonText, sentChange, type PlannedSync, type SyncTally } from "./sync-model.js";
-import { canonicalHash } from "../history/canonical.js";
-
-/**
- * Supply Smart keeps one snapshot per listing, capture time and source (a unique key; a conflict is dropped without
- * an error). The source was fixed across runs so that a retry stays one snapshot (review 2026-10-12), which also
- * dropped every resend of a retained original: the listing-date and units backfills reached the ledger, not Supply
- * Smart (found 2026-10-27, 0 of 175 verified resends stored). The source now carries the fingerprint of the batch's
- * observation items (not their labels, which have their own idempotency): a batch of unchanged items sent again is
- * still one snapshot each; a changed item at the same capture time is a new one. The source belongs to the run, so
- * an unchanged item resent in a differently composed batch gains a duplicate snapshot with the same values.
- */
-const SOURCE = "crawl-automation:marketplace-sync";
-export function batchSource(planned: readonly { item: unknown }[]) {
-  const hashes = planned.map((entry) => canonicalHash(entry.item)).sort();
-  return `${SOURCE}:${canonicalHash(hashes).slice(0, 12)}`;
-}
+// A new fixed key keeps the first corrected resend distinct from legacy fixed and batch-hashed snapshots.
+const SOURCE = "crawl-automation:marketplace-sync-v2";
 const NEEDS_REVIEW = "needs_review";
 const RUN_OPEN = "run_not_completed";
 
@@ -47,7 +33,7 @@ export async function sendBatch(batch: Batch, tally: SyncTally, signal: AbortSig
     closed.found && closed.scope === "partial" && closed.problems.length === 0;
 }
 
-/** The ingest run of one batch: earliest capture as its start, the batch content as its snapshot source. */
+/** The ingest run of one batch: earliest capture as its start, a fixed snapshot source. */
 export function partialRun(batch: Pick<Batch, "runId" | "planned">): DeliveryRun {
   const times = batch.planned.map((entry) => entry.item.capturedAt);
   const [startedAt] = times.sort((left, right) => Date.parse(left) - Date.parse(right));
@@ -56,7 +42,7 @@ export function partialRun(batch: Pick<Batch, "runId" | "planned">): DeliveryRun
     channel: batch.planned[0].product.channel,
     scope: "partial",
     startedAt: startedAt ?? batch.planned[0].item.capturedAt,
-    source: batchSource(batch.planned),
+    source: SOURCE,
   };
 }
 
@@ -72,14 +58,14 @@ function fail(tally: SyncTally, at: { entry: PlannedSync; runId: string; reason:
 
 async function ingestWithLabels(batch: Batch, tally: SyncTally, signal: AbortSignal) {
   const { writer, runId, planned } = batch;
-  const answer = await writer.ingest(
-    { run: partialRun(batch), items: planned.map((entry) => entry.item) },
-    signal,
-  );
+  const run = partialRun(batch);
+  const answer = await writer.ingest({ run, items: planned.map((entry) => entry.item) }, signal);
   const accepted: PlannedSync[] = [];
   for (const { product: entry, reason } of acceptedItems(answer, { runId, products: planned })) {
     const refused =
-      reason && reason !== NEEDS_REVIEW ? reason : await labelOf(writer, entry, signal);
+      reason && reason !== NEEDS_REVIEW
+        ? reason
+        : await labelOf({ writer, entry, source: run.source }, signal);
     if (refused) {
       fail(tally, { entry, runId, reason: refused });
     } else {
@@ -90,9 +76,13 @@ async function ingestWithLabels(batch: Batch, tally: SyncTally, signal: AbortSig
 }
 
 /** A verified marketplace observation without a usable formula is sent without a label. */
-function labelOf(writer: ProductObservationWriter, entry: PlannedSync, signal: AbortSignal) {
+function labelOf(
+  input: { writer: ProductObservationWriter; entry: PlannedSync; source: string },
+  signal: AbortSignal,
+) {
+  const { writer, entry, source } = input;
   return entry.label
-    ? deliverLabel({ writer, product: { item: entry.item, label: entry.label } }, signal)
+    ? deliverLabel({ writer, product: { item: entry.item, label: entry.label }, source }, signal)
     : Promise.resolve(null);
 }
 

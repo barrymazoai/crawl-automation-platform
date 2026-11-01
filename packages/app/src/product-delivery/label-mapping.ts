@@ -66,11 +66,8 @@ export function deliveryLabelEvidence(record: LabelCollectedProduct) {
  */
 export const LABEL_CONFIDENCE = 100;
 
-/**
- * Part of every label's operation and observation IDs. Supply Smart refuses a known ID with a different body, so the
- * same capture sent again with its confidence is a new submission there (2026-10-16).
- */
-export const LABEL_SUBMISSION = "confidence-1";
+/** The label source now follows its ingest run; change the operation ID so old submissions are not body conflicts. */
+export const LABEL_SUBMISSION = "snapshot-source-2";
 
 /** Full label wire payload shared by DTC and marketplace delivery. No run-dependent identity. */
 export function deliveryLabel(input: {

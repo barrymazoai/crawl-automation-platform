@@ -47,7 +47,7 @@ describe.skipIf(!marketplaceSamplesPath)("mapping the 15 supplied marketplace ru
       );
       expect(label.label.evidence.assembly).toEqual(required(input.collection).assembly);
       expect(label.observation.observationId).toBe(
-        `${required(input.collection).observation.observationId}-confidence-1`,
+        `${required(input.collection).observation.observationId}-snapshot-source-2`,
       );
       expect(label.listing.externalId).toBe(item.externalId);
       expect(item).not.toHaveProperty("siteKey");
