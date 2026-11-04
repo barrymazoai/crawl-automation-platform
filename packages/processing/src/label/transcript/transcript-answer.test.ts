@@ -89,6 +89,50 @@ describe("transcriptAttempt", () => {
     ]);
   });
 
+  it("gives each listed blend member the dose it prints before its name (MegaFood on Swanson)", () => {
+    const members =
+      "250 mg Holy basil leaf extract (Ocimum sanctum), 250 mg Sensoril® ashwagandha root & leaf extract (Withania somnifera/ 10% Withanolides), 150 mg Coleus forskohlii root extract (Coleus forskohlii)";
+    const pre = [
+      "Supplement Facts",
+      "",
+      "Serving Size 2 Tablets",
+      "",
+      "Amount Per Serving\t% Daily Value",
+      "Herb Blend 650 mg\t**",
+      members,
+      "L-Tyrosine 300 mg\t**",
+      "",
+      "Other Ingredients: Microcrystalline cellulose, hypromellose.",
+    ].join("\n");
+    const lines = pre.split("\n").map((line) => line.replace(/\t/g, " "));
+
+    const { decoded, rows } = attempt(`<pre>${pre}</pre>`, lines);
+
+    expect(decoded?.status).toBe("candidate");
+    expect(rows).toEqual([
+      { kind: "blend_total", name: "Herb Blend", amount: "650 mg", parent: null },
+      {
+        kind: "blend_component",
+        name: "Holy basil leaf extract (Ocimum sanctum)",
+        amount: "250 mg",
+        parent: 0,
+      },
+      {
+        kind: "blend_component",
+        name: "Sensoril® ashwagandha root & leaf extract (Withania somnifera/ 10% Withanolides)",
+        amount: "250 mg",
+        parent: 0,
+      },
+      {
+        kind: "blend_component",
+        name: "Coleus forskohlii root extract (Coleus forskohlii)",
+        amount: "150 mg",
+        parent: 0,
+      },
+      { kind: "nutrient", name: "L-Tyrosine", amount: "300 mg", parent: null },
+    ]);
+  });
+
   it("puts strains under a sub-heading in the dosed blend, with each '--' cell left out", () => {
     const html = [
       gridRow("Probiotic Blend 30 Billion CFU:", "520 mg", "**"),

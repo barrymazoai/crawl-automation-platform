@@ -1,5 +1,5 @@
 import type { TranscriptRow } from "./html-transcript.js";
-import { readCells, servingLine, type Cells } from "./transcript-cells.js";
+import { memberDose, readCells, servingLine, type Cells } from "./transcript-cells.js";
 
 /**
  * Step 2 of the transcribe-then-parse plan: a copied panel becomes formula rows by fixed rules, so the same panel
@@ -66,6 +66,8 @@ interface OpenGroup {
 class RowParser {
   readonly panel: ParsedPanel = { servingSize: null, servingsPerContainer: null, rows: [] };
   private readonly open: OpenGroup[] = [];
+  /** Blend members whose dose is printed before their name; that dose never keeps the blend open. */
+  private readonly listed = new Set<number>();
 
   read(raw: TranscriptRow): void {
     if (this.servingLine(raw)) {
@@ -136,8 +138,16 @@ class RowParser {
     return true;
   }
 
-  private component(name: string, parentRowIndex: number): void {
-    this.push({ kind: "blend_component", name, amount: null, dailyValue: null, parentRowIndex });
+  private component(text: string, parentRowIndex: number): void {
+    const dosed = memberDose(text);
+    const index = this.push({
+      kind: "blend_component",
+      name: dosed?.name ?? text,
+      amount: dosed?.amount ?? null,
+      dailyValue: null,
+      parentRowIndex,
+    });
+    this.listed.add(index);
   }
 
   private row(cells: Cells): void {
@@ -147,28 +157,27 @@ class RowParser {
       this.makeRoomForGroup(cells);
     }
     const parentRowIndex = this.parent();
+    const member = isGroup ? null : memberRow(cells, parentRowIndex);
     const index = this.push({
-      kind: rowKind(isGroup, cells, parentRowIndex),
-      name: cells.name,
-      amount: cells.amount,
-      dailyValue: cells.dailyValue,
-      // A sub-heading's place inside a printed blend is the label rules' own reading; it carries no parent.
-      parentRowIndex: isGroup && !cells.amount ? null : parentRowIndex,
-      ...(cells.dvMarker ? { dailyValueMarker: cells.dvMarker } : {}),
-      ...(cells.amountMarker ? { amountMarker: cells.amountMarker } : {}),
+      ...printedRow(cells, isGroup, parentRowIndex),
+      ...(member ?? {}),
     });
+    if (member) {
+      this.listed.add(index);
+    }
     if (isGroup) {
       this.open.push({ index, indent: cells.raw.indent, printed: !!cells.amount });
     }
   }
 
-  /** A dosed root row after a blend's undosed components closes the blend. */
+  /** A dosed root row after a blend's undosed (or listed) components closes the blend. */
   private closeAfterDosedRoot(cells: Cells): void {
     const top = this.top();
     if (!top || !cells.amount || cells.raw.indent > 0 || cells.endsWithColon || cells.groupWord) {
       return;
     }
-    if (this.panel.rows.slice(top.index + 1).every((row) => row.amount === null)) {
+    const after = this.panel.rows.slice(top.index + 1);
+    if (after.every((row, at) => row.amount === null || this.listed.has(top.index + 1 + at))) {
       this.open.length = 0;
     }
   }
@@ -200,6 +209,24 @@ class RowParser {
   private push(row: ParsedRow): number {
     return this.panel.rows.push(row) - 1;
   }
+}
+
+function printedRow(cells: Cells, isGroup: boolean, parentRowIndex: number | null): ParsedRow {
+  return {
+    kind: rowKind(isGroup, cells, parentRowIndex),
+    name: cells.name,
+    amount: cells.amount,
+    dailyValue: cells.dailyValue,
+    // A sub-heading's place inside a printed blend is the label rules' own reading; it carries no parent.
+    parentRowIndex: isGroup && !cells.amount ? null : parentRowIndex,
+    ...(cells.dvMarker ? { dailyValueMarker: cells.dvMarker } : {}),
+    ...(cells.amountMarker ? { amountMarker: cells.amountMarker } : {}),
+  };
+}
+
+/** A blend member on its own line printing its dose before its name ("300 mg Boswellia … (Boswellia serrata),"). */
+function memberRow(cells: Cells, parentRowIndex: number | null) {
+  return !cells.amount && parentRowIndex !== null ? memberDose(cells.name) : null;
 }
 
 function rowKind(isGroup: boolean, cells: Cells, parentRowIndex: number | null): ParsedRow["kind"] {

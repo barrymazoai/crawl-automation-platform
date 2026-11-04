@@ -28,6 +28,19 @@ const BARE_NUMBER = /^\d+$/;
 /** "240 mcg Folic Acid": a sub-line printing its dose before the name, with no amount cell. */
 const LEADING_DOSE = /^\(?(\d[\d,.]*\s*(?:mcg|µg|mg|g|iu))\s+([a-z][^()]*?)\)?$/i;
 
+/** "250 mg Holy basil leaf extract (Ocimum sanctum)": a listed blend member printing its dose before its name. */
+const MEMBER_DOSE = /^(\d[\d,.]*\s*(?:mcg|µg|mg|g|iu))\s+([a-z].*\S)$/i;
+
+/**
+ * Owner 2026-11-04 (MegaFood Thyroid Strength on Swanson: "250 mg Holy basil …, 250 mg Sensoril® …, 150 mg Coleus …"
+ * listed under "Herb Blend 650 mg"): a member of a printed blend list that prints its own dose before its name has
+ * that dose as its amount; the name is the rest. A bracketed dose at the end ("… 1% magnolol (3 mg)", Nature's Way
+ * Cortisol Manager) is a constituent's, not the member's, and stays in the name.
+ */
+export function memberDose(text: string): { name: string; amount: string } | null {
+  return split(MEMBER_DOSE.exec(text), 2, 1);
+}
+
 /** One printed row read into its parts: name, value cells and what the row prints about itself. */
 export interface Cells {
   raw: TranscriptRow;
