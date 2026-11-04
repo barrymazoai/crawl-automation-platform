@@ -141,7 +141,37 @@ it("owners skip family discovery and products", async () => {
   expect(mocks.plain.brandProducts).not.toHaveBeenCalled();
 });
 
-it("found companies run only identity and completed close", async () => {
+it("found companies get only sub-brands and website products, then a completed close (KAN-253)", async () => {
+  mocks.plain.brandIdentity.mockResolvedValue({
+    role: "request",
+    hasWebsite: true,
+    existing: true,
+  });
+  const childRunId = randomUUID();
+  mocks.gated.mockResolvedValue({ children: [childRunId], products: true });
+  const request = input();
+  await BrandEnrichmentWorkflow(request);
+  expect(mocks.patched).toHaveBeenCalledWith("brand-enrichment-found-stops-v1");
+  expect(mocks.patched).toHaveBeenCalledWith("brand-enrichment-found-family-products-v1");
+  expect(mocks.gated).toHaveBeenCalledExactlyOnceWith("brandFamily", { runId: request.runId });
+  expect(mocks.child).toHaveBeenCalledExactlyOnceWith(
+    BrandEnrichmentWorkflow,
+    expect.objectContaining({ args: [expect.objectContaining({ runId: childRunId })] }),
+  );
+  expect(mocks.plain.brandProducts).toHaveBeenCalledExactlyOnceWith({ runId: request.runId });
+  expect(mocks.plain.brandClose).toHaveBeenCalledExactlyOnceWith({
+    runId: request.runId,
+    state: "completed",
+  });
+  for (const name of ["brandWrite", "brandOwnershipWrite", "brandProductsStop"] as const) {
+    expect(mocks.plain[name]).not.toHaveBeenCalled();
+  }
+});
+
+it("found companies without the family-products patch run only identity and close", async () => {
+  mocks.patched.mockImplementation(
+    (patch: string) => patch !== "brand-enrichment-found-family-products-v1",
+  );
   mocks.plain.brandIdentity.mockResolvedValue({
     role: "request",
     hasWebsite: true,
@@ -149,7 +179,6 @@ it("found companies run only identity and completed close", async () => {
   });
   const request = input();
   await BrandEnrichmentWorkflow(request);
-  expect(mocks.patched).toHaveBeenCalledWith("brand-enrichment-found-stops-v1");
   expect(mocks.plain.brandIdentity).toHaveBeenCalledExactlyOnceWith({ runId: request.runId });
   expect(mocks.plain.brandClose).toHaveBeenCalledExactlyOnceWith({
     runId: request.runId,

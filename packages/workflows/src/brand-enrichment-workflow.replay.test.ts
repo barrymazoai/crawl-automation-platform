@@ -23,19 +23,26 @@ describe.skipIf(process.env["BRAND_ENRICHMENT_TEMPORAL_TEST"] !== "1")(
     }, 60_000);
     afterAll(async () => environment?.teardown());
     it.each([
-      { legacy: false, existing: true },
-      { legacy: true, existing: true },
-      { legacy: true, existing: undefined },
+      { legacy: false, foundStopOnly: false, existing: true },
+      { legacy: false, foundStopOnly: true, existing: true },
+      { legacy: true, foundStopOnly: false, existing: true },
+      { legacy: true, foundStopOnly: false, existing: undefined },
     ])(
       "replays found completion and pre-patch commands (%j)",
-      async ({ legacy, existing }) => {
+      async ({ legacy, foundStopOnly, existing }) => {
         const queue = browserTaskQueue("mini-ego-space-1");
         const marker = "brand-enrichment-found-stops-v1";
+        // KAN-253 (2026-11-04): found companies also run family and products; older found histories stop.
+        const familyMarker = "brand-enrichment-found-family-products-v1";
         const held = new Set<string>();
         const close = vi.fn(async () => undefined);
         const recorded = await recordHistory({
           environment,
-          bundle: legacy ? withoutPatches(bundle, [marker]) : bundle,
+          bundle: legacy
+            ? withoutPatches(bundle, [marker, familyMarker])
+            : foundStopOnly
+              ? withoutPatches(bundle, [familyMarker])
+              : bundle,
           queue,
           workflow: "BrandEnrichmentWorkflow",
           input: { runId: randomUUID(), settings: settingsFor(queue) },
@@ -77,8 +84,12 @@ describe.skipIf(process.env["BRAND_ENRICHMENT_TEMPORAL_TEST"] !== "1")(
             "brandOwnershipWrite",
             "brandClose",
           ]);
-        } else {
+        } else if (foundStopOnly) {
+          expect(hasMarker(recorded.history, familyMarker)).toBe(false);
           expect(activities).toEqual(["brandIdentity", "brandClose"]);
+        } else {
+          expect(hasMarker(recorded.history, familyMarker)).toBe(true);
+          expect(activities).toEqual(["brandIdentity", "brandFamily", "brandClose"]);
         }
         expect(close).toHaveBeenCalledWith(expect.objectContaining({ state: "completed" }));
         expect(held.size).toBe(0);

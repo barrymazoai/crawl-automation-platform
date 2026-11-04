@@ -17,6 +17,7 @@ export const labelNoSourceMarker = "label-no-source-review-v1";
 export const stopProofMarker = "resource-execution-stop-proof-v1";
 export type PatchMarker =
   | "brand-enrichment-found-stops-v1"
+  | "brand-enrichment-found-family-products-v1"
   | "resource-reserve-failure-release-v1"
   | "dtc-gallery-joint-facts-v1"
   | "dtc-variant-workflow-id-v1"

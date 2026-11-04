@@ -1,5 +1,6 @@
 import {
   BrandEnrichmentWorkflowInputSchema,
+  type BrandEnrichmentRole,
   type BrandEnrichmentWorkflowInput,
 } from "@crawl-automation/v3-contracts";
 import {
@@ -24,6 +25,7 @@ export async function BrandEnrichmentWorkflow(raw: BrandEnrichmentWorkflowInput)
   try {
     const identity = await plain.brandIdentity({ runId });
     if (patched("brand-enrichment-found-stops-v1") && identity.existing) {
+      await foundCompanyTracks(input, identity, { plain, gated });
       return;
     }
     const family =
@@ -53,6 +55,30 @@ export async function BrandEnrichmentWorkflow(raw: BrandEnrichmentWorkflowInput)
     await CancellationScope.nonCancellable(() => closeRun({ plain, runId, state, reason }));
   }
 }
+/**
+ * Owner 2026-11-04 (KAN-253, Nature's Way): a found company still gets its sub-brands and website products through
+ * the same family and products steps; its own research, Apollo, contacts and ownership stay untouched.
+ */
+async function foundCompanyTracks(
+  input: BrandEnrichmentWorkflowInput,
+  identity: { role: BrandEnrichmentRole; hasWebsite: boolean },
+  activities: ReturnType<typeof brandEnrichmentActivities>,
+) {
+  if (!patched("brand-enrichment-found-family-products-v1") || !identity.hasWebsite) {
+    return;
+  }
+  const { role } = identity;
+  const { plain, gated } = activities;
+  const family =
+    role === "request"
+      ? await gated("brandFamily", { runId: input.runId })
+      : { children: [], products: role === "sub_brand" };
+  await settleBrandTracks([
+    ...family.children.map((childRunId) => () => child(input, childRunId)),
+    ...(family.products ? [() => brandProductsTrack(input, plain)] : []),
+  ]);
+}
+
 async function child(input: BrandEnrichmentWorkflowInput, runId: string) {
   try {
     await executeChild(BrandEnrichmentWorkflow, {
