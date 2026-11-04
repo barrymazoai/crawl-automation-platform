@@ -17,15 +17,42 @@ import { screenKeywords, verifySelection } from "./keyword-screen.js";
 
 type OcrFacts = ResultFacts<OcrRegistration>;
 
-/** The text of a registration whose result files were verified; read from a local copy or R2. */
+/** One printed line as the OCR read it, with its four corners when the provider gave them. */
+export interface OcrLine {
+  text: string;
+  polygon?: [number, number][];
+}
+/** A verified OCR result: its text and, for results that keep the provider's answer, its lines. */
+export interface OcrReading {
+  text: string;
+  lines: OcrLine[];
+}
+
+/** The reading of a registration whose result files were verified; read from a local copy or R2. */
+async function registeredReading(
+  artifacts: Pick<ArtifactResolver, "resolve">,
+  registration: OcrRegistration,
+  signal: AbortSignal,
+): Promise<OcrReading> {
+  const owner = observationIdentity(registration.input);
+  const resolved = await artifacts.resolve(registration.result, owner, signal);
+  const output = ocrResultKind.parseOutput(registration.input, decodeJson(resolved.bytes));
+  const lines = "rawResponse" in output ? output.rawResponse.lines : [];
+  return {
+    text: output.text,
+    lines: lines.map((line) => ({
+      text: line.text,
+      ...(line.polygon ? { polygon: line.polygon } : {}),
+    })),
+  };
+}
+
 async function registeredText(
   artifacts: Pick<ArtifactResolver, "resolve">,
   registration: OcrRegistration,
   signal: AbortSignal,
 ): Promise<string> {
-  const owner = observationIdentity(registration.input);
-  const resolved = await artifacts.resolve(registration.result, owner, signal);
-  return ocrResultKind.parseOutput(registration.input, decodeJson(resolved.bytes)).text;
+  return (await registeredReading(artifacts, registration, signal)).text;
 }
 
 /** The selection names exactly this OCR operation, image and observation. */
@@ -65,15 +92,20 @@ export class LedgerOcrText {
 
   /** The OCR text behind a keyword selection, after recomputing the selection from it. */
   async verifiedText(selection: KeywordResult, signal: AbortSignal): Promise<string> {
+    return (await this.verifiedOcr(selection, signal)).text;
+  }
+
+  /** The same verified OCR result, with its printed lines' positions. */
+  async verifiedOcr(selection: KeywordResult, signal: AbortSignal): Promise<OcrReading> {
     const saved = await this.deps.registry.read(selection.ocrOperationId);
     if (!saved) {
       throw keywordFailure("SCREEN.UPSTREAM_UNVERIFIED");
     }
     const registration = await this.verified(saved, signal);
     assertSameSource(registration, selection);
-    const text = await registeredText(this.deps.artifacts, registration, signal);
-    verifySelection(selection, text);
-    return text;
+    const reading = await registeredReading(this.deps.artifacts, registration, signal);
+    verifySelection(selection, reading.text);
+    return reading;
   }
 
   private async verified(raw: unknown, signal: AbortSignal): Promise<OcrRegistration> {
@@ -101,15 +133,19 @@ export class RemoteOcrText {
   ) {}
 
   async verifiedText(selection: KeywordResult, signal: AbortSignal): Promise<string> {
+    return (await this.verifiedOcr(selection, signal)).text;
+  }
+
+  async verifiedOcr(selection: KeywordResult, signal: AbortSignal): Promise<OcrReading> {
     const input = await this.intendedInput(selection.ocrOperationId, signal);
     const facts = await this.deps.results.inspectRemote(input, signal);
     if (!facts.artifactDurable || !facts.record) {
       throw keywordFailure("SCREEN.UPSTREAM_UNVERIFIED");
     }
     assertSameSource(facts.record, selection);
-    const text = await registeredText(this.deps.artifacts, facts.record, signal);
-    verifySelection(selection, text);
-    return text;
+    const reading = await registeredReading(this.deps.artifacts, facts.record, signal);
+    verifySelection(selection, reading.text);
+    return reading;
   }
 
   private async intendedInput(operationId: string, signal: AbortSignal): Promise<OcrInput> {

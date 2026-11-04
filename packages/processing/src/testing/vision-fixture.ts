@@ -113,11 +113,14 @@ function visionStores() {
   const local = new MemoryStore();
   const remote = new MemoryStore();
   remote.data.set(image.objectKey, JPEG);
-  const ocr = { verified: true, verifiedText: async () => ocrText(ocr.verified) };
+  const ocr = {
+    verified: true,
+    verifiedOcr: async () => ({ text: await ocrText(ocr.verified), lines: [] }),
+  };
   const evidence = new VisionEvidence({
     local,
     remote,
-    verifyOcr: async () => void (await ocr.verifiedText()),
+    verifyOcr: async () => void (await ocr.verifiedOcr()),
   });
   return {
     local,

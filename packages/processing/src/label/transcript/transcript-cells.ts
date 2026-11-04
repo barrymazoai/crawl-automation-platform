@@ -100,7 +100,7 @@ function valueCells(values: string[]) {
   return { amountCell, dvCell: values[dvAt], amountMarker };
 }
 
-/** A dose the name cell prints itself: "Total Carbohydrate <1g", "240 mcg Folic Acid", "Includes 4 g Added Sugars". */
+/** A dose the name cell prints itself: "Sodium 55mg", "240 mcg Folic Acid", "Includes 4 g Added Sugars". */
 function doseInName(
   nameCell: string,
   amountCell: string | undefined,
@@ -117,7 +117,13 @@ function doseInName(
   if (printed(amountCell)) {
     return null;
   }
-  return split(LEADING_DOSE.exec(nameCell), 2, 1) ?? split(BRACKETED_DOSE.exec(nameCell), 1, 2);
+  // Owner 2026-11-04: Nutrition Facts print the dose after the name ("Sodium 55mg", "Herb Blend 650 mg") with no
+  // amount cell of its own.
+  return (
+    split(LEADING_DOSE.exec(nameCell), 2, 1) ??
+    split(BRACKETED_DOSE.exec(nameCell), 1, 2) ??
+    split(TRAILING_DOSE.exec(nameCell), 1, 2)
+  );
 }
 
 function split(

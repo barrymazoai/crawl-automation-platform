@@ -1,6 +1,7 @@
 import type { LabelImageCandidate } from "@crawl-automation/v3-contracts";
 import { labelValidationErrors } from "../../label/validation-errors.js";
 import { visionFailure } from "../vision-errors.js";
+import { squashAmount } from "./label-amount-position.js";
 import { judgeIngredientPresence } from "./label-ingredient-presence.js";
 import { transcriptCandidate } from "./label-transcript-candidate.js";
 import {
@@ -13,30 +14,10 @@ import { MAX_VISION_ANSWER_BYTES } from "./vision-limits.js";
 
 type Row = NonNullable<LabelImageCandidate["formula"]>["columns"][number]["rows"][number];
 
-/** Units the OCR and the model may print differently for the same amount. */
-const squash = (text: string) =>
-  text
-    .normalize("NFKC")
-    .toLowerCase()
-    .replace(/[µμ]g|\bug\b/g, "mcg")
-    .replace(/[\s,]/g, "");
-const escape = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-
 /** The formula rows that print an amount, with their index in the column. */
 export function dosedRows(candidate: LabelImageCandidate): { index: number; row: Row }[] {
   const rows = candidate.formula?.columns[0]?.rows ?? [];
   return rows.flatMap((row, index) => (row.amount ? [{ index, row }] : []));
-}
-
-/** Rows whose amount the image's OCR text prints as such (never inside a longer number: "20 mg" is not "120 mg"). */
-export function ocrConfirmedRows(candidate: LabelImageCandidate, ocrText: string): number[] {
-  const printed = squash(ocrText);
-  return dosedRows(candidate)
-    .filter(({ row }) => {
-      const amount = squash(row.amount?.text ?? "");
-      return !!amount && new RegExp(`(?<![0-9.])${escape(amount)}`).test(printed);
-    })
-    .map(({ index }) => index);
 }
 
 /** Rows the independent re-read printed with the same amount. */
@@ -53,7 +34,7 @@ export function rereadConfirmedRows(
       answer.rows.some(
         (read) =>
           read.name === row.name.text &&
-          squash(read.amountCells[0] ?? "") === squash(row.amount?.text ?? ""),
+          squashAmount(read.amountCells[0] ?? "") === squashAmount(row.amount?.text ?? ""),
       ),
     )
     .map(({ index }) => index);

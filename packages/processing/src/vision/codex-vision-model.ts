@@ -1,6 +1,7 @@
 import { verifyBytes } from "@crawl-automation/platform";
 import { ImageEvidenceSchema, type ArtifactRef } from "@crawl-automation/v3-contracts";
 import type { CodexConnectionFactory } from "@crawl-automation/platform";
+import type { OcrReading } from "../keywords/ocr-text.js";
 import { CodexClient } from "../codex/codex-client.js";
 import { asVisionCodexError } from "../codex/codex-errors.js";
 import type { CodexModelProfile } from "../codex/codex-profile.js";
@@ -51,14 +52,14 @@ const visionProfile: CodexModelProfile = {
   closed: () => visionFailure("VISION.CODEX_CLOSED", "not_executed"),
 };
 
-/** An image's bytes, alone or with the verified OCR text it was selected by. */
-export type ImageInput = Uint8Array | { bytes: Uint8Array; ocrText: string };
+/** An image's bytes, alone or with the verified OCR reading it was selected by. */
+export type ImageInput = Uint8Array | { bytes: Uint8Array; ocr: OcrReading };
 
 /** The vision model a task is pinned to: its answer format and its setup's fingerprint. */
 export interface VisionModel {
   readonly fingerprint: string;
   readonly extractionProtocol: VisionProtocol;
-  /** The image's bytes, with its verified OCR text, which a transcribing setup checks amounts against. */
+  /** The image's bytes, with its verified OCR reading, which a transcribing setup checks amounts against. */
   interpret(image: ArtifactRef, evidence: ImageInput, signal: AbortSignal): Promise<string>;
   readonly repairEnabled?: boolean;
   readonly repairFingerprint?: string;
@@ -149,7 +150,7 @@ export class CodexVisionModel implements VisionModel {
     signal: AbortSignal,
   ): Promise<string> {
     const bytes = evidence instanceof Uint8Array ? evidence : evidence.bytes;
-    const ocrText = evidence instanceof Uint8Array ? "" : evidence.ocrText;
+    const ocr = evidence instanceof Uint8Array ? { text: "", lines: [] } : evidence.ocr;
     const image = ImageEvidenceSchema.parse(rawImage);
     verifyBytes(image, bytes, MAX_IMAGE_BYTES);
     const run = (request: { prompt: string; outputSchema: object }) =>
@@ -171,7 +172,7 @@ export class CodexVisionModel implements VisionModel {
             run({ prompt: labelRereadPrompt(names), outputSchema: labelRereadOutputSchema }),
           label,
         },
-        ocrText,
+        ocr,
         policy: labelIngredientPresencePolicySchema.parse(
           this.config.ingredientPresencePolicy ?? {},
         ),

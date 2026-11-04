@@ -1,9 +1,10 @@
 import { recordRecovery } from "@crawl-automation/platform";
+import type { OcrReading } from "../keywords/ocr-text.js";
+import { amountPositions } from "./protocol/label-amount-position.js";
 import type { LabelIngredientPresencePolicy } from "./protocol/label-ingredient-presence.js";
 import {
   decodeTranscriptAnswer,
   dosedRows,
-  ocrConfirmedRows,
   transcriptAnswer,
 } from "./protocol/label-transcript-answer.js";
 import { transcriptCandidate } from "./protocol/label-transcript-candidate.js";
@@ -22,22 +23,27 @@ export interface TranscriptCalls {
 const AMOUNT_UNREADABLE = "LABEL.AMOUNT_UNREADABLE";
 
 /**
- * Owner 2026-11-04: copy, parse in code, confirm every printed amount (in the image's OCR text, else by one independent
- * re-read of those rows). Anything else (a copy the rules cannot read, a check that fails, an amount the re-read does
- * not repeat) is read with the label protocol exactly as before, so a reading is never worse than today's.
+ * Owner 2026-11-04: copy, parse in code, confirm every printed amount (the image's OCR prints it on that row, else one
+ * independent re-read of those rows repeats it). Anything else (a copy the rules cannot read, a check that fails, an
+ * amount the OCR prints on another row, an amount the re-read does not repeat) is read with the label protocol exactly
+ * as before, so a reading is never worse than today's.
  */
 export async function transcribedAnswer(input: {
   calls: TranscriptCalls;
-  ocrText: string;
+  ocr: OcrReading;
   policy: Required<LabelIngredientPresencePolicy>;
 }): Promise<string> {
-  const { calls, ocrText, policy } = input;
+  const { calls, ocr, policy } = input;
   const raw = await calls.transcribe();
   const built = parsed(raw, policy);
   if (!built) {
     return calls.label();
   }
-  const ocrConfirmed = ocrConfirmedRows(built.candidate, ocrText);
+  const positions = amountPositions(built.candidate, ocr);
+  if (positions.misplaced.length) {
+    return calls.label();
+  }
+  const ocrConfirmed = positions.confirmed;
   const first = transcriptAnswer({ policy, raw, ocrConfirmed, reread: null });
   const before = decodeTranscriptAnswer(first);
   if (before.status !== "review") {

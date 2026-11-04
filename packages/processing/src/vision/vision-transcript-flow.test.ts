@@ -41,13 +41,31 @@ function calls(transcript: unknown, reread?: unknown) {
 
 const task = { extractionProtocol: "label-extraction/1", operationId: "op-1" } as never;
 
+/** An OCR reading of a printed panel: each name at the left of its row, each amount further right on the same row. */
+function printed(rows: [name: string, amount: string][]) {
+  const at = (left: number, top: number): [number, number][] => [
+    [left, top],
+    [left + 200, top],
+    [left + 200, top + 12],
+    [left, top + 12],
+  ];
+  const lines = rows.flatMap(([name, amount], index) => [
+    { text: name, polygon: at(0, index * 20) },
+    ...(amount ? [{ text: amount, polygon: at(300, index * 20) }] : []),
+  ]);
+  return { text: lines.map((line) => line.text).join("\n"), lines };
+}
+
 describe("transcribed image reading (owner 2026-11-04)", () => {
-  it("keeps the code-parsed copy when the OCR text prints every amount", async () => {
+  it("keeps the code-parsed copy when the OCR prints every amount on its own row", async () => {
     const { fake, made } = calls(wire());
 
     const answer = await transcribedAnswer({
       calls: fake,
-      ocrText: "Vitamin C 90 mg 100% Zinc 11mg 100%",
+      ocr: printed([
+        ["Vitamin C (as ascorbic acid)", "90 mg 100%"],
+        ["Zinc", "11mg 100%"],
+      ]),
       policy,
     });
 
@@ -66,11 +84,38 @@ describe("transcribed image reading (owner 2026-11-04)", () => {
     ]);
   });
 
+  it("takes a dose printed after the name when the row has no amount cell (Nutrition Facts)", async () => {
+    const { fake, made } = calls(wire([row("Sodium 55mg", "2%"), row("Herb Blend 650 mg", "**")]));
+
+    const answer = await transcribedAnswer({
+      calls: fake,
+      ocr: printed([
+        ["Sodium 55mg 2%", ""],
+        ["Herb Blend 650 mg **", ""],
+      ]),
+      policy,
+    });
+
+    expect(made).toEqual(["transcribe"]);
+    const rows = decodeTranscriptAnswer(answer).candidate.formula?.columns[0]?.rows ?? [];
+    expect(rows.map((read) => [read.name.text, read.amount?.text])).toEqual([
+      ["Sodium", "55mg"],
+      ["Herb Blend", "650 mg"],
+    ]);
+  });
+
   it("re-reads only the rows the OCR does not show, and keeps the copy when the re-read agrees", async () => {
     const reread = { rows: [{ name: "Zinc", amountCells: ["11 mg"] }] };
     const { fake, made } = calls(wire(), reread);
 
-    const answer = await transcribedAnswer({ calls: fake, ocrText: "Vitamin C 90 mg", policy });
+    const answer = await transcribedAnswer({
+      calls: fake,
+      ocr: printed([
+        ["Vitamin C (as ascorbic acid)", "90 mg"],
+        ["Zinc", ""],
+      ]),
+      policy,
+    });
 
     expect(made).toEqual(["transcribe", "reread:Zinc"]);
     expect(decodeVisionResult(task, answer).status).toBe("candidate");
@@ -80,7 +125,14 @@ describe("transcribed image reading (owner 2026-11-04)", () => {
     const reread = { rows: [{ name: "Zinc", amountCells: ["11 mg"] }] };
     const { fake, made } = calls(wire(), reread);
 
-    await transcribedAnswer({ calls: fake, ocrText: "Vitamin C 90 mg Zinc 111 mg", policy });
+    await transcribedAnswer({
+      calls: fake,
+      ocr: printed([
+        ["Vitamin C (as ascorbic acid)", "90 mg"],
+        ["Zinc", "111 mg"],
+      ]),
+      policy,
+    });
 
     expect(made).toEqual(["transcribe", "reread:Zinc"]);
   });
@@ -89,7 +141,14 @@ describe("transcribed image reading (owner 2026-11-04)", () => {
     const reread = { rows: [{ name: "Zinc", amountCells: ["1.1 mg"] }] };
     const { fake, made } = calls(wire(), reread);
 
-    const answer = await transcribedAnswer({ calls: fake, ocrText: "Vitamin C 90 mg", policy });
+    const answer = await transcribedAnswer({
+      calls: fake,
+      ocr: printed([
+        ["Vitamin C (as ascorbic acid)", "90 mg"],
+        ["Zinc", ""],
+      ]),
+      policy,
+    });
 
     expect(made).toEqual(["transcribe", "reread:Zinc", "label"]);
     expect(answer).toBe("label-visual-answer/3 envelope");
@@ -102,9 +161,46 @@ describe("transcribed image reading (owner 2026-11-04)", () => {
 
     for (const transcript of [twoColumns, unreadable, twoPanels, { not: "a transcript" }]) {
       const { fake, made } = calls(transcript);
-      await transcribedAnswer({ calls: fake, ocrText: "Vitamin C 90 mg", policy });
+      await transcribedAnswer({ calls: fake, ocr: printed([["Vitamin C", "90 mg"]]), policy });
       expect(made).toEqual(["transcribe", "label"]);
     }
+  });
+
+  it("reads the image with the label protocol, never a re-read, when the OCR prints a copied amount on another row", async () => {
+    // The copy gives Vitamin C 90 mg and Zinc 11 mg; the label prints 11 mg on the Vitamin C row and 90 mg on Zinc's.
+    const reread = { rows: [{ name: "Zinc", amountCells: ["11 mg"] }] };
+    const { fake, made } = calls(wire(), reread);
+
+    const answer = await transcribedAnswer({
+      calls: fake,
+      ocr: printed([
+        ["Vitamin C (as ascorbic acid)", "11 mg"],
+        ["Zinc", "90 mg"],
+      ]),
+      policy,
+    });
+
+    expect(made).toEqual(["transcribe", "label"]);
+    expect(answer).toBe("label-visual-answer/3 envelope");
+  });
+
+  it("an OCR result without line positions confirms no amount: every amount is re-read", async () => {
+    const reread = {
+      rows: [
+        { name: "Vitamin C (as ascorbic acid)", amountCells: ["90 mg"] },
+        { name: "Zinc", amountCells: ["11 mg"] },
+      ],
+    };
+    const { fake, made } = calls(wire(), reread);
+
+    const answer = await transcribedAnswer({
+      calls: fake,
+      ocr: { text: "Vitamin C 90 mg Zinc 11 mg", lines: [] },
+      policy,
+    });
+
+    expect(made).toEqual(["transcribe", "reread:Vitamin C (as ascorbic acid)|Zinc"]);
+    expect(decodeVisionResult(task, answer).status).toBe("candidate");
   });
 
   it("a saved copy whose amount nothing confirmed decodes to a Review, never a guess", () => {

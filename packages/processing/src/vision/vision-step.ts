@@ -11,6 +11,7 @@ import type { ReviewReader, ReviewWriter } from "../step/review-ledger.js";
 import { ProcessingStep, type StepAttempt, type StepFailure } from "../step/processing-step.js";
 import { codexFactOf } from "../codex/codex-errors.js";
 import { recordedFact, type ExecutionFact } from "../step/step-failure.js";
+import type { OcrReading } from "../keywords/ocr-text.js";
 import type { VisionModel } from "./codex-vision-model.js";
 import { claimVisionIntent, keepCallFailure } from "./vision-attempts.js";
 import { visionFailure } from "./vision-errors.js";
@@ -30,8 +31,8 @@ export interface VisionStepDeps {
     | "repairFingerprint"
   >;
   results: VisionResults;
-  /** The OCR text a keyword selection was made from, checked against the selection. */
-  ocrText: { verifiedText(selection: KeywordResult, signal: AbortSignal): Promise<string> };
+  /** The OCR result a keyword selection was made from, checked against the selection. */
+  ocrText: { verifiedOcr(selection: KeywordResult, signal: AbortSignal): Promise<OcrReading> };
   artifacts: Pick<ArtifactResolver, "resolve">;
   local: ObjectStore;
   remote: ObjectStore;
@@ -42,10 +43,10 @@ export interface VisionStepDeps {
 
 export type { VisionOutcome } from "./vision-outcome.js";
 
-/** The selected image's bytes and the verified OCR text it was selected by. */
+/** The selected image's bytes and the verified OCR reading it was selected by. */
 interface VisionEvidence {
   bytes: Uint8Array;
-  ocrText: string;
+  ocr: OcrReading;
 }
 
 const handoffCodes = {
@@ -86,13 +87,13 @@ export class VisionStep extends ProcessingStep<
   protected async readEvidence(task: VisionTask, signal: AbortSignal): Promise<VisionEvidence> {
     const { selection } = task.input;
     try {
-      const ocrText = await this.deps.ocrText.verifiedText(selection, signal);
+      const ocr = await this.deps.ocrText.verifiedOcr(selection, signal);
       const image = await this.deps.artifacts.resolve(
         selection.image,
         selection.observation,
         signal,
       );
-      return { bytes: image.bytes, ocrText };
+      return { bytes: image.bytes, ocr };
     } catch (error) {
       throw visionFailure("VISION.EVIDENCE_UNRESOLVED", "not_executed", error);
     }
