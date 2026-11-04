@@ -78,6 +78,11 @@ export function readCells(raw: TranscriptRow): Cells | null {
   };
 }
 
+/** A printed amount cell ("400 mcg DFE", "1.09 g", "20"): never a %DV. */
+export function isAmountCell(value: string): boolean {
+  return AMOUNT.test(value) && !DAILY_VALUE.test(value);
+}
+
 const isMarker = (value: string) => !!value.trim() && NONE.test(value);
 
 /** Which value cell is the amount and which the %DV, and the amount column's own "--" when it prints none. */

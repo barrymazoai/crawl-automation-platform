@@ -82,17 +82,30 @@ export function decodeIngredientPresenceAnswer(response: string) {
       ...saved.policy,
     },
   });
+  return judgeIngredientPresence(candidate, wire.otherIngredientsBlock);
+}
+
+/**
+ * The checks every answer reporting ingredient presence meets (label-visual-wire/3 and the transcript protocol): the
+ * list is split from its exact body, a closed list needs no whole-label view, and a list beside a reported absence is
+ * a boundary conflict.
+ */
+export function judgeIngredientPresence(
+  candidate: z.infer<typeof LabelImageCandidateSchema>,
+  block: z.infer<typeof LabelImageFieldSchema> | null,
+) {
+  const state = candidate.ingredientDeclaration?.state;
   const codes = new Set<string>();
-  splitOtherIngredients(candidate, wire.otherIngredientsBlock, codes);
+  splitOtherIngredients(candidate, block, codes);
   const closedList = !codes.size && hasClosedIngredientList(candidate);
   if (closedList) {
     candidate.ingredientsComplete = true;
     candidate.issues = candidate.issues.filter((issue) => !isWholeLabelCoverageIssue(issue));
   }
   if (
-    wire.otherIngredientsState !== "present" &&
-    (candidate.otherIngredients || wire.otherIngredientsBlock) &&
-    !(wire.otherIngredientsState === "not_fully_visible" && closedList)
+    state !== "present" &&
+    (candidate.otherIngredients || block) &&
+    !(state === "not_fully_visible" && closedList)
   ) {
     codes.add(labelValidationErrors.code("LABEL.INGREDIENT_BOUNDARY"));
   }

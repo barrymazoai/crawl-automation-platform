@@ -3,7 +3,7 @@ import type { LabelCandidate } from "./label-extraction.js";
 
 /** A visual observation, not invented printed text or a substitute for an unseen panel. */
 export const LabelIngredientDeclarationSchema = z.strictObject({
-  protocol: z.literal("label-visual-wire/3"),
+  protocol: z.enum(["label-visual-wire/3", "label-visual-wire/4"]),
   state: z.enum(["present", "none_printed", "not_fully_visible", "unreadable"]),
   wholeLabelVisible: z.boolean(),
   /** Recorded by the caller, never chosen by the model. */

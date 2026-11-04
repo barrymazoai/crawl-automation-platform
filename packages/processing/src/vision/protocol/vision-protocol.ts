@@ -11,6 +11,7 @@ import {
   isIngredientPresenceAnswer,
 } from "./label-ingredient-presence.js";
 import { decodeRetainedRepair, labelVisionRepairPolicyVersion } from "./label-vision-repair.js";
+import { decodeTranscriptAnswer, isTranscriptAnswer } from "./label-transcript-answer.js";
 import { LabelVisionRepairAnswerSchema } from "./label-vision-repair.js";
 import { isDeepStrictEqual } from "node:util";
 
@@ -66,6 +67,9 @@ export function decodeVisionResult(input: VisionInput, raw: string) {
 function decodeLabelAnswer(protocol: VisionProtocol, raw: string) {
   if (isIngredientPresenceAnswer(raw)) {
     return decodeIngredientPresenceAnswer(raw);
+  }
+  if (isTranscriptAnswer(raw)) {
+    return decodeTranscriptAnswer(raw);
   }
   return protocol === "label-extraction/2" ? decodeLabelImageV2(raw) : decodeLabelImage(raw);
 }

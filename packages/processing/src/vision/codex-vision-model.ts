@@ -19,6 +19,16 @@ import {
   retainIngredientPresenceAnswer,
 } from "./protocol/label-ingredient-presence.js";
 
+import {
+  labelRereadOutputSchema,
+  labelRereadPrompt,
+  labelTranscriptOutputSchema,
+  labelTranscriptPrompt,
+  labelTranscriptProtocol,
+} from "./protocol/label-transcript-wire.js";
+import { transcribedAnswer } from "./vision-transcript-flow.js";
+import { labelIngredientPresencePolicySchema } from "./protocol/label-ingredient-presence.js";
+
 import { CodexVisionConfigSchema, type CodexVisionConfig } from "./codex-vision-config.js";
 export { CodexVisionConfigSchema, type CodexVisionConfig };
 
@@ -30,6 +40,8 @@ const EXTENSIONS: Record<string, string> = {
   "image/webp": "webp",
 };
 
+const imageName = (mediaType: string) => `source.${EXTENSIONS[mediaType] ?? "bin"}`;
+
 /** Vision names Codex failures `VISION.*`, as the previous vision client did. */
 const visionProfile: CodexModelProfile = {
   workspace: "vision-",
@@ -39,11 +51,15 @@ const visionProfile: CodexModelProfile = {
   closed: () => visionFailure("VISION.CODEX_CLOSED", "not_executed"),
 };
 
+/** An image's bytes, alone or with the verified OCR text it was selected by. */
+export type ImageInput = Uint8Array | { bytes: Uint8Array; ocrText: string };
+
 /** The vision model a task is pinned to: its answer format and its setup's fingerprint. */
 export interface VisionModel {
   readonly fingerprint: string;
   readonly extractionProtocol: VisionProtocol;
-  interpret(image: ArtifactRef, bytes: Uint8Array, signal: AbortSignal): Promise<string>;
+  /** The image's bytes, with its verified OCR text, which a transcribing setup checks amounts against. */
+  interpret(image: ArtifactRef, evidence: ImageInput, signal: AbortSignal): Promise<string>;
   readonly repairEnabled?: boolean;
   readonly repairFingerprint?: string;
   repair?(
@@ -127,17 +143,41 @@ export class CodexVisionModel implements VisionModel {
     await this.opened().check(signal);
   }
 
-  async interpret(rawImage: ArtifactRef, bytes: Uint8Array, signal: AbortSignal): Promise<string> {
+  async interpret(
+    rawImage: ArtifactRef,
+    evidence: ImageInput,
+    signal: AbortSignal,
+  ): Promise<string> {
+    const bytes = evidence instanceof Uint8Array ? evidence : evidence.bytes;
+    const ocrText = evidence instanceof Uint8Array ? "" : evidence.ocrText;
     const image = ImageEvidenceSchema.parse(rawImage);
     verifyBytes(image, bytes, MAX_IMAGE_BYTES);
-    const name = `source.${EXTENSIONS[image.mediaType] ?? "bin"}`;
-    const request = this.config.visualProtocol
-      ? { prompt: labelIngredientPresencePrompt, outputSchema: labelIngredientPresenceOutputSchema }
-      : visionRequest(this.extractionProtocol);
-    const raw = await this.opened().run({ ...request, image: { name, bytes } }, signal);
-    return this.config.visualProtocol
-      ? retainIngredientPresenceAnswer(raw, this.config.ingredientPresencePolicy)
-      : raw;
+    const run = (request: { prompt: string; outputSchema: object }) =>
+      this.opened().run({ ...request, image: { name: imageName(image.mediaType), bytes } }, signal);
+    const label = async () =>
+      retainIngredientPresenceAnswer(
+        await run({
+          prompt: labelIngredientPresencePrompt,
+          outputSchema: labelIngredientPresenceOutputSchema,
+        }),
+        this.config.ingredientPresencePolicy,
+      );
+    if (this.config.visualProtocol === labelTranscriptProtocol) {
+      return transcribedAnswer({
+        calls: {
+          transcribe: () =>
+            run({ prompt: labelTranscriptPrompt, outputSchema: labelTranscriptOutputSchema }),
+          reread: (names) =>
+            run({ prompt: labelRereadPrompt(names), outputSchema: labelRereadOutputSchema }),
+          label,
+        },
+        ocrText,
+        policy: labelIngredientPresencePolicySchema.parse(
+          this.config.ingredientPresencePolicy ?? {},
+        ),
+      });
+    }
+    return this.config.visualProtocol ? label() : run(visionRequest(this.extractionProtocol));
   }
 
   async repair(
@@ -151,7 +191,7 @@ export class CodexVisionModel implements VisionModel {
   ): Promise<string> {
     const image = ImageEvidenceSchema.parse(input.image);
     verifyBytes(image, input.bytes, MAX_IMAGE_BYTES);
-    const name = `source.${EXTENSIONS[image.mediaType] ?? "bin"}`;
+    const name = imageName(image.mediaType);
     return (this.repairClient ?? this.opened()).run(
       {
         ...labelVisionRepairRequest(input.original, input.findings),

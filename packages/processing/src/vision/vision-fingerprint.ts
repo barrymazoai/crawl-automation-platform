@@ -17,6 +17,13 @@ import {
   labelIngredientPresencePrompt,
   labelIngredientPresenceOutputSchema,
 } from "./protocol/label-ingredient-presence.js";
+import {
+  labelRereadOutputSchema,
+  labelRereadPrompt,
+  labelTranscriptOutputSchema,
+  labelTranscriptPrompt,
+  labelTranscriptProtocol,
+} from "./protocol/label-transcript-wire.js";
 
 /**
  * The fingerprint of a vision setup. It covers the model settings, the prompt and the answer format, so any change is
@@ -32,9 +39,20 @@ export function visionFingerprint(config: CodexVisionConfig): string {
 }
 
 function presenceFingerprint(config: CodexVisionConfig, common: unknown[]): string {
+  // The transcript setup also asks its re-read and its label-visual-wire/3 fallback, so both are part of it.
+  const transcript =
+    config.visualProtocol === labelTranscriptProtocol
+      ? [
+          labelTranscriptPrompt,
+          labelTranscriptOutputSchema,
+          labelRereadPrompt(["<row>"]),
+          labelRereadOutputSchema,
+        ]
+      : [];
   return hashString(
     JSON.stringify([
-      "codex-vision/4",
+      config.visualProtocol === labelTranscriptProtocol ? "codex-vision/5" : "codex-vision/4",
+      ...transcript,
       ...common,
       config.extractionProtocol,
       config.visualProtocol,

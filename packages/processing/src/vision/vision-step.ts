@@ -42,6 +42,12 @@ export interface VisionStepDeps {
 
 export type { VisionOutcome } from "./vision-outcome.js";
 
+/** The selected image's bytes and the verified OCR text it was selected by. */
+interface VisionEvidence {
+  bytes: Uint8Array;
+  ocrText: string;
+}
+
 const handoffCodes = {
   incomplete: "VISION.HANDOFF_PENDING",
   unknown: "VISION.HANDOFF_UNKNOWN",
@@ -53,7 +59,7 @@ export class VisionStep extends ProcessingStep<
   VisionOutput,
   VisionRecord,
   VisionOutcome,
-  Uint8Array
+  VisionEvidence
 > {
   constructor(private readonly deps: VisionStepDeps) {
     super(deps);
@@ -77,16 +83,16 @@ export class VisionStep extends ProcessingStep<
   }
 
   /** The OCR selection re-checked (never a caller's "matched" flag), then the image's own bytes. */
-  protected async readEvidence(task: VisionTask, signal: AbortSignal): Promise<Uint8Array> {
+  protected async readEvidence(task: VisionTask, signal: AbortSignal): Promise<VisionEvidence> {
     const { selection } = task.input;
     try {
-      await this.deps.ocrText.verifiedText(selection, signal);
+      const ocrText = await this.deps.ocrText.verifiedText(selection, signal);
       const image = await this.deps.artifacts.resolve(
         selection.image,
         selection.observation,
         signal,
       );
-      return image.bytes;
+      return { bytes: image.bytes, ocrText };
     } catch (error) {
       throw visionFailure("VISION.EVIDENCE_UNRESOLVED", "not_executed", error);
     }
@@ -97,9 +103,14 @@ export class VisionStep extends ProcessingStep<
   }
 
   /** The first model call, followed by answer retention and at most one eligible repair turn. */
-  protected async call(attempt: StepAttempt<VisionTask>, image: Uint8Array, signal: AbortSignal) {
+  protected async call(
+    attempt: StepAttempt<VisionTask>,
+    evidence: VisionEvidence,
+    signal: AbortSignal,
+  ) {
     const task = attempt.input;
-    const raw = await this.interpret(task, image, signal);
+    const image = evidence.bytes;
+    const raw = await this.interpret(task, evidence, signal);
     attempt.fact = "executed";
     return finishVisionAnswer({
       task,
@@ -151,11 +162,11 @@ export class VisionStep extends ProcessingStep<
   /** A failed call keeps its facts locally first, so a redelivery reports the same failure. */
   private async interpret(
     task: VisionTask,
-    image: Uint8Array,
+    evidence: VisionEvidence,
     signal: AbortSignal,
   ): Promise<string> {
     try {
-      return await this.deps.model.interpret(task.input.selection.image, image, signal);
+      return await this.deps.model.interpret(task.input.selection.image, evidence, signal);
     } catch (error) {
       await keepCallFailure(this.deps.local, task, error);
       throw error;
