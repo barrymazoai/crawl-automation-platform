@@ -44,7 +44,8 @@ export async function transcribedAnswer(input: {
     return calls.label();
   }
   const ocrConfirmed = positions.confirmed;
-  const first = transcriptAnswer({ policy, raw, ocrConfirmed, reread: null });
+  const ocrLines = ocr.lines.map(({ text, polygon }) => (polygon ? { text, polygon } : { text }));
+  const first = transcriptAnswer({ policy, raw, ocrConfirmed, ocrLines, reread: null });
   const before = decodeTranscriptAnswer(first);
   if (before.status !== "review") {
     return first;
@@ -56,7 +57,7 @@ export async function transcribedAnswer(input: {
     .filter(({ index }) => !ocrConfirmed.includes(index))
     .map(({ row }) => row.name.text);
   const reread = await calls.reread(names);
-  const answer = transcriptAnswer({ policy, raw, ocrConfirmed, reread });
+  const answer = transcriptAnswer({ policy, raw, ocrConfirmed, ocrLines, reread });
   return accepted(answer) ? answer : calls.label();
 }
 

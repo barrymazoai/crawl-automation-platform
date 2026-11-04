@@ -241,6 +241,64 @@ describe("transcribed image reading (owner 2026-11-04)", () => {
     });
   });
 
+  it("keeps the image's OCR lines in the answer it retains", async () => {
+    const { fake } = calls(wire());
+    const ocr = printed([
+      ["Vitamin C (as ascorbic acid)", "90 mg"],
+      ["Zinc", "11 mg"],
+    ]);
+
+    const answer = await transcribedAnswer({ calls: fake, ocr, policy });
+
+    expect(JSON.parse(answer).ocrLines).toEqual(ocr.lines);
+  });
+
+  it("a later decode confirms every amount against the retained OCR lines, never the saved row numbers", () => {
+    // Owner 2026-11-04: a changed parse numbers rows differently, so the row numbers saved with the answer may name
+    // other rows. With OCR lines retained, the decode places each amount afresh.
+    const saved = (ocrConfirmed: number[], rows: [string, string][]) =>
+      JSON.stringify({
+        codec: "label-visual-answer/4",
+        policy,
+        raw: JSON.stringify(wire()),
+        ocrConfirmed,
+        ocrLines: printed(rows).lines,
+        reread: null,
+      });
+
+    const zincNotPrinted = saved(
+      [0, 1],
+      [
+        ["Vitamin C (as ascorbic acid)", "90 mg"],
+        ["Zinc", ""],
+      ],
+    );
+    const bothPrinted = saved(
+      [],
+      [
+        ["Vitamin C (as ascorbic acid)", "90 mg"],
+        ["Zinc", "11 mg"],
+      ],
+    );
+    const swapped = saved(
+      [0, 1],
+      [
+        ["Vitamin C (as ascorbic acid)", "11 mg"],
+        ["Zinc", "90 mg"],
+      ],
+    );
+
+    expect(decodeVisionResult(task, zincNotPrinted)).toMatchObject({
+      status: "review",
+      code: "VISION.LABEL_AMOUNT_UNREADABLE",
+    });
+    expect(decodeVisionResult(task, bothPrinted).status).toBe("candidate");
+    expect(decodeVisionResult(task, swapped)).toMatchObject({
+      status: "review",
+      code: "VISION.LABEL_AMOUNT_UNREADABLE",
+    });
+  });
+
   it("is a setup of its own: its fingerprint differs from label-visual-wire/3", () => {
     const base = {
       settings: { provider: "openai", model: "m", reasoningEffort: "medium" },

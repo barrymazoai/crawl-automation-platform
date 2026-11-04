@@ -74,8 +74,25 @@ export const labelTranscriptAnswerSchema = z.strictObject({
   codec: z.literal("label-visual-answer/4"),
   policy: labelIngredientPresencePolicySchema.required(),
   raw: z.string(),
-  /** Row indices (in the parsed formula) whose amount the image's OCR text prints. */
+  /** Row indices (in the formula as parsed when the answer was made) whose amount the image's OCR prints there. */
   ocrConfirmed: z.array(z.number().int().nonnegative()).max(200),
+  /**
+   * Owner 2026-11-04: the image's OCR lines with their positions. A later decode parses the copy with that day's
+   * rules and confirms each amount against these lines afresh; the row indices above are then not used (a changed
+   * parse numbers the rows differently). Answers made before 2026-11-04 evening carry none and keep their indices.
+   */
+  ocrLines: z
+    .array(
+      z.strictObject({
+        text: z.string().max(2000),
+        polygon: z
+          .array(z.tuple([z.number(), z.number()]))
+          .max(8)
+          .optional(),
+      }),
+    )
+    .max(5000)
+    .optional(),
   reread: z.string().nullable(),
 });
 export type LabelTranscriptAnswer = z.infer<typeof labelTranscriptAnswerSchema>;
