@@ -14,7 +14,12 @@ const SERVINGS = /^servings?\s*per\s*container\s*:?\s*(.*)$/i;
 const SKIP =
   /^(?:supplement|nutrition|drug)\s+facts$|^amount\s*(?:per|\/)\s*serving$|^%\s*(?:dv|daily\s*value)|daily\s+value|not\s+established|calorie\s+diet|^\$\s*\d/i;
 const GROUP_WORD = /\b(?:blend|complex|matrix|formula|proprietary|system)\b/i;
-const IN_NAME_SUGARS = /^includes\s+(\d[\d.]*\s*(?:g|mg))\s+added\s+sugars/i;
+const IN_NAME_SUGARS = /^includes\s+(\d[\d.]*\s*(?:g|mg))\s+added\s+sugars?/i;
+/** "Bacopa … Extract (100mg)": a component printing its dose in brackets after its name, with no amount cell. */
+const BRACKETED_DOSE = /^(.*\S)\s*\((\d[\d,.]*\s*(?:mcg|µg|mg|g|iu))\)$/i;
+/** A column header row ("Ingredient | Amount | DV % *", GNC 2026-11-04): every cell names a column. */
+const HEADER_CELL =
+  /^(?:ingredients?|amount(?:\s*(?:per|\/)\s*serving)?|per\s+serving|%?\s*dv\s*%?|%?\s*daily\s+value)\s*[*†‡]*$/i;
 /** "Total Carbohydrate <1g" over an amount cell printing a bare "0": the name cell carries the dose. */
 const TRAILING_DOSE = /^(.*\S)\s+(<?\s*\d[\d,.]*\s*(?:mcg|µg|mg|g|iu))$/i;
 const BARE_NUMBER = /^\d+$/;
@@ -95,16 +100,19 @@ function doseInName(
   nameCell: string,
   amountCell: string | undefined,
 ): { name: string; amount: string } | null {
-  if (amountCell && BARE_NUMBER.test(amountCell)) {
+  const bare = !!amountCell && BARE_NUMBER.test(amountCell);
+  // "Includes 4g Added Sugars" over a bare "0" cell: the printed words carry the dose (the "0" stays unexplained).
+  const sugars = IN_NAME_SUGARS.exec(nameCell)?.[1];
+  if (sugars && (bare || !printed(amountCell))) {
+    return { name: nameCell, amount: sugars };
+  }
+  if (bare) {
     return split(TRAILING_DOSE.exec(nameCell), 1, 2);
   }
   if (printed(amountCell)) {
     return null;
   }
-  const sugars = IN_NAME_SUGARS.exec(nameCell)?.[1];
-  return (
-    split(LEADING_DOSE.exec(nameCell), 2, 1) ?? (sugars ? { name: nameCell, amount: sugars } : null)
-  );
+  return split(LEADING_DOSE.exec(nameCell), 2, 1) ?? split(BRACKETED_DOSE.exec(nameCell), 1, 2);
 }
 
 function split(
@@ -120,7 +128,12 @@ function split(
 function skipped(raw: TranscriptRow, values: string[]): boolean {
   const [nameCell = ""] = raw.cells;
   const joined = raw.cells.filter(Boolean).join(" ");
-  return SKIP.test(nameCell) || (SKIP.test(joined) && !values.some((value) => AMOUNT.test(value)));
+  const header = raw.cells.filter(Boolean).every((cell) => HEADER_CELL.test(cell));
+  return (
+    header ||
+    SKIP.test(nameCell) ||
+    (SKIP.test(joined) && !values.some((value) => AMOUNT.test(value)))
+  );
 }
 
 /** A cell's printed value; "--", "**", "†" and blanks print none. */

@@ -162,6 +162,82 @@ describe("transcriptAttempt", () => {
     ]);
   });
 
+  it("reads a plain-text <pre> panel line by line (Swanson)", () => {
+    const pre = [
+      "Supplement Facts",
+      "",
+      "Serving Size 1 tablet",
+      "",
+      "Amount Per Serving\t% Daily Value",
+      "Calories 10\t",
+      "Vitamin B-12 (as Cyanocobalamin) 1,000 mcg\t41,667%",
+      "Calcium (as Dibasic Calcium Phosphate) 120 mg\t10%",
+      "",
+      "Other Ingredients: Cellulose Gel, Stearic Acid.",
+      "",
+      "Suggested Use: 1 tablet daily.",
+    ].join("\n");
+    const lines = [
+      "Supplement Facts",
+      "",
+      "Serving Size 1 tablet",
+      "",
+      "Amount Per Serving % Daily Value",
+      "Calories 10",
+      "Vitamin B-12 (as Cyanocobalamin) 1,000 mcg 41,667%",
+      "Calcium (as Dibasic Calcium Phosphate) 120 mg 10%",
+      "",
+      "Other Ingredients: Cellulose Gel, Stearic Acid.",
+    ];
+
+    const { decoded, rows } = attempt(`<pre>${pre}</pre>`, lines);
+
+    expect(decoded?.status).toBe("candidate");
+    expect(rows.map((row) => [row.name, row.amount])).toEqual([
+      ["Calories", "10"],
+      ["Vitamin B-12 (as Cyanocobalamin)", "1,000 mcg"],
+      ["Calcium (as Dibasic Calcium Phosphate)", "120 mg"],
+    ]);
+  });
+
+  it("reads CSS grid rows of <p> cells, not the flex boxes around them (natrol)", () => {
+    const grid = (...cells: string[]) =>
+      `<div class="grid grid-cols-[55%_1fr_1fr]">${cells.map((cell) => `<p class="text-base">${cell}</p>`).join("")}</div>`;
+    const html = `<div class="flex flex-col"><div class="flex flex-col"><h3>Nutrition Facts</h3></div>
+      <div class="flex flex-col">${grid("Biotin", "10,000mcg", "33,333%")}${grid("Calcium", "66mg", "5%")}</div></div>
+      <p><b>Other Ingredients:</b> Cellulose.</p>`;
+    const lines = [
+      "Nutrition Facts",
+      "Amount Per Serving",
+      "%DV",
+      "Biotin",
+      "10,000mcg",
+      "33,333%",
+      "Calcium",
+      "66mg",
+      "5%",
+      "Other Ingredients: Cellulose.",
+    ];
+
+    const { decoded, rows } = attempt(html, lines);
+
+    expect(decoded?.status).toBe("candidate");
+    expect(rows.map((row) => [row.name, row.amount])).toEqual([
+      ["Biotin", "10,000mcg"],
+      ["Calcium", "66mg"],
+    ]);
+  });
+
+  it("never places a value inside a longer number ('10' is not the start of '100 mg')", () => {
+    const pre = "Amount Per Serving\nCalories 10\nZinc 100 mg\n";
+    const lines = ["Amount Per Serving", "Calories", "Zinc 100 mg"];
+
+    const result = attempt(`<pre>${pre}</pre>`, lines);
+
+    expect(result.answer).toBeNull();
+    expect(result.reason).toBe("value not printed after its name: Calories");
+  });
+
   it("leaves the panel to the model when a printed line among the rows is not explained", () => {
     const lines = [...multivitamin.lines];
     lines.splice(11, 0, "Calcium 200 mg");

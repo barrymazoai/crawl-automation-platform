@@ -47,7 +47,14 @@ export function parseTranscriptRows(rows: readonly TranscriptRow[]): ParsedPanel
   for (const row of rows) {
     parser.read(row);
   }
-  return parser.panel;
+  const panel = parser.panel;
+  // A dosed "… Complex" row nothing is listed under ("Citrus Bioflavonoid Complex 60 mg") is one ingredient.
+  panel.rows.forEach((row, index) => {
+    if (row.kind === "blend_total" && !panel.rows.some((other) => other.parentRowIndex === index)) {
+      row.kind = "nutrient";
+    }
+  });
+  return panel;
 }
 
 interface OpenGroup {
@@ -121,6 +128,7 @@ class RowParser {
       amount: cells.amount,
       dailyValue: cells.dailyValue,
       parentRowIndex: null,
+      ...(cells.dvMarker ? { dailyValueMarker: cells.dvMarker } : {}),
     });
     for (const part of parts) {
       this.component(part, blend);

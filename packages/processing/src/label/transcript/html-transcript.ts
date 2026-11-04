@@ -9,6 +9,8 @@ export interface TranscriptRow {
   cells: string[];
   indent: number;
   bold: boolean;
+  /** The table (or grid container) the row belongs to, numbered in page order. */
+  table: number;
 }
 
 export interface HtmlTranscript {
@@ -29,6 +31,16 @@ interface Element {
   querySelectorAll(selector: string): ArrayLike<Element>;
   contains(other: Element): boolean;
   nextElementSibling: Element | null;
+  closest(selector: string): Element | null;
+}
+
+/** Numbers each distinct container in the order first seen. */
+function numbering() {
+  const seen: Element[] = [];
+  return (container: Element | null) => {
+    const at = container ? seen.indexOf(container) : -1;
+    return at >= 0 ? at : seen.push(container as Element) - 1;
+  };
 }
 
 const clean = (text: string | null | undefined) =>
@@ -44,7 +56,7 @@ const MAX_ROWS = 400;
 export function htmlTranscript(html: string): HtmlTranscript | null {
   const { document } = parseHTML(`<!doctype html><html><body>${html}</body></html>`);
   const body = document.body as unknown as Element;
-  const rows = tableRows(body) ?? gridRows(body);
+  const rows = tableRows(body) ?? gridRows(body) ?? preRows(body);
   if (!rows?.length) {
     return null;
   }
@@ -58,6 +70,7 @@ function tableRows(body: Element): TranscriptRow[] | null {
     return null;
   }
   const rows: TranscriptRow[] = [];
+  const tableOf = numbering();
   for (const tr of trs) {
     const cells = Array.from(tr.children).filter((cell) => /^(?:td|th)$/i.test(cell.tagName));
     const texts = cells.map((cell) => clean(cell.textContent));
@@ -71,7 +84,12 @@ function tableRows(body: Element): TranscriptRow[] | null {
           cell.getAttribute("scope") === "colgroup" ||
           tr.parentElement?.tagName.toUpperCase() === "THEAD"),
     );
-    rows.push({ cells: texts, indent: indentOf(cells[0]), bold: header || hasBold(cells[0]) });
+    rows.push({
+      cells: texts,
+      indent: indentOf(cells[0]),
+      bold: header || hasBold(cells[0]),
+      table: tableOf(tr.closest("table")),
+    });
   }
   return rows.length ? rows : null;
 }
@@ -83,6 +101,7 @@ function tableRows(body: Element): TranscriptRow[] | null {
 function gridRows(body: Element): TranscriptRow[] | null {
   const taken: Element[] = [];
   const rows: TranscriptRow[] = [];
+  const gridOf = numbering();
   for (const el of Array.from(body.querySelectorAll("div, li, p, dl"))) {
     const kids = Array.from(el.children);
     if (!isGridRow(el, kids) || taken.some((row) => row.contains(el) || el.contains(row))) {
@@ -94,20 +113,68 @@ function gridRows(body: Element): TranscriptRow[] | null {
     }
     taken.push(el);
     const bold = kids.some((kid) => hasBold(kid)) && !/\d/.test(cells.slice(1).join(""));
-    rows.push({ cells, indent: indentOf(kids[0]), bold });
+    rows.push({ cells, indent: indentOf(kids[0]), bold, table: gridOf(el.parentElement) });
   }
   return rows.length >= 2 ? rows : null;
 }
 
-/** 2-4 column children: column-like class names, or a row class whose children hold no further rows. */
+/**
+ * 2-4 cells that hold no blocks of their own (a container whose children are "flex-col" boxes is not a row), with
+ * column-like class names, or under a row class or a CSS grid row ("grid grid-cols-[55%_1fr_1fr]", natrol 2026-11-04).
+ */
 function isGridRow(el: Element, kids: Element[]): boolean {
-  if (kids.length < 2 || kids.length > 4) {
+  if (kids.length < 2 || kids.length > 4 || kids.some((kid) => kid.querySelector(BLOCK))) {
     return false;
   }
   return (
     kids.every((kid) => COLUMN_CLASS.test(kid.className ?? "")) ||
-    (/row/i.test(el.className ?? "") && kids.every((kid) => !kid.querySelector("div div")))
+    /row|\bgrid\b|grid-cols/i.test(el.className ?? "")
   );
+}
+
+const BLOCK = "div, p, li, ul, ol, table, tr, section";
+
+const AMOUNT_HEADER = /^amount\s+per\s+serving\b/i;
+const SERVING = /^servings?\s*(?:size|per\s+container)\b/i;
+const PRE_UNIT = String.raw`(?:mcg|µg|μg|mg|g|kg|iu|ml|cfu|billion(?:\s+cfu)?|million(?:\s+cfu)?|kcal)`;
+/** "Vitamin B-12 (as Cyanocobalamin) 1,000 mcg": the name, then the amount it ends with. */
+const PRE_AMOUNT = new RegExp(
+  String.raw`^(.*\S)\s+(<?\s*\d[\d,]*(?:\.\d+)?\s*${PRE_UNIT}(?:\s*(?:dfe|rae))?)$`,
+  "i",
+);
+const PRE_CALORIES = /^(calories)\s+(\d[\d,]*)$/i;
+
+/**
+ * A panel printed as plain text (Swanson's <pre>): the serving lines, then from "Amount Per Serving" one row per
+ * line until the first blank line, each line "name amount<TAB>%DV".
+ */
+function preRows(body: Element): TranscriptRow[] | null {
+  const rows: TranscriptRow[] = [];
+  Array.from(body.querySelectorAll("pre")).forEach((pre, table) => {
+    const lines = (pre.textContent ?? "").replace(/\u00a0/g, " ").split(/\r?\n/);
+    const header = lines.findIndex((line) => AMOUNT_HEADER.test(line.trim()));
+    if (header < 0) {
+      return;
+    }
+    for (const line of lines.slice(0, header).filter((text) => SERVING.test(text.trim()))) {
+      rows.push({ cells: [clean(line)], indent: 0, bold: false, table });
+    }
+    const end = lines.findIndex((line, at) => at > header && !line.trim());
+    for (const line of lines.slice(header + 1, end < 0 ? undefined : end)) {
+      rows.push({ cells: preCells(line), indent: preIndent(line), bold: false, table });
+    }
+  });
+  return rows.length ? rows : null;
+}
+
+function preCells(line: string): string[] {
+  const [first = "", ...rest] = line.split("\t").map(clean);
+  const split = PRE_AMOUNT.exec(first) ?? PRE_CALORIES.exec(first);
+  return split?.[1] && split[2] ? [split[1], split[2], ...rest] : [first, ...rest];
+}
+
+function preIndent(line: string): number {
+  return Math.floor((/^[ \t]*/.exec(line)?.[0].length ?? 0) / 2);
 }
 
 function hasBold(el: Element | undefined): boolean {
@@ -144,6 +211,23 @@ function styleIndent(el: Element): number {
 }
 
 function otherIngredients(body: Element): string | null {
+  return preOtherIngredients(body) ?? elementOtherIngredients(body);
+}
+
+/** Swanson's plain-text panel prints "Other Ingredients: …" as one of its lines. */
+function preOtherIngredients(body: Element): string | null {
+  for (const pre of Array.from(body.querySelectorAll("pre"))) {
+    const line = (pre.textContent ?? "").split(/\r?\n/).find((text) => OTHER.test(text.trim()));
+    const rest = line ? clean(line).replace(OTHER, "").trim() : "";
+    if (rest) {
+      return rest;
+    }
+  }
+  return null;
+}
+
+/** The heading's own element ("Other Ingredients: …"), else the element right after it. */
+function elementOtherIngredients(body: Element): string | null {
   for (const el of Array.from(
     body.querySelectorAll("p, div, span, strong, b, h2, h3, h4, h5, h6, dt, li, td, th"),
   )) {
@@ -152,11 +236,8 @@ function otherIngredients(body: Element): string | null {
       continue;
     }
     const rest = own.replace(OTHER, "").trim();
-    if (rest) {
-      return rest;
-    }
     const next = el.nextElementSibling ?? el.parentElement?.nextElementSibling;
-    const text = clean(next?.textContent);
+    const text = rest || clean(next?.textContent);
     if (text) {
       return text;
     }

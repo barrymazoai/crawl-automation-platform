@@ -1,7 +1,7 @@
 import type { TextInput } from "@crawl-automation/v3-contracts";
 import { evidenceLines, type EvidenceLine } from "../../text/protocol/evidence-lines.js";
 import { Anchors, type Anchor } from "./transcript-anchors.js";
-import { htmlTranscript } from "./html-transcript.js";
+import { htmlTranscript, type TranscriptRow } from "./html-transcript.js";
 import {
   parseTranscriptRows,
   splitPrintedList,
@@ -22,11 +22,13 @@ export interface TranscriptAttempt {
   reason: string | null;
 }
 
+/** An ingredient list's heading anywhere in the text ("… not established. Other Ingredients: …", foods' "Ingredients"). */
+const PRINTED_INGREDIENTS = /\b(?:other|inactive)\s+ingredients?\b|^\s*ingredients?\s*(?::|$)/im;
 const ALLERGEN = /\b(?:does\s+not\s+contain|contains\s*:|free\s+of|gluten\s+free|allergen)/i;
 /** Lines a facts panel prints that are no row, dose or ingredient, with the exclusion reason the protocol knows. */
 const EXCLUDED: [RegExp, string][] = [
   [
-    /^(?:supplement|nutrition|drug)\s+facts\b|^amount\s*(?:per|\/)\s*serving\b|^%\s*(?:dv|daily\s*value)\b|^(?:other|inactive)\s+ingredients?\s*:?$|^serving\s*size\b|^servings?\s+per\b/i,
+    /^(?:supplement|nutrition|drug)\s+facts\b|^amount\s*(?:per|\/)\s*serving\b|^(?:ingredients?|amount|per\s+serving|dv\s*%)\s*[*†‡]*$|^%\s*(?:dv|daily\s*value)\b|^(?:other|inactive)\s+ingredients?\s*:?$|^serving\s*size\b|^servings?\s+per\b/i,
     "heading",
   ],
   [/^[*†‡]|daily\s+value|calorie\s+diet|not\s+established/i, "footnote"],
@@ -54,7 +56,7 @@ export function transcriptAttempt(
   html: string,
 ): TranscriptAttempt {
   const transcript = htmlTranscript(html);
-  const panel = transcript ? parseTranscriptRows(transcript.rows) : null;
+  const panel = transcript ? parseTranscriptRows(labelTables(transcript.rows, text)) : null;
   if (!transcript || !panel?.rows.length) {
     return { answer: null, reason: transcript ? "no rows" : "no row structure" };
   }
@@ -64,6 +66,13 @@ export function transcriptAttempt(
     return { answer: null, reason: formula };
   }
   const otherIngredients = other(transcript.otherIngredients, anchors);
+  // A printed ingredient list the copy could not read is never left out: the model reads the panel instead.
+  if (
+    !otherIngredients &&
+    PRINTED_INGREDIENTS.test(text.slice(input.range.start, input.range.end))
+  ) {
+    return { answer: null, reason: "ingredient list not read" };
+  }
   const exclusions = excludedLines(anchors.unused(), anchors.usedRange());
   if (typeof exclusions === "string") {
     return { answer: null, reason: exclusions };
@@ -79,6 +88,23 @@ export function transcriptAttempt(
   });
   return { answer, reason: null };
 }
+
+/**
+ * Only tables the label text prints: a page's other tables (a reviews widget's star rows, dherbs 2026-11-04) are not the
+ * label. A table with any row printed in the text is kept whole, so a row of it the text does not print still sends the
+ * panel to the model.
+ */
+function labelTables(rows: readonly TranscriptRow[], text: string): TranscriptRow[] {
+  const printed = squash(text);
+  const kept = new Set(
+    rows
+      .filter((row) => row.cells[0] && printed.includes(squash(row.cells[0])))
+      .map((row) => row.table),
+  );
+  return rows.filter((row) => kept.has(row.table));
+}
+
+const squash = (value: string) => value.replace(/\s+/g, " ").trim().toLowerCase();
 
 /** The formula with every field anchored, or the reason a field is not printed where the copy says. */
 function anchoredFormula(panel: ParsedPanel, anchors: Anchors) {

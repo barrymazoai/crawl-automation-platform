@@ -42,21 +42,40 @@ export class Anchors {
   }
 
   /**
-   * A row's value cell, printed after its name on a line no other field holds: null when the row has none,
-   * undefined when it is not printed there.
+   * A row's value cell: printed after its name on the same line ("Biotin 10,000 mcg\t33,333%"), else as a whole
+   * later line no other field holds (one cell per line), else inside the name's own line ("240 mcg Folic Acid",
+   * "Includes 4 g Added Sugars"). Null when the row has none, undefined when it is not printed there.
    */
   value(value: string | null, name: Anchor): Anchor | null | undefined {
     if (!value) {
       return null;
     }
-    return this.find(value, name.fromLine, true) ?? this.inLine(value, name) ?? undefined;
+    const wanted = norm(value);
+    const own = this.lines.find((line) => line.id === name.fromLine);
+    return (
+      (own && this.afterName(own, name, wanted)) ??
+      this.wholeLaterLine(name, wanted) ??
+      (own && quoted(own, printedSubstring(own.text, wanted))) ??
+      undefined
+    );
   }
 
-  /** A value printed in the name's own line ("240 mcg Folic Acid", "Includes 4 g Added Sugars"). */
-  private inLine(value: string, name: Anchor): Anchor | null {
-    const line = this.lines.find((candidate) => candidate.id === name.fromLine);
-    const printed = line ? printedSubstring(line.text, norm(value)) : null;
-    return line && printed !== null ? { fromLine: line.id, toLine: line.id, text: printed } : null;
+  private afterName(own: EvidenceLine, name: Anchor, wanted: string): Anchor | null {
+    const nameAt = own.text.toLowerCase().indexOf(name.text.toLowerCase());
+    return nameAt < 0
+      ? null
+      : quoted(own, printedSubstring(own.text.slice(nameAt + name.text.length), wanted));
+  }
+
+  private wholeLaterLine(name: Anchor, wanted: string): Anchor | null {
+    const cell = this.lines.find(
+      (line) => line.id > name.fromLine && !this.used.has(line.id) && norm(line.text) === wanted,
+    );
+    if (!cell) {
+      return null;
+    }
+    this.used.add(cell.id);
+    return quoted(cell, cell.text.trim());
   }
 
   /** Gives a found line back, so it is left out (excluded) rather than quoted. */
@@ -88,19 +107,41 @@ export class Anchors {
   }
 }
 
-/** The printed substring of `line` whose whitespace-normalized, case-folded form equals `wanted`. */
+function quoted(line: EvidenceLine, text: string | null): Anchor | null {
+  return text === null ? null : { fromLine: line.id, toLine: line.id, text };
+}
+
+/**
+ * The printed substring of `line` whose whitespace-normalized, case-folded form equals `wanted`, on word boundaries:
+ * "10" is never the start of "100 mg", "Zinc" never part of "Zincite".
+ */
 function printedSubstring(line: string, wanted: string): string | null {
   const lower = line.toLowerCase();
   const first = wanted.split(" ")[0] ?? "";
   for (let at = lower.indexOf(first); first && at >= 0; at = lower.indexOf(first, at + 1)) {
-    for (let end = at + first.length; end <= line.length; end++) {
-      const normalized = norm(line.slice(at, end));
-      if (normalized === wanted) {
-        return line.slice(at, end).trim();
-      }
-      if (normalized.length > wanted.length) {
-        break;
-      }
+    if (WORD.test(lower[at - 1] ?? "") && WORD.test(first[0] ?? "")) {
+      continue;
+    }
+    const found = spanFrom(line, at, wanted);
+    if (found !== null) {
+      return found;
+    }
+  }
+  return null;
+}
+
+const WORD = /[\p{L}\p{N}]/u;
+
+/** The shortest span starting at `at` that reads as `wanted`, when the next character does not continue a word. */
+function spanFrom(line: string, at: number, wanted: string): string | null {
+  for (let end = at + 1; end <= line.length; end++) {
+    const normalized = norm(line.slice(at, end));
+    if (normalized === wanted) {
+      const continues = WORD.test(line[end] ?? "") && WORD.test(wanted[wanted.length - 1] ?? "");
+      return continues ? null : line.slice(at, end).trim();
+    }
+    if (normalized.length > wanted.length) {
+      return null;
     }
   }
   return null;
