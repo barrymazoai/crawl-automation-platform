@@ -22,6 +22,8 @@ export interface SourceText {
   text: string;
   /** Every artifact the text depends on; each must be durable before the result counts. */
   refs: ArtifactRef[];
+  /** A label-core document's verified original page and its policy, for the transcribe-then-parse path. */
+  page?: { html: string; corePolicy: string };
 }
 
 export interface TextEvidenceDeps {
@@ -96,10 +98,14 @@ export class TextEvidence {
       throw conflict();
     }
     const original = await this.deps.artifacts.resolve(document.source, owner, signal);
-    if (document.producer === "label.core.prepare") {
-      this.assertLabelCore({ document, ref, originalHtml: utf8(original.bytes) });
+    const refs = [ref, document.source];
+    if (document.producer !== "label.core.prepare") {
+      return { text: document.text, refs };
     }
-    return { text: document.text, refs: [ref, document.source] };
+    const html = utf8(original.bytes);
+    this.assertLabelCore({ document, ref, originalHtml: html });
+    const corePolicy = document.corePolicy;
+    return { text: document.text, refs, ...(corePolicy ? { page: { html, corePolicy } } : {}) };
   }
 
   /** The label facts text must be exactly what its policy reads from the source page. */

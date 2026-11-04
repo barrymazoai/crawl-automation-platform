@@ -14,5 +14,12 @@ export const ProcessingSettingsSchema = z.strictObject({
   codex: z.strictObject({ text: z.json(), vision: z.json() }).optional(),
   /** The OCR API on the Windows machine, reached directly over the private network. */
   ocrApi: OcrApiSettingsSchema.optional(),
+  /**
+   * Owner 2026-11-04: label-core policies (e.g. `gnc-label-core/1`) whose facts tables are read in code from the page
+   * before the text model is asked. Absent or empty: every table goes to the model as before.
+   */
+  labelTranscript: z
+    .strictObject({ corePolicies: z.array(z.string().min(1).max(80)).max(20) })
+    .optional(),
 });
 export type ProcessingSettings = z.infer<typeof ProcessingSettingsSchema>;

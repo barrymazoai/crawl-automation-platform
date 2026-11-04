@@ -1,10 +1,10 @@
 import { randomUUID } from "node:crypto";
-import { ArtifactResolver, sha256 } from "@crawl-automation/platform";
+import { ArtifactResolver } from "@crawl-automation/platform";
 import {
-  ArtifactRefSchema,
   TextInputSchema,
   textFingerprint,
   type ArtifactRef,
+  type TextCompatibility,
   type TextRecord,
 } from "@crawl-automation/v3-contracts";
 import { TextEvidence } from "../evidence/text-evidence.js";
@@ -16,10 +16,16 @@ import { TextResults } from "../results/text-results.js";
 import { TextStep } from "../step/text-step.js";
 import { MemoryRegistry, MemoryReviews } from "../../testing/memory-ledgers.js";
 import { MemoryStore } from "../../testing/memory-store.js";
+import {
+  LABEL_CORE_POLICY,
+  LABEL_CORE_PRODUCER,
+  fixtureArtifact,
+  type Owner,
+} from "./text-fixture-artifacts.js";
 
 export const signal = () => new AbortController().signal;
 
-const SUPPORTED = {
+const SUPPORTED: TextCompatibility = {
   schemaVersion: 1 as const,
   module: "codex.text" as const,
   implementationVersion: "text/1",
@@ -53,18 +59,22 @@ export function quotingModel(text: string): TextModel & { calls: number } {
   return model;
 }
 
-type Owner = {
-  schemaVersion: 1;
-  requestId: string;
-  observationId: string;
-  brandId: string;
-  sourceId: string;
-  listingId: string;
-  variantId: null;
+export interface TextFixtureOptions {
+  text?: string;
+  labelCores?: LabelCorePolicies;
+  /** A label-core facts document (label-text/6 task) read from this page; its policy re-derives `text` as is. */
+  labelCore?: { html: string; transcriptPolicies?: readonly string[] };
+}
+
+const LABEL_SUPPORTED: TextCompatibility = {
+  ...SUPPORTED,
+  implementationVersion: "codex-text/3",
+  policyVersion: "label-text/6",
+  resultSchemaVersion: 3,
 };
 
 /** A prepared page-text task with its source in a remote store, and every part of the text step wired up. */
-export function textFixture(options: { text?: string; labelCores?: LabelCorePolicies } = {}) {
+export function textFixture(options: TextFixtureOptions = {}) {
   const text = options.text ?? "Vitamin C 10 mg\nIngredients: water";
   const id = randomUUID();
   const remote = new MemoryStore();
@@ -77,8 +87,18 @@ export function textFixture(options: { text?: string; labelCores?: LabelCorePoli
     listingId: `listing-${id}`,
     variantId: null,
   };
-  const { source, ref } = storeSource({ remote, owner, text });
-  const input = signedTask(owner, ref, text);
+  const core = options.labelCore;
+  const { source, ref } = storeSource({
+    remote,
+    owner,
+    text,
+    ...(core ? { html: core.html } : {}),
+  });
+  const supported = core ? LABEL_SUPPORTED : SUPPORTED;
+  const input = signedTask(owner, ref, { text, supported });
+  const corePolicies = core
+    ? { [LABEL_CORE_POLICY]: { sourceModule: "page.prepare", extract: () => text } }
+    : {};
   return wire({
     text,
     input,
@@ -86,51 +106,43 @@ export function textFixture(options: { text?: string; labelCores?: LabelCorePoli
     remote,
     ref,
     source,
-    labelCores: options.labelCores ?? {},
+    labelCores: { ...corePolicies, ...options.labelCores },
+    supported,
+    transcriptPolicies: core?.transcriptPolicies ?? [],
   });
 }
 
 /** The source page and the prepared document made from it, both in the remote store. */
-function storeSource(parts: { remote: MemoryStore; owner: Owner; text: string }) {
+function storeSource(parts: { remote: MemoryStore; owner: Owner; text: string; html?: string }) {
   const { remote, owner, text } = parts;
-  const artifact = (
-    kind: "source-html" | "result-json",
-    bytes: Uint8Array,
-    suffix: string,
-  ): ArtifactRef =>
-    ArtifactRefSchema.parse({
-      schemaVersion: 1,
-      artifactId: `${suffix}-${owner.observationId}`,
-      observationId: owner.observationId,
-      sourceId: owner.sourceId,
-      listingId: owner.listingId,
-      variantId: null,
-      kind,
-      mediaType: kind === "source-html" ? "text/html" : "application/json",
-      objectKey: `sources/${owner.observationId}/${suffix}`,
-      sha256: sha256(bytes),
-      byteSize: bytes.length,
-      producer: {
-        operationId: `prepare-${owner.observationId}`,
-        module: "page.prepare",
-        implementationVersion: "fixture/1",
-      },
-    });
-  const html = Buffer.from(`<p>${text}</p>`);
-  const source = artifact("source-html", html, "html");
-  const document = { ...owner, producer: "page.prepare", source, pageIndex: null, text };
+  const html = Buffer.from(parts.html ?? `<p>${text}</p>`);
+  const source = fixtureArtifact(owner, "source-html", { bytes: html, suffix: "html" });
+  const prepared = { ...owner, source, pageIndex: null, text };
+  const labelCore = parts.html !== undefined;
+  const document = labelCore
+    ? { ...prepared, producer: "label.core.prepare", corePolicy: LABEL_CORE_POLICY }
+    : { ...prepared, producer: "page.prepare" };
   const documentBytes = Buffer.from(JSON.stringify(document));
-  const ref = artifact("result-json", documentBytes, "document");
+  const ref = fixtureArtifact(owner, "result-json", {
+    bytes: documentBytes,
+    suffix: "document",
+    ...(labelCore ? { producer: LABEL_CORE_PRODUCER } : {}),
+  });
   remote.data.set(source.objectKey, html);
   remote.data.set(ref.objectKey, documentBytes);
   return { source, ref };
 }
 
 /** The text task over the whole document, with its fingerprint. */
-function signedTask(owner: Owner, ref: ArtifactRef, text: string) {
+function signedTask(
+  owner: Owner,
+  ref: ArtifactRef,
+  task: { text: string; supported: TextCompatibility },
+) {
+  const { text, supported } = task;
   const unsigned = {
     ...owner,
-    ...SUPPORTED,
+    ...supported,
     operationId: `text-${owner.observationId}`,
     source: { kind: "prepared" as const, document: ref },
     range: { start: 0, end: text.length },
@@ -149,6 +161,8 @@ function wire(parts: {
   ref: ArtifactRef;
   source: ArtifactRef;
   labelCores: LabelCorePolicies;
+  supported: TextCompatibility;
+  transcriptPolicies: readonly string[];
 }) {
   const cache = { read: async () => null, retain: async () => {} };
   const unusedOcr = {
@@ -169,7 +183,13 @@ function wire(parts: {
   };
   const results = new TextResults(deps);
   const recovery = new TextResultRecovery(results, deps);
-  const model = quotingModel(parts.text);
-  const step = new TextStep({ model, results, reviews, nodeId: "test-node" });
+  const model = Object.assign(quotingModel(parts.text), { supported: parts.supported });
+  const step = new TextStep({
+    model,
+    results,
+    reviews,
+    nodeId: "test-node",
+    transcriptPolicies: parts.transcriptPolicies,
+  });
   return { ...parts, evidence, registry, reviews, results, recovery, model, step, artifacts };
 }

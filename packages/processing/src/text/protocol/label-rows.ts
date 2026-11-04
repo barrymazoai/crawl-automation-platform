@@ -54,10 +54,17 @@ const ROW_CONNECTOR =
 function rowConnector(exclusion: Exclusion, candidate: Candidate): boolean {
   const span = rowSpan(candidate);
   const { start, end } = exclusion.quote;
+  const text = exclusion.quote.text.trim();
   return (
     !!span &&
     start >= span.first &&
     end <= span.last &&
-    ROW_CONNECTOR.test(exclusion.quote.text.trim())
+    (ROW_CONNECTOR.test(text) || EMPTY_CELL_MARKER.test(text))
   );
 }
+
+/**
+ * Owner 2026-11-04 (KAN-253): a cell printed among the Facts rows only to say "nothing here" ("--", "—", "**", "†")
+ * carries no row, dose or ingredient (Fortify's "Lactobacilli Blend: -- --" sub-heading had no other way to pass).
+ */
+const EMPTY_CELL_MARKER = /^(?:-{1,3}|—|–|\*{1,3}|†{1,2}|‡{1,2})$/;

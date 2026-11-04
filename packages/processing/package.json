@@ -19,6 +19,7 @@
     "@crawl-automation/v3-contracts": "workspace:*",
     "htmlparser2": "10.1.0",
     "ipaddr.js": "catalog:",
+    "linkedom": "0.18.13",
     "openapi-fetch": "catalog:",
     "zod": "catalog:"
   },

@@ -23,6 +23,7 @@ import {
 import type { TextResults } from "../results/text-results.js";
 import { admittedInput, assertSafeModel } from "./task-admission.js";
 import { textReview } from "./text-review.js";
+import { transcriptAnswer } from "../../label/transcript/transcript-answer.js";
 
 export interface TextStepDeps {
   model: TextModel;
@@ -31,7 +32,12 @@ export interface TextStepDeps {
   nodeId: string;
   /** "register" writes the ledger; "upload-only" (cloud mode) leaves registration to the receipt step. */
   mode?: "register" | "upload-only";
+  /** Label-core policies whose facts tables are first read in code from the page (transcribe-then-parse). */
+  transcriptPolicies?: readonly string[];
 }
+
+/** The provider recorded for an answer the code read from the page's own table, with no model call. */
+export const TRANSCRIPT_PROVIDER = "label-transcript/1";
 
 /**
  * Owner 2026-10-26: an answer the model cut off at its output limit returned nothing, so the step asks again, at most
@@ -91,6 +97,10 @@ export class TextStep extends ProcessingStep<
     signal: AbortSignal,
   ): Promise<TextOutput> {
     const { input } = attempt;
+    const coded = this.transcribed(input, source);
+    if (coded) {
+      return this.answered(attempt, { ...coded, provider: TRANSCRIPT_PROVIDER });
+    }
     const prompt = textProtocolPrompt(input, source.text);
     const request = {
       operationId: input.operationId,
@@ -105,14 +115,50 @@ export class TextStep extends ProcessingStep<
     attempt.candidate = { schema: "text-raw-response/1", value: { rawResponse: response } };
     await this.deps.results.retainResponse(input, response);
     const candidate = decodeTextResult(input, source.text, response);
+    return this.answered(attempt, { response, provider: this.deps.model.provider, candidate });
+  }
+
+  private async answered(
+    attempt: StepAttempt<TextInput>,
+    answer: { response: string; provider: string; candidate: ReturnType<typeof decodeTextResult> },
+  ): Promise<TextOutput> {
+    const { response, provider, candidate } = answer;
+    if (provider === TRANSCRIPT_PROVIDER) {
+      attempt.fact = "executed";
+      await this.deps.results.retainResponse(attempt.input, response);
+    }
     const output = TextOutputSchema.parse({
-      ...textIdentity(input),
-      provider: this.deps.model.provider,
+      ...textIdentity(attempt.input),
+      provider,
       rawResponse: response,
       candidate,
     });
     attempt.candidate = { schema: "text-output/1", value: output };
     return output;
+  }
+
+  /**
+   * Owner 2026-11-04 (docs/spark/2026-11-04-label-transcribe-then-parse-plan.md): a facts table the page prints as
+   * rows is copied from its HTML and parsed in code, then held to every check a model answer meets. Only an answer
+   * those checks accept is used; any other outcome asks the model exactly as before.
+   */
+  private transcribed(input: TextInput, source: SourceText) {
+    const page = source.page;
+    if (
+      !page ||
+      input.resultSchemaVersion !== 3 ||
+      !this.deps.transcriptPolicies?.includes(page.corePolicy)
+    ) {
+      return null;
+    }
+    try {
+      const response = transcriptAnswer(input, source.text, page.html);
+      return response
+        ? { response, candidate: decodeTextResult(input, source.text, response) }
+        : null;
+    } catch {
+      return null;
+    }
   }
 
   private async interpret(request: Parameters<TextModel["interpret"]>[0], signal: AbortSignal) {

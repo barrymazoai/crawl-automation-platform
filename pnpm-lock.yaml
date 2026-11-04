@@ -706,6 +706,9 @@ importers:
       ipaddr.js:
         specifier: 'catalog:'
         version: 2.5.0
+      linkedom:
+        specifier: 0.18.13
+        version: 0.18.13
       openapi-fetch:
         specifier: 'catalog:'
         version: 0.17.0

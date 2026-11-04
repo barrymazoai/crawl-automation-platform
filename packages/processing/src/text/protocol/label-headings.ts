@@ -12,7 +12,8 @@ const HEADING = new RegExp(
   "i",
 );
 const COLUMN =
-  String.raw`(?:(?:amt|amounts?)(?:\s+per\s+serving)?|composition|nutrient|ingredients?|per\s+serving|` +
+  // "Amount/Serving" (naturesway.com, KAN-253 2026-11-04) is the same column header as "Amount Per Serving".
+  String.raw`(?:(?:amt|amounts?)(?:\s*(?:per|\/)\s*serving)?|composition|nutrient|ingredients?|per\s+serving|` +
   String.raw`%\s*dv|dv\s*%|(?:%\s*)?daily\s+value)`;
 const SYMBOLS = String.raw`[*+†‡§¶•■|/\s]`;
 const TABLE_HEADING = new RegExp(

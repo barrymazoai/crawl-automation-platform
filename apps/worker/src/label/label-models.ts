@@ -68,7 +68,13 @@ export function labelModels(stores: LabelStores): LabelModels {
   const ocrStep = (verifiedFailures = false) => (verifiedFailures ? verifiedOcr() : legacyOcr());
   const textStep = once(async () => {
     const model = measuredProvider(await clients.text(), "interpret", "model-text");
-    return new TextStep({ model, results: stores.textResults, reviews, nodeId: settings.nodeId });
+    return new TextStep({
+      model,
+      results: stores.textResults,
+      reviews,
+      nodeId: settings.nodeId,
+      transcriptPolicies: settings.labelTranscript?.corePolicies ?? [],
+    });
   });
   const visionStep = once(async () => {
     const model = measuredProvider(await clients.vision(), "interpret", "model-image");

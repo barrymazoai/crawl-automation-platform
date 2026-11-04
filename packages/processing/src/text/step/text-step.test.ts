@@ -2,7 +2,7 @@ import { storageErrors } from "@crawl-automation/platform";
 import { CodexError } from "@crawl-automation/platform";
 import { describe, expect, it } from "vitest";
 import { signal, textFixture } from "../testing/text-fixture.js";
-import { TextStep } from "./text-step.js";
+import { TRANSCRIPT_PROVIDER, TextStep } from "./text-step.js";
 
 describe("TextStep", () => {
   it("calls the model once, stores the result in R2 and registers it", async () => {
@@ -173,5 +173,64 @@ describe("TextStep", () => {
     const review = given.reviews.records.get(outcome.status === "review" ? outcome.reviewId : "");
     expect(review?.failure).toMatchObject({ executionFact: "unknown", blockedBy: null });
     expect(given.model.calls).toBe(0);
+  });
+});
+
+describe("TextStep transcribe-then-parse (owner 2026-11-04)", () => {
+  const row = (...cells: string[]) =>
+    `<div class="row">${cells.map((cell) => `<div class="col">${cell}</div>`).join("")}</div>`;
+  const html = [
+    row("Vitamin C (ascorbic acid)", "90 mg", "100%"),
+    row("Zinc (as zinc citrate)", "11 mg", "100%"),
+    "<h4>Other Ingredients</h4><p>cellulose, silica</p>",
+  ].join("");
+  const lines = [
+    "Supplement Facts",
+    "Vitamin C (ascorbic acid)",
+    "90 mg",
+    "100%",
+    "Zinc (as zinc citrate)",
+    "11 mg",
+    "100%",
+    "Other Ingredients",
+    "cellulose, silica",
+  ];
+
+  it("a table its policy reads in code is answered without the model, every quote checked", async () => {
+    const given = textFixture({
+      text: lines.join("\n"),
+      labelCore: { html, transcriptPolicies: ["dtc-label-core/5"] },
+    });
+
+    const outcome = await given.step.run(given.input, signal());
+
+    expect(outcome.status).toBe("registered");
+    expect(given.model.calls).toBe(0);
+    const stored = [...given.remote.data.values()].map((bytes) => Buffer.from(bytes).toString());
+    const output = stored.find((text) => text.includes(`"provider":"${TRANSCRIPT_PROVIDER}"`));
+    expect(JSON.parse(output ?? "{}")).toMatchObject({
+      provider: TRANSCRIPT_PROVIDER,
+      candidate: { formula: { columns: [{ rows: [{ kind: "nutrient" }, { kind: "nutrient" }] }] } },
+    });
+  });
+
+  it("the model reads the table when its policy is not switched on", async () => {
+    const given = textFixture({ text: lines.join("\n"), labelCore: { html } });
+
+    await given.step.run(given.input, signal());
+
+    expect(given.model.calls).toBe(1);
+  });
+
+  it("a code answer the checks do not accept goes to the model as before", async () => {
+    const text = [...lines.slice(0, 4), "Calcium 200 mg", ...lines.slice(4)].join("\n");
+    const given = textFixture({
+      text,
+      labelCore: { html, transcriptPolicies: ["dtc-label-core/5"] },
+    });
+
+    await given.step.run(given.input, signal());
+
+    expect(given.model.calls).toBe(1);
   });
 });
