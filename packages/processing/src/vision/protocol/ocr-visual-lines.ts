@@ -13,8 +13,9 @@ export interface Box {
  */
 export interface Visual {
   text: string;
-  /** Where each character sits along the line. */
+  /** Where each character sits along the line, and the height of its own piece's middle. */
   xs: number[];
+  ys: number[];
   /** Where each piece starts in the text, and its box. */
   pieces: { at: number; box: Box }[];
   top: number;
@@ -32,12 +33,20 @@ function box(polygon: readonly (readonly [number, number])[]): Box {
   };
 }
 
+/** A box this many times taller than the image's usual line is rotated text (a side panel), never a row's line. */
+const TALL = 2.5;
+
 /** The OCR boxes grouped into printed lines (heights overlapping by half), each read left to right. */
 export function visualLines(lines: readonly OcrLine[]): Visual[] {
-  const boxes = lines
-    .flatMap((line) =>
-      line.polygon?.length === 4 ? [{ text: line.text, box: box(line.polygon) }] : [],
-    )
+  const all = lines.flatMap((line) =>
+    line.polygon?.length === 4 ? [{ text: line.text, box: box(line.polygon) }] : [],
+  );
+  const heights = all
+    .map((piece) => piece.box.bottom - piece.box.top)
+    .sort((low, high) => low - high);
+  const usual = heights[Math.floor(heights.length / 2)] ?? 0;
+  const boxes = all
+    .filter((piece) => piece.box.bottom - piece.box.top <= TALL * usual)
     .sort((upper, lower) => upper.box.top + upper.box.bottom - lower.box.top - lower.box.bottom);
   const groups: { top: number; bottom: number; members: typeof boxes }[] = [];
   for (const piece of boxes) {
@@ -58,17 +67,19 @@ export function visualLines(lines: readonly OcrLine[]): Visual[] {
 }
 
 function joined(members: readonly { text: string; box: Box }[]): Visual {
-  const line: Visual = { text: "", xs: [], pieces: [], top: Infinity, bottom: -Infinity };
+  const line: Visual = { text: "", xs: [], ys: [], pieces: [], top: Infinity, bottom: -Infinity };
   for (const { text, box: at } of members) {
     if (line.text) {
       line.text += " ";
       line.xs.push(at.left);
+      line.ys.push((at.top + at.bottom) / 2);
     }
     line.pieces.push({ at: line.text.length, box: at });
     const width = at.right - at.left;
-    [...text].forEach((_, index) =>
-      line.xs.push(at.left + (width * (index + 0.5)) / Math.max(1, text.length)),
-    );
+    [...text].forEach((_, index) => {
+      line.xs.push(at.left + (width * (index + 0.5)) / Math.max(1, text.length));
+      line.ys.push((at.top + at.bottom) / 2);
+    });
     line.text += [...text].join("");
     line.top = Math.min(line.top, at.top);
     line.bottom = Math.max(line.bottom, at.bottom);
