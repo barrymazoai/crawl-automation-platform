@@ -30,6 +30,7 @@ it.each([1, 2])(
         // KAN-253: this run's own scans; the brand's own site names products by their catalog's brand.
         scanIds: [test.task.scanId],
         brandNames: { [test.task.sourceId]: test.task.name },
+        sourceOrder: [test.task.sourceId],
       });
     }
   },

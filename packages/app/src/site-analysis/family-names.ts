@@ -19,6 +19,12 @@ export function familyName(name: string, family: readonly string[]): string | nu
   return close.length === 1 ? (close[0] ?? null) : null;
 }
 
+/** The same name after normalizing case, accents, apostrophes and punctuation ("Nature’s Way" = "Nature's Way"). */
+export function sameFamilyName(left: string, right: string): boolean {
+  const leftWords = words(left);
+  return leftWords.length > 0 && same(leftWords, words(right));
+}
+
 function words(name: string): string[] {
   return name
     .normalize("NFKD")

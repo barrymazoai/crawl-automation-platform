@@ -86,6 +86,8 @@ export interface ProductDeliveryRequest {
   scanIds?: string[];
   /** Source ID → the brand its products are sold under, sent as `brandName` instead of the page vendor. */
   brandNames?: Record<string, string>;
+  /** Sources whose copy of a product listed by several of them is delivered first (sub-brands before the family). */
+  sourceOrder?: string[];
 }
 
 export interface ProductDeliveryResult {

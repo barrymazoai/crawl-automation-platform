@@ -23,6 +23,7 @@ it("waits for the brand's queued products, then delivers its sources once while 
       ingestRunId: `brand-enrichment-${test.runId}`,
       scanIds: [test.task.scanId],
       brandNames: { [test.task.sourceId]: test.task.name },
+      sourceOrder: [test.task.sourceId],
     },
     signal,
   );

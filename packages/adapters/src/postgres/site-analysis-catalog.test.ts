@@ -65,7 +65,7 @@ it("applies and queues only the selected collection using the existing per-brand
   vi.mocked(insertAnalyzedSettings).mockClear();
   const analysisId = randomUUID();
   const result = await applySiteAnalysis(test.tx, { analysisId, catalogUrl, enqueue: true });
-  await enqueueAnalyzedBrands(test.tx, analysisId, result);
+  await enqueueAnalyzedBrands(test.tx, { analysisId }, result);
   expect(result.created).toEqual([
     { name: "Absorbed", brandId: test.brandId, sourceId: test.sourceId },
   ]);
@@ -119,7 +119,7 @@ it("does not fall back to the whole store when the analysis has no matching coll
   const test = fixture([brand("Owner", "https://owner.example/collections/all")]);
   const analysisId = randomUUID();
   const result = await applySiteAnalysis(test.tx, { analysisId, catalogUrl, enqueue: true });
-  await enqueueAnalyzedBrands(test.tx, analysisId, result);
+  await enqueueAnalyzedBrands(test.tx, { analysisId }, result);
   expect(result.created).toEqual([]);
   expect(result.matched).toEqual([]);
   expect(result.tasks).toEqual([]);

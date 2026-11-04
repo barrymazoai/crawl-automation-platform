@@ -1,17 +1,21 @@
-import type { SiteAnalysisApplyResult } from "@crawl-automation/app";
+import { sameFamilyName, type SiteAnalysisApplyResult } from "@crawl-automation/app";
 import type { Queryable } from "@crawl-automation/platform";
 import { z } from "zod";
 
 /** Runs inside the source-apply transaction. Analysis/source identity also deduplicates new request IDs. */
 export async function enqueueAnalyzedBrands(
   tx: Queryable,
-  analysisId: string,
+  input: { analysisId: string; ownerBrand?: string | undefined },
   result: SiteAnalysisApplyResult,
 ) {
+  const { analysisId, ownerBrand } = input;
   result.tasks = [];
   result.notQueued = [];
-  const sources = [...result.created, ...result.matched].sort((left, right) =>
-    left.name.localeCompare(right.name),
+  // KAN-253: on a brand family's own site its whole-store catalog scans after every sub-brand catalog, so the
+  // scan admission can leave the sub-brands' products to them (one capture per product).
+  const last = (name: string) => (ownerBrand && sameFamilyName(name, ownerBrand) ? 1 : 0);
+  const sources = [...result.created, ...result.matched].sort(
+    (left, right) => last(left.name) - last(right.name) || left.name.localeCompare(right.name),
   );
   for (const source of sources) {
     const scanId = await enqueueSource(tx, { analysisId, sourceId: source.sourceId });

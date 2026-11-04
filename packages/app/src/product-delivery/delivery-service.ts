@@ -76,6 +76,7 @@ export class ProductDeliveryService implements ProductDelivery {
   ) {
     const mapped: MappedDelivery[] = [];
     const seen = new Set<string>();
+    products = preferredFirst(products, request.sourceOrder);
     for (const product of products) {
       try {
         const value = mapDeliveryProduct(product, request);
@@ -133,4 +134,19 @@ export class ProductDeliveryService implements ProductDelivery {
       }
     }
   }
+}
+
+/**
+ * KAN-253: a product listed by a sub-brand's catalog and by its family's whole-store catalog is delivered once, from
+ * the sub-brand's catalog; the stable sort keeps every other order as the reader returned it.
+ */
+function preferredFirst(products: DeliveryProduct[], order: readonly string[] | undefined) {
+  if (!order?.length) {
+    return products;
+  }
+  const rank = (sourceId: string) => {
+    const index = order.indexOf(sourceId);
+    return index === -1 ? order.length : index;
+  };
+  return [...products].sort((left, right) => rank(left.sourceId) - rank(right.sourceId));
 }

@@ -88,7 +88,11 @@ export class PostgresSiteAnalyses implements SiteAnalysisStore {
             needsReview = state === "needs-review";
           });
           if (input.enqueue) {
-            await enqueueAnalyzedBrands(tx, input.analysisId, result);
+            await enqueueAnalyzedBrands(
+              tx,
+              { analysisId: input.analysisId, ownerBrand: input.family?.ownerBrand },
+              result,
+            );
           }
           applied = true;
           return result;

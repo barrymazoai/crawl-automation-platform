@@ -1,7 +1,7 @@
 import type { SiteAnalysisApplyResult } from "../site-analysis/site-analysis-service.js";
 import type { ProductDelivery, ProductDeliveryResult } from "./task-ports.js";
 import { productDeliveryGroups } from "./product-delivery-groups.js";
-import { catalogBrandNames, type OwnSiteFamily } from "./family-catalogs.js";
+import { catalogBrandNames, catalogOrder, type OwnSiteFamily } from "./family-catalogs.js";
 
 export interface BrandDeliveryInput {
   runId: string;
@@ -35,6 +35,7 @@ export async function deliverBrandProducts(
   const groups = productDeliveryGroups(sourceIds, await delivery.catalogs(sourceIds, signal));
   const tasks = input.applied.tasks ?? [];
   const brandNames = input.ownSite ? catalogBrandNames(tasks, input.ownSite) : undefined;
+  const sourceOrder = input.ownSite ? catalogOrder(tasks, input.ownSite) : undefined;
   const result: ProductDeliveryResult = { captured: 0, review: 0, delivered: 0, refused: [] };
   for (const group of groups) {
     signal.throwIfAborted();
@@ -45,6 +46,7 @@ export async function deliverBrandProducts(
         ingestRunId: `brand-enrichment-${input.runId}${groups.length > 1 ? `-${group.siteKey}` : ""}`,
         ...ownScans(tasks, group.sourceIds),
         ...(brandNames ? { brandNames } : {}),
+        ...(sourceOrder ? { sourceOrder } : {}),
       },
       signal,
     );

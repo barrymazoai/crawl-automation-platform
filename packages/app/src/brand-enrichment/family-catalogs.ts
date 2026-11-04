@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { BrandEnrichmentSummarySchema } from "@crawl-automation/v3-contracts";
-import { familyName } from "../site-analysis/family-names.js";
+import { familyName, sameFamilyName } from "../site-analysis/family-names.js";
 import type { SiteAnalysisService } from "../site-analysis/site-analysis-service.js";
 import type { BrandEnrichmentRuns } from "./ports.js";
 import { saveOutput } from "./run-records.js";
@@ -34,6 +34,20 @@ export async function ownSiteFamily(
       ? summary.data.subBrands.flatMap((brand) => (brand.companyId ? [brand.name] : []))
       : [];
   return { ownerBrand: run.brandName, subBrands };
+}
+
+/** Whether a catalog is the family's own (whole-store) catalog rather than one of its sub-brands'. */
+export function isOwnerCatalog(name: string, family: Pick<OwnSiteFamily, "ownerBrand">): boolean {
+  return sameFamilyName(name, family.ownerBrand);
+}
+
+/** Sub-brand catalogs first, the family's own catalog last (KAN-253: one delivery per product, its sub-brand's). */
+export function catalogOrder(
+  tasks: readonly { sourceId: string; name: string }[],
+  family: Pick<OwnSiteFamily, "ownerBrand">,
+): string[] {
+  const owner = (task: { name: string }) => (isOwnerCatalog(task.name, family) ? 1 : 0);
+  return [...tasks].sort((left, right) => owner(left) - owner(right)).map((task) => task.sourceId);
 }
 
 /** The brand each delivered source's products are sold under, in the family's own spelling. */
