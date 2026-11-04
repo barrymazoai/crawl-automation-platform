@@ -184,6 +184,29 @@ describe("transcribed image reading (owner 2026-11-04)", () => {
     expect(answer).toBe("label-visual-answer/3 envelope");
   });
 
+  it("reads a printed line the OCR split into pieces ('0.65' | 'mg', 'Vitamin' | 'C')", async () => {
+    const { fake, made } = calls(wire());
+    const box = (left: number, top: number, width: number): [number, number][] => [
+      [left, top],
+      [left + width, top],
+      [left + width, top + 12],
+      [left, top + 12],
+    ];
+    const lines = [
+      { text: "Vitamin", polygon: box(0, 0, 60) },
+      { text: "C (as ascorbic acid)", polygon: box(64, 1, 140) },
+      { text: "90", polygon: box(300, 0, 20) },
+      { text: "mg", polygon: box(324, 1, 20) },
+      { text: "Zinc", polygon: box(0, 20, 40) },
+      { text: "11", polygon: box(300, 21, 20) },
+      { text: "mg", polygon: box(324, 20, 20) },
+    ];
+
+    await transcribedAnswer({ calls: fake, ocr: { text: "", lines }, policy });
+
+    expect(made).toEqual(["transcribe"]);
+  });
+
   it("an OCR result without line positions confirms no amount: every amount is re-read", async () => {
     const reread = {
       rows: [

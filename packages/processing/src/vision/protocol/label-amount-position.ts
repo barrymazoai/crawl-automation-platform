@@ -1,5 +1,6 @@
 import type { LabelImageCandidate } from "@crawl-automation/v3-contracts";
-import type { OcrLine, OcrReading } from "../../keywords/ocr-text.js";
+import type { OcrReading } from "../../keywords/ocr-text.js";
+import { visualLines, type Box, type Visual } from "./ocr-visual-lines.js";
 
 type Row = NonNullable<LabelImageCandidate["formula"]>["columns"][number]["rows"][number];
 
@@ -22,15 +23,14 @@ const letters = (text: string) =>
     .replace(/[^a-z0-9]/g, "");
 /** Enough of a row's name to find its printed line, short enough to survive a wrapped line. */
 const NAME_PREFIX = 12;
+/** A wrapped first line shorter than this never stands for a name. */
+const MIN_WRAPPED = 8;
+/** A name this far right of another (share of the panel's width) starts the next printed column. */
+const NEXT_COLUMN_SHARE = 0.3;
 
-interface Box {
-  left: number;
-  right: number;
-  top: number;
-  bottom: number;
-}
-interface Placed {
-  line: OcrLine & { polygon: [number, number][] };
+interface Anchor {
+  line: Visual;
+  piece: number;
   box: Box;
 }
 interface Dose {
@@ -38,6 +38,7 @@ interface Dose {
   x: number;
   y: number;
 }
+type InBand = (x: number, y: number) => boolean;
 
 /** What the OCR's positions say about each printed amount of the copied panel. */
 export interface AmountPositions {
@@ -58,22 +59,23 @@ export interface AmountPositions {
  */
 export function amountPositions(candidate: LabelImageCandidate, ocr: OcrReading): AmountPositions {
   const rows = candidate.formula?.columns[0]?.rows ?? [];
-  const placed = placeNames(rows, ocr.lines);
-  const doses = ocr.lines.flatMap((line) =>
-    line.polygon ? lineDoses(line.text, box(line.polygon)) : [],
-  );
+  const lines = visualLines(ocr.lines);
+  const bands = rowBands(rows, lines);
+  const doses = lines.flatMap((line) => numbersOn(line, DOSE));
   const copied = copiedDoses(rows);
   const result: AmountPositions = { confirmed: [], misplaced: [] };
   rows.forEach((row, index) => {
-    const at = placed.get(index);
-    if (!row.amount || !at) {
+    const band = bands.get(index);
+    if (!row.amount || !band) {
       return;
     }
-    const inBand = (x: number, y: number) =>
-      y >= at.band.top && y < at.band.bottom && x >= at.band.left && x < at.band.right;
+    const inBand: InBand = (x, y) =>
+      y >= band.top && y < band.bottom && x >= band.left && x < band.right;
     const key = firstDose(row.amount.text);
     if (!key) {
-      if (bareNumberInBand(row.amount.text, ocr.lines, inBand)) {
+      // A unitless amount (Calories "130"): the number printed in the row's band.
+      const bare = new RegExp(`(?<![\\d.])${escape(row.amount.text.trim())}(?![\\d.])`, "g");
+      if (lines.some((line) => numbersOn(line, bare).some((dose) => inBand(dose.x, dose.y)))) {
         result.confirmed.push(index);
       }
       return;
@@ -100,76 +102,78 @@ function copiedDoses(rows: readonly Row[]): Map<string, number[]> {
   return copied;
 }
 
-/** A unitless amount (Calories "130"): the number printed on the row's own lines. */
-function bareNumberInBand(
-  amount: string,
-  lines: readonly OcrLine[],
-  inBand: (x: number, y: number) => boolean,
-): boolean {
-  const bare = new RegExp(`(?<![0-9.])${escape(squashAmount(amount))}(?![0-9.])`);
-  return lines.some(
-    (line) => line.polygon && inBandLine(line, inBand) && bare.test(squashAmount(line.text)),
-  );
-}
-
-function inBandLine(line: OcrLine, inBand: (x: number, y: number) => boolean): boolean {
-  const at = box(line.polygon ?? []);
-  return inBand(at.right, (at.top + at.bottom) / 2);
-}
-
 /** The first dose an amount prints, squashed ("10 mcg (400 IU)" is "10mcg"). */
 function firstDose(text: string): string | null {
   const match = text.match(new RegExp(DOSE.source, "i"));
   return match ? squashAmount(match[0]) : null;
 }
 
-function box(polygon: readonly (readonly [number, number])[]): Box {
-  const xs = polygon.map(([x]) => x);
-  const ys = polygon.map(([, y]) => y);
-  return {
-    left: Math.min(...xs),
-    right: Math.max(...xs),
-    top: Math.min(...ys),
-    bottom: Math.max(...ys),
-  };
-}
-
-/** Each dose a line prints, placed where it sits along the line. */
-function lineDoses(text: string, at: Box): Dose[] {
-  const width = at.right - at.left;
-  return [...text.matchAll(DOSE)].map((match) => ({
+/** Each match of a number pattern on a printed line, placed where it sits along the line. */
+function numbersOn(line: Visual, pattern: RegExp): Dose[] {
+  return [...line.text.matchAll(pattern)].map((match) => ({
     key: squashAmount(match[0]),
-    x: at.left + (width * ((match.index ?? 0) + match[0].length / 2)) / Math.max(1, text.length),
-    y: (at.top + at.bottom) / 2,
+    x: line.xs[(match.index ?? 0) + Math.floor(match[0].length / 2)] ?? line.xs.at(-1) ?? 0,
+    y: (line.top + line.bottom) / 2,
   }));
 }
 
-/** Each copied row's printed name line, with the band its own values sit in. */
-function placeNames(rows: readonly Row[], lines: readonly OcrLine[]) {
-  const found = nameLines(rows, lines);
-  const named = [...found.values()];
-  const bands = new Map<number, { band: Box }>();
-  for (const [index, own] of found) {
-    bands.set(index, { band: band(own, named) });
+/** Each copied row's band: from its name down to the next name in its column, left of the next column. */
+function rowBands(rows: readonly Row[], lines: readonly Visual[]): Map<number, Box> {
+  const anchors = nameAnchors(rows, lines);
+  const all = [...anchors.values()];
+  const bands = new Map<number, Box>();
+  if (!all.length) {
+    return bands;
+  }
+  const width = Math.max(
+    1,
+    Math.max(...lines.map((line) => line.xs.at(-1) ?? 0)) -
+      Math.min(...all.map((anchor) => anchor.box.left)),
+  );
+  for (const [index, own] of anchors) {
+    bands.set(index, band(own, all, width));
   }
   return bands;
 }
 
-/** The first unused printed line, top down, that starts with each row's name. */
-function nameLines(rows: readonly Row[], lines: readonly OcrLine[]): Map<number, Placed> {
-  const positioned = lines.flatMap((line): Placed[] =>
-    line.polygon?.length === 4 ? [{ line: line as Placed["line"], box: box(line.polygon) }] : [],
+function band(own: Anchor, all: readonly Anchor[], width: number): Box {
+  const height = Math.max(1, own.line.bottom - own.line.top);
+  const nextColumn = all
+    .filter((other) => other.box.left - own.box.left > NEXT_COLUMN_SHARE * width)
+    .map((other) => other.box.left);
+  const right = nextColumn.length ? Math.min(...nextColumn) : Number.POSITIVE_INFINITY;
+  const below = all
+    .filter((other) => other.box.left >= own.box.left - height * 4 && other.box.left < right)
+    .map((other) => other.line.top)
+    .filter((top) => top > own.line.top + height / 3);
+  return {
+    left: own.box.left,
+    right,
+    top: own.line.top,
+    bottom: below.length ? Math.min(...below) : own.line.bottom + 2 * height,
+  };
+}
+
+/** The first unused printed line, top down, where each row's name starts at one of the OCR's pieces. */
+function nameAnchors(rows: readonly Row[], lines: readonly Visual[]): Map<number, Anchor> {
+  const starts = lines.flatMap((line) =>
+    line.pieces.map((piece, at) => ({
+      line,
+      piece: at,
+      box: piece.box,
+      text: line.text.slice(piece.at),
+    })),
   );
-  const used = new Set<Placed>();
-  const found = new Map<number, Placed>();
+  const used = new Set<(typeof starts)[number]>();
+  const found = new Map<number, Anchor>();
   rows.forEach((row, index) => {
     const name = letters(row.name.text).slice(0, NAME_PREFIX);
     if (name.length < 3) {
       return;
     }
-    const match = positioned
-      .filter((candidate) => !used.has(candidate) && namesLine(name, candidate.line.text))
-      .sort((upper, lower) => upper.box.top - lower.box.top)[0];
+    const match = starts
+      .filter((start) => !used.has(start) && namesLine(name, start.text))
+      .sort((upper, lower) => upper.line.top - lower.line.top)[0];
     if (match) {
       used.add(match);
       found.set(index, match);
@@ -178,31 +182,11 @@ function nameLines(rows: readonly Row[], lines: readonly OcrLine[]): Map<number,
   return found;
 }
 
-/** From the row's name line down to the next name line in its column, and left of the next column's names. */
-function band(own: Placed, named: readonly Placed[]): Box {
-  const height = Math.max(1, own.box.bottom - own.box.top);
-  const below = named
-    .filter(
-      (other) => other !== own && other.box.left < own.box.right && other.box.right > own.box.left,
-    )
-    .map((other) => other.box.top)
-    .filter((top) => top > own.box.top + height / 3);
-  const nextColumn = named
-    .filter((other) => other.box.left > own.box.right)
-    .map((other) => other.box.left);
-  return {
-    left: own.box.left,
-    right: nextColumn.length ? Math.min(...nextColumn) : Number.POSITIVE_INFINITY,
-    top: own.box.top,
-    bottom: below.length ? Math.min(...below) : own.box.bottom + 2 * height,
-  };
-}
-
 /** A printed line that starts with the row's name (or is the start of a wrapped name). */
 function namesLine(name: string, text: string): boolean {
   const printed = letters(text);
   return (
     printed.startsWith(name) ||
-    (printed.length >= 8 && name.startsWith(printed.slice(0, NAME_PREFIX)))
+    (printed.length >= MIN_WRAPPED && name.startsWith(printed.slice(0, NAME_PREFIX)))
   );
 }

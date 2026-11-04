@@ -11,6 +11,8 @@ const DAILY_VALUE = /^[<]?\s*\d[\d,.]*\s*%\s*[*†‡]*$|^[*†‡]+$/;
 const NONE = /^(?:--|—|–|-|\*+|†+|‡+|n\/a)?$/i;
 const SERVING_SIZE = /^serving\s*size\s*:?\s*(.*)$/i;
 const SERVINGS = /^servings?\s*per\s*container\s*:?\s*(.*)$/i;
+/** The FDA 2016 layout prints the count first: "20 servings per container", "About 60 Servings Per Container". */
+const COUNT_FIRST_SERVINGS = /^((?:about\s+)?\d[\d,.]*)\s*servings?\s*per\s*container\s*\.?$/i;
 const SKIP =
   /^(?:supplement|nutrition|drug)\s+facts$|^amount\s*(?:per|\/)\s*serving$|^%\s*(?:dv|daily\s*value)|daily\s+value|not\s+established|calorie\s+diet|^\$\s*\d/i;
 const GROUP_WORD = /\b(?:blend|complex|matrix|formula|proprietary|system)\b/i;
@@ -47,7 +49,7 @@ export function servingLine(
 ): { field: "servingSize" | "servingsPerContainer"; value: string | null } | null {
   const [nameCell = "", ...values] = raw.cells;
   const size = SERVING_SIZE.exec(nameCell);
-  const servings = size ? null : SERVINGS.exec(nameCell);
+  const servings = size ? null : (SERVINGS.exec(nameCell) ?? COUNT_FIRST_SERVINGS.exec(nameCell));
   const match = size ?? servings;
   if (!match) {
     return null;
