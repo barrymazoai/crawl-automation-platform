@@ -29,11 +29,20 @@ it.each([1, 2, 3])(
       },
       test.analysis.limits,
     );
+    const family = { ownerBrand: "Example Nutrition", subBrands: [] };
+    expect(test.apply).toHaveBeenCalledWith({
+      requestId: operationRequestId(runId, `own-site${suffix}`),
+      analysisId: test.analysis.analysisId,
+      replaceSettings: true,
+      family,
+    });
     expect(test.apply).toHaveBeenCalledWith({
       requestId: operationRequestId(runId, `apply${suffix}`),
       analysisId: test.analysis.analysisId,
       enqueue: true,
+      family,
     });
+    expect(await test.runs.step(runId, `product-own-site${suffix}`)).toEqual(family);
     expect(await test.runs.step(runId, `product-analysis${suffix}`)).toEqual({
       analysisId: test.analysis.analysisId,
     });
@@ -46,7 +55,7 @@ it.each([1, 2, 3])(
     }
     await test.service.tick(runId, signal, attempt);
     expect(test.create).toHaveBeenCalledOnce();
-    expect(test.apply).toHaveBeenCalledOnce();
+    expect(test.apply).toHaveBeenCalledTimes(2);
     expect(test.delivery.deliver).toHaveBeenCalledExactlyOnceWith(
       expect.objectContaining({ ingestRunId: `brand-enrichment-${runId}` }),
       signal,

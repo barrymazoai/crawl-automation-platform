@@ -1,7 +1,12 @@
 import { createHash } from "node:crypto";
 
 export type ProductStep =
-  "product-analysis" | "product-sources" | "products" | "products-failure" | "products-retry";
+  | "product-analysis"
+  | "product-sources"
+  | "product-own-site"
+  | "products"
+  | "products-failure"
+  | "products-retry";
 
 /** Attempt one retains every historical step name. */
 export function productStep(name: ProductStep, attempt = 1): string {

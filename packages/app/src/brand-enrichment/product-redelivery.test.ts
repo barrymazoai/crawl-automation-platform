@@ -58,6 +58,8 @@ it("delivers a closed run's products again through the same Supply Smart ingest 
       siteKey: "example.test",
       sourceIds: [test.sourceId],
       ingestRunId: `brand-enrichment-${test.runId}`,
+      // KAN-253: only this run's scans; no own-site record, so the original brand names stay.
+      scanIds: [expect.any(String)],
     },
     signal,
   );

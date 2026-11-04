@@ -14,6 +14,11 @@ const catalogAddress = z.url().max(4096);
 const brandCatalog = z.strictObject({
   brand: z.string().trim().min(1).max(1000),
   catalogUrl: catalogAddress,
+  /**
+   * Owner 2026-11-04 (KAN-253): a catalog on a brand family's own site; the catalog, not the page's vendor, names the
+   * brand (naturesway.com lists vendor "NW" for Alive!, Sambucus and Umcka). Set only by brand enrichment.
+   */
+  ownerBrand: z.string().trim().min(1).max(1000).optional(),
 });
 
 function ownCatalog(siteKey: string, catalogUrl: string): boolean {

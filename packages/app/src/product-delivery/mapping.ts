@@ -41,10 +41,12 @@ export function mapDeliveryProduct(
 }
 
 function mapListing(input: ReadyDeliveryProduct, request: ProductDeliveryRequest): DeliveryItem {
+  const catalogBrand = request.brandNames?.[input.sourceId];
   return deliveryItem(input, {
     domain: request.siteKey,
     siteKey: request.siteKey,
     clientRef: `sku-${canonicalHash([request.siteKey, input.product.variantId ?? input.product.listingId])}`,
+    ...(catalogBrand ? { brandName: catalogBrand } : {}),
   });
 }
 
@@ -62,21 +64,23 @@ type DeliveryMappingInput = Pick<
 /** Shared wire mapping; each caller validates its channel's ownership before entering. */
 export function deliveryItem(
   input: DeliveryMappingInput,
-  target: { domain: string; siteKey?: string; clientRef: string },
+  /** `brandName`: the catalog's brand on a brand's own site (KAN-253), in place of the page vendor. */
+  target: { domain: string; siteKey?: string; clientRef: string; brandName?: string },
 ): DeliveryItem {
   const { collection, product, history } = input;
   const { extras, ...amazonFields } = amazonDerivedFields(input);
   const variant = product.variants.find(
     (entry) => entry.listingId === product.listingId && entry.variantId === product.variantId,
   );
+  const { brandName, ...listingTarget } = target;
   return {
-    ...target,
+    ...listingTarget,
     externalId: product.variantId ?? product.listingId,
     sourceUrl: variant?.url ?? history.listing.url,
     productUrl: product.url,
     productName: input.enrichment?.candidate.unifiedName ?? product.title,
     titleRaw: product.title,
-    ...listingBrand(product.brandRaw, target.domain),
+    ...(brandName ? { brandName } : listingBrand(product.brandRaw, target.domain)),
     capturedAt: z.iso.datetime({ offset: true }).parse(history.capturedAt),
     ...deliverySemantics(input.enrichment),
     ...observedMetrics(history.metrics),

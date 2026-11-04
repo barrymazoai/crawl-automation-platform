@@ -11,6 +11,7 @@ import { requireCompanyRun, saveOutput } from "./run-records.js";
 import { savedFamily } from "./saved-family.js";
 import { deliverBrandProducts } from "./product-delivery-step.js";
 import { productStep, productAnalysisRequestId, operationRequestId } from "./product-attempt.js";
+import { markOwnSiteSources, ownSiteFamily, type OwnSiteFamily } from "./family-catalogs.js";
 export { operationRequestId } from "./product-attempt.js";
 type Attempt = { runId: string; attempt: number };
 
@@ -49,14 +50,40 @@ export class BrandProductsService {
     if (analysis.state !== "completed") {
       return this.unfinishedAnalysis({ runId, attempt }, analysis);
     }
+    return this.applyAndDeliver(
+      {
+        run,
+        attempt,
+        analysisId: analysis.analysisId,
+        absorbedCatalog: family.absorbed ? url : null,
+      },
+      signal,
+    );
+  }
+  private async applyAndDeliver(
+    input: {
+      run: { runId: string; brandName: string; companyId: string };
+      attempt: number;
+      analysisId: string;
+      absorbedCatalog: string | null;
+    },
+    signal: AbortSignal,
+  ): Promise<BrandProductProgress> {
+    const { run, attempt, analysisId, absorbedCatalog } = input;
+    const { runId } = run;
+    // KAN-253: the brand's own website (not a catalog absorbed from another brand's redirect).
+    const ownSite = absorbedCatalog ? undefined : await ownSiteFamily(this.deps.runs, run);
     const applied = await this.apply(
       { runId, attempt },
-      { analysisId: analysis.analysisId, catalogUrl: family.absorbed ? url : undefined },
+      { analysisId, catalogUrl: absorbedCatalog ?? undefined, ownSite },
     );
-    if (!(await this.settled(analysis.analysisId, applied))) {
+    if (!(await this.settled(analysisId, applied))) {
       return { done: false };
     }
-    await this.deliver({ runId, attempt, companyId: run.companyId, applied }, signal);
+    await this.deliver(
+      { runId, attempt, companyId: run.companyId, applied, ...(ownSite ? { ownSite } : {}) },
+      signal,
+    );
     return { done: true };
   }
   private async unfinishedAnalysis({ runId, attempt }: Attempt, analysis: SiteAnalysis) {
@@ -88,6 +115,7 @@ export class BrandProductsService {
       attempt: number;
       companyId: string;
       applied: SiteAnalysisApplyResult;
+      ownSite?: OwnSiteFamily;
     },
     signal: AbortSignal,
   ) {
@@ -118,13 +146,21 @@ export class BrandProductsService {
   }
   private async apply(
     { runId, attempt }: Attempt,
-    { analysisId, catalogUrl }: { analysisId: string; catalogUrl: string | undefined },
+    input: {
+      analysisId: string;
+      catalogUrl: string | undefined;
+      ownSite: OwnSiteFamily | undefined;
+    },
   ) {
+    const { analysisId, catalogUrl, ownSite } = input;
     const applied = SiteAnalysisApplyResultSchema.safeParse(
       await this.deps.runs.step(runId, productStep("product-sources", attempt)),
     );
     if (applied.success) {
       return applied.data;
+    }
+    if (ownSite) {
+      await markOwnSiteSources(this.deps, { runId, attempt, analysisId, catalogUrl, ownSite });
     }
     const result = await this.deps.analyses.apply({
       // One receipt per request ID: analyze already used the run ID (MANTRA Labs, 2026-10-09: REQUEST.ID_CONFLICT).
@@ -132,6 +168,7 @@ export class BrandProductsService {
       analysisId,
       enqueue: true,
       ...(catalogUrl ? { catalogUrl } : {}),
+      ...(ownSite ? { family: ownSite } : {}),
     });
     await saveOutput(this.deps.runs, {
       runId,

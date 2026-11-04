@@ -11,14 +11,18 @@ export const DtcBrandEvidenceSchema = z.strictObject({
 });
 export type DtcBrandEvidence = z.infer<typeof DtcBrandEvidenceSchema>;
 
-/** Only trim, case and accent marks are normalized (sameDtcBrand); aliases or similar names never merge brands. */
+/**
+ * Only trim, case and accent marks are normalized (sameDtcBrand); aliases or similar names never merge brands.
+ * A catalog on a brand family's own site (ownerBrand, set only by brand enrichment) is that catalog's brand, as a
+ * single-brand store is its brand: naturesway.com names every product's vendor "NW" (owner 2026-11-04, KAN-253).
+ */
 export function dtcBrandEvidence(
   site: DtcSitePolicy,
   observedBrand: string | null,
   source: DtcBrandSource | null,
 ): DtcBrandEvidence {
   const status =
-    site.kind === "single-brand"
+    site.kind === "single-brand" || source?.ownerBrand
       ? "site-brand"
       : !observedBrand?.trim()
         ? "unverified"

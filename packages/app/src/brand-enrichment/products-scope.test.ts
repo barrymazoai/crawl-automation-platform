@@ -33,7 +33,10 @@ it.each([null, true, false])(
       requestId: operationRequestId(test.runId, "apply"),
       analysisId: test.analysis.analysisId,
       enqueue: true,
-      ...(sameBrand === false ? { catalogUrl } : {}),
+      // KAN-253: a catalog absorbed from another brand's redirect is not this brand's own site.
+      ...(sameBrand === false
+        ? { catalogUrl }
+        : { family: { ownerBrand: "Example Nutrition", subBrands: [] } }),
     });
     expect(test.delivery.deliver).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -45,7 +48,8 @@ it.each([null, true, false])(
     );
     await test.service.tick(test.runId, signal);
     expect(test.create).toHaveBeenCalledOnce();
-    expect(test.apply).toHaveBeenCalledOnce();
+    // The brand's own site marks earlier sources first (KAN-253); each apply still happens once.
+    expect(test.apply).toHaveBeenCalledTimes(sameBrand === false ? 1 : 2);
   },
 );
 

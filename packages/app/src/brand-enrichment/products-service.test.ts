@@ -9,13 +9,20 @@ it("waits for the brand's queued products, then delivers its sources once while 
   test.progress.products.running = 0;
   test.progress.products.completed = 2;
   expect(await test.service.tick(test.runId, signal)).toEqual({ done: true });
-  expect(test.apply).toHaveBeenCalledOnce();
+  // KAN-253: the brand's own site first marks earlier sources, then the enqueueing apply.
+  expect(test.apply).toHaveBeenCalledTimes(2);
+  expect(test.apply.mock.calls[0]?.[0]).toMatchObject({
+    replaceSettings: true,
+    family: { ownerBrand: "Example Nutrition", subBrands: [] },
+  });
   expect(test.delivery.deliver).toHaveBeenCalledWith(
     {
       companyId: test.companyId,
       siteKey: "example.test",
       sourceIds: [test.task.sourceId],
       ingestRunId: `brand-enrichment-${test.runId}`,
+      scanIds: [test.task.scanId],
+      brandNames: { [test.task.sourceId]: test.task.name },
     },
     signal,
   );

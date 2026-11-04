@@ -11,6 +11,8 @@ type SourceInput = {
   analysisId: string;
   singleBrand: boolean;
   replaceSettings: boolean;
+  /** KAN-253: the brand family whose own site lists this catalog. */
+  ownerBrand?: string;
 };
 
 /** A correction only looks up existing brand and source identities. */
@@ -53,7 +55,7 @@ async function insertSource(tx: Queryable, input: SourceInput & { brandId: strin
     [brandId, brand.catalogUrl],
   );
   const sourceId = z.uuid().parse(sources[0]?.["id"]);
-  await insertAnalyzedSettings(tx, { sourceId, analysisId, brand, singleBrand });
+  await insertAnalyzedSettings(tx, { sourceId, analysisId, brand, singleBrand, ...owner(input) });
   return sourceId;
 }
 
@@ -88,13 +90,9 @@ async function matchSource(
     return;
   }
   const sourceId = z.uuid().parse(row["id"]);
+  const settings = { sourceId, analysisId, brand, singleBrand, ...owner(input) };
   if (replaceSettings) {
-    const correction = await replaceAnalyzedSettings(tx, {
-      sourceId,
-      analysisId,
-      brand,
-      singleBrand,
-    });
+    const correction = await replaceAnalyzedSettings(tx, settings);
     if (row["url"] !== brand.catalogUrl) {
       await tx.query("UPDATE brand_source SET url=$2 WHERE id=$1", [sourceId, brand.catalogUrl]);
     }
@@ -104,7 +102,7 @@ async function matchSource(
     result.matched.push({ name: brand.name, brandId, sourceId });
     return;
   }
-  if (!(await insertAnalyzedSettings(tx, { sourceId, analysisId, brand, singleBrand }))) {
+  if (!(await insertAnalyzedSettings(tx, settings))) {
     result.skipped.push({
       name: brand.name,
       reason: "Existing source settings conflict; preserved unchanged",
@@ -112,4 +110,8 @@ async function matchSource(
     return;
   }
   result.matched.push({ name: brand.name, brandId, sourceId });
+}
+
+function owner(input: Pick<SourceInput, "ownerBrand">) {
+  return input.ownerBrand ? { ownerBrand: input.ownerBrand } : {};
 }

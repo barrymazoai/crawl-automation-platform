@@ -21,6 +21,16 @@ export const ApplySiteAnalysisSchema = z
     enqueue: z.boolean().optional(),
     /** Correct settings only on an existing DTC source, retaining its previous settings in history. */
     replaceSettings: z.boolean().optional(),
+    /**
+     * Brand enrichment on a parent's own site (owner 2026-11-04, KAN-253): catalogs take the family's sub-brand name
+     * (or an existing source's name for the same catalog URL), and product pages naming the parent still verify.
+     */
+    family: z
+      .strictObject({
+        ownerBrand: z.string().trim().min(1).max(200),
+        subBrands: z.array(z.string().trim().min(1).max(200)).max(100),
+      })
+      .optional(),
   })
   .refine((input) => !(input.replaceSettings && input.enqueue), {
     message: "Settings correction cannot enqueue scans in the same request",

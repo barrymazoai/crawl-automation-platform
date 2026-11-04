@@ -82,6 +82,10 @@ export interface ProductDeliveryRequest {
   sourceIds: string[];
   /** Idempotency key of the ingest run, e.g. `brand-enrichment-<runId>`. */
   ingestRunId: string;
+  /** This run's scans of those sources; only their queue items are read (KAN-253). Absent: every item. */
+  scanIds?: string[];
+  /** Source ID → the brand its products are sold under, sent as `brandName` instead of the page vendor. */
+  brandNames?: Record<string, string>;
 }
 
 export interface ProductDeliveryResult {

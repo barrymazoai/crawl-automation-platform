@@ -37,6 +37,8 @@ export interface DtcSitePolicy {
 export interface DtcBrandCatalog {
   brand: string;
   catalogUrl: string;
+  /** The brand family whose own site lists this catalog; the catalog names the brand (brand enrichment, KAN-253). */
+  ownerBrand?: string | undefined;
 }
 
 type SiteInput = Pick<DtcSitePolicy, "siteKey" | "platform"> &

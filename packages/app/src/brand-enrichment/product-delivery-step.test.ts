@@ -27,6 +27,9 @@ it.each([1, 2])(
         siteKey: "sambucolusa.com",
         sourceIds: [test.task.sourceId],
         ingestRunId: `brand-enrichment-${test.runId}`,
+        // KAN-253: this run's own scans; the brand's own site names products by their catalog's brand.
+        scanIds: [test.task.scanId],
+        brandNames: { [test.task.sourceId]: test.task.name },
       });
     }
   },
@@ -63,12 +66,14 @@ it("groups sources by catalog domain with stable distinct ingest runs and summed
       siteKey: "sambucolusa.com",
       sourceIds: [test.task.sourceId, second.sourceId].sort(),
       ingestRunId: `brand-enrichment-${test.runId}-sambucolusa.com`,
+      scanIds: [test.task.scanId, second.scanId].sort(),
     },
     {
       companyId: test.companyId,
       siteKey: "zahlers.com",
       sourceIds: [third.sourceId],
       ingestRunId: `brand-enrichment-${test.runId}-zahlers.com`,
+      scanIds: [third.scanId],
     },
   ]);
   input.applied.tasks.reverse();

@@ -64,8 +64,10 @@ export class PostgresDeliveryReader implements ProductDeliveryReader {
 
   async read(request: ProductDeliveryRequest, signal: AbortSignal): Promise<DeliverySnapshot> {
     signal.throwIfAborted();
-    const queues = await this.deps.database.query<QueueRow>(DELIVERY_QUEUE, [request.sourceIds]);
-    const scans = await this.deps.database.query<ScanRow>(DELIVERY_SCANS, [request.sourceIds]);
+    // KAN-253: a run reads only its own scans' items; a later run of the same sources is not its delivery.
+    const scope = [request.sourceIds, request.scanIds?.length ? request.scanIds : null];
+    const queues = await this.deps.database.query<QueueRow>(DELIVERY_QUEUE, scope);
+    const scans = await this.deps.database.query<ScanRow>(DELIVERY_SCANS, scope);
     const result: DeliverySnapshot = {
       products: [],
       review: 0,

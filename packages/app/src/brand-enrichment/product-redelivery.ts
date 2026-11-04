@@ -5,6 +5,7 @@ import { requireCompanyRun, saveOutput } from "./run-records.js";
 import { brandEnrichmentErrors } from "./errors.js";
 import { productStep } from "./product-attempt.js";
 import { deliverBrandProducts } from "./product-delivery-step.js";
+import { OwnSiteFamilySchema } from "./family-catalogs.js";
 
 /**
  * Sends a brand's products again after its run closed (owner 2026-10-09): products that were in Review or still running
@@ -29,9 +30,18 @@ export class BrandProductRedelivery {
         details: { runId, reason: "The run has no product sources to deliver" },
       });
     }
+    // Only runs that delivered with their own-site brand names resend them; older runs keep their original body.
+    const ownSite = OwnSiteFamilySchema.safeParse(
+      await this.deps.runs.step(runId, productStep("product-own-site", attempt)),
+    );
     const result = await deliverBrandProducts(
       this.deps.delivery,
-      { runId, companyId: run.companyId, applied: applied.data },
+      {
+        runId,
+        companyId: run.companyId,
+        applied: applied.data,
+        ...(ownSite.success ? { ownSite: ownSite.data } : {}),
+      },
       signal,
     );
     await saveOutput(this.deps.runs, {

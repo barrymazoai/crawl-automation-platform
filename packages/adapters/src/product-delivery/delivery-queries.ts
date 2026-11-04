@@ -5,12 +5,14 @@ export const DELIVERY_QUEUE = `
   FROM queue_item q JOIN brand_source s ON s.id=q.source_id AND s.channel='dtc'
   LEFT JOIN queue_attempt a ON a.run_id=q.run_id
   WHERE q.channel='dtc' AND q.source_id=ANY($1::uuid[])
+    AND ($2::uuid[] IS NULL OR q.batch_id=ANY($2::uuid[]))
   ORDER BY q.source_id, q.listing_id, q.variant_id, q.created_at DESC, q.item_id DESC`;
 
 export const DELIVERY_SCANS = `
   SELECT DISTINCT ON (scan.source_id) scan.source_id::text, scan_id::text, state, started_at, result, settings
   FROM brand_scan scan LEFT JOIN dtc_source_settings policy ON policy.source_id=scan.source_id
   WHERE channel='dtc' AND scan.source_id=ANY($1::uuid[])
+    AND ($2::uuid[] IS NULL OR scan.scan_id=ANY($2::uuid[]))
   ORDER BY scan.source_id, requested_at DESC, scan_id DESC`;
 
 export const DELIVERY_COLLECTIONS = `

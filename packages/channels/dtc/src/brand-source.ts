@@ -9,6 +9,8 @@ export const DtcBrandSourceSchema = z.strictObject({
   siteKey: z.string().min(1),
   brand: z.string().min(1).max(1000),
   catalogUrl: z.url().max(4096),
+  /** The brand family whose own site lists this catalog; the catalog names the brand (KAN-253). */
+  ownerBrand: z.string().min(1).max(1000).optional(),
 });
 export type DtcBrandSource = z.infer<typeof DtcBrandSourceSchema>;
 

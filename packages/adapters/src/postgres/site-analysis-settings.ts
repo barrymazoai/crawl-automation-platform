@@ -8,6 +8,8 @@ type SettingsInput = {
   analysisId: string;
   brand: AnalyzedBrand;
   singleBrand: boolean;
+  /** KAN-253: the brand family whose own site lists this multi-brand catalog. */
+  ownerBrand?: string;
 };
 const StoredKindSchema = z.object({ kind: z.enum(["single-brand", "multi-brand"]) });
 
@@ -23,7 +25,13 @@ function analyzedSettings(input: SettingsInput) {
     : {
         ...site,
         kind: "multi-brand" as const,
-        brands: [{ brand: brand.name, catalogUrl: brand.catalogUrl }],
+        brands: [
+          {
+            brand: brand.name,
+            catalogUrl: brand.catalogUrl,
+            ...(input.ownerBrand ? { ownerBrand: input.ownerBrand } : {}),
+          },
+        ],
       };
 }
 

@@ -1,6 +1,7 @@
 import { conflictingCatalog, singleBrandSite, storeCatalog } from "./site-analysis-settings.js";
 import { applyAnalyzedSource } from "./site-analysis-source.js";
 import {
+  familyName,
   siteAnalysisErrors,
   siteAnalysisLimitsReached,
   type SiteAnalysisApplyResult,
@@ -22,6 +23,7 @@ type BrandApplication = {
   entryUrl: string;
   scoped: boolean;
   replaceSettings: boolean;
+  family: z.infer<typeof ApplySiteAnalysisSchema>["family"];
 };
 
 export async function applySiteAnalysis(
@@ -54,6 +56,7 @@ export async function applySiteAnalysis(
         entryUrl,
         scoped: !!input.catalogUrl,
         replaceSettings: input.replaceSettings === true,
+        family: input.family,
       },
       result,
     );
@@ -116,7 +119,7 @@ function selectCatalog(
 }
 
 async function applyBrand(tx: Queryable, input: BrandApplication, result: SiteAnalysisApplyResult) {
-  const { brand: found } = input;
+  const found = await familyBrand(tx, input);
   if (found.status !== "verified" || !found.catalogUrl || found.name.length > 80) {
     result.skipped.push({
       name: found.name,
@@ -148,9 +151,29 @@ async function applyBrand(tx: Queryable, input: BrandApplication, result: SiteAn
       analysisId: input.analysisId,
       singleBrand,
       replaceSettings: input.replaceSettings,
+      ...(input.family && !singleBrand ? { ownerBrand: input.family.ownerBrand } : {}),
     },
     result,
   );
+}
+
+/**
+ * KAN-253: on a family's own site one name per catalog. An existing DTC source of the same catalog URL keeps its
+ * brand; otherwise the family check's sub-brand name; otherwise the analysis's own name.
+ */
+async function familyBrand(tx: Queryable, input: BrandApplication): Promise<AnalyzedBrand> {
+  const { brand, family } = input;
+  if (!family || brand.status !== "verified" || !brand.catalogUrl) {
+    return brand;
+  }
+  const rows = await tx.query<{ name: string }>(
+    `SELECT brand.name FROM brand_source source JOIN brand ON brand.id=source.brand_id
+    WHERE source.channel='dtc' AND source.region='US' AND source.url=$1 ORDER BY source.created_at LIMIT 2`,
+    [brand.catalogUrl],
+  );
+  const existing = rows.length === 1 ? rows[0]?.name : undefined;
+  const name = existing ?? familyName(brand.name, family.subBrands) ?? brand.name;
+  return name === brand.name ? brand : { ...brand, name };
 }
 
 function skippedSelections(
