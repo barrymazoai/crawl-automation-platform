@@ -703,6 +703,9 @@ importers:
       htmlparser2:
         specifier: 10.1.0
         version: 10.1.0
+      image-size:
+        specifier: 2.0.2
+        version: 2.0.2
       ipaddr.js:
         specifier: 'catalog:'
         version: 2.5.0

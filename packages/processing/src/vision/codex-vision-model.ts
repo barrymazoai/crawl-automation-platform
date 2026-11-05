@@ -28,6 +28,7 @@ import {
   labelTranscriptProtocol,
 } from "./protocol/label-transcript-wire.js";
 import { transcribedAnswer } from "./vision-transcript-flow.js";
+import { tooSmallAnswer, tooSmallLabelImage } from "./protocol/label-image-size.js";
 import {
   labelIngredientPresencePolicySchema,
   type TranscriptAttempt,
@@ -167,6 +168,10 @@ export class CodexVisionModel implements VisionModel {
         this.config.ingredientPresencePolicy,
         attempt,
       );
+    const tooSmall = this.config.visualProtocol ? tooSmallLabelImage(bytes) : null;
+    if (tooSmall) {
+      return tooSmallAnswer(tooSmall);
+    }
     if (this.config.visualProtocol === labelTranscriptProtocol) {
       return transcribedAnswer({
         calls: {
@@ -177,12 +182,14 @@ export class CodexVisionModel implements VisionModel {
           label,
         },
         ocr,
-        policy: labelIngredientPresencePolicySchema.parse(
-          this.config.ingredientPresencePolicy ?? {},
-        ),
+        policy: this.presencePolicy(),
       });
     }
     return this.config.visualProtocol ? label() : run(visionRequest(this.extractionProtocol));
+  }
+
+  private presencePolicy() {
+    return labelIngredientPresencePolicySchema.parse(this.config.ingredientPresencePolicy ?? {});
   }
 
   async repair(

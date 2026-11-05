@@ -44,6 +44,10 @@ export const labelValidationWarnings = defineErrors({
 /** Registered reasons retained in Reviews and source observations. */
 export const labelValidationErrors = defineErrors({
   "LABEL.AMOUNT_UNREADABLE": { category: "VALIDATION", message: "Amount unreadable." },
+  "LABEL.IMAGE_TOO_SMALL": {
+    category: "VALIDATION",
+    message: "The label image is too small to read; it was not read.",
+  },
   "LABEL.CONTAINER_COUNT_CONFLICT": {
     category: "VALIDATION",
     message: "Container count conflict.",

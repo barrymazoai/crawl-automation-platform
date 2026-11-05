@@ -12,6 +12,7 @@ import {
 } from "./label-ingredient-presence.js";
 import { decodeRetainedRepair, labelVisionRepairPolicyVersion } from "./label-vision-repair.js";
 import { decodeTranscriptAnswer, isTranscriptAnswer } from "./label-transcript-answer.js";
+import { decodeTooSmallAnswer, isTooSmallAnswer } from "./label-image-size.js";
 import { LabelVisionRepairAnswerSchema } from "./label-vision-repair.js";
 import { isDeepStrictEqual } from "node:util";
 
@@ -65,6 +66,9 @@ export function decodeVisionResult(input: VisionInput, raw: string) {
 }
 
 function decodeLabelAnswer(protocol: VisionProtocol, raw: string) {
+  if (isTooSmallAnswer(raw)) {
+    return decodeTooSmallAnswer(raw);
+  }
   if (isIngredientPresenceAnswer(raw)) {
     return decodeIngredientPresenceAnswer(raw);
   }

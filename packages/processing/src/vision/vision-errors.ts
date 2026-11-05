@@ -58,6 +58,7 @@ export const visionErrors = defineErrors({
   "VISION.LABEL_INGREDIENT_BOUNDARY": labelCheck("ingredient items overlap or are not separated."),
   "VISION.LABEL_INGREDIENT_HEADING_INVALID": labelCheck("the ingredient heading is not a heading."),
   "VISION.LABEL_INGREDIENT_ROLE_INVALID": labelCheck("an ingredient item is outside its section."),
+  "VISION.LABEL_IMAGE_TOO_SMALL": labelCheck("the image is too small to read."),
   "VISION.LABEL_INGREDIENTS_INCOMPLETE": labelCheck("the ingredient list is incomplete."),
   "VISION.LABEL_PARENT_INVALID": labelCheck("a blend component points to a wrong parent."),
   "VISION.PRIVATE_CONFIG": processing("The vision model's private config is invalid."),
