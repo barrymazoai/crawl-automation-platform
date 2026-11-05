@@ -36,7 +36,10 @@ export function labelExtractionSchema<F extends z.ZodType>(field: F) {
   return z.strictObject({ codec: z.literal(labelExtractionVersion),
     // Absent or null for Supplement/Nutrition Facts (the model's strict format sends null).
     formula: z.strictObject({ drugFacts: field.nullable().optional(), servingSize: field.nullable(), servingsPerContainer: field.nullable(),
-      columns: z.array(z.strictObject({ heading: field.nullable(), rows: z.array(row).min(1).max(200) })).min(1).max(8),
+      // KAN-243: the printed header of the column's percentage cells ("%RDA", "% Daily Value"), quoted when a label
+      // format reads it; old columns omit it and their percentages are US %DV.
+      columns: z.array(z.strictObject({ heading: field.nullable(), dailyValueHeading: field.nullable().optional(),
+        rows: z.array(row).min(1).max(200) })).min(1).max(8),
     }).nullable(),
     otherIngredients: z.strictObject({ heading: field, items: z.array(field).min(1).max(300) }).nullable(),
     formulaComplete: z.boolean(), ingredientsComplete: z.boolean(),
@@ -44,7 +47,19 @@ export function labelExtractionSchema<F extends z.ZodType>(field: F) {
     issues: z.array(z.strictObject({ code: z.enum(["UNREADABLE", "AMBIGUOUS", "FORMULA_MISSING", "INGREDIENTS_MISSING", "METADATA_CONFLICT"]), detail: z.string().min(1).max(4000) })).max(100),
   });
 }
-export const LabelTextWireSchema = labelExtractionSchema(LabelAnchorSchema);
+/**
+ * A model's answer format never carries a column's dailyValueHeading (KAN-243): only a label format's code parse
+ * quotes it, so no model setup changes.
+ */
+export function labelWireSchema<F extends z.ZodType>(field: F) {
+  const schema = labelExtractionSchema(field);
+  const formula = schema.shape.formula.unwrap();
+  const column = formula.shape.columns.element;
+  return schema.extend({ formula: formula.extend({
+    columns: z.array(column.omit({ dailyValueHeading: true })).min(1).max(8),
+  }).nullable() });
+}
+export const LabelTextWireSchema = labelWireSchema(LabelAnchorSchema);
 export const LabelTextCandidateSchema = labelExtractionSchema(LabelQuoteSchema).extend({
   /** Decoder-only provenance; never part of the model's wire answer. */
   ingredientParagraphReclassified: z.literal(true).optional(),
@@ -140,7 +155,7 @@ export function labelFormulaStructure(candidate: LabelCandidate) {
   const text = (f: { text: string } | null) => f?.text.replace(/\s+/gu, " ").trim() ?? null;
   return candidate.formula ? { ...(candidate.formula.drugFacts ? { drugFacts: text(candidate.formula.drugFacts) } : {}), servingSize: text(candidate.formula.servingSize),
     servingsPerContainer: text(candidate.formula.servingsPerContainer), columns: candidate.formula.columns.map(c => ({
-      heading: text(c.heading), rows: c.rows.map(r => ({ kind: r.kind, name: text(r.name), amount: text(r.amount),
+      heading: text(c.heading), ...(c.dailyValueHeading ? { dailyValueHeading: text(c.dailyValueHeading) } : {}), rows: c.rows.map(r => ({ kind: r.kind, name: text(r.name), amount: text(r.amount),
         ...(r.purpose ? { purpose: text(r.purpose) } : {}),
         amountStatus: r.amountStatus, dailyValue: text(r.dailyValue), parentRowIndex: r.parentRowIndex })),
     })) } : null;
@@ -161,6 +176,6 @@ export function legacyLabelExtractionSchema<F extends z.ZodType>(field: F) {
   const formula = schema.shape.formula.unwrap();
   const column = formula.shape.columns.element;
   return schema.extend({ formula: formula.omit({ drugFacts: true }).extend({
-    columns: z.array(column.extend({ rows: z.array(column.shape.rows.element.omit({ purpose: true })).min(1).max(200) })).min(1).max(8),
+    columns: z.array(column.omit({ dailyValueHeading: true }).extend({ rows: z.array(column.shape.rows.element.omit({ purpose: true })).min(1).max(200) })).min(1).max(8),
   }).nullable() });
 }

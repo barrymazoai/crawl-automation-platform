@@ -1,4 +1,5 @@
 import { recordRecovery } from "@crawl-automation/platform";
+import { isUsOnlyFormats, type LabelFormatId } from "@crawl-automation/v3-contracts";
 import type { OcrReading } from "../keywords/ocr-text.js";
 import { amountPositions } from "./protocol/label-amount-position.js";
 import type {
@@ -11,7 +12,13 @@ import {
   transcriptAnswer,
 } from "./protocol/label-transcript-answer.js";
 import { transcriptCandidate } from "./protocol/label-transcript-candidate.js";
-import { labelTranscriptWireSchema } from "./protocol/label-transcript-wire.js";
+import {
+  labelRereadOutputSchema,
+  labelRereadPrompt,
+  labelTranscriptOutputSchema,
+  labelTranscriptPromptFor,
+  labelTranscriptWireSchema,
+} from "./protocol/label-transcript-wire.js";
 
 /** The model calls one transcribed reading may make. */
 export interface TranscriptCalls {
@@ -28,6 +35,21 @@ export interface TranscriptCalls {
 
 const AMOUNT_UNREADABLE = "LABEL.AMOUNT_UNREADABLE";
 
+/** The copy and re-read one model asks, in the image's label formats (KAN-243), and its label-protocol fallback. */
+export function transcriptCalls(
+  run: (request: { prompt: string; outputSchema: object }) => Promise<string>,
+  label: TranscriptCalls["label"],
+  formats: readonly LabelFormatId[] | undefined,
+): TranscriptCalls {
+  return {
+    transcribe: () =>
+      run({ prompt: labelTranscriptPromptFor(formats), outputSchema: labelTranscriptOutputSchema }),
+    reread: (names) =>
+      run({ prompt: labelRereadPrompt(names), outputSchema: labelRereadOutputSchema }),
+    label,
+  };
+}
+
 /**
  * Owner 2026-11-04: copy, parse in code, confirm every printed amount (the image's OCR prints it on that row, else one
  * independent re-read of those rows repeats it). Anything else (a copy the rules cannot read, a check that fails, an
@@ -38,12 +60,15 @@ export async function transcribedAnswer(input: {
   calls: TranscriptCalls;
   ocr: OcrReading;
   policy: Required<LabelIngredientPresencePolicy>;
+  /** KAN-243: the label formats the copy is parsed in; US alone when absent. */
+  formats?: readonly LabelFormatId[] | undefined;
 }): Promise<string> {
   const { calls, ocr, policy } = input;
+  const formats = input.formats && !isUsOnlyFormats(input.formats) ? [...input.formats] : undefined;
   const raw = await calls.transcribe();
   const fallback = (reason: string, reread: string | null = null) =>
     calls.label({ raw, reason, reread });
-  const built = parsed(raw, policy);
+  const built = parsed(raw, policy, formats);
   if ("reason" in built) {
     return fallback(`copy not parsed: ${built.reason}`);
   }
@@ -53,7 +78,8 @@ export async function transcribedAnswer(input: {
   }
   const ocrConfirmed = positions.confirmed;
   const ocrLines = ocr.lines.map(({ text, polygon }) => (polygon ? { text, polygon } : { text }));
-  const first = transcriptAnswer({ policy, raw, ocrConfirmed, ocrLines, reread: null });
+  const kept = formats ? { formats } : {};
+  const first = transcriptAnswer({ policy, raw, ocrConfirmed, ocrLines, reread: null, ...kept });
   const before = decodeTranscriptAnswer(first);
   if (before.status !== "review") {
     return first;
@@ -65,14 +91,18 @@ export async function transcribedAnswer(input: {
     .filter(({ index }) => !ocrConfirmed.includes(index))
     .map(({ row }) => row.name.text);
   const reread = await calls.reread(names);
-  const answer = transcriptAnswer({ policy, raw, ocrConfirmed, ocrLines, reread });
+  const answer = transcriptAnswer({ policy, raw, ocrConfirmed, ocrLines, reread, ...kept });
   const after = decoded(answer);
   return after.accepted ? answer : fallback(`re-read not accepted: ${after.reason}`, reread);
 }
 
-function parsed(raw: string, policy: Required<LabelIngredientPresencePolicy>) {
+function parsed(
+  raw: string,
+  policy: Required<LabelIngredientPresencePolicy>,
+  formats: readonly LabelFormatId[] | undefined,
+) {
   try {
-    return transcriptCandidate(labelTranscriptWireSchema.parse(JSON.parse(raw)), policy);
+    return transcriptCandidate(labelTranscriptWireSchema.parse(JSON.parse(raw)), policy, formats);
   } catch (error) {
     recordRecovery(error, { operation: "vision/transcript-flow" });
     return { reason: "not a transcript" };

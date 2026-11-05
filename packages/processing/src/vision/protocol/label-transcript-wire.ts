@@ -1,4 +1,11 @@
 import { z } from "zod";
+import {
+  LABEL_FORMATS,
+  LabelFormatIdSchema,
+  isUsOnlyFormats,
+  labelFormatsOf,
+  type LabelFormatId,
+} from "@crawl-automation/v3-contracts";
 import { labelIngredientPresencePolicySchema } from "./label-ingredient-presence.js";
 
 /**
@@ -55,6 +62,21 @@ export const labelTranscriptPrompt = `Transcribe the Supplement Facts / Nutritio
 - "otherIngredientsState": present, none_printed, not_fully_visible, or unreadable. none_printed ONLY when the ENTIRE physical label is visible and readable and no separate ingredients section is printed (then wholeLabelVisible true). A Facts crop, one side of a bottle or an image of unknown coverage is not_fully_visible with wholeLabelVisible false. Null alone never establishes absence.
 - Do not correct spelling, do not add anything not printed, do not decide what is a blend. If several facts panels are printed, one entry per panel.`;
 
+/**
+ * KAN-243: the copy prompt for an image selected in these label formats. US alone is the prompt above, byte for byte.
+ * Another format adds its own lines; they belong to the format's versioned name, which every such task carries in its
+ * keyword policy and answer, so they are not part of the setup fingerprint and are never edited in place.
+ */
+export function labelTranscriptPromptFor(formats: readonly LabelFormatId[] | undefined): string {
+  if (isUsOnlyFormats(formats)) {
+    return labelTranscriptPrompt;
+  }
+  const lines = labelFormatsOf(formats).flatMap((id) =>
+    LABEL_FORMATS[id].prompt.map((line) => `- ${line}`),
+  );
+  return `${labelTranscriptPrompt}\n${lines.join("\n")}`;
+}
+
 /** Rows whose amounts the OCR text does not show are read once more, on their own. */
 export const labelRereadWireSchema = z.strictObject({
   rows: z.array(z.strictObject({ name: line, amountCells: z.array(cell).max(8) })).max(200),
@@ -94,5 +116,7 @@ export const labelTranscriptAnswerSchema = z.strictObject({
     .max(5000)
     .optional(),
   reread: z.string().nullable(),
+  /** KAN-243: the label formats the copy was asked and is parsed in; absent for the US panel alone. */
+  formats: z.array(LabelFormatIdSchema).min(1).max(20).optional(),
 });
 export type LabelTranscriptAnswer = z.infer<typeof labelTranscriptAnswerSchema>;

@@ -57,6 +57,7 @@ export function decodeTranscriptAnswer(response: string) {
   const built = transcriptCandidate(
     labelTranscriptWireSchema.parse(JSON.parse(saved.raw)),
     saved.policy,
+    saved.formats,
   );
   if ("reason" in built) {
     throw visionFailure("VISION.INVALID_OUTPUT", "executed");

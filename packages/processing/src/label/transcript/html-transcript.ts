@@ -11,6 +11,11 @@ export interface TranscriptRow {
   bold: boolean;
   /** The table (or grid container) the row belongs to, numbered in page order. */
   table: number;
+  /**
+   * KAN-243: which value cell (0 = the first cell after the name) is the amount and which the percentage, when a label
+   * format read them from the printed column headers. Absent: decided from each cell's own text, as always.
+   */
+  columns?: { amount: number | null; dailyValue: number | null };
 }
 
 export interface HtmlTranscript {

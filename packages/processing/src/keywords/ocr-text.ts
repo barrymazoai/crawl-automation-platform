@@ -5,6 +5,7 @@ import {
   OcrIntentSchema,
   OcrRegistrationSchema,
   observationIdentity,
+  type KeywordPolicy,
   type KeywordResult,
   type OcrInput,
   type OcrRegistration,
@@ -76,18 +77,21 @@ export class LedgerOcrText {
     },
   ) {}
 
-  /** Screens the text of one registered OCR result for label keywords. */
-  async screen(raw: unknown, signal: AbortSignal): Promise<KeywordResult> {
+  /** Screens the text of one registered OCR result for label keywords (the US policy unless another is given). */
+  async screen(raw: unknown, signal: AbortSignal, policy?: KeywordPolicy): Promise<KeywordResult> {
     const registration = await this.verified(raw, signal);
     const text = await registeredText(this.deps.artifacts, registration, signal);
     const { input } = registration;
     const observation = observationIdentity(input);
-    return screenKeywords({
-      observation,
-      image: input.file,
-      ocrOperationId: input.operationId,
-      text,
-    });
+    return screenKeywords(
+      {
+        observation,
+        image: input.file,
+        ocrOperationId: input.operationId,
+        text,
+      },
+      policy,
+    );
   }
 
   /** The OCR text behind a keyword selection, after recomputing the selection from it. */

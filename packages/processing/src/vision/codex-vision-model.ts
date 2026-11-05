@@ -1,5 +1,9 @@
 import { verifyBytes } from "@crawl-automation/platform";
-import { ImageEvidenceSchema, type ArtifactRef } from "@crawl-automation/v3-contracts";
+import {
+  ImageEvidenceSchema,
+  type ArtifactRef,
+  type LabelFormatId,
+} from "@crawl-automation/v3-contracts";
 import type { CodexConnectionFactory } from "@crawl-automation/platform";
 import type { OcrReading } from "../keywords/ocr-text.js";
 import { CodexClient } from "../codex/codex-client.js";
@@ -20,14 +24,8 @@ import {
   retainIngredientPresenceAnswer,
 } from "./protocol/label-ingredient-presence.js";
 
-import {
-  labelRereadOutputSchema,
-  labelRereadPrompt,
-  labelTranscriptOutputSchema,
-  labelTranscriptPrompt,
-  labelTranscriptProtocol,
-} from "./protocol/label-transcript-wire.js";
-import { transcribedAnswer } from "./vision-transcript-flow.js";
+import { labelTranscriptProtocol } from "./protocol/label-transcript-wire.js";
+import { transcribedAnswer, transcriptCalls } from "./vision-transcript-flow.js";
 import { tooSmallAnswer, tooSmallLabelImage } from "./protocol/label-image-size.js";
 import {
   labelIngredientPresencePolicySchema,
@@ -57,7 +55,9 @@ const visionProfile: CodexModelProfile = {
 };
 
 /** An image's bytes, alone or with the verified OCR reading it was selected by. */
-export type ImageInput = Uint8Array | { bytes: Uint8Array; ocr: OcrReading };
+/** KAN-243: and the label formats its keyword policy selected it for (US alone when absent). */
+export type ImageInput =
+  Uint8Array | { bytes: Uint8Array; ocr: OcrReading; formats?: readonly LabelFormatId[] };
 
 /** The vision model a task is pinned to: its answer format and its setup's fingerprint. */
 export interface VisionModel {
@@ -154,7 +154,8 @@ export class CodexVisionModel implements VisionModel {
     signal: AbortSignal,
   ): Promise<string> {
     const bytes = evidence instanceof Uint8Array ? evidence : evidence.bytes;
-    const ocr = evidence instanceof Uint8Array ? { text: "", lines: [] } : evidence.ocr;
+    const { ocr, formats } =
+      evidence instanceof Uint8Array ? { ocr: { text: "", lines: [] } } : evidence;
     const image = ImageEvidenceSchema.parse(rawImage);
     verifyBytes(image, bytes, MAX_IMAGE_BYTES);
     const run = (request: { prompt: string; outputSchema: object }) =>
@@ -173,17 +174,8 @@ export class CodexVisionModel implements VisionModel {
       return tooSmallAnswer(tooSmall);
     }
     if (this.config.visualProtocol === labelTranscriptProtocol) {
-      return transcribedAnswer({
-        calls: {
-          transcribe: () =>
-            run({ prompt: labelTranscriptPrompt, outputSchema: labelTranscriptOutputSchema }),
-          reread: (names) =>
-            run({ prompt: labelRereadPrompt(names), outputSchema: labelRereadOutputSchema }),
-          label,
-        },
-        ocr,
-        policy: this.presencePolicy(),
-      });
+      const calls = transcriptCalls(run, label, formats);
+      return transcribedAnswer({ calls, ocr, policy: this.presencePolicy(), formats });
     }
     return this.config.visualProtocol ? label() : run(visionRequest(this.extractionProtocol));
   }

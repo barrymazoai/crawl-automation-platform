@@ -1,6 +1,7 @@
 import { errorCodeOf, isAppError, type ObjectStore } from "@crawl-automation/platform";
 import type { ArtifactResolver } from "@crawl-automation/platform";
 import {
+  keywordPolicyFormats,
   VisionTaskSchema,
   type KeywordResult,
   type ReviewRecord,
@@ -167,7 +168,13 @@ export class VisionStep extends ProcessingStep<
     signal: AbortSignal,
   ): Promise<string> {
     try {
-      return await this.deps.model.interpret(task.input.selection.image, evidence, signal);
+      // KAN-243: the image is read in the label formats its keyword policy selected it for.
+      const formats = keywordPolicyFormats(task.input.selection.policy);
+      return await this.deps.model.interpret(
+        task.input.selection.image,
+        { ...evidence, formats },
+        signal,
+      );
     } catch (error) {
       await keepCallFailure(this.deps.local, task, error);
       throw error;

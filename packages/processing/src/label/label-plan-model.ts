@@ -14,6 +14,7 @@ import {
   TextCompatibilitySchema,
   type ProductResolvedEvidenceSource,
   type SavedEvidenceSource,
+  LabelFormatIdSchema,
 } from "@crawl-automation/v3-contracts";
 
 /**
@@ -40,6 +41,8 @@ export const LabelPlanInputSchema = z
     failurePolicy: z.enum(["source-failure-first/1", "source-failure-first/2"]).optional(),
     /** Packaging admission: the label is compared with the product's full page documents. */
     admission: z.literal("label-packaging/1").optional(),
+    /** KAN-243: the label formats the storefront's labels are read in; absent = the US panel alone. */
+    labelFormats: z.array(LabelFormatIdSchema).min(1).max(20).optional(),
   })
   .refine(
     (input) => ![input.plan.operationId, input.plan.sourceOperationId].includes(input.operationId),

@@ -258,6 +258,42 @@ Supply Smart 已上测试环境的做法：
 - 用这 20 个商品的原图跑一次视觉照抄回放（先定模型/effort/并发），验证 §4 第 2、3、5 项改动后的版式 A/B 读取率；
 - 按 §6.1 改交付层，用测试库验收（同 ASIN 美印两条 listing、国家筛选）。
 
+## 9. 多国家标签格式：第一部分已实现（2026-11-05）
+
+用户 11-05 定的做法：站点只影响标签这一步，规则写成「标签格式」配置，以后加日本、加拿大只需加配置和样例表。
+
+**结构**（`packages/v3-contracts/src/label-formats.ts`）：
+- 每种格式一份，名字带版本：`us-facts/1`、`in-nutritional-information/1`、`in-composition/1`。一份格式包括挑图关键词、各列表头的角色（每份用量 / 固定基准用量如每 100 g / 百分比列及其口径 `us_dv` 或 `in_rda`）、表头行、跳过行、份数行、「Each … contains」、「prepared from」，以及给视觉照抄提示词追加的几行。
+- 站点到格式的对应写在 `MARKETPLACE_LABEL_FORMATS`：`amazon.com` 只用美国格式；`amazon.in` 用美国格式加两种印度格式，因为印度站也卖进口美国货。
+- 哪一列算 %DV、哪一列算 %RDA，看印出来的表头，不看站点。
+
+**怎么一路传下去**：
+- 标签任务（`LabelPlanInputSchema` / `LabelTaskSchema`）上多一个可选的 `labelFormats`。
+- 挑图时按这些格式选关键词表，用新版本 `label-keywords/2`，表里写明格式。
+- 选中结果本来就带着关键词表，所以视觉照抄的提示词和照抄后的代码解析直接从选中结果里取格式。
+- 照抄答案里存一份 `formats`，以后重新解码时还按同样的格式读。
+
+**印度表怎么读**（`label/transcript/format-panel.ts`）：
+- 按 `columnHeaders` 认列：用每份用量那一列，没有就用每 100 g 那一列；百分比只取第一列，男女两列 RDA 时取男。
+- 表头行、「Nutritional Information」标题、「*RDA not established」脚注都去掉。
+- 「Servings Per Pack」读成每瓶份数；「Each capsule contains」读成份量。
+- 「Each 100 g is prepared from」这种生药投料量不按配方读，交回原来的整张读图协议处理。
+- 某一行对不上表头时，同样交回原来的协议。
+- 读出来的那一列带上 `dailyValueHeading`，内容是印出来的百分比表头原文（如 `%RDA`），一路带到交付给 Supply Smart 的 label 里。
+
+**美国不变**（都有测试）：
+- 没有 `labelFormats` 时，以及格式只有美国一种时：关键词表就是原来的 `label-keywords/1`，提示词逐字节相同，答案里没有 `formats`，挑图 activity 的入参也和原来一样，所以 Temporal 回放不受影响。
+- 读图、文字、ingredient-presence 三套模型配置的指纹都和 main 相同。`dailyValueHeading` 不进任何发给模型的输出格式。
+- 全量单测和干净 main 相比没有多挂一个。main 上原本就挂的有两类：指纹测试的期望值本身已过时；`tools/diag-corpus` 本地测试数据不在 git 里。
+
+**还没做**：
+- 还没有渠道会设置 `labelFormats`，要等 amazon.in 渠道接进来（`amazon-in` 渠道、ScraperAPI `country_code=in`、价格用 `priceToPay`）。
+- 交付层还要每次提交都带 `marketplace`，按站点分 run。
+- 重新处理已存来源（`saved-source-tasks.ts`）还是用美国关键词表重新核对。等印度有已存来源后要跟着带上格式。
+- 页面 HTML 文字表那条路还只认美国格式。印度页面基本不印完整的表，先不动。
+- Supply Smart 侧：`dailyValueHeading` 的接收和按口径分开存放，由 Supply Smart 的 worktree `KAN-243-india-label` 在做。他们上线前，我们发过去的这个字段会被他们的 `z.object` 静默丢掉，不会报错。
+- 日文、法文：关键词还只许英文字母，要等对应格式加进来时再放开，并按语言换匹配方式。
+
 ## 证据位置
 
 - ScraperAPI 原件：R2 `supply-smart-test` 桶 `research/kan243-india/scraperapi/`（5 个 `.html` + `.json`，已回读校验）；Server 一 `~/kan243-research/scraperapi/`。

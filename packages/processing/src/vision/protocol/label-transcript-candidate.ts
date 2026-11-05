@@ -1,9 +1,17 @@
 import {
   LabelImageCandidateSchema,
+  US_FACTS,
+  type LabelFormatId,
   type LabelImageCandidate,
 } from "@crawl-automation/v3-contracts";
+import { formatPanel, type FormatPanel } from "../../label/transcript/format-panel.js";
 import { isAmountCell } from "../../label/transcript/transcript-cells.js";
-import { parseTranscriptRows, type ParsedRow } from "../../label/transcript/transcript-rows.js";
+import {
+  parseTranscriptRows,
+  type ParsedPanel,
+  type ParsedRow,
+} from "../../label/transcript/transcript-rows.js";
+import type { TranscriptRow } from "../../label/transcript/html-transcript.js";
 import type { LabelIngredientPresencePolicy } from "./label-ingredient-presence.js";
 import {
   UNREADABLE_CELL,
@@ -26,18 +34,13 @@ const AMOUNT_HEADER = /amount|per\s+serving/i;
 export function transcriptCandidate(
   wire: LabelTranscriptWire,
   policy: Required<LabelIngredientPresencePolicy>,
+  formats: readonly LabelFormatId[] = [US_FACTS],
 ): TranscriptCandidate {
-  const panel = readablePanel(wire);
-  if (typeof panel === "string") {
-    return { reason: panel };
+  const read = readPanel(wire, formats);
+  if ("reason" in read) {
+    return { reason: read.reason };
   }
-  const parsed = parseTranscriptRows([
-    ...panel.servingLines.map((text) => ({ cells: [text], indent: 0, bold: false, table: 0 })),
-    ...panel.rows.map((row) => ({ ...row, table: 0 })),
-  ]);
-  if (!parsed.rows.length) {
-    return { reason: "no rows" };
-  }
+  const { parsed, column } = read;
   const heading = wire.otherIngredientsHeading?.trim();
   const body = wire.otherIngredients?.trim();
   const block = heading && body ? field(body) : null;
@@ -47,7 +50,7 @@ export function transcriptCandidate(
       drugFacts: null,
       servingSize: optionalField(parsed.servingSize),
       servingsPerContainer: optionalField(parsed.servingsPerContainer),
-      columns: [{ heading: columnHeading(panel.columnHeaders), rows: parsed.rows.map(labelRow) }],
+      columns: [column],
     },
     otherIngredients: heading && block ? { heading: field(heading), items: [block] } : null,
     formulaComplete: parsed.rows.some((row) => row.amount !== null),
@@ -64,18 +67,74 @@ export function transcriptCandidate(
   return result.success ? { candidate: result.data, block } : { reason: "not a label answer" };
 }
 
-/** The one panel, when its copy can be read by the rules; otherwise why not. */
-function readablePanel(wire: LabelTranscriptWire): LabelTranscriptWire["panels"][number] | string {
+type Panel = LabelTranscriptWire["panels"][number];
+
+/**
+ * The one panel's rows and its formula column, or why the rules cannot read it. KAN-243: a non-US format reshapes the
+ * panel first; the US panel is read exactly as before.
+ */
+type Reason = { reason: string };
+
+function readPanel(
+  wire: LabelTranscriptWire,
+  formats: readonly LabelFormatId[],
+): Reason | { parsed: ParsedPanel; column: ReturnType<typeof formulaColumn> } {
+  const read = panelRows(wire, formats);
+  if ("reason" in read) {
+    return read;
+  }
+  const { panel, shaped, rows } = read;
+  const parsed = parseTranscriptRows(rows);
+  if (!parsed.rows.length) {
+    return { reason: "no rows" };
+  }
+  parsed.servingSize ??= shaped?.servingSize ?? null;
+  parsed.servingsPerContainer ??= shaped?.servingsPerContainer ?? null;
+  return { parsed, column: formulaColumn(panel, shaped, parsed) };
+}
+
+/** The rows the parser reads; a value cell the headers do not place must be the only amount in its row. */
+function panelRows(
+  wire: LabelTranscriptWire,
+  formats: readonly LabelFormatId[],
+): Reason | { panel: Panel; shaped: FormatPanel | null; rows: TranscriptRow[] } {
+  const panel = onePanel(wire);
+  if (typeof panel === "string") {
+    return { reason: panel };
+  }
+  const shaped = formatPanel(panel, formats);
+  if (shaped && "reason" in shaped) {
+    return { reason: shaped.reason };
+  }
+  const rows = shaped?.rows ?? usRows(panel);
+  const several = (row: TranscriptRow) =>
+    !row.columns && row.cells.slice(1).filter(isAmountCell).length > 1;
+  return rows.some(several) ? { reason: "several amount columns" } : { panel, shaped, rows };
+}
+
+/** The one panel with no unreadable cell; otherwise why not. */
+function onePanel(wire: LabelTranscriptWire): Panel | string {
   const [panel, ...others] = wire.panels;
   if (!panel || others.length) {
     return `panels: ${wire.panels.length}`;
   }
-  if (JSON.stringify(wire).includes(UNREADABLE_CELL)) {
-    return "unreadable cell";
-  }
-  return panel.rows.some((row) => row.cells.slice(1).filter(isAmountCell).length > 1)
-    ? "several amount columns"
-    : panel;
+  return JSON.stringify(wire).includes(UNREADABLE_CELL) ? "unreadable cell" : panel;
+}
+
+const usRows = (panel: Panel): TranscriptRow[] => [
+  ...panel.servingLines.map((text) => ({ cells: [text], indent: 0, bold: false, table: 0 })),
+  ...panel.rows.map((row) => ({ ...row, table: 0 })),
+];
+
+function formulaColumn(panel: Panel, shaped: FormatPanel | null, parsed: ParsedPanel) {
+  const dailyValueHeading = shaped?.dailyValueHeading;
+  return {
+    heading: shaped?.amountHeading
+      ? field(shaped.amountHeading)
+      : columnHeading(panel.columnHeaders),
+    ...(dailyValueHeading ? { dailyValueHeading: field(dailyValueHeading) } : {}),
+    rows: parsed.rows.map(labelRow),
+  };
 }
 
 const optionalField = (text: string | null) => (text ? field(text) : null);

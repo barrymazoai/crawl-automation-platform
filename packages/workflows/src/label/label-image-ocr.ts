@@ -6,6 +6,7 @@ import {
   observationIdentity,
   type OcrActivityOutcome,
   type OcrInput,
+  type OcrRegistration,
 } from "@crawl-automation/v3-contracts";
 import { isCancellation, patched } from "@temporalio/workflow";
 import { isAdmissionFailure, noteSourceFailure, type LabelRun } from "./label-run.js";
@@ -105,15 +106,19 @@ async function recognized(
   if (!sameJson(receipt.registration.input, task)) {
     return stateOf(source, "rejected");
   }
-  const keywords = KeywordReceiptSchema.parse(
-    await run.call("activities", "screenImageKeywords", receipt.registration),
-  );
-  const { selection } = keywords;
+  const { selection } = await screened(run, receipt.registration);
   const same =
     selection.ocrOperationId === task.operationId &&
     sameJson(selection.image, task.file) &&
     sameJson(selection.observation, owner);
   return same ? { kind: "selection", selection } : stateOf(source, "rejected");
+}
+
+/** KAN-243: a storefront reading other label formats screens with their keywords; a US task sends what it always did. */
+async function screened(run: LabelRun, registration: OcrRegistration) {
+  const { labelFormats } = run.entry.input;
+  const request = labelFormats ? { registration, labelFormats } : registration;
+  return KeywordReceiptSchema.parse(await run.call("activities", "screenImageKeywords", request));
 }
 
 /** The OCR call; a lost outcome leaves the receipt to inspect, and a permit failure stops the product. */

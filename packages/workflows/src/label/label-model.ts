@@ -2,6 +2,7 @@ import {
   ExecutionIdSchema,
   ImageOcrPrepareOutcomeSchema,
   LabelEvidencePolicySchema,
+  LabelFormatIdSchema,
   isOrderedEvidencePolicy,
   LabelSourcePolicySchema,
   LabelPreparationSchema,
@@ -38,6 +39,8 @@ export const LabelTaskSchema = z
     sourcePolicy: LabelSourcePolicySchema.optional(),
     failurePolicy: z.enum(["source-failure-first/1", "source-failure-first/2"]).optional(),
     admission: z.literal("label-packaging/1").optional(),
+    /** KAN-243: the label formats the storefront's labels are read in; absent = the US panel alone. */
+    labelFormats: z.array(LabelFormatIdSchema).min(1).max(20).optional(),
   })
   .refine(
     (input) => !input.sourcePolicy || isOrderedEvidencePolicy(input.evidencePolicy),

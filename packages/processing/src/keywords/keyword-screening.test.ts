@@ -23,6 +23,42 @@ async function screeningSetup(text = "  Supplement Facts\nIngredients: test only
   return { ...fixture, registration, ocrText, local, keywordReviews: reviews, screening };
 }
 
+// KAN-243: a storefront reading Indian label formats screens with their keywords; the US input is unchanged.
+describe("keyword screening in a storefront's label formats", () => {
+  const india = ["us-facts/1", "in-nutritional-information/1", "in-composition/1"] as const;
+
+  it("selects an Indian Nutritional Information table the US words miss, under its own policy", async () => {
+    const fixture = await screeningSetup(
+      "Nutritional Information (Approx.)\nMagnesium 350 mg 100 %RDA",
+    );
+    expect(await fixture.screening.run(fixture.registration, signal())).toMatchObject({
+      status: "not_matched",
+    });
+    const receipt = await fixture.screening.run(
+      { registration: fixture.registration, labelFormats: [...india] },
+      signal(),
+    );
+    expect(receipt).toMatchObject({
+      status: "matched",
+      selection: {
+        policy: { version: "label-keywords/2", formats: india },
+        matchedKeywords: ["Nutritional Information", "RDA"],
+      },
+    });
+    expect(fixture.remote.data.has((receipt as { evidenceKey: string }).evidenceKey)).toBe(true);
+  });
+
+  it("screens a US-only format list exactly as a bare registration", async () => {
+    const fixture = await screeningSetup();
+    const bare = await fixture.screening.run(fixture.registration, signal());
+    const listed = await fixture.screening.run(
+      { registration: fixture.registration, labelFormats: ["us-facts/1"] },
+      signal(),
+    );
+    expect(listed).toEqual(bare);
+  });
+});
+
 // Cases carried over from the former keyword publication and keyword role.
 describe("keyword screening step", () => {
   it.each(["Supplement Facts per scoop", "marketing only"])(

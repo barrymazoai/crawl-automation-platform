@@ -1,17 +1,41 @@
 import { z } from "zod";
+import { LABEL_FORMATS, LabelFormatIdSchema, US_FACTS, isUsOnlyFormats, labelFormatsOf, type LabelFormatId } from "./label-formats.js";
 import { ArtifactRefSchema, ObservationSchema, ExecutionIdSchema, Sha256Schema, ObjectKeySchema, assertArtifactBelongsTo } from "./artifacts.js";
 
 export const ImageEvidenceSchema = ArtifactRefSchema.refine(f => f.kind === "source-image" || f.kind === "pdf-page");
-export const KeywordPolicySchema = z.strictObject({
-  version: z.literal("label-keywords/1"),
-  keywords: z.array(z.string().regex(/^[A-Za-z]+(?: [A-Za-z]+)*$/).max(100)).min(1).max(50)
-    .refine(terms => new Set(terms.map(t => t.toLowerCase())).size === terms.length),
-});
+const KeywordListSchema = z.array(z.string().regex(/^[A-Za-z]+(?: [A-Za-z]+)*$/).max(100)).min(1).max(50)
+  .refine(terms => new Set(terms.map(t => t.toLowerCase())).size === terms.length);
+/**
+ * label-keywords/1 is the US policy. label-keywords/2 (KAN-243) also names the label formats the keywords select for,
+ * so the vision copy and its parse read the selected image in those formats.
+ */
+export const KeywordPolicySchema = z.union([
+  z.strictObject({ version: z.literal("label-keywords/1"), keywords: KeywordListSchema }),
+  z.strictObject({ version: z.literal("label-keywords/2"),
+    formats: z.array(LabelFormatIdSchema).min(1).max(20).refine(ids => new Set(ids).size === ids.length),
+    keywords: KeywordListSchema }),
+]);
+export type KeywordPolicy = z.infer<typeof KeywordPolicySchema>;
 // Panel-only phrases (owner 2026-10-05) admit Facts panels whose heading is cropped on a curved bottle
 // ("...plement Facts"); bare "Servings" also appears on front labels, so it is not a keyword.
 export const DefaultKeywordPolicy = KeywordPolicySchema.parse({ version: "label-keywords/1",
   keywords: ["Supplement Facts", "Nutrition Facts", "Ingredients", "Other Ingredients",
     "Amount Per Serving", "Daily Value", "Servings Per Container"] });
+
+/** The keyword policy for these label formats: exactly the US policy when only the US panel is read. */
+export function keywordPolicyFor(formats: readonly LabelFormatId[] | undefined): KeywordPolicy {
+  if (isUsOnlyFormats(formats)) return DefaultKeywordPolicy;
+  const read = labelFormatsOf(formats);
+  const keywords: string[] = [];
+  for (const id of read) for (const term of LABEL_FORMATS[id].keywords)
+    if (!keywords.some(known => known.toLowerCase() === term.toLowerCase())) keywords.push(term);
+  return KeywordPolicySchema.parse({ version: "label-keywords/2", formats: [...read], keywords });
+}
+
+/** The label formats a keyword policy selected for. */
+export function keywordPolicyFormats(policy: KeywordPolicy): readonly LabelFormatId[] {
+  return policy.version === "label-keywords/2" ? policy.formats : [US_FACTS];
+}
 export const KeywordResultSchema = z.strictObject({
   schemaVersion: z.literal(1), observation: ObservationSchema, image: ImageEvidenceSchema,
   ocrOperationId: ExecutionIdSchema, ocrTextSha256: Sha256Schema,

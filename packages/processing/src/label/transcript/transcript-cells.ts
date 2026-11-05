@@ -77,7 +77,7 @@ export function readCells(raw: TranscriptRow): Cells | null {
   if (!nameCell || skipped(raw, values)) {
     return null;
   }
-  const value = valueCells(values);
+  const value = raw.columns ? headedCells(values, raw.columns) : valueCells(values);
   const inName = doseInName(nameCell, value.amountCell);
   return {
     raw,
@@ -113,6 +113,14 @@ function valueCells(values: string[]) {
     ? null
     : marker(values.find((value, at) => at !== dvAt && isMarker(value)));
   return { amountCell, dvCell: values[dvAt], amountMarker };
+}
+
+/** The cells the printed column headers name; a "--" in the amount column is its marker. */
+function headedCells(values: string[], columns: NonNullable<TranscriptRow["columns"]>) {
+  const amountCell = columns.amount === null ? undefined : values[columns.amount];
+  const dvCell = columns.dailyValue === null ? undefined : values[columns.dailyValue];
+  const amount = printed(amountCell) ? amountCell : undefined;
+  return { amountCell: amount, dvCell, amountMarker: amount ? null : marker(amountCell) };
 }
 
 /** A dose the name cell prints itself: "Sodium 55mg", "240 mcg Folic Acid", "Includes 4 g Added Sugars". */

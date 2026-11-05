@@ -1,8 +1,12 @@
+import { z } from "zod";
 import { recordRecovery } from "@crawl-automation/platform";
 import { isAppError, type ObjectStore } from "@crawl-automation/platform";
 import {
   DefaultKeywordPolicy,
   KeywordReceiptSchema,
+  LabelFormatIdSchema,
+  keywordPolicyFor,
+  type KeywordPolicy,
   KeywordResultSchema,
   OcrRegistrationSchema,
   observationIdentity,
@@ -17,7 +21,27 @@ import { keywordFailure, type KeywordErrorCode } from "./keyword-errors.js";
 import type { LedgerOcrText } from "./ocr-text.js";
 
 /** Names the keyword policy in a Review's operation ID, so a policy change is a different operation. */
-export const keywordCompatibility = `keywords-${hashString(JSON.stringify(DefaultKeywordPolicy)).slice(0, 32)}`;
+export const keywordCompatibilityOf = (policy: KeywordPolicy) =>
+  `keywords-${hashString(JSON.stringify(policy)).slice(0, 32)}`;
+export const keywordCompatibility = keywordCompatibilityOf(DefaultKeywordPolicy);
+
+/**
+ * The activity's input: an OCR registration (the US policy), or KAN-243 the registration with the label formats of
+ * its task, screened with those formats' policy.
+ */
+const ScreenRequestSchema = z.strictObject({
+  registration: z.unknown(),
+  labelFormats: z.array(LabelFormatIdSchema).min(1).max(20),
+});
+function screenRequest(raw: unknown): { registration: unknown; policy: KeywordPolicy } {
+  const request = ScreenRequestSchema.safeParse(raw);
+  return request.success
+    ? {
+        registration: request.data.registration,
+        policy: keywordPolicyFor(request.data.labelFormats),
+      }
+    : { registration: raw, policy: DefaultKeywordPolicy };
+}
 export const keywordKey = (result: KeywordResult) =>
   `v3/keywords/${result.ocrOperationId}/${result.policyFingerprint}.json`;
 
@@ -52,8 +76,9 @@ export class KeywordScreening {
   constructor(private readonly deps: KeywordScreeningDeps) {}
 
   async run(raw: unknown, signal: AbortSignal): Promise<KeywordReceipt | KeywordReview> {
+    const { registration, policy } = screenRequest(raw);
     try {
-      const result = await this.deps.text.screen(raw, signal);
+      const result = await this.deps.text.screen(registration, signal, policy);
       const evidenceKey = await this.publish(result, signal);
       const imageId = result.image.artifactId;
       return KeywordReceiptSchema.parse({
@@ -66,7 +91,7 @@ export class KeywordScreening {
       recordRecovery(error, { operation: "keyword-screening" });
       const own = isAppError(error) && (KEPT as readonly string[]).includes(error.code);
       const code = own ? error.code : "SCREEN.EVIDENCE_UNRESOLVED";
-      const reviewId = await this.recordReview(raw, code);
+      const reviewId = await this.recordReview(registration, code, policy);
       return { status: "review", code, reviewId, automaticRetry: false };
     }
   }
@@ -87,7 +112,7 @@ export class KeywordScreening {
     return key;
   }
 
-  private async recordReview(raw: unknown, code: string): Promise<string> {
+  private async recordReview(raw: unknown, code: string, policy: KeywordPolicy): Promise<string> {
     const registration = OcrRegistrationSchema.parse(raw);
     const { input } = registration;
     const reviewId = newReviewId("screen");
@@ -96,7 +121,7 @@ export class KeywordScreening {
       task: {
         requestId: input.requestId,
         observationId: input.observationId,
-        operationId: `screen-${hashString(JSON.stringify([input.operationId, keywordCompatibility]))}`,
+        operationId: `screen-${hashString(JSON.stringify([input.operationId, keywordCompatibilityOf(policy)]))}`,
         inputFingerprint: hashString(JSON.stringify(registration)),
       },
       observation: observationIdentity(input),
