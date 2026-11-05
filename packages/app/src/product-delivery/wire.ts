@@ -1,4 +1,5 @@
 import type {
+  CrossMarketField,
   LabelCollectedProduct,
   ProductListingDateFields,
 } from "@crawl-automation/v3-contracts";
@@ -51,6 +52,8 @@ export interface DeliveryListing {
 }
 export interface DeliveryItem extends DeliveryListing, ProductListingDateFields {
   clientRef: string;
+  /** KAN-243: the cross-market verdict; on the observation batch item only, never in a label request. */
+  crossMarket?: CrossMarketField;
   domain: string;
   capturedAt: string;
   images: DeliveryImage[];

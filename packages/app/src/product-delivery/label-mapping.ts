@@ -72,6 +72,19 @@ export const LABEL_CONFIDENCE = 100;
  */
 export const LABEL_SUBMISSION = "confidence-1";
 
+/** The item's listing fields; batch-only fields (its ref, domain, listing date, cross-market verdict) never travel. */
+function itemListing(item: DeliveryItem) {
+  const {
+    clientRef: _clientRef,
+    domain: _domain,
+    listedAt: _date,
+    listedAtSource: _source,
+    crossMarket: _crossMarket,
+    ...rest
+  } = item;
+  return rest;
+}
+
 /** Full label wire payload shared by DTC and marketplace delivery. No run-dependent identity. */
 export function deliveryLabel(input: {
   item: DeliveryItem;
@@ -80,15 +93,7 @@ export function deliveryLabel(input: {
   channel: DeliveryLabel["channel"];
 }): DeliveryLabel {
   const { item, collection, company, channel } = input;
-  const {
-    clientRef: _clientRef,
-    domain: _domain,
-    listedAt: _date,
-    listedAtSource: _source,
-    capturedAt,
-    images,
-    ...listing
-  } = item;
+  const { capturedAt, images, ...listing } = itemListing(item);
   const { schemaVersion: _schemaVersion, ...observation } = collection.observation;
   return {
     schemaVersion: 1,

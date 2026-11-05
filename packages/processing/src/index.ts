@@ -14,3 +14,8 @@ export * from "./formula/index.js";
 export * from "./recheck/index.js";
 export * from "./enrichment/index.js";
 export * from "./brand-research/index.js";
+export {
+  crossMarketJudge,
+  crossMarketPrompt,
+  CROSS_MARKET_REASONS,
+} from "./cross-market/cross-market-judge.js";

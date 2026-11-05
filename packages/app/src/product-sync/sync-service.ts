@@ -1,7 +1,12 @@
 import type { ProductObservationWriter } from "../product-delivery/ports.js";
 import type { MarketplaceChannel, ProductSyncLedger, SyncChange } from "./ledger.js";
-import type { MarketplacePage, MarketplaceReadRequest } from "./marketplace-model.js";
-import type { DomainResolution } from "@crawl-automation/v3-contracts";
+import type {
+  MarketplacePage,
+  MarketplaceProduct,
+  MarketplaceReadRequest,
+} from "./marketplace-model.js";
+import type { CrossMarketField, DomainResolution } from "@crawl-automation/v3-contracts";
+import type { CrossMarketCheck, CrossMarketOutcome } from "../cross-market/cross-market-check.js";
 import type { BrandCompanyMatch } from "./brand-company-model.js";
 import type { BrandCompanyRepository } from "./ports.js";
 import {
@@ -40,6 +45,8 @@ export interface ProductSyncDeps {
  */
 export interface SyncTarget {
   writer: ProductObservationWriter;
+  /** KAN-243: the cross-market check of this target's first listings; absent = no verdict is sent. */
+  crossMarket?: Pick<CrossMarketCheck, "outcomes">;
   companies: {
     resolveDomain(domain: string, signal: AbortSignal): Promise<DomainResolution>;
   };
@@ -71,10 +78,16 @@ export class ProductSyncService {
       },
       tally,
     );
-    tally.result.toSend = planned.length;
+    const ready = request.dryRun
+      ? planned
+      : await this.crossMarket({ channel: request.channel, planned, tally }, signal);
+    tally.result.toSend = ready.length;
     if (!request.dryRun) {
       await this.deps.ledger.touch(tally.touched);
-      await this.send({ runId, planned, tally, writer: this.writerOf(request.channel) }, signal);
+      await this.send(
+        { runId, planned: ready, tally, writer: this.writerOf(request.channel) },
+        signal,
+      );
     }
     return tally.result;
   }
@@ -105,6 +118,22 @@ export class ProductSyncService {
     } finally {
       await this.deps.ledger.record(tally.changes);
     }
+  }
+
+  /** Each item carries its verdict; one waiting for the other storefront's page is left for a later round. */
+  private async crossMarket(
+    at: { channel: MarketplaceChannel; planned: PlannedSync[]; tally: SyncTally },
+    signal: AbortSignal,
+  ): Promise<PlannedSync[]> {
+    const check = this.deps.writers?.[at.channel]?.crossMarket;
+    if (!check || !at.planned.length) {
+      return at.planned;
+    }
+    const outcomes = await check.outcomes(
+      at.planned.map((entry) => entry.product),
+      signal,
+    );
+    return withOutcomes(at.planned, outcomes, at.tally);
   }
 
   private writerOf(channel: MarketplaceChannel): ProductObservationWriter {
@@ -165,4 +194,24 @@ function emptyResult(request: ProductSyncRequest, page: MarketplacePage): Produc
     runCompleted: null,
     after: page.after ?? null,
   };
+}
+
+export function withOutcomes(
+  planned: PlannedSync[],
+  outcomes: Map<MarketplaceProduct, CrossMarketOutcome>,
+  tally: SyncTally,
+): PlannedSync[] {
+  return planned.flatMap((entry) => {
+    const outcome = outcomes.get(entry.product);
+    if (outcome && "hold" in outcome) {
+      tally.result.waitingCrossMarket = (tally.result.waitingCrossMarket ?? 0) + 1;
+      return [];
+    }
+    return [outcome && "field" in outcome ? withVerdict(entry, outcome.field) : entry];
+  });
+}
+
+/** The verdict rides on the item; the label (built from the item before) never carries it. */
+function withVerdict(entry: PlannedSync, crossMarket: CrossMarketField): PlannedSync {
+  return { ...entry, item: { ...entry.item, crossMarket } };
 }

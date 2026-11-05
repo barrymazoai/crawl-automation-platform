@@ -364,6 +364,25 @@ Supply Smart 已上测试环境的做法：
 4. 20 个商品端到端推测试库，按设计稿第一期的验证标准验收：页面字段 ≥ 95%、配方 ≥ 90%、美国渠道的表里没有一行来自 amazon.in、同 ASIN 美印两条挂牌各归其位。
 5. 每一步结束都跑 `pnpm check` 并做独立审查，修完再进下一步。不部署、不重启 worker、不推正式库，这几件都要另行批准。
 
+### 10.6 实现记录（2026-11-05）
+
+用户在 11-05 改选 10.4 第 1 项的 **B**：印度标签照常读，在交付前判同。原因是 A 的判同发生在读标签之前，那时只能拿整套印度图库去比，视觉调用的成本和读一遍标签差不多，A 想省的部分省不下来。印度商品不复用美国配方，`amazon-in` 有自己的配方族。
+
+- 第 1 步（`c4fcacac`）：`amazon-in` 渠道、迁移 071、按站点生成 adapter。
+- 第 2 步（`24023919`）：按 Supply Smart 渠道 `amazon` 加 `marketplace: "amazon.in"` 交付；`productSync.targets` 按站点选目标库；按目标库的域名重新查公司；印度不套美国销量曲线。
+- 第 3 步：跨站判同（`packages/app/src/cross-market/`，迁移 072 `cross_market_check`，只追加）。
+  - 只在有目标库、带判同检查的站点生效（`amazon-in`），在 product-sync 发送前做。
+  - 先用目标库的 `getCrossMarketListings` 批量查同 ASIN 在别国的挂牌。查不到就不带字段。
+  - 查到了：取爬虫自己存的那个站点（`amazon`）同 ASIN 的已采集商品。两边配方逐行一致、份量相同 → `same`（`rule`）；否则交给标签模型（`processing.codex.vision` 的模型和强度）做一次不带工具的文字判断，输入是两边的标题、品牌、份量、配方行和其他成分，结论是 `same`、`different` 或 `unsure`，原因码从固定列表里选。
+  - 爬虫没有对方站点的材料：用同一个爬虫品牌在那个站点的 source 排一次抓取（每个 ASIN 只排一次），这条印度商品先不发，最多等 3 天。
+  - 没法判断时**不带字段**，原因记在爬虫自己的记录里。没法判断的情况包括：没有 source 可排、3 天内没等到、对方商品没有标签。不带字段在 Supply Smart 的行为和 `unsure` 相同。爬虫不会发一个没有模型判断、却标着 `method: "codex"` 的 `unsure`。
+  - 判同结论只放在 batch item 上，标签请求不带（`deliveryLabel` 显式剥掉）。
+
+**还没做 / 要注意：**
+- 反方向（美国新 ASIN 交付前先查印度挂牌）还没接。现在印度只在测试库，正式库里没有印度挂牌，而且正式库还没部署 `getCrossMarketListings`。等 amazon.in 上正式库时，再给 `amazon` 目标加上同样的检查。
+- 判断用的材料里还没有印度页面上的进口商、生产商信息（它们在商品详情区，不在已采集的标签里）。
+- 爬虫品牌在 amazon.com 没有 source 的本土品牌，排不了美国抓取，只能不带字段。
+
 ## 证据位置
 
 - ScraperAPI 原件：R2 `supply-smart-test` 桶 `research/kan243-india/scraperapi/`（5 个 `.html` + `.json`，已回读校验）；Server 一 `~/kan243-research/scraperapi/`。

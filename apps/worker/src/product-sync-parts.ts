@@ -21,6 +21,7 @@ import {
   ProductSyncSweep,
 } from "@crawl-automation/app";
 import type { CoreParts } from "./core-parts.js";
+import { crossMarketCheck } from "./cross-market-parts.js";
 import type { BrandEnrichmentSettings } from "./brand-enrichment-settings.js";
 
 /** Hosted by the brand-enrichment role: it holds the Supply Smart key, R2 and the channels' retained-page parsers. */
@@ -34,17 +35,18 @@ export function buildProductSyncSweep(
   },
 ) {
   const targets = Object.entries(input.targets ?? {}) as Targets;
+  const reader = new PostgresMarketplaceReader({
+    database: parts.database,
+    objects: parts.r2.store,
+    channels: parts.registry,
+    log: parts.log,
+  });
   const service = new ProductSyncService({
-    reader: new PostgresMarketplaceReader({
-      database: parts.database,
-      objects: parts.r2.store,
-      channels: parts.registry,
-      log: parts.log,
-    }),
+    reader,
     brands: new PostgresBrandCompany(parts.database),
     ledger: new PostgresProductSync(parts.database),
     writer: new SupplySmartObservationWriter(input.rpc),
-    writers: targetWriters(targets),
+    writers: targetWriters(parts, { reader, targets }),
   });
   return new ProductSyncSweep({
     sync: service,
@@ -63,13 +65,18 @@ export function buildProductSyncSweep(
 
 type Targets = [AmazonChannel, SupplySmartRpc][];
 
-function targetWriters(targets: Targets) {
+/** Each target's writer, its company lookup and its cross-market check (KAN-243). */
+function targetWriters(
+  parts: CoreParts,
+  input: { reader: PostgresMarketplaceReader; targets: Targets },
+) {
   return Object.fromEntries(
-    targets.map(([channel, rpc]) => [
+    input.targets.map(([channel, rpc]) => [
       channel,
       {
         writer: new SupplySmartObservationWriter(rpc),
         companies: new SupplySmartCompaniesClient(rpc),
+        crossMarket: crossMarketCheck(parts, { rpc, reader: input.reader }),
       },
     ]),
   );

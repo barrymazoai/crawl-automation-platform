@@ -31,6 +31,7 @@ const Request = z.object({
     .object({ listingId: z.string().min(1), variantId: z.string().min(1).nullable() })
     .optional(),
   pending: z.boolean().optional(),
+  listingIds: z.array(z.string().min(1).max(200)).min(1).max(200).optional(),
 });
 
 /** Read-only keyset pages of settled marketplace products. No fetch, RPC, retry or database writes. */
@@ -48,6 +49,7 @@ export class PostgresMarketplaceReader {
       request.after?.variantId ?? null,
       request.limit + 1,
       request.pending ?? false,
+      request.listingIds ?? null,
     ]);
     const products: MarketplaceProduct[] = [];
     for (const row of rows.slice(0, request.limit)) {

@@ -22,6 +22,8 @@ export interface ProductSyncResult {
   read: number;
   unchanged: number;
   waitingCompany: number;
+  /** KAN-243: listings waiting for the other storefront's page before their cross-market check (not sent). */
+  waitingCrossMarket?: number;
   material: number;
   toSend: number;
   verified: number;

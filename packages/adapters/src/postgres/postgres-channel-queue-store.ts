@@ -90,11 +90,16 @@ export class PostgresChannelQueueStore implements QueueStore {
   }
 
   /** The brand's source for the formula request, preferring enabled entries; no particular URL is required. */
-  async amazonSourceOf(brandId: string): Promise<string | null> {
+  amazonSourceOf(brandId: string): Promise<string | null> {
+    return this.brandSourceOf("amazon", brandId);
+  }
+
+  /** KAN-243: the brand's source on a storefront (the cross-market check's recapture), enabled first. */
+  async brandSourceOf(channel: string, brandId: string): Promise<string | null> {
     const rows = await this.database.query<{ id: string }>(
-      `SELECT id FROM brand_source WHERE brand_id = $1 AND channel = 'amazon'
+      `SELECT id FROM brand_source WHERE brand_id = $1 AND channel = $2
        ORDER BY enabled DESC, created_at, id LIMIT 1`,
-      [brandId],
+      [brandId, channel],
     );
     return rows[0]?.id ?? null;
   }

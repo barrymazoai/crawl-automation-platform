@@ -169,3 +169,32 @@ describe("amazon.in's own Supply Smart target", () => {
     expect(fallback.ingest).not.toHaveBeenCalled();
   });
 });
+
+describe("cross-market verdicts in a batch", () => {
+  it("leaves a listing waiting for material out of the batch and puts a verdict on the item only", async () => {
+    const { withOutcomes } = await import("./sync-service.js");
+    const entry = (listingId: string) =>
+      ({
+        product: { listingId },
+        item: { externalId: listingId },
+        label: { listing: { externalId: listingId } },
+      }) as unknown as Parameters<typeof withOutcomes>[0][number];
+    const [waiting, judged, alone] = [entry("A"), entry("B"), entry("C")];
+    const field = { verdict: "same" } as never;
+    const tally = { result: {} } as never as Parameters<typeof withOutcomes>[2];
+    const ready = withOutcomes(
+      [waiting, judged, alone],
+      new Map<unknown, unknown>([
+        [waiting.product, { hold: "material" }],
+        [judged.product, { field }],
+        [alone.product, { none: true }],
+      ]) as never,
+      tally,
+    );
+    expect(ready.map((sent) => sent.item.externalId)).toEqual(["B", "C"]);
+    expect(ready[0]?.item).toEqual({ externalId: "B", crossMarket: field });
+    expect(ready[0]?.label).toEqual({ listing: { externalId: "B" } });
+    expect(ready[1]?.item).not.toHaveProperty("crossMarket");
+    expect(tally.result.waitingCrossMarket).toBe(1);
+  });
+});

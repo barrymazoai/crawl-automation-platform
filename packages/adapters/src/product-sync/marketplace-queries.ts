@@ -52,6 +52,7 @@ export const MARKETPLACE_QUEUE = `
   FROM done d
   WHERE ($2::text IS NULL OR (d.listing_id, coalesce(d.variant_id, '')) > ($2, coalesce($3::text, '')))
     AND (NOT $5::boolean OR (${PENDING_SYNC}))
+    AND ($6::text[] IS NULL OR d.listing_id = ANY($6::text[]))
   ORDER BY d.listing_id, coalesce(d.variant_id, '') LIMIT $4`;
 
 export const MARKETPLACE_HISTORY = `

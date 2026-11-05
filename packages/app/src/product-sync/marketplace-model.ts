@@ -83,6 +83,8 @@ export interface MarketplaceReadRequest {
   after?: MarketplaceCursor;
   /** Only matched brands' products that are new or settled again since their last send (the automatic sweep). */
   pending?: boolean;
+  /** KAN-243: only these listings (the other storefront's product a cross-market check compares with). */
+  listingIds?: string[];
 }
 export interface MarketplacePage {
   products: MarketplaceProduct[];
