@@ -1,5 +1,5 @@
 import { brandScanErrors } from "@crawl-automation/channels-core";
-import { AMAZON_ORIGIN } from "./address.js";
+import { AMAZON_US, type AmazonSite } from "./site.js";
 
 export const AMAZON_SCAN_MAX_PAGES = 7;
 const SORT = "date-desc-rank";
@@ -35,20 +35,14 @@ function checkBrandPage(url: URL): void {
 }
 
 /** Only observed Brand-filter searches and /s?srs= brand pages; Store URLs need a browser. */
-export function amazonScanSourceUrl(raw: string): string {
-  const url = URL.parse(raw, AMAZON_ORIGIN);
-  if (
-    !url ||
-    url.origin !== AMAZON_ORIGIN ||
-    url.username ||
-    url.password ||
-    url.pathname !== "/s"
-  ) {
+export function amazonScanSourceUrl(raw: string, site: AmazonSite = AMAZON_US): string {
+  const url = URL.parse(raw, site.origin);
+  if (!url || url.origin !== site.origin || url.username || url.password || url.pathname !== "/s") {
     throw brandScanErrors.create("BRAND_SCAN.URL");
   }
   filtersOf(url);
   checkBrandPage(url);
-  const result = new URL("/s", AMAZON_ORIGIN);
+  const result = new URL("/s", site.origin);
   for (const key of ["k", "i", "srs", "rh", "dc"]) {
     const value = url.searchParams.get(key);
     if (value !== null) {
@@ -59,27 +53,33 @@ export function amazonScanSourceUrl(raw: string): string {
   return result.href;
 }
 
-export function amazonScanPageUrl(source: string, page: number): string {
+export function amazonScanPageUrl(
+  source: string,
+  page: number,
+  site: AmazonSite = AMAZON_US,
+): string {
   if (!Number.isInteger(page) || page < 1 || page > AMAZON_SCAN_MAX_PAGES) {
     throw brandScanErrors.create("BRAND_SCAN.URL", { details: { page } });
   }
-  const url = new URL(amazonScanSourceUrl(source));
+  const url = new URL(amazonScanSourceUrl(source, site));
   url.searchParams.set("page", String(page));
   return url.href;
 }
 
 /** The shared numeric brand ID, or null for other supported brand filter types. */
-export function amazonBrandFilterId(url: string): string | null {
-  return /^p_123:(\d{1,12})$/.exec(amazonScanBrandFilter(url))?.[1] ?? null;
+export function amazonBrandFilterId(url: string, site: AmazonSite = AMAZON_US): string | null {
+  return /^p_123:(\d{1,12})$/.exec(amazonScanBrandFilter(url, site))?.[1] ?? null;
 }
 
-export function amazonScanBrandFilter(url: string): string {
+export function amazonScanBrandFilter(url: string, site: AmazonSite = AMAZON_US): string {
   return (
-    filtersOf(new URL(amazonScanSourceUrl(url))).find((filter) => BRAND_FILTER.test(filter)) ?? ""
+    filtersOf(new URL(amazonScanSourceUrl(url, site))).find((filter) =>
+      BRAND_FILTER.test(filter),
+    ) ?? ""
   );
 }
 
 /** The observed retail brand keyword, never a fallback to a holding-company record. */
-export function amazonBrandSearchName(url: string): string | null {
-  return new URL(amazonScanSourceUrl(url)).searchParams.get("k")?.trim() || null;
+export function amazonBrandSearchName(url: string, site: AmazonSite = AMAZON_US): string | null {
+  return new URL(amazonScanSourceUrl(url, site)).searchParams.get("k")?.trim() || null;
 }

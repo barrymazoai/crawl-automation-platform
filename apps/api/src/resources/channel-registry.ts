@@ -11,7 +11,7 @@ import {
   WHOLE_FOODS_STORE,
   type WholeFoodsHttpScanSettings,
 } from "@crawl-automation/channels-wholefoods";
-import { amazonAdapter } from "@crawl-automation/channel-amazon";
+import { amazonAdapter, amazonInAdapter } from "@crawl-automation/channel-amazon";
 import {
   createSwansonAdapter,
   type SwansonBrandScanSettings,
@@ -29,6 +29,7 @@ export function channelRegistry(
     createSwansonAdapter(swanson),
     gncAdapter,
     amazonAdapter,
+    amazonInAdapter,
     wholeFoodsAdapter(WHOLE_FOODS_STORE, wholefoods),
     costcoAdapter(),
     createDtcAdapter(dtcSites),

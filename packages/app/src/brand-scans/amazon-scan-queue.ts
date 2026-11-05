@@ -1,3 +1,4 @@
+import { isAmazonChannel } from "@crawl-automation/v3-contracts";
 import { z } from "zod";
 import { appErrors } from "../errors.js";
 import {
@@ -37,6 +38,9 @@ export interface AmazonScanQueueDeps {
   knownListings(scan: ScanRecord): Promise<QueuedProduct[]>;
 }
 
+/** Amazon storefronts' scans queue their products through this bridge. */
+export const isAmazonScan = (scan: ScanRecord): boolean => isAmazonChannel(scan.source.channel);
+
 /** Bridges scan products to the shared queue using the scan's source and stable batch IDs. */
 export class AmazonBrandScanQueue implements AmazonScanQueue {
   constructor(private readonly deps: AmazonScanQueueDeps) {}
@@ -49,7 +53,8 @@ export class AmazonBrandScanQueue implements AmazonScanQueue {
     if (!products.length) {
       return { added: 0 };
     }
-    if (scan.source.channel !== "amazon") {
+    const { channel } = scan.source;
+    if (!isAmazonChannel(channel)) {
       throw appErrors.create("QUEUE.SOURCE_CHANNEL_MISMATCH");
     }
     // Revisit inputs can carry a historical sourceId; the scan owns this new batch's source.
@@ -59,7 +64,7 @@ export class AmazonBrandScanQueue implements AmazonScanQueue {
       variantId,
     }));
     const input = AddToQueueSchema.parse({
-      channel: "amazon",
+      channel,
       batchId,
       label: `brand scan: ${scan.source.brandName}`.slice(0, 200),
       products: scanProducts.parse(candidates).map((product) => ({

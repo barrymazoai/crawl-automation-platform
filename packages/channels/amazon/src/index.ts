@@ -1,5 +1,11 @@
-export { amazonAdapter, AMAZON_HTTP_POLICY } from "./adapter.js";
-export { amazonBrandScan, type AmazonListingPage } from "./brand-scan.js";
+export {
+  amazonAdapter,
+  amazonInAdapter,
+  amazonSiteAdapter,
+  AMAZON_HTTP_POLICY,
+} from "./adapter.js";
+export { AMAZON_IN, AMAZON_SITES, AMAZON_US, type AmazonSite } from "./site.js";
+export { amazonBrandScan, amazonSiteBrandScan, type AmazonListingPage } from "./brand-scan.js";
 export { amazonBrandFilterId, amazonBrandSearchName } from "./brand-scan-address.js";
 export { amazonStoreSourceUrl } from "./store-address.js";
 export { amazonStoreBrandScan, parseAmazonStoreListing } from "./store-listing.js";

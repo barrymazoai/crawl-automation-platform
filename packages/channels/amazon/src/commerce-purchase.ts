@@ -11,9 +11,14 @@ import { purchasePromotions } from "./commerce-promotions.js";
 import { purchaseOptions } from "./commerce-options.js";
 import { purchaseSeller } from "./commerce-seller.js";
 import type { AmazonElement } from "./dom.js";
+import { AMAZON_US, type AmazonSite } from "./site.js";
 import { commerceVisibleText as textOf } from "./commerce-dom.js";
 
-function initialConditions(root: AmazonElement, price: string | null): PurchaseConditions {
+function initialConditions(
+  root: AmazonElement,
+  price: string | null,
+  site: AmazonSite,
+): PurchaseConditions {
   const text = locationText(root);
   return {
     codec: "purchase-conditions/1",
@@ -22,7 +27,7 @@ function initialConditions(root: AmazonElement, price: string | null): PurchaseC
     shipsFrom: null,
     delivery: {
       countryCode: null,
-      postalCode: uniqueCommerce(text?.match(/\b\d{5}(?:-\d{4})?\b/g) ?? []),
+      postalCode: uniqueCommerce(text?.match(site.postalCode) ?? []),
       text,
     },
     selectedOptions: [],
@@ -35,7 +40,7 @@ function initialConditions(root: AmazonElement, price: string | null): PurchaseC
   };
 }
 
-function nativePurchase(offer: AmazonElement): boolean {
+function nativePurchase(offer: AmazonElement, origin: string): boolean {
   const forms = commerceElements(offer, "form#addToCart");
   const form = forms.length === 1 ? forms[0] : null;
   if (!form) {
@@ -47,20 +52,24 @@ function nativePurchase(offer: AmazonElement): boolean {
   ].every(([id, name, path]) => {
     const buttons = commerceElements(form, `input#${id}[name="${name}"]`);
     const button = buttons.length === 1 ? buttons[0] : null;
-    const url = URL.parse(button?.getAttribute("formaction") ?? "", "https://www.amazon.com");
+    const url = URL.parse(button?.getAttribute("formaction") ?? "", origin);
     return (
       button &&
       !button.hasAttribute("disabled") &&
-      url?.origin === "https://www.amazon.com" &&
+      url?.origin === origin &&
       (url.pathname === path || url.pathname.startsWith(`${path}/`))
     );
   });
 }
 
-function offerConditions(
-  input: { root: AmazonElement; offer: AmazonElement; price: string | null },
-  out: PurchaseConditions,
-): void {
+type OfferInput = {
+  root: AmazonElement;
+  offer: AmazonElement;
+  price: string | null;
+  site: AmazonSite;
+};
+
+function offerConditions(input: OfferInput, out: PurchaseConditions): void {
   const { offer } = input;
   const text = textOf(offer);
   const heading = commerceText(offer, ".accordion-caption") ?? text;
@@ -75,21 +84,18 @@ function offerConditions(
     out.purchaseType = "subscription";
   }
   offerBinding(input, out);
-  purchaseSeller(offer, out);
+  purchaseSeller(offer, out, input.site.origin);
   offerQuantity(offer, out);
 }
 
-function offerBinding(
-  input: { root: AmazonElement; offer: AmazonElement; price: string | null },
-  out: PurchaseConditions,
-): void {
-  const { root, offer, price } = input;
+function offerBinding(input: OfferInput, out: PurchaseConditions): void {
+  const { root, offer, price, site } = input;
   const text = textOf(offer);
   const quoted = uniqueCommerce(
     commerceElements(
       offer,
       "#corePrice_feature_div .apex-pricetopay-value, #corePrice_feature_div .priceToPay",
-    ).map((element) => amount(priceText(element))),
+    ).map((element) => amount(priceText(element), site)),
   );
   if (price && quoted === price) {
     out.priceScope = "selected_offer";
@@ -101,7 +107,7 @@ function offerBinding(
     out.priceScope === "selected_offer" &&
     !commerceElements(root, "#buyBoxAccordion").length &&
     !/subscribe|subscription/i.test(text) &&
-    nativePurchase(offer)
+    nativePurchase(offer, site.origin)
   ) {
     out.purchaseType = "one_time";
   }
@@ -129,8 +135,12 @@ function offerQuantity(offer: AmazonElement, out: PurchaseConditions): void {
   }
 }
 
-export function purchaseConditions(root: AmazonElement, price: string | null): PurchaseConditions {
-  const out = initialConditions(root, price);
+export function purchaseConditions(
+  root: AmazonElement,
+  price: string | null,
+  site: AmazonSite = AMAZON_US,
+): PurchaseConditions {
+  const out = initialConditions(root, price, site);
   const offer = selectedOffer(root);
   if (out.delivery.text) {
     out.evidence.push({
@@ -140,7 +150,7 @@ export function purchaseConditions(root: AmazonElement, price: string | null): P
     });
   }
   if (offer && textOf(offer)) {
-    offerConditions({ root, offer, price }, out);
+    offerConditions({ root, offer, price, site }, out);
   } else {
     out.warnings.push("PURCHASE.OFFER_SELECTION_UNKNOWN");
   }

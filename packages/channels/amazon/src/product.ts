@@ -18,6 +18,7 @@ import { amazonFacts, amazonFactsHtml } from "./facts.js";
 import { extractVariationFamily, type AmazonVariationFamily } from "./family.js";
 import { amazonImages } from "./images.js";
 import { amazonScriptData } from "./script-data.js";
+import { AMAZON_US, type AmazonSite } from "./site.js";
 
 export interface AmazonRendered {
   evidence: ChannelProductEvidence;
@@ -69,7 +70,10 @@ function detailsHtml(document: AmazonDocument): string | null {
   );
 }
 
-function evidenceOf(page: FetchedPage, document: AmazonDocument, root: AmazonElement) {
+function evidenceOf(
+  { page, document, root }: { page: FetchedPage; document: AmazonDocument; root: AmazonElement },
+  site: AmazonSite,
+) {
   const asin = pageAsin(root);
   const data = amazonScriptData(document);
   const family = extractVariationFamily(data, asin);
@@ -79,15 +83,15 @@ function evidenceOf(page: FetchedPage, document: AmazonDocument, root: AmazonEle
     family?.members
       .filter((member) => member.asin !== asin)
       .map((member) => ({
-        ...amazonProductAddress(`/dp/${member.asin}`),
+        ...amazonProductAddress(`/dp/${member.asin}`, site),
         title: member.label,
       })) ?? [];
   const evidence = ChannelProductEvidenceSchema.parse({
     codec: "channel-product/1",
-    channel: "amazon",
+    channel: site.channel,
     listingId: asin,
     variantId: null,
-    url: amazonProductAddress(page.url).url,
+    url: amazonProductAddress(page.url, site).url,
     title: titleOf(root),
     brandRaw: brandOf(root),
     variantOptions: family?.dimensions ?? [],
@@ -106,18 +110,21 @@ function evidenceOf(page: FetchedPage, document: AmazonDocument, root: AmazonEle
  * Parse archived bytes. A request for a different ASIN still reports this page's own identity to
  * core.
  */
-export function parseAmazonProduct(page: FetchedPage): ParsedProduct<AmazonRendered> {
-  amazonProductAddress(page.url);
+export function parseAmazonProduct(
+  page: FetchedPage,
+  site: AmazonSite = AMAZON_US,
+): ParsedProduct<AmazonRendered> {
+  amazonProductAddress(page.url, site);
   const document = amazonDocument(page.html);
   const root = productRoot(document);
-  const rendered = evidenceOf(page, document, root);
+  const rendered = evidenceOf({ page, document, root }, site);
   const { evidence } = rendered;
   return {
-    channel: "amazon",
+    channel: site.channel,
     identity: { listingId: evidence.listingId, variantId: null },
     rendered,
     evidence,
-    commerce: amazonCommerce(root, evidence.listingId),
+    commerce: amazonCommerce(root, evidence.listingId, site),
     variants: evidence.variants.map(({ title: _title, ...address }) => address),
     facts: amazonFacts(evidence.factsCandidates[0]?.html ?? null),
     categories: [...document.querySelectorAll("#wayfinding-breadcrumbs_feature_div a")]

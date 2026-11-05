@@ -1,5 +1,6 @@
 import { brandScanErrors, type ListedProduct } from "@crawl-automation/channels-core";
-import { AMAZON_ORIGIN, isAsin } from "./address.js";
+import { isAsin } from "./address.js";
+import { AMAZON_US, type AmazonSite } from "./site.js";
 import { textOf, type AmazonElement } from "./dom.js";
 
 const ADVERTISEMENT = [
@@ -31,7 +32,10 @@ export function amazonOrganicCards(grid: AmazonElement): AmazonElement[] {
   );
 }
 
-export function amazonCardProduct(card: AmazonElement): ListedProduct {
+export function amazonCardProduct(
+  card: AmazonElement,
+  site: AmazonSite = AMAZON_US,
+): ListedProduct {
   const listingId = card.getAttribute("data-asin") ?? "";
   if (!isAsin(listingId)) {
     throw brandScanErrors.create("BRAND_SCAN.TILE_IDENTITY");
@@ -41,7 +45,7 @@ export function amazonCardProduct(card: AmazonElement): ListedProduct {
     card.querySelector("h2[aria-label], h2");
   return {
     listingId,
-    url: `${AMAZON_ORIGIN}/dp/${listingId}`,
+    url: `${site.origin}/dp/${listingId}`,
     variantId: null,
     title: textOf(heading).slice(0, 500) || null,
     kind: "product",

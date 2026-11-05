@@ -63,7 +63,7 @@ export class LabelTasks {
       sourcePlan.sourcePolicy || evidencePolicy === "label-image-first/5"
         ? "label-image-first/7"
         : evidencePolicy;
-    const corePolicy = this.deps.registry.get(pipeline.channel).planning?.corePolicy;
+    const { corePolicy, labelFormats } = this.deps.registry.get(pipeline.channel).planning ?? {};
     const identity = Buffer.from(JSON.stringify([pipeline.operationId, sourcePlan.operationId]));
     return LabelPlanInputSchema.parse({
       operationId: `label-${sha256(identity)}`,
@@ -81,6 +81,8 @@ export class LabelTasks {
       ...(policy ? { evidencePolicy: policy } : {}),
       ...(sourcePlan.sourcePolicy ? { sourcePolicy: sourcePlan.sourcePolicy } : {}),
       ...(corePolicy ? { corePolicy } : {}),
+      // KAN-243: only a channel with non-US formats names them, so every existing task's input is unchanged.
+      ...(labelFormats ? { labelFormats: [...labelFormats] } : {}),
     });
   }
 }

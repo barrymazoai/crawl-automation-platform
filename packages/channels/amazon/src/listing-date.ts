@@ -3,6 +3,7 @@ import { format, isValid, parse } from "date-fns";
 import { enUS } from "date-fns/locale";
 import { z } from "zod";
 import type { AmazonDocument, AmazonElement } from "./dom.js";
+import { AMAZON_US, type AmazonSite } from "./site.js";
 
 const clean = (text: string) =>
   text
@@ -10,10 +11,10 @@ const clean = (text: string) =>
     .replace(/\s+/gu, " ")
     .trim();
 
-/** Strict en-US calendar dates; a format round-trip excludes date-fns' abbreviated/short-year fallbacks. */
-export function parseAmazonDate(raw: string): string | null {
+/** Strict English calendar dates; a format round-trip excludes date-fns' abbreviated/short-year fallbacks. */
+export function parseAmazonDate(raw: string, site: AmazonSite = AMAZON_US): string | null {
   const text = clean(raw).toLowerCase();
-  for (const pattern of ["MMMM d, yyyy", "MMMM d yyyy"]) {
+  for (const pattern of site.dateFormats) {
     const parsed = parse(text, pattern, new Date(2000, 0, 1), { locale: enUS });
     if (isValid(parsed) && format(parsed, pattern, { locale: enUS }).toLowerCase() === text) {
       return z.iso.date().safeParse(format(parsed, "yyyy-MM-dd")).data ?? null;
@@ -22,7 +23,11 @@ export function parseAmazonDate(raw: string): string | null {
   return null;
 }
 
-function dateRow(element: AmazonElement, selector: AmazonListingDate["selector"]) {
+function dateRow(
+  element: AmazonElement,
+  selector: AmazonListingDate["selector"],
+  site: AmazonSite,
+) {
   const rawText = element.textContent ?? "";
   const label = element.querySelector(selector === "#prodDetails tr" ? "th" : ".a-text-bold");
   if (clean(label?.textContent ?? "").replace(/\s*:$/u, "") !== "Date First Available") {
@@ -32,15 +37,18 @@ function dateRow(element: AmazonElement, selector: AmazonListingDate["selector"]
     selector === "#prodDetails tr"
       ? (element.querySelector("td")?.textContent ?? "")
       : clean(rawText).replace(/^Date First Available\s*:\s*/u, "");
-  return { date: parseAmazonDate(value), rawText, selector };
+  return { date: parseAmazonDate(value, site), rawText, selector };
 }
 
 /** Only the selected page's two product-detail layouts; no Publication date or keyword fallback. */
-export function amazonListingDate(document: AmazonDocument): AmazonListingDate | null {
+export function amazonListingDate(
+  document: AmazonDocument,
+  site: AmazonSite = AMAZON_US,
+): AmazonListingDate | null {
   const rows: AmazonListingDate[] = [];
   for (const selector of ["#detailBullets_feature_div li", "#prodDetails tr"] as const) {
     for (const element of document.querySelectorAll(selector)) {
-      const row = dateRow(element, selector);
+      const row = dateRow(element, selector, site);
       if (row) {
         rows.push(row);
       }

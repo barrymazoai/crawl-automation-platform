@@ -1,3 +1,4 @@
+import { isAmazonChannel } from "@crawl-automation/v3-contracts";
 import type { ChannelAdapter } from "../adapter.js";
 import type { HtmlCaptureRecords } from "./html-capture-records.js";
 import type { ArchivedHtml, OriginalHtmlArchive } from "./original-html-archive.js";
@@ -18,7 +19,7 @@ export async function existingOriginal(input: {
   }
   let selected = { archive, page: first };
   let retryFailure: string | null = null;
-  if (adapter.id === "amazon") {
+  if (isAmazonChannel(adapter.id)) {
     const retryArchive = archive.otherOfferRetry();
     const retry = await retryArchive.inspect(signal);
     if (retry) {

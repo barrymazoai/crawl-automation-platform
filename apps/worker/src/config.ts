@@ -108,7 +108,7 @@ export const WorkerConfigSchema = z
         /** Per-channel order for new plans; Whole Foods formulas use Amazon's order. */
         sourceOrder: z
           .partialRecord(
-            z.enum(["amazon", "gnc", "swanson", "costco", "dtc"]),
+            z.enum(["amazon", "amazon-in", "gnc", "swanson", "costco", "dtc"]),
             LabelSourcePolicySchema.shape.order,
           )
           .default({}),

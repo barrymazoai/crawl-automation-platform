@@ -2,6 +2,7 @@ import type { CommerceEvidence } from "@crawl-automation/channels-core";
 import { commerceElements, commerceVisibleText, selectedOffer } from "./commerce-dom.js";
 import { selectedSeller } from "./commerce-seller.js";
 import { cleanText, textOf, type AmazonElement } from "./dom.js";
+import { AMAZON_US, type AmazonSite } from "./site.js";
 
 const digits = (element: AmazonElement, selector: string) =>
   cleanText(element.querySelector(selector)?.textContent ?? "");
@@ -18,8 +19,9 @@ export function priceText(element: AmazonElement): string {
   return whole ? `${symbol}${whole.replace(/[.\s]/g, "")}.${fraction || "00"}` : textOf(element);
 }
 
-export function amount(raw: string | undefined): string | null {
-  return raw?.match(/(?:\$|USD\s*)\s*([\d,]+(?:\.\d{1,2})?)/)?.[1]?.replaceAll(",", "") ?? null;
+export function amount(raw: string | undefined, site: AmazonSite = AMAZON_US): string | null {
+  const pattern = new RegExp(`${site.pricePrefix.source}\\s*([\\d,]+(?:\\.\\d{1,2})?)`);
+  return raw?.match(pattern)?.[1]?.replaceAll(",", "") ?? null;
 }
 
 function candidates(root: AmazonElement, selector: string): string[] {
@@ -46,7 +48,7 @@ export function priceCandidates(root: AmazonElement): string[] {
 }
 
 /** A store pickup quote is evidence, never a deliverable Amazon product price. */
-export function otherOffer(root: AmazonElement) {
+export function otherOffer(root: AmazonElement, site: AmazonSite) {
   const offer = selectedOffer(root);
   if (!offer) {
     return null;
@@ -72,7 +74,7 @@ export function otherOffer(root: AmazonElement) {
         offer,
         ".a-price:not(.a-text-price), #priceblock_ourprice, #priceblock_dealprice, #price_inside_buybox",
       )
-        .map((element) => amount(priceText(element)))
+        .map((element) => amount(priceText(element), site))
         .filter((value): value is string => !!value),
     ),
   ];
@@ -84,12 +86,13 @@ export function priceStatus(input: {
   availability: string | null;
   root: AmazonElement;
   otherOffer: boolean;
+  site?: AmazonSite;
 }): CommerceEvidence["priceStatus"] {
-  const { prices, availability, root } = input;
+  const { prices, availability, root, site = AMAZON_US } = input;
   if (input.otherOffer) {
     return "other_offer";
   }
-  if (prices.length === 1 && amount(prices[0])) {
+  if (prices.length === 1 && amount(prices[0], site)) {
     return "observed";
   }
   if (/unavailable|out of stock/i.test(availability ?? "")) {

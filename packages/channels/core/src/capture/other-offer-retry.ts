@@ -1,3 +1,4 @@
+import { isAmazonChannel } from "@crawl-automation/v3-contracts";
 import type { ChannelAdapter, ParsedProduct } from "../adapter.js";
 import { errorCodeOf } from "@crawl-automation/platform";
 import type { ArchivedHtml, OriginalHtmlArchive } from "./original-html-archive.js";
@@ -15,7 +16,7 @@ export async function captureOtherOfferRetry(input: {
   isOtherOffer: () => boolean;
 }) {
   const { pages, adapter, archive, first, signal, isOtherOffer } = input;
-  if (adapter.id !== "amazon" || !isOtherOffer()) {
+  if (!isAmazonChannel(adapter.id) || !isOtherOffer()) {
     return null;
   }
   if (!pages.fetchOtherOfferRetry) {

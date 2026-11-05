@@ -1,6 +1,6 @@
 import { classifyFamily, type ProductFamily } from "@crawl-automation/channels-core";
 import { z } from "zod";
-import { AMAZON_ORIGIN } from "./address.js";
+import { AMAZON_US, type AmazonSite } from "./site.js";
 import { amazonErrors } from "./errors.js";
 import type { ScriptData } from "./script-data.js";
 
@@ -78,6 +78,7 @@ function comparisonLabel(dimension: string, value: string): string {
 export function amazonProductFamily(
   family: AmazonVariationFamily | null,
   asin: string,
+  site: AmazonSite = AMAZON_US,
 ): ProductFamily | null {
   const selected = family?.members.find((member) => member.asin === asin);
   if (!family || !selected || family.members.length < 2) {
@@ -104,7 +105,7 @@ export function amazonProductFamily(
       .map((member) => ({
         listingId: member.asin,
         variantId: null,
-        url: `${AMAZON_ORIGIN}/dp/${member.asin}`,
+        url: `${site.origin}/dp/${member.asin}`,
         label: member.label,
       })),
   };

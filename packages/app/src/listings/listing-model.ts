@@ -1,3 +1,4 @@
+import { AMAZON_CHANNELS } from "@crawl-automation/v3-contracts";
 import { UNLISTED_REASONS } from "@crawl-automation/channels-core";
 import { z } from "zod";
 import { QueueChannelSchema, QueuedProductSchema } from "../queue/queue-model.js";
@@ -80,7 +81,8 @@ export interface ListingCounts {
  * Amazon search capped at 7 pages, never does).
  */
 export const MissingFromScanSchema = z.strictObject({
-  channel: QueueChannelSchema.exclude(["amazon"]),
+  // Amazon storefronts revisit through their product queue (the brand scan's Amazon bridge).
+  channel: QueueChannelSchema.exclude(AMAZON_CHANNELS),
   scope: z.literal("full"),
   /** The revisit list's ID (e.g. derived from the scan's ID), so asking twice queues once. */
   batchId: z.uuid(),

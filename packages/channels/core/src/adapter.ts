@@ -3,6 +3,7 @@ import type {
   ChannelPlanInput,
   ChannelProductEvidence,
   CommerceEvidenceSchema,
+  LabelFormatId,
   TextDocument,
 } from "@crawl-automation/v3-contracts";
 import type { z } from "zod";
@@ -104,6 +105,11 @@ export interface ChannelPlanning<Rendered = unknown> {
   corePolicy?: TextDocument["corePolicy"];
   /** How that core step reads the label facts text from the product page (supplied to processing by name). */
   labelCore?: LabelCoreReader;
+  /**
+   * KAN-243: the printed label formats this channel's labels are read in, when not the US panel alone (amazon.in).
+   * Absent = the US formats, every label rule as before.
+   */
+  labelFormats?: readonly LabelFormatId[];
 }
 
 /** A channel's label-core reader: which page producer it reads, and how it picks out the label facts text. */

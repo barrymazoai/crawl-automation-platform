@@ -1,3 +1,4 @@
+import { isAmazonChannel } from "@crawl-automation/v3-contracts";
 import { appErrors, type BrandRun } from "@crawl-automation/app";
 import type { Queryable } from "@crawl-automation/platform";
 import { CollectionSnapshot } from "@crawl-automation/v3-contracts";
@@ -61,7 +62,7 @@ async function lockedSnapshot(tx: Queryable, run: BrandRun): Promise<CollectionS
 
 /** Browser channels allow one active run per source; Amazon runs are request-based and may overlap. */
 async function insertSubmission(tx: Queryable, requestId: string, snapshot: CollectionSnapshot) {
-  if (snapshot.channel !== "amazon") {
+  if (!isAmazonChannel(snapshot.channel)) {
     const active = await tx.query("SELECT 1 FROM source_submission_guard WHERE source_id = $1", [
       snapshot.sourceId,
     ]);

@@ -23,12 +23,18 @@ function labelled(offer: AmazonElement, labels: string[]): string | null {
 }
 
 /** Seller URLs keep only the public seller ID, never hidden offer or session parameters. */
-export function purchaseSeller(offer: AmazonElement, out: PurchaseConditions): void {
+export function purchaseSeller(
+  offer: AmazonElement,
+  out: PurchaseConditions,
+  origin: string,
+): void {
   const links = commerceElements(offer, "#sellerProfileTriggerId");
   const combined = labelled(offer, ["Shipper / Seller", "Ships from and sold by"]);
   out.seller.name = selectedSeller(offer);
   out.shipsFrom = uniqueCommerce([labelled(offer, ["Ships from"]), combined]);
-  const urls = links.filter((link) => textOf(link) === out.seller.name).flatMap(sellerUrl);
+  const urls = links
+    .filter((link) => textOf(link) === out.seller.name)
+    .flatMap((link) => sellerUrl(link, origin));
   out.seller.id = uniqueCommerce(urls.map((item) => item.id));
   out.seller.url = out.seller.id ? uniqueCommerce(urls.map((item) => item.url)) : null;
   if (out.seller.name) {
@@ -50,9 +56,9 @@ export function selectedSeller(offer: AmazonElement): string | null {
       ]);
 }
 
-function sellerUrl(link: AmazonElement): { id: string; url: string }[] {
-  const url = URL.parse(link.getAttribute("href") ?? "", "https://www.amazon.com");
-  if (!url || url.origin !== "https://www.amazon.com" || url.username || url.password) {
+function sellerUrl(link: AmazonElement, origin: string): { id: string; url: string }[] {
+  const url = URL.parse(link.getAttribute("href") ?? "", origin);
+  if (!url || url.origin !== origin || url.username || url.password) {
     return [];
   }
   const id = url.searchParams.get("seller") ?? url.searchParams.get("me");

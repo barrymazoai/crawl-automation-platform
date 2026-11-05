@@ -1,3 +1,4 @@
+import { isAmazonChannel } from "@crawl-automation/v3-contracts";
 import type { QueuedProduct } from "../queue/queue-model.js";
 import type { BrandListing } from "./scan-listing.js";
 import type { ScanRecord } from "./scan-model.js";
@@ -12,7 +13,7 @@ export async function compareKnownScanListings(input: {
   known: QueuedProduct[];
 }) {
   const { store, scan, listing, known } = input;
-  if (scan.source.channel === "amazon") {
+  if (isAmazonChannel(scan.source.channel)) {
     return compareScanListings(listing, known);
   }
   const variantListingIds = new Set(

@@ -12,6 +12,7 @@ export const ScanChannelSchema = QueueChannelSchema.extract([
   "swanson",
   "gnc",
   "amazon",
+  "amazon-in",
   "wholefoods",
   "dtc",
   "costco",

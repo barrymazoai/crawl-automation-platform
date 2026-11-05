@@ -18,7 +18,7 @@ import { readListing, type BrandListing } from "./scan-listing.js";
 import type { ScanReaders } from "./scan-listing.js";
 import type { ScanChannel, ScanRecord, ScanResult } from "./scan-model.js";
 import { scanExclusions } from "./scan-exclusions.js";
-import type { AmazonScanQueue } from "./amazon-scan-queue.js";
+import { isAmazonScan, type AmazonScanQueue } from "./amazon-scan-queue.js";
 import { appErrors } from "../errors.js";
 import type { GatedBrandListing } from "./scan-permits.js";
 
@@ -147,7 +147,7 @@ export class BrandScanRunner {
     signal: AbortSignal,
     result: ScanResult,
   ): Promise<ScanResult> {
-    const amazon = scan.source.channel === "amazon" ? this.amazonQueue() : null;
+    const amazon = isAmazonScan(scan) ? this.amazonQueue() : null;
     const listing = await this.read(scan, signal);
     if (scan.source.channel === "wholefoods") {
       listing.full = hasScanTotalProof(listing);
@@ -200,7 +200,7 @@ export class BrandScanRunner {
       return { added: 0 };
     }
     const channel = scan.source.channel as ScanChannel;
-    if (channel === "amazon") {
+    if (isAmazonScan(scan)) {
       return this.amazonQueue().add(scan, listed, scan.scanId);
     }
     const products = listed.map(toQueued(scan));
@@ -213,7 +213,7 @@ export class BrandScanRunner {
     if (missing.length === 0) {
       return 0;
     }
-    if (scan.source.channel === "amazon") {
+    if (isAmazonScan(scan)) {
       await this.amazonQueue().add(scan, missing, scan.revisitBatchId);
       return missing.length;
     }

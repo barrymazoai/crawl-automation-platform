@@ -1,4 +1,4 @@
-import { amazonAdapter } from "@crawl-automation/channel-amazon";
+import { amazonAdapter, amazonInAdapter } from "@crawl-automation/channel-amazon";
 import { createLogger, type TemporalClient } from "@crawl-automation/platform";
 import { describe, expect, it } from "vitest";
 import { ApiConfigSchema } from "./config.js";
@@ -24,11 +24,13 @@ describe("API composition root", () => {
       "swanson",
       "gnc",
       "amazon",
+      "amazon-in",
       "wholefoods",
       "costco",
       "dtc",
     ]);
     expect(registry.forCapture("amazon", "http")).toBe(amazonAdapter);
+    expect(registry.forCapture("amazon-in", "http")).toBe(amazonInAdapter);
     expect(registry.forCapture("dtc", "browser").planning?.channel).toBe("dtc");
     expect(() => registry.forCapture("dtc", "http")).toThrow();
     expect(

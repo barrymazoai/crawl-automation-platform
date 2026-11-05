@@ -1,3 +1,4 @@
+import { AMAZON_CHANNELS } from "@crawl-automation/v3-contracts";
 import {
   ChannelIdSchema,
   Id,
@@ -39,7 +40,7 @@ export const SubmitRunSchema = z.discriminatedUnion("kind", [
     kind: z.literal("list"),
     /** Also the queue list's ID: submitting the same list again adds nothing. */
     requestId: Id,
-    channel: ChannelIdSchema.exclude(["amazon"]),
+    channel: ChannelIdSchema.exclude(AMAZON_CHANNELS),
     label: z.string().min(1).max(200),
     products: z.array(ListRunProductSchema).min(1).max(10_000),
   }),
