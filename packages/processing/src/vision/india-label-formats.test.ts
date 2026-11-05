@@ -22,7 +22,8 @@ import {
 } from "./protocol/label-transcript-wire.js";
 import { transcribedAnswer, type TranscriptCalls } from "./vision-transcript-flow.js";
 
-// KAN-243: real amazon.in labels (docs/plans/KAN-243-india-research.md §2), values as printed.
+// KAN-243: the layouts of real amazon.in labels (docs/plans/KAN-243-india-research.md §2): headers, serving lines
+// and the Tata 1mg Magnesium and Kapiva Shilajit rows as printed; the other products' numbers are illustrative.
 const INDIA = MARKETPLACE_LABEL_FORMATS["amazon.in"] ?? [];
 const US: LabelFormatId[] = ["us-facts/1"];
 const policy = { allowNoOtherIngredientsSection: true };
