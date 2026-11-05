@@ -1,3 +1,4 @@
+import { AMAZON_MARKETPLACES, type AmazonChannel } from "@crawl-automation/v3-contracts";
 import {
   MarketplaceBrandsApi,
   PostgresBrandCompany,
@@ -6,13 +7,16 @@ import {
   PostgresListingTargets,
   PostgresMarketplaceReader,
   PostgresProductSync,
+  SupplySmartCompaniesClient,
   SupplySmartListingStates,
+  loadSupplySmartSecrets,
   SupplySmartObservationWriter,
-  type SupplySmartRpc,
+  SupplySmartRpc,
 } from "@crawl-automation/adapters";
 import {
   ListingStateDelivery,
   MarketplaceBrandSweep,
+  MarketplaceRoutedListingStates,
   ProductSyncService,
   ProductSyncSweep,
 } from "@crawl-automation/app";
@@ -22,8 +26,14 @@ import type { BrandEnrichmentSettings } from "./brand-enrichment-settings.js";
 /** Hosted by the brand-enrichment role: it holds the Supply Smart key, R2 and the channels' retained-page parsers. */
 export function buildProductSyncSweep(
   parts: CoreParts,
-  input: { rpc: SupplySmartRpc; settings: BrandEnrichmentSettings["productSync"] },
+  input: {
+    rpc: SupplySmartRpc;
+    settings: BrandEnrichmentSettings["productSync"];
+    /** KAN-243: storefronts sent to another Supply Smart (productSync.targets), by crawler channel. */
+    targets?: Partial<Record<"amazon-in", SupplySmartRpc>>;
+  },
 ) {
+  const targets = Object.entries(input.targets ?? {}) as Targets;
   const service = new ProductSyncService({
     reader: new PostgresMarketplaceReader({
       database: parts.database,
@@ -34,13 +44,14 @@ export function buildProductSyncSweep(
     brands: new PostgresBrandCompany(parts.database),
     ledger: new PostgresProductSync(parts.database),
     writer: new SupplySmartObservationWriter(input.rpc),
+    writers: targetWriters(targets),
   });
   return new ProductSyncSweep({
     sync: service,
     // Delistings of the synced channels only; DTC keeps its own path.
     listings: new ListingStateDelivery({
       store: new PostgresListingStates(parts.database),
-      sender: new SupplySmartListingStates(input.rpc),
+      sender: listingSender(input.rpc, targets),
       targets: new PostgresListingTargets(parts.database),
       channels: input.settings.channels,
     }),
@@ -48,6 +59,29 @@ export function buildProductSyncSweep(
     settings: input.settings,
     log: parts.log.child({ service: "product-sync" }),
   });
+}
+
+type Targets = [AmazonChannel, SupplySmartRpc][];
+
+function targetWriters(targets: Targets) {
+  return Object.fromEntries(
+    targets.map(([channel, rpc]) => [
+      channel,
+      {
+        writer: new SupplySmartObservationWriter(rpc),
+        companies: new SupplySmartCompaniesClient(rpc),
+      },
+    ]),
+  );
+}
+
+/** Listing states of a storefront with its own target go there; the rest to production as before. */
+function listingSender(rpc: SupplySmartRpc, targets: Targets) {
+  const routes = targets.map(
+    ([channel, target]) =>
+      [AMAZON_MARKETPLACES[channel].marketplace, new SupplySmartListingStates(target)] as const,
+  );
+  return new MarketplaceRoutedListingStates(new SupplySmartListingStates(rpc), new Map(routes));
 }
 
 /** The automatic brand step calls the operators' API: its own `apiUrl`, else the stop sweep's. */
@@ -65,4 +99,16 @@ function brandStep(parts: CoreParts, input: { settings: BrandEnrichmentSettings[
       log: parts.log.child({ service: "marketplace-brands" }),
     }),
   };
+}
+
+/** KAN-243: each configured storefront target's own Supply Smart client (amazon-in: the test database). */
+export async function syncTargets(sync: BrandEnrichmentSettings["productSync"]) {
+  const targets: Partial<Record<"amazon-in", SupplySmartRpc>> = {};
+  for (const [channel, target] of Object.entries(sync.targets) as [
+    "amazon-in",
+    { secretsFile: string },
+  ][]) {
+    targets[channel] = new SupplySmartRpc(await loadSupplySmartSecrets(target.secretsFile));
+  }
+  return targets;
 }

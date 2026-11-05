@@ -11,7 +11,14 @@ import type { MarketplaceChannel } from "./ledger.js";
 import type { ListingDateWarning } from "../product-delivery/listing-date-read.js";
 export type { MarketplaceChannel } from "./ledger.js";
 
-export const MARKETPLACE_CHANNELS = ["amazon", "gnc", "swanson", "wholefoods", "costco"] as const;
+export const MARKETPLACE_CHANNELS = [
+  "amazon",
+  "amazon-in",
+  "gnc",
+  "swanson",
+  "wholefoods",
+  "costco",
+] as const;
 /** Inject the existing registry for retained-page parsing and declared formula families. */
 export type MarketplaceChannels = Pick<ChannelRegistry, "get" | "channels">;
 export interface MarketplaceHistory extends DeliveryHistory {

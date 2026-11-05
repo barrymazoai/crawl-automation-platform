@@ -1,6 +1,10 @@
 import { defineErrors } from "@crawl-automation/platform";
 
 export const productDeliveryErrors = defineErrors({
+  "PRODUCT_DELIVERY.TARGET_MISSING": {
+    category: "RUNTIME",
+    message: "No Supply Smart target is configured for this storefront; nothing was sent.",
+  },
   "PRODUCT_DELIVERY.MATERIAL_MISSING": {
     category: "VALIDATION",
     message: "The settled product has no complete retained delivery material.",

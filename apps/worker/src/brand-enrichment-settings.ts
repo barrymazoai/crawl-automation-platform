@@ -42,7 +42,8 @@ export const BrandEnrichmentSettingsSchema = BrandEnrichmentWorkflowSettingsSche
     .strictObject({
       sweepMinutes: z.number().int().min(0).max(1440).default(0),
       channels: z
-        .array(z.enum(["amazon", "gnc", "swanson", "wholefoods", "costco"]))
+        // amazon-in is sent only when named: it goes to the Supply Smart its target names (KAN-243).
+        .array(z.enum(["amazon", "amazon-in", "gnc", "swanson", "wholefoods", "costco"]))
         .default(["amazon", "gnc", "swanson", "wholefoods", "costco"]),
       batchLimit: z.number().int().min(1).max(200).default(200),
       maxBatchesPerChannel: z.number().int().min(1).max(50).default(5),
@@ -62,6 +63,21 @@ export const BrandEnrichmentSettingsSchema = BrandEnrichmentWorkflowSettingsSche
           maxLiveRuns: z.number().int().min(0).max(100).default(20),
         })
         .prefault({}),
+      /**
+       * KAN-243 (owner 2026-11-05): a channel sent to another Supply Smart than `secretsFile`'s, named by its own
+       * private `.env` (SUPPLY_SMART_* only). amazon-in goes to the test database first; it is never sent without one.
+       */
+      targets: z
+        .partialRecord(
+          z.enum(["amazon-in"]),
+          z.strictObject({ secretsFile: z.string().trim().min(1) }),
+        )
+        .default({}),
+    })
+    .refine((sync) => !sync.channels.includes("amazon-in") || !!sync.targets["amazon-in"], {
+      message:
+        "amazon-in needs productSync.targets.amazon-in: it is never sent to the production Supply Smart",
+      path: ["targets"],
     })
     .prefault({}),
 });

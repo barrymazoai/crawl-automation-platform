@@ -16,6 +16,8 @@ const REFRESHED_ENRICHMENTS = `
            CASE ps.channel WHEN 'wholefoods' THEN 'amazon' ELSE ps.channel END AS channel
       FROM product_sync ps
      WHERE ps.supply_smart_product_id IS NOT NULL AND ps.status IN ('verified', 'sent', 'failed')
+       -- KAN-243: amazon-in products live in its own Supply Smart (test), never updated through production.
+       AND ps.channel <> 'amazon-in'
        AND ps.collected_operation_id IS NOT NULL
        AND ($1::uuid IS NULL OR ps.supply_smart_product_id > $1::uuid)
        AND ($4::uuid[] IS NULL OR ps.supply_smart_product_id = ANY($4::uuid[]))),

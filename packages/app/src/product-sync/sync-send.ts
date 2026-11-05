@@ -1,3 +1,4 @@
+import { deliveredMarketplace, supplySmartChannel } from "@crawl-automation/v3-contracts";
 import { deliverLabel } from "../product-delivery/label-delivery.js";
 import type { ProductObservationWriter } from "../product-delivery/ports.js";
 import {
@@ -51,9 +52,12 @@ export async function sendBatch(batch: Batch, tally: SyncTally, signal: AbortSig
 export function partialRun(batch: Pick<Batch, "runId" | "planned">): DeliveryRun {
   const times = batch.planned.map((entry) => entry.item.capturedAt);
   const [startedAt] = times.sort((left, right) => Date.parse(left) - Date.parse(right));
+  const { channel } = batch.planned[0].product;
+  const marketplace = deliveredMarketplace(channel);
   return {
     runId: batch.runId,
-    channel: batch.planned[0].product.channel,
+    channel: supplySmartChannel(channel),
+    ...(marketplace ? { marketplace } : {}),
     scope: "partial",
     startedAt: startedAt ?? batch.planned[0].item.capturedAt,
     source: batchSource(batch.planned),

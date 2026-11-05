@@ -1,3 +1,4 @@
+import { deliveredMarketplace, supplySmartChannel } from "@crawl-automation/v3-contracts";
 import type { ListingObservation } from "./listing-model.js";
 import type {
   DeliveredSighting,
@@ -8,6 +9,12 @@ import type {
   ListingStateStore,
   ListingTargets,
 } from "./ports.js";
+
+/** KAN-243: Supply Smart's channel, and the storefront when it is not amazon.com (absent: as before). */
+function supplySmartListing(channel: string): { channel: string; marketplace?: string } {
+  const marketplace = deliveredMarketplace(channel);
+  return { channel: supplySmartChannel(channel), ...(marketplace ? { marketplace } : {}) };
+}
 
 /** The product database accepts at most 200 items per request (SUPPLYSMAR-380). */
 const BATCH_LIMIT = 200;
@@ -43,7 +50,7 @@ export function listingStateBatches(
       batch: {
         run: {
           runId: `listing-state-${startedAt}-${channel}${index ? `-${index + 1}` : ""}`,
-          channel,
+          ...supplySmartListing(channel),
           scope: "partial" as const,
           source: SOURCE,
           startedAt,
@@ -80,7 +87,7 @@ function batchItem(observation: ListingObservation, externalId: string): Listing
   const { artifactKey, ...evidence } = observation.evidence;
   return {
     clientRef: `${channel}:${externalId}:${capturedAt}`,
-    listing: { channel, externalId },
+    listing: { ...supplySmartListing(channel), externalId },
     capturedAt,
     state: observation.state === "unlisted" ? "gone" : "live",
     evidence: {

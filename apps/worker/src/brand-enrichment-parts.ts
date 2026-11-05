@@ -28,7 +28,7 @@ import { SiteAnalysisLimitsSchema } from "@crawl-automation/v3-contracts";
 import type { CoreParts } from "./core-parts.js";
 import { buildBrandStepServices, type BrandEnrichmentTasks } from "./brand-enrichment-services.js";
 import { buildBrandRedeliverySweep } from "./brand-redelivery-parts.js";
-import { buildProductSyncSweep } from "./product-sync-parts.js";
+import { buildProductSyncSweep, syncTargets } from "./product-sync-parts.js";
 import type { BrandEnrichmentSettings } from "./brand-enrichment-settings.js";
 import { buildRequestIntake } from "./brand-request-intake-parts.js";
 
@@ -103,8 +103,7 @@ export async function buildBrandEnrichmentParts(parts: CoreParts) {
   if (!config) {
     throw brandEnrichmentErrors.create("BRAND_ENRICHMENT.NOT_CONFIGURED");
   }
-  const secrets = await loadBrandEnrichmentSecrets(config.secretsFile);
-  const rpc = new SupplySmartRpc(secrets.supplySmart);
+  const { rpc, apollo, targets } = await supplySmartClients(config);
   const tasks = brandEnrichmentTaskImplementations(parts, rpc);
   const runs = new PostgresBrandEnrichmentRuns(parts.database);
   const temporal = await connectTemporal(parts.config.temporal);
@@ -117,7 +116,7 @@ export async function buildBrandEnrichmentParts(parts: CoreParts) {
     companies: new SupplySmartCompaniesClient(rpc),
     contacts: new SupplySmartContactsClient(rpc),
     requests: new SupplySmartBrandRequests(rpc),
-    apollo: new ApolloClient(secrets.apollo),
+    apollo: new ApolloClient(apollo),
     ...marketplaceStores(parts),
     execution: new TemporalBrandEnrichmentProducts({
       client: temporal.client,
@@ -133,10 +132,20 @@ export async function buildBrandEnrichmentParts(parts: CoreParts) {
     runs,
     ...services,
     redeliverySweep,
-    ...backgroundLoops(parts, { rpc, runs, productSync: config.productSync }),
+    ...backgroundLoops(parts, { rpc, runs, productSync: config.productSync, targets }),
     closeConnection: () => temporal.close(),
   };
 }
+/** The production Supply Smart client, Apollo's key, and each storefront target's own client (KAN-243). */
+async function supplySmartClients(config: BrandEnrichmentSettings) {
+  const secrets = await loadBrandEnrichmentSecrets(config.secretsFile);
+  return {
+    rpc: new SupplySmartRpc(secrets.supplySmart),
+    apollo: secrets.apollo,
+    targets: await syncTargets(config.productSync),
+  };
+}
+
 /** The worker-owned loops beside the Temporal workers: product sync and, since KAN-220, request intake. */
 function backgroundLoops(
   parts: CoreParts,
@@ -144,10 +153,15 @@ function backgroundLoops(
     rpc: SupplySmartRpc;
     runs: PostgresBrandEnrichmentRuns;
     productSync: BrandEnrichmentSettings["productSync"];
+    targets: Partial<Record<"amazon-in", SupplySmartRpc>>;
   },
 ) {
   return {
-    productSync: buildProductSyncSweep(parts, { rpc: input.rpc, settings: input.productSync }),
+    productSync: buildProductSyncSweep(parts, {
+      rpc: input.rpc,
+      settings: input.productSync,
+      targets: input.targets,
+    }),
     requestIntake: buildRequestIntake(parts, {
       requests: new SupplySmartBrandRequests(input.rpc),
       runs: input.runs,

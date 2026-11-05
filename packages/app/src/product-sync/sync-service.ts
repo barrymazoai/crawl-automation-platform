@@ -1,6 +1,8 @@
 import type { ProductObservationWriter } from "../product-delivery/ports.js";
-import type { ProductSyncLedger, SyncChange } from "./ledger.js";
+import type { MarketplaceChannel, ProductSyncLedger, SyncChange } from "./ledger.js";
 import type { MarketplacePage, MarketplaceReadRequest } from "./marketplace-model.js";
+import type { DomainResolution } from "@crawl-automation/v3-contracts";
+import type { BrandCompanyMatch } from "./brand-company-model.js";
 import type { BrandCompanyRepository } from "./ports.js";
 import {
   sentChange,
@@ -23,7 +25,24 @@ export interface ProductSyncDeps {
   brands: Pick<BrandCompanyRepository, "matches">;
   ledger: ProductSyncLedger;
   writer: ProductObservationWriter;
+  /**
+   * KAN-243: a channel sent to another Supply Smart than `writer`'s (amazon-in to the test database while amazon.com
+   * goes to production). A channel without its own writer uses `writer`.
+   */
+  writers?: Partial<Record<MarketplaceChannel, SyncTarget>>;
   now?: () => Date;
+}
+
+/**
+ * Another Supply Smart a channel is sent to. Company IDs differ between its database and production (Supply Smart,
+ * 2026-11-05: production was copied from test on 2026-11-03, then both diverged), so a brand's company is resolved by
+ * its domain in that database; a domain it does not know waits, so no product is created there without a company.
+ */
+export interface SyncTarget {
+  writer: ProductObservationWriter;
+  companies: {
+    resolveDomain(domain: string, signal: AbortSignal): Promise<DomainResolution>;
+  };
 }
 
 /**
@@ -48,14 +67,14 @@ export class ProductSyncService {
         products: page.products,
         runId,
         ledger: await this.deps.ledger.read(page.products.map(syncKeyOf)),
-        matches: await this.deps.brands.matches([...new Set(brandIds)]),
+        matches: await this.matchesFor(request.channel, [...new Set(brandIds)], signal),
       },
       tally,
     );
     tally.result.toSend = planned.length;
     if (!request.dryRun) {
       await this.deps.ledger.touch(tally.touched);
-      await this.send({ runId, planned, tally }, signal);
+      await this.send({ runId, planned, tally, writer: this.writerOf(request.channel) }, signal);
     }
     return tally.result;
   }
@@ -65,10 +84,15 @@ export class ProductSyncService {
    * and are not resent until the product settles again (review 2026-10-12). Outcomes are written either way.
    */
   private async send(
-    at: { runId: string; planned: PlannedSync[]; tally: SyncTally },
+    at: {
+      runId: string;
+      planned: PlannedSync[];
+      tally: SyncTally;
+      writer: ProductObservationWriter;
+    },
     signal: AbortSignal,
   ) {
-    const { runId, planned, tally } = at;
+    const { runId, planned, tally, writer } = at;
     const [first, ...rest] = planned;
     if (!first) {
       await this.deps.ledger.record(tally.changes);
@@ -77,14 +101,36 @@ export class ProductSyncService {
     tally.result.ingestRunId = runId;
     await this.deps.ledger.record(planned.map((entry) => sentChange(entry, runId)));
     try {
-      await sendBatch(
-        { writer: this.deps.writer, runId, planned: [first, ...rest] },
-        tally,
-        signal,
-      );
+      await sendBatch({ writer, runId, planned: [first, ...rest] }, tally, signal);
     } finally {
       await this.deps.ledger.record(tally.changes);
     }
+  }
+
+  private writerOf(channel: MarketplaceChannel): ProductObservationWriter {
+    return this.deps.writers?.[channel]?.writer ?? this.deps.writer;
+  }
+
+  /** The brands' company matches as the channel's own Supply Smart knows them. */
+  private async matchesFor(channel: MarketplaceChannel, brandIds: string[], signal: AbortSignal) {
+    const matches = await this.deps.brands.matches(brandIds);
+    const target = this.deps.writers?.[channel];
+    if (!target) {
+      return matches;
+    }
+    const resolved: BrandCompanyMatch[] = [];
+    for (const match of matches) {
+      const answer =
+        match.status === "matched" && match.domain
+          ? await target.companies.resolveDomain(match.domain, signal)
+          : null;
+      resolved.push(
+        answer?.status === "matched" && answer.companyId
+          ? { ...match, companyId: answer.companyId }
+          : { ...match, status: "unmatched", companyId: null },
+      );
+    }
+    return resolved;
   }
 
   private read(request: ProductSyncRequest, signal: AbortSignal) {

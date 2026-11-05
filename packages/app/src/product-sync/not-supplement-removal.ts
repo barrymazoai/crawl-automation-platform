@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { NotSupplementDelivered, ProductSyncLedger, SyncKey } from "./ledger.js";
 
+// amazon-in is not here: removals go to production Supply Smart, and amazon-in is sent to its own target (KAN-243).
 const channel = z.enum(["amazon", "gnc", "swanson", "wholefoods", "costco"]);
 
 /** A dry run by default: it re-checks every candidate in Supply Smart and deletes nothing. */

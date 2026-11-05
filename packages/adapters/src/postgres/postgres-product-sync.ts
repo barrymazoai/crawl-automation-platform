@@ -179,7 +179,7 @@ export class PostgresProductSync implements ProductSyncLedger {
   /** Same selection as the marketplace reader (latest settled completed queue item), counted without reading R2. */
   async overview(): Promise<SyncOverview[]> {
     return this.database.query<SyncOverview>(
-      `WITH ${settledMarketplace("q.channel IN ('amazon', 'gnc', 'swanson', 'wholefoods', 'costco')")}
+      `WITH ${settledMarketplace("q.channel IN ('amazon', 'amazon-in', 'gnc', 'swanson', 'wholefoods', 'costco')")}
        SELECT d.channel, count(*)::int AS completed,
          count(*) FILTER (WHERE EXISTS (SELECT 1 FROM supply_smart_brand_company m
            WHERE m.brand_id = d.brand_id AND m.status = 'matched'))::int AS "matchedBrand",

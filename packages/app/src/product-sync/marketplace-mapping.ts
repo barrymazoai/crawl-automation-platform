@@ -1,3 +1,4 @@
+import { deliveredMarketplace, supplySmartChannel } from "@crawl-automation/v3-contracts";
 import { z } from "zod";
 import { canonicalHash } from "../history/canonical.js";
 import { deliveryItem } from "../product-delivery/mapping.js";
@@ -21,6 +22,10 @@ export function marketplaceItem(
     domain,
     clientRef: `sku-${canonicalHash([input.channel, externalId])}`,
   });
+  const marketplace = deliveredMarketplace(input.channel);
+  if (marketplace) {
+    item.marketplace = marketplace;
+  }
   // Unlike DTC, a retailer projection may omit the brand; the matched crawler brand is retained evidence.
   if (!item.brandName && input.brand.trim()) {
     item.brandName = input.brand.trim();
@@ -40,7 +45,7 @@ export function marketplaceLabel(
   const label = deliveryLabel({
     item,
     collection: input.collection,
-    channel: input.channel,
+    channel: supplySmartChannel(input.channel),
     company: {
       domain: item.domain,
       ...(options.companyId ? { expectedCompanyId: options.companyId } : {}),

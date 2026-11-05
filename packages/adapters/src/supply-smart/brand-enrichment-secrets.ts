@@ -12,12 +12,12 @@ const secretErrors = defineErrors({
   },
 });
 
-const SecretsFileSchema = z.object({
+const SupplySmartFileSchema = z.object({
   SUPPLY_SMART_API_KEY: z.string().min(1),
   SUPPLY_SMART_BIZ_RPC_URL: z.url(),
   SUPPLY_SMART_DATABASE_RPC_URL: z.url(),
-  APOLLO_API_KEY: z.string().min(1),
 });
+const SecretsFileSchema = SupplySmartFileSchema.extend({ APOLLO_API_KEY: z.string().min(1) });
 
 export interface BrandEnrichmentSecrets {
   supplySmart: SupplySmartSettings;
@@ -29,19 +29,35 @@ export interface BrandEnrichmentSecrets {
  * `.env` parser. A bad file names the missing keys, never their values.
  */
 export async function loadBrandEnrichmentSecrets(path: string): Promise<BrandEnrichmentSecrets> {
-  const parsed = SecretsFileSchema.safeParse(parseEnv(await readFile(path, "utf8")));
+  const secrets = await secretsFile(path, SecretsFileSchema);
+  return {
+    supplySmart: supplySmartSettings(secrets),
+    apollo: ApolloSettingsSchema.parse({ apiKey: secrets.APOLLO_API_KEY }),
+  };
+}
+
+/**
+ * KAN-243: another Supply Smart's address and service key alone (the test database amazon.in is sent to), in the same
+ * private `.env` form.
+ */
+export async function loadSupplySmartSecrets(path: string): Promise<SupplySmartSettings> {
+  return supplySmartSettings(await secretsFile(path, SupplySmartFileSchema));
+}
+
+async function secretsFile<Schema extends z.ZodType>(path: string, schema: Schema) {
+  const parsed = schema.safeParse(parseEnv(await readFile(path, "utf8")));
   if (!parsed.success) {
     throw secretErrors.create("BRAND_ENRICHMENT.SECRETS_INVALID", {
       details: { path, keys: parsed.error.issues.map((issue) => issue.path.join(".")) },
     });
   }
-  const secrets = parsed.data;
-  return {
-    supplySmart: SupplySmartSettingsSchema.parse({
-      bizRpcUrl: secrets.SUPPLY_SMART_BIZ_RPC_URL,
-      databaseRpcUrl: secrets.SUPPLY_SMART_DATABASE_RPC_URL,
-      apiKey: secrets.SUPPLY_SMART_API_KEY,
-    }),
-    apollo: ApolloSettingsSchema.parse({ apiKey: secrets.APOLLO_API_KEY }),
-  };
+  return parsed.data as z.infer<Schema>;
+}
+
+function supplySmartSettings(secrets: z.infer<typeof SupplySmartFileSchema>) {
+  return SupplySmartSettingsSchema.parse({
+    bizRpcUrl: secrets.SUPPLY_SMART_BIZ_RPC_URL,
+    databaseRpcUrl: secrets.SUPPLY_SMART_DATABASE_RPC_URL,
+    apiKey: secrets.SUPPLY_SMART_API_KEY,
+  });
 }

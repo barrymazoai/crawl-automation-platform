@@ -4,7 +4,7 @@ import type { ListingDateOriginals } from "./listing-date-originals.js";
 import { brandCompanyErrors } from "./brand-company-errors.js";
 import { productDeliveryErrors } from "../product-delivery/errors.js";
 
-const channel = z.enum(["amazon", "gnc", "swanson", "wholefoods", "costco"]);
+const channel = z.enum(["amazon", "amazon-in", "gnc", "swanson", "wholefoods", "costco"]);
 
 /** Listings found in Supply Smart before the ledger existed (read-only baseline, owner 2026-10-12). */
 export const MarkPresentSchema = z.strictObject({

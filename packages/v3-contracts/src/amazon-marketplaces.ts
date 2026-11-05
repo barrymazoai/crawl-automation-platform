@@ -36,6 +36,24 @@ export function amazonMarketplaceOf(channel: string): AmazonMarketplace | null {
   return isAmazonChannel(channel) ? AMAZON_MARKETPLACES[channel].marketplace : null;
 }
 
+/** Supply Smart's channel for a crawler channel: every Amazon storefront is Supply Smart's `amazon`. */
+export function supplySmartChannel<C extends string>(
+  channel: C,
+): Exclude<C, AmazonChannel> | "amazon" {
+  return isAmazonChannel(channel) ? "amazon" : (channel as Exclude<C, AmazonChannel>);
+}
+
+/**
+ * The `marketplace` a delivery names for a crawler channel: another storefront than amazon.com, or undefined.
+ * amazon.com stays implicit (Supply Smart reads a request without one as amazon.com), so every US request body is
+ * byte-identical to before.
+ */
+export function deliveredMarketplace(channel: string): AmazonMarketplace | undefined {
+  return isAmazonChannel(channel) && channel !== "amazon"
+    ? AMAZON_MARKETPLACES[channel].marketplace
+    : undefined;
+}
+
 /** The label formats an Amazon storefront's labels are read in. */
 export function amazonLabelFormats(channel: AmazonChannel): readonly LabelFormatId[] {
   const formats = MARKETPLACE_LABEL_FORMATS[AMAZON_MARKETPLACES[channel].marketplace];

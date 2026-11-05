@@ -6,6 +6,8 @@ import type {
 export interface DeliveryRun {
   runId: string;
   channel: "dtc" | "amazon" | "gnc" | "swanson" | "wholefoods" | "costco";
+  /** KAN-243: the Amazon storefront other than amazon.com (absent = amazon.com, every US request as before). */
+  marketplace?: string;
   scope: "full" | "partial";
   siteKey?: string;
   companyDomain?: string;
@@ -19,6 +21,8 @@ export interface DeliveryImage {
 }
 export interface DeliveryListing {
   externalId: string;
+  /** KAN-243: as on the run; Supply Smart keys the listing by (channel, country, externalId). */
+  marketplace?: string;
   sourceUrl: string;
   productUrl: string;
   siteKey?: string;

@@ -67,3 +67,18 @@ it.each([
 ])("rejects invalid redelivery limits %j", (limits) => {
   expect(BrandEnrichmentSettingsSchema.safeParse({ ...settings(), limits }).success).toBe(false);
 });
+
+it("never syncs amazon-in without its own Supply Smart target, and leaves it out by default (KAN-243)", () => {
+  const sync = (productSync: unknown) =>
+    BrandEnrichmentSettingsSchema.safeParse({ ...settings(), productSync });
+  expect(BrandEnrichmentSettingsSchema.parse(settings()).productSync.channels).not.toContain(
+    "amazon-in",
+  );
+  expect(sync({ channels: ["amazon", "amazon-in"] }).success).toBe(false);
+  expect(
+    sync({
+      channels: ["amazon", "amazon-in"],
+      targets: { "amazon-in": { secretsFile: "/private/supply-smart-test.env" } },
+    }).data?.productSync.targets,
+  ).toEqual({ "amazon-in": { secretsFile: "/private/supply-smart-test.env" } });
+});

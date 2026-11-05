@@ -1,4 +1,5 @@
 import {
+  isAmazonChannel,
   AmazonSalesRankSchema,
   estimateMonthlyUnits,
   type AmazonSalesEstimate,
@@ -76,10 +77,15 @@ export function salesEstimateDelivery(input: SalesEstimateInput): {
   unitsSoldPeriod?: "trailing_30d";
   extras: Record<string, unknown>;
 } {
-  if (input.channel !== "amazon") {
+  if (!isAmazonChannel(input.channel)) {
     return { extras: input.extras };
   }
   const { rank, read } = rankOf(input);
+  // KAN-243: the units curve and the floor are amazon.com's (owner 2026-10-27); another storefront sends its page
+  // badge as printed, or no units at all, and its rank.
+  if (input.channel !== "amazon") {
+    return { salesRank: rank?.rank, extras: input.extras };
+  }
   const detail: SalesEstimateExtras = { ...decide(input, rank), rankRead: read };
   const extras = { ...input.extras, salesEstimate: detail };
   const salesRank = rank?.rank;

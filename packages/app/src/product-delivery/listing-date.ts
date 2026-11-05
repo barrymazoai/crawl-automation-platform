@@ -1,4 +1,5 @@
 import {
+  isAmazonChannel,
   AmazonListingDateSchema,
   ProductListingDateFieldsSchema,
   type AmazonListingDate,
@@ -16,7 +17,7 @@ export function listingDateDelivery(input: {
   dateFirstAvailableWarning?: ListingDateWarning | undefined;
 }) {
   const extras = record(input.metrics["extras"]);
-  if (input.channel !== "amazon") {
+  if (!isAmazonChannel(input.channel)) {
     return { extras };
   }
   if (input.dateFirstAvailableWarning) {
@@ -57,7 +58,7 @@ export function labelListing<
     unitsSoldPeriod?: string | undefined;
   },
 >(channel: string, listing: T): T {
-  if (channel !== "amazon") {
+  if (!isAmazonChannel(channel)) {
     return listing;
   }
   const { salesRank: _rank, ...rest } = listing;
@@ -72,7 +73,7 @@ export function labelListing<
 
 /** The extras part of `labelListing`. */
 export function labelExtras(channel: string, extras: Record<string, unknown>) {
-  if (channel !== "amazon") {
+  if (!isAmazonChannel(channel)) {
     return extras;
   }
   const { amazonDfa: _dfa, salesEstimate: _estimate, ...original } = extras;

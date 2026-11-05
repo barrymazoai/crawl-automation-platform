@@ -40,7 +40,7 @@ export interface UndeliveredFilter {
 export interface ListingStateItem {
   clientRef: string;
   /** Supply Smart finds the listing by exact channel + external ID; it has no variant field. */
-  listing: { channel: string; externalId: string };
+  listing: { channel: string; externalId: string; marketplace?: string };
   capturedAt: string;
   /** The product service's own states; every unlisted reason is `gone` there (see listing-delivery.ts). */
   state: "gone" | "live";
@@ -54,7 +54,14 @@ export interface ListingStateItem {
 }
 
 export interface ListingStateBatch {
-  run: { runId: string; channel: string; scope: "partial"; source: string; startedAt: string };
+  run: {
+    runId: string;
+    channel: string;
+    marketplace?: string;
+    scope: "partial";
+    source: string;
+    startedAt: string;
+  };
   items: ListingStateItem[];
 }
 
