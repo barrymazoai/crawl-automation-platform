@@ -316,9 +316,19 @@ Supply Smart 已上测试环境的做法：
 | 2 | channels → label | `amazon-in` 的标签任务按 `MARKETPLACE_LABEL_FORMATS["amazon.in"]` 设置 `labelFormats` | 第一部分已做的格式机制 |
 | 3 | database 迁移 | 各表 channel CHECK 加 `amazon-in`（027/028/029/032/061 一处迁移） | — |
 | 4 | 全仓 | 写死 `"amazon"` 的 15 处判断，逐个定是「仅美国」还是「亚马逊系」（§6.1 末行）。HTML 复用、`other-offer-retry`、label 请求剥 `salesRank` 这类属于亚马逊系 | — |
-| 5 | product-sync / listings | `marketplace` 写进 run、item、label listing、listing-state；`clientRef` 哈希加上 marketplace；按站点分 run；`marketplace_invalid` 记成失败、不重试；私有配置加 `allowedMarketplaces`，生产默认只放 `amazon.com` | §6.1 ①–④；label 请求体剥字段时显式保留 marketplace，并加整请求测试（10-27 教训） |
+| 5 | product-sync / listings | `marketplace` 写进 run、item、label listing、listing-state；`clientRef` 哈希加上 marketplace；按站点分 run；`marketplace_invalid` 记成失败、不重试；按站点选 Supply Smart 目标（见 10.2a） | §6.1 ①–④；label 请求体剥字段时显式保留 marketplace，并加整请求测试（10-27 教训） |
 | 6 | 跨站判同（新步骤） | 见 10.3 | Codex app-server 客户端、标签模型配置、R2 证据读取 |
 | 7 | 重新处理已存来源 | `saved-source-tasks.ts` 重新核对时带上这个来源的格式 | 第一部分 |
+
+### 10.2a 正式库和测试库（2026-11-05 核实）
+
+爬虫现在只连一个 Supply Smart：Server 一 的 `worker.private.json` 和 `api.private.json`（`manual-releases/deploy-r46`）用同一份私有文件 `manual-releases/brand-enrichment/.env.brand-enrichment`。文件里只有一组地址和一个密钥，指向正式环境 `https://app.supplysmart.net/api/rpc` 和 `https://app.supplysmart.net/api/database/rpc`。商品推送、上下架状态、品牌补全、每周报告都走这一个连接（`packages/adapters/src/supply-smart/brand-enrichment-secrets.ts`）。
+
+要做到「印度先推测试库、美国照旧推正式库」，做法如下：
+- 商品推送的配置按站点选目标：`amazon.com` 用现在这份正式库文件，`amazon.in` 用一份新的测试库私有文件（地址和测试库密钥，只经 SCP 放到服务器）。配置里没写的站点一律不推。
+- 跨站判同那一步的查询（`getCrossMarketListings`），跟着这个站点的推送目标走。
+- 品牌补全和每周报告不变，仍只连正式库。
+- 印度验收通过后，只要把 `amazon.in` 的目标改成正式库，不改代码。
 
 不新增外部库：这些都是站点配置、映射和流程编排，现有框架（Temporal、zod、Codex 客户端）已经够用。
 
