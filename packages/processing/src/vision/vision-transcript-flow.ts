@@ -1,7 +1,10 @@
 import { recordRecovery } from "@crawl-automation/platform";
 import type { OcrReading } from "../keywords/ocr-text.js";
 import { amountPositions } from "./protocol/label-amount-position.js";
-import type { LabelIngredientPresencePolicy } from "./protocol/label-ingredient-presence.js";
+import type {
+  LabelIngredientPresencePolicy,
+  TranscriptAttempt,
+} from "./protocol/label-ingredient-presence.js";
 import {
   decodeTranscriptAnswer,
   dosedRows,
@@ -16,8 +19,11 @@ export interface TranscriptCalls {
   transcribe(): Promise<string>;
   /** An independent reading of the named rows' amounts. */
   reread(names: string[]): Promise<string>;
-  /** The label protocol the setup used before (label-visual-wire/3), already in its retained envelope. */
-  label(): Promise<string>;
+  /**
+   * The label protocol the setup used before (label-visual-wire/3), already in its retained envelope, which keeps the
+   * copy that was not accepted and why (owner 2026-11-05).
+   */
+  label(attempt: TranscriptAttempt): Promise<string>;
 }
 
 const AMOUNT_UNREADABLE = "LABEL.AMOUNT_UNREADABLE";
@@ -35,13 +41,15 @@ export async function transcribedAnswer(input: {
 }): Promise<string> {
   const { calls, ocr, policy } = input;
   const raw = await calls.transcribe();
+  const fallback = (reason: string, reread: string | null = null) =>
+    calls.label({ raw, reason, reread });
   const built = parsed(raw, policy);
-  if (!built) {
-    return calls.label();
+  if ("reason" in built) {
+    return fallback(`copy not parsed: ${built.reason}`);
   }
   const positions = amountPositions(built.candidate, ocr);
   if (positions.misplaced.length) {
-    return calls.label();
+    return fallback(`amount on another row: ${rowNames(built.candidate, positions.misplaced)}`);
   }
   const ocrConfirmed = positions.confirmed;
   const ocrLines = ocr.lines.map(({ text, polygon }) => (polygon ? { text, polygon } : { text }));
@@ -51,31 +59,37 @@ export async function transcribedAnswer(input: {
     return first;
   }
   if (before.codes.some((code) => code !== AMOUNT_UNREADABLE)) {
-    return calls.label();
+    return fallback(`checks: ${before.codes.join(", ")}`);
   }
   const names = dosedRows(built.candidate)
     .filter(({ index }) => !ocrConfirmed.includes(index))
     .map(({ row }) => row.name.text);
   const reread = await calls.reread(names);
   const answer = transcriptAnswer({ policy, raw, ocrConfirmed, ocrLines, reread });
-  return accepted(answer) ? answer : calls.label();
+  const after = decoded(answer);
+  return after.accepted ? answer : fallback(`re-read not accepted: ${after.reason}`, reread);
 }
 
 function parsed(raw: string, policy: Required<LabelIngredientPresencePolicy>) {
   try {
-    const built = transcriptCandidate(labelTranscriptWireSchema.parse(JSON.parse(raw)), policy);
-    return "reason" in built ? null : built;
+    return transcriptCandidate(labelTranscriptWireSchema.parse(JSON.parse(raw)), policy);
   } catch (error) {
     recordRecovery(error, { operation: "vision/transcript-flow" });
-    return null;
+    return { reason: "not a transcript" };
   }
 }
 
-function accepted(answer: string): boolean {
+function rowNames(candidate: Parameters<typeof dosedRows>[0], indices: readonly number[]): string {
+  const rows = candidate.formula?.columns[0]?.rows ?? [];
+  return indices.map((index) => rows[index]?.name.text ?? `row ${index}`).join("; ");
+}
+
+function decoded(answer: string): { accepted: boolean; reason: string } {
   try {
-    return decodeTranscriptAnswer(answer).status !== "review";
+    const result = decodeTranscriptAnswer(answer);
+    return { accepted: result.status !== "review", reason: result.codes.join(", ") };
   } catch (error) {
     recordRecovery(error, { operation: "vision/transcript-flow" });
-    return false;
+    return { accepted: false, reason: "answer not decoded" };
   }
 }

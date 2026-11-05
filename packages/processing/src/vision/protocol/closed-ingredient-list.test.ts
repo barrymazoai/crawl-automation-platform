@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { assessLabelCandidate, completeLabelSections } from "@crawl-automation/v3-contracts";
-import { decodeIngredientPresenceAnswer } from "./label-ingredient-presence.js";
+import {
+  decodeIngredientPresenceAnswer,
+  retainIngredientPresenceAnswer,
+} from "./label-ingredient-presence.js";
 import { explicitNoneWire, printed, savedPresenceAnswer } from "./ingredient-presence-fixture.js";
 
 function observedList(body: string) {
@@ -82,5 +85,17 @@ describe("closed printed Other Ingredients list", () => {
     const wire = observedList("Olive oil, glycerin.");
     wire.otherIngredientsState = "none_printed";
     expect(decodeIngredientPresenceAnswer(savedPresenceAnswer(wire)).status).toBe("review");
+  });
+
+  it("decodes the same with the copy a transcribed reading did not accept kept beside it", () => {
+    const wire = observedList("Olive oil, Gelatin (capsule), Glycerin.");
+    const policy = { allowNoOtherIngredientsSection: true };
+    const attempt = { raw: '{"codec":"label-visual-wire/4"}', reason: "checks: X", reread: null };
+    const kept = retainIngredientPresenceAnswer(JSON.stringify(wire), policy, attempt);
+
+    expect(JSON.parse(kept).transcriptAttempt).toEqual(attempt);
+    expect(decodeIngredientPresenceAnswer(kept)).toEqual(
+      decodeIngredientPresenceAnswer(savedPresenceAnswer(wire)),
+    );
   });
 });

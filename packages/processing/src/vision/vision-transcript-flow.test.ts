@@ -31,12 +31,17 @@ function wire(
 
 function calls(transcript: unknown, reread?: unknown) {
   const made: string[] = [];
+  const attempts: Parameters<TranscriptCalls["label"]>[0][] = [];
   const fake: TranscriptCalls = {
     transcribe: async () => (made.push("transcribe"), JSON.stringify(transcript)),
     reread: async (names) => (made.push(`reread:${names.join("|")}`), JSON.stringify(reread)),
-    label: async () => (made.push("label"), "label-visual-answer/3 envelope"),
+    label: async (attempt) => (
+      made.push("label"),
+      attempts.push(attempt),
+      "label-visual-answer/3 envelope"
+    ),
   };
-  return { fake, made };
+  return { fake, made, attempts };
 }
 
 const task = { extractionProtocol: "label-extraction/1", operationId: "op-1" } as never;
@@ -139,7 +144,7 @@ describe("transcribed image reading (owner 2026-11-04)", () => {
 
   it("reads the image with the label protocol when the re-read gives another amount", async () => {
     const reread = { rows: [{ name: "Zinc", amountCells: ["1.1 mg"] }] };
-    const { fake, made } = calls(wire(), reread);
+    const { fake, made, attempts } = calls(wire(), reread);
 
     const answer = await transcribedAnswer({
       calls: fake,
@@ -152,6 +157,13 @@ describe("transcribed image reading (owner 2026-11-04)", () => {
 
     expect(made).toEqual(["transcribe", "reread:Zinc", "label"]);
     expect(answer).toBe("label-visual-answer/3 envelope");
+    expect(attempts).toEqual([
+      {
+        raw: JSON.stringify(wire()),
+        reason: "re-read not accepted: LABEL.AMOUNT_UNREADABLE",
+        reread: JSON.stringify(reread),
+      },
+    ]);
   });
 
   it("reads the image with the label protocol when the copy cannot be parsed faithfully", async () => {
@@ -159,17 +171,21 @@ describe("transcribed image reading (owner 2026-11-04)", () => {
     const unreadable = wire([row("Vitamin C", "9[UNREADABLE] mg", "100%")]);
     const twoPanels = { ...wire(), panels: [...wire().panels, ...wire().panels] };
 
+    const reasons = [];
     for (const transcript of [twoColumns, unreadable, twoPanels, { not: "a transcript" }]) {
-      const { fake, made } = calls(transcript);
+      const { fake, made, attempts } = calls(transcript);
       await transcribedAnswer({ calls: fake, ocr: printed([["Vitamin C", "90 mg"]]), policy });
       expect(made).toEqual(["transcribe", "label"]);
+      expect(attempts[0]?.raw).toBe(JSON.stringify(transcript));
+      reasons.push(attempts[0]?.reason);
     }
+    expect(reasons.every((reason) => reason?.startsWith("copy not parsed: "))).toBe(true);
   });
 
   it("reads the image with the label protocol, never a re-read, when the OCR prints a copied amount on another row", async () => {
     // The copy gives Vitamin C 90 mg and Zinc 11 mg; the label prints 11 mg on the Vitamin C row and 90 mg on Zinc's.
     const reread = { rows: [{ name: "Zinc", amountCells: ["11 mg"] }] };
-    const { fake, made } = calls(wire(), reread);
+    const { fake, made, attempts } = calls(wire(), reread);
 
     const answer = await transcribedAnswer({
       calls: fake,
@@ -182,6 +198,9 @@ describe("transcribed image reading (owner 2026-11-04)", () => {
 
     expect(made).toEqual(["transcribe", "label"]);
     expect(answer).toBe("label-visual-answer/3 envelope");
+    expect(attempts.map((attempt) => [attempt.reason, attempt.reread])).toEqual([
+      ["amount on another row: Vitamin C (as ascorbic acid); Zinc", null],
+    ]);
   });
 
   it("reads a printed line the OCR split into pieces ('0.65' | 'mg', 'Vitamin' | 'C')", async () => {

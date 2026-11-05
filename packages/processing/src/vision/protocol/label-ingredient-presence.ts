@@ -41,21 +41,38 @@ When the whole label is visible and no separate ingredients section is printed, 
 When the section is present, transcribe it as before. When cut off, hidden, unreadable or uncertain, ingredientsComplete MUST be false and report the actual issue. formulaComplete and all dose checks remain independent.
 A blend_component with NO individual printed amount is not_declared when its parent blend_total has a readable printed total. That is complete evidence, not UNREADABLE or FORMULA_MISSING. Never use this exception for a group_header without a printed total, or replace an actually unreadable dose with not_declared.`;
 
+/**
+ * Owner 2026-11-05: when the copy-then-parse reading (label-visual-wire/4) is not accepted, the copy, why it was not
+ * accepted and its re-read are kept with the label answer read instead, so the cause can be looked up later. Never
+ * read when the answer is decoded.
+ */
+const TranscriptAttemptSchema = z.strictObject({
+  raw: z.string(),
+  reason: z.string().max(2000),
+  reread: z.string().nullable(),
+});
+export type TranscriptAttempt = z.infer<typeof TranscriptAttemptSchema>;
+
 /** Caller-authored envelope: the model cannot choose the acceptance policy. Raw stays byte-exact. */
 const savedAnswerSchema = z.strictObject({
   codec: z.literal("label-visual-answer/3"),
   policy: labelIngredientPresencePolicySchema.required(),
   raw: z.string(),
+  transcriptAttempt: TranscriptAttemptSchema.optional(),
 });
 
 export function retainIngredientPresenceAnswer(
   raw: string,
   policy: Partial<LabelIngredientPresencePolicy> = {},
+  transcriptAttempt?: TranscriptAttempt,
 ): string {
   return JSON.stringify({
     codec: "label-visual-answer/3",
     policy: labelIngredientPresencePolicySchema.parse(policy),
     raw,
+    ...(transcriptAttempt
+      ? { transcriptAttempt: TranscriptAttemptSchema.parse(transcriptAttempt) }
+      : {}),
   });
 }
 

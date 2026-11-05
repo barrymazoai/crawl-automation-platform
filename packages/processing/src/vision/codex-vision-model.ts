@@ -28,7 +28,10 @@ import {
   labelTranscriptProtocol,
 } from "./protocol/label-transcript-wire.js";
 import { transcribedAnswer } from "./vision-transcript-flow.js";
-import { labelIngredientPresencePolicySchema } from "./protocol/label-ingredient-presence.js";
+import {
+  labelIngredientPresencePolicySchema,
+  type TranscriptAttempt,
+} from "./protocol/label-ingredient-presence.js";
 
 import { CodexVisionConfigSchema, type CodexVisionConfig } from "./codex-vision-config.js";
 export { CodexVisionConfigSchema, type CodexVisionConfig };
@@ -155,13 +158,14 @@ export class CodexVisionModel implements VisionModel {
     verifyBytes(image, bytes, MAX_IMAGE_BYTES);
     const run = (request: { prompt: string; outputSchema: object }) =>
       this.opened().run({ ...request, image: { name: imageName(image.mediaType), bytes } }, signal);
-    const label = async () =>
+    const label = async (attempt?: TranscriptAttempt) =>
       retainIngredientPresenceAnswer(
         await run({
           prompt: labelIngredientPresencePrompt,
           outputSchema: labelIngredientPresenceOutputSchema,
         }),
         this.config.ingredientPresencePolicy,
+        attempt,
       );
     if (this.config.visualProtocol === labelTranscriptProtocol) {
       return transcribedAnswer({
