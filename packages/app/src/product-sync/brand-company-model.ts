@@ -5,8 +5,7 @@ export const BRAND_COMPANY_CANDIDATE_LIMIT = 20;
 export const BRAND_COMPANY_RECHECK_MS = 24 * 60 * 60 * 1000;
 export const BrandCompanyStatusSchema = z.enum(["matched", "unmatched", "ambiguous"]);
 export type BrandCompanyStatus = z.infer<typeof BrandCompanyStatusSchema>;
-export type BrandCompanyChannel =
-  "amazon" | "amazon-in" | "gnc" | "swanson" | "wholefoods" | "costco";
+export type BrandCompanyChannel = "amazon" | "gnc" | "swanson" | "wholefoods" | "costco";
 
 export const MatchBrandsSchema = z.object({
   limit: z.number().int().min(1).max(500),
