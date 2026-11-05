@@ -206,6 +206,57 @@ describe("transcriptAttempt", () => {
     ]);
   });
 
+  it("reads a dosed row without a blend word over its undosed list as that blend (Iron Faith)", () => {
+    const html = `<table>
+      <tr><td>Molybdenum</td><td>75 mcg</td><td>167%</td></tr>
+      <tr><td>Health Support</td><td>170 mg</td><td>**</td></tr>
+      <tr><td>Lutein, Lycopene (fruit), Saw Palmetto (fruit)</td><td></td><td></td></tr>
+      <tr><td>Immune Support</td><td>110 mg</td><td>**</td></tr>
+      <tr><td>Echinacea Extract (aerial), Garlic (bulb)</td><td></td><td></td></tr>
+      <tr><td>Zinc</td><td>15 mg</td><td>136%</td></tr>
+      <tr><td>Selenium, Copper</td><td></td><td></td></tr>
+    </table><p><b>Other Ingredients:</b> Rice Flour, Hypromellose.</p>`;
+    const lines = [
+      "Supplement Facts",
+      "Molybdenum",
+      "75 mcg",
+      "167%",
+      "Health Support",
+      "170 mg",
+      "**",
+      "Lutein, Lycopene (fruit), Saw Palmetto (fruit)",
+      "Immune Support",
+      "110 mg",
+      "**",
+      "Echinacea Extract (aerial), Garlic (bulb)",
+      "Zinc",
+      "15 mg",
+      "136%",
+      "Selenium, Copper",
+      "** Daily Value (DV) Not Established",
+      "Other Ingredients: Rice Flour, Hypromellose.",
+    ];
+
+    const { rows } = attempt(html, lines);
+
+    // A row printing a %DV ("Zinc 15 mg 136%") is never read as a blend: its list stays out of the formula.
+    expect(rows.slice(0, 8).map((row) => [row.kind, row.name, row.parent])).toEqual([
+      ["nutrient", "Molybdenum", null],
+      ["blend_total", "Health Support", null],
+      ["blend_component", "Lutein", 1],
+      ["blend_component", "Lycopene (fruit)", 1],
+      ["blend_component", "Saw Palmetto (fruit)", 1],
+      ["blend_total", "Immune Support", null],
+      ["blend_component", "Echinacea Extract (aerial)", 5],
+      ["blend_component", "Garlic (bulb)", 5],
+    ]);
+    expect(rows.find((row) => row.name === "Zinc")).toMatchObject({
+      kind: "nutrient",
+      parent: null,
+    });
+    expect(rows.some((row) => row.parent === 8)).toBe(false);
+  });
+
   it("reads a plain-text <pre> panel line by line (Swanson)", () => {
     const pre = [
       "Supplement Facts",

@@ -1,27 +1,8 @@
 import type { TranscriptRow } from "./html-transcript.js";
 import { memberDose, readCells, servingLine, type Cells } from "./transcript-cells.js";
+import { memberRow, printedRow, type ParsedPanel, type ParsedRow } from "./transcript-row-build.js";
 
-/**
- * Step 2 of the transcribe-then-parse plan: a copied panel becomes formula rows by fixed rules, so the same panel
- * always gives the same structure. Every text a row carries is a substring of one transcript cell.
- */
-export interface ParsedRow {
-  kind: "nutrient" | "group_header" | "blend_total" | "blend_component";
-  name: string;
-  amount: string | null;
-  dailyValue: string | null;
-  parentRowIndex: number | null;
-  /** A printed "no DV" marker cell ("--", "**", "†"): quoted as printed, never read as a value. */
-  dailyValueMarker?: string;
-  /** The same marker printed in the amount column: left out as noise, never an amount. */
-  amountMarker?: string;
-}
-
-export interface ParsedPanel {
-  servingSize: string | null;
-  servingsPerContainer: string | null;
-  rows: ParsedRow[];
-}
+export type { ParsedPanel, ParsedRow } from "./transcript-row-build.js";
 
 /** Commas and semicolons outside parentheses/brackets separate the items of a printed list. */
 export function splitPrintedList(text: string): string[] {
@@ -103,17 +84,43 @@ class RowParser {
 
   /** An undosed comma list indented under an open group, or right below it, lists that group's components. */
   private componentList(cells: Cells): boolean {
-    const parent = this.top();
     const parts = splitPrintedList(cells.name);
+    if (cells.amount || parts.length < 2) {
+      return false;
+    }
+    const parent = this.top() ?? this.blendAbove(cells);
     // GNC prints a blend's list unindented in the row right below it ("Stimulant Complex 750 mg" / "Caffeine, …").
     const listsParent = cells.raw.indent > 0 || this.panel.rows.length - 1 === parent?.index;
-    if (cells.amount || !listsParent || !parent || parts.length < 2) {
+    if (!listsParent || !parent) {
       return false;
     }
     for (const part of parts) {
       this.component(part, parent.index);
     }
     return true;
+  }
+
+  /**
+   * Owner 2026-11-05 (Iron Faith Essential Cell Food: "Health Support 170 mg **" over "Lutein, Lycopene …, Saw
+   * Palmetto"): a dosed root row without a %DV, right above a list printing no values of its own, is a blend named
+   * without a blend word; the list is its components.
+   */
+  private blendAbove(cells: Cells): OpenGroup | undefined {
+    const index = this.panel.rows.length - 1;
+    const above = this.panel.rows[index];
+    const blend =
+      above?.kind === "nutrient" &&
+      !!above.amount &&
+      above.dailyValue === null &&
+      above.parentRowIndex === null &&
+      cells.valuesBlank;
+    if (!above || !blend) {
+      return undefined;
+    }
+    above.kind = "blend_total";
+    const group = { index, indent: cells.raw.indent, printed: true };
+    this.open.push(group);
+    return group;
   }
 
   /** "Blend Name: A, B (part), C" in one cell: the blend and its components. */
@@ -209,29 +216,4 @@ class RowParser {
   private push(row: ParsedRow): number {
     return this.panel.rows.push(row) - 1;
   }
-}
-
-function printedRow(cells: Cells, isGroup: boolean, parentRowIndex: number | null): ParsedRow {
-  return {
-    kind: rowKind(isGroup, cells, parentRowIndex),
-    name: cells.name,
-    amount: cells.amount,
-    dailyValue: cells.dailyValue,
-    // A sub-heading's place inside a printed blend is the label rules' own reading; it carries no parent.
-    parentRowIndex: isGroup && !cells.amount ? null : parentRowIndex,
-    ...(cells.dvMarker ? { dailyValueMarker: cells.dvMarker } : {}),
-    ...(cells.amountMarker ? { amountMarker: cells.amountMarker } : {}),
-  };
-}
-
-/** A blend member on its own line printing its dose before its name ("300 mg Boswellia … (Boswellia serrata),"). */
-function memberRow(cells: Cells, parentRowIndex: number | null) {
-  return !cells.amount && parentRowIndex !== null ? memberDose(cells.name) : null;
-}
-
-function rowKind(isGroup: boolean, cells: Cells, parentRowIndex: number | null): ParsedRow["kind"] {
-  if (isGroup) {
-    return cells.amount ? "blend_total" : "group_header";
-  }
-  return parentRowIndex !== null ? "blend_component" : "nutrient";
 }
