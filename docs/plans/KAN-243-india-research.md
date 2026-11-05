@@ -294,6 +294,66 @@ Supply Smart 已上测试环境的做法：
 - Supply Smart 侧：`dailyValueHeading` 的接收和按口径分开存放，由 Supply Smart 的 worktree `KAN-243-india-label` 在做。他们上线前，我们发过去的这个字段会被他们的 `z.object` 静默丢掉，不会报错。
 - 日文、法文：关键词还只许英文字母，要等对应格式加进来时再放开，并按语言换匹配方式。
 
+## 10. 第二部分计划：接 amazon.in 渠道 + 跨站判同（待用户批准，2026-11-05）
+
+本节只是计划，批准前不写代码。依据：设计稿 `docs/plans/KAN-243-india-amazon-design.md`（worktree `bs-kan243-india-design`）§3.1 / §5 第一期，本文 §4 / §6.1，以及和 Supply Smart 定下的跨站判同契约 v2.3（Supply Smart 侧草案 `KAN-243-crossMarket-contract-draft.md`）。
+
+### 10.1 已经定的
+
+- 渠道用设计稿做法 A：新渠道 `amazon-in`，现有美国数据一行不动。
+- 交付每次都带 `marketplace`，一个 run 只有一个站点。印度先只推 Supply Smart **测试库**。
+- 同 ASIN 在别国已有挂牌时，由爬虫判断是不是同一个东西（`same` / `different` / `unsure`），结论放在 batch item 的 `crossMarket` 上，标签请求不带。Supply Smart 只在第一次建挂牌时按结论执行。
+- 两个方向都要判：谁后建谁带结论。所以美国的新 ASIN 交付前也要先查。
+- 判断用的 Codex 模型和读标签的一样，复用同一份配置（用户 11-05）。
+- 爬虫手里没有美国侧的对比材料时，先去 amazon.com 重新抓一次。这次抓取作为新观测存档，照常走 24 小时准入，抓到后再判断；抓不到或页面不可用才发 `unsure`（用户 11-05）。
+- Supply Smart 库里现在没有印度数据，不用处理存量（用户 11-05）。
+
+### 10.2 要做的（按层）
+
+| # | 层 | 内容 | 复用 |
+|---|---|---|---|
+| 1 | channels/amazon | `amazonMarketplaceAdapter(site)` 工厂。站点配置包括：`channel`、`origin`、国家、币种、货币符号、日期格式（`d MMMM yyyy`）、邮编（6 位）、非保健品类目表、ScraperAPI `country_code`。价格只读 `priceToPay` 的 whole+fraction，不取「第一个非空价格」（§4 范围外表）。新读 GTIN / UPC 行。 | 选择器、图库、变体、BSR、徽标、验证页处理全部共用美国代码 |
+| 2 | channels → label | `amazon-in` 的标签任务按 `MARKETPLACE_LABEL_FORMATS["amazon.in"]` 设置 `labelFormats` | 第一部分已做的格式机制 |
+| 3 | database 迁移 | 各表 channel CHECK 加 `amazon-in`（027/028/029/032/061 一处迁移） | — |
+| 4 | 全仓 | 写死 `"amazon"` 的 15 处判断，逐个定是「仅美国」还是「亚马逊系」（§6.1 末行）。HTML 复用、`other-offer-retry`、label 请求剥 `salesRank` 这类属于亚马逊系 | — |
+| 5 | product-sync / listings | `marketplace` 写进 run、item、label listing、listing-state；`clientRef` 哈希加上 marketplace；按站点分 run；`marketplace_invalid` 记成失败、不重试；私有配置加 `allowedMarketplaces`，生产默认只放 `amazon.com` | §6.1 ①–④；label 请求体剥字段时显式保留 marketplace，并加整请求测试（10-27 教训） |
+| 6 | 跨站判同（新步骤） | 见 10.3 | Codex app-server 客户端、标签模型配置、R2 证据读取 |
+| 7 | 重新处理已存来源 | `saved-source-tasks.ts` 重新核对时带上这个来源的格式 | 第一部分 |
+
+不新增外部库：这些都是站点配置、映射和流程编排，现有框架（Temporal、zod、Codex 客户端）已经够用。
+
+### 10.3 跨站判同步骤
+
+放在商品处理完成之后、交付之前。它是产品流水线里的一步，结论存进爬虫库，交付层只负责把存下的结论映射到 `crossMarket`。判断不放在 product-sync 里，因为 product-sync 只做映射和发送。
+
+1. 交付前一次批量查询 Supply Smart `product.getCrossMarketListings({ channel, externalIds })`，一次 1–200 个。查不到别国挂牌 → 不带字段，照常交付。
+2. 查到了 → 找对比材料：
+   - 先用爬虫自己存的那个市场的采集记录，包括原始 HTML、图库和配方；
+   - 没有 → 给那个市场排一次商品抓取（新观测），这条商品的交付先缓，等抓取有结果再判断；
+   - 抓不到或页面不可用 → `unsure`。
+3. 判断：
+   - **确定性规则**，只会给出 `same`。候选有两条，要先在真实样本上验证才能用：
+     - 两边标签图是同一个 Amazon 图片 ID；
+     - 两边配方逐行一致（成分名归一化后相同、剂量和单位相同、份量相同）。
+   - 其余交给 Codex。它看两边的标签图、标题、品牌，以及印度页面上的进口商或生产商信息，给出 `same` / `different` / `unsure` 和原因码。
+4. 结论存一条记录：结论、比对的挂牌 `listingId`、方法、模型、原因码、对比材料快照的 R2 引用、时间。结论不覆盖，重新判断时写新记录。
+
+### 10.4 要用户决定
+
+1. **印度商品要不要复用美国配方？** 设计稿 §3.1 原来打算让 `amazon-in` 和 Whole Foods 一样用 `formulaFamily: "amazon-asin"`，同 ASIN 直接复用美国配方，不再 OCR。有了判同以后，二者必须一致，否则判成 `different` 的印度商品会挂着美国配方。
+   - A（推荐）：先判同，`same` 才复用美国配方；`different` / `unsure` 照常读印度标签。这样省掉进口货的 OCR，也不会把美国配方错挂到本地版上。代价是判同要提到读标签之前，只能用图和标题判断，配方逐行比对这条规则就用不上了。
+   - B：一律先读印度标签再判同。规则能用，但进口货也要多跑一遍 OCR 和视觉。
+2. **第一期范围**：按设计稿第一期做 Top 50 品牌（约 30 个本土 + 20 个国际），只推测试库，可以吗？
+3. **Mini 上真实验证要花的 ScraperAPI 额度。** 按 AGENTS.md，先 1 个请求核对地区和单价，再跑 20 个商品端到端（每页 5 credits），然后才是品牌扫描。品牌扫描的量开跑前另报。
+
+### 10.5 顺序和验收
+
+1. 渠道和迁移（10.2 第 1–4 项）→ 单测加 1 个真实请求。
+2. 交付层（第 5 项）→ 整请求测试；美国请求逐字节不变。
+3. 跨站判同（第 6 项）。Supply Smart 的只读查询和 `crossMarket` 接收同时开工，用测试库联调。
+4. 20 个商品端到端推测试库，按设计稿第一期的验证标准验收：页面字段 ≥ 95%、配方 ≥ 90%、美国渠道的表里没有一行来自 amazon.in、同 ASIN 美印两条挂牌各归其位。
+5. 每一步结束都跑 `pnpm check` 并做独立审查，修完再进下一步。不部署、不重启 worker、不推正式库，这几件都要另行批准。
+
 ## 证据位置
 
 - ScraperAPI 原件：R2 `supply-smart-test` 桶 `research/kan243-india/scraperapi/`（5 个 `.html` + `.json`，已回读校验）；Server 一 `~/kan243-research/scraperapi/`。
