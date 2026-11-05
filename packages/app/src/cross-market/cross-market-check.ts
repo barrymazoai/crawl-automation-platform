@@ -26,9 +26,10 @@ export const MATERIAL_WAIT_MS = 3 * 24 * 60 * 60 * 1000;
 
 /** What a product's delivery carries: a verdict, nothing (no listing elsewhere, or no judgment), or a wait. */
 export type CrossMarketOutcome =
-  { field: CrossMarketField } | { none: true } | { hold: "material" };
+  { field: CrossMarketField } | { none: true } | { hold: "material" | "judgment" };
 
-type Decision = { field: CrossMarketField } | { hold: "material" } | { unjudged: string };
+type Decision =
+  { field: CrossMarketField } | { hold: "material" | "judgment" } | { unjudged: string };
 type Checked = MarketplaceProduct & { channel: AmazonChannel; collection: LabelCollectedProduct };
 interface Pending {
   product: Checked;
@@ -44,6 +45,8 @@ export interface CrossMarketDeps {
   records: CrossMarketRecords;
   recapture: CrossMarketRecapture;
   now?: () => Date;
+  /** Where a failed judgment is reported (the listing itself waits for the next round). */
+  log?: (error: unknown) => void;
 }
 
 const checkable = (product: MarketplaceProduct): product is Checked =>
@@ -113,7 +116,7 @@ export class CrossMarketCheck {
         ? { ...at.key, status: "decided", field: decision.field, recordedAt }
         : "unjudged" in decision
           ? { ...at.key, status: "unjudged", reason: decision.unjudged, recordedAt }
-          : at.pendingSince
+          : at.pendingSince || decision.hold === "judgment"
             ? null
             : { ...at.key, status: "pending", recordedAt };
     if (record) {
@@ -145,14 +148,21 @@ export class CrossMarketCheck {
         reasons: ["same_rows_and_serving"],
       });
     }
-    const judged = await this.deps.judge.judge(
-      {
-        listing: crossMarketSide(product, product.collection),
-        other: crossMarketSide(other, other.collection),
-      },
-      signal,
-    );
-    return this.field({ ...judged, comparedWith, method: "codex" });
+    // A failed model turn holds only this listing; it is judged again next round, its siblings are sent.
+    const judged = await this.deps.judge
+      .judge(
+        {
+          listing: crossMarketSide(product, product.collection),
+          other: crossMarketSide(other, other.collection),
+        },
+        signal,
+      )
+      .catch((error: unknown) => {
+        signal.throwIfAborted();
+        this.deps.log?.(error);
+        return null;
+      });
+    return judged ? this.field({ ...judged, comparedWith, method: "codex" }) : { hold: "judgment" };
   }
 
   /** The other storefront's page is queued once; past the wait, or with no source to queue it from, no verdict. */

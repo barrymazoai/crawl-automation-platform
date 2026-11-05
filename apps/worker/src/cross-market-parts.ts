@@ -31,6 +31,11 @@ export function crossMarketCheck(
     },
     judge: { judge: (request, signal) => judge(parts).judge(request, signal) },
     records: new PostgresCrossMarketRecords(parts.database),
+    log: (error) =>
+      parts.log.warn(
+        { err: error, service: "cross-market" },
+        "cross-market judgment failed; retried next round",
+      ),
     recapture: new QueuedCrossMarketRecapture({
       queue: {
         sourceOf: (channel, brandId) => queue.brandSourceOf(channel, brandId),

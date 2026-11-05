@@ -181,6 +181,16 @@ describe("cross-market check", () => {
     expect(alone.records).toEqual([]);
   });
 
+  it("holds only the listing whose judgment failed, recording nothing, so the next round judges it again", async () => {
+    const india = product("amazon-in", label([["Glucosamine Sulfate", "750 mg"]], "1 Tablet"));
+    const failing = check({ other: product("amazon", label(US_ROWS)) });
+    failing.deps.judge.judge.mockRejectedValueOnce(new Error("codex turn failed"));
+    expect((await failing.service.outcomes([india], signal)).get(india)).toEqual({
+      hold: "judgment",
+    });
+    expect(failing.records).toEqual([]);
+  });
+
   it("never calls a missing serving, an undosed label or a different row the same", () => {
     expect(sameFormula(label(US_ROWS), label(US_ROWS))).toBe(true);
     expect(sameFormula(label(US_ROWS), label(US_ROWS, "2 Capsules"))).toBe(false);
