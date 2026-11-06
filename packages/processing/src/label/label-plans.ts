@@ -96,7 +96,7 @@ export class LabelPlans {
     if (!source || (source.kind !== "page" && source.kind !== "file-image")) {
       throw labelFailure("CHANNEL.LABEL_IDENTITY_CONFLICT");
     }
-    const resolution = await this.deps.resolve(source, signal);
+    const resolution = await this.deps.resolve(source, signal, request.input.labelFormats);
     if (resolution.status === "review") {
       const cause = safeErrorSummary({
         ...resolution,

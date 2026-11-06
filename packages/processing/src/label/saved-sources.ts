@@ -4,6 +4,7 @@ import { errorCodeOf } from "@crawl-automation/platform";
 import {
   ReviewRecordSchema,
   observationIdentity,
+  type LabelFormatId,
   type ProductEvidenceJoin,
   type ReviewRecord,
   type SavedEvidenceSource,
@@ -27,8 +28,16 @@ const PREPARATION_STAGES = ["file.acquire", "image.ocr-input"];
 export class SavedSourceEvidence {
   private readonly tasks: SavedSourceTasks;
 
-  constructor(private readonly deps: SavedSourceDeps) {
-    this.tasks = new SavedSourceTasks(deps);
+  constructor(
+    private readonly deps: SavedSourceDeps,
+    formats?: readonly LabelFormatId[],
+  ) {
+    this.tasks = new SavedSourceTasks(deps, formats);
+  }
+
+  /** KAN-243: the same evidence checked with a task's label formats (its images' keyword list). */
+  forFormats(formats: readonly LabelFormatId[] | undefined): SavedSourceEvidence {
+    return formats ? new SavedSourceEvidence(this.deps, formats) : this;
   }
 
   async resolve(

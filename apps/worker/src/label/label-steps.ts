@@ -17,7 +17,7 @@ import {
   type LabelInspection,
   type ProductPlanReader,
 } from "@crawl-automation/processing";
-import type { SavedEvidenceSource } from "@crawl-automation/v3-contracts";
+import type { LabelFormatId, SavedEvidenceSource } from "@crawl-automation/v3-contracts";
 import type { CoreParts } from "../core-parts.js";
 import type { LabelStores } from "./label-stores.js";
 import { labelSourceReader } from "./label-source-reader.js";
@@ -62,9 +62,7 @@ export function labelSteps(parts: CoreParts, stores: LabelStores): LabelSteps {
     remote,
     policies: stores.labelCores,
   });
-  // A fresh source has no receipt yet: its evidence alone says what it resolved to.
-  const resolve = (source: SavedEvidenceSource, signal: AbortSignal) =>
-    saved.resolve(source, { id: source.id, status: "unresolved" }, signal);
+  const resolve = freshResolver(saved);
   const plans = measuredLabelPlans(
     new LabelPlans({
       plans: labelPlanReader(parts),
@@ -92,6 +90,12 @@ export function labelSteps(parts: CoreParts, stores: LabelStores): LabelSteps {
     assembly,
     collection: new LabelCollection({ local, remote, reviews, assembly, registry }),
   };
+}
+
+/** A fresh source has no receipt yet: its evidence alone says what it resolved to, in its task's label formats. */
+function freshResolver(saved: SavedSourceEvidence) {
+  return (source: SavedEvidenceSource, signal: AbortSignal, formats?: readonly LabelFormatId[]) =>
+    saved.forFormats(formats).resolve(source, { id: source.id, status: "unresolved" }, signal);
 }
 
 /** What a saved source's prepared evidence resolves to, read from that evidence only. */

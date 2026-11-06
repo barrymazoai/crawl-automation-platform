@@ -15,6 +15,7 @@ import {
   type ProductResolvedEvidenceSource,
   type SavedEvidenceSource,
   LabelFormatIdSchema,
+  type LabelFormatId,
 } from "@crawl-automation/v3-contracts";
 
 /**
@@ -122,6 +123,8 @@ export type SourceResolution =
 export type SourceResolver = (
   source: SavedEvidenceSource,
   signal: AbortSignal,
+  /** KAN-243: the task's label formats, so an image's keyword decision is checked with the list it was made with. */
+  formats?: readonly LabelFormatId[],
 ) => Promise<SourceResolution>;
 
 export const labelKeys = {

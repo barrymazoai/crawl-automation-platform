@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
-import type {
-  OcrRegistration,
+import {
+  keywordPolicyFor,
+  type LabelFormatId,
+  type OcrRegistration,
   SavedEvidenceSource,
   VisionTask,
 } from "@crawl-automation/v3-contracts";
@@ -42,7 +44,7 @@ async function savedPage(html = "<p>Other ingredients: Water</p>") {
   return { ...setup, source, prepared, resolver: new SavedSourceEvidence(deps) };
 }
 
-async function savedImage(text: string) {
+async function savedImage(text: string, labelFormats?: LabelFormatId[]) {
   const setup = ocrStepSetup();
   setup.api.recognize = async () => ({ text, lines: [] });
   await setup.step.run(setup.input, signal());
@@ -52,13 +54,13 @@ async function savedImage(text: string) {
     registry: setup.registry,
   });
   const record = defined(await setup.registry.read(setup.input.operationId)) as OcrRegistration;
-  const selection = await screen.screen(record, signal());
+  const selection = await screen.screen(record, signal(), keywordPolicyFor(labelFormats));
   await new KeywordScreening({
     text: screen,
     local: new MemoryStore(),
     remote: setup.remote,
     reviews: new MemoryReviews(),
-  }).run(record, signal());
+  }).run(labelFormats ? { registration: record, labelFormats } : record, signal());
   const deps = {
     remote: setup.remote,
     pages: { inspect: async () => null },
@@ -182,6 +184,29 @@ describe("saved sources", () => {
       image.resolver.resolve(image.source, { id: "label", status: "not_matched" }, signal()),
     ).rejects.toMatchObject({
       code: "SAVED.RECEIPT_INVALID",
+    });
+  });
+
+  it("an Indian label image is confirmed with the keyword list its task screened it with (KAN-243)", async () => {
+    // amazon.in B0019LWV92 (2026-11-06): screened with the Indian list, it failed SAVED.KEYWORDS_UNCONFIRMED when the
+    // saved-source check re-derived the decision with the US list.
+    const formats: LabelFormatId[] = [
+      "us-facts/1",
+      "in-nutritional-information/1",
+      "in-composition/1",
+    ];
+    const image = await savedImage("Nutritional Information (Approx.) Qty./Serving %RDA", formats);
+    expect(image.selection.status).toBe("matched");
+    const fresh = { id: "label", status: "unresolved" } as const;
+    await expect(image.resolver.resolve(image.source, fresh, signal())).resolves.toMatchObject({
+      status: "review",
+      code: "SAVED.PREPARATION_UNVERIFIED",
+    });
+    expect(
+      await image.resolver.forFormats(formats).resolve(image.source, fresh, signal()),
+    ).toMatchObject({
+      status: "resolved",
+      source: { task: { input: { selection: image.selection } } },
     });
   });
 

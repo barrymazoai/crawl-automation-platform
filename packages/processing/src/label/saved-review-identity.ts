@@ -1,5 +1,5 @@
 import type { ReviewRecord, SavedEvidenceSource } from "@crawl-automation/v3-contracts";
-import { keywordCompatibility } from "../keywords/keyword-screening.js";
+import { keywordCompatibilityOf } from "../keywords/keyword-screening.js";
 import { hashString } from "../results/result-record.js";
 import { labelFailure } from "./label-errors.js";
 import type { SavedSourceTasks } from "./saved-source-tasks.js";
@@ -46,7 +46,12 @@ async function imageOperation(source: Of<"ocr-image">, lookup: Lookup): Promise<
   if (stage === "ocr.keywords") {
     const registration = await lookup.tasks.registration(source);
     return {
-      operationId: `screen-${hashString(JSON.stringify([source.task.operationId, keywordCompatibility]))}`,
+      operationId: `screen-${hashString(
+        JSON.stringify([
+          source.task.operationId,
+          keywordCompatibilityOf(lookup.tasks.keywordPolicy),
+        ]),
+      )}`,
       inputFingerprint: hashString(JSON.stringify(registration)),
     };
   }

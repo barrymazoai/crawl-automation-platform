@@ -1,7 +1,10 @@
 import { isDeepStrictEqual } from "node:util";
 import type { ObjectStore } from "@crawl-automation/platform";
 import {
+  keywordPolicyFor,
   KeywordResultSchema,
+  type KeywordPolicy,
+  type LabelFormatId,
   OcrInputSchema,
   fingerprintOcrInput,
   observationIdentity,
@@ -41,7 +44,15 @@ const DECISION_LIMIT = 1024 * 1024;
 
 /** The tasks a saved source's prepared evidence stands for, each re-derived from that evidence. */
 export class SavedSourceTasks {
-  constructor(readonly deps: SavedSourceDeps) {}
+  /** KAN-243: the keyword list the task's images were screened with (the US list without formats, as before). */
+  readonly keywordPolicy: KeywordPolicy;
+
+  constructor(
+    readonly deps: SavedSourceDeps,
+    formats?: readonly LabelFormatId[],
+  ) {
+    this.keywordPolicy = keywordPolicyFor(formats);
+  }
 
   async page(source: Of<"page">, signal: AbortSignal) {
     const record = await this.deps.pages.inspect(source.plan.page, signal);
@@ -67,7 +78,11 @@ export class SavedSourceTasks {
   }
 
   async image(source: Of<"ocr-image">, signal: AbortSignal) {
-    const selection = await this.deps.screen.screen(await this.registration(source), signal);
+    const selection = await this.deps.screen.screen(
+      await this.registration(source),
+      signal,
+      this.keywordPolicy,
+    );
     const bytes = await this.deps.remote.read(keywordKey(selection), DECISION_LIMIT, signal);
     if (!bytes || !isDeepStrictEqual(KeywordResultSchema.parse(decodeJson(bytes)), selection)) {
       throw labelFailure("SAVED.KEYWORDS_UNCONFIRMED");
