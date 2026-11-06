@@ -1,6 +1,7 @@
 import type { TextInput } from "@crawl-automation/v3-contracts";
 import { evidenceLines, type EvidenceLine } from "../../text/protocol/evidence-lines.js";
 import { Anchors, type Anchor } from "./transcript-anchors.js";
+import { splitFinalAnd } from "./final-and.js";
 import { htmlTranscript, type TranscriptRow } from "./html-transcript.js";
 import {
   parseTranscriptRows,
@@ -214,7 +215,7 @@ function other(textValue: string | null, anchors: Anchors) {
     return null;
   }
   const items: Anchor[] = [];
-  for (const item of splitPrintedList(textValue)) {
+  for (const item of splitFinalAnd(splitPrintedList(textValue))) {
     const anchor = anchors.find(item, heading.fromLine);
     if (!anchor) {
       return null;

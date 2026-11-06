@@ -1,4 +1,5 @@
 import type { LabelImageCandidate } from "@crawl-automation/v3-contracts";
+import { splitFinalAnd } from "../../label/transcript/final-and.js";
 import { labelValidationErrors } from "../../label/validation-errors.js";
 import { visionFailure } from "../vision-errors.js";
 import { amountPositions, squashAmount } from "./label-amount-position.js";
@@ -63,6 +64,7 @@ export function decodeTranscriptAnswer(response: string) {
     throw visionFailure("VISION.INVALID_OUTPUT", "executed");
   }
   const judged = judgeIngredientPresence(built.candidate, built.block);
+  withFinalAnd(judged.candidate);
   const codes = new Set(judged.codes);
   const byOcr = ocrConfirmedRows(built.candidate, saved);
   const confirmed = new Set([
@@ -77,6 +79,18 @@ export function decodeTranscriptAnswer(response: string) {
     status: codes.size ? ("review" as const) : judged.status,
     codes: [...codes],
   };
+}
+
+/** The copied list's last "A and B" is two items, as on a web page's copy (owner 2026-11-06). */
+function withFinalAnd(candidate: LabelImageCandidate): void {
+  const other = candidate.otherIngredients;
+  const texts = other?.items.map((item) => item.text) ?? [];
+  const split = splitFinalAnd(texts);
+  if (!other || split.length === texts.length) {
+    return;
+  }
+  const pair = split.slice(-2).map((text) => ({ text, evidence: text }));
+  other.items = [...other.items.slice(0, -1), ...pair];
 }
 
 /** Rows the OCR confirms, placed by this parse; null when the OCR prints a copied amount on another row. */

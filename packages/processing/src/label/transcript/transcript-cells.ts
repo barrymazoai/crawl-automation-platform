@@ -79,13 +79,14 @@ export function readCells(raw: TranscriptRow): Cells | null {
   }
   const value = raw.columns ? headedCells(values, raw.columns) : valueCells(values);
   const inName = doseInName(nameCell, value.amountCell);
+  const cell = amountAndMarker(value.amountCell, value.dvCell);
   return {
     raw,
     nameCell,
     name: (inName?.name ?? nameCell).replace(/:\s*$/, "").trim(),
-    amount: inName?.amount ?? printed(value.amountCell) ?? null,
+    amount: inName?.amount ?? cell.amount,
     dailyValue: printed(value.dvCell),
-    dvMarker: marker(value.dvCell),
+    dvMarker: cell.dvMarker,
     amountMarker: value.amountMarker,
     endsWithColon: /:\s*$/.test(nameCell),
     groupWord: GROUP_WORD.test(nameCell),
@@ -121,6 +122,27 @@ function headedCells(values: string[], columns: NonNullable<TranscriptRow["colum
   const dvCell = columns.dailyValue === null ? undefined : values[columns.dailyValue];
   const amount = printed(amountCell) ? amountCell : undefined;
   return { amountCell: amount, dvCell, amountMarker: amount ? null : marker(amountCell) };
+}
+
+/** An amount printed with its footnote mark: "500 mg**", "2,000 IU†". */
+const GLUED_MARK = /^(.*\d.*?)\s*([*†‡]+)$/;
+
+/**
+ * Owner 2026-11-06 (NOW Glutathione on amazon.in: "L-Glutathione | 500 mg**" with no %DV cell): a footnote mark
+ * printed against the amount is the %DV column's own marker, as amazon.com's copy of the same panel prints it in a
+ * cell of its own ("500 mg | **"); the amount is the dose before it. A row printing a %DV (or a marker) keeps its
+ * amount cell as printed.
+ */
+function amountAndMarker(
+  amountCell: string | undefined,
+  dvCell: string | undefined,
+): { amount: string | null; dvMarker: string | null } {
+  const match = amountCell && !dvCell?.trim() ? GLUED_MARK.exec(amountCell.trim()) : null;
+  const amount = match?.[1]?.trim();
+  if (match?.[2] && amount && isAmountCell(amount)) {
+    return { amount, dvMarker: match[2] };
+  }
+  return { amount: printed(amountCell), dvMarker: marker(dvCell) };
 }
 
 /** A dose the name cell prints itself: "Sodium 55mg", "240 mcg Folic Acid", "Includes 4 g Added Sugars". */
