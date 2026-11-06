@@ -80,5 +80,5 @@ it("never syncs amazon-in without its own Supply Smart target, and leaves it out
       channels: ["amazon", "amazon-in"],
       targets: { "amazon-in": { secretsFile: "/private/supply-smart-test.env" } },
     }).data?.productSync.targets,
-  ).toEqual({ "amazon-in": { secretsFile: "/private/supply-smart-test.env" } });
+  ).toEqual({ "amazon-in": { secretsFile: "/private/supply-smart-test.env", brandDomains: {} } });
 });
