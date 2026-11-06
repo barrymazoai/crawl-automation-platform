@@ -7,6 +7,8 @@ import {
   isIngredientPresenceAnswer,
 } from "./protocol/label-ingredient-presence.js";
 import { decodeTranscriptAnswer, isTranscriptAnswer } from "./protocol/label-transcript-answer.js";
+import { copiesPairedRows, transcriptCandidate } from "./protocol/label-transcript-candidate.js";
+import { labelTranscriptWireSchema } from "./protocol/label-transcript-wire.js";
 
 /**
  * Owner rule (simulate old vs new on stored answers before changing a label rule): every stored vision answer in
@@ -28,14 +30,58 @@ function summary(candidate: LabelImageCandidate) {
   return { rows, other: candidate.otherIngredients?.items.map((item) => item.text) ?? null };
 }
 
+const INDIA = ["us-facts/1", "in-nutritional-information/2", "in-composition/2"] as const;
+
+/**
+ * A label-protocol answer's copy that was not accepted, as the copy rules read it. The formats are amazon.in's, which
+ * read a US panel exactly as the US format does.
+ */
+function copyRows(raw: string) {
+  const attempt = JSON.parse(raw)?.transcriptAttempt;
+  if (!attempt) {
+    return undefined;
+  }
+  const policy = { allowNoOtherIngredientsSection: true };
+  try {
+    const wire = labelTranscriptWireSchema.parse(JSON.parse(attempt.raw));
+    const built = copiesPairedRows(wire, INDIA)
+      ? { reason: "two ingredients in one row" }
+      : transcriptCandidate(wire, policy, INDIA);
+    return {
+      reason: attempt.reason,
+      rows: "reason" in built ? built.reason : summary(built.candidate).rows,
+    };
+  } catch (error) {
+    return { reason: attempt.reason, rows: String((error as Error).message).slice(0, 80) };
+  }
+}
+
 function decode(raw: string) {
   if (isTranscriptAnswer(raw)) {
     return { codec: "label-visual-answer/4", ...decodeTranscriptAnswer(raw) };
   }
   if (isIngredientPresenceAnswer(raw)) {
-    return { codec: "label-visual-answer/3", ...decodeIngredientPresenceAnswer(raw) };
+    return {
+      codec: "label-visual-answer/3",
+      ...decodeIngredientPresenceAnswer(raw),
+      copy: copyRows(raw),
+    };
   }
   return null;
+}
+
+function replayLine(name: string, raw: string) {
+  try {
+    const decoded = decode(raw);
+    if (!decoded) {
+      return { name, codec: "other" };
+    }
+    const { codec, status, codes, candidate } = decoded;
+    const copy = "copy" in decoded ? decoded.copy : undefined;
+    return { name, codec, status, codes, ...summary(candidate), ...(copy ? { copy } : {}) };
+  } catch (error) {
+    return { name, error: String((error as Error).message).slice(0, 120) };
+  }
 }
 
 describe.skipIf(!dir)("stored vision answers decoded with today's rules", () => {
@@ -46,21 +92,7 @@ describe.skipIf(!dir)("stored vision answers decoded with today's rules", () => 
       .sort()) {
       const body = JSON.parse(readFileSync(join(dir ?? "", name), "utf8"));
       const raw = typeof body.raw === "string" ? body.raw : JSON.stringify(body.raw ?? body);
-      try {
-        const decoded = decode(raw);
-        const line = decoded
-          ? {
-              name,
-              codec: decoded.codec,
-              status: decoded.status,
-              codes: decoded.codes,
-              ...summary(decoded.candidate),
-            }
-          : { name, codec: "other" };
-        lines.push(JSON.stringify(line));
-      } catch (error) {
-        lines.push(JSON.stringify({ name, error: String((error as Error).message).slice(0, 120) }));
-      }
+      lines.push(JSON.stringify(replayLine(name, raw)));
     }
     writeFileSync(process.env["LABEL_REPLAY_OUT"] ?? "/dev/null", `${lines.join("\n")}\n`);
     expect(lines.length).toBeGreaterThan(0);

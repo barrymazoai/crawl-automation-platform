@@ -6,6 +6,7 @@ import {
 } from "@crawl-automation/v3-contracts";
 import { formatPanel, type FormatPanel } from "../../label/transcript/format-panel.js";
 import { isAmountCell } from "../../label/transcript/transcript-cells.js";
+import { printsPairedRow } from "../../label/transcript/paired-rows.js";
 import {
   parseTranscriptRows,
   type ParsedPanel,
@@ -110,6 +111,19 @@ function panelRows(
   const several = (row: TranscriptRow) =>
     !row.columns && row.cells.slice(1).filter(isAmountCell).length > 1;
   return rows.some(several) ? { reason: "several amount columns" } : { panel, shaped, rows };
+}
+
+/**
+ * Owner 2026-11-06: a new copy whose rows print two ingredients side by side ("Iron | 2% | Thiamine (B1) | 180%") is
+ * not accepted, since the row rules keep only the first. Asked when an image is read, never when a saved answer is
+ * decoded: a saved copy keeps reading as it was accepted.
+ */
+export function copiesPairedRows(
+  wire: LabelTranscriptWire,
+  formats: readonly LabelFormatId[] = [US_FACTS],
+): boolean {
+  const read = panelRows(wire, formats);
+  return !("reason" in read) && read.rows.some((row) => printsPairedRow(row.cells));
 }
 
 /** The one panel with no unreadable cell; otherwise why not. */

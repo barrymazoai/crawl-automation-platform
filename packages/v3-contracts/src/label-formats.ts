@@ -154,8 +154,9 @@ export const LABEL_FORMATS: Readonly<Record<LabelFormatId, LabelFormat>> = {
         /^.{0,60}\(\s*per\s*100\s*(?:g|gm|ml)\s*\)$/i,
       ],
       dailyValue: [
-        { header: /^[*#†‡]*\s*%?\s*rda\b.*$/i, basis: "in_rda" },
-        { header: /^[*#†‡]*\s*%?\s*(?:dv|daily\s*values?)\s*%?\s*[*†‡]*$/i, basis: "us_dv" },
+        // A leading footnote mark: "**%RDA Per Serve", "^%RDA Per Serve" (amazon.in copies, 2026-11-06).
+        { header: /^[*#†‡^]*\s*%?\s*rda\b.*$/i, basis: "in_rda" },
+        { header: /^[*#†‡^]*\s*%?\s*(?:dv|daily\s*values?)\s*%?\s*[*†‡]*$/i, basis: "us_dv" },
       ],
     },
     headerCells: [

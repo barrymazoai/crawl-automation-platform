@@ -12,7 +12,7 @@ import {
   transcriptAnswer,
 } from "./protocol/label-transcript-answer.js";
 import { printedPercentHeader } from "../label/transcript/format-panel.js";
-import { transcriptCandidate } from "./protocol/label-transcript-candidate.js";
+import { copiesPairedRows, transcriptCandidate } from "./protocol/label-transcript-candidate.js";
 import {
   labelRereadOutputSchema,
   labelRereadPrompt,
@@ -81,22 +81,65 @@ export async function transcribedAnswer(input: {
   }
   const ocrConfirmed = positions.confirmed;
   const ocrLines = ocr.lines.map(({ text, polygon }) => (polygon ? { text, polygon } : { text }));
-  const kept = formats ? { formats } : {};
-  const first = transcriptAnswer({ policy, raw, ocrConfirmed, ocrLines, reread: null, ...kept });
+  const answerWith = (reread: string | null) =>
+    transcriptAnswer({
+      policy,
+      raw,
+      ocrConfirmed,
+      ocrLines,
+      reread,
+      ...(formats ? { formats } : {}),
+    });
+  const unconfirmed = dosedRows(built.candidate)
+    .filter(({ index }) => !ocrConfirmed.includes(index))
+    .map(({ row }) => row.name.text);
+  return confirmedAnswer({ raw, calls, fallback, answerWith, unconfirmed });
+}
+
+/** The copy whose checks pass, or whose only open amounts one re-read repeats; otherwise the label protocol. */
+async function confirmedAnswer(at: {
+  raw: string;
+  calls: TranscriptCalls;
+  fallback: (reason: string, reread?: string | null) => Promise<string>;
+  answerWith: (reread: string | null) => string;
+  unconfirmed: string[];
+}): Promise<string> {
+  const first = at.answerWith(null);
   const before = decodeTranscriptAnswer(first);
   if (before.status !== "review") {
     return first;
   }
-  if (before.codes.some((code) => code !== AMOUNT_UNREADABLE)) {
-    return fallback(`checks: ${before.codes.join(", ")}`);
+  const elsewhere = ingredientsElsewhere(at.raw, before.codes);
+  if (!elsewhere && before.codes.some((code) => code !== AMOUNT_UNREADABLE)) {
+    return at.fallback(`checks: ${before.codes.join(", ")}`);
   }
-  const names = dosedRows(built.candidate)
-    .filter(({ index }) => !ocrConfirmed.includes(index))
-    .map(({ row }) => row.name.text);
-  const reread = await calls.reread(names);
-  const answer = transcriptAnswer({ policy, raw, ocrConfirmed, ocrLines, reread, ...kept });
-  const after = decoded(answer);
-  return after.accepted ? answer : fallback(`re-read not accepted: ${after.reason}`, reread);
+  if (!before.codes.includes(AMOUNT_UNREADABLE)) {
+    return first;
+  }
+  const reread = await at.calls.reread(at.unconfirmed);
+  const answer = at.answerWith(reread);
+  const after = decoded(answer, elsewhere);
+  return after.accepted ? answer : at.fallback(`re-read not accepted: ${after.reason}`, reread);
+}
+
+const INGREDIENTS_INCOMPLETE = "LABEL.INGREDIENTS_INCOMPLETE";
+
+/**
+ * Owner 2026-11-06 (Be Bodywise Biotin gummies on amazon.in: the panel on one side of the jar, the ingredients on another
+ * image): a copy whose only open check is the ingredients section, on an image the copy says does not show that
+ * section, keeps its panel. The label protocol cannot read a section the image does not show either, and its own
+ * reading of that panel was worse (1000 mcg for the printed 10000 mcg); the ingredients come from the image that
+ * prints them, as for every partial label. A section copied as unreadable or partly copied is still read again.
+ */
+function ingredientsElsewhere(raw: string, codes: readonly string[]): boolean {
+  if (
+    !codes.includes(INGREDIENTS_INCOMPLETE) ||
+    codes.some((code) => code !== INGREDIENTS_INCOMPLETE && code !== AMOUNT_UNREADABLE)
+  ) {
+    return false;
+  }
+  const wire = labelTranscriptWireSchema.parse(JSON.parse(raw));
+  return wire.otherIngredientsState === "not_fully_visible" && !wire.otherIngredients?.trim();
 }
 
 function parsed(
@@ -105,7 +148,11 @@ function parsed(
   formats: readonly LabelFormatId[] | undefined,
 ) {
   try {
-    return transcriptCandidate(labelTranscriptWireSchema.parse(JSON.parse(raw)), policy, formats);
+    const wire = labelTranscriptWireSchema.parse(JSON.parse(raw));
+    if (copiesPairedRows(wire, formats)) {
+      return { reason: "two ingredients in one row" };
+    }
+    return transcriptCandidate(wire, policy, formats);
   } catch (error) {
     recordRecovery(error, { operation: "vision/transcript-flow" });
     return { reason: "not a transcript" };
@@ -126,10 +173,16 @@ function rowNames(candidate: Parameters<typeof dosedRows>[0], indices: readonly 
   return indices.map((index) => rows[index]?.name.text ?? `row ${index}`).join("; ");
 }
 
-function decoded(answer: string): { accepted: boolean; reason: string } {
+/** Accepted: no open check, or (ingredients printed elsewhere) only the ingredients section open. */
+function decoded(answer: string, elsewhere = false): { accepted: boolean; reason: string } {
   try {
     const result = decodeTranscriptAnswer(answer);
-    return { accepted: result.status !== "review", reason: result.codes.join(", ") };
+    const onlyIngredients =
+      elsewhere && result.codes.every((code) => code === INGREDIENTS_INCOMPLETE);
+    return {
+      accepted: result.status !== "review" || onlyIngredients,
+      reason: result.codes.join(", "),
+    };
   } catch (error) {
     recordRecovery(error, { operation: "vision/transcript-flow" });
     return { accepted: false, reason: "answer not decoded" };

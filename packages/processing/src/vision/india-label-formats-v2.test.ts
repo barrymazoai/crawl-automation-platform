@@ -101,6 +101,15 @@ describe("Indian label formats /2: the first 20 real amazon.in labels", () => {
       servingSize: "30ml",
       rows: [["Energy (kcal)", "8.89", "0.44"]],
     });
+    // The same Kapiva table copied from another image, its footnote mark a caret (2026-11-06).
+    const caret = wire({
+      columnHeaders: ["Contents", "Per 30ml", "Per 100ml", "^%RDA Per Serve"],
+      rows: [row("Serve Size: 30ml"), row("Energy (kcal)", "8.89", "29.62", "0.44")],
+    });
+    expect(rowsOf(transcriptCandidate(caret, policy, INDIA))).toMatchObject({
+      dailyValueHeading: "^%RDA Per Serve",
+      rows: [["Energy (kcal)", "8.89", "0.44"]],
+    });
   });
 
   it("reads two tables printed side by side as one table after the other", () => {
