@@ -85,6 +85,8 @@ export interface MarketplaceReadRequest {
   pending?: boolean;
   /** KAN-243: only these listings (the other storefront's product a cross-market check compares with). */
   listingIds?: string[];
+  /** KAN-243: brands a sync target resolves by its own domain, pending like brands with a production match. */
+  matchedBrandIds?: string[];
 }
 export interface MarketplacePage {
   products: MarketplaceProduct[];

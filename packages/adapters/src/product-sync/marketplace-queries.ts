@@ -43,6 +43,17 @@ export const PENDING_SYNC = `
     WHERE ps.channel = d.channel AND ps.listing_id = d.listing_id AND ps.variant_key = coalesce(d.variant_id, '')
       AND ps.status <> 'waiting_company' AND ps.material_at >= d.material_at)`;
 
+/**
+ * The reader's pending rule: PENDING_SYNC, where a brand also counts as matched when the sync target resolves it by
+ * its own domain ($7, KAN-243). Not yet sent with this material, whichever way the brand is matched.
+ */
+const READER_PENDING = `
+  (d.brand_id::text = ANY(coalesce($7::text[], '{}'))
+    OR EXISTS (SELECT 1 FROM supply_smart_brand_company m WHERE m.brand_id = d.brand_id AND m.status = 'matched'))
+  AND NOT EXISTS (SELECT 1 FROM product_sync ps
+    WHERE ps.channel = d.channel AND ps.listing_id = d.listing_id AND ps.variant_key = coalesce(d.variant_id, '')
+      AND ps.status <> 'waiting_company' AND ps.material_at >= d.material_at)`;
+
 export const MARKETPLACE_QUEUE = `
   WITH ${settledMarketplace("q.channel = $1")}
   SELECT d.item_id, d.listing_id, d.variant_id, d.material_url AS url, d.run_id::text,
@@ -51,7 +62,7 @@ export const MARKETPLACE_QUEUE = `
     d.material_at::text AS material_at
   FROM done d
   WHERE ($2::text IS NULL OR (d.listing_id, coalesce(d.variant_id, '')) > ($2, coalesce($3::text, '')))
-    AND (NOT $5::boolean OR (${PENDING_SYNC}))
+    AND (NOT $5::boolean OR (${READER_PENDING}))
     AND ($6::text[] IS NULL OR d.listing_id = ANY($6::text[]))
   ORDER BY d.listing_id, coalesce(d.variant_id, '') LIMIT $4`;
 

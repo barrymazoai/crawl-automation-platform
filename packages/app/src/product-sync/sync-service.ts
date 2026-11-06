@@ -165,6 +165,11 @@ export class ProductSyncService {
     return resolved;
   }
 
+  private targetBrands(channel: MarketplaceChannel): { matchedBrandIds?: string[] } {
+    const brands = Object.keys(this.deps.writers?.[channel]?.brandDomains ?? {});
+    return brands.length ? { matchedBrandIds: brands } : {};
+  }
+
   private read(request: ProductSyncRequest, signal: AbortSignal) {
     const limit = Math.min(Math.max(1, Math.trunc(request.limit)), SYNC_BATCH_LIMIT);
     return this.deps.reader.read(
@@ -175,6 +180,7 @@ export class ProductSyncService {
         // Only the pending selection may send: it is what keeps `sent`, `present` and verified rows from being
         // sent again. A non-pending read is a count (dry run) only (review 2026-10-12).
         ...(request.pending || !request.dryRun ? { pending: true } : {}),
+        ...this.targetBrands(request.channel),
       },
       signal,
     );

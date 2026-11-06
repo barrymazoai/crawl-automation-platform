@@ -32,7 +32,20 @@ const Request = z.object({
     .optional(),
   pending: z.boolean().optional(),
   listingIds: z.array(z.string().min(1).max(200)).min(1).max(200).optional(),
+  matchedBrandIds: z.array(z.uuid()).max(10_000).optional(),
 });
+
+function queueParams(request: z.infer<typeof Request>) {
+  return [
+    request.channel,
+    request.after?.listingId ?? null,
+    request.after?.variantId ?? null,
+    request.limit + 1,
+    request.pending ?? false,
+    request.listingIds ?? null,
+    request.matchedBrandIds ?? null,
+  ];
+}
 
 /** Read-only keyset pages of settled marketplace products. No fetch, RPC, retry or database writes. */
 export class PostgresMarketplaceReader {
@@ -43,14 +56,7 @@ export class PostgresMarketplaceReader {
   async read(raw: MarketplaceReadRequest, signal: AbortSignal): Promise<MarketplacePage> {
     const request = Request.parse(raw);
     signal.throwIfAborted();
-    const rows = await this.deps.database.query<QueueRow>(MARKETPLACE_QUEUE, [
-      request.channel,
-      request.after?.listingId ?? null,
-      request.after?.variantId ?? null,
-      request.limit + 1,
-      request.pending ?? false,
-      request.listingIds ?? null,
-    ]);
+    const rows = await this.deps.database.query<QueueRow>(MARKETPLACE_QUEUE, queueParams(request));
     const products: MarketplaceProduct[] = [];
     for (const row of rows.slice(0, request.limit)) {
       signal.throwIfAborted();
