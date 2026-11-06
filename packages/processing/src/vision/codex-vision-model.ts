@@ -160,14 +160,14 @@ export class CodexVisionModel implements VisionModel {
     verifyBytes(image, bytes, MAX_IMAGE_BYTES);
     const run = (request: { prompt: string; outputSchema: object }) =>
       this.opened().run({ ...request, image: { name: imageName(image.mediaType), bytes } }, signal);
-    const label = async (attempt?: TranscriptAttempt) =>
+    const label = async (attempt?: TranscriptAttempt, dailyValueHeading?: string | null) =>
       retainIngredientPresenceAnswer(
         await run({
           prompt: labelIngredientPresencePrompt,
           outputSchema: labelIngredientPresenceOutputSchema,
         }),
         this.config.ingredientPresencePolicy,
-        attempt,
+        { transcriptAttempt: attempt, dailyValueHeading },
       );
     const tooSmall = this.config.visualProtocol ? tooSmallLabelImage(bytes) : null;
     if (tooSmall) {

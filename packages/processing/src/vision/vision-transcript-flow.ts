@@ -11,6 +11,7 @@ import {
   dosedRows,
   transcriptAnswer,
 } from "./protocol/label-transcript-answer.js";
+import { printedPercentHeader } from "../label/transcript/format-panel.js";
 import { transcriptCandidate } from "./protocol/label-transcript-candidate.js";
 import {
   labelRereadOutputSchema,
@@ -30,7 +31,7 @@ export interface TranscriptCalls {
    * The label protocol the setup used before (label-visual-wire/3), already in its retained envelope, which keeps the
    * copy that was not accepted and why (owner 2026-11-05).
    */
-  label(attempt: TranscriptAttempt): Promise<string>;
+  label(attempt: TranscriptAttempt, dailyValueHeading?: string | null): Promise<string>;
 }
 
 const AMOUNT_UNREADABLE = "LABEL.AMOUNT_UNREADABLE";
@@ -66,8 +67,10 @@ export async function transcribedAnswer(input: {
   const { calls, ocr, policy } = input;
   const formats = input.formats && !isUsOnlyFormats(input.formats) ? [...input.formats] : undefined;
   const raw = await calls.transcribe();
+  // KAN-243: a copy read in a non-US format names its percentage column; the label answer keeps that header.
+  const heading = formats ? copiedPercentHeader(raw, formats) : null;
   const fallback = (reason: string, reread: string | null = null) =>
-    calls.label({ raw, reason, reread });
+    calls.label({ raw, reason, reread }, heading);
   const built = parsed(raw, policy, formats);
   if ("reason" in built) {
     return fallback(`copy not parsed: ${built.reason}`);
@@ -106,6 +109,15 @@ function parsed(
   } catch (error) {
     recordRecovery(error, { operation: "vision/transcript-flow" });
     return { reason: "not a transcript" };
+  }
+}
+
+function copiedPercentHeader(raw: string, formats: readonly LabelFormatId[]): string | null {
+  try {
+    return printedPercentHeader(labelTranscriptWireSchema.parse(JSON.parse(raw)).panels, formats);
+  } catch (error) {
+    recordRecovery(error, { operation: "vision/transcript-flow" });
+    return null;
   }
 }
 

@@ -12,8 +12,9 @@ interface Panel<Row extends { cells: string[] }> {
 export function sideBySide<Row extends { cells: string[] }>(panel: Panel<Row>): Panel<Row> {
   const headers = panel.columnHeaders;
   const half = headers.length / 2;
+  // Footnote marks may differ between the halves ("%RDA*" | "%RDA^", HK Vitals 2026-11-06 re-read).
   const key = (cells: readonly string[]) =>
-    cells.map((cell) => cell.replace(/\s+/gu, "").toLowerCase());
+    cells.map((cell) => cell.replace(/[\s*^#†‡]+/gu, "").toLowerCase());
   const twice =
     half >= 2 &&
     Number.isInteger(half) &&

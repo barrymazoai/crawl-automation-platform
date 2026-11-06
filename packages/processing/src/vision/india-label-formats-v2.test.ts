@@ -1,7 +1,14 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { LabelFormatId } from "@crawl-automation/v3-contracts";
 import { INDIA, policy, row, rowsOf, wire } from "./india-label-fixture.js";
 import { transcriptCandidate } from "./protocol/label-transcript-candidate.js";
+import { UNREADABLE_CELL } from "./protocol/label-transcript-wire.js";
+import { explicitNoneWire, printed } from "./protocol/ingredient-presence-fixture.js";
+import {
+  decodeIngredientPresenceAnswer,
+  retainIngredientPresenceAnswer,
+} from "./protocol/label-ingredient-presence.js";
+import { transcribedAnswer } from "./vision-transcript-flow.js";
 
 // Cells copied from the stored transcripts of the first 20 real amazon.in labels (2026-11-06, plan §10.7).
 describe("Indian label formats /2: the first 20 real amazon.in labels", () => {
@@ -142,5 +149,53 @@ describe("Indian label formats /2: the first 20 real amazon.in labels", () => {
       servingSize: "1g",
       rows: [["Shilajit (Asphaltum) Exd.", "333.33mg", null]],
     });
+  });
+});
+
+describe("the copied %RDA header on an answer read with the label protocol (KAN-243)", () => {
+  // Tata 1mg Magnesium (2026-11-06): the copy was not accepted, the label protocol read the table, and its answer had
+  // no percentage header, so Supply Smart read the %RDA numbers as US %DV.
+  const copy = (rows: ReturnType<typeof row>[]) =>
+    JSON.stringify(wire({ columnHeaders: ["Nutrients", "Qty./Serving", "*%RDA"], rows }));
+  const unreadable = copy([
+    row("Energy*", "6.00 kcal", "0.30"),
+    row("Magnesium", UNREADABLE_CELL, "100"),
+  ]);
+
+  async function fellBack(formats: readonly LabelFormatId[] | undefined) {
+    const label = vi.fn(async (_attempt: unknown, _heading?: string | null) => "label answer");
+    await transcribedAnswer({
+      calls: { transcribe: async () => unreadable, reread: async () => "{}", label },
+      ocr: { text: "", lines: [] },
+      policy,
+      formats,
+    });
+    return label.mock.calls[0];
+  }
+
+  it("names the copy's percentage header when the label protocol reads an Indian table instead", async () => {
+    expect(await fellBack(INDIA)).toEqual([
+      expect.objectContaining({ reason: expect.any(String) }),
+      "*%RDA",
+    ]);
+    expect((await fellBack(["us-facts/1"]))?.[1]).toBeNull();
+    expect((await fellBack(undefined))?.[1]).toBeNull();
+  });
+
+  it("puts that header on the one column whose rows print percentages, and nothing without one", () => {
+    const answer = explicitNoneWire();
+    const component = answer.label.formula?.columns[0]?.rows[1];
+    if (!component) {
+      throw new Error("fixture has no component row");
+    }
+    component.dailyValue = printed("100");
+    const read = (dailyValueHeading?: string) =>
+      decodeIngredientPresenceAnswer(
+        retainIngredientPresenceAnswer(JSON.stringify(answer), policy, { dailyValueHeading }),
+      ).candidate.formula?.columns[0]?.dailyValueHeading ?? null;
+    expect(read("*%RDA")).toEqual({ text: "*%RDA", evidence: "*%RDA" });
+    expect(read()).toBeNull();
+    const us = retainIngredientPresenceAnswer(JSON.stringify(answer), policy);
+    expect(JSON.parse(us)).not.toHaveProperty("dailyValueHeading");
   });
 });

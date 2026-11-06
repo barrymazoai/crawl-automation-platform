@@ -91,7 +91,9 @@ describe("closed printed Other Ingredients list", () => {
     const wire = observedList("Olive oil, Gelatin (capsule), Glycerin.");
     const policy = { allowNoOtherIngredientsSection: true };
     const attempt = { raw: '{"codec":"label-visual-wire/4"}', reason: "checks: X", reread: null };
-    const kept = retainIngredientPresenceAnswer(JSON.stringify(wire), policy, attempt);
+    const kept = retainIngredientPresenceAnswer(JSON.stringify(wire), policy, {
+      transcriptAttempt: attempt,
+    });
 
     expect(JSON.parse(kept).transcriptAttempt).toEqual(attempt);
     expect(decodeIngredientPresenceAnswer(kept)).toEqual(

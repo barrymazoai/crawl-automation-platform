@@ -59,13 +59,22 @@ const savedAnswerSchema = z.strictObject({
   policy: labelIngredientPresencePolicySchema.required(),
   raw: z.string(),
   transcriptAttempt: TranscriptAttemptSchema.optional(),
+  /**
+   * KAN-243: the percentage column's header as the copy printed it ("%RDA"), named by the caller when the copy was
+   * read in a non-US label format; the model's own label answer has no place for it.
+   */
+  dailyValueHeading: z.string().min(1).max(200).optional(),
 });
 
 export function retainIngredientPresenceAnswer(
   raw: string,
   policy: Partial<LabelIngredientPresencePolicy> = {},
-  transcriptAttempt?: TranscriptAttempt,
+  kept: {
+    transcriptAttempt?: TranscriptAttempt | undefined;
+    dailyValueHeading?: string | null | undefined;
+  } = {},
 ): string {
+  const { transcriptAttempt, dailyValueHeading } = kept;
   return JSON.stringify({
     codec: "label-visual-answer/3",
     policy: labelIngredientPresencePolicySchema.parse(policy),
@@ -73,6 +82,7 @@ export function retainIngredientPresenceAnswer(
     ...(transcriptAttempt
       ? { transcriptAttempt: TranscriptAttemptSchema.parse(transcriptAttempt) }
       : {}),
+    ...(dailyValueHeading ? { dailyValueHeading } : {}),
   });
 }
 
@@ -91,7 +101,7 @@ export function decodeIngredientPresenceAnswer(response: string) {
   const saved = savedAnswerSchema.parse(JSON.parse(response));
   const wire = labelIngredientPresenceWireSchema.parse(JSON.parse(saved.raw));
   const candidate = LabelImageCandidateSchema.parse({
-    ...retainDailyValueHeading(wire.label),
+    ...withPrintedHeading(retainDailyValueHeading(wire.label), saved.dailyValueHeading),
     ingredientDeclaration: {
       protocol: labelIngredientPresenceProtocol,
       state: wire.otherIngredientsState,
@@ -100,6 +110,29 @@ export function decodeIngredientPresenceAnswer(response: string) {
     },
   });
   return judgeIngredientPresence(candidate, wire.otherIngredientsBlock);
+}
+
+/**
+ * The copy's percentage header on the one column whose rows print percentages (never on several columns, never over
+ * a header the answer already has).
+ */
+function withPrintedHeading<Label extends ReturnType<typeof retainDailyValueHeading>>(
+  label: Label,
+  heading: string | undefined,
+): Label {
+  const columns = label.formula?.columns ?? [];
+  const [column] = columns;
+  if (!heading || columns.length !== 1 || !column || column.dailyValueHeading) {
+    return label;
+  }
+  if (!column.rows.some((row) => row.dailyValue)) {
+    return label;
+  }
+  const dailyValueHeading = { text: heading, evidence: heading };
+  return {
+    ...label,
+    formula: { ...label.formula, columns: [{ ...column, dailyValueHeading }] },
+  } as Label;
 }
 
 /**

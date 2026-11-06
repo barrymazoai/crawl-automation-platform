@@ -63,6 +63,22 @@ export function formatPanel(
   return read;
 }
 
+/**
+ * KAN-243: the printed percentage header of a copied panel ("%RDA"), for an answer read with the label protocol
+ * instead of this parse: the copy names the column the model's percentages come from. Null with US formats only,
+ * without one panel, or when no header names a percentage column.
+ */
+export function printedPercentHeader(
+  panels: readonly Pick<PrintedPanel, "columnHeaders" | "rows">[],
+  formats: readonly LabelFormatId[],
+): string | null {
+  const [panel, ...others] = panels;
+  if (!panel || others.length || isUsOnlyFormats(formats)) {
+    return null;
+  }
+  return headedColumns(sideBySide(panel).columnHeaders, formats)?.dailyValueHeading ?? null;
+}
+
 /** The read so far: the headed columns' printed headers and the serving lines, kept as rows unless the format's. */
 function servingRead(
   servingLines: readonly string[],

@@ -148,7 +148,11 @@ export const LABEL_FORMATS: Readonly<Record<LabelFormatId, LabelFormat>> = {
         /^each\s+(?:serving|serve|tablet|capsule|sachet|scoop|dose)s?\s+(?:provides|contains)\b.*$/i,
         /^per\s+(?!100\s*(?:g|gm|ml)\b)\d+(?:\.\d+)?\s*(?:g|gm|ml|mg)\b.*$/i,
       ],
-      perBasis: [/^(?:(?:qty|quantity|amount)\.?\s*)?(?:\/|per)\s*100\s*(?:g|gm|ml)\b.*$/i],
+      perBasis: [
+        /^(?:(?:qty|quantity|amount)\.?\s*)?(?:\/|per)\s*100\s*(?:g|gm|ml)\b.*$/i,
+        // "ENSURE® Powder (per 100 g)", "Powder (per 100 g)" (Abbott, 2026-11-06)
+        /^.{0,60}\(\s*per\s*100\s*(?:g|gm|ml)\s*\)$/i,
+      ],
       dailyValue: [
         { header: /^[*#†‡]*\s*%?\s*rda\b.*$/i, basis: "in_rda" },
         { header: /^[*#†‡]*\s*%?\s*(?:dv|daily\s*values?)\s*%?\s*[*†‡]*$/i, basis: "us_dv" },
