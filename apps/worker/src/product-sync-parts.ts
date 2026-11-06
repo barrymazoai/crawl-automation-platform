@@ -46,7 +46,7 @@ export function buildProductSyncSweep(
     brands: new PostgresBrandCompany(parts.database),
     ledger: new PostgresProductSync(parts.database),
     writer: new SupplySmartObservationWriter(input.rpc),
-    writers: targetWriters(parts, { reader, targets }),
+    writers: targetWriters(parts, { reader, targets, settings: input.settings }),
   });
   return new ProductSyncSweep({
     sync: service,
@@ -68,7 +68,11 @@ type Targets = [AmazonChannel, SupplySmartRpc][];
 /** Each target's writer, its company lookup and its cross-market check (KAN-243). */
 function targetWriters(
   parts: CoreParts,
-  input: { reader: PostgresMarketplaceReader; targets: Targets },
+  input: {
+    reader: PostgresMarketplaceReader;
+    targets: Targets;
+    settings: BrandEnrichmentSettings["productSync"];
+  },
 ) {
   return Object.fromEntries(
     input.targets.map(([channel, rpc]) => [
@@ -77,6 +81,7 @@ function targetWriters(
         writer: new SupplySmartObservationWriter(rpc),
         companies: new SupplySmartCompaniesClient(rpc),
         crossMarket: crossMarketCheck(parts, { rpc, reader: input.reader }),
+        brandDomains: input.settings.targets[channel as "amazon-in"]?.brandDomains ?? {},
       },
     ]),
   );

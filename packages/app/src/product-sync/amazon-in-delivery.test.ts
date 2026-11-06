@@ -130,8 +130,12 @@ describe("amazon.in's own Supply Smart target", () => {
       ingest: ReturnType<typeof vi.fn>;
     };
 
-  function service(resolution: { status: "matched" | "unmatched"; companyId: string | null }) {
+  function service(
+    resolution: { status: "matched" | "unmatched"; companyId: string | null },
+    options: { matches?: BrandCompanyMatch[]; brandDomains?: Record<string, string> } = {},
+  ) {
     const target = {
+      ...(options.brandDomains ? { brandDomains: options.brandDomains } : {}),
       writer: writer(),
       companies: {
         resolveDomain: vi.fn(async () => ({
@@ -148,7 +152,7 @@ describe("amazon.in's own Supply Smart target", () => {
         read: async () =>
           ({ products: [product as unknown as MarketplaceProduct], next: null }) as never,
       },
-      brands: { matches: async () => [production] },
+      brands: { matches: async () => options.matches ?? [production] },
       ledger: {
         read: async () => [],
         record: async () => undefined,
@@ -168,11 +172,34 @@ describe("amazon.in's own Supply Smart target", () => {
     expect(target.writer.ingest).not.toHaveBeenCalled();
     expect(fallback.ingest).not.toHaveBeenCalled();
   });
+  it("resolves a brand without a production match by the domain its target names; a production match comes first", async () => {
+    const india = service(
+      { status: "matched", companyId: "test-company" },
+      {
+        matches: [],
+        brandDomains: { [brandId]: "healthyhey.com" },
+      },
+    );
+    await india.sync.sync({ channel: "amazon-in", limit: 10 } as never, signal);
+    expect(india.target.companies.resolveDomain).toHaveBeenCalledWith("healthyhey.com", signal);
+    const matched = service(
+      { status: "matched", companyId: "test-company" },
+      {
+        brandDomains: { [brandId]: "healthyhey.com" },
+      },
+    );
+    await matched.sync.sync({ channel: "amazon-in", limit: 10 } as never, signal);
+    expect(matched.target.companies.resolveDomain).toHaveBeenCalledWith("kapiva.in", signal);
+    const none = service({ status: "matched", companyId: "test-company" }, { matches: [] });
+    const result = await none.sync.sync({ channel: "amazon-in", limit: 10 } as never, signal);
+    expect(none.target.companies.resolveDomain).not.toHaveBeenCalled();
+    expect(result.waitingCompany).toBe(1);
+  });
 });
 
 describe("cross-market verdicts in a batch", () => {
   it("leaves a listing waiting for material out of the batch and puts a verdict on the item only", async () => {
-    const { withOutcomes } = await import("./sync-service.js");
+    const { withOutcomes } = await import("./sync-targets.js");
     const entry = (listingId: string) =>
       ({
         product: { listingId },

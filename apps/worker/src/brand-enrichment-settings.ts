@@ -70,7 +70,11 @@ export const BrandEnrichmentSettingsSchema = BrandEnrichmentWorkflowSettingsSche
       targets: z
         .partialRecord(
           z.enum(["amazon-in"]),
-          z.strictObject({ secretsFile: z.string().trim().min(1) }),
+          z.strictObject({
+            secretsFile: z.string().trim().min(1),
+            /** Crawler brand ID → domain in that Supply Smart, for brands without a production match. */
+            brandDomains: z.record(z.uuid(), z.string().trim().min(3).max(253)).default({}),
+          }),
         )
         .default({}),
     })

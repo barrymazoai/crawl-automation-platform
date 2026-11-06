@@ -1,12 +1,8 @@
 import type { ProductObservationWriter } from "../product-delivery/ports.js";
 import type { MarketplaceChannel, ProductSyncLedger, SyncChange } from "./ledger.js";
-import type {
-  MarketplacePage,
-  MarketplaceProduct,
-  MarketplaceReadRequest,
-} from "./marketplace-model.js";
-import type { CrossMarketField, DomainResolution } from "@crawl-automation/v3-contracts";
-import type { CrossMarketCheck, CrossMarketOutcome } from "../cross-market/cross-market-check.js";
+import type { MarketplacePage, MarketplaceReadRequest } from "./marketplace-model.js";
+import type { DomainResolution } from "@crawl-automation/v3-contracts";
+import type { CrossMarketCheck } from "../cross-market/cross-market-check.js";
 import type { BrandCompanyMatch } from "./brand-company-model.js";
 import type { BrandCompanyRepository } from "./ports.js";
 import {
@@ -18,6 +14,7 @@ import {
   type SyncTally,
 } from "./sync-model.js";
 import { planSync } from "./sync-plan.js";
+import { withOutcomes, withTargetDomains } from "./sync-targets.js";
 import { sendBatch } from "./sync-send.js";
 
 export type { ProductSyncRequest, ProductSyncResult } from "./sync-model.js";
@@ -50,6 +47,11 @@ export interface SyncTarget {
   companies: {
     resolveDomain(domain: string, signal: AbortSignal): Promise<DomainResolution>;
   };
+  /**
+   * Brands with no production company match, by crawler brand ID, and the domain to resolve in this target instead
+   * (amazon.in-only brands on the test database, owner 2026-11-06). A production match always comes first.
+   */
+  brandDomains?: Readonly<Record<string, string>>;
 }
 
 /**
@@ -147,8 +149,9 @@ export class ProductSyncService {
     if (!target) {
       return matches;
     }
+    const known = new Map(matches.map((match) => [match.brandId, match]));
     const resolved: BrandCompanyMatch[] = [];
-    for (const match of matches) {
+    for (const match of withTargetDomains(brandIds, known, target.brandDomains)) {
       const answer =
         match.status === "matched" && match.domain
           ? await target.companies.resolveDomain(match.domain, signal)
@@ -194,24 +197,4 @@ function emptyResult(request: ProductSyncRequest, page: MarketplacePage): Produc
     runCompleted: null,
     after: page.after ?? null,
   };
-}
-
-export function withOutcomes(
-  planned: PlannedSync[],
-  outcomes: Map<MarketplaceProduct, CrossMarketOutcome>,
-  tally: SyncTally,
-): PlannedSync[] {
-  return planned.flatMap((entry) => {
-    const outcome = outcomes.get(entry.product);
-    if (outcome && "hold" in outcome) {
-      tally.result.waitingCrossMarket = (tally.result.waitingCrossMarket ?? 0) + 1;
-      return [];
-    }
-    return [outcome && "field" in outcome ? withVerdict(entry, outcome.field) : entry];
-  });
-}
-
-/** The verdict rides on the item; the label (built from the item before) never carries it. */
-function withVerdict(entry: PlannedSync, crossMarket: CrossMarketField): PlannedSync {
-  return { ...entry, item: { ...entry.item, crossMarket } };
 }
