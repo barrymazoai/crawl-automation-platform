@@ -3,13 +3,11 @@ import {
   DefaultKeywordPolicy,
   LABEL_FORMATS,
   LabelImageCandidateSchema,
-  MARKETPLACE_LABEL_FORMATS,
   keywordPolicyFor,
   keywordPolicyFormats,
   legacyLabelExtractionSchema,
   LabelImageFieldSchema,
   projectLabelProductCandidate,
-  type LabelFormatId,
 } from "@crawl-automation/v3-contracts";
 import { screenKeywords } from "../keywords/keyword-screen.js";
 import { image, observation } from "../testing/vision-fixture.js";
@@ -18,74 +16,18 @@ import { transcriptCandidate } from "./protocol/label-transcript-candidate.js";
 import {
   labelTranscriptPrompt,
   labelTranscriptPromptFor,
-  labelTranscriptWireSchema,
 } from "./protocol/label-transcript-wire.js";
 import { transcribedAnswer, type TranscriptCalls } from "./vision-transcript-flow.js";
+import { INDIA, US, candidateOf, policy, row, rowsOf, wire } from "./india-label-fixture.js";
 
 // KAN-243: the layouts of real amazon.in labels (docs/plans/KAN-243-india-research.md §2): headers, serving lines
 // and the Tata 1mg Magnesium and Kapiva Shilajit rows as printed; the other products' numbers are illustrative.
-const INDIA = MARKETPLACE_LABEL_FORMATS["amazon.in"] ?? [];
-const US: LabelFormatId[] = ["us-facts/1"];
-const policy = { allowNoOtherIngredientsSection: true };
-const row = (...cells: string[]) => ({ cells, indent: 0, bold: false });
-
-function wire(panel: {
-  heading?: string | null;
-  servingLines?: string[];
-  columnHeaders?: string[];
-  rows: ReturnType<typeof row>[];
-}) {
-  return labelTranscriptWireSchema.parse({
-    codec: "label-visual-wire/4",
-    panels: [
-      {
-        heading: panel.heading ?? "Nutritional Information (Approx.)",
-        servingLines: panel.servingLines ?? [],
-        columnHeaders: panel.columnHeaders ?? [],
-        rows: panel.rows,
-        footnotes: [],
-      },
-    ],
-    otherIngredientsHeading: "Ingredients:",
-    otherIngredients: "Magnesium Citrate, Microcrystalline Cellulose.",
-    otherIngredientsState: "present",
-    wholeLabelVisible: false,
-    issues: [],
-  });
-}
-
 /** Tata 1mg Magnesium: "Nutrients | Qty./Serving | %RDA", the RDA printed as a bare number. */
 const tataMagnesium = wire({
   servingLines: ["Serving Size: 1 Tablet"],
   columnHeaders: ["Nutrients", "Qty./Serving", "%RDA"],
   rows: [row("Energy", "0.3 kcal", "-"), row("Magnesium", "350 mg", "100")],
 });
-
-/** The candidate a readable copy gives; a test fails on a reason. */
-function candidateOf(result: ReturnType<typeof transcriptCandidate>) {
-  if ("reason" in result) {
-    throw new Error(result.reason);
-  }
-  return result.candidate;
-}
-
-const text = (quoted: { text: string } | null | undefined) => quoted?.text ?? null;
-
-function rowsOf(result: ReturnType<typeof transcriptCandidate>) {
-  const formula = candidateOf(result).formula;
-  const column = formula?.columns[0];
-  return {
-    heading: text(column?.heading),
-    dailyValueHeading: text(column?.dailyValueHeading),
-    servingSize: text(formula?.servingSize),
-    servingsPerContainer: text(formula?.servingsPerContainer),
-    rows: (column?.rows ?? []).map((read) => [
-      text(read.name),
-      text(read.amount),
-      text(read.dailyValue),
-    ]),
-  };
-}
 
 describe("Indian label formats (KAN-243)", () => {
   it("reads the Nutritional Information table by its printed headers; the US rules alone do not", () => {
@@ -163,7 +105,8 @@ describe("Indian label formats (KAN-243)", () => {
         rows: [row("Shilajit (Asphaltum) Exd.", "333.33mg"), row("Excipients", "q.s.")],
       }),
       policy,
-      INDIA,
+      // /1 as it was: an answer retained in /1 decodes exactly as before (/2 leaves "Excipients" out).
+      ["us-facts/1", "in-nutritional-information/1", "in-composition/1"],
     );
     expect(rowsOf(read)).toMatchObject({
       servingSize: "1g",

@@ -7,6 +7,7 @@ import {
   type LabelFormatId,
 } from "@crawl-automation/v3-contracts";
 import type { TranscriptRow } from "./html-transcript.js";
+import { sideBySide } from "./side-by-side.js";
 
 /** One copied panel, as the vision copy or a page table prints it. */
 export interface PrintedPanel {
@@ -44,10 +45,14 @@ export function formatPanel(
   if (preparedFrom(panel, formats)) {
     return { reason: "prepared-from list: raw herb quantities, not the product's contents" };
   }
-  const headers = headedColumns(panel.columnHeaders, formats);
+  const { columnHeaders, rows } = sideBySide(panel);
+  const headers = headedColumns(columnHeaders, formats);
   const read = servingRead(panel.servingLines, headers, formats);
-  for (const row of panel.rows) {
-    const placed = placedRow(read, row, { formats, headers, width: panel.columnHeaders.length });
+  for (const row of rows) {
+    if (continues(read, row, formats)) {
+      continue;
+    }
+    const placed = placedRow(read, row, { formats, headers, width: columnHeaders.length });
     if (placed === "unaligned") {
       return { reason: `row not aligned with the column headers: ${row.cells.join(" | ")}` };
     }
@@ -147,6 +152,7 @@ function formatLine(
   const serving = firstMatch(text, formatRules(formats, "servingFor"));
   if (serving) {
     read.servingSize ??= printedValue(serving[1]);
+    read.servingsPerContainer ??= printedValue(serving[2]);
     return true;
   }
   const servings = firstMatch(text, formatRules(formats, "servings"));
@@ -157,6 +163,25 @@ function formatLine(
 }
 
 const printedValue = (text: string | undefined) => text?.trim() || null;
+
+/** A name-only line continuing the row above ("(Magnesium bisglycinate buffered …)") joins that row's name. */
+function continues(
+  read: FormatPanel,
+  row: PrintedPanel["rows"][number],
+  formats: readonly LabelFormatId[],
+): boolean {
+  const [name = "", ...values] = row.cells;
+  const above = read.rows.at(-1);
+  if (
+    !above ||
+    values.some((cell) => cell.trim()) ||
+    !matchesAny(name, formatRules(formats, "continuation"))
+  ) {
+    return false;
+  }
+  above.cells = [`${above.cells[0] ?? ""} ${name.trim()}`.trim(), ...above.cells.slice(1)];
+  return true;
+}
 
 /** A row printing only column names ("Nutrients | Qty./Serving | %RDA"). */
 function headerRow(cells: readonly string[], formats: readonly LabelFormatId[]): boolean {

@@ -89,8 +89,8 @@ describe("amazon.in storefront", () => {
     expect(amazonAdapter.brandScan).toBe(amazonBrandScan);
     expect(amazonInAdapter.planning?.labelFormats).toEqual([
       "us-facts/1",
-      "in-nutritional-information/1",
-      "in-composition/1",
+      "in-nutritional-information/2",
+      "in-composition/2",
     ]);
     expect(amazonAdapter.planning).not.toHaveProperty("labelFormats");
   });
