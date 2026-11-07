@@ -72,6 +72,28 @@ and captures no older than scan start. Shared-site brand subsets and unknown sit
 completion is domain-scoped and could otherwise deactivate another sub-brand. Only full, fully verified runs call
 `completeCrawlRun`. Empty input sends no empty batch and performs no absence-based deactivation.
 
+## Sources collected outside brand enrichment (KAN-259)
+
+CSV/test DTC batches (`brands.analyzeSite` → `applySiteAnalysis`) have no brand-enrichment run, so nothing sends
+their products. `productSync.deliverDtc` (API) sends them through this same service:
+
+```json
+{
+  "companyId": "<Supply Smart company>",
+  "sourceIds": ["<crawler brand_source>"],
+  "target": "test",
+  "dryRun": true
+}
+```
+
+- `target` is required: `production` uses `brandEnrichment.secretsFile`; `test` uses `brandEnrichment.testSecretsFile`
+  and is refused (`PRODUCT_DELIVERY.TARGET_MISSING`) when that is not configured.
+- `dryRun` defaults to true: `preview` reads and maps exactly as `deliver` would and returns `deliverable`, without any
+  Supply Smart call.
+- Sources are grouped by catalog domain (`productDeliveryGroups`); each company/domain pair has the stable ingest run
+  `dtc-company-<companyId>-<siteKey>`, reused when the same delivery is sent again.
+- The caller names the company; the crawler does not check that the sources belong to it.
+
 ## Deliberate omissions / rollout questions
 
 - No identity resolution, variant key generation, company creation, listing state transitions or direct events.

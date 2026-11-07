@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { sameIngredientsFormula } from "./india-formula.js";
+import { sameIngredientsFormula } from "./india-same-ingredients.js";
 
 /** Readings copied from the amazon.in Reviews of the 2026-11-07 rerun. */
 const formula = (serving: string | null, rows: [string, string | null][]) => ({

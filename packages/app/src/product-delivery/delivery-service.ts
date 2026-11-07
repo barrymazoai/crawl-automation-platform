@@ -12,6 +12,12 @@ import { acceptedItems, verificationProblems, verificationExpectation } from "./
 import { deliverLabel } from "./label-delivery.js";
 import { productDeliveryErrors } from "./errors.js";
 
+/**
+ * Items per ingestObservationBatch call. KAN-259 (2026-11-07): 144 TrioMedica items in one call exceeded Supply Smart's
+ * fixed 60 s RPC timeout (as GNC sync batches of 200 did on 10-15); the run was ingested but its labels never sent.
+ */
+const DELIVERY_BATCH = 50;
+
 export class ProductDeliveryService implements ProductDelivery {
   constructor(
     private readonly deps: { reader: ProductDeliveryReader; writer: ProductObservationWriter },
@@ -38,10 +44,10 @@ export class ProductDeliveryService implements ProductDelivery {
       return result;
     }
     const run = deliveryRun({ request, snapshot, mapped });
-    for (let offset = 0; offset < mapped.length; offset += 200) {
+    for (let offset = 0; offset < mapped.length; offset += DELIVERY_BATCH) {
       signal.throwIfAborted();
       await this.deliverBatch(
-        { run, products: mapped.slice(offset, offset + 200), result },
+        { run, products: mapped.slice(offset, offset + DELIVERY_BATCH), result },
         signal,
       );
     }
@@ -49,6 +55,26 @@ export class ProductDeliveryService implements ProductDelivery {
       await this.complete(run, signal);
     }
     return result;
+  }
+
+  /**
+   * KAN-259: the same read and mapping as `deliver`, without any Supply Smart call; `delivered` stays 0 and
+   * `deliverable` counts the products `deliver` would send.
+   */
+  async preview(
+    request: ProductDeliveryRequest,
+    signal: AbortSignal,
+  ): Promise<ProductDeliveryResult & { deliverable: number }> {
+    signal.throwIfAborted();
+    const snapshot = await this.deps.reader.read(request, signal);
+    const result: ProductDeliveryResult = {
+      captured: snapshot.products.length,
+      review: snapshot.review,
+      delivered: 0,
+      refused: [],
+    };
+    const mapped = this.mapProducts(snapshot.products, request, result);
+    return { ...result, deliverable: mapped.length };
   }
 
   private async complete(run: DeliveryRun, signal: AbortSignal) {

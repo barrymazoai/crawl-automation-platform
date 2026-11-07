@@ -37,11 +37,15 @@ function pageYields(state: MergeState, pick: MarketPick, conflict: AssemblyError
 
 /**
  * KAN-243 (owner 2026-11-07, India): two readings of the label that name the same ingredients and amounts shorter or
- * longer agree (Methylcobalamin IP 1500 mcg, front and back). Not where a complete image leads: the collected record
- * then checks the shared agreement itself.
+ * longer agree (Methylcobalamin IP 1500 mcg, front and back), and are not two sections to join (Vitamin D3 60,000 IU,
+ * front and back). Where a complete image leads, only between two label images: the collected record's check accepts
+ * exactly that (sameIndianIngredients in v3-contracts).
  */
 export function marketAgrees(state: MergeState, pick: MarketPick): boolean {
   const selected = state.formulaSource?.candidate.formula;
   const next = pick.candidate.formula;
-  return !pick.imageFirst && !!selected && !!next && state.market.formulaFits(next, selected);
+  const images = pick.entry.kind === "image" && state.formulaSource?.kind === "image";
+  return (
+    (!pick.imageFirst || images) && !!selected && !!next && state.market.formulaFits(next, selected)
+  );
 }

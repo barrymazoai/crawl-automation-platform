@@ -18,6 +18,11 @@ import type { Database, ObjectStore, TemporalClient } from "@crawl-automation/pl
 
 export const ApiBrandEnrichmentSchema = BrandEnrichmentWorkflowSettingsSchema.safeExtend({
   secretsFile: z.string().refine(isAbsolute, "Must be an absolute path"),
+  /**
+   * KAN-259 (owner 2026-11-07): the test Supply Smart's own `.env` (SUPPLY_SMART_* only), used only by
+   * `productSync.deliverDtc` with `target: "test"`; without it that target is refused.
+   */
+  testSecretsFile: z.string().refine(isAbsolute, "Must be an absolute path").optional(),
 });
 
 /** Composition root only: reads private credentials lazily; no intake or background polling. */

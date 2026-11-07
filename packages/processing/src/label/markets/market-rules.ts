@@ -16,7 +16,7 @@ import {
   type AmountPositions,
 } from "../../vision/protocol/label-amount-position.js";
 import { proseAmounts } from "./india-prose-amounts.js";
-import { sameIngredientsFormula } from "./india-formula.js";
+import { sameIngredientsFormula } from "@crawl-automation/v3-contracts";
 import type { TranscriptRow } from "../transcript/html-transcript.js";
 import { compositionRows, compositionTextRows, compositionWire } from "./india-composition.js";
 

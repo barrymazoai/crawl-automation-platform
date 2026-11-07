@@ -1,5 +1,6 @@
 import {
   brandCompanyErrors,
+  DeliverDtcSourcesSchema,
   ListSyncBrandsSchema,
   MarkPresentSchema,
   MatchBrandsSchema,
@@ -49,6 +50,14 @@ export const productSyncRouter = router({
     .mutation(async ({ ctx, input, signal }) =>
       (await service(ctx)).updateEnrichment(input, signal),
     ),
+  /**
+   * KAN-259: sends settled DTC products of the given crawler sources to an existing Supply Smart company, on the
+   * named target (production or test); dry run by default. Same delivery as brand enrichment, one stable ingest
+   * run per company and catalog domain.
+   */
+  deliverDtc: procedure
+    .input(DeliverDtcSourcesSchema)
+    .mutation(async ({ ctx, input, signal }) => (await service(ctx)).deliverDtc(input, signal)),
   /** Records listings already in Supply Smart so the sweep does not send them again. */
   markPresent: procedure
     .input(MarkPresentSchema)

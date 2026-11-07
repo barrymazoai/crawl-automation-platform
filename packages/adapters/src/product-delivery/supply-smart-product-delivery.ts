@@ -24,4 +24,7 @@ export class SupplySmartProductDelivery implements ProductDelivery {
   deliver(...args: Parameters<ProductDelivery["deliver"]>) {
     return this.service.deliver(...args);
   }
+  preview(...args: Parameters<ProductDeliveryService["preview"]>) {
+    return this.service.preview(...args);
+  }
 }
