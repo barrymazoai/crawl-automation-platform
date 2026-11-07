@@ -93,3 +93,40 @@ describe("an ingredients statement that is a dosed composition", () => {
     expect(decoded.codes).toContain("LABEL.COMPLETENESS_CONFLICT");
   });
 });
+
+describe("India: a page's ingredient section that lists no ingredient", () => {
+  const INDIA = ["us-facts/1", "in-nutritional-information/2", "in-composition/2"] as const;
+  const decodeIn = (text: string, response: string) =>
+    decodeLabelText({
+      scope: { range: { start: 0, end: text.length } },
+      text,
+      response,
+      policyVersion: "label-text/6",
+      formats: INDIA,
+    });
+  const list = (heading: string, items: string[], line = 3) =>
+    JSON.stringify({
+      codec: "label-extraction/1",
+      formula: null,
+      otherIngredients: {
+        heading: { fromLine: 1, toLine: 1, text: heading },
+        items: items.map((text) => ({ fromLine: line, toLine: line, text })),
+      },
+      formulaComplete: false,
+      ingredientsComplete: true,
+      exclusions: [],
+      issues: [],
+    });
+
+  it("a lone number is no list (Dabur Jamun Neem Karela juice: 'Ingredients: 1')", () => {
+    const decoded = decodeIn("Ingredients:\n\n1", list("Ingredients:", ["1"]));
+    expect(decoded.candidate.otherIngredients).toBeNull();
+    expect(decoded.status).toBe("review");
+    expect(decoded.codes).toContain("LABEL.CORE_MISSING");
+  });
+
+  it("is read as before for the US", () => {
+    const decoded = decode("Ingredients:\n\n1", list("Ingredients:", ["1"]));
+    expect(decoded.candidate.otherIngredients?.items.map((item) => item.text)).toEqual(["1"]);
+  });
+});
