@@ -55,19 +55,23 @@ function copyRows(raw: string) {
     return {
       reason: attempt.reason,
       rows: "reason" in built ? built.reason : summary(built.candidate).rows,
-      ...("reason" in built ? {} : { checks: copyChecks(attempt.raw, built.candidate) }),
+      ...("reason" in built ? {} : copyChecks(attempt.raw, built.candidate)),
     };
   } catch (error) {
     return { reason: attempt.reason, rows: String((error as Error).message).slice(0, 80) };
   }
 }
 
-/** The copy's own checks if the OCR or a re-read confirmed every amount (what would still send it back). */
-function copyChecks(raw: string, candidate: LabelImageCandidate): string[] {
+/**
+ * The copy's own checks, and its Other Ingredients items, if the OCR or a re-read confirmed every amount (what would
+ * still send it back).
+ */
+function copyChecks(raw: string, candidate: LabelImageCandidate) {
   const ocrConfirmed = dosedRows(candidate).map(({ index }) => index);
   const policy = { allowNoOtherIngredientsSection: true };
   const answer = transcriptAnswer({ policy, raw, ocrConfirmed, reread: null, formats: [...INDIA] });
-  return decodeTranscriptAnswer(answer).codes;
+  const decoded = decodeTranscriptAnswer(answer);
+  return { checks: decoded.codes, other: summary(decoded.candidate).other };
 }
 
 function decode(raw: string) {
