@@ -196,6 +196,9 @@ export const LABEL_FORMATS: Readonly<Record<LabelFormatId, LabelFormat>> = {
     servingFor: [
       /^serv(?:e|ing)?\.?\s+size\s*[:\-–]?\s*(.+?)(?:\s+servings?\s+per\s+(?:pack|bottle|jar|container)\s*[:\-–]?\s*(.+))?$/i,
       /^(1\s+serving\s*\(.+\))$/i,
+      // "1 levelled scoop serving = 38g • No. of servings: 26 (approx)" (The Whole Truth plant protein, amazon.in
+      // spot check 2026-11-07): the serving and the pack's count on one line.
+      /^(\d+\s+(?:[a-z]+\s+){0,3}?(?:scoops?|tablets?|capsules?|softgels?|sachets?|serv(?:e|ing)s?)\b[^•|=]*=\s*\d+(?:\.\d+)?\s*(?:g|gm|ml|mg))\s*(?:[•|·,;]\s*no\.?\s*of\s+servings?\s*[:\-–]?\s*(.+))?$/i,
     ],
     continuation: [/^\(.+\)$/],
     preparedFrom: none,

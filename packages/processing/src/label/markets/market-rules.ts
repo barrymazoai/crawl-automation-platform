@@ -19,6 +19,7 @@ import { proseAmounts } from "./india-prose-amounts.js";
 import { sameIngredientsFormula } from "@crawl-automation/v3-contracts";
 import type { TranscriptRow } from "../transcript/html-transcript.js";
 import { compositionRows, compositionTextRows, compositionWire } from "./india-composition.js";
+import { withoutIngredientTotal } from "./india-ingredient-total.js";
 
 type Panel = LabelTranscriptWire["panels"][number];
 
@@ -98,8 +99,9 @@ export const INDIA_RULES: MarketLabelRules = {
   // fish oil, MuscleBlaze creatine, Health OK, LightYears, Earthful); 10 of the copies behind the label-protocol
   // readings of the 2026-11-06 batch were such pairs.
   joinsPanels: true,
-  // Owner 2026-11-07: excipients, preservatives, colours and the base printed in a composition are not formula rows.
-  copyWire: compositionWire,
+  // Owner 2026-11-07: excipients, preservatives, colours and the base printed in a composition are not formula rows;
+  // the "100%" closing a list of ingredient shares is no ingredient.
+  copyWire: (wire, formats) => withoutIngredientTotal(compositionWire(wire, formats), formats),
   copyRows: compositionRows,
   // Owner 2026-11-07: the same ingredient and amount named shorter or longer is one reading of the label; a seller's
   // page that prints another amount than the label image (Rasayanam KSM-66: 500 mg, the label 600 mg) yields to it.

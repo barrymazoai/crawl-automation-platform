@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { withoutIngredientTotal } from "../../label/markets/india-ingredient-total.js";
 import { transcriptCandidate } from "./label-transcript-candidate.js";
 import { labelTranscriptWireSchema } from "./label-transcript-wire.js";
 
@@ -216,5 +217,66 @@ describe("India: what a composition is made up with is no formula row", () => {
     );
     const us = transcriptCandidate(copied, policy);
     expect("candidate" in us && us.candidate.otherIngredients?.heading.text).toBe("Preservatives:");
+  });
+});
+
+// The Whole Truth double cocoa plant protein (amazon.in spot check 2026-11-07): the copy was refused for a serving
+// line read as an undosed row, and the label-protocol reading that replaced it put the ingredient list in the formula.
+describe("India: a plant protein's serving line and ingredient shares", () => {
+  const facts = {
+    ...panel(
+      "NUTRITIONAL INFORMATION",
+      ["", "per 100 g", "per 38 g serving", "%RDA/ serve"],
+      [
+        ["energy (kcal#)", "396.0", "150.5", "7.5% •"],
+        ["protein (g)", "66.9", "25.4", "47.1% •"],
+      ],
+    ),
+    servingLines: ["1 levelled scoop serving = 38g • No. of servings: 26 (approx)"],
+  };
+  const copied = (formats: readonly string[]) => {
+    const built = transcriptCandidate(
+      labelTranscriptWireSchema.parse({
+        ...wire([facts]),
+        otherIngredientsHeading: "INGREDIENTS",
+        otherIngredients:
+          "pea protein isolate 51.8%, brown rice protein isolate 22.2%, cocoa powder 20.5%, date powder 4.3%, monk fruit 0.8%, bromelain 0.4%, 100%",
+        otherIngredientsState: "present",
+        wholeLabelVisible: true,
+      }),
+      policy,
+      formats as typeof INDIA,
+    );
+    if ("reason" in built) {
+      throw new Error(built.reason);
+    }
+    return built;
+  };
+
+  it("'1 levelled scoop serving = 38g • No. of servings: 26 (approx)' is the serving, not a row", () => {
+    const { candidate } = copied(INDIA);
+    expect(candidate.formula?.servingSize?.text).toBe("1 levelled scoop serving = 38g");
+    expect(candidate.formula?.servingsPerContainer?.text).toBe("26 (approx)");
+    expect(candidate.formula?.columns[0]?.rows.map((each) => each.name.text)).toEqual([
+      "energy (kcal#)",
+      "protein (g)",
+    ]);
+  });
+
+  it("the '100%' closing the ingredient shares is no ingredient", () => {
+    expect(copied(INDIA).block?.text).toBe(
+      "pea protein isolate 51.8%, brown rice protein isolate 22.2%, cocoa powder 20.5%, date powder 4.3%, monk fruit 0.8%, bromelain 0.4%",
+    );
+  });
+
+  it("a list without shares, and the US market, keep the list as printed", () => {
+    const list = (otherIngredients: string) => ({ ...wire([facts]), otherIngredients });
+    expect(withoutIngredientTotal(list("whey, cocoa, 100%"), INDIA).otherIngredients).toBe(
+      "whey, cocoa, 100%",
+    );
+    expect(
+      withoutIngredientTotal(list("pea protein 80%, cocoa 20%, 100%"), ["us-facts/1"])
+        .otherIngredients,
+    ).toBe("pea protein 80%, cocoa 20%, 100%");
   });
 });
