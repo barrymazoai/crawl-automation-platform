@@ -7,7 +7,9 @@ import { LabelCollectedProductSchema } from "@crawl-automation/v3-contracts";
 import { PostgresDeliveryReader } from "./postgres-delivery-reader.js";
 import {
   DELIVERY_COLLECTIONS,
+  DELIVERY_EARLIER_COLLECTION,
   DELIVERY_HISTORY,
+  DELIVERY_LIVE_REVISIT,
   DELIVERY_QUEUE,
   DELIVERY_SCANS,
   DELIVERY_HOLDS,
@@ -78,13 +80,48 @@ function readerWithHistory(variantId: string | null, runId = "request") {
     }
     return [];
   });
+  const objects = { read: vi.fn(async () => bytes) };
   return {
     query,
-    reader: new PostgresDeliveryReader({
-      database: { query } as Queryable,
-      objects: { read: vi.fn(async () => bytes) },
-    }),
+    objects,
+    reader: new PostgresDeliveryReader({ database: { query } as Queryable, objects }),
   };
+}
+
+/** KAN-259: the newest attempt revisited the listing (`sightings`) and collected nothing; `request` collected it. */
+function revisitReader(sightings: { live: number; other: number }) {
+  const stored = readerWithHistory("variant-1");
+  const revisit = {
+    state: "completed",
+    run_id: "revisit",
+    settled_at: new Date(),
+    outcome: "completed",
+    item_id: "new-item",
+    batch_id: "new-batch",
+    source_id: "source",
+    listing_id: "product-1",
+    variant_id: "variant-1",
+  };
+  const query = vi.fn(async (sql: string, values?: readonly unknown[]) => {
+    if (sql === DELIVERY_QUEUE) {
+      return [revisit];
+    }
+    if (sql === DELIVERY_COLLECTIONS && values?.[0] === "revisit") {
+      return [];
+    }
+    if (sql === DELIVERY_LIVE_REVISIT) {
+      return [sightings];
+    }
+    if (sql === DELIVERY_EARLIER_COLLECTION) {
+      return [{ ...revisit, run_id: "request", item_id: "old-item", batch_id: "old-batch" }];
+    }
+    return stored.query(sql);
+  });
+  const reader = new PostgresDeliveryReader({
+    database: { query } as Queryable,
+    objects: stored.objects,
+  });
+  return { query, reader };
 }
 
 describe("settled DTC repository selection", () => {
@@ -169,6 +206,41 @@ describe("settled DTC repository selection", () => {
       { sourceId: "source", externalId: "variant", problem: "PRODUCT_DELIVERY.MATERIAL_MISSING" },
     ]);
     expect(query).toHaveBeenCalledWith(DELIVERY_COLLECTIONS, ["request", "source"]);
+  });
+
+  it("reads a metrics-only live revisit's SKU from the earlier attempt that collected it", async () => {
+    const { reader, query } = revisitReader({ live: 1, other: 0 });
+    const snapshot = await reader.read(
+      { ...deliveryRequest, scanIds: ["new-batch", "old-batch"] },
+      new AbortController().signal,
+    );
+    expect(snapshot.products).toMatchObject([
+      { queueId: "old-item", batchId: "old-batch", externalId: "variant-1" },
+    ]);
+    expect(snapshot.products[0]?.problem).toBeUndefined();
+    expect(query).toHaveBeenCalledWith(DELIVERY_LIVE_REVISIT, ["product-1", "revisit"]);
+    expect(query).toHaveBeenCalledWith(DELIVERY_EARLIER_COLLECTION, [
+      "source",
+      "product-1",
+      "variant-1",
+      "revisit",
+      ["new-batch", "old-batch"],
+    ]);
+    expect(query).toHaveBeenCalledWith(DELIVERY_COLLECTIONS, ["request", "source"]);
+    expect(query).toHaveBeenCalledWith(DELIVERY_HOLDS, ["request", "source"]);
+  });
+
+  it.each([
+    { live: 0, other: 1 },
+    { live: 1, other: 1 },
+    { live: 0, other: 0 },
+  ])("never falls back for a revisit that was not only live %j", async (sightings) => {
+    const { reader, query } = revisitReader(sightings);
+    const snapshot = await reader.read(deliveryRequest, new AbortController().signal);
+    expect(snapshot.products).toMatchObject([
+      { queueId: "new-item", problem: "PRODUCT_DELIVERY.MATERIAL_MISSING" },
+    ]);
+    expect(query.mock.calls.map(([sql]) => sql)).not.toContain(DELIVERY_EARLIER_COLLECTION);
   });
 
   it("reads the same-run capture with a null variant for a selected website variant", async () => {

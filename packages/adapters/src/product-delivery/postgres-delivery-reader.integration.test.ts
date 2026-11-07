@@ -31,10 +31,11 @@ it.skipIf(!connectionString)(
       CREATE TABLE product_enrichment_subject(collection_operation_id text,channel text,listing_id text,variant_id text);
       CREATE TABLE queue_item(item_id text, batch_id uuid, source_id uuid, listing_id text,
         variant_id text, state text, run_id uuid, channel text, created_at timestamptz);
-      CREATE TABLE queue_attempt(run_id uuid, settled_at timestamptz, outcome text);
+      CREATE TABLE queue_attempt(run_id uuid, settled_at timestamptz, outcome text, item_id text, started_at timestamptz);
       CREATE TABLE brand_scan(source_id uuid, scan_id uuid, state text, started_at timestamptz,
         requested_at timestamptz, result jsonb, channel text);
-      CREATE TABLE collected_product(operation_id text, record jsonb, collected_at timestamptz);`);
+      CREATE TABLE collected_product(operation_id text, record jsonb, collected_at timestamptz);
+      CREATE TABLE listing_state_observation(channel text, listing_id text, run_id uuid, state text);`);
       await client.query("INSERT INTO brand VALUES ($1,'Sambucol'),($2,'Other')", [source, other]);
       const catalogUrl = "https://sambucolusa.com/collections/shop-all";
       await client.query(

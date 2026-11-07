@@ -10,26 +10,15 @@ import type {
 import { selectDeliverySettlement } from "@crawl-automation/app";
 import { errorCodeOf, type ObjectStore, type Queryable } from "@crawl-automation/platform";
 import { z } from "zod";
-import {
-  DELIVERY_COLLECTIONS,
-  DELIVERY_QUEUE,
-  DELIVERY_SCANS,
-  DELIVERY_HOLDS,
-} from "./delivery-queries.js";
+import { DELIVERY_QUEUE, DELIVERY_SCANS, DELIVERY_HOLDS } from "./delivery-queries.js";
 import { DeliveryMaterials } from "./delivery-materials.js";
+import {
+  DeliveryCollections,
+  type CollectedQueue,
+  type DeliveryQueueRow as QueueRow,
+} from "./delivery-collected.js";
 import { PostgresBrandSources } from "../postgres/postgres-brand-sources.js";
 
-interface QueueRow {
-  item_id: string;
-  batch_id: string;
-  source_id: string;
-  listing_id: string;
-  variant_id: string | null;
-  state: string;
-  run_id: string | null;
-  settled_at: Date | null;
-  outcome: string | null;
-}
 interface ScanRow {
   settings: unknown;
   source_id: string;
@@ -49,8 +38,10 @@ const ScanResult = z.object({
 
 export class PostgresDeliveryReader implements ProductDeliveryReader {
   private readonly materials: DeliveryMaterials;
+  private readonly collected: DeliveryCollections;
   constructor(private readonly deps: { database: Queryable; objects: Pick<ObjectStore, "read"> }) {
     this.materials = new DeliveryMaterials(deps);
+    this.collected = new DeliveryCollections(deps.database);
   }
 
   /** Site analysis saves the verified catalog in brand_source.url; scans copy that same URL. */
@@ -80,7 +71,12 @@ export class PostgresDeliveryReader implements ProductDeliveryReader {
         const selected = await this.settlement(queue, [], true);
         result.review += selected.review;
       } else if (queue.state === "completed" && queue.settled_at && queue.outcome === "completed") {
-        const selected = await this.settlement(queue, await this.products(queue, signal), false);
+        const collected = await this.collected.of(queue, scope[1] ?? null);
+        const selected = await this.settlement(
+          collected.queue,
+          await this.products(collected, signal),
+          false,
+        );
         result.products.push(...selected.products);
         result.review += selected.review;
         result.pending += selected.pending;
@@ -99,11 +95,10 @@ export class PostgresDeliveryReader implements ProductDeliveryReader {
     return selectDeliverySettlement({ products, holds, queueReview });
   }
 
-  private async products(queue: QueueRow, signal: AbortSignal): Promise<DeliveryProduct[]> {
-    const rows = await this.deps.database.query<{ operation_id: string }>(DELIVERY_COLLECTIONS, [
-      queue.run_id,
-      queue.source_id,
-    ]);
+  private async products(
+    { queue, rows }: CollectedQueue,
+    signal: AbortSignal,
+  ): Promise<DeliveryProduct[]> {
     const base = queueProduct(queue);
     if (!rows.length) {
       return [{ ...base, problem: "PRODUCT_DELIVERY.MATERIAL_MISSING" }];

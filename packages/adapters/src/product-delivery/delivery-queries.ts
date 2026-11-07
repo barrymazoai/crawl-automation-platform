@@ -23,6 +23,35 @@ export const DELIVERY_COLLECTIONS = `
   ORDER BY record->'observation'->>'listingId', record->'observation'->>'variantId',
     collected_at DESC, operation_id DESC`;
 
+/**
+ * KAN-259: did this run only revisit a live listing? A metrics-only revisit records `live` sightings and collects
+ * nothing; an unlisted revisit (brand mismatch, identity conflict, removed variant) must not count.
+ */
+export const DELIVERY_LIVE_REVISIT = `
+  SELECT count(*) FILTER (WHERE state='live')::int AS live,
+    count(*) FILTER (WHERE state<>'live')::int AS other
+  FROM listing_state_observation
+  WHERE channel='dtc' AND listing_id=$1 AND run_id=$2::uuid`;
+
+/**
+ * KAN-259: the newest other settled, completed attempt (an earlier attempt of the same queue item included) of the same
+ * source and SKU that collected the product, within the request's scans when it names them (KAN-253). Attempts that
+ * ended in Review never qualify: their label was not accepted.
+ */
+export const DELIVERY_EARLIER_COLLECTION = `
+  SELECT q.item_id, q.batch_id::text, q.source_id::text, q.listing_id, q.variant_id,
+    'completed' AS state, a.run_id::text, a.settled_at, a.outcome
+  FROM queue_attempt a JOIN queue_item q ON q.item_id=a.item_id
+  WHERE q.channel='dtc' AND q.source_id=$1::uuid AND q.listing_id=$2
+    AND q.variant_id IS NOT DISTINCT FROM $3::text AND a.run_id<>$4::uuid
+    AND a.settled_at IS NOT NULL AND a.outcome='completed'
+    AND ($5::uuid[] IS NULL OR q.batch_id=ANY($5::uuid[]))
+    AND EXISTS (SELECT 1 FROM collected_product cp
+      WHERE cp.record->'observation'->>'requestId'=a.run_id::text
+        AND cp.record->'observation'->>'sourceId'=q.source_id::text
+        AND cp.record->>'codec' IN ('collected-product/3','collected-product/4','collected-product/5'))
+  ORDER BY a.started_at DESC NULLS LAST, a.run_id DESC LIMIT 1`;
+
 export const DELIVERY_HISTORY = `
   SELECT record, body_hash FROM product_history_source
   WHERE record->>'codec'='v3-capture-history/1'
