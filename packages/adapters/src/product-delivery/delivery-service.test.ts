@@ -166,18 +166,18 @@ describe("Supply Smart product delivery with real answer codecs and fake RPC", (
     expect(state.rpc.calls).toEqual([]);
   });
 
-  it("uses batches of at most 200, and replay keeps every label ledger key and body stable", async () => {
-    const products = Array.from({ length: 201 }, (_, index) => deliveryProduct(String(index)));
+  it("uses batches of at most 50 (Supply Smart's 60 s RPC timeout), and replay keeps every label ledger key and body stable", async () => {
+    const products = Array.from({ length: 101 }, (_, index) => deliveryProduct(String(index)));
     const state = setup(deliverySnapshot(products));
-    expect((await state.run()).delivered).toBe(201);
+    expect((await state.run()).delivered).toBe(101);
     const batches = state.rpc.calls.filter(
       (call) => call.path === "product.ingestObservationBatch",
     );
     expect(batches.map((call) => (call.input as { items: unknown[] }).items.length)).toEqual([
-      200, 1,
+      50, 50, 1,
     ]);
     const first = [...state.rpc.labels.values()];
-    expect((await state.run()).delivered).toBe(201);
+    expect((await state.run()).delivered).toBe(101);
     expect([...state.rpc.labels.values()]).toEqual(first);
   });
 });
