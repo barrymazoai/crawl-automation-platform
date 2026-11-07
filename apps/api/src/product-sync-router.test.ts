@@ -134,3 +134,37 @@ it("reopens products enriched again after their send, bounded by a limit", async
     expect.any(AbortSignal),
   );
 });
+
+it("delivers DTC sources to the named target, dry run by default", async () => {
+  const deliverDtc = vi.fn(async () => ({ target: "test", dryRun: true, groups: [] }));
+  const input = {
+    companyId: "9d55fe85-7ed1-4714-a96f-4061c67143a5",
+    sourceIds: ["11111111-1111-4111-8111-111111111111"],
+    target: "test",
+  };
+  const response = await appWith({ productSync: { deliverDtc } }).request(
+    "/trpc/productSync.deliverDtc",
+    post(input),
+  );
+  expect(response.status).toBe(200);
+  expect(deliverDtc).toHaveBeenCalledExactlyOnceWith(
+    { ...input, dryRun: true },
+    expect.any(AbortSignal),
+  );
+});
+
+it.each([
+  {
+    companyId: "9d55fe85-7ed1-4714-a96f-4061c67143a5",
+    sourceIds: ["11111111-1111-4111-8111-111111111111"],
+  },
+  { companyId: "9d55fe85-7ed1-4714-a96f-4061c67143a5", sourceIds: [], target: "production" },
+])("rejects a DTC delivery without a target or sources %j", async (input) => {
+  const deliverDtc = vi.fn();
+  const response = await appWith({ productSync: { deliverDtc } }).request(
+    "/trpc/productSync.deliverDtc",
+    post(input),
+  );
+  expect(response.status).toBe(400);
+  expect(deliverDtc).not.toHaveBeenCalled();
+});

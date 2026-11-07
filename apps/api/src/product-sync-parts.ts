@@ -5,11 +5,14 @@ import {
   RetainedListingDateOriginals,
   SupplySmartCompaniesClient,
   SupplySmartEnrichmentClient,
+  SupplySmartProductDelivery,
   SupplySmartProductsClient,
   SupplySmartRpc,
+  loadSupplySmartSecrets,
 } from "@crawl-automation/adapters";
 import {
   BrandCompanyService,
+  DtcSourceDelivery,
   EnrichmentUpdate,
   NotSupplementRemoval,
   ProductSyncControl,
@@ -46,7 +49,9 @@ export async function productSyncService(parts: {
     ledger,
     supplySmart: new SupplySmartEnrichmentClient(rpc),
   });
+  const dtc = await dtcDelivery(parts, { rpc, testSecretsFile: settings.testSecretsFile });
   return {
+    deliverDtc: dtc.deliver.bind(dtc),
     matchBrands: brands.matchBrands.bind(brands),
     brands: brands.brands.bind(brands),
     status: () => control.status(),
@@ -55,6 +60,30 @@ export async function productSyncService(parts: {
     removeNotSupplements: removal.run.bind(removal),
     updateEnrichment: enrichment.run.bind(enrichment),
   };
+}
+
+/** KAN-259: production uses the brand-enrichment client; test only when its own secrets file is configured. */
+async function dtcDelivery(
+  parts: { database: Database; storageReaders?: { objects: Pick<ObjectStore, "read"> } | null },
+  input: { rpc: SupplySmartRpc; testSecretsFile: string | undefined },
+) {
+  const objects = parts.storageReaders?.objects;
+  if (!objects) {
+    // Retained projections are the delivery material; without R2 readers nothing can be sent.
+    return new DtcSourceDelivery({ deliveries: {} });
+  }
+  const delivery = (rpc: SupplySmartRpc) =>
+    new SupplySmartProductDelivery({ database: parts.database, rpc, objects });
+  return new DtcSourceDelivery({
+    deliveries: {
+      production: delivery(input.rpc),
+      ...(input.testSecretsFile
+        ? {
+            test: delivery(new SupplySmartRpc(await loadSupplySmartSecrets(input.testSecretsFile))),
+          }
+        : {}),
+    },
+  });
 }
 
 function syncControl(

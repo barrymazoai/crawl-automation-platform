@@ -51,6 +51,26 @@ export class ProductDeliveryService implements ProductDelivery {
     return result;
   }
 
+  /**
+   * KAN-259: the same read and mapping as `deliver`, without any Supply Smart call; `delivered` stays 0 and
+   * `deliverable` counts the products `deliver` would send.
+   */
+  async preview(
+    request: ProductDeliveryRequest,
+    signal: AbortSignal,
+  ): Promise<ProductDeliveryResult & { deliverable: number }> {
+    signal.throwIfAborted();
+    const snapshot = await this.deps.reader.read(request, signal);
+    const result: ProductDeliveryResult = {
+      captured: snapshot.products.length,
+      review: snapshot.review,
+      delivered: 0,
+      refused: [],
+    };
+    const mapped = this.mapProducts(snapshot.products, request, result);
+    return { ...result, deliverable: mapped.length };
+  }
+
   private async complete(run: DeliveryRun, signal: AbortSignal) {
     const answer = await this.deps.writer.complete(
       { runId: run.runId, status: "completed" },

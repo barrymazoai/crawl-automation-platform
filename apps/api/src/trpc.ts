@@ -1,5 +1,6 @@
 import type {
   BrandCompanyService,
+  DtcSourceDelivery,
   EnrichmentUpdate,
   NotSupplementRemoval,
   ProductSyncControl,
@@ -30,6 +31,8 @@ export type ProductSyncApi = Pick<BrandCompanyService, "matchBrands" | "brands">
   Pick<ProductSyncControl, "status" | "markPresent" | "reopen"> & {
     removeNotSupplements: NotSupplementRemoval["run"];
     updateEnrichment: EnrichmentUpdate["run"];
+    /** KAN-259: settled DTC sources to an existing company, production or test. */
+    deliverDtc: DtcSourceDelivery["deliver"];
   };
 
 export interface ApiContext {
