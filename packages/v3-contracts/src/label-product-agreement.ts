@@ -2,6 +2,9 @@ import type { LabelCandidate } from "./label-extraction.js";
 import type { LabelCollectedProduct } from "./label-product.js";
 import { hasConfirmedNoOtherIngredients } from "./label-ingredient-declaration.js";
 import { sameServingSize } from "./label-rules/serving-size.js";
+import { isUsOnlyFormats } from "./label-formats.js";
+import { sameIngredientsFormula } from "./india-same-ingredients.js";
+import { keywordPolicyFormats, type KeywordPolicy } from "./vision.js";
 import {
   formulaAgreement,
   joinFormulaSections,
@@ -17,7 +20,41 @@ import {
   type FormulaAgreement,
 } from "./label-agreement.js";
 
-type Source = { id: string; kind: "image" | "text"; candidate: LabelCandidate };
+type Source = {
+  id: string;
+  kind: "image" | "text";
+  candidate: LabelCandidate;
+  record?: unknown;
+};
+
+/** The formats an image source was read in (its keyword policy); none for a page. */
+function imageFormats(source: Source) {
+  const record = source.record as { input?: { selection?: { policy?: KeywordPolicy } } } | undefined;
+  const policy = source.kind === "image" ? record?.input?.selection?.policy : undefined;
+  return policy ? keywordPolicyFormats(policy) : null;
+}
+
+/**
+ * KAN-243 (owner 2026-11-07, Vitamin D3 60,000 IU on amazon.in): two label images read in the Indian formats that name
+ * the same ingredients with the same amounts, one name only longer ("Cholecalciferol (Vitamin D3)" on the front,
+ * "Cholecalciferol (Vitamin D3) IP (In Nano Droplet form)" on the back), print one formula: the record keeps the
+ * selected image's, and the other only differs in wording (warned). The merge applies the same rule.
+ */
+function sameIndianIngredients(source: Source, selected: Source | undefined): boolean {
+  const indian = (each: Source) => {
+    const formats = imageFormats(each);
+    return !!formats && !isUsOnlyFormats(formats);
+  };
+  return (
+    !!selected &&
+    source.id !== selected.id &&
+    indian(source) &&
+    indian(selected) &&
+    !!source.candidate.formula &&
+    !!selected.candidate.formula &&
+    sameIngredientsFormula(source.candidate.formula, selected.candidate.formula)
+  );
+}
 interface CollectedAgreement {
   schemaVersion: number;
   comparisonPolicy?: "label-typography/1" | "label-typography/2" | undefined;
@@ -90,9 +127,10 @@ export function collectedSourcesAgree(record: CollectedAgreement, accepted: Sour
     column.rows.map(row => row.name.sourceId)) ?? []);
   return accepted.every((source) => {
     const sourceFormula = formulaShape(source, record);
-    const formulaResult = source.candidate.formula
-      ? formulaAgreement(formula, sourceFormula)
-      : "exact";
+    const shared = source.candidate.formula ? formulaAgreement(formula, sourceFormula) : "exact";
+    const formulaResult =
+      !joined && (shared === "conflict" || shared === "sections") &&
+      sameIndianIngredients(source, selectedSource) ? "wording" : shared;
     const shorterFormulaId = !joined && source.kind === "image" && selectedSource &&
       preferFormulaSource(selectedSource.candidate, source.candidate)
       ? formulaId : source.id;

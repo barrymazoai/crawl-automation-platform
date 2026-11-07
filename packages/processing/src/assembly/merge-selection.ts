@@ -130,7 +130,10 @@ function selectFormula(state: MergeState, pick: Pick): void {
 
 function compareFormula(state: MergeState, pick: Pick, shape: Shape): void {
   const shared = formulaAgreement(state.formulaShape, shape);
-  const agreement = shared === "conflict" && marketAgrees(state, pick) ? "wording" : shared;
+  const agreement =
+    (shared === "conflict" || shared === "sections") && marketAgrees(state, pick)
+      ? "wording"
+      : shared;
   if (agreement === "subset") {
     acceptFormulaSubset(state, pick, shape);
   } else if (agreement === "sections") {

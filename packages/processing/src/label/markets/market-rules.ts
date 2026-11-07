@@ -16,7 +16,7 @@ import {
   type AmountPositions,
 } from "../../vision/protocol/label-amount-position.js";
 import { proseAmounts } from "./india-prose-amounts.js";
-import { sameIngredientsFormula } from "./india-formula.js";
+import { sameIngredientsFormula } from "@crawl-automation/v3-contracts";
 import type { TranscriptRow } from "../transcript/html-transcript.js";
 import { compositionRows, compositionTextRows, compositionWire } from "./india-composition.js";
 
@@ -116,12 +116,18 @@ export function sourcesMarket(
     | { kind: "text"; task: unknown }
   )[],
 ): MarketLabelRules {
-  const formats = sources.flatMap((source) => {
-    if (source.kind === "image") {
-      return keywordPolicyFormats(source.task.input.selection.policy);
-    }
-    return (source.task as { labelFormats?: LabelFormatId[] }).labelFormats ?? [];
-  });
+  // Each format once: a US product's two sources each read in the US format are still read in the US format only
+  // (KAN-243 2026-11-07: counted twice, US products were merged with the India rules from 0611176c).
+  const formats = [
+    ...new Set(
+      sources.flatMap((source) => {
+        if (source.kind === "image") {
+          return keywordPolicyFormats(source.task.input.selection.policy);
+        }
+        return (source.task as { labelFormats?: LabelFormatId[] }).labelFormats ?? [];
+      }),
+    ),
+  ];
   return marketRules(formats.length ? formats : undefined);
 }
 

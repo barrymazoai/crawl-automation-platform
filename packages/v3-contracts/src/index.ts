@@ -16,6 +16,7 @@ export * from "./text.js";
 export * from "./codex-settings.js";
 export * from "./vision.js";
 export * from "./label-formats.js";
+export * from "./india-same-ingredients.js";
 export * from "./amazon-marketplaces.js";
 export * from "./cross-market.js";
 export * from "./product-images.js";
