@@ -10,6 +10,8 @@ const lines = [
   "terrestris) Fr. 77.92mg, Haldi Extract (Curcuma longa) Rz. 50mg, Black",
 ].map((text) => ({ text }));
 
+const INDIA = ["us-facts/1", "in-nutritional-information/2", "in-composition/2"] as const;
+
 const candidate = (rows: [string, string][]) =>
   ({
     formula: {
@@ -35,7 +37,7 @@ describe("India: amounts of a composition printed as a paragraph", () => {
     const positions = proseAmounts(
       read,
       { text: "", lines },
-      { confirmed: [0], misplaced: [1, 2] },
+      { positions: { confirmed: [0], misplaced: [1, 2] }, formats: INDIA },
     );
     expect(positions).toEqual({ confirmed: [0, 1, 2, 3], misplaced: [] });
   });
@@ -45,7 +47,11 @@ describe("India: amounts of a composition printed as a paragraph", () => {
       ["Coffee Extract (Coffea arabica) Sd.", "133.33mg"],
       ["Ashwagandha Extract (Withania somnifera) Rt.", "200mg"],
     ]);
-    const positions = proseAmounts(read, { text: "", lines }, { confirmed: [], misplaced: [0, 1] });
+    const positions = proseAmounts(
+      read,
+      { text: "", lines },
+      { positions: { confirmed: [], misplaced: [0, 1] }, formats: INDIA },
+    );
     expect(positions).toEqual({ confirmed: [], misplaced: [0, 1] });
   });
 
@@ -55,8 +61,35 @@ describe("India: amounts of a composition printed as a paragraph", () => {
     const positions = proseAmounts(
       read,
       { text: "", lines: twice },
-      { confirmed: [], misplaced: [] },
+      { positions: { confirmed: [], misplaced: [] }, formats: INDIA },
     );
     expect(positions.confirmed).toEqual([]);
+  });
+
+  it("leave a table's misplaced amount misplaced (OCR read the names, then the amounts)", () => {
+    const table = [
+      "Vitamin A (Retinyl Acetate)",
+      "Zinc (as Zinc Gluconate)",
+      "900 mcg 10 mg 20 mg",
+    ];
+    const read = candidate([
+      ["Vitamin A (Retinyl Acetate)", "900 mcg"],
+      ["Zinc (as Zinc Gluconate)", "20 mg"],
+    ]);
+    const ocr = { text: "", lines: table.map((text) => ({ text })) };
+    // Zinc's first dose after its name is 900 mcg on the next line: not its own amount, so nothing is confirmed.
+    expect(
+      proseAmounts(read, ocr, { positions: { confirmed: [], misplaced: [1] }, formats: INDIA })
+        .misplaced,
+    ).toEqual([1]);
+  });
+
+  it("change nothing for the first India formats or a headed table column", () => {
+    const read = candidate([["Coffee Extract (Coffea arabica) Sd.", "200mg"]]);
+    const before = { confirmed: [], misplaced: [0] };
+    const first = ["us-facts/1", "in-nutritional-information/1", "in-composition/1"] as const;
+    expect(proseAmounts(read, { text: "", lines }, { positions: before, formats: first })).toBe(
+      before,
+    );
   });
 });

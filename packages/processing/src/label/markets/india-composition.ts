@@ -4,6 +4,7 @@ import {
   type LabelTextCandidate,
 } from "@crawl-automation/v3-contracts";
 import type { TranscriptRow } from "../transcript/html-transcript.js";
+import { readsComposition } from "../../text/protocol/composition-clause.js";
 import { isAmountCell } from "../transcript/transcript-cells.js";
 import type { LabelTranscriptWire } from "../../vision/protocol/label-transcript-wire.js";
 
@@ -102,9 +103,11 @@ export function compositionWire(
  * Iron …" after Supradyn's trace elements; "Permitted class II preservatives less than 0.3%" after Krishna's juice):
  * those last rows leave the formula. Their quotes stay placed, so the page text is still covered.
  */
-export function compositionTextRows(candidate: LabelTextCandidate): void {
-  const heading = (candidate.formula?.columns ?? []).map((column) => column.heading?.text ?? "");
-  if (!heading.some((text) => COMPOSITION.test(text))) {
+export function compositionTextRows(
+  candidate: LabelTextCandidate,
+  formats: readonly LabelFormatId[],
+): void {
+  if (!current(formats) || !readsComposition(candidate)) {
     return;
   }
   for (const column of candidate.formula?.columns ?? []) {

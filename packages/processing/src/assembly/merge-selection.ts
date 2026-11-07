@@ -83,7 +83,14 @@ function selectSections(state: MergeState, entry: LabelEvidence, policy: MergePo
   const candidate = entry.candidate;
   const projected = projectLabelProductCandidate(entry.id, candidate);
   const secondaryText = policy.imageFirst && entry.kind === "text";
-  const pick = { entry, candidate, projected, secondaryText, imageFirst: policy.imageFirst };
+  const pick = {
+    entry,
+    candidate,
+    projected,
+    secondaryText,
+    imageFirst: policy.imageFirst,
+    textFallback: policy.textFallback,
+  };
   selectFormula(state, pick);
   selectOtherIngredients(state, pick);
 }
@@ -95,6 +102,8 @@ interface Pick {
   secondaryText: boolean;
   /** A complete image leads this product: packaging serving-size conflicts only warn. */
   imageFirst: boolean;
+  /** A complete page leads this product (no complete image): the record keeps the page's formula. */
+  textFallback: boolean;
 }
 
 function selectFormula(state: MergeState, pick: Pick): void {
@@ -157,6 +166,30 @@ function acceptFormulaSubset(state: MergeState, pick: Pick, shape: Shape): void 
   }
 }
 
+/** The page's difference only warns: an image leads (and wins, under ordered policies), or the market yields. */
+function textYields(
+  state: MergeState,
+  pick: Pick,
+  at: { conflict: AssemblyErrorCode; imageWins: boolean },
+): boolean {
+  return (
+    pageYields(state, pick, at.conflict) ||
+    (pick.secondaryText &&
+      (at.imageWins || !isOrderedEvidencePolicy(state.manifest.evidencePolicy)))
+  );
+}
+
+/** KAN-243 (owner 2026-11-07, India): a page's formula that differs from the selected label image's yields to it. */
+function pageYields(state: MergeState, pick: Pick, conflict: AssemblyErrorCode): boolean {
+  return (
+    state.market.pageFormulaYields &&
+    !pick.textFallback &&
+    conflict === "LABEL_PRODUCT.FORMULA_CONFLICT" &&
+    pick.entry.kind === "text" &&
+    state.formulaSource?.kind === "image"
+  );
+}
+
 function recordAgreement(
   state: MergeState,
   pick: Pick,
@@ -168,8 +201,7 @@ function recordAgreement(
   },
 ): void {
   const { agreement, conflict, secondary, imageWins = false } = comparison;
-  const secondaryText =
-    pick.secondaryText && (imageWins || !isOrderedEvidencePolicy(state.manifest.evidencePolicy));
+  const secondaryText = textYields(state, pick, { conflict, imageWins });
   if (agreement === "exact") {
     return;
   }

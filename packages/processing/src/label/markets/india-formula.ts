@@ -22,16 +22,19 @@ export function sameIngredientsFormula(partial: Formula, complete: Formula): boo
     formula.columns.flatMap((column) => column.rows).filter((row) => row.amount);
   const rows = dosed(partial);
   const full = dosed(complete);
+  // One to one: each ingredient matches exactly one of the other reading's, and no two match the same one.
+  const matched = rows.map((row) => full.filter((each) => sameIngredient(row, each)));
   return (
     rows.length > 0 &&
-    rows.every((row) => full.filter((each) => sameIngredient(row, each)).length === 1)
+    matched.every((each) => each.length === 1) &&
+    new Set(matched.map((each) => each[0])).size === rows.length
   );
 }
 
 const amount = (row: Row) => row.amount?.text.toLowerCase().replace(/\s+/gu, "") ?? null;
 const NAME_WORD = /[a-z0-9]+/gu;
 const words = (row: Row) =>
-  new Set((row.name.text.toLowerCase().match(NAME_WORD) ?? []).filter((word) => word.length >= 3));
+  new Set((row.name.text.toLowerCase().match(NAME_WORD) ?? []).filter((word) => word.length >= 2));
 
 function sameIngredient(left: Row, right: Row): boolean {
   if (!amount(left) || amount(left) !== amount(right)) {

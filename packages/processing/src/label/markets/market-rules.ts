@@ -1,4 +1,9 @@
-import { isUsOnlyFormats, type LabelFormatId } from "@crawl-automation/v3-contracts";
+import {
+  isUsOnlyFormats,
+  keywordPolicyFormats,
+  type KeywordPolicy,
+  type LabelFormatId,
+} from "@crawl-automation/v3-contracts";
 import type { LabelTranscriptWire } from "../../vision/protocol/label-transcript-wire.js";
 import type {
   LabelCandidate,
@@ -51,12 +56,12 @@ export interface MarketLabelRules {
   amountPositions(
     candidate: LabelImageCandidate,
     ocr: OcrReading,
-    positions: AmountPositions,
+    at: { positions: AmountPositions; formats: readonly LabelFormatId[] },
   ): AmountPositions;
   /** Merge: a page's formula that differs from an image's formula yields to the label (a warning, no Review). */
   readonly pageFormulaYields: boolean;
   /** Web text: the answer as this market's labels print it, before it is checked. */
-  textCandidate(candidate: LabelTextCandidate): void;
+  textCandidate(candidate: LabelTextCandidate, formats: readonly LabelFormatId[]): void;
   /** Web text: the label check codes this market keeps for this answer (all of them by default). */
   textCodes(candidate: LabelTextCandidate, codes: readonly string[], text: string): string[];
 }
@@ -68,7 +73,7 @@ export const US_RULES: MarketLabelRules = {
   joinsPanels: false,
   copyWire: (wire) => wire,
   copyRows: (_panel, rows) => rows,
-  amountPositions: (_candidate, _ocr, positions) => positions,
+  amountPositions: (_candidate, _ocr, at) => at.positions,
   formulaFits: () => false,
   textCandidate: () => undefined,
   pageFormulaYields: false,
@@ -107,13 +112,13 @@ export const INDIA_RULES: MarketLabelRules = {
 /** The market of a product's label sources: the formats its images and page text are read in. */
 export function sourcesMarket(
   sources: readonly (
-    { kind: "image"; task: { input: unknown } } | { kind: "text"; task: unknown }
+    | { kind: "image"; task: { input: { selection: { policy: KeywordPolicy } } } }
+    | { kind: "text"; task: unknown }
   )[],
 ): MarketLabelRules {
   const formats = sources.flatMap((source) => {
     if (source.kind === "image") {
-      const input = source.task.input as { policy?: { formats?: LabelFormatId[] } };
-      return input.policy?.formats ?? [];
+      return keywordPolicyFormats(source.task.input.selection.policy);
     }
     return (source.task as { labelFormats?: LabelFormatId[] }).labelFormats ?? [];
   });
@@ -126,7 +131,10 @@ export function marketAmountPositions(
   ocr: OcrReading,
   formats: readonly LabelFormatId[] | undefined,
 ): AmountPositions {
-  return marketRules(formats).amountPositions(candidate, ocr, amountPositions(candidate, ocr));
+  return marketRules(formats).amountPositions(candidate, ocr, {
+    positions: amountPositions(candidate, ocr),
+    formats: formats ?? [],
+  });
 }
 
 /** The rules of the market whose label formats these are; US when absent or US-only. */

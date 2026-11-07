@@ -52,4 +52,19 @@ describe("India: two readings of one label name an ingredient shorter or longer"
     const iron = formula(null, [["Iron", "10 mg"]]);
     expect(sameIngredientsFormula(zinc, iron)).toBe(false);
   });
+
+  it("keep vitamins apart by their short names, one to one (B6 is not B2)", () => {
+    const partial = formula(null, [["Vitamin B6", "1.4 mg"]]);
+    const complete = formula(null, [
+      ["Vitamin B2", "1.4 mg"],
+      ["Vitamin B6", "2 mg"],
+    ]);
+    expect(sameIngredientsFormula(partial, complete)).toBe(false);
+    const twice = formula(null, [
+      ["Methylcobalamin", "1500 mcg"],
+      ["Methylcobalamin IP", "1500 mcg"],
+    ]);
+    const once = formula(null, [["Vitamin B12 (Methylcobalamin IP)", "1500 mcg"]]);
+    expect(sameIngredientsFormula(twice, once)).toBe(false);
+  });
 });

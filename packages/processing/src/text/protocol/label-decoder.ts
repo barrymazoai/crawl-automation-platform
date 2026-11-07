@@ -64,7 +64,7 @@ export function decodeLabelText(request: LabelTextRequest): DecodedLabel {
   normalizeNoFactsIngredientList(candidate, text, scope.range);
   separateTextIngredientDeclarations(candidate);
   const market = marketRules(request.formats);
-  normalizeCompositionIngredients(candidate, market);
+  normalizeCompositionIngredients(candidate, { rules: market, formats: request.formats ?? [] });
   return validateCandidate({
     candidate,
     text,

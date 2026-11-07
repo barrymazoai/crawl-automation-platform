@@ -20,12 +20,10 @@ export function pageFormulaYields(
   },
 ): string[] {
   const formulaConflict = assemblyErrors.code("LABEL_PRODUCT.FORMULA_CONFLICT");
-  const formula = at.split.complete.candidate.formula;
-  const owner = [...at.split.sections.values()].find((each) => each.candidate.formula === formula);
   if (
     !at.market.pageFormulaYields ||
     entry.kind !== "text" ||
-    owner?.kind !== "image" ||
+    at.split.complete.kind !== "image" ||
     !codes.includes(formulaConflict)
   ) {
     return codes;

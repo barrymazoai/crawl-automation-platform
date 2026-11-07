@@ -13,16 +13,16 @@ export const squashAmount = (text: string) =>
     .replace(/[\s,]/g, "");
 
 /** A printed dose with its unit ("1,125 mcg", "0.5 g", "400 IU"); never a %DV or a bare number. */
-const DOSE =
+export const DOSE =
   /(?<![\d.])\d[\d,]*(?:\.\d+)?\s*(?:mcg|µg|μg|ug|mg|kg|g|iu|i\.u\.|ml|kcal|cfu|billion|million)(?![a-z])/gi;
 const escape = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-const letters = (text: string) =>
+export const letters = (text: string) =>
   text
     .normalize("NFKD")
     .toLowerCase()
     .replace(/[^a-z0-9]/g, "");
 /** Enough of a row's name to find its printed line, short enough to survive a wrapped line. */
-const NAME_PREFIX = 12;
+export const NAME_PREFIX = 12;
 /** A wrapped first line shorter than this never stands for a name. */
 const MIN_WRAPPED = 8;
 /** A name this far right of another (share of the panel's width) starts the next printed column. */
@@ -103,7 +103,7 @@ function copiedDoses(rows: readonly Row[]): Map<string, number[]> {
 }
 
 /** The first dose an amount prints, squashed ("10 mcg (400 IU)" is "10mcg"). */
-function firstDose(text: string): string | null {
+export function firstDose(text: string): string | null {
   const match = text.match(new RegExp(DOSE.source, "i"));
   return match ? squashAmount(match[0]) : null;
 }

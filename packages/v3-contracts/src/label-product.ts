@@ -36,11 +36,17 @@ type AcceptedSource = { kind: string; candidate: LabelImageCandidate | TextCandi
  * check does not count (KAN-243 2026-11-07: a magnesium label joined a section of an image that did not count, and the
  * product became a Review).
  */
+const integrity = (p: AcceptedSource) => p.kind === "image" && labelImageIntegrityCodes(p.candidate as LabelImageCandidate).length > 0;
+
+/** No source is a complete label (ordered policies): each source's complete sections count on their own. */
+function collectedSplit(evidencePolicy: string | undefined, provenance: readonly AcceptedSource[]): boolean {
+  return isOrderedEvidencePolicy(evidencePolicy) && !provenance.some(p =>
+    (isCompleteLabelImage(p) || isCompleteLabelText(p)) && !integrity(p));
+}
+
 export function collectedSourceAcceptance(evidencePolicy: string | undefined, provenance: readonly AcceptedSource[]) {
   const quality = ["label-image-first/4", "label-image-first/5", ...ORDERED_EVIDENCE_POLICIES].includes(evidencePolicy ?? "");
-  const integrity = (p: AcceptedSource) => p.kind === "image" && labelImageIntegrityCodes(p.candidate as LabelImageCandidate).length > 0;
-  const split = isOrderedEvidencePolicy(evidencePolicy) && !provenance.some(p =>
-    (isCompleteLabelImage(p) || isCompleteLabelText(p)) && !integrity(p));
+  const split = collectedSplit(evidencePolicy, provenance);
   return (p: AcceptedSource): boolean =>
     (assessLabelCandidate(p.candidate).status !== "review" || split && !!completeLabelSections(p.candidate)) &&
     !(quality && integrity(p));
@@ -132,10 +138,7 @@ export const LabelCollectedProductSchema = z.discriminatedUnion("schemaVersion",
     ...(r.formula?.columns ?? []).flatMap(c => [c.heading, c.dailyValueHeading, ...c.rows.flatMap(row => [row.name, row.amount, row.dailyValue, row.purpose])]),
     ...(r.otherIngredients ? [r.otherIngredients.heading, ...r.otherIngredients.items] : []), ...r.ingredients.flatMap(i => [i.name, i.amount])];
   for (const f of fields) if (f && sources.get(f.sourceId)?.kind !== f.citation.kind) invalid();
-  const quality = ["label-image-first/4", "label-image-first/5", ...ORDERED_EVIDENCE_POLICIES].includes(r.evidencePolicy??"");
-  const split = isOrderedEvidencePolicy(r.evidencePolicy) && !r.provenance.some(p =>
-    (isCompleteLabelImage(p) || isCompleteLabelText(p)) &&
-    !(p.kind === "image" && labelImageIntegrityCodes(p.candidate).length));
+  const split = collectedSplit(r.evidencePolicy, r.provenance);
   const accepted = r.provenance.filter(collectedSourceAcceptance(r.evidencePolicy, r.provenance));
   if (r.evidencePolicy === "label-image-first/4" && labelNumericSourceConflict(accepted)) invalid();
   const imageFirst = !!r.evidencePolicy && accepted.some(isCompleteLabelImage);

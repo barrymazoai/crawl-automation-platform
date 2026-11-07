@@ -1,4 +1,4 @@
-import type { LabelTextCandidate } from "@crawl-automation/v3-contracts";
+import type { LabelFormatId, LabelTextCandidate } from "@crawl-automation/v3-contracts";
 import type { MarketLabelRules } from "../../label/markets/market-rules.js";
 import { drugHeadingAliasesAllowed } from "./drug-label.js";
 import { compositionHeading, readsComposition } from "./composition-clause.js";
@@ -32,10 +32,10 @@ export function textAssessmentCodes(
  */
 export function normalizeCompositionIngredients(
   candidate: LabelTextCandidate,
-  market: Pick<MarketLabelRules, "textCandidate">,
+  market: { rules: Pick<MarketLabelRules, "textCandidate">; formats: readonly LabelFormatId[] },
 ): void {
   // KAN-243: the market's own reading first (India: a composition's made-up-with rows leave the formula).
-  market.textCandidate(candidate);
+  market.rules.textCandidate(candidate, market.formats);
   if (candidate.ingredientsComplete && compositionIsTheIngredients(candidate)) {
     candidate.ingredientsComplete = false;
   }
