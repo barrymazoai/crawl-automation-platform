@@ -147,15 +147,23 @@ export const LABEL_FORMATS: Readonly<Record<LabelFormatId, LabelFormat>> = {
         /^per\s+(?:serving|serve|tablet|capsule|sachet|scoop|dose)s?\b.*$/i,
         /^each\s+(?:serving|serve|tablet|capsule|sachet|scoop|dose)s?\s+(?:provides|contains)\b.*$/i,
         /^per\s+(?!100\s*(?:g|gm|ml)\b)\d+(?:\.\d+)?\s*(?:g|gm|ml|mg)\b.*$/i,
+        // amazon.in copies, 2026-11-07: "Approx Value Per Serving" (Naturaltein), "Approx. Value per serving" (WOW),
+        // "QUANTITY" (Wellbeing Nutrition), and the serving's own weight "3.1 g" beside "100 g" (Nutrabay).
+        /^(?:approx\.?\s*)?(?:value|amount|qty|quantity)\s+per\s+(?:serving|serve|tablet|capsule|softgel|sachet|scoop|dose)s?\b.*$/i,
+        /^(?:qty|quantity|amount)\.?$/i,
+        /^(?!100\s*(?:g|gm|ml)$)\d+(?:\.\d+)?\s*(?:g|gm|ml|mg)$/i,
       ],
       perBasis: [
         /^(?:(?:qty|quantity|amount)\.?\s*)?(?:\/|per)\s*100\s*(?:g|gm|ml)\b.*$/i,
+        /^100\s*(?:g|gm|ml)$/i,
         // "ENSURE® Powder (per 100 g)", "Powder (per 100 g)" (Abbott, 2026-11-06)
         /^.{0,60}\(\s*per\s*100\s*(?:g|gm|ml)\s*\)$/i,
       ],
       dailyValue: [
         // A leading footnote mark: "**%RDA Per Serve", "^%RDA Per Serve" (amazon.in copies, 2026-11-06).
         { header: /^[*#†‡^]*\s*%?\s*rda\b.*$/i, basis: "in_rda" },
+        // "Per Serve % RDA" (Organic India Isabgol, 2026-11-07) is the percentage column, not a per-serving amount.
+        { header: /%\s*rda\b/i, basis: "in_rda" },
         { header: /^[*#†‡^]*\s*%?\s*(?:dv|daily\s*values?)\s*%?\s*[*†‡]*$/i, basis: "us_dv" },
       ],
     },
@@ -172,7 +180,14 @@ export const LABEL_FORMATS: Readonly<Record<LabelFormatId, LabelFormat>> = {
       /^approx\.?\s*values?\b/i,
       /^\(?approx\.?\)?$/i,
       /^\(?approximate\s+composition\)?/i,
-      /^(?:vitamins?|minerals?|amino\s+acids?|others?|herbal\s+extracts?|botanicals?|probiotics?|antioxidants?)\s*[\^*#:]*$/i,
+      /^(?:vitamins?|minerals?|amino\s+acids?|others?|herbal\s+extracts?|botanicals?|probiotics?|antioxidants?)\s*[\^*#:§]*$/i,
+      // amazon.in copies, 2026-11-07: notes copied as rows, never an ingredient: "(Approximate values)",
+      // "(Approx. Values)", "90 TABLETS", "This pack contains about 35 serves with Milk", "Each serving provides
+      // (%RDA)", "EACH SERVING OF OMEFISH ULTRA PROVIDES".
+      /^\(\s*approx(?:imate|\.)?\s*values?\s*\)$/i,
+      /^\d+\s*(?:n\s+)?(?:veg(?:etarian)?\s+)?(?:tablets?|capsules?|softgels?|gummies|sachets?)$/i,
+      /^this\s+pack\s+contains\b/i,
+      /^each\s+serving\b.*\bprovides\b/i,
     ],
     servings: [
       /^(?:no\.?\s*of\s+)?servings?\s*per\s*(?:pack|bottle|jar|container)\s*[:\-–]?\s*(.*)$/i,

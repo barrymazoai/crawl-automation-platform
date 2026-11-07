@@ -8,6 +8,7 @@ import { formatPanel, type FormatPanel } from "../../label/transcript/format-pan
 import { isAmountCell } from "../../label/transcript/transcript-cells.js";
 import { marketRules } from "../../label/markets/market-rules.js";
 import { printsPairedRow } from "../../label/transcript/paired-rows.js";
+import { joinPanelReads } from "./label-transcript-join.js";
 import {
   parseTranscriptRows,
   type ParsedPanel,
@@ -38,7 +39,7 @@ export function transcriptCandidate(
   policy: Required<LabelIngredientPresencePolicy>,
   formats: readonly LabelFormatId[] = [US_FACTS],
 ): TranscriptCandidate {
-  const read = readPanel(wire, formats);
+  const read = readPanels(wire, formats);
   if ("reason" in read) {
     return { reason: read.reason };
   }
@@ -95,6 +96,24 @@ function readPanel(
   return { parsed, column: formulaColumn(panel, shaped, parsed) };
 }
 
+/** One panel; or, where the market joins them, two panels of one label read as one formula. */
+function readPanels(wire: LabelTranscriptWire, formats: readonly LabelFormatId[]) {
+  const read = readPanel(wire, formats);
+  if (!("reason" in read) || !read.reason.startsWith("panels: ") || !joins(wire, formats)) {
+    return read;
+  }
+  const [first, second, ...more] = selectedPanels(wire, formats).map((panel) =>
+    readPanel({ ...wire, panels: [panel] }, formats),
+  );
+  if (!first || !second || more.length || "reason" in first || "reason" in second) {
+    return read;
+  }
+  return joinPanelReads(first, second) ?? read;
+}
+
+const joins = (wire: LabelTranscriptWire, formats: readonly LabelFormatId[]) =>
+  wire.panels.length > 1 && marketRules(formats).joinsPanels;
+
 /** The rows the parser reads; a value cell the headers do not place must be the only amount in its row. */
 function panelRows(
   wire: LabelTranscriptWire,
@@ -123,8 +142,13 @@ export function copiesPairedRows(
   wire: LabelTranscriptWire,
   formats: readonly LabelFormatId[] = [US_FACTS],
 ): boolean {
-  const read = panelRows(wire, formats);
-  return !("reason" in read) && read.rows.some((row) => printsPairedRow(row.cells));
+  const wires = joins(wire, formats)
+    ? selectedPanels(wire, formats).map((panel) => ({ ...wire, panels: [panel] }))
+    : [wire];
+  return wires.some((each) => {
+    const read = panelRows(each, formats);
+    return !("reason" in read) && read.rows.some((row) => printsPairedRow(row.cells));
+  });
 }
 
 /**
@@ -133,14 +157,18 @@ export function copiesPairedRows(
  */
 const AMINO_PROFILE = /\bamino\s+acids?\b/i;
 
-/** The one panel with no unreadable cell; otherwise why not. The market may set further panels aside. */
-function onePanel(wire: LabelTranscriptWire, formats: readonly LabelFormatId[]): Panel | string {
+/** The panels the copy rules read: amino acid profiles beside a facts panel set aside, then the market's choice. */
+function selectedPanels(wire: LabelTranscriptWire, formats: readonly LabelFormatId[]) {
   const shared =
     wire.panels.length > 1
       ? wire.panels.filter((panel) => !AMINO_PROFILE.test(panel.heading ?? ""))
       : wire.panels;
-  const panels = marketRules(formats).copyPanels(shared);
-  const [panel, ...others] = panels;
+  return marketRules(formats).copyPanels(shared);
+}
+
+/** The one panel with no unreadable cell; otherwise why not. */
+function onePanel(wire: LabelTranscriptWire, formats: readonly LabelFormatId[]): Panel | string {
+  const [panel, ...others] = selectedPanels(wire, formats);
   if (!panel || others.length) {
     return `panels: ${wire.panels.length}`;
   }

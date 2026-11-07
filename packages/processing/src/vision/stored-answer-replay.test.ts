@@ -6,7 +6,12 @@ import {
   decodeIngredientPresenceAnswer,
   isIngredientPresenceAnswer,
 } from "./protocol/label-ingredient-presence.js";
-import { decodeTranscriptAnswer, isTranscriptAnswer } from "./protocol/label-transcript-answer.js";
+import {
+  decodeTranscriptAnswer,
+  dosedRows,
+  isTranscriptAnswer,
+  transcriptAnswer,
+} from "./protocol/label-transcript-answer.js";
 import { copiesPairedRows, transcriptCandidate } from "./protocol/label-transcript-candidate.js";
 import { labelTranscriptWireSchema } from "./protocol/label-transcript-wire.js";
 
@@ -50,10 +55,19 @@ function copyRows(raw: string) {
     return {
       reason: attempt.reason,
       rows: "reason" in built ? built.reason : summary(built.candidate).rows,
+      ...("reason" in built ? {} : { checks: copyChecks(attempt.raw, built.candidate) }),
     };
   } catch (error) {
     return { reason: attempt.reason, rows: String((error as Error).message).slice(0, 80) };
   }
+}
+
+/** The copy's own checks if the OCR or a re-read confirmed every amount (what would still send it back). */
+function copyChecks(raw: string, candidate: LabelImageCandidate): string[] {
+  const ocrConfirmed = dosedRows(candidate).map(({ index }) => index);
+  const policy = { allowNoOtherIngredientsSection: true };
+  const answer = transcriptAnswer({ policy, raw, ocrConfirmed, reread: null, formats: [...INDIA] });
+  return decodeTranscriptAnswer(answer).codes;
 }
 
 function decode(raw: string) {
