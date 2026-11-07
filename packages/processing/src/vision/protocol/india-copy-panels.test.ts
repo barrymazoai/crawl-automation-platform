@@ -137,3 +137,84 @@ describe("India: the amount column and notes copied as rows", () => {
     ]);
   });
 });
+
+const listed = (heading: string, serving: string, rows: string[][]) => ({
+  ...panel(heading, [], rows),
+  servingLines: [serving],
+});
+
+describe("India: what a composition is made up with is no formula row", () => {
+  it("leaves out 'Preservative' and the undosed line under it (Softovac SF)", () => {
+    const softovac = listed(
+      "PROPRIETARY AYURVEDIC MEDICINE COMPOSITION (Powder)",
+      "Each 5 gm Contains :",
+      [
+        ["Isapgol (Plantago ovata) Husk*", "3.5 g"],
+        ["Sonamukhi (Cassia angustifolia) Leaves Dry Aq. Ext*", "0.15 g"],
+        ["Excipients", "q.s."],
+        ["Preservative", ""],
+        ["Sodium Benzoate IP", ""],
+      ],
+    );
+    expect(read(transcriptCandidate(wire([softovac]), policy, INDIA))).toEqual([
+      ["Isapgol (Plantago ovata) Husk*", "3.5 g"],
+      ["Sonamukhi (Cassia angustifolia) Leaves Dry Aq. Ext*", "0.15 g"],
+    ]);
+  });
+
+  it("leaves out a syrup base printed q.s. and a colour (D3 60K syrup)", () => {
+    const syrup = listed("Composition:", "Each 5 ml contains:", [
+      ["Cholecalciferol (Vitamin D3) IP (In Nano Droplet form)", "60,000 IU"],
+      ["In a flavoured sugar free syrup base", "q.s."],
+      ["Colour: Sunset Yellow FCF"],
+    ]);
+    expect(read(transcriptCandidate(wire([syrup]), policy, INDIA))).toEqual([
+      ["Cholecalciferol (Vitamin D3) IP (In Nano Droplet form)", "60,000 IU"],
+    ]);
+  });
+
+  it("keeps a dosed active printed after them, and every row of a nutrition table", () => {
+    const tail = listed("Composition:", "Each capsule contains:", [
+      ["Shilajit Extract", "250 mg"],
+      ["Preservative", ""],
+      ["Swarna Bhasma", "0.42 mg"],
+    ]);
+    expect(read(transcriptCandidate(wire([tail]), policy, INDIA))).toEqual([
+      ["Shilajit Extract", "250 mg"],
+      ["Swarna Bhasma", "0.42 mg"],
+    ]);
+    expect(read(transcriptCandidate(wire([nutrition]), policy, INDIA))).toEqual([
+      ["Energy (kcal)", "0.09"],
+      ["Protein (g)", "0"],
+    ]);
+  });
+
+  it("is read as before for the US market", () => {
+    const syrup = listed("Composition:", "Each 5 ml contains:", [
+      ["Cholecalciferol", "60,000 IU"],
+      ["In a flavoured sugar free syrup base", "q.s."],
+    ]);
+    expect(read(transcriptCandidate(wire([syrup]), policy))).not.toEqual([
+      ["Cholecalciferol", "60,000 IU"],
+    ]);
+  });
+
+  it("a section headed 'Preservatives:' is no ingredient list (Dabur Shatavari)", () => {
+    const shatavari = listed("COMPOSITION", "Each g contains:", [
+      ["Khatika (Calcium carbonate) Pwdr.", "62.50 mg"],
+    ]);
+    const copied = labelTranscriptWireSchema.parse({
+      ...wire([shatavari]),
+      otherIngredientsHeading: "Preservatives:",
+      otherIngredients: "Sodium Benzoate I.P.",
+      otherIngredientsState: "present",
+    });
+    const built = transcriptCandidate(copied, policy, INDIA);
+    expect("candidate" in built && built.candidate.otherIngredients).toBeNull();
+    expect("candidate" in built && built.candidate.ingredientDeclaration?.state).toBe(
+      "not_fully_visible",
+    );
+    const us = transcriptCandidate(copied, policy);
+    expect("candidate" in us && us.candidate.otherIngredients?.heading.text).toBe("Preservatives:");
+  });
+});

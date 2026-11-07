@@ -53,7 +53,7 @@ export function mergePolicy(state: MergeState, provenance: LabelEvidence[]): Mer
   );
   const { split, conflicts, ingredientImageId } =
     ordered && !complete.length
-      ? resolveSplit(eligible, onePart)
+      ? resolveSplit(eligible, onePart, state.market)
       : { split: null, conflicts: [] as string[], ingredientImageId: null };
   conflicts.forEach((code) => state.codes.add(code));
   const completeLabel = !!split || complete.length > 0;
@@ -213,7 +213,10 @@ function compatiblePartial(state: MergeState, failure: MergeFailure, policy: Mer
   const complete = policy.split ? [policy.split.complete] : policy.complete;
   const parts = policy.split?.parts;
   const conflicts = complete.flatMap((entry) =>
-    partialLabelConflicts(candidate, entry.candidate, parts),
+    partialLabelConflicts(candidate, entry.candidate, {
+      ...(parts ?? { formula: true, ingredients: true }),
+      market: state.market,
+    }),
   );
   conflicts.forEach((code) => state.codes.add(code));
   return conflicts.length === 0;

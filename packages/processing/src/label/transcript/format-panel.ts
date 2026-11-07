@@ -6,6 +6,7 @@ import {
   type ColumnRole,
   type LabelFormatId,
 } from "@crawl-automation/v3-contracts";
+import { marketRules } from "../markets/market-rules.js";
 import type { TranscriptRow } from "./html-transcript.js";
 import { sideBySide } from "./side-by-side.js";
 
@@ -60,6 +61,7 @@ export function formatPanel(
       read.rows.push(placed);
     }
   }
+  read.rows = marketRules(formats).copyRows(panel, read.rows, formats);
   return read;
 }
 

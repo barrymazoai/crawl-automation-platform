@@ -4,6 +4,7 @@ import {
   ingredientWordingKey,
   type LabelCandidate,
 } from "@crawl-automation/v3-contracts";
+import { US_RULES, type MarketLabelRules } from "../label/markets/market-rules.js";
 
 const words = (field: { text: string } | null | undefined) =>
   field?.text.replace(/\s+/gu, " ").trim().toLowerCase();
@@ -14,8 +15,16 @@ type Formula = NonNullable<LabelCandidate["formula"]>;
  * component line, or a separate section of the same panel does not contradict it. The exact row matcher stays as the
  * fallback for partial panels that read fewer columns than the full label.
  */
-export function formulaFits(partial: Formula, complete: Formula): boolean {
-  return formulaAgreement(partial, complete) !== "conflict" || rowsFit(partial, complete);
+export function formulaFits(
+  partial: Formula,
+  complete: Formula,
+  market: Pick<MarketLabelRules, "formulaFits"> = US_RULES,
+): boolean {
+  return (
+    formulaAgreement(partial, complete) !== "conflict" ||
+    rowsFit(partial, complete) ||
+    market.formulaFits(partial, complete)
+  );
 }
 
 function rowsFit(partial: Formula, complete: Formula): boolean {

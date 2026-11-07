@@ -1,6 +1,7 @@
 import { assemblyErrors, type AssemblyErrorCode } from "./assembly-errors.js";
 import type { Shape } from "./packaging-serving-check.js";
 import {
+  collectedSourceAcceptance,
   isCompleteLabelImage,
   isOrderedEvidencePolicy,
   formulaAgreement,
@@ -43,6 +44,7 @@ export function selectLabel(
     (left, right) => priority(left) - priority(right) || byText(left.id, right.id),
   );
   state.anyFormula = provenance.some((entry) => entry.candidate.formula !== null);
+  state.counted = collectedSourceAcceptance(state.manifest.evidencePolicy, provenance);
   for (const entry of ordered) {
     selectEntry(state, entry, policy);
   }
@@ -52,7 +54,10 @@ export function selectLabel(
 function selectEntry(state: MergeState, entry: LabelEvidence, policy: MergePolicy): void {
   const split = policy.split;
   if (split) {
-    const conflicts = splitConflictsFor(entry, split, state.warnings);
+    const conflicts = splitConflictsFor(entry, split, {
+      warnings: state.warnings,
+      market: state.market,
+    });
     conflicts.forEach((code) => state.codes.add(code));
     const section = split.sections.get(entry.id);
     if (section) {

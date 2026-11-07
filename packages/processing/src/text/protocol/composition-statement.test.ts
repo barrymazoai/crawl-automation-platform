@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { assessLabelCandidate } from "@crawl-automation/v3-contracts";
 import { decodeLabelText } from "./label-decoder.js";
 
 /**
@@ -65,6 +66,9 @@ describe("an ingredients statement that is a dosed composition", () => {
       "10 g",
     ]);
     expect(decoded.candidate.otherIngredients).toBeNull();
+    // The merge checks the stored answer again with the shared rules (Dabur Isabgol, rerun 2026-11-07).
+    expect(decoded.candidate.ingredientsComplete).toBe(false);
+    expect(assessLabelCandidate(decoded.candidate).codes).toEqual([]);
   });
 
   it("stays in Review when the composition heading itself was read as a row (Krishna's)", () => {

@@ -36,11 +36,10 @@ export function unusedPartSource(
   const selected = policy.split ? [policy.split] : [];
   const conflicts = failure.candidate
     ? selected.flatMap((split) =>
-        partialLabelConflicts(
-          failure.candidate as LabelImageCandidate,
-          split.complete.candidate,
-          split.parts,
-        ),
+        partialLabelConflicts(failure.candidate as LabelImageCandidate, split.complete.candidate, {
+          ...split.parts,
+          market: state.market,
+        }),
       )
     : [];
   conflicts.forEach((code) => state.codes.add(code));

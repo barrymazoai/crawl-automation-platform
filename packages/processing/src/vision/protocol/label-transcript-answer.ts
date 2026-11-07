@@ -2,9 +2,10 @@ import type { LabelImageCandidate } from "@crawl-automation/v3-contracts";
 import { splitFinalAnd } from "../../label/transcript/final-and.js";
 import { labelValidationErrors } from "../../label/validation-errors.js";
 import { visionFailure } from "../vision-errors.js";
-import { amountPositions, squashAmount } from "./label-amount-position.js";
+import { squashAmount } from "./label-amount-position.js";
 import { judgeIngredientPresence } from "./label-ingredient-presence.js";
 import { transcriptCandidate } from "./label-transcript-candidate.js";
+import { marketAmountPositions } from "../../label/markets/market-rules.js";
 import {
   labelRereadWireSchema,
   labelTranscriptAnswerSchema,
@@ -99,7 +100,7 @@ function ocrConfirmedRows(candidate: LabelImageCandidate, saved: LabelTranscript
     return saved.ocrConfirmed;
   }
   const lines = saved.ocrLines.map(({ text, polygon }) => (polygon ? { text, polygon } : { text }));
-  const positions = amountPositions(candidate, { text: "", lines });
+  const positions = marketAmountPositions(candidate, { text: "", lines }, saved.formats);
   return positions.misplaced.length ? null : positions.confirmed;
 }
 

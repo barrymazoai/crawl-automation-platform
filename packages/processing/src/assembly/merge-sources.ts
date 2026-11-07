@@ -15,6 +15,7 @@ import {
   type PackagingFacts,
 } from "@crawl-automation/v3-contracts";
 import { assemblyFailure } from "./assembly-errors.js";
+import { sourcesMarket } from "../label/markets/market-rules.js";
 import {
   byText,
   words,
@@ -49,6 +50,8 @@ export function beginMerge(
     otherSourceId: null,
     imageLists: [],
     anyFormula: false,
+    counted: () => true,
+    market: sourcesMarket(manifest.sources),
   };
   if (!!manifest.admission !== !!rawPackaging) {
     throw assemblyFailure("LABEL_PRODUCT.PACKAGING_UNVERIFIED");

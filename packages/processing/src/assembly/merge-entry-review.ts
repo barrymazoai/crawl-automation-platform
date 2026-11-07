@@ -46,7 +46,9 @@ const unusedPart = (policy: MergePolicy) => policy.onePart && policy.completeLab
 
 function splitConflicts(state: MergeState, entry: LabelEvidence, policy: MergePolicy): string[] {
   const split = policy.split;
-  return split ? splitConflictsFor(entry, split, state.warnings) : [];
+  return split
+    ? splitConflictsFor(entry, split, { warnings: state.warnings, market: state.market })
+    : [];
 }
 
 /** Preserve /3–/5 text fallback semantics for historical results. */

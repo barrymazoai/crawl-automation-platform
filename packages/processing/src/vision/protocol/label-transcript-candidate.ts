@@ -35,10 +35,11 @@ const AMOUNT_HEADER = /amount|per\s+serving/i;
  * with the label protocol as before.
  */
 export function transcriptCandidate(
-  wire: LabelTranscriptWire,
+  copied: LabelTranscriptWire,
   policy: Required<LabelIngredientPresencePolicy>,
   formats: readonly LabelFormatId[] = [US_FACTS],
 ): TranscriptCandidate {
+  const wire = marketRules(formats).copyWire(copied, formats);
   const read = readPanels(wire, formats);
   if ("reason" in read) {
     return { reason: read.reason };

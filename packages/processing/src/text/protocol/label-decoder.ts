@@ -15,7 +15,7 @@ import { evidenceLines, type Quote } from "./evidence-lines.js";
 import { exclusionCodes } from "./label-exclusions.js";
 import { equivalentFootnoteAllowed, labelCoverage } from "./label-coverage.js";
 import { ingredientCodes, rowOrderCodes } from "./label-structure.js";
-import { textAssessmentCodes } from "./label-assessment.js";
+import { normalizeCompositionIngredients, textAssessmentCodes } from "./label-assessment.js";
 import { labelLimitErrors } from "./label-limits.js";
 import { marketRules, type MarketLabelRules } from "../../label/markets/market-rules.js";
 import { resolveAnchor, type Anchor, type AnchorContext } from "./resolve-anchor.js";
@@ -63,12 +63,14 @@ export function decodeLabelText(request: LabelTextRequest): DecodedLabel {
   const ingredientHeading = normalizeUndosedIngredientParagraph(candidate, text, scope.range);
   normalizeNoFactsIngredientList(candidate, text, scope.range);
   separateTextIngredientDeclarations(candidate);
+  const market = marketRules(request.formats);
+  normalizeCompositionIngredients(candidate, market);
   return validateCandidate({
     candidate,
     text,
     range: scope.range,
     policyVersion,
-    market: marketRules(request.formats),
+    market,
     modelExclusions,
     placed: ingredientHeading ? [...quotes.placed, ingredientHeading] : quotes.placed,
   });

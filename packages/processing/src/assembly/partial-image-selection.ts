@@ -33,8 +33,14 @@ export function selectPartialImage(
   }
   const complete = policy.split ? [policy.split.complete] : policy.complete;
   const conflicts = policy.split
-    ? splitConflictsFor(entry, policy.split)
-    : complete.flatMap((full) => partialLabelConflicts(entry.candidate, full.candidate));
+    ? splitConflictsFor(entry, policy.split, { market: state.market })
+    : complete.flatMap((full) =>
+        partialLabelConflicts(entry.candidate, full.candidate, {
+          formula: true,
+          ingredients: true,
+          market: state.market,
+        }),
+      );
   conflicts.forEach((code) => fail(state, entry.id, code));
   if (conflicts.length) {
     return true;

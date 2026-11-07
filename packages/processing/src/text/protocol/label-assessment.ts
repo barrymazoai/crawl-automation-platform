@@ -1,4 +1,5 @@
 import type { LabelTextCandidate } from "@crawl-automation/v3-contracts";
+import type { MarketLabelRules } from "../../label/markets/market-rules.js";
 import { drugHeadingAliasesAllowed } from "./drug-label.js";
 import { compositionHeading, readsComposition } from "./composition-clause.js";
 import { ingredientHeadingAllowed, ingredientItemsAreRows } from "./label-structure.js";
@@ -22,6 +23,22 @@ export function textAssessmentCodes(
     }
     return true;
   });
+}
+
+/**
+ * KAN-243 2026-11-07 (Dabur Isabgol still a Review after 612d635c): the merge checks the stored answer again with the
+ * shared label rules, which read "ingredients complete" with no list as a contradiction. A composition that is the
+ * page's ingredients statement is stored as what it is: a formula, with no ingredient list read.
+ */
+export function normalizeCompositionIngredients(
+  candidate: LabelTextCandidate,
+  market: Pick<MarketLabelRules, "textCandidate">,
+): void {
+  // KAN-243: the market's own reading first (India: a composition's made-up-with rows leave the formula).
+  market.textCandidate(candidate);
+  if (candidate.ingredientsComplete && compositionIsTheIngredients(candidate)) {
+    candidate.ingredientsComplete = false;
+  }
 }
 
 /**

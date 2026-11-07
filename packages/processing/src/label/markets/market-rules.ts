@@ -1,6 +1,19 @@
 import { isUsOnlyFormats, type LabelFormatId } from "@crawl-automation/v3-contracts";
 import type { LabelTranscriptWire } from "../../vision/protocol/label-transcript-wire.js";
-import type { LabelTextCandidate } from "@crawl-automation/v3-contracts";
+import type {
+  LabelCandidate,
+  LabelImageCandidate,
+  LabelTextCandidate,
+} from "@crawl-automation/v3-contracts";
+import type { OcrReading } from "../../keywords/ocr-text.js";
+import {
+  amountPositions,
+  type AmountPositions,
+} from "../../vision/protocol/label-amount-position.js";
+import { proseAmounts } from "./india-prose-amounts.js";
+import { sameIngredientsFormula } from "./india-formula.js";
+import type { TranscriptRow } from "../transcript/html-transcript.js";
+import { compositionRows, compositionTextRows, compositionWire } from "./india-composition.js";
 
 type Panel = LabelTranscriptWire["panels"][number];
 
@@ -18,6 +31,32 @@ export interface MarketLabelRules {
    * its own columns, unless they repeat each other. Off: a copy of two panels is not read by the copy rules.
    */
   readonly joinsPanels: boolean;
+  /** Image copy: the copy as this market's labels print it, before any panel is read. */
+  copyWire(wire: LabelTranscriptWire, formats: readonly LabelFormatId[]): LabelTranscriptWire;
+  /** Image copy: a panel's rows read in this market's formats (the US panel is never reshaped). */
+  copyRows(
+    panel: { heading: string | null; servingLines: readonly string[] },
+    rows: TranscriptRow[],
+    formats: readonly LabelFormatId[],
+  ): TranscriptRow[];
+  /**
+   * Merge: a partial reading's formula fits the selected one by this market's rule, where the shared agreement and
+   * row matcher do not decide it.
+   */
+  formulaFits(
+    partial: NonNullable<LabelCandidate["formula"]>,
+    complete: NonNullable<LabelCandidate["formula"]>,
+  ): boolean;
+  /** Image copy: where the OCR prints each copied amount, after the table check (the US keeps that check alone). */
+  amountPositions(
+    candidate: LabelImageCandidate,
+    ocr: OcrReading,
+    positions: AmountPositions,
+  ): AmountPositions;
+  /** Merge: a page's formula that differs from an image's formula yields to the label (a warning, no Review). */
+  readonly pageFormulaYields: boolean;
+  /** Web text: the answer as this market's labels print it, before it is checked. */
+  textCandidate(candidate: LabelTextCandidate): void;
   /** Web text: the label check codes this market keeps for this answer (all of them by default). */
   textCodes(candidate: LabelTextCandidate, codes: readonly string[], text: string): string[];
 }
@@ -27,6 +66,12 @@ export const US_RULES: MarketLabelRules = {
   market: "us",
   copyPanels: (panels) => panels,
   joinsPanels: false,
+  copyWire: (wire) => wire,
+  copyRows: (_panel, rows) => rows,
+  amountPositions: (_candidate, _ocr, positions) => positions,
+  formulaFits: () => false,
+  textCandidate: () => undefined,
+  pageFormulaYields: false,
   textCodes: (_candidate, codes) => [...codes],
 };
 
@@ -48,7 +93,41 @@ export const INDIA_RULES: MarketLabelRules = {
   // fish oil, MuscleBlaze creatine, Health OK, LightYears, Earthful); 10 of the copies behind the label-protocol
   // readings of the 2026-11-06 batch were such pairs.
   joinsPanels: true,
+  // Owner 2026-11-07: excipients, preservatives, colours and the base printed in a composition are not formula rows.
+  copyWire: compositionWire,
+  copyRows: compositionRows,
+  // Owner 2026-11-07: the same ingredient and amount named shorter or longer is one reading of the label; a seller's
+  // page that prints another amount than the label image (Rasayanam KSM-66: 500 mg, the label 600 mg) yields to it.
+  amountPositions: proseAmounts,
+  formulaFits: sameIngredientsFormula,
+  textCandidate: compositionTextRows,
+  pageFormulaYields: true,
 };
+
+/** The market of a product's label sources: the formats its images and page text are read in. */
+export function sourcesMarket(
+  sources: readonly (
+    { kind: "image"; task: { input: unknown } } | { kind: "text"; task: unknown }
+  )[],
+): MarketLabelRules {
+  const formats = sources.flatMap((source) => {
+    if (source.kind === "image") {
+      const input = source.task.input as { policy?: { formats?: LabelFormatId[] } };
+      return input.policy?.formats ?? [];
+    }
+    return (source.task as { labelFormats?: LabelFormatId[] }).labelFormats ?? [];
+  });
+  return marketRules(formats.length ? formats : undefined);
+}
+
+/** Where the OCR prints each copied amount: the table check, then the market's own reading of it. */
+export function marketAmountPositions(
+  candidate: LabelImageCandidate,
+  ocr: OcrReading,
+  formats: readonly LabelFormatId[] | undefined,
+): AmountPositions {
+  return marketRules(formats).amountPositions(candidate, ocr, amountPositions(candidate, ocr));
+}
 
 /** The rules of the market whose label formats these are; US when absent or US-only. */
 export function marketRules(formats: readonly LabelFormatId[] | undefined): MarketLabelRules {

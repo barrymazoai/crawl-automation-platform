@@ -1,7 +1,6 @@
 import { recordRecovery } from "@crawl-automation/platform";
 import { isUsOnlyFormats, type LabelFormatId } from "@crawl-automation/v3-contracts";
 import type { OcrReading } from "../keywords/ocr-text.js";
-import { amountPositions } from "./protocol/label-amount-position.js";
 import type {
   LabelIngredientPresencePolicy,
   TranscriptAttempt,
@@ -12,6 +11,7 @@ import {
   transcriptAnswer,
 } from "./protocol/label-transcript-answer.js";
 import { printedPercentHeader } from "../label/transcript/format-panel.js";
+import { marketAmountPositions, marketRules } from "../label/markets/market-rules.js";
 import { copiesPairedRows, transcriptCandidate } from "./protocol/label-transcript-candidate.js";
 import {
   labelRereadOutputSchema,
@@ -75,7 +75,7 @@ export async function transcribedAnswer(input: {
   if ("reason" in built) {
     return fallback(`copy not parsed: ${built.reason}`);
   }
-  const positions = amountPositions(built.candidate, ocr);
+  const positions = marketAmountPositions(built.candidate, ocr, formats);
   if (positions.misplaced.length) {
     return fallback(`amount on another row: ${rowNames(built.candidate, positions.misplaced)}`);
   }
@@ -93,23 +93,24 @@ export async function transcribedAnswer(input: {
   const unconfirmed = dosedRows(built.candidate)
     .filter(({ index }) => !ocrConfirmed.includes(index))
     .map(({ row }) => row.name.text);
-  return confirmedAnswer({ raw, calls, fallback, answerWith, unconfirmed });
+  const elsewhere = (codes: readonly string[]) => ingredientsElsewhere(raw, codes, formats);
+  return confirmedAnswer({ calls, fallback, answerWith, unconfirmed, elsewhere });
 }
 
 /** The copy whose checks pass, or whose only open amounts one re-read repeats; otherwise the label protocol. */
 async function confirmedAnswer(at: {
-  raw: string;
   calls: TranscriptCalls;
   fallback: (reason: string, reread?: string | null) => Promise<string>;
   answerWith: (reread: string | null) => string;
   unconfirmed: string[];
+  elsewhere: (codes: readonly string[]) => boolean;
 }): Promise<string> {
   const first = at.answerWith(null);
   const before = decodeTranscriptAnswer(first);
   if (before.status !== "review") {
     return first;
   }
-  const elsewhere = ingredientsElsewhere(at.raw, before.codes);
+  const elsewhere = at.elsewhere(before.codes);
   if (!elsewhere && before.codes.some((code) => code !== AMOUNT_UNREADABLE)) {
     return at.fallback(`checks: ${before.codes.join(", ")}`);
   }
@@ -131,14 +132,21 @@ const INGREDIENTS_INCOMPLETE = "LABEL.INGREDIENTS_INCOMPLETE";
  * reading of that panel was worse (1000 mcg for the printed 10000 mcg); the ingredients come from the image that
  * prints them, as for every partial label. A section copied as unreadable or partly copied is still read again.
  */
-function ingredientsElsewhere(raw: string, codes: readonly string[]): boolean {
+function ingredientsElsewhere(
+  raw: string,
+  codes: readonly string[],
+  formats: readonly LabelFormatId[] | undefined,
+): boolean {
   if (
     !codes.includes(INGREDIENTS_INCOMPLETE) ||
     codes.some((code) => code !== INGREDIENTS_INCOMPLETE && code !== AMOUNT_UNREADABLE)
   ) {
     return false;
   }
-  const wire = labelTranscriptWireSchema.parse(JSON.parse(raw));
+  const wire = marketRules(formats).copyWire(
+    labelTranscriptWireSchema.parse(JSON.parse(raw)),
+    formats ?? [],
+  );
   return wire.otherIngredientsState === "not_fully_visible" && !wire.otherIngredients?.trim();
 }
 

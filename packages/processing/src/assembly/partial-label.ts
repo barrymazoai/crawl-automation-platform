@@ -8,7 +8,9 @@ import {
 import { labelValidationErrors } from "../label/validation-errors.js";
 import { assemblyErrors } from "./assembly-errors.js";
 import { splitLabel } from "./split-label.js";
+import { US_RULES, type MarketLabelRules } from "../label/markets/market-rules.js";
 import { formulaFits, ingredientsFit } from "./partial-label-fit.js";
+import { pageFormulaYields } from "./page-formula-yield.js";
 import type { LabelEvidence } from "./merge-state.js";
 
 export const partialLabelCodes: readonly string[] = partialLabelValidationCodes.map((code) =>
@@ -58,7 +60,11 @@ function ingredientsOnlySection(candidate: LabelCandidate, sections: LabelCandid
 }
 
 /** Keep existing section conflict checks even when a proposed cross-image join is refused. */
-export function resolveSplit(eligible: LabelEvidence[], onePart: boolean) {
+export function resolveSplit(
+  eligible: LabelEvidence[],
+  onePart: boolean,
+  market: MarketLabelRules = US_RULES,
+) {
   const proposed = splitLabel(eligible, onePart);
   if (!proposed) {
     return { split: null, conflicts: [] as string[], ingredientImageId: null as string | null };
@@ -70,7 +76,10 @@ export function resolveSplit(eligible: LabelEvidence[], onePart: boolean) {
     return {
       split: null,
       conflicts: eligible.flatMap((entry) =>
-        partialLabelConflicts(entry.candidate, proposed.complete.candidate, proposed.parts),
+        partialLabelConflicts(entry.candidate, proposed.complete.candidate, {
+          ...proposed.parts,
+          market,
+        }),
       ),
       ingredientImageId: null,
     };
@@ -118,6 +127,13 @@ function differentImagePair(
   return facts?.kind === "image" && ingredients?.kind === "image" && facts.id !== ingredients.id;
 }
 
+/** The parts compared, and (KAN-243) the market whose rules compare them; US when absent. */
+export interface Compared {
+  formula: boolean;
+  ingredients: boolean;
+  market?: MarketLabelRules;
+}
+
 /**
  * A partial panel may omit unreadable content, but every readable field must agree with the full label. A part the
  * selected label does not carry (/7) is not compared: there is nothing to disagree with.
@@ -125,11 +141,12 @@ function differentImagePair(
 export function partialLabelConflicts(
   partial: LabelCandidate,
   complete: LabelCandidate,
-  parts: { formula: boolean; ingredients: boolean } = { formula: true, ingredients: true },
+  parts: Compared = { formula: true, ingredients: true },
 ): string[] {
   const codes: string[] = [];
+  const market = parts.market ?? US_RULES;
   const formula = parts.formula && partial.formula;
-  if (formula && (!complete.formula || !formulaFits(formula, complete.formula))) {
+  if (formula && (!complete.formula || !formulaFits(formula, complete.formula, market))) {
     codes.push(assemblyErrors.code("LABEL_PRODUCT.FORMULA_CONFLICT"));
   }
   if (parts.ingredients && partial.otherIngredients && !ingredientsFit(partial, complete)) {
@@ -169,10 +186,15 @@ export function warnPageYields(warnings: { id: string; code: string }[], pageId:
 export function splitConflictsFor(
   entry: Pick<LabelEvidence, "id" | "kind" | "candidate">,
   split: Split,
-  warnings?: { id: string; code: string }[],
+  at: { warnings?: { id: string; code: string }[]; market?: MarketLabelRules } = {},
 ): string[] {
+  const { warnings, market = US_RULES } = at;
   const conflict = assemblyErrors.code("LABEL_PRODUCT.INGREDIENTS_CONFLICT");
-  const all = partialLabelConflicts(entry.candidate, split.complete.candidate, split.parts);
+  const all = pageFormulaYields(
+    entry,
+    partialLabelConflicts(entry.candidate, split.complete.candidate, { ...split.parts, market }),
+    { split, market, warnings },
+  );
   if (!all.includes(conflict) || !pageAgainstImage(entry, split)) {
     return all;
   }

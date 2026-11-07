@@ -1,5 +1,6 @@
 import { isDeepStrictEqual } from "node:util";
 import { joinFormulaSections } from "@crawl-automation/v3-contracts";
+import type { MarketLabelRules } from "../label/markets/market-rules.js";
 import type {
   ArtifactRef,
   LabelCollectedProduct,
@@ -69,6 +70,10 @@ export interface MergeState {
   imageLists: { id: string; shape: string[] }[];
   /** Whether any source carries a formula, known before selection starts. */
   anyFormula: boolean;
+  /** The sources the collected record's check counts; only those may add a section to the formula. */
+  counted: (entry: LabelEvidence) => boolean;
+  /** KAN-243: the label rules of the market the product's sources are read in. */
+  market: MarketLabelRules;
 }
 
 export const words = (text: string) => text.replace(/\s+/gu, " ").trim();
@@ -90,10 +95,7 @@ export function joinVerifiedFormulaSections(
   const selected = state.formulaSource;
   if (
     !selected ||
-    selected.kind !== "image" ||
-    next.entry.kind !== "image" ||
-    !imageAtObservation(state, selected.id) ||
-    !imageAtObservation(state, next.entry.id) ||
+    !imageSections(state, selected, next.entry) ||
     !state.formula ||
     !next.projected.formula ||
     !state.formulaShape ||
@@ -106,6 +108,17 @@ export function joinVerifiedFormulaSections(
   state.formulaSources.push(next.entry);
   state.warnings.push({ id: next.entry.id, code: "LABEL_PRODUCT.FORMULA_SECTIONS_JOINED" });
   return true;
+}
+
+/** Both images of this product, and the next one a source the collected record's check counts. */
+function imageSections(state: MergeState, selected: LabelEvidence, next: LabelEvidence): boolean {
+  return (
+    selected.kind === "image" &&
+    next.kind === "image" &&
+    imageAtObservation(state, selected.id) &&
+    imageAtObservation(state, next.id) &&
+    state.counted(next)
+  );
 }
 
 function imageAtObservation(state: MergeState, id: string): boolean {

@@ -28,6 +28,24 @@ export function isCompleteLabelImage(p: { kind: string; candidate: LabelImageCan
 export function isCompleteLabelText(p: { kind: string; candidate: LabelImageCandidate | TextCandidateV3 }) {
   return p.kind === "text" && p.candidate.formulaComplete && p.candidate.ingredientsComplete && assessLabelCandidate(p.candidate).status === "candidate";
 }
+type AcceptedSource = { kind: string; candidate: LabelImageCandidate | TextCandidateV3 };
+
+/**
+ * The sources a collected record counts: an answer whose own checks pass, or (no source being complete) one whose
+ * complete sections stand. The merge asks the same before it joins a section, so a record never cites a source this
+ * check does not count (KAN-243 2026-11-07: a magnesium label joined a section of an image that did not count, and the
+ * product became a Review).
+ */
+export function collectedSourceAcceptance(evidencePolicy: string | undefined, provenance: readonly AcceptedSource[]) {
+  const quality = ["label-image-first/4", "label-image-first/5", ...ORDERED_EVIDENCE_POLICIES].includes(evidencePolicy ?? "");
+  const integrity = (p: AcceptedSource) => p.kind === "image" && labelImageIntegrityCodes(p.candidate as LabelImageCandidate).length > 0;
+  const split = isOrderedEvidencePolicy(evidencePolicy) && !provenance.some(p =>
+    (isCompleteLabelImage(p) || isCompleteLabelText(p)) && !integrity(p));
+  return (p: AcceptedSource): boolean =>
+    (assessLabelCandidate(p.candidate).status !== "review" || split && !!completeLabelSections(p.candidate)) &&
+    !(quality && integrity(p));
+}
+
 const common = { id: ExecutionIdSchema, required: z.boolean() };
 export const LabelProductSourceSchema = z.discriminatedUnion("kind", [
   z.strictObject({ ...common, kind: z.literal("text"), task: TextInputSchema.refine(t => t.resultSchemaVersion === 3 && t.source.kind === "prepared") }),
@@ -118,10 +136,7 @@ export const LabelCollectedProductSchema = z.discriminatedUnion("schemaVersion",
   const split = isOrderedEvidencePolicy(r.evidencePolicy) && !r.provenance.some(p =>
     (isCompleteLabelImage(p) || isCompleteLabelText(p)) &&
     !(p.kind === "image" && labelImageIntegrityCodes(p.candidate).length));
-  const accepted = r.provenance.filter(p =>
-    (assessLabelCandidate(p.candidate).status !== "review" ||
-      split && completeLabelSections(p.candidate)) &&
-    !(quality && p.kind === "image" && labelImageIntegrityCodes(p.candidate).length));
+  const accepted = r.provenance.filter(collectedSourceAcceptance(r.evidencePolicy, r.provenance));
   if (r.evidencePolicy === "label-image-first/4" && labelNumericSourceConflict(accepted)) invalid();
   const imageFirst = !!r.evidencePolicy && accepted.some(isCompleteLabelImage);
   const textFallback = ["label-image-first/3","label-image-first/4", "label-image-first/5", ...ORDERED_EVIDENCE_POLICIES].includes(r.evidencePolicy??"") && !imageFirst && accepted.some(isCompleteLabelText);
