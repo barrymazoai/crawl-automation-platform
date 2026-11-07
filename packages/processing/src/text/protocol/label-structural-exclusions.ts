@@ -1,4 +1,5 @@
 import type { LabelTextCandidate } from "@crawl-automation/v3-contracts";
+import { compositionHeading } from "./composition-clause.js";
 import { equivalentFootnoteAllowed } from "./label-coverage.js";
 import { ingredientSubheadingAllowed } from "./label-headings.js";
 import { labelHeadingAllowed } from "./label-headings.js";
@@ -19,13 +20,7 @@ export function specialStructuralExclusion(
     return true;
   }
   if (exclusion.reason === "heading") {
-    return (
-      ingredientSubheadingAllowed(exclusion.quote.text.trim(), {
-        candidate,
-        span: exclusion.quote,
-        text,
-      }) || blendSubheadingAllowed(exclusion, candidate, text)
-    );
+    return subheadingAllowed(exclusion, candidate, text);
   }
   if (exclusion.reason === "marketing") {
     return ingredientOrganicLegend(exclusion, candidate, text);
@@ -40,6 +35,19 @@ export function specialStructuralExclusion(
     );
   }
   return exclusion.reason === "footnote" && equivalentFootnoteAllowed(exclusion, candidate, text);
+}
+
+function subheadingAllowed(exclusion: Exclusion, candidate: LabelTextCandidate, text: string) {
+  return (
+    ingredientSubheadingAllowed(exclusion.quote.text.trim(), {
+      candidate,
+      span: exclusion.quote,
+      text,
+    }) ||
+    blendSubheadingAllowed(exclusion, candidate, text) ||
+    // "Each 10 g contains:" heads a composition (amazon.in, 2026-11-07).
+    compositionHeading(exclusion.quote.text)
+  );
 }
 
 /** Page layout around the label, not its content: a commerce note, or a chart column's own label cell. */

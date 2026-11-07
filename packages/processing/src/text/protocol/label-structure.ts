@@ -1,3 +1,4 @@
+import { COMPOSITION_CLAUSE } from "./composition-clause.js";
 import { completeIngredientItem, ingredientGap } from "./ingredient-boundaries.js";
 import { labelValidationErrors } from "../../label/validation-errors.js";
 import { isIngredientHeading, type LabelTextCandidateSchema } from "@crawl-automation/v3-contracts";
@@ -159,7 +160,8 @@ function outsideSection(other: Ingredients, item: Ingredients["items"][number], 
   const sinceHeading = text.slice(other.heading.end, item.start);
   return (
     item.start < other.heading.end ||
-    warning.test(sinceHeading) ||
+    // "Each tablet contains:" opens a composition, not an allergen statement (amazon.in, 2026-11-07).
+    warning.test(sinceHeading.replace(COMPOSITION_CLAUSE, "")) ||
     warning.test(item.text) ||
     /(?:supplement|nutrition|drug)\s+facts|(?:other|inactive)?\s*ingredients\s*:/i.test(
       sinceHeading,

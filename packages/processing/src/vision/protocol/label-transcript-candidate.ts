@@ -126,13 +126,24 @@ export function copiesPairedRows(
   return !("reason" in read) && read.rows.some((row) => printsPairedRow(row.cells));
 }
 
+/**
+ * Owner 2026-11-07 (MuscleBlaze Biozyme, Cosmix, AS-IT-IS whey on amazon.in): an amino acid profile printed beside the
+ * facts panel is the protein's make-up, not a second facts panel; the facts panel is read alone.
+ */
+const AMINO_PROFILE = /\bamino\s+acids?\b/i;
+
 /** The one panel with no unreadable cell; otherwise why not. */
 function onePanel(wire: LabelTranscriptWire): Panel | string {
-  const [panel, ...others] = wire.panels;
+  const panels =
+    wire.panels.length > 1
+      ? wire.panels.filter((panel) => !AMINO_PROFILE.test(panel.heading ?? ""))
+      : wire.panels;
+  const [panel, ...others] = panels;
   if (!panel || others.length) {
     return `panels: ${wire.panels.length}`;
   }
-  return JSON.stringify(wire).includes(UNREADABLE_CELL) ? "unreadable cell" : panel;
+  const kept = { ...wire, panels: [panel] };
+  return JSON.stringify(kept).includes(UNREADABLE_CELL) ? "unreadable cell" : panel;
 }
 
 const usRows = (panel: Panel): TranscriptRow[] => [
