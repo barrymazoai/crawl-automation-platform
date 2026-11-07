@@ -3,7 +3,6 @@ import type { Shape } from "./packaging-serving-check.js";
 import {
   collectedSourceAcceptance,
   isCompleteLabelImage,
-  isOrderedEvidencePolicy,
   formulaAgreement,
   labelAgreementFormula,
   preferFormulaSource,
@@ -19,6 +18,7 @@ import {
 } from "./merge-state.js";
 import { reviewEntry } from "./merge-entry-review.js";
 import { checkAgainstPackaging } from "./packaging-serving-check.js";
+import { marketAgrees, textYields } from "./market-merge.js";
 import { splitConflictsFor } from "./partial-label.js";
 import { selectOtherIngredients } from "./ingredient-selection.js";
 import { deferSeparateSection, joinPendingSections } from "./partial-image-selection.js";
@@ -129,7 +129,8 @@ function selectFormula(state: MergeState, pick: Pick): void {
 }
 
 function compareFormula(state: MergeState, pick: Pick, shape: Shape): void {
-  const agreement = formulaAgreement(state.formulaShape, shape);
+  const shared = formulaAgreement(state.formulaShape, shape);
+  const agreement = shared === "conflict" && marketAgrees(state, pick) ? "wording" : shared;
   if (agreement === "subset") {
     acceptFormulaSubset(state, pick, shape);
   } else if (agreement === "sections") {
@@ -164,30 +165,6 @@ function acceptFormulaSubset(state: MergeState, pick: Pick, shape: Shape): void 
     state.formulaSources = [pick.entry];
     state.formula = pick.projected.formula;
   }
-}
-
-/** The page's difference only warns: an image leads (and wins, under ordered policies), or the market yields. */
-function textYields(
-  state: MergeState,
-  pick: Pick,
-  at: { conflict: AssemblyErrorCode; imageWins: boolean },
-): boolean {
-  return (
-    pageYields(state, pick, at.conflict) ||
-    (pick.secondaryText &&
-      (at.imageWins || !isOrderedEvidencePolicy(state.manifest.evidencePolicy)))
-  );
-}
-
-/** KAN-243 (owner 2026-11-07, India): a page's formula that differs from the selected label image's yields to it. */
-function pageYields(state: MergeState, pick: Pick, conflict: AssemblyErrorCode): boolean {
-  return (
-    state.market.pageFormulaYields &&
-    !pick.textFallback &&
-    conflict === "LABEL_PRODUCT.FORMULA_CONFLICT" &&
-    pick.entry.kind === "text" &&
-    state.formulaSource?.kind === "image"
-  );
 }
 
 function recordAgreement(

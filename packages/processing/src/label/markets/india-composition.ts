@@ -107,17 +107,45 @@ export function compositionTextRows(
   candidate: LabelTextCandidate,
   formats: readonly LabelFormatId[],
 ): void {
-  if (!current(formats) || !readsComposition(candidate)) {
+  if (!current(formats)) {
     return;
   }
-  for (const column of candidate.formula?.columns ?? []) {
-    const start = column.rows.findIndex((row) => {
-      const name = row.name.text.trim();
-      return QS.test(row.amount?.text.trim() ?? "") || MADE_UP_WITH.test(name);
-    });
-    const tail = start < 0 ? [] : column.rows.slice(start + 1);
-    if (start > 0 && tail.every((row) => !row.amount || MADE_UP_WITH.test(row.name.text.trim()))) {
-      column.rows = column.rows.slice(0, start);
-    }
+  withoutNumberList(candidate);
+  if (readsComposition(candidate)) {
+    withoutMadeUpSection(candidate);
+    (candidate.formula?.columns ?? []).forEach(withoutMadeUpRows);
+  }
+}
+
+/** The made-up-with lines read as the ingredient section ("Colours: Black Oxide of Iron, …", Supradyn-like tablets). */
+function withoutMadeUpSection(candidate: LabelTextCandidate): void {
+  const heading = candidate.otherIngredients?.heading.text.trim() ?? "";
+  if (heading && !isIngredientHeading(heading) && MADE_UP_WITH.test(heading)) {
+    candidate.otherIngredients = null;
+  }
+}
+
+type TextColumn = NonNullable<LabelTextCandidate["formula"]>["columns"][number];
+
+/** The made-up-with lines read as the column's last rows. */
+function withoutMadeUpRows(column: TextColumn): void {
+  const start = column.rows.findIndex(
+    (row) => QS.test(row.amount?.text.trim() ?? "") || MADE_UP_WITH.test(row.name.text.trim()),
+  );
+  const tail = start < 0 ? [] : column.rows.slice(start + 1);
+  if (start > 0 && tail.every((row) => !row.amount || MADE_UP_WITH.test(row.name.text.trim()))) {
+    column.rows = column.rows.slice(0, start);
+  }
+}
+
+/**
+ * A page's ingredients field holding only a number (Dabur Jamun Neem Karela juice: "Ingredients: 1") lists no
+ * ingredient: no list is read from it.
+ */
+function withoutNumberList(candidate: LabelTextCandidate): void {
+  const items = candidate.otherIngredients?.items ?? [];
+  if (items.length && items.every((item) => !/\p{L}/u.test(item.text))) {
+    candidate.otherIngredients = null;
+    candidate.ingredientsComplete = false;
   }
 }
