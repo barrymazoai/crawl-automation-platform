@@ -6,6 +6,7 @@ import {
 } from "@crawl-automation/v3-contracts";
 import { formatPanel, type FormatPanel } from "../../label/transcript/format-panel.js";
 import { isAmountCell } from "../../label/transcript/transcript-cells.js";
+import { marketRules } from "../../label/markets/market-rules.js";
 import { printsPairedRow } from "../../label/transcript/paired-rows.js";
 import {
   parseTranscriptRows,
@@ -99,7 +100,7 @@ function panelRows(
   wire: LabelTranscriptWire,
   formats: readonly LabelFormatId[],
 ): Reason | { panel: Panel; shaped: FormatPanel | null; rows: TranscriptRow[] } {
-  const panel = onePanel(wire);
+  const panel = onePanel(wire, formats);
   if (typeof panel === "string") {
     return { reason: panel };
   }
@@ -132,12 +133,13 @@ export function copiesPairedRows(
  */
 const AMINO_PROFILE = /\bamino\s+acids?\b/i;
 
-/** The one panel with no unreadable cell; otherwise why not. */
-function onePanel(wire: LabelTranscriptWire): Panel | string {
-  const panels =
+/** The one panel with no unreadable cell; otherwise why not. The market may set further panels aside. */
+function onePanel(wire: LabelTranscriptWire, formats: readonly LabelFormatId[]): Panel | string {
+  const shared =
     wire.panels.length > 1
       ? wire.panels.filter((panel) => !AMINO_PROFILE.test(panel.heading ?? ""))
       : wire.panels;
+  const panels = marketRules(formats).copyPanels(shared);
   const [panel, ...others] = panels;
   if (!panel || others.length) {
     return `panels: ${wire.panels.length}`;

@@ -11,8 +11,12 @@ import { decodeLabelText } from "./protocol/label-decoder.js";
  */
 const dir = process.env["LABEL_TEXT_REPLAY_CASES"];
 
+/** An amazon.in answer is read with India's label formats, as its task now names them (KAN-243 step 1). */
+const INDIA = ["us-facts/1", "in-nutritional-information/2", "in-composition/2"] as const;
+
 interface ReplayCase {
   id: string;
+  observationId?: string;
   range: { start: number; end: number };
   text: string;
   response: string;
@@ -27,6 +31,7 @@ function replayLine(file: string) {
       text: replay.text,
       response: replay.response,
       ...(replay.policyVersion ? { policyVersion: replay.policyVersion } : {}),
+      ...(replay.observationId?.startsWith("amazon-in-") ? { formats: INDIA } : {}),
     });
     const rows = decoded.candidate.formula?.columns.flatMap((column) =>
       column.rows.map((row) => [row.name.text, row.amount?.text ?? null]),

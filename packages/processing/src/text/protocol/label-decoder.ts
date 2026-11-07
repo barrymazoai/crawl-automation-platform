@@ -17,6 +17,7 @@ import { equivalentFootnoteAllowed, labelCoverage } from "./label-coverage.js";
 import { ingredientCodes, rowOrderCodes } from "./label-structure.js";
 import { textAssessmentCodes } from "./label-assessment.js";
 import { labelLimitErrors } from "./label-limits.js";
+import { marketRules, type MarketLabelRules } from "../../label/markets/market-rules.js";
 import { resolveAnchor, type Anchor, type AnchorContext } from "./resolve-anchor.js";
 import { isWithinText, splitsCharacter } from "./text-range.js";
 import { textLimits } from "../limits.js";
@@ -67,6 +68,7 @@ export function decodeLabelText(request: LabelTextRequest): DecodedLabel {
     text,
     range: scope.range,
     policyVersion,
+    market: marketRules(request.formats),
     modelExclusions,
     placed: ingredientHeading ? [...quotes.placed, ingredientHeading] : quotes.placed,
   });
@@ -77,6 +79,7 @@ function validateCandidate(input: {
   text: string;
   range: TextInput["range"];
   policyVersion: string;
+  market: MarketLabelRules;
   modelExclusions: number;
   placed: readonly Quote[];
 }): DecodedLabel {
@@ -100,8 +103,9 @@ function validateCandidate(input: {
     codes.add(labelValidationErrors.code("LABEL.EXTRACTION_INCOMPLETE"));
   }
   const warnings = candidateWarnings(candidate, text, assessment.warnings);
-  const status = candidateStatus({ candidate, assessment, codes });
-  return { candidate, status, codes: [...codes], warnings };
+  const kept = new Set(input.market.textCodes(candidate, [...codes], text));
+  const status = candidateStatus({ candidate, assessment, codes: kept });
+  return { candidate, status, codes: [...kept], warnings };
 }
 
 function candidateWarnings(
