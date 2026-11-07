@@ -78,13 +78,31 @@ function domImages(root: AmazonElement): string[] {
     .filter((url): url is string => url !== null);
 }
 
-/** The selected initial gallery, never recommendation images or galleries for other variations. */
+/** Amazon's image path: the image ID, its rendering modifiers ("._AC_SL1500_"), the extension. */
+const IMAGE_PATH = /^(\/images\/I\/[^./]+)(?:\.[^/]*)?\.(jpe?g|png|webp)$/i;
+
+/** The same image at `size` px on its longest side (Amazon's "_SL" rendering); other URLs as they are. */
+function sized(url: string, size: number | null): string {
+  const parsed = new URL(url);
+  const path = size ? IMAGE_PATH.exec(parsed.pathname) : null;
+  if (!path) {
+    return url;
+  }
+  parsed.pathname = `${path[1]}._SL${size}_.${path[2]}`;
+  return parsed.href;
+}
+
+/**
+ * The selected initial gallery, never recommendation images or galleries for other variations; at the storefront's
+ * image size when it sets one.
+ */
 export function amazonImages(
   root: AmazonElement,
   data: ScriptData,
+  imageSize: number | null = null,
 ): ChannelProductEvidence["imageCandidates"] {
   const scripted = scriptedImages(data);
-  const urls = scripted.length ? scripted : domImages(root);
+  const urls = (scripted.length ? scripted : domImages(root)).map((url) => sized(url, imageSize));
   return [...new Set(urls)].map((url) => ({
     url,
     variantId: null,

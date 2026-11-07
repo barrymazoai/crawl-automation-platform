@@ -78,7 +78,7 @@ function evidenceOf(
   const data = amazonScriptData(document);
   const family = extractVariationFamily(data, asin);
   const facts = amazonFactsHtml(document);
-  const images = amazonImages(root, data);
+  const images = amazonImages(root, data, site.imageSize);
   const variants =
     family?.members
       .filter((member) => member.asin !== asin)

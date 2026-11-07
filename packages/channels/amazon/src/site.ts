@@ -17,6 +17,12 @@ export interface AmazonSite {
   /** date-fns patterns of "Date First Available", in the storefront's English locale. */
   dateFormats: readonly string[];
   parserVersion: "amazon-rendered/1" | "amazon-in-rendered/1";
+  /**
+   * KAN-243 (owner 2026-11-07): the longest side, in pixels, gallery images are downloaded at; null keeps the page's own
+   * image URLs. Indian labels print small type on a side of the jar: the page's 1500 px image left Man Matters' panel
+   * unreadable, and Amazon serves the same image at up to 2560 px (never enlarged past the uploaded original).
+   */
+  imageSize: number | null;
 }
 
 export const AMAZON_US: AmazonSite = {
@@ -28,6 +34,7 @@ export const AMAZON_US: AmazonSite = {
   postalCode: /\b\d{5}(?:-\d{4})?\b/g,
   dateFormats: ["MMMM d, yyyy", "MMMM d yyyy"],
   parserVersion: "amazon-rendered/1",
+  imageSize: null,
 };
 
 // Real amazon.in pages, 2026-11-04 (docs/plans/KAN-243-india-research.md §4): "₹2,129" in priceToPay's whole part
@@ -41,6 +48,7 @@ export const AMAZON_IN: AmazonSite = {
   postalCode: /\b\d{6}\b/g,
   dateFormats: ["d MMMM yyyy"],
   parserVersion: "amazon-in-rendered/1",
+  imageSize: 2560,
 };
 
 export const AMAZON_SITES: Readonly<Record<AmazonChannel, AmazonSite>> = {
