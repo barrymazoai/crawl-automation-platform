@@ -2,6 +2,7 @@ import { z } from "zod";
 import { ArtifactRefSchema, ObservationSchema, ExecutionIdSchema, Sha256Schema, VersionTagSchema, assertArtifactBelongsTo } from "./artifacts.js";
 import { OcrRegistrationSchema } from "./registration.js";
 import { LabelTextCandidateSchema } from "./label-extraction.js";
+import { LabelFormatIdSchema } from "./label-formats.js";
 export const TextDocumentSchema = z.strictObject({ ...ObservationSchema.shape,
     producer: z.enum(["page.prepare", "pdf.text", "label.core.prepare"]), source: ArtifactRefSchema,
     corePolicy: z.enum(["gnc-label-core/1", "swanson-label-core/1", "dtc-label-core/1", "dtc-label-core/2", "dtc-label-core/3", "dtc-label-core/4", "dtc-label-core/5"]).optional(),
@@ -29,6 +30,9 @@ export const TextInputSchema = z.strictObject({ ...ObservationSchema.shape, ...T
     operationId: ExecutionIdSchema, inputFingerprint: Sha256Schema, source: TextSourceSchema,
     // Half-open UTF-16 code-unit offsets into the original decoded text, not bytes or code points.
     range: z.strictObject({ start: z.number().int().nonnegative(), end: z.number().int().positive().max(200000) }).refine(r => r.end > r.start),
+    // KAN-243 (owner 2026-11-07): the market's label formats, so its own label rules read the answer. Only a non-US
+    // market's task carries them; a US task is byte-identical to before (same fingerprint).
+    labelFormats: z.array(LabelFormatIdSchema).min(1).max(20).optional(),
 }).superRefine((input, ctx) => {
     if (input.resultSchemaVersion === 3 && (input.implementationVersion !== "codex-text/3" || !["label-text/1", "label-text/2", "label-text/3", "label-text/4", "label-text/5", "label-text/6"].includes(input.policyVersion)))
         ctx.addIssue({ code: "custom", message: "Label text requires its explicit implementation and policy" });

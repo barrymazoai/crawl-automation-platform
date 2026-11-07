@@ -3,6 +3,7 @@ import { sha256 } from "@crawl-automation/platform";
 import {
   LabelCoreOutcomeSchema,
   TextInputSchema,
+  isUsOnlyFormats,
   observationIdentity,
   textFingerprint,
   type ArtifactRef,
@@ -81,7 +82,12 @@ async function labelTextTask(
     base.source = { kind: "prepared", document: prepared.document };
     base.range = prepared.range;
   }
-  const next = { ...base, ...input.text, operationId };
+  // KAN-243: a non-US market's text task names its label formats for that market's label rules; a US task stays
+  // exactly as before.
+  const marketFormats = input.labelFormats;
+  const formats =
+    marketFormats && !isUsOnlyFormats(marketFormats) ? { labelFormats: [...marketFormats] } : {};
+  const next = { ...base, ...input.text, operationId, ...formats };
   const signed = TextInputSchema.parse({
     ...next,
     inputFingerprint: textFingerprint(next, hashString),

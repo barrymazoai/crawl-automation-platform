@@ -5,6 +5,7 @@ import {
   legacyLabelExtractionSchema,
   LabelTextWireSchema,
   assessLabelCandidate,
+  type LabelFormatId,
   type TextInput,
 } from "@crawl-automation/v3-contracts";
 import type { z } from "zod";
@@ -42,6 +43,8 @@ export interface LabelTextRequest {
   text: string;
   response: string;
   policyVersion?: string;
+  /** KAN-243: the market's label formats (a non-US task's); absent = US. */
+  formats?: readonly LabelFormatId[] | undefined;
 }
 
 /** Reads a label-extraction/1 answer: places every quote in the text, then runs the label checks. */

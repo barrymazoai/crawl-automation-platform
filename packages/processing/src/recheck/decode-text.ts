@@ -8,6 +8,7 @@ export function recheckTextAnswer(input: TextInput, text: string, response: stri
     text,
     response,
     policyVersion: input.policyVersion,
+    formats: input.labelFormats,
   });
   assertTextQuotes({ ...decoded.candidate, schemaVersion: 3 }, input, text);
   return decoded;

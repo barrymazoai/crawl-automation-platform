@@ -38,6 +38,28 @@ describe("label plans", () => {
     expect(await setup.labelPlans.manifest(setup.input, signal())).toEqual(result);
   });
 
+  it("a non-US market's text task names its label formats; a US task is unchanged (owner 2026-11-07)", async () => {
+    const india = ["us-facts/1", "in-nutritional-information/2", "in-composition/2"] as const;
+    const textTask = async (labelFormats?: readonly (typeof india)[number][]) => {
+      const setup = await labelPlanSetup({ imageTexts: ["Supplement Facts"] });
+      const input = labelFormats
+        ? { ...setup.input, labelFormats: [...labelFormats] }
+        : setup.input;
+      const result = await setup.labelPlans.manifest(input, signal());
+      const text = result.manifest.sources.find((source) => source.kind === "text");
+      return text?.kind === "text" ? parseTextInput(text.task, hashString) : null;
+    };
+
+    const us = await textTask();
+    const usExplicit = await textTask(["us-facts/1"]);
+    const indian = await textTask(india);
+
+    expect(us && "labelFormats" in us).toBe(false);
+    expect(usExplicit).toEqual(us);
+    expect(indian?.labelFormats).toEqual(india);
+    expect(indian?.inputFingerprint).not.toBe(us?.inputFingerprint);
+  });
+
   it("a task with a core policy uses the label-core document, checked for its page and policy", async () => {
     const setup = await labelPlanSetup({ corePolicy: "gnc-label-core/1" });
     await expect(setup.labelPlans.manifest(setup.input, signal())).rejects.toMatchObject({

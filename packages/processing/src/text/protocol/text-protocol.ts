@@ -65,6 +65,7 @@ function decodeLabelCandidate(input: TextInput, text: string, response: string) 
     text,
     response,
     policyVersion: input.policyVersion,
+    formats: input.labelFormats,
   });
   const [firstCode] = decoded.codes;
   if (decoded.status === "review" && firstCode) {
