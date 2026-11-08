@@ -32,7 +32,14 @@ function summary(candidate: LabelImageCandidate) {
       row.dailyValue?.text ?? null,
     ]),
   );
-  return { rows, other: candidate.otherIngredients?.items.map((item) => item.text) ?? null };
+  return {
+    rows,
+    other: candidate.otherIngredients?.items.map((item) => item.text) ?? null,
+    serving: [
+      candidate.formula?.servingSize?.text ?? null,
+      candidate.formula?.servingsPerContainer?.text ?? null,
+    ],
+  };
 }
 
 const INDIA = ["us-facts/1", "in-nutritional-information/2", "in-composition/2"] as const;

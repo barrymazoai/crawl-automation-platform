@@ -148,3 +148,38 @@ describe("a re-read of an Indian row with two amount columns", () => {
     expect(rereadConfirmedRows(built.candidate, reread(["1.0 mg", "0.0 mg"]), copied)).toEqual([]);
   });
 });
+
+describe("the serving and the pack's count copied on one line (amazon.in rerun 2026-11-08)", () => {
+  const panel = (servingLine: string) => ({
+    heading: "NUTRITIONAL INFORMATION",
+    servingLines: [servingLine],
+    columnHeaders: ["Nutrients", "Per Serving", "%RDA"],
+    rows: [row("Protein (g)", "24", "44%")],
+    footnotes: [],
+  });
+  it.each([
+    ["Serving Size: 1 Scoop (36g) | Servings Per Container: ~28", "1 Scoop (36g)", "~28"],
+    ["Serving size: 2 softgels (2.6g) | Number of Servings per pack 30", "2 softgels (2.6g)", "30"],
+    ["Serving Size: 1 Level Scoop (4g), Servings Per Container: 30", "1 Level Scoop (4g)", "30"],
+    ["Servings per container: 30    Serving size: 1 Tablet", "1 Tablet", "30"],
+    ["SERVING SIZE: 40.50G, NO. OF SERVINGS - 1", "40.50G", "1"],
+    [
+      "Servings per container: 33 Servings | Serving Size: 1 Heaped Scoop (~3.7g)",
+      "1 Heaped Scoop (~3.7g)",
+      "33 Servings",
+    ],
+    [
+      "1 levelled scoop serving = 35 g • No. of servings: 28 (approx.)",
+      "1 levelled scoop serving = 35 g",
+      "28 (approx.)",
+    ],
+    [
+      "Serv Size - 2.38 g (1 sachet) Servings per pack - 30 sachets",
+      "2.38 g (1 sachet)",
+      "30 sachets",
+    ],
+  ])("%s", (line, serving, servings) => {
+    const built = read(transcriptCandidate(wire(panel(line)), policy, INDIA));
+    expect([built.serving, built.servings]).toEqual([serving, servings]);
+  });
+});

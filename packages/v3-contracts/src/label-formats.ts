@@ -190,8 +190,9 @@ export const LABEL_FORMATS: Readonly<Record<LabelFormatId, LabelFormat>> = {
       /^each\s+serving\b.*\bprovides\b/i,
     ],
     servings: [
-      /^(?:no\.?\s*of\s+)?servings?\s*per\s*(?:pack|bottle|jar|container)\s*[:\-–]?\s*(.*)$/i,
-      /^no\.?\s*of\s+servings?\s*[:\-–]?\s*(.*)$/i,
+      // "Number of Servings per pack 30" (amazon.in, Luna high copy 2026-11-08) as well as "No. of servings".
+      /^(?:(?:no\.?|number)\s*of\s+)?servings?\s*per\s*(?:pack|bottle|jar|container)\s*[:\-–]?\s*(.*)$/i,
+      /^(?:no\.?|number)\s*of\s+servings?\s*[:\-–]?\s*(.*)$/i,
     ],
     servingFor: [
       /^serv(?:e|ing)?\.?\s+size\s*[:\-–]?\s*(.+?)(?:\s+servings?\s+per\s+(?:pack|bottle|jar|container)\s*[:\-–]?\s*(.+))?$/i,

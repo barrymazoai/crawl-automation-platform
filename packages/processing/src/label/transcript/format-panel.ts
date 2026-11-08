@@ -98,11 +98,20 @@ function servingRead(
     amountHeading: headers?.amountHeading ?? null,
     dailyValueHeading: headers?.dailyValueHeading ?? null,
   };
-  for (const text of servingLines) {
+  for (const text of servingLines.flatMap((line) => line.split(SERVING_PART))) {
     formatLine(read, [text], formats);
   }
   return read;
 }
+
+/**
+ * Owner 2026-11-08 (KAN-243 amazon.in rerun, Luna high): the serving and the pack's count copied on one line ("Serving
+ * Size: 1 Scoop (36g) | Servings Per Container: ~28", "Servings per container: 30    Serving size: 1 Tablet",
+ * "SERVING SIZE: 40.50G, NO. OF SERVINGS - 1") are read one part at a time; the serving had kept "|" or "," and the
+ * next line's start ("2 softgels (2.6g) | Number of"). A separator splits only before a serving or servings part.
+ */
+const SERVING_PART =
+  /\s*(?:[|;•·,]|\s{3,})\s*(?=(?:no\.?\s*of\s+|number\s+of\s+|total\s+)?serv(?:e|ing)?s?\b)/iu;
 
 function preparedFrom(panel: PrintedPanel, formats: readonly LabelFormatId[]): boolean {
   const lines = [
