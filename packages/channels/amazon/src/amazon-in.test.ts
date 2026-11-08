@@ -3,6 +3,7 @@ import { amazonAdapter, amazonInAdapter } from "./adapter.js";
 import { amazonProductAddress } from "./address.js";
 import { amazonBrandScan } from "./brand-scan.js";
 import { amazonScanPageUrl, amazonScanSourceUrl } from "./brand-scan-address.js";
+import { amazonSiteBrandScan } from "./brand-scan.js";
 import { amazonCommerce } from "./commerce.js";
 import { amazonDocument, productRoot } from "./dom.js";
 import { parseAmazonDate } from "./listing-date.js";
@@ -124,5 +125,39 @@ describe("amazon.in brand scan order (owner 2026-11-08)", () => {
     expect(new URL(amazonScanSourceUrl(us, AMAZON_US)).searchParams.get("s")).toBe(
       "date-desc-rank",
     );
+  });
+});
+
+describe("amazon.in brand scan size (owner 2026-11-08, demo week)", () => {
+  const source = "https://www.amazon.in/s?k=Himalaya&i=hpc&rh=n%3A1374489031%2Cp_123%3A94291";
+  const reader = amazonSiteBrandScan(AMAZON_IN);
+  // A best-seller search page as amazon.in prints it: 24 result cards, the brand facet ticked, a next-page link.
+  const page = () => {
+    const card = (index: number) => {
+      const asin = `B0${String(index).padStart(8, "0")}`;
+      return `<div data-component-type="s-search-result" data-asin="${asin}"><a href="/x/dp/${asin}"><h2>Himalaya product ${index}</h2></a></div>`;
+    };
+    const next = amazonScanPageUrl(source, 2, AMAZON_IN).replace("https://www.amazon.in", "");
+    return `<html><body>
+      <div id="p_123/94291"><input type="checkbox" checked></div>
+      <div data-component-type="s-result-info-bar">1-24 of 223 results for "Himalaya"</div>
+      <div class="s-main-slot">${Array.from({ length: 24 }, (_, index) => card(index + 1)).join("")}</div>
+      <span class="s-pagination-selected">1</span><a class="s-pagination-next" href="${next}">Next</a>
+    </body></html>`;
+  };
+
+  it("reads one page and keeps a brand's ten best sellers; the scan is capped, never full", () => {
+    expect(reader.maxPages).toBe(1);
+    const listed = reader.parsePage({ body: page(), url: reader.pageUrl(source, 1), page: 1 });
+    expect(listed.products.map((product) => product.listingId)).toEqual(
+      Array.from({ length: 10 }, (_, index) => `B0${String(index + 1).padStart(8, "0")}`),
+    );
+    expect(listed).toMatchObject({ nextPage: null, capped: true });
+    expect(listed.products[0]?.url).toBe("https://www.amazon.in/dp/B000000001");
+  });
+
+  it("leaves the amazon.com scan at seven pages and every product", () => {
+    expect(amazonBrandScan.maxPages).toBe(7);
+    expect(AMAZON_US).toMatchObject({ scanPages: 7, scanProducts: null });
   });
 });

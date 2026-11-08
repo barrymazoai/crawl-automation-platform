@@ -6,7 +6,11 @@ export {
 } from "./adapter.js";
 export { AMAZON_IN, AMAZON_SITES, AMAZON_US, type AmazonSite } from "./site.js";
 export { amazonBrandScan, amazonSiteBrandScan, type AmazonListingPage } from "./brand-scan.js";
-export { amazonBrandFilterId, amazonBrandSearchName } from "./brand-scan-address.js";
+export {
+  amazonBrandFilterId,
+  amazonBrandSearchName,
+  amazonBrandSearchOn,
+} from "./brand-scan-address.js";
 export { amazonStoreSourceUrl } from "./store-address.js";
 export { amazonStoreBrandScan, parseAmazonStoreListing } from "./store-listing.js";
 export { AmazonStoreBrandScan } from "./store-scan.js";

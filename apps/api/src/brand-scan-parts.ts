@@ -20,6 +20,7 @@ import {
 } from "@crawl-automation/app";
 import { BROWSER_SCAN_PERMITS } from "./browser-scan-permit-settings.js";
 import { wholeFoodsSourceFromAmazon } from "./whole-foods-source-derivation.js";
+import { amazonInSourceFromAmazon } from "./amazon-in-source-derivation.js";
 import { adapterBrowserScanners } from "./browser-scan-gateways.js";
 import { createListingPages } from "@crawl-automation/channels-core";
 import {
@@ -144,6 +145,12 @@ function sourceImports(parts: {
       store: sourceStore,
       channel: "wholefoods",
       derive: wholeFoodsSourceFromAmazon,
+    },
+    derivedAmazonIn: {
+      sources: store,
+      store: sourceStore,
+      channel: "amazon-in",
+      derive: amazonInSourceFromAmazon,
     },
     registry,
     browsers,

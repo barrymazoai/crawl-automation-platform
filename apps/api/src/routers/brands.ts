@@ -115,6 +115,11 @@ export const brandsRouter = router({
     .input(DerivedSourcesSchema)
     .mutation(({ ctx, input }) => ctx.brandSources.deriveWholeFoods(input)),
 
+  /** KAN-243: adds disabled amazon.in sources from amazon.com sources' shared brand IDs. */
+  deriveAmazonInSources: procedure
+    .input(DerivedSourcesSchema)
+    .mutation(({ ctx, input }) => ctx.brandSources.deriveAmazonIn(input)),
+
   /** Enable or disable a source; only an enabled source can run. */
   toggleSource: procedure
     .input(ToggleSourceSchema)

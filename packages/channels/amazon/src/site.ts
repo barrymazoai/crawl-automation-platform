@@ -29,6 +29,18 @@ export interface AmazonSite {
    * filled them with reseller relistings that print no label (Himalaya: 21 of the first 29 had none).
    */
   scanSort: "date-desc-rank" | "exact-aware-popularity-rank";
+  /**
+   * How many search pages a brand scan reads, and how many of the listed products it keeps (null: all). amazon.in
+   * (owner 2026-11-08, demo week): one page, a brand's ten best sellers, so a day's crawl covers many companies.
+   */
+  scanPages: number;
+  scanProducts: number | null;
+  /**
+   * The supplement department node a brand search is scoped to (`i=hpc&rh=n:<node>,p_123:<brand>`): amazon.com's
+   * sources use Vitamins, Minerals & Supplements; amazon.in's Diet & Nutrition covers vitamins, sports supplements and
+   * family nutrition (without it Himalaya's scan listed face wash and wipes).
+   */
+  supplementNode: string;
 }
 
 export const AMAZON_US: AmazonSite = {
@@ -42,6 +54,9 @@ export const AMAZON_US: AmazonSite = {
   parserVersion: "amazon-rendered/1",
   imageSize: null,
   scanSort: "date-desc-rank",
+  scanPages: 7,
+  scanProducts: null,
+  supplementNode: "3760901",
 };
 
 // Real amazon.in pages, 2026-11-04 (docs/plans/KAN-243-india-research.md §4): "₹2,129" in priceToPay's whole part
@@ -57,6 +72,9 @@ export const AMAZON_IN: AmazonSite = {
   parserVersion: "amazon-in-rendered/1",
   imageSize: 2560,
   scanSort: "exact-aware-popularity-rank",
+  scanPages: 1,
+  scanProducts: 10,
+  supplementNode: "1374489031",
 };
 
 export const AMAZON_SITES: Readonly<Record<AmazonChannel, AmazonSite>> = {

@@ -1,6 +1,7 @@
 import {
   brandScanErrors,
   type BrandScanReader,
+  type ListedProduct,
   type ListingPage,
 } from "@crawl-automation/channels-core";
 import {
@@ -85,16 +86,31 @@ function parsePage(input: PageInput, site: AmazonSite): AmazonListingPage {
   }
   const next = cards.length ? nextPage(document, input, site) : null;
   const info = textOf(document.querySelector('[data-component-type="s-result-info-bar"]'));
-  const capped =
-    input.page === AMAZON_SCAN_MAX_PAGES &&
-    cards.length > 0 &&
-    (next !== null || fullLastPage(info));
+  const listed = [...new Map(products.map((product) => [product.listingId, product])).values()];
   return {
-    products: [...new Map(products.map((product) => [product.listingId, product])).values()],
-    cards: cards.length,
-    nextPage: input.page === AMAZON_SCAN_MAX_PAGES ? null : next,
+    ...keptPage({ listed, cards: cards.length, next, info, page: input.page }, site),
     statedTotal: statedTotal(info),
-    capped,
+  };
+}
+
+/**
+ * The products the storefront keeps from this page and whether the scan stops here capped: at its last page with
+ * more to read, or with products left out (amazon.in keeps a brand's first ten).
+ */
+function keptPage(
+  at: { listed: ListedProduct[]; cards: number; next: number | null; info: string; page: number },
+  site: AmazonSite,
+) {
+  const kept = site.scanProducts === null ? at.listed : at.listed.slice(0, site.scanProducts);
+  const trimmed = kept.length < at.listed.length;
+  const last = at.page === site.scanPages;
+  const more =
+    at.next !== null || (site.scanPages === AMAZON_SCAN_MAX_PAGES && fullLastPage(at.info));
+  return {
+    products: kept,
+    cards: at.cards,
+    nextPage: last || trimmed ? null : at.next,
+    capped: trimmed || (last && at.cards > 0 && more),
   };
 }
 
@@ -103,7 +119,7 @@ function siteReader(site: AmazonSite) {
     sourceUrl: (url: string) => amazonScanSourceUrl(url, site),
     pageUrl: (url: string, page: number) => amazonScanPageUrl(url, page, site),
     answer: "html",
-    maxPages: AMAZON_SCAN_MAX_PAGES,
+    maxPages: site.scanPages,
     maxBytes: AMAZON_MAX_BYTES,
     parsePage: (input: PageInput) => parsePage(input, site),
     complete: (pages: readonly ListingPage[]) => {

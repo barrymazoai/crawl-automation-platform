@@ -82,3 +82,21 @@ export function amazonScanBrandFilter(url: string, site: AmazonSite = AMAZON_US)
 export function amazonBrandSearchName(url: string, site: AmazonSite = AMAZON_US): string | null {
   return new URL(amazonScanSourceUrl(url, site)).searchParams.get("k")?.trim() || null;
 }
+
+/**
+ * KAN-243 (owner 2026-11-08): the same brand's search on another storefront. Amazon's numeric brand IDs (`p_123`) are
+ * shared across storefronts (Himalaya is 94291 on amazon.com and amazon.in), so a source with one ID and its search
+ * keyword becomes that storefront's supplement-scoped brand search; null without both.
+ */
+export function amazonBrandSearchOn(url: string, from: AmazonSite, to: AmazonSite): string | null {
+  const id = amazonBrandFilterId(url, from);
+  const name = amazonBrandSearchName(url, from);
+  if (!id || !name) {
+    return null;
+  }
+  const result = new URL("/s", to.origin);
+  result.searchParams.set("k", name);
+  result.searchParams.set("i", "hpc");
+  result.searchParams.set("rh", `n:${to.supplementNode},p_123:${id}`);
+  return amazonScanSourceUrl(result.href, to);
+}

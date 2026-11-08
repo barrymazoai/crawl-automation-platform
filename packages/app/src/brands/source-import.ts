@@ -50,6 +50,8 @@ export class BrandSourceImport {
     private readonly deps: {
       store: BrandSourceImportStore;
       derived?: DerivedSourceDeps;
+      /** KAN-243: amazon.in sources derived from amazon.com brand IDs. */
+      derivedAmazonIn?: DerivedSourceDeps;
       registry: ChannelRegistry;
       browsers: BrowserBrandScanners;
       log: Logger;
@@ -62,6 +64,14 @@ export class BrandSourceImport {
       throw appErrors.create("BRAND_SCAN.NOT_CONFIGURED");
     }
     return new DerivedBrandSources(this.deps.derived).import(raw);
+  }
+
+  /** Derives disabled amazon.in sources from retained amazon.com sources' brand IDs; no network or scan is started. */
+  deriveAmazonIn(raw: unknown): Promise<{ created: number; skipped: number }> {
+    if (!this.deps.derivedAmazonIn) {
+      throw appErrors.create("BRAND_SCAN.NOT_CONFIGURED");
+    }
+    return new DerivedBrandSources(this.deps.derivedAmazonIn).import(raw);
   }
 
   async import(raw: unknown): Promise<SourceImportResult> {
