@@ -115,7 +115,7 @@ function siteReader(site: AmazonSite) {
 
 const readers = new Map<AmazonSite, ReturnType<typeof siteReader>>();
 
-/** Seven-page, newest-first ScraperAPI search scan of one storefront; Store pages belong to the browser scanner. */
+/** Seven-page ScraperAPI search scan of one storefront, in its scan order (US newest first); Store pages belong to the browser scanner. */
 export function amazonSiteBrandScan(site: AmazonSite) {
   const reader = readers.get(site) ?? siteReader(site);
   readers.set(site, reader);

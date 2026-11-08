@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { amazonAdapter, amazonInAdapter } from "./adapter.js";
 import { amazonProductAddress } from "./address.js";
 import { amazonBrandScan } from "./brand-scan.js";
+import { amazonScanPageUrl, amazonScanSourceUrl } from "./brand-scan-address.js";
 import { amazonCommerce } from "./commerce.js";
 import { amazonDocument, productRoot } from "./dom.js";
 import { parseAmazonDate } from "./listing-date.js";
@@ -105,5 +106,23 @@ describe("amazon.in storefront", () => {
     ).toThrow();
     expect(amazonInAdapter.scanCapture?.("https://www.amazon.in/stores/page/ABC")).toBe("http");
     expect(amazonAdapter.scanCapture?.("https://www.amazon.com/stores/page/ABC")).toBe("browser");
+  });
+});
+
+describe("amazon.in brand scan order (owner 2026-11-08)", () => {
+  // Himalaya: newest first filled the seven pages with reseller relistings that print no label.
+  const himalaya = "https://www.amazon.in/s?k=Himalaya&i=hpc&rh=n%3A1374489031%2Cp_123%3A94291";
+
+  it("reads best sellers first on amazon.in, newest first on amazon.com", () => {
+    expect(new URL(amazonScanSourceUrl(himalaya, AMAZON_IN)).searchParams.get("s")).toBe(
+      "exact-aware-popularity-rank",
+    );
+    expect(new URL(amazonScanPageUrl(himalaya, 2, AMAZON_IN)).search).toBe(
+      "?k=Himalaya&i=hpc&rh=n%3A1374489031%2Cp_123%3A94291&s=exact-aware-popularity-rank&page=2",
+    );
+    const us = "https://www.amazon.com/s?k=Himalaya&i=hpc&rh=n%3A3760901%2Cp_123%3A94291";
+    expect(new URL(amazonScanSourceUrl(us, AMAZON_US)).searchParams.get("s")).toBe(
+      "date-desc-rank",
+    );
   });
 });

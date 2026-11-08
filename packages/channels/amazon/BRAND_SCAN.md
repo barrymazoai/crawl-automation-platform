@@ -8,7 +8,7 @@ outside this ticket's edit boundary; this is not a deployed or live-tested scan 
 `amazonAdapter.brandScan` exports `amazonBrandScan`, a `BrandScanReader` for verified `/s` Brand
 filters and the 19 `/s?srs=...&rh=p_89:...` brand pages. Store pages, root URLs, keyword-only
 searches and Seller filters are rejected. Search scope is retained, tracking is removed, and
-requests carry `s=date-desc-rank` and `page=1..7`.
+requests carry `s=date-desc-rank` (amazon.com; amazon.in reads best sellers first, `s=exact-aware-popularity-rank`, owner 2026-11-08) and `page=1..7`.
 
 The existing application `ListingPageReader`/core `ListingPages` performs ScraperAPI capture and
 archive verification before parsing. This reader performs no HTTP or browser operations itself.

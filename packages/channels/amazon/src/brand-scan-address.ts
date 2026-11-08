@@ -2,7 +2,6 @@ import { brandScanErrors } from "@crawl-automation/channels-core";
 import { AMAZON_US, type AmazonSite } from "./site.js";
 
 export const AMAZON_SCAN_MAX_PAGES = 7;
-const SORT = "date-desc-rank";
 const BRAND_FILTER = /^(?:p_123:\d+|p_(?:4|89):[^,|]{1,80})$/;
 
 function filtersOf(url: URL): string[] {
@@ -49,7 +48,7 @@ export function amazonScanSourceUrl(raw: string, site: AmazonSite = AMAZON_US): 
       result.searchParams.set(key, value);
     }
   }
-  result.searchParams.set("s", SORT);
+  result.searchParams.set("s", site.scanSort);
   return result.href;
 }
 

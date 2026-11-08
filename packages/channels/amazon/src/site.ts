@@ -23,6 +23,12 @@ export interface AmazonSite {
    * unreadable, and Amazon serves the same image at up to 2560 px (never enlarged past the uploaded original).
    */
   imageSize: number | null;
+  /**
+   * The order a brand scan reads its seven search pages in. amazon.com: newest first, so a new product is found.
+   * amazon.in (owner 2026-11-08): best sellers first. Its brand searches are longer than seven pages and newest first
+   * filled them with reseller relistings that print no label (Himalaya: 21 of the first 29 had none).
+   */
+  scanSort: "date-desc-rank" | "exact-aware-popularity-rank";
 }
 
 export const AMAZON_US: AmazonSite = {
@@ -35,6 +41,7 @@ export const AMAZON_US: AmazonSite = {
   dateFormats: ["MMMM d, yyyy", "MMMM d yyyy"],
   parserVersion: "amazon-rendered/1",
   imageSize: null,
+  scanSort: "date-desc-rank",
 };
 
 // Real amazon.in pages, 2026-11-04 (docs/plans/KAN-243-india-research.md §4): "₹2,129" in priceToPay's whole part
@@ -49,6 +56,7 @@ export const AMAZON_IN: AmazonSite = {
   dateFormats: ["d MMMM yyyy"],
   parserVersion: "amazon-in-rendered/1",
   imageSize: 2560,
+  scanSort: "exact-aware-popularity-rank",
 };
 
 export const AMAZON_SITES: Readonly<Record<AmazonChannel, AmazonSite>> = {
