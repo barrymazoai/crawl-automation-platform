@@ -91,12 +91,14 @@ export function amazonBrandSearchName(url: string, site: AmazonSite = AMAZON_US)
 export function amazonBrandSearchOn(url: string, from: AmazonSite, to: AmazonSite): string | null {
   const id = amazonBrandFilterId(url, from);
   const name = amazonBrandSearchName(url, from);
-  if (!id || !name) {
-    return null;
-  }
-  const result = new URL("/s", to.origin);
+  return id && name ? amazonBrandSearch(name, id, to) : null;
+}
+
+/** A storefront's supplement-scoped search for one numeric brand ID, as a brand scan source. */
+export function amazonBrandSearch(name: string, id: string, site: AmazonSite): string {
+  const result = new URL("/s", site.origin);
   result.searchParams.set("k", name);
   result.searchParams.set("i", "hpc");
-  result.searchParams.set("rh", `n:${to.supplementNode},p_123:${id}`);
-  return amazonScanSourceUrl(result.href, to);
+  result.searchParams.set("rh", `n:${site.supplementNode},p_123:${id}`);
+  return amazonScanSourceUrl(result.href, site);
 }

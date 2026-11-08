@@ -6,6 +6,7 @@ import {
   siteAnalysisErrors,
   CancelScansSchema,
   DerivedSourcesSchema,
+  LookedUpSourcesSchema,
   CreateSourceSchema,
   ImportSourcesSchema,
   ListSourcesSchema,
@@ -119,6 +120,16 @@ export const brandsRouter = router({
   deriveAmazonInSources: procedure
     .input(DerivedSourcesSchema)
     .mutation(({ ctx, input }) => ctx.brandSources.deriveAmazonIn(input)),
+
+  /**
+   * KAN-243: amazon.in sources for brands whose amazon.com source has no brand ID (Store pages), looked up by name on
+   * amazon.in (one paid search page per brand, archived); at most 100 sources per call.
+   */
+  lookupAmazonInSources: procedure
+    .input(LookedUpSourcesSchema)
+    .mutation(({ ctx, input, signal }) =>
+      ctx.brandSources.lookupAmazonIn(input, signal ?? new AbortController().signal),
+    ),
 
   /** Enable or disable a source; only an enabled source can run. */
   toggleSource: procedure

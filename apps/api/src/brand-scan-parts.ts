@@ -20,9 +20,9 @@ import {
 } from "@crawl-automation/app";
 import { BROWSER_SCAN_PERMITS } from "./browser-scan-permit-settings.js";
 import { wholeFoodsSourceFromAmazon } from "./whole-foods-source-derivation.js";
-import { amazonInSourceFromAmazon } from "./amazon-in-source-derivation.js";
+import { amazonInSourceFromAmazon, amazonInSourceLookup } from "./amazon-in-source-derivation.js";
 import { adapterBrowserScanners } from "./browser-scan-gateways.js";
-import { createListingPages } from "@crawl-automation/channels-core";
+import { createListingPages, type ListingPages } from "@crawl-automation/channels-core";
 import {
   type TemporalClient,
   type Database,
@@ -85,10 +85,10 @@ export function brandScanParts(parts: BrandScanDependencies): BrandScanParts {
     channelRegistry(dtcSites, settings?.swanson, settings?.wholefoods),
   );
   const store = new PostgresBrandScans(database);
-  const remote = settings ? createR2Objects(settings.r2, settings.r2Credentials).store : null;
+  const pages = settings ? scanPages(settings) : null;
   const browsers = settings ? browserScanners(settings, parts.temporal, dtcSites) : {};
   bindDtcBrowser(browsers, registry);
-  const brandSources = sourceImports({ database, registry, browsers, log, store });
+  const brandSources = sourceImports({ database, registry, browsers, log, store, pages });
   const brandScans = new BrandScanService({
     store,
     ...{ registry, browsers, log },
@@ -96,10 +96,10 @@ export function brandScanParts(parts: BrandScanDependencies): BrandScanParts {
     objects: parts.evidenceObjects,
     dtcQueue: new PostgresDtcScanQueue(database),
   });
-  if (!settings || !remote) {
+  if (!settings || !pages) {
     return { brandScans, brandSources, runner: null };
   }
-  const readers = { registry, pages: createListingPages(settings, remote), browsers };
+  const readers = { registry, pages, browsers };
   const amazonQueue = new AmazonBrandScanQueue({
     queue: parts.queue,
     knownListings: (scan) => store.knownListings(scan.source, scan.scanId),
@@ -117,6 +117,10 @@ export function brandScanParts(parts: BrandScanDependencies): BrandScanParts {
   return { brandScans, brandSources, runner: new BrandScanRunner(deps, settings.runner) };
 }
 
+function scanPages(settings: BrandScanSettings): ListingPages {
+  return createListingPages(settings, createR2Objects(settings.r2, settings.r2Credentials).store);
+}
+
 function gatedListings(settings: BrandScanSettings, temporal: TemporalClient) {
   return Object.fromEntries(
     Object.entries(settings.permits)
@@ -129,14 +133,18 @@ function gatedListings(settings: BrandScanSettings, temporal: TemporalClient) {
   );
 }
 
+/** amazon.in brand lookups in flight at once: 100 brands take a few minutes, well under ScraperAPI's concurrency. */
+const AMAZON_IN_LOOKUPS_AT_ONCE = 5;
+
 function sourceImports(parts: {
   database: Database;
   registry: ReturnType<typeof channelRegistry>;
   browsers: BrowserBrandScanners;
   log: Logger;
   store: PostgresBrandScans;
+  pages: ListingPages | null;
 }) {
-  const { database, registry, browsers, log, store } = parts;
+  const { database, registry, browsers, log, store, pages } = parts;
   const sourceStore = new PostgresBrandSourceImport(database);
   return new BrandSourceImport({
     store: sourceStore,
@@ -152,6 +160,16 @@ function sourceImports(parts: {
       channel: "amazon-in",
       derive: amazonInSourceFromAmazon,
     },
+    ...(pages && {
+      lookedUpAmazonIn: {
+        sources: store,
+        store: sourceStore,
+        channel: "amazon-in" as const,
+        concurrency: AMAZON_IN_LOOKUPS_AT_ONCE,
+        lookup: amazonInSourceLookup(pages),
+        log,
+      },
+    }),
     registry,
     browsers,
     log,

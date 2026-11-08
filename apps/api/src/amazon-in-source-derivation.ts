@@ -1,5 +1,12 @@
-import { AMAZON_IN, AMAZON_US, amazonBrandSearchOn } from "@crawl-automation/channel-amazon";
-import { brandScanErrors } from "@crawl-automation/channels-core";
+import {
+  AMAZON_IN,
+  AMAZON_MAX_BYTES,
+  AMAZON_US,
+  amazonBrandLookupUrl,
+  amazonBrandSearchFromLookup,
+  amazonBrandSearchOn,
+} from "@crawl-automation/channel-amazon";
+import { brandScanErrors, type ListingPages } from "@crawl-automation/channels-core";
 import { isAppError, recordRecovery } from "@crawl-automation/platform";
 import type { ScanSource } from "@crawl-automation/app";
 
@@ -20,4 +27,33 @@ export function amazonInSourceFromAmazon(source: ScanSource): string | null {
     recordRecovery(error, { operation: "amazon-in.source-derivation" });
     return null;
   }
+}
+
+/** Lookup pages are archived under this name, one per brand, and read from the archive when looked up again. */
+const LOOKUP_ARCHIVE = "amazon-in-brand-lookup";
+
+/**
+ * KAN-243 (owner 2026-11-08): the brands with a company whose amazon.com source is a Store page (no brand ID) are
+ * looked up by name on amazon.in, one search page per brand through the brand scans' ScraperAPI and archive.
+ */
+export function amazonInSourceLookup(pages: Pick<ListingPages, "read">) {
+  return async (source: ScanSource, signal: AbortSignal): Promise<string | null> => {
+    if (source.channel !== "amazon") {
+      return null;
+    }
+    const read = await pages.read(
+      {
+        scanId: LOOKUP_ARCHIVE,
+        channel: "amazon-in",
+        url: amazonBrandLookupUrl(source.brandName, AMAZON_IN),
+        label: `brand-${source.brandId}`,
+        answer: "html",
+        origins: [AMAZON_IN.origin],
+        maxBytes: AMAZON_MAX_BYTES,
+        timeoutMs: 120_000,
+      },
+      signal,
+    );
+    return amazonBrandSearchFromLookup(read.body, source.brandName, AMAZON_IN);
+  };
 }

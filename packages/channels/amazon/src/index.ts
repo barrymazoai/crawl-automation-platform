@@ -11,6 +11,8 @@ export {
   amazonBrandSearchName,
   amazonBrandSearchOn,
 } from "./brand-scan-address.js";
+export { amazonBrandLookupUrl, amazonBrandSearchFromLookup } from "./brand-lookup.js";
+export { AMAZON_MAX_BYTES } from "./dom.js";
 export { amazonStoreSourceUrl } from "./store-address.js";
 export { amazonStoreBrandScan, parseAmazonStoreListing } from "./store-listing.js";
 export { AmazonStoreBrandScan } from "./store-scan.js";
