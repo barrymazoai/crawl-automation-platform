@@ -24,9 +24,16 @@ export function splitLabelIngredients(block: string): string[] {
     const c = block[i];
     if (c === "(" || c === "[") stack.push(c);
     if (c === ")" || c === "]") { if (stack.pop() !== (c === ")" ? "(" : "[")) throw Error("LABEL.INGREDIENT_BOUNDARY"); }
-    if ((c === "," || c === ";") && stack.length === 0) { parts.push(block.slice(start, i).trim()); start = i + 1; }
+    // A line break between items (a list printed one item per line, copied with its breaks; owner 2026-11-08) is a
+    // separator like a comma; a break right after a comma or before one adds no item.
+    if ((c === "," || c === ";" || c === "\n") && stack.length === 0) {
+      const part = block.slice(start, i).trim();
+      if (part || c !== "\n") parts.push(part);
+      start = i + 1;
+    }
   }
-  parts.push(block.slice(start).trim());
+  const last = block.slice(start).trim();
+  if (last || !/\n\s*$/.test(block)) parts.push(last);
   if (stack.length || parts.some(p => !p || /^\([^()]+\)[.]?$/.test(p)) || /^\s*other\s+ingredients/i.test(block)) throw Error("LABEL.INGREDIENT_BOUNDARY");
   return parts;
 }

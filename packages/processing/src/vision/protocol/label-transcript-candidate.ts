@@ -5,7 +5,7 @@ import {
   type LabelImageCandidate,
 } from "@crawl-automation/v3-contracts";
 import { formatPanel, type FormatPanel } from "../../label/transcript/format-panel.js";
-import { isAmountCell } from "../../label/transcript/transcript-cells.js";
+import { isAmountCell, servingLine } from "../../label/transcript/transcript-cells.js";
 import { marketRules } from "../../label/markets/market-rules.js";
 import { printsPairedRow } from "../../label/transcript/paired-rows.js";
 import { joinPanelReads } from "./label-transcript-join.js";
@@ -177,8 +177,15 @@ function onePanel(wire: LabelTranscriptWire, formats: readonly LabelFormatId[]):
   return JSON.stringify(kept).includes(UNREADABLE_CELL) ? "unreadable cell" : panel;
 }
 
+/**
+ * The copied serving lines the parser reads (Serving Size, Servings Per Container), then the table's rows. Owner
+ * 2026-11-08 (KAN-243, Luna high copy test): any other line the copy files beside the table ("Recommended usage level:
+ * 1-2 servings per day", "8 SHOTS") is no row of the table.
+ */
 const usRows = (panel: Panel): TranscriptRow[] => [
-  ...panel.servingLines.map((text) => ({ cells: [text], indent: 0, bold: false, table: 0 })),
+  ...panel.servingLines
+    .map((text) => ({ cells: [text], indent: 0, bold: false, table: 0 }))
+    .filter((row) => servingLine(row)),
   ...panel.rows.map((row) => ({ ...row, table: 0 })),
 ];
 

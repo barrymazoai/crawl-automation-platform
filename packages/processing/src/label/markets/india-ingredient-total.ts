@@ -7,7 +7,7 @@ import type { LabelTranscriptWire } from "../../vision/protocol/label-transcript
  * The total is no ingredient: it leaves the copied list. A list without shares, or a share that is not the last item,
  * is kept as printed.
  */
-const TOTAL = /\s*[,;]\s*100(?:\.0+)?\s*%\s*\.?\s*$/u;
+const TOTAL = /\s*[,;\n]\s*100(?:\.0+)?\s*%\s*\.?\s*$/u;
 const SHARE = /\d(?:\.\d+)?\s*%/u;
 
 export function withoutIngredientTotal(

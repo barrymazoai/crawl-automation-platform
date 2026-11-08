@@ -81,7 +81,11 @@ export function printedPercentHeader(
   return headedColumns(sideBySide(panel).columnHeaders, formats)?.dailyValueHeading ?? null;
 }
 
-/** The read so far: the headed columns' printed headers and the serving lines, kept as rows unless the format's. */
+/**
+ * The read so far: the headed columns' printed headers and the serving lines the format reads. Owner 2026-11-08
+ * (KAN-243, Luna high copy test): any other line the copy files beside the table ("Recommended usage level: 1-2
+ * servings per day", "8 SHOTS") is no row of the table.
+ */
 function servingRead(
   servingLines: readonly string[],
   headers: HeadedColumns | null,
@@ -95,9 +99,7 @@ function servingRead(
     dailyValueHeading: headers?.dailyValueHeading ?? null,
   };
   for (const text of servingLines) {
-    if (!formatLine(read, [text], formats)) {
-      read.rows.push({ cells: [text], indent: 0, bold: false, table: 0 });
-    }
+    formatLine(read, [text], formats);
   }
   return read;
 }

@@ -13,6 +13,11 @@ import { labelIngredientPresencePolicySchema } from "./label-ingredient-presence
  * panel (each row's cells, indent, bold) and the Other Ingredients text; code parses the copy into the label answer
  * with the same rules as a web page's table. A new rule is a new version, never an edit: the prompt and schemas are
  * part of the setup's fingerprint.
+ *
+ * Owner 2026-11-08 (KAN-243, 12 amazon.in labels copied by Luna medium/high and Haiku with the old and this prompt):
+ * lines beside the table go in "servingLines", a running line of nutrients is one row each, an ingredient list printed
+ * one per line keeps its breaks, and an issue is reported only for an unreadable name, amount or header. With Luna
+ * high, 2 of 195 printed numbers were misread (a blurred %RDA), none of the 12 copies reported a needless issue.
  */
 export const labelTranscriptProtocol = "label-visual-wire/4" as const;
 
@@ -56,11 +61,13 @@ export const labelTranscriptPrompt = `Transcribe the Supplement Facts / Nutritio
 - A blend printed as "Blend Name: A, B (part), C" in one cell stays one cell exactly as printed. A list printed on its own line under a blend is its own row.
 - "indent": 0 for a row at the left edge, 1 for one visible step of indentation, 2 for two, and so on.
 - "bold": true when the row text is bold or a heading.
-- "servingLines": the Serving Size / Servings Per Container lines as printed. "columnHeaders": the header row cells (e.g. "Amount Per Serving", "% Daily Value"). "footnotes": lines under the table.
+- "servingLines": the Serving Size / Servings Per Container lines as printed, and every other line printed with the panel that is not a row of the table (usage lines, pack counts such as "8 SHOTS", "Approx. Values"); such lines never go in "rows". "columnHeaders": the header row cells (e.g. "Amount Per Serving", "% Daily Value"). "footnotes": lines under the table.
+- Nutrients printed as one running line ("Energy 7.1 kcal (0.4%*) | Protein 0.04 g (0.07%*)") are one row per nutrient: its name, its amount, its percentage, each exactly as printed.
 - Read every digit and unit carefully. A character you cannot read is written ${UNREADABLE_CELL} in its cell, never a plausible guess, and reported as an UNREADABLE issue.
-- "otherIngredientsHeading": the heading exactly as printed ("Other Ingredients:", "Ingredients:"), "otherIngredients": the ENTIRE body after it exactly as printed, joining visual line wraps with single spaces; both null when no such section is visible.
+- "otherIngredientsHeading": the heading exactly as printed ("Other Ingredients:", "Ingredients:"), "otherIngredients": the ENTIRE body after it exactly as printed. A word or item that merely wraps onto the next line is joined with a single space; when the items are printed one per line with no comma between them, keep each line break between items as a newline character. Both null when no such section is visible.
 - "otherIngredientsState": present, none_printed, not_fully_visible, or unreadable. none_printed ONLY when the ENTIRE physical label is visible and readable and no separate ingredients section is printed (then wholeLabelVisible true). A Facts crop, one side of a bottle or an image of unknown coverage is not_fully_visible with wholeLabelVisible false. Null alone never establishes absence.
-- Do not correct spelling, do not add anything not printed, do not decide what is a blend. If several facts panels are printed, one entry per panel.`;
+- Do not correct spelling, do not add anything not printed, do not decide what is a blend. If several facts panels are printed, one entry per panel.
+- "issues": report an issue ONLY when a character of an ingredient name, an amount, a percentage or a column header cannot be read with certainty, or a facts panel is cut off. Do not report how a dash or symbol was transcribed, the image resolution in general, or that only one side of the package is visible (that is otherIngredientsState / wholeLabelVisible).`;
 
 /**
  * KAN-243: the copy prompt for an image selected in these label formats. US alone is the prompt above, byte for byte.
