@@ -34,13 +34,12 @@ const LOOKUP_ARCHIVE = "amazon-in-brand-lookup";
 
 /**
  * KAN-243 (owner 2026-11-08): the brands with a company whose amazon.com source is a Store page (no brand ID) are
- * looked up by name on amazon.in, one search page per brand through the brand scans' ScraperAPI and archive.
+ * looked up by name on amazon.in, one search page per brand through the brand scans' ScraperAPI and archive. Owner
+ * 2026-11-09 ("把能找的全部找完"): every brand with a company is looked up, so a source of any channel (a DTC site,
+ * GNC, an amazon.com search whose brand ID amazon.in does not know) names the brand; only its name is used.
  */
 export function amazonInSourceLookup(pages: Pick<ListingPages, "read">) {
   return async (source: ScanSource, signal: AbortSignal): Promise<string | null> => {
-    if (source.channel !== "amazon") {
-      return null;
-    }
     const read = await pages.read(
       {
         scanId: LOOKUP_ARCHIVE,
