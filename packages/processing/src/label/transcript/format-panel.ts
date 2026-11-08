@@ -2,12 +2,11 @@ import {
   columnRole,
   formatRules,
   isUsOnlyFormats,
-  US_FACTS,
-  type ColumnRole,
   type LabelFormatId,
 } from "@crawl-automation/v3-contracts";
 import { marketRules } from "../markets/market-rules.js";
 import type { TranscriptRow } from "./html-transcript.js";
+import { headedColumns, rowColumns, type HeadedColumns } from "./headed-columns.js";
 import { sideBySide } from "./side-by-side.js";
 
 /** One copied panel, as the vision copy or a page table prints it. */
@@ -138,35 +137,6 @@ function placedRow(
   return columns ? { ...row, table: 0, columns } : "unaligned";
 }
 
-interface HeadedColumns {
-  amountAt: number | null;
-  dvAt: number | null;
-  amountHeading: string | null;
-  dailyValueHeading: string | null;
-}
-
-/**
- * The headed amount column (per serving, else the fixed-basis one) and the first percentage column, when the printed
- * headers name a column only a non-US format knows; null leaves each cell to be read by its own text.
- */
-function headedColumns(
-  headers: readonly string[],
-  formats: readonly LabelFormatId[],
-): HeadedColumns | null {
-  const roles = headers.map((header) => (header.trim() ? columnRole(header, formats) : null));
-  if (!roles.some((role) => role && role.format !== US_FACTS)) {
-    return null;
-  }
-  const at = (role: ColumnRole["role"]) => {
-    const found = roles.findIndex((known) => known?.role === role);
-    return found < 0 ? null : found;
-  };
-  const amountAt = at("amount") ?? at("per_basis");
-  const dvAt = at("daily_value");
-  const text = (index: number | null) => (index === null ? null : (headers[index]?.trim() ?? null));
-  return { amountAt, dvAt, amountHeading: text(amountAt), dailyValueHeading: text(dvAt) };
-}
-
 /** A heading, serving or pack line of the format; serving and pack values are kept as printed. */
 function formatLine(
   read: FormatPanel,
@@ -221,28 +191,6 @@ function headerRow(cells: readonly string[], formats: readonly LabelFormatId[]):
     printed.every((cell) => matchesAny(cell, names) || columnRole(cell, formats) !== null) &&
     printed.some((cell) => columnRole(cell, formats) !== null)
   );
-}
-
-/**
- * Value-cell positions of the headed columns in this row. The headers either include the name column's or not; a
- * row of the name alone (a group heading) has no values. Any other width cannot be placed under its headers.
- */
-function rowColumns(
-  cells: readonly string[],
-  headers: number,
-  at: Pick<HeadedColumns, "amountAt" | "dvAt">,
-): TranscriptRow["columns"] | null {
-  const values = cells.length - 1;
-  if (values === 0) {
-    return { amount: null, dailyValue: null };
-  }
-  const shift = headers - values;
-  if (shift !== 0 && shift !== 1) {
-    return null;
-  }
-  const place = (header: number | null) =>
-    header === null || header - shift < 0 ? null : header - shift;
-  return { amount: place(at.amountAt), dailyValue: place(at.dvAt) };
 }
 
 const matchesAny = (text: string, rules: readonly RegExp[]) =>

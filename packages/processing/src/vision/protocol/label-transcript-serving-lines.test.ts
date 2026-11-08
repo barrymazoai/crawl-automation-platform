@@ -183,3 +183,49 @@ describe("the serving and the pack's count copied on one line (amazon.in rerun 2
     expect([built.serving, built.servings]).toEqual([serving, servings]);
   });
 });
+
+describe("nutrients of a running line under a headed table (HealthyHey Magnesium Glycinate, 2026-11-08)", () => {
+  const panel = (extra: ReturnType<typeof row>[], headers: string[]) => ({
+    heading: "NUTRITIONAL INFORMATION",
+    servingLines: ["Serving Size: 1 Veg. Capsule (0.73 g)", "Servings Per Container: 120"],
+    columnHeaders: headers,
+    rows: [
+      row("Magnesium Glycinate", "550 mg", "**", "**"),
+      row("Elemental Magnesium 22%", "121 mg", "27.50", "32.70"),
+      ...extra,
+    ],
+    footnotes: [],
+  });
+  const ONE_AMOUNT = ["Nutrients", "Amount Per Serving", "*% RDA Men", "*% RDA Women"];
+
+  it("takes each nutrient's amount from the one amount column", () => {
+    const built = transcriptCandidate(
+      wire(panel([row("Energy Value", "0 kcal"), row("Protein", "0 g")], ONE_AMOUNT)),
+      policy,
+      INDIA,
+    );
+    expect(read(built).rows).toEqual([
+      ["Magnesium Glycinate", "550 mg"],
+      ["Elemental Magnesium 22%", "121 mg"],
+      ["Energy Value", "0 kcal"],
+      ["Protein", "0 g"],
+    ]);
+  });
+
+  it("leaves a lone percentage, or a lone cell under per 100 g and per serving columns, unaligned", () => {
+    const percent = transcriptCandidate(
+      wire(panel([row("Energy Value", "0%")], ONE_AMOUNT)),
+      policy,
+      INDIA,
+    );
+    expect("reason" in percent && percent.reason).toMatch(/not aligned/);
+    const twoAmounts = transcriptCandidate(
+      wire(
+        panel([row("Energy Value", "0 kcal")], ["Nutrients", "Per 100 g", "Per Serving", "%RDA"]),
+      ),
+      policy,
+      INDIA,
+    );
+    expect("reason" in twoAmounts && twoAmounts.reason).toMatch(/not aligned/);
+  });
+});
