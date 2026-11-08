@@ -11,6 +11,7 @@ import {
   labelTranscriptAnswerSchema,
   labelTranscriptWireSchema,
   type LabelTranscriptAnswer,
+  type LabelTranscriptWire,
 } from "./label-transcript-wire.js";
 import { MAX_VISION_ANSWER_BYTES } from "./vision-limits.js";
 
@@ -22,24 +23,66 @@ export function dosedRows(candidate: LabelImageCandidate): { index: number; row:
   return rows.flatMap((row, index) => (row.amount ? [{ index, row }] : []));
 }
 
-/** Rows the independent re-read printed with the same amount. */
+/**
+ * Rows the independent re-read printed with the same amount: its first cell is the amount, or (owner 2026-11-08,
+ * KAN-243: an Indian table prints "per 100 g" before "per serving", and its unit in the row name, "cholesterol (mg)
+ * <1.0 0.0") its cells, left to right, are the copied row's amount cells and the selected amount is one of them.
+ */
 export function rereadConfirmedRows(
   candidate: LabelImageCandidate,
   reread: string | null,
+  copied?: LabelTranscriptWire,
 ): number[] {
   if (!reread) {
     return [];
   }
   const answer = labelRereadWireSchema.parse(JSON.parse(reread));
+  const copiedRows = copied?.panels.flatMap((panel) => panel.rows) ?? [];
   return dosedRows(candidate)
     .filter(({ row }) =>
       answer.rows.some(
         (read) =>
           read.name === row.name.text &&
-          squashAmount(read.amountCells[0] ?? "") === squashAmount(row.amount?.text ?? ""),
+          (squashAmount(read.amountCells[0] ?? "") === squashAmount(row.amount?.text ?? "") ||
+            readsCopiedCells(read.amountCells, row, copiedRows)),
       ),
     )
     .map(({ index }) => index);
+}
+
+const PERCENT_ONLY = /%|^[\s*†‡•°○–—-]*$/u;
+
+/** The re-read's cells are the copied row's amount cells in order (a %DV column after them aside). */
+function readsCopiedCells(
+  cells: readonly string[],
+  row: Row,
+  copiedRows: readonly LabelTranscriptWire["panels"][number]["rows"][number][],
+): boolean {
+  const selected = row.amount?.text ?? "";
+  return copiedRows.some((copy) => {
+    if ((copy.cells[0] ?? "").trim() !== row.name.text.trim()) {
+      return false;
+    }
+    const amounts = copy.cells.slice(1).filter((cell) => cell.trim() && !PERCENT_ONLY.test(cell));
+    const at = amounts.findIndex((cell) => sameCell(cell, selected));
+    return (
+      cells.length > 0 &&
+      at >= 0 &&
+      at < cells.length &&
+      cells.every((cell, index) => amounts[index] !== undefined && sameCell(amounts[index], cell))
+    );
+  });
+}
+
+/** The same printed amount; a bare number (its unit printed in the row name) matches that number with a unit. */
+function sameCell(copied: string, read: string): boolean {
+  const one = squashAmount(copied);
+  const other = squashAmount(read);
+  if (one === other) {
+    return true;
+  }
+  const bare = /^[<>≤≥]?\d+(?:\.\d+)?$/u;
+  return bare.test(one) && other.startsWith(one) && /^[a-z]+$/u.test(other.slice(one.length));
 }
 
 export function isTranscriptAnswer(raw: string): boolean {
@@ -56,11 +99,8 @@ export function isTranscriptAnswer(raw: string): boolean {
  */
 export function decodeTranscriptAnswer(response: string) {
   const saved = labelTranscriptAnswerSchema.parse(JSON.parse(response));
-  const built = transcriptCandidate(
-    labelTranscriptWireSchema.parse(JSON.parse(saved.raw)),
-    saved.policy,
-    saved.formats,
-  );
+  const copied = labelTranscriptWireSchema.parse(JSON.parse(saved.raw));
+  const built = transcriptCandidate(copied, saved.policy, saved.formats);
   if ("reason" in built) {
     throw visionFailure("VISION.INVALID_OUTPUT", "executed");
   }
@@ -70,7 +110,7 @@ export function decodeTranscriptAnswer(response: string) {
   const byOcr = ocrConfirmedRows(built.candidate, saved);
   const confirmed = new Set([
     ...(byOcr ?? []),
-    ...rereadConfirmedRows(built.candidate, saved.reread),
+    ...rereadConfirmedRows(built.candidate, saved.reread, copied),
   ]);
   if (dosedRows(built.candidate).some(({ index }) => !confirmed.has(index)) || !byOcr) {
     codes.add(labelValidationErrors.code("LABEL.AMOUNT_UNREADABLE"));

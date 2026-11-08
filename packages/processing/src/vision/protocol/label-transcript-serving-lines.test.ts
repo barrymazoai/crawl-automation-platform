@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { splitLabelIngredients } from "@crawl-automation/v3-contracts";
+import { rereadConfirmedRows } from "./label-transcript-answer.js";
 import { transcriptCandidate } from "./label-transcript-candidate.js";
 import { labelTranscriptWireSchema } from "./label-transcript-wire.js";
 
@@ -97,5 +98,45 @@ describe("an ingredient list printed one item per line", () => {
     expect("block" in built ? built.block?.text : built.reason).toBe(
       "pea protein isolate 51.8%\ncocoa powder 20.5%",
     );
+  });
+});
+
+describe("a re-read of an Indian row with two amount columns", () => {
+  const copied = labelTranscriptWireSchema.parse({
+    codec: "label-visual-wire/4",
+    panels: [
+      {
+        heading: "NUTRITIONAL INFORMATION",
+        servingLines: [],
+        columnHeaders: ["", "per 100 g", "per 38 g serving", "%RDA/serve"],
+        rows: [
+          row("protein (g)", "66.9", "25.4", "47.1% •"),
+          row("cholesterol (mg)", "<1.0", "0.0", "–"),
+        ],
+        footnotes: [],
+      },
+    ],
+    otherIngredientsHeading: null,
+    otherIngredients: null,
+    otherIngredientsState: "not_fully_visible",
+    wholeLabelVisible: false,
+    issues: [],
+  });
+  const built = transcriptCandidate(copied, policy, INDIA);
+  if ("reason" in built) {
+    throw new Error(built.reason);
+  }
+  const reread = (cells: string[]) =>
+    JSON.stringify({ rows: [{ name: "cholesterol (mg)", amountCells: cells }] });
+
+  it("confirms the per-serving amount when both cells match the copy, units from the row name", () => {
+    expect(rereadConfirmedRows(built.candidate, reread(["<1.0 mg", "0.0 mg"]), copied)).toEqual([
+      1,
+    ]);
+  });
+
+  it("does not confirm a re-read that prints another number in either column", () => {
+    expect(rereadConfirmedRows(built.candidate, reread(["<1.0 mg", "0.6 mg"]), copied)).toEqual([]);
+    expect(rereadConfirmedRows(built.candidate, reread(["1.0 mg", "0.0 mg"]), copied)).toEqual([]);
   });
 });
