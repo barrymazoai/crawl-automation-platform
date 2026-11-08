@@ -18,7 +18,10 @@ export function labelImageIntegrityFindings(candidate: LabelImageCandidate): Lab
 }
 
 /** Split the original IMAGE transcription only, retaining parenthesized subingredients. */
-export function splitLabelIngredients(block: string): string[] {
+export function splitLabelIngredients(printed: string): string[] {
+  // A line that opens with a parenthesis describes the item above it ("whey protein blend 74.9%" / "(instantised with
+  // lecithin)", The Whole Truth whey, 2026-11-08): it continues that item, it is no item of its own.
+  const block = printed.replace(/\s*\n(?=\s*\()/g, " ");
   const parts: string[] = [], stack: string[] = []; let start = 0;
   for (let i = 0; i < block.length; i++) {
     const c = block[i];

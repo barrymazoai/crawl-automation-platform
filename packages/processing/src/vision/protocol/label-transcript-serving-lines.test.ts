@@ -80,6 +80,14 @@ describe("an ingredient list printed one item per line", () => {
       splitLabelIngredients("pea protein isolate 51.8%\nbrown rice protein isolate 22.2%"),
     ).toEqual(["pea protein isolate 51.8%", "brown rice protein isolate 22.2%"]);
     expect(splitLabelIngredients("Whey, Cocoa,\nSalt")).toEqual(["Whey", "Cocoa", "Salt"]);
+    expect(
+      splitLabelIngredients(
+        "whey protein blend 74.9%\n(instantised with lecithin)\nwhey protein isolate 50.0%",
+      ),
+    ).toEqual([
+      "whey protein blend 74.9% (instantised with lecithin)",
+      "whey protein isolate 50.0%",
+    ]);
   });
 
   it("India: the closing '100%' on its own line is no ingredient", () => {
