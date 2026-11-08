@@ -1,4 +1,8 @@
-import { isAmazonChannel } from "@crawl-automation/v3-contracts";
+import {
+  AMAZON_MARKETPLACES,
+  isAmazonChannel,
+  type AmazonChannel,
+} from "@crawl-automation/v3-contracts";
 import { z } from "zod";
 import { appErrors } from "../errors.js";
 import {
@@ -12,20 +16,27 @@ import type { ScanRecord } from "./scan-model.js";
 
 type ScanProduct = Pick<QueuedProduct, "url" | "listingId" | "variantId">;
 
-/** Preserve the scan's canonical ASIN and URL validation before enqueueing. */
-const scanProduct = QueuedProductSchema.omit({ sourceId: true })
-  .extend({
-    listingId: z.string().regex(/^[A-Z0-9]{10}$/),
-    variantId: z.null(),
-  })
-  .refine((entry) => entry.url === `https://www.amazon.com/dp/${entry.listingId}`);
-const scanProducts = z
-  .array(scanProduct)
-  .min(1)
-  .max(10_000)
-  .refine(
-    (products) => new Set(products.map((product) => product.listingId)).size === products.length,
-  );
+/**
+ * Preserve the scan's canonical ASIN and URL validation before enqueueing: each product page is on the scan's own
+ * storefront (KAN-243: an amazon.in scan lists `https://www.amazon.in/dp/<ASIN>`; it was refused as not amazon.com).
+ */
+const scanProducts = (channel: AmazonChannel) =>
+  z
+    .array(
+      QueuedProductSchema.omit({ sourceId: true })
+        .extend({
+          listingId: z.string().regex(/^[A-Z0-9]{10}$/),
+          variantId: z.null(),
+        })
+        .refine(
+          (entry) => entry.url === `${AMAZON_MARKETPLACES[channel].origin}/dp/${entry.listingId}`,
+        ),
+    )
+    .min(1)
+    .max(10_000)
+    .refine(
+      (products) => new Set(products.map((product) => product.listingId)).size === products.length,
+    );
 
 export interface AmazonScanQueue {
   knownListings(scan: ScanRecord): Promise<QueuedProduct[]>;
@@ -67,10 +78,12 @@ export class AmazonBrandScanQueue implements AmazonScanQueue {
       channel,
       batchId,
       label: `brand scan: ${scan.source.brandName}`.slice(0, 200),
-      products: scanProducts.parse(candidates).map((product) => ({
-        ...product,
-        sourceId: scan.source.sourceId,
-      })),
+      products: scanProducts(channel)
+        .parse(candidates)
+        .map((product) => ({
+          ...product,
+          sourceId: scan.source.sourceId,
+        })),
     });
     return batchId === scan.scanId
       ? this.deps.queue.addScanDiscovery(input)

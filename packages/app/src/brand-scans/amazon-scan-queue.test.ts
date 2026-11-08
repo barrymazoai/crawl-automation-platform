@@ -129,3 +129,39 @@ describe("Amazon scan queue bridge", () => {
     expect(queue.addScanDiscovery).not.toHaveBeenCalled();
   });
 });
+
+describe("an amazon.in scan (KAN-243, 2026-11-08 trial: Himalaya and Now Foods)", () => {
+  const india: ScanRecord = {
+    ...scan,
+    source: {
+      ...scan.source,
+      channel: "amazon-in",
+      url: "https://www.amazon.in/s?rh=p_123%3A94291",
+    },
+  };
+  const listed = products.slice(0, 2).map(({ listingId }) => ({
+    listingId,
+    variantId: null,
+    url: `https://www.amazon.in/dp/${listingId}`,
+  }));
+
+  it("queues its amazon.in product pages in the amazon-in queue", async () => {
+    const { bridge, queue } = fixture();
+    await bridge.add(india, listed, india.scanId);
+    expect(AddToQueueSchema.parse(queue.addScanDiscovery.mock.calls[0]?.[0])).toMatchObject({
+      channel: "amazon-in",
+      products: listed.map((product) => ({ ...product, sourceId: scan.source.sourceId })),
+    });
+  });
+
+  it("refuses an amazon.com page in an amazon.in scan, and an amazon.in page in a US scan", async () => {
+    const { bridge, queue } = fixture();
+    await expect(bridge.add(india, products.slice(0, 1), india.scanId)).rejects.toMatchObject({
+      name: "ZodError",
+    });
+    await expect(bridge.add(scan, listed.slice(0, 1), scan.scanId)).rejects.toMatchObject({
+      name: "ZodError",
+    });
+    expect(queue.addScanDiscovery).not.toHaveBeenCalled();
+  });
+});
