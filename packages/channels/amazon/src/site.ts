@@ -30,8 +30,9 @@ export interface AmazonSite {
    */
   scanSort: "date-desc-rank" | "exact-aware-popularity-rank";
   /**
-   * How many search pages a brand scan reads, and how many of the listed products it keeps (null: all). amazon.in
-   * (owner 2026-11-08, demo week): one page, a brand's ten best sellers, so a day's crawl covers many companies.
+   * How many search pages a brand scan reads, and how many of a page's listed products it keeps (null: all). amazon.in
+   * (owner 2026-11-08, demo week): one page, a brand's ten best sellers, so a day's crawl covers many companies; owner
+   * 2026-11-09: fifty, so a large brand's catalogue is mostly covered (one page lists 48, all kept).
    */
   scanPages: number;
   scanProducts: number | null;
@@ -73,7 +74,7 @@ export const AMAZON_IN: AmazonSite = {
   imageSize: 2560,
   scanSort: "exact-aware-popularity-rank",
   scanPages: 1,
-  scanProducts: 10,
+  scanProducts: 50,
   supplementNode: "1374489031",
 };
 

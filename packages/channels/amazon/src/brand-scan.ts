@@ -95,7 +95,7 @@ function parsePage(input: PageInput, site: AmazonSite): AmazonListingPage {
 
 /**
  * The products the storefront keeps from this page and whether the scan stops here capped: at its last page with
- * more to read, or with products left out (amazon.in keeps a brand's first ten).
+ * more to read, or with products left out (amazon.in keeps a page's first fifty).
  */
 function keptPage(
   at: { listed: ListedProduct[]; cards: number; next: number | null; info: string; page: number },

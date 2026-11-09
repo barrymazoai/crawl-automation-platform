@@ -131,8 +131,8 @@ describe("amazon.in brand scan order (owner 2026-11-08)", () => {
 describe("amazon.in brand scan size (owner 2026-11-08, demo week)", () => {
   const source = "https://www.amazon.in/s?k=Himalaya&i=hpc&rh=n%3A1374489031%2Cp_123%3A94291";
   const reader = amazonSiteBrandScan(AMAZON_IN);
-  // A best-seller search page as amazon.in prints it: 24 result cards, the brand facet ticked, a next-page link.
-  const page = () => {
+  // A best-seller search page as amazon.in prints it: result cards, the brand facet ticked, a next-page link.
+  const page = (cards = 48) => {
     const card = (index: number) => {
       const asin = `B0${String(index).padStart(8, "0")}`;
       return `<div data-component-type="s-search-result" data-asin="${asin}"><a href="/x/dp/${asin}"><h2>Himalaya product ${index}</h2></a></div>`;
@@ -140,20 +140,27 @@ describe("amazon.in brand scan size (owner 2026-11-08, demo week)", () => {
     const next = amazonScanPageUrl(source, 2, AMAZON_IN).replace("https://www.amazon.in", "");
     return `<html><body>
       <div id="p_123/94291"><input type="checkbox" checked></div>
-      <div data-component-type="s-result-info-bar">1-24 of 223 results for "Himalaya"</div>
-      <div class="s-main-slot">${Array.from({ length: 24 }, (_, index) => card(index + 1)).join("")}</div>
+      <div data-component-type="s-result-info-bar">1-${cards} of 223 results for "Himalaya"</div>
+      <div class="s-main-slot">${Array.from({ length: cards }, (_, index) => card(index + 1)).join("")}</div>
       <span class="s-pagination-selected">1</span><a class="s-pagination-next" href="${next}">Next</a>
     </body></html>`;
   };
 
-  it("reads one page and keeps a brand's ten best sellers; the scan is capped, never full", () => {
+  const asins = (count: number) =>
+    Array.from({ length: count }, (_, index) => `B0${String(index + 1).padStart(8, "0")}`);
+
+  it("reads one page and keeps a brand's best sellers on it, up to fifty; the scan is capped, never full", () => {
     expect(reader.maxPages).toBe(1);
     const listed = reader.parsePage({ body: page(), url: reader.pageUrl(source, 1), page: 1 });
-    expect(listed.products.map((product) => product.listingId)).toEqual(
-      Array.from({ length: 10 }, (_, index) => `B0${String(index + 1).padStart(8, "0")}`),
-    );
+    expect(listed.products.map((product) => product.listingId)).toEqual(asins(48));
     expect(listed).toMatchObject({ nextPage: null, capped: true });
     expect(listed.products[0]?.url).toBe("https://www.amazon.in/dp/B000000001");
+  });
+
+  it("keeps the first fifty of a longer page", () => {
+    const listed = reader.parsePage({ body: page(60), url: reader.pageUrl(source, 1), page: 1 });
+    expect(listed.products.map((product) => product.listingId)).toEqual(asins(50));
+    expect(listed).toMatchObject({ nextPage: null, capped: true });
   });
 
   it("leaves the amazon.com scan at seven pages and every product", () => {
