@@ -8,7 +8,7 @@ import { deliveryRequest } from "./product.fixture.js";
 const connectionString = process.env["CRAWL_TEST_DATABASE_URL"];
 
 it.skipIf(!connectionString)(
-  "selects only the latest exact-source SKU state, not old successes or another site's same ID",
+  "selects only the latest exact-source SKU state, not old successes, withdrawn rescans or another site's same ID",
   async () => {
     const client = new Client({ connectionString });
     await client.connect();
@@ -50,7 +50,10 @@ it.skipIf(!connectionString)(
       ('new',$1,$2,'same',NULL,'review',$3,'dtc',now()),
       ('foreign',$1,$4,'same',NULL,'completed',$3,'dtc',now()),
       ('active',$1,$2,'active',NULL,'running',$3,'dtc',now()),
-      ('complete',$1,$2,'complete',NULL,'completed',$3,'dtc',now())`,
+      ('complete',$1,$2,'complete',NULL,'completed',$3,'dtc',now()),
+      ('kept',$1,$2,'redo',NULL,'completed',$3,'dtc',now()-interval '1 day'),
+      ('redo',$1,$2,'redo',NULL,'withdrawn',NULL,'dtc',now()),
+      ('never',$1,$2,'never',NULL,'withdrawn',NULL,'dtc',now())`,
         [batch, source, runId, other],
       );
       const query: Queryable["query"] = async (sql, values) =>
@@ -68,10 +71,12 @@ it.skipIf(!connectionString)(
       );
       expect(result.review).toBe(1);
       expect(result.pending).toBe(1);
+      // A withdrawn rescan never ran: the SKU keeps its earlier completed item, and a withdrawn-only SKU is not pending.
       expect(result.products).toMatchObject([
         { queueId: "complete", externalId: "complete", sourceId: source },
+        { queueId: "kept", externalId: "redo", sourceId: source },
       ]);
-      expect(result.products).toHaveLength(1);
+      expect(result.products).toHaveLength(2);
     } finally {
       await client.query("ROLLBACK");
       await client.end();

@@ -1,10 +1,14 @@
+/**
+ * The newest queue item per SKU. A withdrawn item never ran (e.g. owner-withdrawn duplicate rescans), so it is skipped:
+ * the SKU keeps its previous item's state and material instead of reading as pending (KAN-89).
+ */
 export const DELIVERY_QUEUE = `
   SELECT DISTINCT ON (q.source_id, q.listing_id, q.variant_id)
     q.item_id, q.batch_id::text, q.source_id::text, q.listing_id, q.variant_id,
     q.state, q.run_id::text, a.settled_at, a.outcome
   FROM queue_item q JOIN brand_source s ON s.id=q.source_id AND s.channel='dtc'
   LEFT JOIN queue_attempt a ON a.run_id=q.run_id
-  WHERE q.channel='dtc' AND q.source_id=ANY($1::uuid[])
+  WHERE q.channel='dtc' AND q.source_id=ANY($1::uuid[]) AND q.state<>'withdrawn'
     AND ($2::uuid[] IS NULL OR q.batch_id=ANY($2::uuid[]))
   ORDER BY q.source_id, q.listing_id, q.variant_id, q.created_at DESC, q.item_id DESC`;
 
