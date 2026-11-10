@@ -8,8 +8,8 @@ import { z } from "zod";
 export const EgoSettingsSchema = z.strictObject({
   /** The `ego-browser` executable, e.g. `/Users/<user>/.local/bin/ego-browser`. */
   cliPath: z.string().refine(isAbsolute, "an absolute path"),
-  /** The task space the crawler owns; pages are opened and closed inside it only. */
-  taskSpaceId: z.number().int().positive(),
+  /** The task space the crawler owns; pages are opened and closed inside it only. Ego 0.6.2.9 numbers from 0. */
+  taskSpaceId: z.number().int().nonnegative(),
   /** The longest one browser round may take, page load and scrolling included. */
   roundTimeoutMs: z.number().int().min(5_000).max(900_000).default(180_000),
   /** Read-only availability checks and each cleanup command. */

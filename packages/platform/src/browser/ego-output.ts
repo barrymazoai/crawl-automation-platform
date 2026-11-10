@@ -20,7 +20,8 @@ const MessageSchema = z.discriminatedUnion("kind", [
   }),
   z.object({
     kind: z.literal("space"),
-    spaceId: z.number().int().positive().nullable(),
+    // Ego 0.6.2.9 numbers task spaces from 0 after a restart (Server 一 and 二, 2026-11-10): 0 is a real space.
+    spaceId: z.number().int().nonnegative().nullable(),
     ownership: z.string().nullable(),
     code: z.string().nullable(),
   }),

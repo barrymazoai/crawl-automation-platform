@@ -52,6 +52,12 @@ describe("Ego output assembly (lovewellness.com, 2026-10-21)", () => {
     expect(failure).toBeUndefined();
     expect(messages).toHaveLength(1);
   });
+  it("accepts task space 0, the first number Ego 0.6.2.9 gives after a restart (2026-11-10)", async () => {
+    const line = JSON.stringify({ kind: "space", spaceId: 0, ownership: "agent", code: null });
+    const { messages, failure } = await assemble([`${EGO_MARKER}${line}`]);
+    expect(failure).toBeUndefined();
+    expect(messages).toEqual([{ kind: "space", spaceId: 0, ownership: "agent", code: null }]);
+  });
   it("still reports an unknown message and an unterminated fragment as protocol failures", async () => {
     const unknown = await assemble([`${EGO_MARKER}{"kind":"mystery"}`]);
     expect(unknown.failure?.code).toBe("BROWSER.PROTOCOL");
