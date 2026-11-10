@@ -1,4 +1,4 @@
-import { AMAZON_MARKETPLACES, type AmazonChannel } from "@crawl-automation/v3-contracts";
+import { AMAZON_MARKETPLACES, type ForeignAmazonChannel } from "@crawl-automation/v3-contracts";
 import {
   MarketplaceBrandsApi,
   PostgresBrandCompany,
@@ -31,7 +31,7 @@ export function buildProductSyncSweep(
     rpc: SupplySmartRpc;
     settings: BrandEnrichmentSettings["productSync"];
     /** KAN-243: storefronts sent to another Supply Smart (productSync.targets), by crawler channel. */
-    targets?: Partial<Record<"amazon-in", SupplySmartRpc>>;
+    targets?: Partial<Record<ForeignAmazonChannel, SupplySmartRpc>>;
   },
 ) {
   const targets = Object.entries(input.targets ?? {}) as Targets;
@@ -63,7 +63,7 @@ export function buildProductSyncSweep(
   });
 }
 
-type Targets = [AmazonChannel, SupplySmartRpc][];
+type Targets = [ForeignAmazonChannel, SupplySmartRpc][];
 
 /** Each target's writer, its company lookup and its cross-market check (KAN-243). */
 function targetWriters(
@@ -81,7 +81,7 @@ function targetWriters(
         writer: new SupplySmartObservationWriter(rpc),
         companies: new SupplySmartCompaniesClient(rpc),
         crossMarket: crossMarketCheck(parts, { rpc, reader: input.reader }),
-        brandDomains: input.settings.targets[channel as "amazon-in"]?.brandDomains ?? {},
+        brandDomains: input.settings.targets[channel]?.brandDomains ?? {},
       },
     ]),
   );
@@ -113,11 +113,11 @@ function brandStep(parts: CoreParts, input: { settings: BrandEnrichmentSettings[
   };
 }
 
-/** KAN-243: each configured storefront target's own Supply Smart client (amazon-in: the test database). */
+/** KAN-243: each configured storefront target's own Supply Smart client. */
 export async function syncTargets(sync: BrandEnrichmentSettings["productSync"]) {
-  const targets: Partial<Record<"amazon-in", SupplySmartRpc>> = {};
+  const targets: Partial<Record<ForeignAmazonChannel, SupplySmartRpc>> = {};
   for (const [channel, target] of Object.entries(sync.targets) as [
-    "amazon-in",
+    ForeignAmazonChannel,
     { secretsFile: string },
   ][]) {
     targets[channel] = new SupplySmartRpc(await loadSupplySmartSecrets(target.secretsFile));

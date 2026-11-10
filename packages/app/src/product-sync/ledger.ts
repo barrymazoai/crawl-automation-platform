@@ -1,11 +1,11 @@
+import type { AmazonChannel } from "@crawl-automation/v3-contracts";
 import type { ListingDateOriginalsReport, ListingDateSelection } from "./listing-date-originals.js";
 
 /**
  * The crawler's record of what is in Supply Smart (migration 061). "Already synced" means this ledger: a listing is
  * sent again only when its payload hash changes. Rows are keyed by channel, listing and website variant ('' none).
  */
-export type MarketplaceChannel =
-  "amazon" | "amazon-in" | "gnc" | "swanson" | "wholefoods" | "costco";
+export type MarketplaceChannel = AmazonChannel | "gnc" | "swanson" | "wholefoods" | "costco";
 /** `removed`: the crawler deleted the Supply Smart product of a listing outside supplements (migration 067). */
 export type SyncStatus = "present" | "waiting_company" | "sent" | "verified" | "failed" | "removed";
 

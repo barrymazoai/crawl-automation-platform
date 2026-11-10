@@ -25,12 +25,14 @@ describe("API composition root", () => {
       "gnc",
       "amazon",
       "amazon-in",
+      "amazon-uk",
       "wholefoods",
       "costco",
       "dtc",
     ]);
     expect(registry.forCapture("amazon", "http")).toBe(amazonAdapter);
     expect(registry.forCapture("amazon-in", "http")).toBe(amazonInAdapter);
+    expect(registry.forCapture("amazon-uk", "http").planning?.channel).toBe("amazon-uk");
     expect(registry.forCapture("dtc", "browser").planning?.channel).toBe("dtc");
     expect(() => registry.forCapture("dtc", "http")).toThrow();
     expect(

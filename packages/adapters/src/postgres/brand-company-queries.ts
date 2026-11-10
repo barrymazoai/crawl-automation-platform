@@ -1,6 +1,8 @@
 // KAN-243 (owner 2026-11-09): amazon.in is sent to production Supply Smart like the others, so its brands are matched
 // to (or get) a production company too.
-const MARKETPLACE_CHANNELS = `('amazon', 'amazon-in', 'gnc', 'swanson', 'wholefoods', 'costco')`;
+import { MARKETPLACE_CHANNELS as CHANNELS } from "@crawl-automation/app/marketplace-mapping";
+
+const MARKETPLACE_CHANNELS = `(${CHANNELS.map((channel) => `'${channel}'`).join(", ")})`;
 
 /** Choose latest state before filtering completion, across every source for the listing identity. */
 export const completedMarketplaceBrands = `
@@ -12,12 +14,7 @@ export const completedMarketplaceBrands = `
     ORDER BY q.channel, q.listing_id, q.variant_id, q.created_at DESC, q.item_id DESC
   ), counts AS (
     SELECT source.brand_id, jsonb_build_object(
-      'amazon', count(*) FILTER (WHERE latest.channel = 'amazon'),
-      'amazon-in', count(*) FILTER (WHERE latest.channel = 'amazon-in'),
-      'gnc', count(*) FILTER (WHERE latest.channel = 'gnc'),
-      'swanson', count(*) FILTER (WHERE latest.channel = 'swanson'),
-      'wholefoods', count(*) FILTER (WHERE latest.channel = 'wholefoods'),
-      'costco', count(*) FILTER (WHERE latest.channel = 'costco')
+      ${CHANNELS.map((channel) => `'${channel}', count(*) FILTER (WHERE latest.channel = '${channel}')`).join(",\n      ")}
     ) AS product_counts
     FROM latest JOIN brand_source source ON source.id = latest.source_id AND source.channel = latest.channel
     WHERE latest.state = 'completed'

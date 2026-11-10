@@ -29,6 +29,10 @@ export const amazonErrors = defineErrors({
     category: "SOURCE",
     message: "The retained Amazon projection is invalid.",
   },
+  "AMAZON.DELIVERY_ABROAD": {
+    category: "SOURCE",
+    message: "The page was shown for delivery to another country than the storefront's own.",
+  },
   "AMAZON.FAMILY_CONFLICT": {
     category: "SOURCE",
     message: "The page gives conflicting variation families for the selected ASIN.",

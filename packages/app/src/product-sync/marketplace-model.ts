@@ -1,4 +1,5 @@
 import type { ChannelRegistry } from "@crawl-automation/channels-core";
+import { AMAZON_CHANNELS } from "@crawl-automation/v3-contracts";
 import type {
   ChannelProductEvidence,
   LabelCollectedProduct,
@@ -12,8 +13,7 @@ import type { ListingDateWarning } from "../product-delivery/listing-date-read.j
 export type { MarketplaceChannel } from "./ledger.js";
 
 export const MARKETPLACE_CHANNELS = [
-  "amazon",
-  "amazon-in",
+  ...AMAZON_CHANNELS,
   "gnc",
   "swanson",
   "wholefoods",

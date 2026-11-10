@@ -18,6 +18,7 @@ import {
 } from "@crawl-automation/platform";
 import { R2ScopeSchema } from "@crawl-automation/platform";
 import {
+  AMAZON_CHANNELS,
   ChannelLabelInputSchema,
   ChannelPlanInputSchema,
   ChannelSavedLabelWorkflowInputSchema,
@@ -108,7 +109,7 @@ export const WorkerConfigSchema = z
         /** Per-channel order for new plans; Whole Foods formulas use Amazon's order. */
         sourceOrder: z
           .partialRecord(
-            z.enum(["amazon", "amazon-in", "gnc", "swanson", "costco", "dtc"]),
+            z.enum([...AMAZON_CHANNELS, "gnc", "swanson", "costco", "dtc"]),
             LabelSourcePolicySchema.shape.order,
           )
           .default({}),

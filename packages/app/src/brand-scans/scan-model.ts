@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { AMAZON_CHANNELS } from "@crawl-automation/v3-contracts";
 import type { ListingNameResolution } from "@crawl-automation/channels-core";
 import type { ScanMetrics } from "./scan-queue-metrics.js";
 export { ScanMetricsSchema } from "./scan-queue-metrics.js";
@@ -11,8 +12,7 @@ import { QueueChannelSchema } from "../queue/queue-model.js";
 export const ScanChannelSchema = QueueChannelSchema.extract([
   "swanson",
   "gnc",
-  "amazon",
-  "amazon-in",
+  ...AMAZON_CHANNELS,
   "wholefoods",
   "dtc",
   "costco",

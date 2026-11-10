@@ -5,8 +5,9 @@ import {
   DtcScanQueueChangeSchema,
   siteAnalysisErrors,
   CancelScansSchema,
+  DerivedAmazonSourcesSchema,
   DerivedSourcesSchema,
-  LookedUpSourcesSchema,
+  LookedUpAmazonSourcesSchema,
   CreateSourceSchema,
   ImportSourcesSchema,
   ListSourcesSchema,
@@ -116,19 +117,19 @@ export const brandsRouter = router({
     .input(DerivedSourcesSchema)
     .mutation(({ ctx, input }) => ctx.brandSources.deriveWholeFoods(input)),
 
-  /** KAN-243: adds disabled amazon.in sources from amazon.com sources' shared brand IDs. */
-  deriveAmazonInSources: procedure
-    .input(DerivedSourcesSchema)
-    .mutation(({ ctx, input }) => ctx.brandSources.deriveAmazonIn(input)),
+  /** KAN-243: adds disabled sources on a storefront (amazon-in, amazon-uk) from amazon.com sources' brand IDs. */
+  deriveAmazonSources: procedure
+    .input(DerivedAmazonSourcesSchema)
+    .mutation(({ ctx, input }) => ctx.brandSources.deriveAmazon(input)),
 
   /**
-   * KAN-243: amazon.in sources for brands whose amazon.com source has no brand ID (Store pages), looked up by name on
-   * amazon.in (one paid search page per brand, archived); at most 100 sources per call.
+   * KAN-243: a storefront's sources for brands with a company, looked up there by name (one paid search page per
+   * brand, archived); at most 100 sources per call.
    */
-  lookupAmazonInSources: procedure
-    .input(LookedUpSourcesSchema)
+  lookupAmazonSources: procedure
+    .input(LookedUpAmazonSourcesSchema)
     .mutation(({ ctx, input, signal }) =>
-      ctx.brandSources.lookupAmazonIn(input, signal ?? new AbortController().signal),
+      ctx.brandSources.lookupAmazon(input, signal ?? new AbortController().signal),
     ),
 
   /** Enable or disable a source; only an enabled source can run. */

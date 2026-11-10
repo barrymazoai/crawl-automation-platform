@@ -2,7 +2,7 @@ import { PostgresSiteAnalyses } from "@crawl-automation/adapters";
 import type { Database } from "@crawl-automation/platform";
 import { costcoAdapter } from "@crawl-automation/channels-costco";
 import { wholeFoodsAdapter, WHOLE_FOODS_STORE } from "@crawl-automation/channels-wholefoods";
-import { amazonAdapter, amazonInAdapter } from "@crawl-automation/channel-amazon";
+import { amazonAdapters } from "@crawl-automation/channel-amazon";
 import {
   configuredDtcSites,
   storedDtcSites,
@@ -20,8 +20,7 @@ export function workerChannelRegistry(
   return new ChannelRegistry([
     createSwansonAdapter(config.brandScans?.swanson),
     gncAdapter,
-    amazonAdapter,
-    amazonInAdapter,
+    ...amazonAdapters,
     wholeFoodsAdapter(WHOLE_FOODS_STORE, config.brandScans?.wholefoods),
     costcoAdapter(),
     createDtcAdapter(configuredDtcSites(config.browser?.dtc)),

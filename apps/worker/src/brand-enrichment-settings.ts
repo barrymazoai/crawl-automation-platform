@@ -1,6 +1,10 @@
 import { isAbsolute } from "node:path";
 import { z } from "zod";
-import { BrandEnrichmentWorkflowSettingsSchema } from "@crawl-automation/v3-contracts";
+import {
+  AMAZON_CHANNELS,
+  BrandEnrichmentWorkflowSettingsSchema,
+  FOREIGN_AMAZON_CHANNELS,
+} from "@crawl-automation/v3-contracts";
 
 export const BrandEnrichmentSettingsSchema = BrandEnrichmentWorkflowSettingsSchema.safeExtend({
   secretsFile: z.string().refine(isAbsolute, "Must be an absolute path"),
@@ -42,8 +46,9 @@ export const BrandEnrichmentSettingsSchema = BrandEnrichmentWorkflowSettingsSche
     .strictObject({
       sweepMinutes: z.number().int().min(0).max(1440).default(0),
       channels: z
-        // amazon-in is sent only when named: it goes to the Supply Smart its target names (KAN-243).
-        .array(z.enum(["amazon", "amazon-in", "gnc", "swanson", "wholefoods", "costco"]))
+        // A storefront other than amazon.com is sent only when named: it goes to the Supply Smart its target names
+        // (KAN-243).
+        .array(z.enum([...AMAZON_CHANNELS, "gnc", "swanson", "wholefoods", "costco"]))
         .default(["amazon", "gnc", "swanson", "wholefoods", "costco"]),
       batchLimit: z.number().int().min(1).max(200).default(200),
       maxBatchesPerChannel: z.number().int().min(1).max(50).default(5),
@@ -64,12 +69,13 @@ export const BrandEnrichmentSettingsSchema = BrandEnrichmentWorkflowSettingsSche
         })
         .prefault({}),
       /**
-       * KAN-243 (owner 2026-11-05): a channel sent to another Supply Smart than `secretsFile`'s, named by its own
-       * private `.env` (SUPPLY_SMART_* only). amazon-in goes to the test database first; it is never sent without one.
+       * KAN-243 (owner 2026-11-05): a storefront other than amazon.com is sent to the Supply Smart its own private
+       * `.env` names (SUPPLY_SMART_* only); it is never sent without one. amazon-in went to the test database first,
+       * production since 2026-11-09.
        */
       targets: z
         .partialRecord(
-          z.enum(["amazon-in"]),
+          z.enum(FOREIGN_AMAZON_CHANNELS),
           z.strictObject({
             secretsFile: z.string().trim().min(1),
             /** Crawler brand ID → domain in that Supply Smart, for brands without a production match. */
@@ -78,11 +84,17 @@ export const BrandEnrichmentSettingsSchema = BrandEnrichmentWorkflowSettingsSche
         )
         .default({}),
     })
-    .refine((sync) => !sync.channels.includes("amazon-in") || !!sync.targets["amazon-in"], {
-      message:
-        "amazon-in needs productSync.targets.amazon-in: it is never sent to the production Supply Smart",
-      path: ["targets"],
-    })
+    .refine(
+      (sync) =>
+        FOREIGN_AMAZON_CHANNELS.every(
+          (channel) => !sync.channels.includes(channel) || !!sync.targets[channel],
+        ),
+      {
+        message:
+          "a storefront other than amazon.com needs productSync.targets.<channel>: it is never sent without one",
+        path: ["targets"],
+      },
+    )
     .prefault({}),
 });
 

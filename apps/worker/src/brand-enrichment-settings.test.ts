@@ -82,3 +82,26 @@ it("never syncs amazon-in without its own Supply Smart target, and leaves it out
     }).data?.productSync.targets,
   ).toEqual({ "amazon-in": { secretsFile: "/private/supply-smart-test.env", brandDomains: {} } });
 });
+
+it("never syncs amazon-uk without its own Supply Smart target either (KAN-243, 2026-11-10)", () => {
+  const sync = (productSync: unknown) =>
+    BrandEnrichmentSettingsSchema.safeParse({ ...settings(), productSync });
+  expect(BrandEnrichmentSettingsSchema.parse(settings()).productSync.channels).not.toContain(
+    "amazon-uk",
+  );
+  const target = { secretsFile: "/private/supply-smart-production.env" };
+  expect(sync({ channels: ["amazon", "amazon-uk"] }).success).toBe(false);
+  expect(
+    sync({ channels: ["amazon", "amazon-uk"], targets: { "amazon-in": target } }).success,
+  ).toBe(false);
+  expect(
+    sync({
+      channels: ["amazon", "amazon-in", "amazon-uk"],
+      targets: { "amazon-in": target, "amazon-uk": target },
+    }).data?.productSync.targets,
+  ).toEqual({
+    "amazon-in": { ...target, brandDomains: {} },
+    "amazon-uk": { ...target, brandDomains: {} },
+  });
+  expect(sync({ channels: ["amazon"], targets: { amazon: target } }).success).toBe(false);
+});

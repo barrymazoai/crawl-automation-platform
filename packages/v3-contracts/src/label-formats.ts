@@ -15,6 +15,7 @@ export const LabelFormatIdSchema = z.enum([
   "in-composition/1",
   "in-nutritional-information/2",
   "in-composition/2",
+  "in-nutritional-information/3",
 ]);
 export type LabelFormatId = z.infer<typeof LabelFormatIdSchema>;
 
@@ -22,7 +23,7 @@ export type LabelFormatId = z.infer<typeof LabelFormatIdSchema>;
 export const US_FACTS: LabelFormatId = "us-facts/1";
 
 /** Whose recommended intake a printed percentage column is relative to. */
-export type DailyValueBasis = "us_dv" | "in_rda";
+export type DailyValueBasis = "us_dv" | "in_rda" | "eu_nrv";
 
 export interface LabelFormat {
   /** Whole-word OCR phrases that select an image for this format (letters and single spaces only). */
@@ -54,6 +55,121 @@ export interface LabelFormat {
 }
 
 const none: readonly RegExp[] = [];
+
+// amazon.in, 2026-11-06 (20 real labels, docs/plans/KAN-243-india-research.md §10.7): headers with a footnote mark in
+// front ("*%RDA", "#%RDA", "**%RDA Per Serve", "*% RDA Men"), "% Daily Values†*", "Each Serving Provides",
+// "Per 30ml"; serving lines inside the table ("Serve Size: 30ml", "Serv Size - 2.38 g (1 sachet) Servings per pack
+// - 30", "1 SERVING (1=1 TABLET)"); section headings ("VITAMINS^", "MINERALS"); "(Approximate Composition)";
+// a description line under its ingredient. Everything /1 reads, /2 reads the same way.
+const IN_NUTRITIONAL_INFORMATION_2: LabelFormat = {
+  keywords: ["Nutritional Information", "Nutrition Information", "Nutritional Facts", "RDA"],
+  columns: {
+    amount: [
+      /^(?:qty|quantity|amount)\.?\s*(?:\/|per)\s*(?:serving|serve|tablet|capsule|sachet|scoop|dose)s?\b.*$/i,
+      /^per\s+(?:serving|serve|tablet|capsule|sachet|scoop|dose)s?\b.*$/i,
+      /^each\s+(?:serving|serve|tablet|capsule|sachet|scoop|dose)s?\s+(?:provides|contains)\b.*$/i,
+      /^per\s+(?!100\s*(?:g|gm|ml)\b)\d+(?:\.\d+)?\s*(?:g|gm|ml|mg)\b.*$/i,
+      // amazon.in copies, 2026-11-07: "Approx Value Per Serving" (Naturaltein), "Approx. Value per serving" (WOW),
+      // "QUANTITY" (Wellbeing Nutrition), and the serving's own weight "3.1 g" beside "100 g" (Nutrabay).
+      /^(?:approx\.?\s*)?(?:value|amount|qty|quantity)\s+per\s+(?:serving|serve|tablet|capsule|softgel|sachet|scoop|dose)s?\b.*$/i,
+      /^(?:qty|quantity|amount)\.?$/i,
+      /^(?!100\s*(?:g|gm|ml)$)\d+(?:\.\d+)?\s*(?:g|gm|ml|mg)$/i,
+    ],
+    perBasis: [
+      /^(?:(?:qty|quantity|amount)\.?\s*)?(?:\/|per)\s*100\s*(?:g|gm|ml)\b.*$/i,
+      /^100\s*(?:g|gm|ml)$/i,
+      // "ENSURE® Powder (per 100 g)", "Powder (per 100 g)" (Abbott, 2026-11-06)
+      /^.{0,60}\(\s*per\s*100\s*(?:g|gm|ml)\s*\)$/i,
+    ],
+    dailyValue: [
+      // A leading footnote mark: "**%RDA Per Serve", "^%RDA Per Serve" (amazon.in copies, 2026-11-06).
+      { header: /^[*#†‡^]*\s*%?\s*rda\b.*$/i, basis: "in_rda" },
+      // "Per Serve % RDA" (Organic India Isabgol, 2026-11-07) is the percentage column, not a per-serving amount.
+      { header: /%\s*rda\b/i, basis: "in_rda" },
+      { header: /^[*#†‡^]*\s*%?\s*(?:dv|daily\s*values?)\s*%?\s*[*†‡]*$/i, basis: "us_dv" },
+    ],
+  },
+  headerCells: [
+    /^(?:nutrients?|nutritional\s+information|nutrition\s+information|parameters?|ingredients?|contents?)\b.*$/i,
+    /^(?:vitamins?|minerals?|amino\s+acids?|herbal\s+extracts?|botanicals?|probiotics?|antioxidants?)\s*[\^*#:]*$/i,
+  ],
+  skip: [
+    /^nutritional?\s+(?:information|facts)\b/i,
+    /^nutrition\s+information\b/i,
+    /\brda\s+not\s+(?:established|set)\b/i,
+    /recommended\s+dietary\s+allowance/i,
+    /^[*#†‡]+\s*rda\b/i,
+    /^approx\.?\s*values?\b/i,
+    /^\(?approx\.?\)?$/i,
+    /^\(?approximate\s+composition\)?/i,
+    /^(?:vitamins?|minerals?|amino\s+acids?|others?|herbal\s+extracts?|botanicals?|probiotics?|antioxidants?)\s*[\^*#:§]*$/i,
+    // amazon.in copies, 2026-11-07: notes copied as rows, never an ingredient: "(Approximate values)",
+    // "(Approx. Values)", "90 TABLETS", "This pack contains about 35 serves with Milk", "Each serving provides
+    // (%RDA)", "EACH SERVING OF OMEFISH ULTRA PROVIDES".
+    /^\(\s*approx(?:imate|\.)?\s*values?\s*\)$/i,
+    /^\d+\s*(?:n\s+)?(?:veg(?:etarian)?\s+)?(?:tablets?|capsules?|softgels?|gummies|sachets?)$/i,
+    /^this\s+pack\s+contains\b/i,
+    /^each\s+serving\b.*\bprovides\b/i,
+  ],
+  servings: [
+    // "Number of Servings per pack 30" (amazon.in, Luna high copy 2026-11-08) as well as "No. of servings".
+    /^(?:(?:no\.?|number)\s*of\s+)?servings?\s*per\s*(?:pack|bottle|jar|container)\s*[:\-–]?\s*(.*)$/i,
+    /^(?:no\.?|number)\s*of\s+servings?\s*[:\-–]?\s*(.*)$/i,
+  ],
+  servingFor: [
+    /^serv(?:e|ing)?\.?\s+size\s*[:\-–]?\s*(.+?)(?:\s+servings?\s+per\s+(?:pack|bottle|jar|container)\s*[:\-–]?\s*(.+))?$/i,
+    /^(1\s+serving\s*\(.+\))$/i,
+    // "1 levelled scoop serving = 38g • No. of servings: 26 (approx)" (The Whole Truth plant protein, amazon.in
+    // spot check 2026-11-07): the serving and the pack's count on one line.
+    // Copied as "1 levelled scoop serving - 38g" and "Levelled scoop serving = 35 g" too (Luna high, 2026-11-08).
+    /^((?:\d+\s+)?(?:[a-z]+\s+){0,3}?(?:scoops?|tablets?|capsules?|softgels?|sachets?|serv(?:e|ing)s?)\b[^•|=–-]*[=–-]\s*\d+(?:\.\d+)?\s*(?:g|gm|ml|mg))\s*(?:[•|·,;]\s*no\.?\s*of\s+servings?\s*[:\-–]?\s*(.+))?$/i,
+  ],
+  continuation: [/^\(.+\)$/],
+  preparedFrom: none,
+  prompt: [
+    'The label may print an Indian "Nutritional Information" table instead (columns such as "Qty./Serving", "Qty/100g", "%RDA"). Transcribe it the same way: one cell per printed column, and each %RDA cell exactly as printed even when it is a bare number ("100", "0.20") or "**".',
+    '"columnHeaders": every column header as printed, left to right, including the name column\'s header (e.g. "Nutrients") when one is printed; "" for a column without a header.',
+  ],
+};
+
+/**
+ * amazon.co.uk, 2026-11-10 (owner: "印度…如果他们很像的话，就用一样的"): the UK prints the same "Nutritional
+ * Information" table, its percentage column relative to the Nutrient Reference Value and its amount column headed per
+ * daily intake. Real UK labels (docs/plans/KAN-243-uk-plan.md §1): Vitabiotics "Av. per Tablet | %NRV", Nutrition
+ * Geeks "Per Daily Intake (Two Capsules) | %NRV*" with "**Nutrient Reference Value Not Established", Zipvit "Per
+ * Serving | %NRV", BetterYou "Each daily dose (3 sprays) contains", Optimum Nutrition "Typical Values | Per 3.4 g".
+ * Everything /2 reads, /3 reads the same way.
+ */
+const IN_NUTRITIONAL_INFORMATION_3: LabelFormat = {
+  ...IN_NUTRITIONAL_INFORMATION_2,
+  keywords: [...IN_NUTRITIONAL_INFORMATION_2.keywords, "NRV"],
+  columns: {
+    amount: [
+      ...IN_NUTRITIONAL_INFORMATION_2.columns.amount,
+      /^(?:av(?:erage)?\.?|typical)\s*(?:\/|per)\s*(?:\d+\s+)?(?:serving|serve|tablet|caplet|capsule|softgel|sachet|scoop|dose|spray|gumm(?:y|ies)|drops?)s?\b.*$/i,
+      /^per\s+(?:\d+\s+|daily\s+)?(?:serving|serve|tablet|caplet|capsule|softgel|sachet|scoop|dose|spray|gumm(?:y|ies)|drops?|intake)s?\b.*$/i,
+      /^each\s+(?:daily\s+)?(?:serving|serve|tablet|caplet|capsule|softgel|sachet|scoop|dose|spray)s?\b.*\b(?:provides|contains)\b.*$/i,
+    ],
+    perBasis: IN_NUTRITIONAL_INFORMATION_2.columns.perBasis,
+    dailyValue: [
+      ...IN_NUTRITIONAL_INFORMATION_2.columns.dailyValue,
+      { header: /^[*#†‡^]*\s*%?\s*nrv\b.*$/i, basis: "eu_nrv" },
+      { header: /%\s*nrv\b/i, basis: "eu_nrv" },
+      { header: /^[*#†‡^]*\s*%\s*ri\b.*$/i, basis: "eu_nrv" },
+    ],
+  },
+  headerCells: [...IN_NUTRITIONAL_INFORMATION_2.headerCells, /^typical\s+values?\b.*$/i],
+  skip: [
+    ...IN_NUTRITIONAL_INFORMATION_2.skip,
+    /\bnrv\b.*\bnot\s+(?:established|set)\b/i,
+    /^[*#†‡]*\s*nutrient\s+reference\s+values?\b/i,
+    /^[*#†‡]+\s*nrv\b/i,
+  ],
+  prompt: [
+    'The label may print an Indian or UK "Nutritional Information" table instead (columns such as "Qty./Serving", "Av. per Tablet", "Per Daily Intake (Two Capsules)", "Qty/100g", "%RDA", "%NRV"). Transcribe it the same way: one cell per printed column, and each %RDA or %NRV cell exactly as printed even when it is a bare number ("100", "0.20") or "**".',
+    IN_NUTRITIONAL_INFORMATION_2.prompt[1]!,
+  ],
+};
 
 export const LABEL_FORMATS: Readonly<Record<LabelFormatId, LabelFormat>> = {
   // The US rules live in the transcript parser and the US prompt themselves; this entry adds nothing to them.
@@ -134,81 +250,8 @@ export const LABEL_FORMATS: Readonly<Record<LabelFormatId, LabelFormat>> = {
       'A "Composition" list ("Each capsule contains:", "Each 1g contains:") is a facts panel too: "heading" is its heading as printed, the "Each … contains" line goes in "servingLines" as printed, and each ingredient is one row whose cells are its name exactly as printed (Latin name and plant part included) and its amount.',
     ],
   },
-  // amazon.in, 2026-11-06 (20 real labels, docs/plans/KAN-243-india-research.md §10.7): headers with a footnote mark in
-  // front ("*%RDA", "#%RDA", "**%RDA Per Serve", "*% RDA Men"), "% Daily Values†*", "Each Serving Provides",
-  // "Per 30ml"; serving lines inside the table ("Serve Size: 30ml", "Serv Size - 2.38 g (1 sachet) Servings per pack
-  // - 30", "1 SERVING (1=1 TABLET)"); section headings ("VITAMINS^", "MINERALS"); "(Approximate Composition)";
-  // a description line under its ingredient. Everything /1 reads, /2 reads the same way.
-  "in-nutritional-information/2": {
-    keywords: ["Nutritional Information", "Nutrition Information", "Nutritional Facts", "RDA"],
-    columns: {
-      amount: [
-        /^(?:qty|quantity|amount)\.?\s*(?:\/|per)\s*(?:serving|serve|tablet|capsule|sachet|scoop|dose)s?\b.*$/i,
-        /^per\s+(?:serving|serve|tablet|capsule|sachet|scoop|dose)s?\b.*$/i,
-        /^each\s+(?:serving|serve|tablet|capsule|sachet|scoop|dose)s?\s+(?:provides|contains)\b.*$/i,
-        /^per\s+(?!100\s*(?:g|gm|ml)\b)\d+(?:\.\d+)?\s*(?:g|gm|ml|mg)\b.*$/i,
-        // amazon.in copies, 2026-11-07: "Approx Value Per Serving" (Naturaltein), "Approx. Value per serving" (WOW),
-        // "QUANTITY" (Wellbeing Nutrition), and the serving's own weight "3.1 g" beside "100 g" (Nutrabay).
-        /^(?:approx\.?\s*)?(?:value|amount|qty|quantity)\s+per\s+(?:serving|serve|tablet|capsule|softgel|sachet|scoop|dose)s?\b.*$/i,
-        /^(?:qty|quantity|amount)\.?$/i,
-        /^(?!100\s*(?:g|gm|ml)$)\d+(?:\.\d+)?\s*(?:g|gm|ml|mg)$/i,
-      ],
-      perBasis: [
-        /^(?:(?:qty|quantity|amount)\.?\s*)?(?:\/|per)\s*100\s*(?:g|gm|ml)\b.*$/i,
-        /^100\s*(?:g|gm|ml)$/i,
-        // "ENSURE® Powder (per 100 g)", "Powder (per 100 g)" (Abbott, 2026-11-06)
-        /^.{0,60}\(\s*per\s*100\s*(?:g|gm|ml)\s*\)$/i,
-      ],
-      dailyValue: [
-        // A leading footnote mark: "**%RDA Per Serve", "^%RDA Per Serve" (amazon.in copies, 2026-11-06).
-        { header: /^[*#†‡^]*\s*%?\s*rda\b.*$/i, basis: "in_rda" },
-        // "Per Serve % RDA" (Organic India Isabgol, 2026-11-07) is the percentage column, not a per-serving amount.
-        { header: /%\s*rda\b/i, basis: "in_rda" },
-        { header: /^[*#†‡^]*\s*%?\s*(?:dv|daily\s*values?)\s*%?\s*[*†‡]*$/i, basis: "us_dv" },
-      ],
-    },
-    headerCells: [
-      /^(?:nutrients?|nutritional\s+information|nutrition\s+information|parameters?|ingredients?|contents?)\b.*$/i,
-      /^(?:vitamins?|minerals?|amino\s+acids?|herbal\s+extracts?|botanicals?|probiotics?|antioxidants?)\s*[\^*#:]*$/i,
-    ],
-    skip: [
-      /^nutritional?\s+(?:information|facts)\b/i,
-      /^nutrition\s+information\b/i,
-      /\brda\s+not\s+(?:established|set)\b/i,
-      /recommended\s+dietary\s+allowance/i,
-      /^[*#†‡]+\s*rda\b/i,
-      /^approx\.?\s*values?\b/i,
-      /^\(?approx\.?\)?$/i,
-      /^\(?approximate\s+composition\)?/i,
-      /^(?:vitamins?|minerals?|amino\s+acids?|others?|herbal\s+extracts?|botanicals?|probiotics?|antioxidants?)\s*[\^*#:§]*$/i,
-      // amazon.in copies, 2026-11-07: notes copied as rows, never an ingredient: "(Approximate values)",
-      // "(Approx. Values)", "90 TABLETS", "This pack contains about 35 serves with Milk", "Each serving provides
-      // (%RDA)", "EACH SERVING OF OMEFISH ULTRA PROVIDES".
-      /^\(\s*approx(?:imate|\.)?\s*values?\s*\)$/i,
-      /^\d+\s*(?:n\s+)?(?:veg(?:etarian)?\s+)?(?:tablets?|capsules?|softgels?|gummies|sachets?)$/i,
-      /^this\s+pack\s+contains\b/i,
-      /^each\s+serving\b.*\bprovides\b/i,
-    ],
-    servings: [
-      // "Number of Servings per pack 30" (amazon.in, Luna high copy 2026-11-08) as well as "No. of servings".
-      /^(?:(?:no\.?|number)\s*of\s+)?servings?\s*per\s*(?:pack|bottle|jar|container)\s*[:\-–]?\s*(.*)$/i,
-      /^(?:no\.?|number)\s*of\s+servings?\s*[:\-–]?\s*(.*)$/i,
-    ],
-    servingFor: [
-      /^serv(?:e|ing)?\.?\s+size\s*[:\-–]?\s*(.+?)(?:\s+servings?\s+per\s+(?:pack|bottle|jar|container)\s*[:\-–]?\s*(.+))?$/i,
-      /^(1\s+serving\s*\(.+\))$/i,
-      // "1 levelled scoop serving = 38g • No. of servings: 26 (approx)" (The Whole Truth plant protein, amazon.in
-      // spot check 2026-11-07): the serving and the pack's count on one line.
-      // Copied as "1 levelled scoop serving - 38g" and "Levelled scoop serving = 35 g" too (Luna high, 2026-11-08).
-      /^((?:\d+\s+)?(?:[a-z]+\s+){0,3}?(?:scoops?|tablets?|capsules?|softgels?|sachets?|serv(?:e|ing)s?)\b[^•|=–-]*[=–-]\s*\d+(?:\.\d+)?\s*(?:g|gm|ml|mg))\s*(?:[•|·,;]\s*no\.?\s*of\s+servings?\s*[:\-–]?\s*(.+))?$/i,
-    ],
-    continuation: [/^\(.+\)$/],
-    preparedFrom: none,
-    prompt: [
-      'The label may print an Indian "Nutritional Information" table instead (columns such as "Qty./Serving", "Qty/100g", "%RDA"). Transcribe it the same way: one cell per printed column, and each %RDA cell exactly as printed even when it is a bare number ("100", "0.20") or "**".',
-      '"columnHeaders": every column header as printed, left to right, including the name column\'s header (e.g. "Nutrients") when one is printed; "" for a column without a header.',
-    ],
-  },
+  "in-nutritional-information/2": IN_NUTRITIONAL_INFORMATION_2,
+  "in-nutritional-information/3": IN_NUTRITIONAL_INFORMATION_3,
   // Composition lists as /1; "Excipients q.s." is the filler, not a formula row (Kapiva Shilajit, 2026-11-06).
   "in-composition/2": {
     keywords: ["Composition"],
@@ -232,6 +275,8 @@ export const MARKETPLACE_LABEL_FORMATS: Readonly<Record<string, readonly LabelFo
   "amazon.com": [US_FACTS],
   // Owner 2026-11-06: /2 reads the table wording of the first 20 real amazon.in labels; /1 stays for its answers.
   "amazon.in": [US_FACTS, "in-nutritional-information/2", "in-composition/2"],
+  // Owner 2026-11-10: the UK reads India's formats; /3 adds the UK's %NRV and per-daily-intake headers.
+  "amazon.co.uk": [US_FACTS, "in-nutritional-information/3", "in-composition/2"],
 };
 
 /** The formats a label is read in: the US panel alone unless the task names more. */

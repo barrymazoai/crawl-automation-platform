@@ -1,5 +1,5 @@
 import { convert } from "html-to-text";
-import type { ChannelPlanInput } from "@crawl-automation/v3-contracts";
+import { isAmazonChannel, type ChannelPlanInput } from "@crawl-automation/v3-contracts";
 
 type SourcePolicy = NonNullable<ChannelPlanInput["sourcePolicy"]>;
 
@@ -9,7 +9,7 @@ export function labelSourcePolicy(channel: string, order?: SourcePolicy["order"]
     version: "label-sources/1",
     order:
       order ??
-      (["amazon", "amazon-in", "wholefoods-amazon-formula", "dtc"].includes(channel)
+      (isAmazonChannel(channel) || ["wholefoods-amazon-formula", "dtc"].includes(channel)
         ? "images-first"
         : "text-first"),
   };

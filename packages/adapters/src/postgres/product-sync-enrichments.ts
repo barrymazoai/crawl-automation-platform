@@ -1,6 +1,9 @@
 import type { RefreshedEnrichment, RefreshedEnrichmentFilter } from "@crawl-automation/app";
 import type { Queryable } from "@crawl-automation/platform";
-import { SHARED_ENRICHMENT_PROTOCOL } from "@crawl-automation/v3-contracts";
+import {
+  FOREIGN_AMAZON_CHANNELS,
+  SHARED_ENRICHMENT_PROTOCOL,
+} from "@crawl-automation/v3-contracts";
 
 /**
  * Products in Supply Smart (ledger rows with its product ID: verified, sent, or failed after an earlier send, such as
@@ -16,8 +19,8 @@ const REFRESHED_ENRICHMENTS = `
            CASE ps.channel WHEN 'wholefoods' THEN 'amazon' ELSE ps.channel END AS channel
       FROM product_sync ps
      WHERE ps.supply_smart_product_id IS NOT NULL AND ps.status IN ('verified', 'sent', 'failed')
-       -- KAN-243: amazon-in products live in its own Supply Smart (test), never updated through production.
-       AND ps.channel <> 'amazon-in'
+       -- KAN-243: a storefront other than amazon.com is sent through its own target, never updated through this one.
+       AND ps.channel NOT IN (${FOREIGN_AMAZON_CHANNELS.map((channel) => `'${channel}'`).join(", ")})
        AND ps.collected_operation_id IS NOT NULL
        AND ($1::uuid IS NULL OR ps.supply_smart_product_id > $1::uuid)
        AND ($4::uuid[] IS NULL OR ps.supply_smart_product_id = ANY($4::uuid[]))),

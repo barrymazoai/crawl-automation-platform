@@ -1,10 +1,11 @@
 export {
   amazonAdapter,
+  amazonAdapters,
   amazonInAdapter,
   amazonSiteAdapter,
   AMAZON_HTTP_POLICY,
 } from "./adapter.js";
-export { AMAZON_IN, AMAZON_SITES, AMAZON_US, type AmazonSite } from "./site.js";
+export { AMAZON_IN, AMAZON_SITES, AMAZON_UK, AMAZON_US, type AmazonSite } from "./site.js";
 export { amazonBrandScan, amazonSiteBrandScan, type AmazonListingPage } from "./brand-scan.js";
 export {
   amazonBrandFilterId,

@@ -1,11 +1,17 @@
 export * from "./derived-sources.js";
 export * from "./looked-up-sources.js";
-import { DerivedBrandSources, type DerivedSourceDeps } from "./derived-sources.js";
+import {
+  DerivedBrandSources,
+  DerivedSourcesSchema,
+  type DerivedSourceDeps,
+} from "./derived-sources.js";
 import {
   LookedUpBrandSources,
+  LookedUpSourcesSchema,
   type LookedUpSourceDeps,
   type LookedUpSourcesResult,
 } from "./looked-up-sources.js";
+import { FOREIGN_AMAZON_CHANNELS, type ForeignAmazonChannel } from "@crawl-automation/v3-contracts";
 import { appErrors } from "../errors.js";
 import { recordRecovery } from "@crawl-automation/platform";
 import { brandScanErrors, type ChannelRegistry } from "@crawl-automation/channels-core";
@@ -27,6 +33,11 @@ export const ImportSourcesSchema = z.strictObject({
     .max(2_000),
 });
 export type ImportSources = z.infer<typeof ImportSourcesSchema>;
+
+/** KAN-243: the Amazon storefront (other than amazon.com) whose sources are derived or looked up. */
+const storefront = z.enum(FOREIGN_AMAZON_CHANNELS);
+export const DerivedAmazonSourcesSchema = DerivedSourcesSchema.extend({ channel: storefront });
+export const LookedUpAmazonSourcesSchema = LookedUpSourcesSchema.extend({ channel: storefront });
 type Entry = ImportSources["entries"][number];
 
 export interface SourceImportResult {
@@ -56,10 +67,10 @@ export class BrandSourceImport {
     private readonly deps: {
       store: BrandSourceImportStore;
       derived?: DerivedSourceDeps;
-      /** KAN-243: amazon.in sources derived from amazon.com brand IDs. */
-      derivedAmazonIn?: DerivedSourceDeps;
-      /** KAN-243: amazon.in sources looked up on amazon.in by brand name (Store-page brands carry no ID). */
-      lookedUpAmazonIn?: LookedUpSourceDeps;
+      /** KAN-243: a storefront's sources derived from amazon.com brand IDs, by storefront. */
+      derivedAmazon?: Partial<Record<ForeignAmazonChannel, DerivedSourceDeps>>;
+      /** KAN-243: a storefront's sources looked up there by brand name (Store-page brands carry no ID). */
+      lookedUpAmazon?: Partial<Record<ForeignAmazonChannel, LookedUpSourceDeps>>;
       registry: ChannelRegistry;
       browsers: BrowserBrandScanners;
       log: Logger;
@@ -74,20 +85,27 @@ export class BrandSourceImport {
     return new DerivedBrandSources(this.deps.derived).import(raw);
   }
 
-  /** Derives disabled amazon.in sources from retained amazon.com sources' brand IDs; no network or scan is started. */
-  deriveAmazonIn(raw: unknown): Promise<{ created: number; skipped: number }> {
-    if (!this.deps.derivedAmazonIn) {
+  /**
+   * Derives disabled sources on a storefront from retained amazon.com sources' brand IDs; no network or scan is
+   * started.
+   */
+  deriveAmazon(raw: unknown): Promise<{ created: number; skipped: number }> {
+    const { channel, ...request } = DerivedAmazonSourcesSchema.parse(raw);
+    const deps = this.deps.derivedAmazon?.[channel];
+    if (!deps) {
       throw appErrors.create("BRAND_SCAN.NOT_CONFIGURED");
     }
-    return new DerivedBrandSources(this.deps.derivedAmazonIn).import(raw);
+    return new DerivedBrandSources(deps).import(request);
   }
 
-  /** Looks brands up on amazon.in, one archived search page each, and adds the disabled sources found. */
-  lookupAmazonIn(raw: unknown, signal: AbortSignal): Promise<LookedUpSourcesResult> {
-    if (!this.deps.lookedUpAmazonIn) {
+  /** Looks brands up on a storefront, one archived search page each, and adds the disabled sources found. */
+  lookupAmazon(raw: unknown, signal: AbortSignal): Promise<LookedUpSourcesResult> {
+    const { channel, ...request } = LookedUpAmazonSourcesSchema.parse(raw);
+    const deps = this.deps.lookedUpAmazon?.[channel];
+    if (!deps) {
       throw appErrors.create("BRAND_SCAN.NOT_CONFIGURED");
     }
-    return new LookedUpBrandSources(this.deps.lookedUpAmazonIn).import(raw, signal);
+    return new LookedUpBrandSources(deps).import(request, signal);
   }
 
   async import(raw: unknown): Promise<SourceImportResult> {

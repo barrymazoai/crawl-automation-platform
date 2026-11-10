@@ -5,6 +5,7 @@ import {
 } from "@crawl-automation/v3-contracts";
 import { amazonProductAddress } from "./address.js";
 import { amazonCommerce } from "./commerce.js";
+import { locationText } from "./commerce-dom.js";
 import {
   amazonDocument,
   pageAsin,
@@ -107,6 +108,26 @@ function evidenceOf(
 }
 
 /**
+ * KAN-243 (2026-11-10): Amazon sets an anonymous visitor's delivery location from the IP, and ScraperAPI does not
+ * always give a storefront's own country ("Deliver to South Africa" on half the amazon.com.au pages, "Il tuo indirizzo
+ * di consegna: Germania" on 3 of 8 amazon.it pages). Such a page shows no price or another country's, so it is a
+ * Review, never read as unavailable. A storefront's own location line names its postal code (amazon.in: 2,642 of
+ * 2,645 captures; amazon.co.uk: 26 of 26); a page without a location line (amazon.in's price-hidden layout) is read as
+ * before. amazon.com keeps its rules unchanged.
+ */
+function assertDeliveredHome(root: AmazonElement, site: AmazonSite): void {
+  if (site === AMAZON_US) {
+    return;
+  }
+  const location = locationText(root);
+  if (location && !(location.match(site.postalCode) ?? []).length) {
+    throw amazonErrors.create("AMAZON.DELIVERY_ABROAD", {
+      details: { channel: site.channel, location: location.slice(0, 200) },
+    });
+  }
+}
+
+/**
  * Parse archived bytes. A request for a different ASIN still reports this page's own identity to
  * core.
  */
@@ -117,6 +138,7 @@ export function parseAmazonProduct(
   amazonProductAddress(page.url, site);
   const document = amazonDocument(page.html);
   const root = productRoot(document);
+  assertDeliveredHome(root, site);
   const rendered = evidenceOf({ page, document, root }, site);
   const { evidence } = rendered;
   return {

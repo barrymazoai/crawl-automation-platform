@@ -4,7 +4,11 @@ import type {
   PlannedProduct,
   ProductIdentity,
 } from "@crawl-automation/channels-core";
-import { amazonLabelFormats, ChannelProductEvidenceSchema } from "@crawl-automation/v3-contracts";
+import {
+  AMAZON_CHANNELS,
+  amazonLabelFormats,
+  ChannelProductEvidenceSchema,
+} from "@crawl-automation/v3-contracts";
 import { amazonProductAddress, amazonProductUrl } from "./address.js";
 import { amazonStoreBrandScan } from "./store-listing.js";
 import { amazonSiteBrandScan } from "./brand-scan.js";
@@ -15,7 +19,7 @@ import { isAmazonChallenge } from "./access-challenge.js";
 import { amazonProductFamily } from "./family.js";
 import { AMAZON_FILE_ORIGINS } from "./images.js";
 import { parseAmazonProduct, type AmazonRendered } from "./product.js";
-import { AMAZON_IN, AMAZON_US, type AmazonSite } from "./site.js";
+import { AMAZON_IN, AMAZON_SITES, AMAZON_US, type AmazonSite } from "./site.js";
 
 function readProjection(
   site: AmazonSite,
@@ -142,3 +146,11 @@ export function amazonSiteAdapter(site: AmazonSite): ChannelAdapter<AmazonRender
 
 export const amazonAdapter = amazonSiteAdapter(AMAZON_US);
 export const amazonInAdapter = amazonSiteAdapter(AMAZON_IN);
+/** One adapter per Amazon storefront, amazon.com first: what a channel registry lists. */
+export const amazonAdapters = AMAZON_CHANNELS.map((channel) =>
+  channel === "amazon"
+    ? amazonAdapter
+    : channel === "amazon-in"
+      ? amazonInAdapter
+      : amazonSiteAdapter(AMAZON_SITES[channel]),
+);

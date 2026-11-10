@@ -16,7 +16,7 @@ export interface AmazonSite {
   postalCode: RegExp;
   /** date-fns patterns of "Date First Available", in the storefront's English locale. */
   dateFormats: readonly string[];
-  parserVersion: "amazon-rendered/1" | "amazon-in-rendered/1";
+  parserVersion: "amazon-rendered/1" | "amazon-in-rendered/1" | "amazon-uk-rendered/1";
   /**
    * KAN-243 (owner 2026-11-07): the longest side, in pixels, gallery images are downloaded at; null keeps the page's own
    * image URLs. Indian labels print small type on a side of the jar: the page's 1500 px image left Man Matters' panel
@@ -78,7 +78,28 @@ export const AMAZON_IN: AmazonSite = {
   supplementNode: "1374489031",
 };
 
+// Real amazon.co.uk pages, 2026-11-10 (docs/plans/KAN-243-uk-plan.md §1): "£9.99" in priceToPay, "Delivering to
+// London E177QZ" / "Rickmansw... WD3" (a full postcode or its outward code), no "Date First Available" line at all;
+// Health & Personal Care > Vitamins, Minerals & Supplements is node 2826484031. The UK reads India's settings
+// otherwise: best sellers first, two search pages per brand, galleries at 2560 px.
+export const AMAZON_UK: AmazonSite = {
+  channel: "amazon-uk",
+  origin: AMAZON_MARKETPLACES["amazon-uk"].origin,
+  hosts: /^(?:(?:www|m)\.)?amazon\.co\.uk$/,
+  currency: AMAZON_MARKETPLACES["amazon-uk"].currency,
+  pricePrefix: /(?:£|GBP\s*)/,
+  postalCode: /\b[A-Z]{1,2}\d[A-Z\d]?(?:\s*\d[A-Z]{2})?\b/g,
+  dateFormats: ["d MMMM yyyy"],
+  parserVersion: "amazon-uk-rendered/1",
+  imageSize: 2560,
+  scanSort: "exact-aware-popularity-rank",
+  scanPages: 2,
+  scanProducts: 50,
+  supplementNode: "2826484031",
+};
+
 export const AMAZON_SITES: Readonly<Record<AmazonChannel, AmazonSite>> = {
   amazon: AMAZON_US,
   "amazon-in": AMAZON_IN,
+  "amazon-uk": AMAZON_UK,
 };

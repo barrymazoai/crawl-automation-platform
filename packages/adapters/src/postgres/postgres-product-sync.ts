@@ -14,6 +14,7 @@ import type {
   ReopenResult,
 } from "@crawl-automation/app";
 import type { Queryable } from "@crawl-automation/platform";
+import { MARKETPLACE_CHANNELS } from "@crawl-automation/app/marketplace-mapping";
 import { PENDING_SYNC, settledMarketplace } from "../product-sync/marketplace-queries.js";
 import { refreshedEnrichments } from "./product-sync-enrichments.js";
 import { reopenAmazonListingDates } from "./product-sync-listing-dates.js";
@@ -179,7 +180,7 @@ export class PostgresProductSync implements ProductSyncLedger {
   /** Same selection as the marketplace reader (latest settled completed queue item), counted without reading R2. */
   async overview(): Promise<SyncOverview[]> {
     return this.database.query<SyncOverview>(
-      `WITH ${settledMarketplace("q.channel IN ('amazon', 'amazon-in', 'gnc', 'swanson', 'wholefoods', 'costco')")}
+      `WITH ${settledMarketplace(`q.channel IN (${MARKETPLACE_CHANNELS.map((channel) => `'${channel}'`).join(", ")})`)}
        SELECT d.channel, count(*)::int AS completed,
          count(*) FILTER (WHERE EXISTS (SELECT 1 FROM supply_smart_brand_company m
            WHERE m.brand_id = d.brand_id AND m.status = 'matched'))::int AS "matchedBrand",

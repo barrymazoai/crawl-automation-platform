@@ -20,7 +20,9 @@ import {
 } from "@crawl-automation/app";
 import { BROWSER_SCAN_PERMITS } from "./browser-scan-permit-settings.js";
 import { wholeFoodsSourceFromAmazon } from "./whole-foods-source-derivation.js";
-import { amazonInSourceFromAmazon, amazonInSourceLookup } from "./amazon-in-source-derivation.js";
+import { amazonSourceFromAmazon, amazonSourceLookup } from "./amazon-source-derivation.js";
+import { AMAZON_SITES, type AmazonSite } from "@crawl-automation/channel-amazon";
+import { FOREIGN_AMAZON_CHANNELS, type ForeignAmazonChannel } from "@crawl-automation/v3-contracts";
 import { adapterBrowserScanners } from "./browser-scan-gateways.js";
 import { createListingPages, type ListingPages } from "@crawl-automation/channels-core";
 import {
@@ -133,8 +135,8 @@ function gatedListings(settings: BrandScanSettings, temporal: TemporalClient) {
   );
 }
 
-/** amazon.in brand lookups in flight at once: 100 brands take a few minutes, well under ScraperAPI's concurrency. */
-const AMAZON_IN_LOOKUPS_AT_ONCE = 5;
+/** Brand lookups in flight at once: 100 brands take a few minutes, well under ScraperAPI's concurrency. */
+const AMAZON_LOOKUPS_AT_ONCE = 5;
 
 function sourceImports(parts: {
   database: Database;
@@ -154,26 +156,33 @@ function sourceImports(parts: {
       channel: "wholefoods",
       derive: wholeFoodsSourceFromAmazon,
     },
-    derivedAmazonIn: {
+    derivedAmazon: byStorefront((site) => ({
       sources: store,
       store: sourceStore,
-      channel: "amazon-in",
-      derive: amazonInSourceFromAmazon,
-    },
+      channel: site.channel,
+      derive: amazonSourceFromAmazon(site),
+    })),
     ...(pages && {
-      lookedUpAmazonIn: {
+      lookedUpAmazon: byStorefront((site) => ({
         sources: store,
         store: sourceStore,
-        channel: "amazon-in" as const,
-        concurrency: AMAZON_IN_LOOKUPS_AT_ONCE,
-        lookup: amazonInSourceLookup(pages),
+        channel: site.channel,
+        concurrency: AMAZON_LOOKUPS_AT_ONCE,
+        lookup: amazonSourceLookup(pages, site),
         log,
-      },
+      })),
     }),
     registry,
     browsers,
     log,
   });
+}
+
+/** One entry per Amazon storefront other than amazon.com (KAN-243). */
+function byStorefront<T>(entry: (site: AmazonSite) => T) {
+  return Object.fromEntries(
+    FOREIGN_AMAZON_CHANNELS.map((channel) => [channel, entry(AMAZON_SITES[channel])]),
+  ) as Record<ForeignAmazonChannel, T>;
 }
 
 function bindDtcBrowser(

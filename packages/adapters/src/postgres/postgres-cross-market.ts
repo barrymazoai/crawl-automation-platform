@@ -40,7 +40,7 @@ export class PostgresCrossMarketRecords implements CrossMarketRecords {
   }
 
   async record(record: CrossMarketRecord): Promise<void> {
-    z.enum(AMAZON_CHANNELS as [string, ...string[]]).parse(record.channel);
+    z.enum(AMAZON_CHANNELS).parse(record.channel);
     await this.database.query(
       `INSERT INTO cross_market_check
          (channel, listing_id, collection_operation_id, compared_listing_id, status, reason, field, recorded_at)

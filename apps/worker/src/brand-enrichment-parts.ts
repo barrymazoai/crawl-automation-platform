@@ -24,7 +24,10 @@ import {
 import { SiteAnalysisService, brandEnrichmentErrors } from "@crawl-automation/app";
 import { connectTemporal, type TemporalClient } from "@crawl-automation/platform";
 import { browserResources } from "@crawl-automation/platform/browser-routing";
-import { SiteAnalysisLimitsSchema } from "@crawl-automation/v3-contracts";
+import {
+  SiteAnalysisLimitsSchema,
+  type ForeignAmazonChannel,
+} from "@crawl-automation/v3-contracts";
 import type { CoreParts } from "./core-parts.js";
 import { buildBrandStepServices, type BrandEnrichmentTasks } from "./brand-enrichment-services.js";
 import { buildBrandRedeliverySweep } from "./brand-redelivery-parts.js";
@@ -153,7 +156,7 @@ function backgroundLoops(
     rpc: SupplySmartRpc;
     runs: PostgresBrandEnrichmentRuns;
     productSync: BrandEnrichmentSettings["productSync"];
-    targets: Partial<Record<"amazon-in", SupplySmartRpc>>;
+    targets: Partial<Record<ForeignAmazonChannel, SupplySmartRpc>>;
   },
 ) {
   return {
