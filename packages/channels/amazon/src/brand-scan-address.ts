@@ -98,7 +98,7 @@ export function amazonBrandSearchOn(url: string, from: AmazonSite, to: AmazonSit
 export function amazonBrandSearch(name: string, id: string, site: AmazonSite): string {
   const result = new URL("/s", site.origin);
   result.searchParams.set("k", name);
-  result.searchParams.set("i", "hpc");
+  result.searchParams.set("i", site.searchAlias);
   result.searchParams.set("rh", `n:${site.supplementNode},p_123:${id}`);
   return amazonScanSourceUrl(result.href, site);
 }

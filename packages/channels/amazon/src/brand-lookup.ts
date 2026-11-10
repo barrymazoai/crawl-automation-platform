@@ -16,7 +16,7 @@ export function amazonBrandLookupUrl(name: string, site: AmazonSite): string {
   }
   const url = new URL("/s", site.origin);
   url.searchParams.set("k", keyword);
-  url.searchParams.set("i", "hpc");
+  url.searchParams.set("i", site.searchAlias);
   url.searchParams.set("rh", `n:${site.supplementNode}`);
   url.searchParams.set("s", site.scanSort);
   return url.href;

@@ -30,7 +30,7 @@ it("builds the amazon.co.uk Vitamins, Minerals & Supplements brand search the sa
       url: "https://www.amazon.com/s?k=Himalaya&i=hpc&rh=n%3A3760901%2Cp_123%3A94291&dc=",
     }),
   ).toBe(
-    "https://www.amazon.co.uk/s?k=Himalaya&i=hpc&rh=n%3A2826484031%2Cp_123%3A94291&s=exact-aware-popularity-rank",
+    "https://www.amazon.co.uk/s?k=Himalaya&i=drugstore&rh=n%3A2826484031%2Cp_123%3A94291&s=exact-aware-popularity-rank",
   );
 });
 
@@ -83,14 +83,14 @@ it("looks a brand up on a storefront by name from a source of any channel, one a
     expect.any(AbortSignal),
   );
   expect(await amazonSourceLookup({ read }, AMAZON_UK)(dtc, new AbortController().signal)).toBe(
-    "https://www.amazon.co.uk/s?k=Redcon1&i=hpc&rh=n%3A2826484031%2Cp_123%3A585714&s=exact-aware-popularity-rank",
+    "https://www.amazon.co.uk/s?k=Redcon1&i=drugstore&rh=n%3A2826484031%2Cp_123%3A585714&s=exact-aware-popularity-rank",
   );
   expect(read).toHaveBeenLastCalledWith(
     expect.objectContaining({
       scanId: "amazon-uk-brand-lookup",
       channel: "amazon-uk",
       origins: ["https://www.amazon.co.uk"],
-      url: "https://www.amazon.co.uk/s?k=Redcon1&i=hpc&rh=n%3A2826484031&s=exact-aware-popularity-rank",
+      url: "https://www.amazon.co.uk/s?k=Redcon1&i=drugstore&rh=n%3A2826484031&s=exact-aware-popularity-rank",
     }),
     expect.any(AbortSignal),
   );

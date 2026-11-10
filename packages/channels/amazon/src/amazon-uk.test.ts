@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { amazonAdapters, amazonInAdapter } from "./adapter.js";
 import { amazonProductAddress } from "./address.js";
+import { amazonBrandLookupUrl } from "./brand-lookup.js";
+import { amazonSiteBrandScan } from "./brand-scan.js";
+import { amazonBrandSearch } from "./brand-scan-address.js";
 import { amazonCommerce } from "./commerce.js";
 import { amazonDocument, productRoot } from "./dom.js";
 import { parseAmazonProduct } from "./product.js";
@@ -136,5 +139,52 @@ describe("a storefront page delivered to another country (KAN-243, 2026-11-10)",
         AMAZON_US,
       ).channel,
     ).toBe("amazon");
+  });
+});
+
+describe("amazon.co.uk brand search department (KAN-243, 2026-11-10)", () => {
+  const reader = amazonSiteBrandScan(AMAZON_UK);
+  // Page 1 of the Enzymedica scan as amazon.co.uk printed it: its next-page link names the department `drugstore`.
+  const page = (selected: number, next: string) => `<html><body>
+    <div id="p_123/23577"><input type="checkbox" checked></div>
+    <div data-component-type="s-result-info-bar">1-48 of 61 results for "Enzymedica"</div>
+    <div class="s-main-slot"><div data-component-type="s-search-result" data-asin="B0019LRY8A"><a href="/x/dp/B0019LRY8A"><h2>Enzymedica Digest Gold</h2></a></div></div>
+    <span class="s-pagination-item s-pagination-selected">${selected}</span>
+    <a href="${next}" role="button" aria-label="Go to next page, page 2" class="s-pagination-item s-pagination-next s-pagination-button">Next</a>
+  </body></html>`;
+  const next =
+    "/s?k=Enzymedica&amp;i=drugstore&amp;rh=n%3A2826484031%2Cp_123%3A23577&amp;s=exact-aware-popularity-rank&amp;page=2&amp;xpid=ljb2lYJ5VByF2&amp;qid=1794312966&amp;ref=sr_pg_1";
+
+  it("builds sources and lookups in the drugstore department; amazon.com and amazon.in keep hpc", () => {
+    expect(amazonBrandSearch("Enzymedica", "23577", AMAZON_UK)).toBe(
+      "https://www.amazon.co.uk/s?k=Enzymedica&i=drugstore&rh=n%3A2826484031%2Cp_123%3A23577&s=exact-aware-popularity-rank",
+    );
+    expect(new URL(amazonBrandLookupUrl("Enzymedica", AMAZON_UK)).searchParams.get("i")).toBe(
+      "drugstore",
+    );
+    expect(new URL(amazonBrandSearch("Himalaya", "94291", AMAZON_IN)).searchParams.get("i")).toBe(
+      "hpc",
+    );
+    expect(new URL(amazonBrandSearch("Himalaya", "94291", AMAZON_US)).searchParams.get("i")).toBe(
+      "hpc",
+    );
+  });
+
+  it("follows amazon.co.uk's next-page link from a drugstore source, as a scan of two pages", () => {
+    const source = amazonBrandSearch("Enzymedica", "23577", AMAZON_UK);
+    const first = reader.parsePage({
+      body: page(1, next),
+      url: reader.pageUrl(source, 1),
+      page: 1,
+    });
+    expect(first).toMatchObject({ nextPage: 2 });
+  });
+
+  it("still refuses that link from a source asked in the hpc department (what 44 scans met)", () => {
+    const source =
+      "https://www.amazon.co.uk/s?k=Enzymedica&i=hpc&rh=n%3A2826484031%2Cp_123%3A23577&s=exact-aware-popularity-rank";
+    expect(() =>
+      reader.parsePage({ body: page(1, next), url: reader.pageUrl(source, 1), page: 1 }),
+    ).toThrow(expect.objectContaining({ code: "BRAND_SCAN.PAGINATION" }));
   });
 });

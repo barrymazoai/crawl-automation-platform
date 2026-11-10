@@ -42,6 +42,12 @@ export interface AmazonSite {
    * family nutrition (without it Himalaya's scan listed face wash and wipes).
    */
   supplementNode: string;
+  /**
+   * The search department (`i=`) that node is searched in. amazon.com and amazon.in call it `hpc`; amazon.co.uk
+   * (2026-11-10, its Enzymedica page 1) calls it `drugstore` and its next-page links say so even when page 1 was asked
+   * with `hpc`, so a source built with `hpc` failed BRAND_SCAN.PAGINATION on every brand with a second page.
+   */
+  searchAlias: "hpc" | "drugstore";
 }
 
 export const AMAZON_US: AmazonSite = {
@@ -58,6 +64,7 @@ export const AMAZON_US: AmazonSite = {
   scanPages: 7,
   scanProducts: null,
   supplementNode: "3760901",
+  searchAlias: "hpc",
 };
 
 // Real amazon.in pages, 2026-11-04 (docs/plans/KAN-243-india-research.md §4): "₹2,129" in priceToPay's whole part
@@ -76,6 +83,7 @@ export const AMAZON_IN: AmazonSite = {
   scanPages: 2,
   scanProducts: 50,
   supplementNode: "1374489031",
+  searchAlias: "hpc",
 };
 
 // Real amazon.co.uk pages, 2026-11-10 (docs/plans/KAN-243-uk-plan.md §1): "£9.99" in priceToPay, "Delivering to
@@ -96,6 +104,7 @@ export const AMAZON_UK: AmazonSite = {
   scanPages: 2,
   scanProducts: 50,
   supplementNode: "2826484031",
+  searchAlias: "drugstore",
 };
 
 export const AMAZON_SITES: Readonly<Record<AmazonChannel, AmazonSite>> = {
