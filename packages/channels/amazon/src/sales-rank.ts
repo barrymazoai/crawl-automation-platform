@@ -5,9 +5,12 @@ type Selector = AmazonSalesRank["selector"];
 
 const clean = (text: string) => text.replace(/[‎‏]/gu, "").replace(/\s+/gu, " ").trim();
 
-/** The root entry carries Amazon's "(See Top 100 in <category>)" link; subcategory entries do not. */
+/**
+ * The root entry carries Amazon's "(See Top 100 in <category>)" link; subcategory entries do not. amazon.co.uk prints
+ * the rank without "#" ("7 in Health & Personal Care (See Top 100 in Health & Personal Care)", 2026-11-10).
+ */
 const ROOT =
-  /#(?<rank>\d{1,3}(?:,\d{3})*|\d+) in (?<category>[^(#]+?) \(See Top 100 in \k<category>\)/u;
+  /#?(?<rank>\d{1,3}(?:,\d{3})*|\d+) in (?<category>[^(#]+?) \(See Top 100 in \k<category>\)/u;
 
 function isRankRow(element: AmazonElement, selector: Selector): boolean {
   const label = element.querySelector(selector === "#prodDetails tr" ? "th" : ".a-text-bold");

@@ -71,6 +71,17 @@ describe("root rank wording", () => {
     expect(amazonSalesRank(document)).toMatchObject({ rank: 64026, selector: "#prodDetails tr" });
   });
 
+  it("reads amazon.co.uk's rank printed without # (Vitabiotics B003VQZC3U, 2026-11-10)", () => {
+    const document = amazonDocument(
+      `<html><body><div id="prodDetails"><table><tr><th class="a-color-secondary a-size-base prodDetSectionEntry"> Best Sellers Rank </th><td> <span> <ul class="a-unordered-list a-nostyle a-vertical"> <li><span class="a-list-item"><span>7 in Health &amp; Personal Care (<a href='/gp/bestsellers/drugstore/ref=pd_zg_ts_drugstore'>See Top 100 in Health &amp; Personal Care</a>)</span></span></li> <li><span class="a-list-item"><span>1 in <a href='/gp/bestsellers/drugstore/2826549031/ref=pd_zg_hrsr_drugstore'>Vitamin D</a></span></span></li> </ul> </span> </td></tr></table></div></body></html>`,
+    );
+    expect(amazonSalesRank(document)).toMatchObject({
+      rank: 7,
+      category: "Health & Personal Care",
+      selector: "#prodDetails tr",
+    });
+  });
+
   it("ignores other rows and a page without the block", () => {
     expect(
       amazonSalesRank(bullets(`<li><span class="a-text-bold">ASIN</span> B000</li>`)),
