@@ -1,6 +1,6 @@
-// amazon-in is not here (KAN-243): matching or creating a brand's company writes to production Supply Smart, and
-// amazon.in goes to the test database first; its brands use the companies the target already knows.
-const MARKETPLACE_CHANNELS = `('amazon', 'gnc', 'swanson', 'wholefoods', 'costco')`;
+// KAN-243 (owner 2026-11-09): amazon.in is sent to production Supply Smart like the others, so its brands are matched
+// to (or get) a production company too.
+const MARKETPLACE_CHANNELS = `('amazon', 'amazon-in', 'gnc', 'swanson', 'wholefoods', 'costco')`;
 
 /** Choose latest state before filtering completion, across every source for the listing identity. */
 export const completedMarketplaceBrands = `
@@ -8,11 +8,12 @@ export const completedMarketplaceBrands = `
     SELECT DISTINCT ON (q.channel, q.listing_id, q.variant_id)
       q.channel, q.listing_id, q.variant_id, q.source_id, q.state
     FROM queue_item q
-    WHERE q.channel IN ('amazon', 'gnc', 'swanson', 'wholefoods', 'costco')
+    WHERE q.channel IN ${MARKETPLACE_CHANNELS}
     ORDER BY q.channel, q.listing_id, q.variant_id, q.created_at DESC, q.item_id DESC
   ), counts AS (
     SELECT source.brand_id, jsonb_build_object(
       'amazon', count(*) FILTER (WHERE latest.channel = 'amazon'),
+      'amazon-in', count(*) FILTER (WHERE latest.channel = 'amazon-in'),
       'gnc', count(*) FILTER (WHERE latest.channel = 'gnc'),
       'swanson', count(*) FILTER (WHERE latest.channel = 'swanson'),
       'wholefoods', count(*) FILTER (WHERE latest.channel = 'wholefoods'),

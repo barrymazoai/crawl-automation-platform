@@ -10,7 +10,7 @@ import {
 
 const now = new Date("2026-10-12T10:00:00.000Z");
 const companyId = randomUUID();
-const counts = { amazon: 1, gnc: 0, swanson: 0, wholefoods: 0, costco: 0 };
+const counts = { amazon: 1, "amazon-in": 0, gnc: 0, swanson: 0, wholefoods: 0, costco: 0 };
 function brand(overrides: Partial<SyncBrand> = {}): SyncBrand {
   return {
     brandId: randomUUID(),
