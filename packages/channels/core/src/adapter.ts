@@ -74,6 +74,11 @@ export interface HttpPolicy {
   timeoutMs: number;
   /** The site's own human-verification page, recognised by its content (it answers 200 like a product page). */
   accessChallenge?(html: string): boolean;
+  /**
+   * Query parameters every page of this site is asked with, over the product's own address (amazon.de: `language=en_GB`
+   * for its English pages, KAN-243). The product keeps its canonical address; only the request carries these.
+   */
+  query?: Readonly<Record<string, string>>;
 }
 
 /** What a channel's planning hook reads back from its own page projection. */

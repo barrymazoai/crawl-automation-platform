@@ -27,6 +27,7 @@ describe("API composition root", () => {
       "amazon-in",
       "amazon-uk",
       "amazon-ca",
+      "amazon-de",
       "wholefoods",
       "costco",
       "dtc",
@@ -35,6 +36,7 @@ describe("API composition root", () => {
     expect(registry.forCapture("amazon-in", "http")).toBe(amazonInAdapter);
     expect(registry.forCapture("amazon-uk", "http").planning?.channel).toBe("amazon-uk");
     expect(registry.forCapture("amazon-ca", "http").planning?.channel).toBe("amazon-ca");
+    expect(registry.forCapture("amazon-de", "http").planning?.channel).toBe("amazon-de");
     expect(registry.forCapture("dtc", "browser").planning?.channel).toBe("dtc");
     expect(() => registry.forCapture("dtc", "http")).toThrow();
     expect(

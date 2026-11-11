@@ -68,6 +68,13 @@ Robert 定的要求：「我们平台用户都是英语用户，所以数据库�
   - B **读图时直接写英文。** 少一步，但抄出来的字和图上对不上，现有「抄的必须是图上印的」核对会失效，出错不好查。
 - 不做：德国本土品牌专用规则（不在我们的公司范围里）。
 
+### 第 2 步实际做法（用户 11-11 批准，选 A）
+
+- 英文页：`AmazonSite.language = "en_GB"`。商品页的标准地址仍是 `https://www.amazon.de/dp/<ASIN>`，只有发给 ScraperAPI 的请求带 `language=en_GB`（通用的 `HttpPolicy.query`，其他渠道没有，请求不变）；品牌搜索和按名查品牌的地址直接带上，`/-/en/s` 的翻页链接认作同一个搜索。
+- 标签格式 `eu-food-supplement/1`：选图关键词 Inhaltsstoffe、Zutaten、Tagesdosis、Verzehrempfehlung、Inhalt pro、NRV；「Tagesdosis (…)」「pro …」「Inhalt pro …」是剂量列，「%NRV」「% RM」是百分比列；脚注和「Nährstofftabelle」等标题跳过；「Verzehrempfehlung: …」是份量。抄图提示：德文照抄、不翻译；多语种贴纸有英文段就抄英文段，否则只抄 DE 段。
+- 已知缺口：剂量列没有表头、只有 %NRV 有表头的表（WeightWorld，德国本土品牌）读不出剂量。改这里要动印度、英国、加拿大共用的列对齐规则，按规定要先做新旧模拟，这次不改。
+- 翻译：推送 Supply Smart 前，`LabelTranslation` 把份量、剂量列表头、成分名、配料标题和配料正文、主要成分换成英文；每个字段的 `citation` 保留德文原文（Supply Smart 不读它，原样存档）。数字、百分比不送去翻译。翻译用读标签的同一个模型（和跨站核对一样），结果存进新表 `label_translation`（迁移 076，只增不改），同一句只翻一次。翻译失败时这一批不发，留在待发，下一轮再翻（结果里记 `waitingTranslation`）。爬虫自己存的标签记录不变，仍是德文。
+
 ## 3. 第 3 步：品牌入口
 
 用美国站的品牌 ID 生成 1,269 个 `amazon-de` 品牌入口，扫描后把没货的设为未启用。抽样 8 个大品牌里 4 个有货；按英国（400/1,269）、加拿大（356/1,269）估，德国约 250–400 个品牌有货，扫描约 2,500 credits。

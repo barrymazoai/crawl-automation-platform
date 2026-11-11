@@ -15,6 +15,7 @@ const counts = {
   "amazon-in": 0,
   "amazon-uk": 0,
   "amazon-ca": 0,
+  "amazon-de": 0,
   gnc: 0,
   swanson: 0,
   wholefoods: 0,

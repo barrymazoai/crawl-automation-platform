@@ -1,15 +1,22 @@
 import {
   PostgresChannelQueueStore,
   PostgresCrossMarketRecords,
+  PostgresLabelTranslations,
   type PostgresMarketplaceReader,
   SupplySmartCrossMarketListings,
   type SupplySmartRpc,
 } from "@crawl-automation/adapters";
-import { CrossMarketCheck, QueuedCrossMarketRecapture, appErrors } from "@crawl-automation/app";
+import {
+  CrossMarketCheck,
+  LabelTranslation,
+  QueuedCrossMarketRecapture,
+  appErrors,
+} from "@crawl-automation/app";
 import {
   CodexTextConfigSchema,
   CodexVisionConfigSchema,
   crossMarketJudge,
+  labelTranslator,
 } from "@crawl-automation/processing";
 import type { CoreParts } from "./core-parts.js";
 
@@ -53,11 +60,34 @@ export function crossMarketCheck(
 }
 
 function judge(parts: CoreParts) {
+  return crossMarketJudge(labelModel(parts));
+}
+
+/**
+ * KAN-243: a label's printed German translated into English before it is sent (owner 2026-11-11, Germany plan option
+ * A), by the same tool-free turn of the label model as the cross-market judgment.
+ */
+export function labelTranslation(parts: CoreParts): LabelTranslation {
+  return new LabelTranslation({
+    store: new PostgresLabelTranslations(parts.database),
+    translator: {
+      translate: (input, signal) => labelTranslator(labelModel(parts)).translate(input, signal),
+    },
+    log: (error) =>
+      parts.log.warn(
+        { err: error, service: "label-translation" },
+        "label translation failed; products wait for the next round",
+      ),
+  });
+}
+
+/** The label model (processing.codex.vision's model and effort) on processing.codex.text's runtime. */
+function labelModel(parts: CoreParts) {
   const codex = parts.config.processing?.codex;
   const vision = CodexVisionConfigSchema.parse(codex?.vision);
   const text = CodexTextConfigSchema.parse({
     ...CodexTextConfigSchema.parse(codex?.text),
     settings: vision.settings,
   });
-  return crossMarketJudge({ text, environment: process.env });
+  return { text, environment: process.env };
 }

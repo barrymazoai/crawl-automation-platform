@@ -19,6 +19,9 @@ export function amazonBrandLookupUrl(name: string, site: AmazonSite): string {
   url.searchParams.set("i", site.searchAlias);
   url.searchParams.set("rh", `n:${site.supplementNode}`);
   url.searchParams.set("s", site.scanSort);
+  if (site.language) {
+    url.searchParams.set("language", site.language);
+  }
   return url.href;
 }
 

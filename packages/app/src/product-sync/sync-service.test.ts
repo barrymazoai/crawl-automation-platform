@@ -8,7 +8,7 @@ import {
   marketplaceSamplesPath,
   required,
 } from "./marketplace-samples.fixture.js";
-import { ProductSyncService } from "./sync-service.js";
+import { ProductSyncService, type ProductSyncDeps } from "./sync-service.js";
 
 const signal = () => new AbortController().signal;
 const brandId = "11111111-1111-4111-8111-111111111111";
@@ -162,6 +162,7 @@ function setup(
     writer?: ReturnType<typeof supplySmart>;
     ids?: string[];
     products?: MarketplaceProduct[];
+    translation?: ProductSyncDeps["translation"];
   } = {},
 ) {
   const ledger = memoryLedger();
@@ -178,6 +179,7 @@ function setup(
     brands: { matches: async () => (input.match === null ? [] : [input.match ?? matched]) },
     ledger,
     writer,
+    ...(input.translation ? { translation: input.translation } : {}),
     now: () => new Date("2026-10-12T05:00:00.000Z"),
   });
   return { service, ledger, writer, reader };
@@ -253,6 +255,21 @@ describe("marketplace sync without a formula (unit material doubles)", () => {
       });
     },
   );
+
+  it("KAN-243: sends nothing and keeps the products pending when their labels could not be put into English", async () => {
+    const translation = { inEnglish: vi.fn(async () => null) };
+    const { service, writer, ledger } = setup({
+      products: [withoutFormula("amazon")],
+      translation,
+    });
+    const result = await service.sync({ channel: "amazon", limit: 50, dryRun: false }, signal());
+    expect(result).toMatchObject({ toSend: 0, verified: 0, waitingTranslation: 1 });
+    expect(writer.ingest).not.toHaveBeenCalled();
+    expect(ledger.rows.size).toBe(0);
+    // A dry run never asks for a translation.
+    await service.sync({ channel: "amazon", limit: 50, dryRun: true }, signal());
+    expect(translation.inEnglish).toHaveBeenCalledTimes(1);
+  });
 
   it.each(["missing", "foreign"])(
     "does not send %s own material just because there is no formula",

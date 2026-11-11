@@ -17,6 +17,7 @@ export const LabelFormatIdSchema = z.enum([
   "in-composition/2",
   "in-nutritional-information/3",
   "in-composition/3",
+  "eu-food-supplement/1",
 ]);
 export type LabelFormatId = z.infer<typeof LabelFormatIdSchema>;
 
@@ -228,6 +229,59 @@ const IN_COMPOSITION_3: LabelFormat = {
   ],
 };
 
+/**
+ * amazon.de, 2026-11-11 (13 galleries of our brands + 3 German brands, docs/plans/KAN-243-germany-plan.md §1): a German
+ * food-supplement label. Importers relabel US bottles with a peel-off multilingual sticker whose DE section prints
+ * "Inhaltsstoffe | Tagesdosis (2 Weichkapseln)" with "Gesamt-Omega-3 1280mg / davon EPA 650mg" (Nordic Naturals) or
+ * "… | Tagesdosis (2 Kapseln) | %NRV*" (Doctor's Best), then "Zutaten: …" and "Verzehrempfehlung: …"; German brands
+ * print "Nährstofftabelle" / "Nährwertinformationen" with "Nährwertangaben pro Portion | %NRV*" (WeightWorld) or
+ * "Inhalt pro Tablette: | NRV*" (Nutravita) and "*NRV: Nährstoffbezugswerte". The copy keeps every word as printed, in
+ * German: translating it into English is a later step, never the copy's (owner 2026-11-11, plan option A).
+ */
+const EU_FOOD_SUPPLEMENT_1: LabelFormat = {
+  keywords: ["Inhaltsstoffe", "Zutaten", "Tagesdosis", "Verzehrempfehlung", "Inhalt pro", "NRV"],
+  columns: {
+    amount: [
+      /^(?:pro\s+)?tagesdosis\b.*$/i,
+      /^(?:pro|je)\s+(?:tages)?(?:portion|dosis|tablette|kapsel|weichkapsel|kautablette|messl[öo]ffel|beutel|tropfen)\w*\b.*$/i,
+      /^(?:pro|je)\s+\d+\s+[a-zäöüß]+.*$/i,
+      /^(?:inhalt|menge|gehalt)\s+(?:pro|je)\s+(?!100\s*(?:g|ml)\b).+$/i,
+    ],
+    perBasis: [/^(?:(?:inhalt|menge|gehalt)\s+)?(?:pro|je)\s+100\s*(?:g|ml)\b.*$/i],
+    dailyValue: [
+      { header: /^[*#†‡^]*\s*%?\s*(?:nrv|rm|referenzmenge)\b.*$/i, basis: "eu_nrv" },
+      { header: /%\s*(?:der\s+|des\s+)?(?:nrv|rm|referenzmenge)\b/i, basis: "eu_nrv" },
+    ],
+  },
+  headerCells: [
+    /^(?:inhaltsstoffe?|n[äa]hrstoffe?|zutaten|wirkstoffe?|bestandteile|n[äa]hrwerte)\s*[:*]*$/i,
+    // WeightWorld heads its name column "Nährwertangaben pro Portion" and leaves the amount column without a header.
+    /^n[äa]hrwertangaben\s+(?:pro|je)\s+(?:portion|tagesdosis)\b.*$/i,
+  ],
+  skip: [
+    /^n[äa]hr(?:stoff|wert)(?:tabelle|informationen?|angaben)\s*:?$/i,
+    /^[*#†‡]+\s*(?:nrv|rm)\b.*$/i,
+    /^[*#†‡]*\s*(?:nrv|rm)\s*[:=]\s*.*$/i,
+    /^[*#†‡]*\s*n[äa]hrstoffbezugswerte?\b.*$/i,
+    /^[*#†‡]*\s*referenzmengen?\b.*$/i,
+    /^[*#†‡]*\s*keine?\s+(?:nrv|rm|referenzmenge|empfehlung)\b.*$/i,
+    /^nahrungserg[äa]nzungsmittel\b.*$/i,
+    // Doctor's Best (B09LR81NNL): "* = Prozentsatz der Nährstoff-Referenzwerte …", "** = Tageswert nicht ermittelt".
+    /^[*#†‡]+\s*=?\s*(?:prozentsatz|tageswert|n[äa]hrstoff-?referenzwert)\b.*$/i,
+  ],
+  servings: [/^portionen\s+(?:pro|je)\s+(?:packung|dose|flasche|beutel|glas)\s*[:\-–]?\s*(.*)$/i],
+  servingFor: [
+    // "Verzehrempfehlung: 1 Tablette alle 2 Tage | Portionen pro Packung: 365" (WeightWorld).
+    /^verzehrempfehlung\s*:?\s*(.+?)(?:\s*[|•·]\s*portionen\s+(?:pro|je)\s+(?:packung|dose|flasche)\s*[:\-–]?\s*(.+))?$/i,
+  ],
+  continuation: [/^\(.+\)$/],
+  preparedFrom: none,
+  prompt: [
+    'The label may print a German food-supplement table instead ("Inhaltsstoffe | Tagesdosis (2 Kapseln) | %NRV*", "Nährstofftabelle", "Nährwertinformationen", "Inhalt pro Tablette"). Transcribe it the same way, every word exactly as printed in German: never translate. Rows such as "davon EPA" are their own rows. Its "Zutaten:" list is the ingredients text: "otherIngredientsHeading" is "Zutaten:" as printed and "otherIngredients" its whole body as printed.',
+    'A multilingual label prints the same text once per language, each section marked by a country or language code ("DE", "FR", "IT", "UK", "EN"). Copy the English section (UK, EN or GB) when one is printed, otherwise the German (DE) section only; leave every other language out.',
+  ],
+};
+
 export const LABEL_FORMATS: Readonly<Record<LabelFormatId, LabelFormat>> = {
   // The US rules live in the transcript parser and the US prompt themselves; this entry adds nothing to them.
   "us-facts/1": {
@@ -311,6 +365,7 @@ export const LABEL_FORMATS: Readonly<Record<LabelFormatId, LabelFormat>> = {
   "in-nutritional-information/3": IN_NUTRITIONAL_INFORMATION_3,
   "in-composition/2": IN_COMPOSITION_2,
   "in-composition/3": IN_COMPOSITION_3,
+  "eu-food-supplement/1": EU_FOOD_SUPPLEMENT_1,
 };
 
 /** The formats a storefront's labels are read in. A storefront not listed is not read at all. */
@@ -322,6 +377,8 @@ export const MARKETPLACE_LABEL_FORMATS: Readonly<Record<string, readonly LabelFo
   "amazon.co.uk": [US_FACTS, "in-nutritional-information/3", "in-composition/2"],
   // Owner 2026-11-11: Canada reads India's composition lists; /3 adds Health Canada's medicinal-ingredient lines.
   "amazon.ca": [US_FACTS, "in-composition/3"],
+  // Owner 2026-11-11: Germany reads US bottles, English (UK) sections in the UK's /3 and German labels in the EU format.
+  "amazon.de": [US_FACTS, "in-nutritional-information/3", "eu-food-supplement/1"],
 };
 
 /**

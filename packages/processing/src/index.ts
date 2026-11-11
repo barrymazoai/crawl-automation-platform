@@ -19,3 +19,8 @@ export {
   crossMarketPrompt,
   CROSS_MARKET_REASONS,
 } from "./cross-market/cross-market-judge.js";
+export {
+  checkedTranslations,
+  labelTranslationPrompt,
+  labelTranslator,
+} from "./translation/label-translator.js";

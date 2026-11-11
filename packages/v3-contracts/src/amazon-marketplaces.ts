@@ -36,12 +36,21 @@ export const AMAZON_MARKETPLACES = {
     countryCode: "CA",
     currency: "CAD",
   },
+  // KAN-243 (owner 2026-11-11): Germany, the first of the EU storefronts Robert named (26 of 26 pages delivered in
+  // Germany through ScraperAPI; English pages with ?language=en_GB, docs/plans/KAN-243-germany-plan.md). Supply Smart's
+  // allow list has amazon.de.
+  "amazon-de": {
+    marketplace: "amazon.de",
+    origin: "https://www.amazon.de",
+    countryCode: "DE",
+    currency: "EUR",
+  },
 } as const;
 
 export type AmazonChannel = keyof typeof AMAZON_MARKETPLACES;
 export type AmazonMarketplace = (typeof AMAZON_MARKETPLACES)[AmazonChannel]["marketplace"];
 /** The storefronts other than amazon.com: their listings name a marketplace and are sent to their own target. */
-export const FOREIGN_AMAZON_CHANNELS = ["amazon-in", "amazon-uk", "amazon-ca"] as const;
+export const FOREIGN_AMAZON_CHANNELS = ["amazon-in", "amazon-uk", "amazon-ca", "amazon-de"] as const;
 export type ForeignAmazonChannel = (typeof FOREIGN_AMAZON_CHANNELS)[number];
 /** Every Amazon storefront channel, amazon.com first: the one list other channel lists are built from. */
 export const AMAZON_CHANNELS = ["amazon", ...FOREIGN_AMAZON_CHANNELS] as const;
@@ -84,4 +93,16 @@ export function amazonLabelFormats(channel: AmazonChannel): readonly LabelFormat
     throw new Error(`no label formats for ${channel}`);
   }
   return formats;
+}
+
+/**
+ * KAN-243 (owner 2026-11-11, Germany plan option A): the language a storefront's labels are copied in when it is not
+ * English. The copy keeps the printed words; what Supply Smart receives is translated into English first (Robert: "我们
+ * 平台用户都是英语用户"). Absent: the labels are English (or copied in English only, as Canada's).
+ */
+const LABEL_LANGUAGES: Partial<Record<AmazonChannel, "de">> = { "amazon-de": "de" };
+
+/** The language a channel's labels are printed in, or null for English. */
+export function labelLanguageOf(channel: string): "de" | null {
+  return isAmazonChannel(channel) ? (LABEL_LANGUAGES[channel] ?? null) : null;
 }

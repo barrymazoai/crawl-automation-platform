@@ -84,6 +84,7 @@ export * from "./temporal/temporal-brand-enrichment.js";
 export * from "./temporal/temporal-brand-enrichment-products.js";
 export * from "./postgres/postgres-product-sync.js";
 export * from "./postgres/postgres-cross-market.js";
+export * from "./postgres/postgres-label-translations.js";
 export * from "./product-sync/marketplace-reader.js";
 export * from "./product-sync/listing-date-originals.js";
 export { SupplySmartObservationWriter } from "./product-delivery/product-observation-writer.js";

@@ -120,7 +120,10 @@ export class ScraperApiPages implements PageFetcher {
     abort: AbortSignal,
   ): Promise<FetchedHtml> {
     const { policy } = request;
-    const target = allowedTarget(withoutFragment(request.url), policy.origins).href;
+    const target = withQuery(
+      allowedTarget(withoutFragment(request.url), policy.origins),
+      policy.query,
+    );
     const signal = AbortSignal.any([abort, AbortSignal.timeout(policy.timeoutMs)]);
     const tooLarge = () =>
       channelErrors.create("CAPTURE.PAGE_LIMIT", { details: { maxBytes: policy.maxBytes } });
@@ -145,6 +148,14 @@ export class ScraperApiPages implements PageFetcher {
       fetchedVia: { ...fetchedVia, creditCost: page.creditCost, ...moved },
     };
   }
+}
+
+/** The site's own request parameters (HttpPolicy.query) over the address; none leaves it as it was. */
+function withQuery(target: URL, query: HttpPolicy["query"]): string {
+  for (const [key, value] of Object.entries(query ?? {})) {
+    target.searchParams.set(key, value);
+  }
+  return target.href;
 }
 
 /** A fragment never reaches the website; channels may use one to name a variant on a shared page (Costco). */

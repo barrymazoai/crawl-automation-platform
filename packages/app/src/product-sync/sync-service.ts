@@ -16,6 +16,7 @@ import {
 import { planSync } from "./sync-plan.js";
 import { withOutcomes, withTargetDomains } from "./sync-targets.js";
 import { sendBatch } from "./sync-send.js";
+import type { LabelTranslation } from "./label-translation.js";
 
 export type { ProductSyncRequest, ProductSyncResult } from "./sync-model.js";
 
@@ -32,6 +33,8 @@ export interface ProductSyncDeps {
    * goes to production). A channel without its own writer uses `writer`.
    */
   writers?: Partial<Record<MarketplaceChannel, SyncTarget>>;
+  /** KAN-243: a storefront whose labels are copied in another language is sent in English (amazon.de). */
+  translation?: Pick<LabelTranslation, "inEnglish">;
   now?: () => Date;
 }
 
@@ -80,9 +83,12 @@ export class ProductSyncService {
       },
       tally,
     );
-    const ready = request.dryRun
+    const checked = request.dryRun
       ? planned
       : await this.crossMarket({ channel: request.channel, planned, tally }, signal);
+    const ready = request.dryRun
+      ? checked
+      : await this.inEnglish({ channel: request.channel, planned: checked, tally }, signal);
     tally.result.toSend = ready.length;
     if (!request.dryRun) {
       await this.deps.ledger.touch(tally.touched);
@@ -136,6 +142,23 @@ export class ProductSyncService {
       signal,
     );
     return withOutcomes(at.planned, outcomes, at.tally);
+  }
+
+  /** Products whose labels could not be translated this round are not sent; they stay pending for the next. */
+  private async inEnglish(
+    at: { channel: MarketplaceChannel; planned: PlannedSync[]; tally: SyncTally },
+    signal: AbortSignal,
+  ): Promise<PlannedSync[]> {
+    const translation = this.deps.translation;
+    if (!translation) {
+      return at.planned;
+    }
+    const english = await translation.inEnglish(at.channel, at.planned, signal);
+    if (english === null) {
+      at.tally.result.waitingTranslation = at.planned.length;
+      return [];
+    }
+    return english;
   }
 
   private writerOf(channel: MarketplaceChannel): ProductObservationWriter {

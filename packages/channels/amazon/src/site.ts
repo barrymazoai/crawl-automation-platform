@@ -17,7 +17,11 @@ export interface AmazonSite {
   /** date-fns patterns of "Date First Available", in the storefront's English locale. */
   dateFormats: readonly string[];
   parserVersion:
-    "amazon-rendered/1" | "amazon-in-rendered/1" | "amazon-uk-rendered/1" | "amazon-ca-rendered/1";
+    | "amazon-rendered/1"
+    | "amazon-in-rendered/1"
+    | "amazon-uk-rendered/1"
+    | "amazon-ca-rendered/1"
+    | "amazon-de-rendered/1";
   /**
    * KAN-243 (owner 2026-11-07): the longest side, in pixels, gallery images are downloaded at; null keeps the page's own
    * image URLs. Indian labels print small type on a side of the jar: the page's 1500 px image left Man Matters' panel
@@ -49,6 +53,12 @@ export interface AmazonSite {
    * with `hpc`, so a source built with `hpc` failed BRAND_SCAN.PAGINATION on every brand with a second page.
    */
   searchAlias: "hpc" | "drugstore";
+  /**
+   * The page language a storefront is asked for (`?language=`), or null for its own. amazon.de answers in German
+   * unless asked for `en_GB` (2026-11-11: product, search and best-seller pages then print the English words the
+   * readers know, with titles translated by Amazon, and link with a `/-/en/` path prefix).
+   */
+  language: "en_GB" | null;
 }
 
 export const AMAZON_US: AmazonSite = {
@@ -66,6 +76,7 @@ export const AMAZON_US: AmazonSite = {
   scanProducts: null,
   supplementNode: "3760901",
   searchAlias: "hpc",
+  language: null,
 };
 
 // Real amazon.in pages, 2026-11-04 (docs/plans/KAN-243-india-research.md §4): "₹2,129" in priceToPay's whole part
@@ -85,6 +96,7 @@ export const AMAZON_IN: AmazonSite = {
   scanProducts: 50,
   supplementNode: "1374489031",
   searchAlias: "hpc",
+  language: null,
 };
 
 // Real amazon.co.uk pages, 2026-11-10 (docs/plans/KAN-243-uk-plan.md §1): "£9.99" in priceToPay, "Delivering to
@@ -106,6 +118,7 @@ export const AMAZON_UK: AmazonSite = {
   scanProducts: 50,
   supplementNode: "2826484031",
   searchAlias: "drugstore",
+  language: null,
 };
 
 // Real amazon.ca pages, 2026-11-11 (docs/plans/KAN-243-canada-plan.md §1): "$7.20 with 15 percent savings" (Canadian
@@ -130,6 +143,30 @@ export const AMAZON_CA: AmazonSite = {
   scanProducts: 50,
   supplementNode: "6369748011",
   searchAlias: "hpc",
+  language: null,
+};
+
+// Real amazon.de pages with ?language=en_GB, 2026-11-11 (docs/plans/KAN-243-germany-plan.md §1): "€34.29" split in
+// priceToPay (its .a-offscreen blank, the whole part "34." and fraction "29"), "Delivering to Frankfurt 60313" (a
+// five-digit postcode), "14,462 in Health & Personal Care (See Top 100 …)" without "#", "100+ bought", no "Date First
+// Available" line. Drugstore > Vitamins, Minerals & Supplements is node 64374031, searched in the `drugstore`
+// department (Doctor's Best's page 1 links page 2 with it, under /-/en/s).
+export const AMAZON_DE: AmazonSite = {
+  channel: "amazon-de",
+  origin: AMAZON_MARKETPLACES["amazon-de"].origin,
+  hosts: /^(?:(?:www|m)\.)?amazon\.de$/,
+  currency: AMAZON_MARKETPLACES["amazon-de"].currency,
+  pricePrefix: /(?:€|EUR\s*)/,
+  postalCode: /\b\d{5}\b/g,
+  dateFormats: ["d MMMM yyyy"],
+  parserVersion: "amazon-de-rendered/1",
+  imageSize: 2560,
+  scanSort: "exact-aware-popularity-rank",
+  scanPages: 2,
+  scanProducts: 50,
+  supplementNode: "64374031",
+  searchAlias: "drugstore",
+  language: "en_GB",
 };
 
 export const AMAZON_SITES: Readonly<Record<AmazonChannel, AmazonSite>> = {
@@ -137,4 +174,5 @@ export const AMAZON_SITES: Readonly<Record<AmazonChannel, AmazonSite>> = {
   "amazon-in": AMAZON_IN,
   "amazon-uk": AMAZON_UK,
   "amazon-ca": AMAZON_CA,
+  "amazon-de": AMAZON_DE,
 };

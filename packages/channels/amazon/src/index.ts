@@ -7,6 +7,7 @@ export {
 } from "./adapter.js";
 export {
   AMAZON_CA,
+  AMAZON_DE,
   AMAZON_IN,
   AMAZON_SITES,
   AMAZON_UK,

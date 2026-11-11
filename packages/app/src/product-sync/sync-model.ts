@@ -24,6 +24,8 @@ export interface ProductSyncResult {
   waitingCompany: number;
   /** KAN-243: listings waiting for the other storefront's page before their cross-market check (not sent). */
   waitingCrossMarket?: number;
+  /** KAN-243: listings whose printed labels could not be translated into English this round (not sent). */
+  waitingTranslation?: number;
   material: number;
   toSend: number;
   verified: number;

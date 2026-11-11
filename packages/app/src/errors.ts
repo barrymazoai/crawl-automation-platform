@@ -92,6 +92,11 @@ export const appErrors = defineErrors({
     category: "VALIDATION",
     message: "A product in this list is already queued with different details.",
   },
+  "LABEL_TRANSLATION.MISSING": {
+    category: "VALIDATION",
+    message:
+      "A printed label text has no English translation, so the product is not sent in its printed language.",
+  },
   "QUEUE.NOT_CONFIGURED": {
     category: "SCHEDULER",
     message: "The queue repository does not support the requested operation.",

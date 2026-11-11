@@ -33,10 +33,22 @@ function checkBrandPage(url: URL): void {
   }
 }
 
-/** Only observed Brand-filter searches and /s?srs= brand pages; Store URLs need a browser. */
+/** A search path, also under a language prefix: amazon.de's English pages link page 2 as /-/en/s (2026-11-11). */
+const SEARCH_PATH = /^(?:\/-\/[a-z]{2})?\/s$/;
+
+/**
+ * Only observed Brand-filter searches and /s?srs= brand pages; Store URLs need a browser. A storefront asked in another
+ * language (AmazonSite.language) keeps that language on every page.
+ */
 export function amazonScanSourceUrl(raw: string, site: AmazonSite = AMAZON_US): string {
   const url = URL.parse(raw, site.origin);
-  if (!url || url.origin !== site.origin || url.username || url.password || url.pathname !== "/s") {
+  if (
+    !url ||
+    url.origin !== site.origin ||
+    url.username ||
+    url.password ||
+    !SEARCH_PATH.test(url.pathname)
+  ) {
     throw brandScanErrors.create("BRAND_SCAN.URL");
   }
   filtersOf(url);
@@ -49,6 +61,9 @@ export function amazonScanSourceUrl(raw: string, site: AmazonSite = AMAZON_US): 
     }
   }
   result.searchParams.set("s", site.scanSort);
+  if (site.language) {
+    result.searchParams.set("language", site.language);
+  }
   return result.href;
 }
 

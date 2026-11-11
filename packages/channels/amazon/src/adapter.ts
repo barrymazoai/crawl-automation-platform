@@ -60,6 +60,7 @@ const httpPolicy = (site: AmazonSite) =>
     maxBytes: AMAZON_MAX_BYTES,
     timeoutMs: 75_000,
     accessChallenge: isAmazonChallenge,
+    ...(site.language ? { query: { language: site.language } } : {}),
   }) as const;
 
 export const AMAZON_HTTP_POLICY = httpPolicy(AMAZON_US);

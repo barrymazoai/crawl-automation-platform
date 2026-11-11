@@ -77,6 +77,7 @@ describe("amazon.co.uk storefront", () => {
       "amazon-in",
       "amazon-uk",
       "amazon-ca",
+      "amazon-de",
     ]);
     expect(amazonAdapters[1]).toBe(amazonInAdapter);
     expect(amazonAdapters[2]).toMatchObject({

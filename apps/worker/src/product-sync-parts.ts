@@ -21,7 +21,7 @@ import {
   ProductSyncSweep,
 } from "@crawl-automation/app";
 import type { CoreParts } from "./core-parts.js";
-import { crossMarketCheck } from "./cross-market-parts.js";
+import { crossMarketCheck, labelTranslation } from "./cross-market-parts.js";
 import type { BrandEnrichmentSettings } from "./brand-enrichment-settings.js";
 
 /** Hosted by the brand-enrichment role: it holds the Supply Smart key, R2 and the channels' retained-page parsers. */
@@ -47,6 +47,7 @@ export function buildProductSyncSweep(
     ledger: new PostgresProductSync(parts.database),
     writer: new SupplySmartObservationWriter(input.rpc),
     writers: targetWriters(parts, { reader, targets, settings: input.settings }),
+    translation: labelTranslation(parts),
   });
   return new ProductSyncSweep({
     sync: service,

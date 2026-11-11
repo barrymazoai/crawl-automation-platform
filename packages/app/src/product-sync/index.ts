@@ -5,6 +5,7 @@ export * from "./ports.js";
 export * from "./ledger.js";
 export * from "./marketplace-mapping.js";
 export * from "./sync-service.js";
+export * from "./label-translation.js";
 export * from "./sync-sweep.js";
 export * from "./brand-sweep.js";
 export * from "./sync-control.js";
