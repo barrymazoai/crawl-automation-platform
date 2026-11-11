@@ -78,6 +78,8 @@ export type LabelCandidate = LabelTextCandidate | LabelImageCandidate;
 export function isIngredientHeading(raw: string): boolean {
   const text = raw.trim();
   if (/^inactive(?:\s+ingredients?(?:\(s\))?)?\s*:?$/i.test(text)) return true;
+  // KAN-243 (amazon.de, Doctor's Best B09LR81NNL 2026-11-11): German labels head their list "Zutaten:".
+  if (/^zutaten(?:liste)?\s*:?$/i.test(text)) return true;
   if (!/\b(?:ingredients?|ingr[e\.]{0,2}dients?|oher\s+ingredients)\b/i.test(text)) return false;
   if (/\b(?:supplement|nutrition|drug)\s+facts\b|amount\s+per\s+serving|daily\s+value|contains\s*:|may\s+contain|allergen/i.test(text)) return false;
   return text.length <= 80;
