@@ -10,13 +10,13 @@ import { parseAmazonProduct } from "./product.js";
 import { amazonSalesRank } from "./sales-rank.js";
 import { AMAZON_DE, AMAZON_UK, AMAZON_US } from "./site.js";
 
-// KAN-243: markup copied from real amazon.de pages asked with ?language=en_GB, captured 2026-11-11 (Doctor's Best
-// PepZinGl B09LR81NNL); the saved pages themselves stay out of git (R2 research/kan243-geo/scraperapi/de/).
-const PRICE_TO_PAY = `<div id="corePriceDisplay_desktop_feature_div">
-  <span data-pricetopay-label="{priceToPay}" class="aok-offscreen apex-pricetopay-accessibility-label"> &euro;34.29 with 10 percent savings </span>
-  <span class="a-price a-text-normal aok-align-center reinventPriceAccordionT2 apex-pricetopay-value priceToPay" data-a-size="l" data-a-color="base"><span class="a-offscreen"> </span><span aria-hidden="true"><span class="a-price-symbol">€</span><span class="a-price-whole">34<span class="a-price-decimal">.</span></span><span class="a-price-fraction">29</span></span></span>
-  <span class="apex-basisprice-feature"><span aria-hidden="true" class="a-size-small a-color-secondary aok-align-center basisPrice"><span class="apex-basisprice-label">RRP:</span> <span class="a-price a-text-price apex-basisprice-value" data-a-strike="true"><span class="a-offscreen">€38.10</span><span aria-hidden="true">€38.10</span></span></span></span>
-</div>`;
+// KAN-243: markup copied from the amazon.de page captured 2026-11-11 13:2x UTC for Doctor's Best PepZinGl B09LR81NNL
+// (?language=en_GB, the one-time purchase selected; Subscribe & Save rows print their own lower prices, "€34.29 with 10
+// percent savings", which are not the price). The archived page stays out of git (R2 v3/amazon-de-html/).
+const PRICE_TO_PAY = `<div id="corePriceDisplay_desktop_feature_div"><div class="a-section apex-core-price-identifier">
+  <span id="apex-pricetopay-accessibility-label" data-pricetopay-label="{priceToPay}" data-pricetopay-savings-label="{priceToPay} with {savings} percent savings" class="aok-offscreen"> €38.10 </span>
+  <span class="a-price aok-align-center reinventPricePriceToPayMargin priceToPay apex-pricetopay-value" data-a-size="xl" data-a-color="base"><span class="a-offscreen"> </span><span aria-hidden="true"><span class="a-price-symbol">€</span><span class="a-price-whole">38<span class="a-price-decimal">.</span></span><span class="a-price-fraction">10</span></span></span>
+</div></div>`;
 const location = (line: string) =>
   `<a id="nav-global-location-popover-link"><span id="glow-ingress-line1">${line}</span>
   <span id="glow-ingress-line2">Update location</span></a>`;
@@ -30,15 +30,10 @@ function html(asin: string, line: string | null) {
 const capturedAt = "2026-11-11T12:00:00.000Z";
 
 describe("amazon.de storefront (KAN-243, 2026-11-11)", () => {
-  it("reads the price to pay in euros, the list price and the delivery postcode", () => {
+  it("reads the one-time purchase price in euros and the delivery postcode", () => {
     const root = productRoot(amazonDocument(html("B09LR81NNL", "Delivering to Frankfurt 60313")));
     const commerce = amazonCommerce(root, "B09LR81NNL", AMAZON_DE);
-    expect(commerce).toMatchObject({
-      price: "34.29",
-      currency: "EUR",
-      listPrice: "38.10",
-      priceStatus: "observed",
-    });
+    expect(commerce).toMatchObject({ price: "38.10", currency: "EUR", priceStatus: "observed" });
     expect(commerce.purchaseConditions?.delivery.postalCode).toBe("60313");
     for (const [line, code] of [
       ["Delivering to Frankfurt... 60313", "60313"],
