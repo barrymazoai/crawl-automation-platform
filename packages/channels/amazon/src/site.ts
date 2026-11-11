@@ -120,7 +120,8 @@ export const AMAZON_CA: AmazonSite = {
   currency: AMAZON_MARKETPLACES["amazon-ca"].currency,
   // A bare "$" is Canadian; "US$" (a price in another currency) is never read as one.
   pricePrefix: /(?:C\$|CA\$|CAD\s*|(?<![A-Za-z])\$)/,
-  postalCode: /\b[A-Z]\d[A-Z](?:\s*\d[A-Z]\d)?\b/g,
+  // Any case: amazon.ca also prints "Delivering to Montreal h1a" (B00L3WS0Y2, 2026-11-11).
+  postalCode: /\b[A-Z]\d[A-Z](?:\s*\d[A-Z]\d)?\b/gi,
   dateFormats: ["MMM. d yyyy", "MMMM d yyyy"],
   parserVersion: "amazon-ca-rendered/1",
   imageSize: 2560,

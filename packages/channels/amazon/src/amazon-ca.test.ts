@@ -48,6 +48,7 @@ describe("amazon.ca storefront (KAN-243, 2026-11-11)", () => {
       ["Delivering to Fort Qu'a... S0G", "S0G"],
       ["Delivering to La Prairie J5R", "J5R"],
       ["Delivering to Toronto M5A", "M5A"],
+      ["Delivering to Montreal h1a", "h1a"],
     ] as const) {
       const at = productRoot(amazonDocument(html("B01NARPPT8", line)));
       expect(
