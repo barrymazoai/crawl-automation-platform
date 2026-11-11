@@ -1,4 +1,4 @@
-import type { LabelFormatId } from "@crawl-automation/v3-contracts";
+import { readsCompositionRules, type LabelFormatId } from "@crawl-automation/v3-contracts";
 import type { LabelTranscriptWire } from "../../vision/protocol/label-transcript-wire.js";
 
 /**
@@ -15,7 +15,7 @@ export function withoutIngredientTotal(
   formats: readonly LabelFormatId[],
 ): LabelTranscriptWire {
   const list = wire.otherIngredients;
-  if (!formats.includes("in-composition/2") || !list || !TOTAL.test(list)) {
+  if (!readsCompositionRules(formats) || !list || !TOTAL.test(list)) {
     return wire;
   }
   const items = list.replace(TOTAL, "");

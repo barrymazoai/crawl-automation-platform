@@ -1,5 +1,6 @@
 import {
   isIngredientHeading,
+  readsCompositionRules,
   type LabelFormatId,
   type LabelTextCandidate,
 } from "@crawl-automation/v3-contracts";
@@ -22,7 +23,7 @@ const BASE = /\bbase\b/i;
 const QS = /^q\.?\s*s\.?$/i;
 
 /** An answer retained in the first India formats (2026-11-06) decodes exactly as it was read. */
-const current = (formats: readonly LabelFormatId[]) => formats.includes("in-composition/2");
+const current = readsCompositionRules;
 
 interface PanelLines {
   heading: string | null;

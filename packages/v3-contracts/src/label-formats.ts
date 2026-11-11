@@ -16,6 +16,7 @@ export const LabelFormatIdSchema = z.enum([
   "in-nutritional-information/2",
   "in-composition/2",
   "in-nutritional-information/3",
+  "in-composition/3",
 ]);
 export type LabelFormatId = z.infer<typeof LabelFormatIdSchema>;
 
@@ -23,7 +24,7 @@ export type LabelFormatId = z.infer<typeof LabelFormatIdSchema>;
 export const US_FACTS: LabelFormatId = "us-facts/1";
 
 /** Whose recommended intake a printed percentage column is relative to. */
-export type DailyValueBasis = "us_dv" | "in_rda" | "eu_nrv";
+export type DailyValueBasis = "us_dv" | "in_rda" | "eu_nrv" | "ca_dv";
 
 export interface LabelFormat {
   /** Whole-word OCR phrases that select an image for this format (letters and single spaces only). */
@@ -171,6 +172,62 @@ const IN_NUTRITIONAL_INFORMATION_3: LabelFormat = {
   ],
 };
 
+// Composition lists as /1; "Excipients q.s." is the filler, not a formula row (Kapiva Shilajit, 2026-11-06).
+const IN_COMPOSITION_2: LabelFormat = {
+    keywords: ["Composition"],
+    columns: { amount: none, perBasis: none, dailyValue: [] },
+    headerCells: none,
+    skip: [/^composition\s*:?$/i, /^excipients?\b.*$/i],
+    servings: none,
+    servingFor: [/^(?:composition\s*:?\s*)?each\s+(.+?)\s+contains\s*:?$/i],
+    continuation: [/^\(.+\)$/],
+    preparedFrom: [
+      /^(?:composition\s*:?\s*)?each\s+.+?\s+(?:is\s+)?prepared\s+(?:from|out\s+of)\b/i,
+    ],
+    prompt: [
+      'A "Composition" list ("Each capsule contains:", "Each 1g contains:") is a facts panel too: "heading" is its heading as printed, the "Each … contains" line goes in "servingLines" as printed, and each ingredient is one row whose cells are its name exactly as printed (Latin name and plant part included) and its amount.',
+    ],
+  };
+
+/**
+ * amazon.ca, 2026-11-11 (7 real galleries, docs/plans/KAN-243-canada-plan.md §1): Health Canada's natural health
+ * product labels, printed in English and French. "Medicinal ingredients" with "Each tablet contains:" (Webber
+ * Naturals, Jamieson), "Ingredients (each softgel contains):" (NOW Canada), the "Product Facts / Info-produit" box with
+ * "(In each softgel)" or "Each capsule contains:" (Sports Research, CanPrev), "Medicinal ingredient – each serving
+ * (10 g) contains" (Organika), and a Supplement Facts–like table headed "Amount Per Serving / Quantité par portion |
+ * %DV / %VQ" (Jacked Factory). "Non-medicinal ingredients" already heads an other-ingredients list. /3 is /2 with these
+ * lines; /2 stays for amazon.in and amazon.co.uk.
+ */
+const IN_COMPOSITION_3: LabelFormat = {
+  ...IN_COMPOSITION_2,
+  keywords: [...IN_COMPOSITION_2.keywords, "Medicinal Ingredients", "Medicinal Ingredient", "Product Facts"],
+  columns: {
+    amount: [/^amount\s+per\s+serving\s*\/\s*quantit[ée]\s+par\s+portion$/i],
+    perBasis: none,
+    dailyValue: [{ header: /^%\s*(?:dv|daily\s+value)\s*\/\s*%\s*(?:vq|valeur\s+quotidienne)\s*[*†‡]*$/i, basis: "ca_dv" }],
+  },
+  skip: [
+    ...IN_COMPOSITION_2.skip,
+    /^product\s+facts\b.*$/i,
+    /^info-produit\b.*$/i,
+    /^medicinal\s+ingredients?\s*(?:\/\s*ingr[ée]dients?\s+m[ée]dicinaux)?\s*:?$/i,
+    /^ingr[ée]dients?\s+m[ée]dicinaux\s*:?$/i,
+    /^chaque\s+.+?\s+contient\b.*$/i,
+    /^\(?\s*dans\s+chaque\s+.+$/i,
+  ],
+  servingFor: [
+    // "Each tablet contains:", "Medicinal Ingredients: Each tablet contains:", "Ingredients (each softgel contains):",
+    // "Medicinal ingredient – each serving (10 g) contains"; the French half after a "/" is left out of the serving.
+    /^(?:(?:composition|(?:medicinal\s+)?ingredients?)\s*[:\-–—(]?\s*)?each\s+(.+?)\s+contains\s*\)?\s*:?(?:\s*\/.*)?$/i,
+    // "(In each softgel)".
+    /^\(\s*in\s+each\s+(.+?)\s*\)\s*:?(?:\s*\/.*)?$/i,
+  ],
+  prompt: [
+    ...IN_COMPOSITION_2.prompt,
+    'A Canadian label prints its "Medicinal ingredients" ("Each tablet contains:", "(In each softgel)") and "Non-medicinal ingredients" in English and in French. Transcribe the English text only and leave out every French translation ("Ingrédients médicinaux", "Chaque comprimé contient :", "Vitamine D3", "Ingrédients non médicinaux"). The medicinal ingredients are the facts panel: the "Each … contains" or "(In each …)" line goes in "servingLines" as printed, and each medicinal ingredient is one row with its amount; the non-medicinal ingredients are the other ingredients.',
+  ],
+};
+
 export const LABEL_FORMATS: Readonly<Record<LabelFormatId, LabelFormat>> = {
   // The US rules live in the transcript parser and the US prompt themselves; this entry adds nothing to them.
   "us-facts/1": {
@@ -252,22 +309,8 @@ export const LABEL_FORMATS: Readonly<Record<LabelFormatId, LabelFormat>> = {
   },
   "in-nutritional-information/2": IN_NUTRITIONAL_INFORMATION_2,
   "in-nutritional-information/3": IN_NUTRITIONAL_INFORMATION_3,
-  // Composition lists as /1; "Excipients q.s." is the filler, not a formula row (Kapiva Shilajit, 2026-11-06).
-  "in-composition/2": {
-    keywords: ["Composition"],
-    columns: { amount: none, perBasis: none, dailyValue: [] },
-    headerCells: none,
-    skip: [/^composition\s*:?$/i, /^excipients?\b.*$/i],
-    servings: none,
-    servingFor: [/^(?:composition\s*:?\s*)?each\s+(.+?)\s+contains\s*:?$/i],
-    continuation: [/^\(.+\)$/],
-    preparedFrom: [
-      /^(?:composition\s*:?\s*)?each\s+.+?\s+(?:is\s+)?prepared\s+(?:from|out\s+of)\b/i,
-    ],
-    prompt: [
-      'A "Composition" list ("Each capsule contains:", "Each 1g contains:") is a facts panel too: "heading" is its heading as printed, the "Each … contains" line goes in "servingLines" as printed, and each ingredient is one row whose cells are its name exactly as printed (Latin name and plant part included) and its amount.',
-    ],
-  },
+  "in-composition/2": IN_COMPOSITION_2,
+  "in-composition/3": IN_COMPOSITION_3,
 };
 
 /** The formats a storefront's labels are read in. A storefront not listed is not read at all. */
@@ -277,7 +320,17 @@ export const MARKETPLACE_LABEL_FORMATS: Readonly<Record<string, readonly LabelFo
   "amazon.in": [US_FACTS, "in-nutritional-information/2", "in-composition/2"],
   // Owner 2026-11-10: the UK reads India's formats; /3 adds the UK's %NRV and per-daily-intake headers.
   "amazon.co.uk": [US_FACTS, "in-nutritional-information/3", "in-composition/2"],
+  // Owner 2026-11-11: Canada reads India's composition lists; /3 adds Health Canada's medicinal-ingredient lines.
+  "amazon.ca": [US_FACTS, "in-composition/3"],
 };
+
+/**
+ * Whether the composition rules written for India's /2 lists apply (made-up-with lines, a list's 100% total, a
+ * paragraph's amounts): /2 and every later version. /1 answers decode as they were read.
+ */
+export function readsCompositionRules(formats: readonly LabelFormatId[]): boolean {
+  return formats.includes("in-composition/2") || formats.includes("in-composition/3");
+}
 
 /** The formats a label is read in: the US panel alone unless the task names more. */
 export function labelFormatsOf(

@@ -28,12 +28,20 @@ export const AMAZON_MARKETPLACES = {
     countryCode: "GB",
     currency: "GBP",
   },
+  // KAN-243 (owner 2026-11-11): Canada, after the UK (21 of 21 pages delivered in Canada through ScraperAPI, en-ca
+  // pages, docs/plans/KAN-243-canada-plan.md). Supply Smart's allow list has amazon.ca.
+  "amazon-ca": {
+    marketplace: "amazon.ca",
+    origin: "https://www.amazon.ca",
+    countryCode: "CA",
+    currency: "CAD",
+  },
 } as const;
 
 export type AmazonChannel = keyof typeof AMAZON_MARKETPLACES;
 export type AmazonMarketplace = (typeof AMAZON_MARKETPLACES)[AmazonChannel]["marketplace"];
 /** The storefronts other than amazon.com: their listings name a marketplace and are sent to their own target. */
-export const FOREIGN_AMAZON_CHANNELS = ["amazon-in", "amazon-uk"] as const;
+export const FOREIGN_AMAZON_CHANNELS = ["amazon-in", "amazon-uk", "amazon-ca"] as const;
 export type ForeignAmazonChannel = (typeof FOREIGN_AMAZON_CHANNELS)[number];
 /** Every Amazon storefront channel, amazon.com first: the one list other channel lists are built from. */
 export const AMAZON_CHANNELS = ["amazon", ...FOREIGN_AMAZON_CHANNELS] as const;

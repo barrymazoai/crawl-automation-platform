@@ -16,7 +16,8 @@ export interface AmazonSite {
   postalCode: RegExp;
   /** date-fns patterns of "Date First Available", in the storefront's English locale. */
   dateFormats: readonly string[];
-  parserVersion: "amazon-rendered/1" | "amazon-in-rendered/1" | "amazon-uk-rendered/1";
+  parserVersion:
+    "amazon-rendered/1" | "amazon-in-rendered/1" | "amazon-uk-rendered/1" | "amazon-ca-rendered/1";
   /**
    * KAN-243 (owner 2026-11-07): the longest side, in pixels, gallery images are downloaded at; null keeps the page's own
    * image URLs. Indian labels print small type on a side of the jar: the page's 1500 px image left Man Matters' panel
@@ -107,8 +108,32 @@ export const AMAZON_UK: AmazonSite = {
   searchAlias: "drugstore",
 };
 
+// Real amazon.ca pages, 2026-11-11 (docs/plans/KAN-243-canada-plan.md §1): "$7.20 with 15 percent savings" (Canadian
+// dollars printed with a bare "$"), "Delivering to Montreal H3H" / "Balzac T4B 2T3" (a postal code's first three
+// characters or all six), "Date First Available : Jan. 23 2013" / "June 3 2014" (a short month abbreviated with a
+// point, no comma), Best Sellers Rank with "#" as on amazon.com. Health & Personal Care > Vitamins, Minerals &
+// Supplements is node 6369748011, searched in the `hpc` department (Webber Naturals' page 1 links page 2 with `hpc`).
+export const AMAZON_CA: AmazonSite = {
+  channel: "amazon-ca",
+  origin: AMAZON_MARKETPLACES["amazon-ca"].origin,
+  hosts: /^(?:(?:www|m)\.)?amazon\.ca$/,
+  currency: AMAZON_MARKETPLACES["amazon-ca"].currency,
+  // A bare "$" is Canadian; "US$" (a price in another currency) is never read as one.
+  pricePrefix: /(?:C\$|CA\$|CAD\s*|(?<![A-Za-z])\$)/,
+  postalCode: /\b[A-Z]\d[A-Z](?:\s*\d[A-Z]\d)?\b/g,
+  dateFormats: ["MMM. d yyyy", "MMMM d yyyy"],
+  parserVersion: "amazon-ca-rendered/1",
+  imageSize: 2560,
+  scanSort: "exact-aware-popularity-rank",
+  scanPages: 2,
+  scanProducts: 50,
+  supplementNode: "6369748011",
+  searchAlias: "hpc",
+};
+
 export const AMAZON_SITES: Readonly<Record<AmazonChannel, AmazonSite>> = {
   amazon: AMAZON_US,
   "amazon-in": AMAZON_IN,
   "amazon-uk": AMAZON_UK,
+  "amazon-ca": AMAZON_CA,
 };

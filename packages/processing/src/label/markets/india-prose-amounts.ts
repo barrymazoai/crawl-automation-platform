@@ -1,4 +1,8 @@
-import type { LabelFormatId, LabelImageCandidate } from "@crawl-automation/v3-contracts";
+import {
+  readsCompositionRules,
+  type LabelFormatId,
+  type LabelImageCandidate,
+} from "@crawl-automation/v3-contracts";
 import type { OcrReading } from "../../keywords/ocr-text.js";
 import {
   DOSE,
@@ -24,7 +28,7 @@ export function proseAmounts(
 ): AmountPositions {
   const { positions } = at;
   const column = candidate.formula?.columns[0];
-  if (!at.formats.includes("in-composition/2") || !column || column.heading) {
+  if (!readsCompositionRules(at.formats) || !column || column.heading) {
     return positions;
   }
   const text = ocr.lines.map((line) => line.text).join("\n");
