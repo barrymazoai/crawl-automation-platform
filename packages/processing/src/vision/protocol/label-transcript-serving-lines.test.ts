@@ -182,6 +182,19 @@ describe("the serving and the pack's count copied on one line (amazon.in rerun 2
     const built = read(transcriptCandidate(wire(panel(line)), policy, INDIA));
     expect([built.serving, built.servings]).toEqual([serving, servings]);
   });
+
+  it("reads a line with a long run of spaces at once (amazon.de label model worker held for good, 2026-11-12)", () => {
+    const started = performance.now();
+    const built = read(
+      transcriptCandidate(
+        wire(panel(`Serving Size: 1 Tablet${" ".repeat(3900)}Servings Per Container: 60`)),
+        policy,
+        INDIA,
+      ),
+    );
+    expect([built.serving, built.servings]).toEqual(["1 Tablet", "60"]);
+    expect(performance.now() - started).toBeLessThan(1000);
+  });
 });
 
 describe("nutrients of a running line under a headed table (HealthyHey Magnesium Glycinate, 2026-11-08)", () => {

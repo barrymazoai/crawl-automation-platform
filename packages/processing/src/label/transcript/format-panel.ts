@@ -108,9 +108,12 @@ function servingRead(
  * Size: 1 Scoop (36g) | Servings Per Container: ~28", "Servings per container: 30    Serving size: 1 Tablet",
  * "SERVING SIZE: 40.50G, NO. OF SERVINGS - 1") are read one part at a time; the serving had kept "|" or "," and the
  * next line's start ("2 softgels (2.6g) | Number of"). A separator splits only before a serving or servings part.
+ * KAN-243 (2026-11-12): a separator starts right after printed text, so a long run of spaces is tried once, not from
+ * every space: the earlier `\s*(?:…|\s{3,})\s*` grew with the fourth power of a run's length (320 spaces 1.9 s) and an
+ * amazon.de multilingual sticker's copy held the label model worker's thread for good. The parts are the same.
  */
 const SERVING_PART =
-  /\s*(?:[|;•·,]|\s{3,})\s*(?=(?:no\.?\s*of\s+|number\s+of\s+|total\s+)?serv(?:e|ing)?s?\b)/iu;
+  /(?<=\S|^)(?:\s*[|;•·,]\s*|\s{3,})(?=(?:no\.?\s*of\s+|number\s+of\s+|total\s+)?serv(?:e|ing)?s?\b)/iu;
 
 function preparedFrom(panel: PrintedPanel, formats: readonly LabelFormatId[]): boolean {
   const lines = [
