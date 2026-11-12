@@ -26,10 +26,31 @@ function checkBrandFilter(document: AmazonDocument, url: string, site: AmazonSit
     return;
   }
   const facet = document.getElementById(filter.replace(":", "/"));
-  if (!facet?.querySelector('input[type="checkbox"][checked]')) {
+  if (facet?.querySelector('input[type="checkbox"][checked]')) {
+    return;
+  }
+  if (facet || document.getElementById("brandsRefinements") || !formsKeepFilters(document, url)) {
     throw amazonErrors.create("AMAZON.SCAN_FILTER_LOST");
   }
 }
+
+/**
+ * KAN-243 2026-11-12 (amazon.de, 66 of 966 "filter lost" scans): a filtered result page may print no Brands panel at
+ * all (Optimum Nutrition: 21 results, every card the brand; Allergy Research Group's last page 25–27 of 27), so the
+ * filters Amazon applied are read from the page's own search forms, whose hidden `rh` field carries them
+ * (`n:64374031,p_123:250393`). A storefront that drops an unknown brand ID ("No results for Luma Nutrition in Health &
+ * Personal Care", results from All Departments) prints no such field, and a panel without the brand checked still
+ * fails.
+ */
+function formsKeepFilters(document: AmazonDocument, url: string): boolean {
+  const requested = filterSet(new URL(url).searchParams.get("rh"));
+  const applied = [...document.querySelectorAll('input[type="hidden"][name="rh"]')].map((input) =>
+    filterSet(input.getAttribute("value")),
+  );
+  return applied.length > 0 && applied.every((filters) => filters === requested);
+}
+
+const filterSet = (rh: string | null) => (rh ?? "").split(",").filter(Boolean).sort().join(",");
 
 type PageInput = { body: string; url: string; page: number };
 

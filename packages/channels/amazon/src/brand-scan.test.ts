@@ -225,6 +225,32 @@ describe.skipIf(!filteredSearch.available)(filteredSearch.name, () => {
     );
   });
 
+  it("reads a filtered page that prints no Brands panel from its search forms' filters (KAN-243, amazon.de 2026-11-12)", () => {
+    const document = searchDocument();
+    document.getElementById("brandsRefinements")?.remove();
+    expect(parse(document.toString())).toMatchObject({ cards: 24 });
+
+    const forms = [...document.querySelectorAll('input[type="hidden"][name="rh"]')];
+    forms[0]?.setAttribute("value", "n:3760901");
+    expect(() => parse(document.toString())).toThrow(
+      expect.objectContaining({ code: "AMAZON.SCAN_FILTER_LOST" }),
+    );
+    for (const input of forms) {
+      input.remove();
+    }
+    expect(() => parse(document.toString())).toThrow(
+      expect.objectContaining({ code: "AMAZON.SCAN_FILTER_LOST" }),
+    );
+  });
+
+  it("keeps refusing a Brands panel without the brand checked, whatever the forms carry", () => {
+    const document = searchDocument();
+    document.getElementById("p_123/383950")?.remove();
+    expect(() => parse(document.toString())).toThrow(
+      expect.objectContaining({ code: "AMAZON.SCAN_FILTER_LOST" }),
+    );
+  });
+
   it("does not interpret a missing result grid or robot check as a completed empty scan", () => {
     const document = searchDocument();
     document.querySelector("div.s-main-slot")?.remove();
