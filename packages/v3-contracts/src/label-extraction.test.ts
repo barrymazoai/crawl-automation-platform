@@ -16,6 +16,26 @@ it("accepts exact inactive heading aliases without generic inactive prose", () =
     expect(isIngredientHeading(heading)).toBe(false);
   }
 });
+it("reads German ingredient headings only in the EU format (KAN-243, amazon.de 2026-11-12 Reviews)", () => {
+  const eu = ["us-facts/1", "in-nutritional-information/3", "eu-food-supplement/1"] as const;
+  const german = ["Inhaltsstoffe:", "INHALTSSTOFFE:", "Inhaltsstoffe", "Liste der Inhaltsstoffe:", "Andere Inhaltsstoffe",
+    "Inhaltsstoffe Kapsel", "Andere Zutaten:", "ANDERE ZUTATEN", "SONSTIGE ZUTATEN:", "Weitere Zutaten", "Liste der Zutaten:",
+    "Zutaten (Bactoblis®-Formulierung)", "Weitere Bestandteile:", "Zutaten / Ingredienti / Ingredientes / Ingrédients",
+    "Zutaten Pulver-Kapseln:\nZutaten Liquid-Kapseln:"];
+  for (const heading of german) {
+    expect(isIngredientHeading(heading, eu)).toBe(true);
+    expect(isIngredientHeading(heading)).toBe(false);
+    expect(isIngredientHeading(heading, ["us-facts/1", "in-nutritional-information/3", "in-composition/2"])).toBe(false);
+  }
+  for (const heading of ["Ingredienti: // Zutaten:", "Ingrediënten/Ingredienser/Składniki/Zutaten", "Ingrédients",
+    "WICHTIGSTE INHALTSSTOFFE:", "Elektrolyt Kautabletten", "Überzugsmittel", "UK:",
+    "Inhaltsstoffe | Tagesdosis (2 Kapseln) | %NRV*", "Inhaltsstoffe pro Tagesdosis", "Zutatenhinweis"]) {
+    expect(isIngredientHeading(heading, eu)).toBe(false);
+  }
+  const candidate = LabelImageCandidateSchema.parse({ ...gncLabelFixture(), otherIngredients: { heading: { text: "Andere Zutaten:", evidence: "Andere Zutaten:" }, items: [{ text: "Pullulan-Kapsel", evidence: "Pullulan-Kapsel" }] } });
+  expect(assessLabelCandidate(candidate).codes).toContain("LABEL.INGREDIENT_HEADING_INVALID");
+  expect(assessLabelCandidate({ ...candidate, labelFormats: [...eu] }).codes).not.toContain("LABEL.INGREDIENT_HEADING_INVALID");
+});
 it("treats a duplicated Ingredients list as partial without rewriting the candidate", () => {
   const original = ingredientListNotAFormulaExamples.pass[1]!.subject;
   const candidate = structuredClone(original);

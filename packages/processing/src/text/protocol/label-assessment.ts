@@ -1,4 +1,8 @@
-import type { LabelFormatId, LabelTextCandidate } from "@crawl-automation/v3-contracts";
+import {
+  labelFormatsOfCandidate,
+  type LabelFormatId,
+  type LabelTextCandidate,
+} from "@crawl-automation/v3-contracts";
 import type { MarketLabelRules } from "../../label/markets/market-rules.js";
 import { drugHeadingAliasesAllowed } from "./drug-label.js";
 import { compositionHeading, readsComposition } from "./composition-clause.js";
@@ -11,7 +15,10 @@ export function textAssessmentCodes(
 ): string[] {
   return codes.filter((code) => {
     if (code === "LABEL.INGREDIENT_HEADING_INVALID") {
-      return !candidate.otherIngredients || !ingredientHeadingAllowed(candidate.otherIngredients);
+      return (
+        !candidate.otherIngredients ||
+        !ingredientHeadingAllowed(candidate.otherIngredients, candidate.labelFormats)
+      );
     }
     if (code === "LABEL.FORMULA_INCOMPLETE") {
       return !drugHeadingAliasesAllowed(candidate) || !candidate.formulaComplete;
@@ -34,7 +41,9 @@ export function normalizeCompositionIngredients(
   candidate: LabelTextCandidate,
   market: { rules: Pick<MarketLabelRules, "textCandidate">; formats: readonly LabelFormatId[] },
 ): void {
-  // KAN-243: the market's own reading first (India: a composition's made-up-with rows leave the formula).
+  // KAN-243: the market's own reading first (India: a composition's made-up-with rows leave the formula), and the
+  // formats some label rules read (a German ingredient heading) named on the answer.
+  Object.assign(candidate, labelFormatsOfCandidate(market.formats));
   market.rules.textCandidate(candidate, market.formats);
   if (candidate.ingredientsComplete && compositionIsTheIngredients(candidate)) {
     candidate.ingredientsComplete = false;

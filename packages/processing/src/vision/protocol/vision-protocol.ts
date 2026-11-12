@@ -1,4 +1,10 @@
-import type { VisionInput } from "@crawl-automation/v3-contracts";
+import {
+  US_FACTS,
+  keywordPolicyFormats,
+  labelFormatsOfCandidate,
+  type LabelFormatId,
+  type VisionInput,
+} from "@crawl-automation/v3-contracts";
 import { visionOutputSchema, visionPrompt, validateVision } from "./legacy-vision.js";
 import { decodeLabelImage, labelVisionOutputSchema, labelVisionPrompt } from "./label-vision.js";
 import {
@@ -43,34 +49,49 @@ export function decodeVisionResult(input: VisionInput, raw: string) {
   if (!input.extractionProtocol) {
     return validateVision(raw);
   }
+  const formats = taskFormats(input);
   if (JSON.parse(raw)?.codec === labelVisionRepairPolicyVersion) {
     const envelope = LabelVisionRepairAnswerSchema.parse(JSON.parse(raw));
-    const original = decodeLabelAnswer(input.extractionProtocol, envelope.originalRaw);
+    const original = decodeLabelAnswer(input.extractionProtocol, envelope.originalRaw, formats);
+    const retained = { ...envelope.originalCandidate, ...labelFormatsOfCandidate(formats) };
     if (
-      !isDeepStrictEqual(original.candidate, envelope.originalCandidate) ||
+      !isDeepStrictEqual(original.candidate, retained) ||
       !isDeepStrictEqual(original.codes, envelope.originalCodes)
     ) {
       throw new Error("Retained repair original does not match the original answer");
     }
-    const saved = decodeRetainedRepair(raw);
+    const saved = decodeRetainedRepair(raw, formats);
     if (saved.operationId && saved.operationId !== `${input.operationId}:repair`) {
       throw new Error("Repair operation does not belong to this vision task");
     }
     return saved;
   }
-  const decoded = decodeLabelAnswer(input.extractionProtocol, raw);
+  const decoded = decodeLabelAnswer(input.extractionProtocol, raw, formats);
   const { candidate, status, codes } = decoded;
   const first = codes[0];
   const code = status === "review" && first ? first.replace(/^LABEL\./, "VISION.LABEL_") : null;
   return { candidate, status, code, codes };
 }
 
-function decodeLabelAnswer(protocol: VisionProtocol, raw: string) {
+/**
+ * KAN-243: the label formats the task's keyword policy selected for, which some label rules read; the US panel for an
+ * input that names no keyword selection.
+ */
+function taskFormats(input: VisionInput): readonly LabelFormatId[] {
+  const policy = (input as { selection?: Partial<VisionInput["selection"]> }).selection?.policy;
+  return policy ? keywordPolicyFormats(policy) : [US_FACTS];
+}
+
+function decodeLabelAnswer(
+  protocol: VisionProtocol,
+  raw: string,
+  formats: readonly LabelFormatId[],
+) {
   if (isTooSmallAnswer(raw)) {
     return decodeTooSmallAnswer(raw);
   }
   if (isIngredientPresenceAnswer(raw)) {
-    return decodeIngredientPresenceAnswer(raw);
+    return decodeIngredientPresenceAnswer(raw, formats);
   }
   if (isTranscriptAnswer(raw)) {
     return decodeTranscriptAnswer(raw);

@@ -5,7 +5,9 @@ import {
   assessLabelCandidate,
   hasClosedPrintedIngredients,
   isIngredientHeading,
+  labelFormatsOfCandidate,
   labelImageIntegrityCodes,
+  type LabelFormatId,
   legacyLabelExtractionSchema,
 } from "@crawl-automation/v3-contracts";
 import { labelValidationErrors } from "../../label/validation-errors.js";
@@ -23,7 +25,7 @@ export type LabelIngredientPresencePolicy = z.infer<typeof labelIngredientPresen
 
 export const labelIngredientPresenceWireSchema = z.strictObject({
   codec: z.literal(labelIngredientPresenceProtocol),
-  label: LabelImageCandidateSchema.omit({ ingredientDeclaration: true }),
+  label: LabelImageCandidateSchema.omit({ ingredientDeclaration: true, labelFormats: true }),
   otherIngredientsBlock: LabelImageFieldSchema.nullable(),
   otherIngredientsState: z.enum(["present", "none_printed", "not_fully_visible", "unreadable"]),
   wholeLabelVisible: z.boolean(),
@@ -93,8 +95,14 @@ export function isIngredientPresenceAnswer(raw: string): boolean {
   return JSON.parse(raw)?.codec === "label-visual-answer/3";
 }
 
-/** Pure decoding also used by reviews.recheck; no model calls and no current-config dependency. */
-export function decodeIngredientPresenceAnswer(response: string) {
+/**
+ * Pure decoding also used by reviews.recheck; no model calls and no current-config dependency. The formats are the
+ * task's own (its keyword policy), not today's setup.
+ */
+export function decodeIngredientPresenceAnswer(
+  response: string,
+  formats?: readonly LabelFormatId[],
+) {
   if (Buffer.byteLength(response) > MAX_VISION_ANSWER_BYTES) {
     throw visionFailure("VISION.OUTPUT_LIMIT", "executed");
   }
@@ -108,6 +116,7 @@ export function decodeIngredientPresenceAnswer(response: string) {
       wholeLabelVisible: wire.wholeLabelVisible,
       ...saved.policy,
     },
+    ...labelFormatsOfCandidate(formats),
   });
   return judgeIngredientPresence(candidate, wire.otherIngredientsBlock);
 }
@@ -174,7 +183,7 @@ function hasClosedIngredientList(candidate: z.infer<typeof LabelImageCandidateSc
   const other = candidate.otherIngredients;
   if (
     !other ||
-    !isIngredientHeading(other.heading.text) ||
+    !isIngredientHeading(other.heading.text, candidate.labelFormats) ||
     !["present", "not_fully_visible"].includes(declaration?.state ?? "")
   ) {
     return false;

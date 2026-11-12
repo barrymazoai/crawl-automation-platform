@@ -1,7 +1,11 @@
 import { COMPOSITION_CLAUSE } from "./composition-clause.js";
 import { completeIngredientItem, ingredientGap } from "./ingredient-boundaries.js";
 import { labelValidationErrors } from "../../label/validation-errors.js";
-import { isIngredientHeading, type LabelTextCandidateSchema } from "@crawl-automation/v3-contracts";
+import {
+  isIngredientHeading,
+  type LabelFormatId,
+  type LabelTextCandidateSchema,
+} from "@crawl-automation/v3-contracts";
 import {
   pseudoDrugFactsContext,
   pseudoInactiveListStartAllowed,
@@ -52,7 +56,7 @@ export function ingredientCodes(candidate: Candidate, text: string): string[] {
   }
   const codes = new Set<string>();
   if (
-    !ingredientHeadingAllowed(other) ||
+    !ingredientHeadingAllowed(other, candidate.labelFormats) ||
     (/^inactive$/i.test(other.heading.text.trim()) &&
       !candidate.formula?.drugFacts &&
       !pseudoDrugFactsContext(candidate, text)) ||
@@ -136,10 +140,13 @@ function adjacentIngredientsPrefix(
 }
 
 /** Local aliases are limited to headings whose following citations form an ingredient list. */
-export function ingredientHeadingAllowed(other: Ingredients): boolean {
+export function ingredientHeadingAllowed(
+  other: Ingredients,
+  formats?: readonly LabelFormatId[],
+): boolean {
   const heading = other.heading.text.trim();
   return (
-    isIngredientHeading(heading) ||
+    isIngredientHeading(heading, formats) ||
     /^inactive(?:\s+ingredients?(?:\(s\))?)?\s*:?$/i.test(heading) ||
     (/^contains:?$/i.test(heading) && other.items.length > 1) ||
     /^other\s+ingredients\s*:\s*may\s+contain\s+any\s+or\s+all\s+of\s+the\s+following\s*:?$/i.test(

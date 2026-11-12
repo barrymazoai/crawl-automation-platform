@@ -1,6 +1,7 @@
 import {
   LabelImageCandidateSchema,
   US_FACTS,
+  labelFormatsOfCandidate,
   type LabelFormatId,
   type LabelImageCandidate,
 } from "@crawl-automation/v3-contracts";
@@ -67,6 +68,7 @@ export function transcriptCandidate(
       wholeLabelVisible: wire.wholeLabelVisible,
       ...policy,
     },
+    ...labelFormatsOfCandidate(formats),
   });
   return result.success ? { candidate: result.data, block } : { reason: "not a label answer" };
 }

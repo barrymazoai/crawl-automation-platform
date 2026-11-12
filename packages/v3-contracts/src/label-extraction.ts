@@ -8,6 +8,7 @@ import { acceptsDailyValueOnlyRow } from "./label-rules/daily-value-only-row.js"
 import { acceptsAmountInName } from "./label-rules/amount-enclosed-in-name.js";
 import { isIngredientListFormula, ingredientListNotAFormulaRule } from "./label-rules/ingredient-list-not-a-formula.js";
 import { applyLabelRules } from "./label-rules/rule.js";
+import { LabelFormatIdSchema, type LabelFormatId } from "./label-formats.js";
 import { bracketedMayContainIsNotADeclarationRule } from "./label-rules/bracketed-may-contain-is-not-a-declaration.js";
 import { servingsPerContainerUncertaintyIsAWarningRule } from "./label-rules/servings-per-container-uncertainty-is-a-warning.js";
 import { drugFactsHeadingAbsenceIsAWarningRule } from "./label-rules/drug-facts-heading-absence-is-a-warning.js";
@@ -60,12 +61,19 @@ export function labelWireSchema<F extends z.ZodType>(field: F) {
   }).nullable() });
 }
 export const LabelTextWireSchema = labelWireSchema(LabelAnchorSchema);
+/**
+ * KAN-243: the label formats the decoder read a candidate in, named only when they change a label rule (a German
+ * ingredient heading, see isIngredientHeading); absent, every rule is as before. Decoder-only, never in a model answer.
+ */
+const labelFormatsField = z.array(LabelFormatIdSchema).min(1).max(8).optional();
 export const LabelTextCandidateSchema = labelExtractionSchema(LabelQuoteSchema).extend({
   /** Decoder-only provenance; never part of the model's wire answer. */
   ingredientParagraphReclassified: z.literal(true).optional(),
+  labelFormats: labelFormatsField,
 });
 export const LabelImageCandidateSchema = labelExtractionSchema(LabelImageFieldSchema).extend({
   ingredientDeclaration: LabelIngredientDeclarationSchema.optional(),
+  labelFormats: labelFormatsField,
 });
 export type LabelTextCandidate = z.infer<typeof LabelTextCandidateSchema>;
 export type LabelImageCandidate = z.infer<typeof LabelImageCandidateSchema>;
@@ -75,15 +83,47 @@ export type LabelCandidate = LabelTextCandidate | LabelImageCandidate;
 /** Real labels head the ingredient list many ways ("Other Ingredients:", "Ingredients:", "Inactive Ingredients",
  * "Capsule ingredients:; Other ingredients:", OCR "Oher"). Accept any heading naming ingredients; reject facts-table
  * headings and warnings, which is what this rule exists for. */
-export function isIngredientHeading(raw: string): boolean {
+export function isIngredientHeading(raw: string, formats?: readonly LabelFormatId[]): boolean {
   const text = raw.trim();
   if (/^inactive(?:\s+ingredients?(?:\(s\))?)?\s*:?$/i.test(text)) return true;
   // KAN-243 (amazon.de, Doctor's Best B09LR81NNL 2026-11-11): German labels head their list "Zutaten:".
   if (/^zutaten(?:liste)?\s*:?$/i.test(text)) return true;
+  if (readsGermanIngredientHeadings(formats) && isGermanIngredientHeading(text)) return true;
   if (!/\b(?:ingredients?|ingr[e\.]{0,2}dients?|oher\s+ingredients)\b/i.test(text)) return false;
   if (/\b(?:supplement|nutrition|drug)\s+facts\b|amount\s+per\s+serving|daily\s+value|contains\s*:|may\s+contain|allergen/i.test(text)) return false;
   return text.length <= 80;
 }
+/**
+ * KAN-243 (amazon.de full run 2026-11-12: 40 products in Review for these headings alone): a German label heads its
+ * ingredient list "Inhaltsstoffe:", "INHALTSSTOFFE:", "Liste der Inhaltsstoffe:", "Andere Inhaltsstoffe",
+ * "Inhaltsstoffe Kapsel", "Andere Zutaten:", "SONSTIGE ZUTATEN:", "Weitere Zutaten", "Liste der Zutaten:",
+ * "Zutaten (Bactoblis®-Formulierung)", "Weitere Bestandteile:", or a multilingual sticker's "Zutaten / Ingredienti /
+ * Ingredientes / Ingrédients" whose German list comes first. Every one headed the whole printed list. Not one: a heading
+ * that starts in another language ("Ingredienti: // Zutaten:" headed the Italian list), a marketing summary
+ * ("WICHTIGSTE INHALTSSTOFFE:"), a product name ("Elektrolyt Kautabletten"), an additive class ("Überzugsmittel") or
+ * the facts table's header ("Inhaltsstoffe | Tagesdosis (2 Kapseln) | %NRV*"). Only for a candidate read in the EU
+ * format: other storefronts have no translation, so a German list stays a Review there.
+ */
+const GERMAN_INGREDIENT_HEADING =
+  /^(?:(?:liste\s+der|andere|sonstige|weitere)\s+)?(?:zutaten(?:liste)?|inhaltsstoffe?|bestandteile)(?![a-zäöüß])/iu;
+const FACTS_TABLE_HEADER = /tagesdosis|tagesportion|\bnrv\b|referenzmenge|n[äa]hrwert|\bpro\s+portion\b|\|/iu;
+
+function isGermanIngredientHeading(text: string): boolean {
+  return GERMAN_INGREDIENT_HEADING.test(text) && !FACTS_TABLE_HEADER.test(text) && text.length <= 80;
+}
+
+/** Whether a candidate read in these formats may head its list in German. */
+export function readsGermanIngredientHeadings(formats: readonly LabelFormatId[] | undefined): boolean {
+  return formats?.includes("eu-food-supplement/1") ?? false;
+}
+
+/** The candidate's formats, named only when they change a rule (see LabelImageCandidateSchema.labelFormats). */
+export function labelFormatsOfCandidate(
+  formats: readonly LabelFormatId[] | undefined,
+): { labelFormats?: LabelFormatId[] } {
+  return formats && readsGermanIngredientHeadings(formats) ? { labelFormats: [...formats] } : {};
+}
+
 /** The rule that fired and where: row index and printed name, or the section concerned; `rule` names its table entry. */
 export type LabelFinding = { code: string; detail: string; rule?: string };
 export function assessLabelCandidate(candidate: LabelCandidate) {
@@ -116,7 +156,7 @@ export function assessLabelCandidate(candidate: LabelCandidate) {
   if ("ingredientDeclaration" in candidate && candidate.ingredientDeclaration && !candidate.ingredientDeclaration.wholeLabelVisible && candidate.ingredientsComplete && candidate.otherIngredients) warnings.push({ code: "LABEL.WHOLE_LABEL_NOT_VISIBLE", detail: "complete printed ingredient list retained without whole-label coverage" });
   if (ingredientDeclarationIncomplete(candidate)) flag("LABEL.INGREDIENTS_INCOMPLETE", "no complete printed list or enabled whole-label absence declaration");
   if (candidate.otherIngredients) {
-    if (!isIngredientHeading(candidate.otherIngredients.heading.text)) flag("LABEL.INGREDIENT_HEADING_INVALID", `ingredient heading "${candidate.otherIngredients.heading.text.slice(0, 80)}" is not an ingredients heading`);
+    if (!isIngredientHeading(candidate.otherIngredients.heading.text, candidate.labelFormats)) flag("LABEL.INGREDIENT_HEADING_INVALID", `ingredient heading "${candidate.otherIngredients.heading.text.slice(0, 80)}" is not an ingredients heading`);
     candidate.otherIngredients.items.forEach(i => applyLabelRules([bracketedMayContainIsNotADeclarationRule], i.text).forEach(f => flag(f.code, f.detail, f.rule)));
   }
   if (!candidate.formula && candidate.formulaComplete || !hasIngredients && candidate.ingredientsComplete) flag("LABEL.COMPLETENESS_CONFLICT", "marked complete with nothing extracted");

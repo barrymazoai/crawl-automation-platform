@@ -99,7 +99,9 @@ export function decodeLabelImage(response: string) {
   }
   const candidate = separateIngredientDeclarations(
     retainDailyValueHeading(
-      LabelImageCandidateSchema.omit({ ingredientDeclaration: true }).parse(JSON.parse(response)),
+      LabelImageCandidateSchema.omit({ ingredientDeclaration: true, labelFormats: true }).parse(
+        JSON.parse(response),
+      ),
     ),
   );
   return { candidate, ...assessLabelCandidate(candidate) };

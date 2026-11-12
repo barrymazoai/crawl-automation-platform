@@ -134,3 +134,31 @@ describe("explicit absence of a separately printed ingredients section", () => {
     ]);
   });
 });
+
+describe("a German ingredient heading (KAN-243, amazon.de 2026-11-12)", () => {
+  const list = "Pullulan-Kapsel, Akaziengummi.";
+  const wire = {
+    ...explicitNoneWire(),
+    label: {
+      ...explicitNoneWire().label,
+      otherIngredients: { heading: printed("Andere Zutaten:"), items: [printed(list)] },
+    },
+    otherIngredientsBlock: printed(list),
+    otherIngredientsState: "present" as const,
+  };
+  const eu = ["us-facts/1", "in-nutritional-information/3", "eu-food-supplement/1"] as const;
+
+  it("heads the list when the task read the label in the EU format, and stays a Review elsewhere", () => {
+    const german = decodeIngredientPresenceAnswer(savedPresenceAnswer(wire), [...eu]);
+    expect(german.codes).not.toContain("LABEL.INGREDIENT_HEADING_INVALID");
+    expect(german.candidate.labelFormats).toEqual(eu);
+    for (const formats of [undefined, ["us-facts/1", "in-composition/3"] as const]) {
+      const other = decodeIngredientPresenceAnswer(
+        savedPresenceAnswer(wire),
+        formats && [...formats],
+      );
+      expect(other.codes).toContain("LABEL.INGREDIENT_HEADING_INVALID");
+      expect(other.candidate).not.toHaveProperty("labelFormats");
+    }
+  });
+});

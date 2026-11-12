@@ -15,7 +15,7 @@ import { MAX_VISION_ANSWER_BYTES } from "./vision-limits.js";
 // schema are part of its setup's fingerprint; a new rule is a new version, never an edit.
 export const labelVisionWireV2Schema = z.strictObject({
   codec: z.literal("label-visual-wire/2"),
-  label: LabelImageCandidateSchema.omit({ ingredientDeclaration: true }),
+  label: LabelImageCandidateSchema.omit({ ingredientDeclaration: true, labelFormats: true }),
   otherIngredientsBlock: LabelImageFieldSchema.nullable(),
 });
 export const labelVisionOutputV2Schema = z.toJSONSchema(
