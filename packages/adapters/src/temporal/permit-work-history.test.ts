@@ -113,6 +113,32 @@ describe("reservation outcomes (owner 2026-10-09)", () => {
     );
   });
 
+  it("KAN-243: in a closed run, gated work scheduled but never started is no work", () => {
+    const outcome = HistoryEvent.fromObject({
+      eventId: "15",
+      activityTaskCompletedEventAttributes: { scheduledEventId: "13" },
+    });
+    const enrich = HistoryEvent.fromObject({ eventId: "17", ...work });
+    const timedOutUnstarted = HistoryEvent.fromObject({
+      eventId: "18",
+      activityTaskTimedOutEventAttributes: { scheduledEventId: "17" },
+    });
+    const started = HistoryEvent.fromObject({
+      eventId: "18",
+      activityTaskStartedEventAttributes: { scheduledEventId: "17" },
+    });
+    const closed = HistoryEvent.fromObject({
+      eventId: "30",
+      workflowExecutionCompletedEventAttributes: {},
+    });
+    expect(permitWorkScheduled([reserve, outcome, enrich, timedOutUnstarted, closed], owner)).toBe(
+      false,
+    );
+    expect(permitWorkScheduled([reserve, outcome, enrich, started, closed], owner)).toBe(true);
+    // While the run is open, scheduled work still counts.
+    expect(permitWorkScheduled([reserve, outcome, enrich, timedOutUnstarted], owner)).toBe(true);
+  });
+
   it("uses the last failed reservation even if an earlier poll completed", () => {
     const earlier = HistoryEvent.fromObject({
       eventId: "2",

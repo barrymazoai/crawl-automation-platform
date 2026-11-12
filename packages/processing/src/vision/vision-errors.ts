@@ -63,6 +63,10 @@ export const visionErrors = defineErrors({
   "VISION.LABEL_PARENT_INVALID": labelCheck("a blend component points to a wrong parent."),
   "VISION.PRIVATE_CONFIG": processing("The vision model's private config is invalid."),
   "VISION.CODEX_CLOSED": processing("The vision model is closed."),
+  // KAN-243 2026-11-12: a copy whose parse runs past its time limit ends its own product, not the worker's thread.
+  "VISION.LABEL_PARSE_TIMEOUT": processing(
+    "Reading the label copy took too long; the product was stopped.",
+  ),
 });
 
 export type VisionErrorCode = keyof typeof visionErrors.codes;

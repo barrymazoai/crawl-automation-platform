@@ -21,9 +21,14 @@ const TAILSCALE = '/Applications/Tailscale.app/Contents/MacOS/Tailscale';
 const PM2_BIN = '/Users/server/Applications/Crawler Node.app/Contents/bin';
 const PM2_HOME = '/Users/server/apps/crawler-v3/pm2';
 const HOSTS = { '100.84.91.3': 'Server 二', '100.114.3.97': 'Windows OCR' };
-const CHANNELS = ['amazon', 'dtc', 'costco', 'wholefoods', 'gnc', 'swanson'];
+// KAN-243 2026-11-12: the Amazon storefronts too (their queues were not watched).
+const CHANNELS = ['amazon', 'amazon-in', 'amazon-uk', 'amazon-ca', 'amazon-de', 'dtc', 'costco', 'wholefoods', 'gnc', 'swanson'];
 const NAMES = {
   amazon: 'Amazon',
+  'amazon-in': 'Amazon 印度',
+  'amazon-uk': 'Amazon 英国',
+  'amazon-ca': 'Amazon 加拿大',
+  'amazon-de': 'Amazon 德国',
   dtc: 'DTC',
   costco: 'Costco',
   wholefoods: 'Whole Foods',
@@ -75,6 +80,8 @@ async function post(title, md, color) {
   const result = await notifier.send({ title, markdown: md, color });
   // Unsent: fail without saving state, so the next run compares against the last sent one.
   if (!result.sent) throw new Error(`not sent: ${result.reason}`);
+  // 2026-11-12: a sent card is logged too, so a sent alert can be confirmed afterwards.
+  console.log(new Date().toISOString(), 'sent', JSON.stringify({ title }));
 }
 
 async function offlineHosts() {
@@ -132,6 +139,7 @@ async function collect() {
       {
         status: p.pm2_env.status,
         restarts: p.pm2_env.restart_time ?? 0,
+        cpu: p.monit?.cpu ?? null,
         release: basename(dirname(p.pm2_env.pm_cwd ?? '')).slice(0, 7),
       },
     ]),
@@ -170,7 +178,9 @@ function issues(s) {
   for (const [rid, r] of Object.entries(s.resources)) {
     // Owner 2026-10-19: resources marked retired (the old DTC v2 browsers) are not problems.
     if (!r.healthy && !String(r.reason).startsWith('retired')) {
-      out[`res:${rid}`] = `资源 ${rid} 不健康${r.reason === 'ready' ? '' : `（${r.reason}）`}`;
+      const stuck = stuckWorker(s, rid, r.reason);
+      if (stuck) out[`stuck:${rid}`] = stuck;
+      else out[`res:${rid}`] = `资源 ${rid} 不健康${r.reason === 'ready' ? '' : `（${r.reason}）`}`;
     }
   }
   for (const c of CHANNELS) {
@@ -178,6 +188,29 @@ function issues(s) {
   }
   return out;
 }
+
+/**
+ * KAN-243 2026-11-12: a resource whose task queue has no poller. On 2026-11-12 the label model worker stayed online at
+ * 100% CPU without polling for 25 minutes (one label copy's parse held its thread), every product needing the model
+ * waited and ended in Review, and the alert said only "资源 mini-model-account 不健康". This one names the job, its CPU
+ * and what to do, and is posted on its first sighting.
+ */
+function stuckWorker(s, resourceId, reason) {
+  const queue = String(reason).match(/^no_pollers:(.+)$/)?.[1];
+  if (!queue) return null;
+  const busy = Object.entries(s.pm2)
+    .filter(([, p]) => p.status === 'online' && typeof p.cpu === 'number' && p.cpu >= 90)
+    .map(([name, p]) => `${name} CPU ${Math.round(p.cpu)}%`);
+  return [
+    `**${resourceId}：没有进程在领任务**（队列 \`${queue}\`）`,
+    busy.length ? `像是卡死了：${busy.join('，')}。` : '对应进程可能没在跑。',
+    '要用它的商品会一直等，等满时限后转 Review（RESOURCE.WAIT_LIMIT / 依赖不可用）。',
+    '处理：暂停相关队列 → 重启该进程 → 查 resources.permits 名额是否收回 → 重排受影响的 Review。',
+  ].join('\n');
+}
+
+/** Problems posted on their first sighting, without waiting for a second check. */
+const URGENT = (key) => key.startsWith('stuck:');
 
 /** 较上次的变化量；上次没有这个数就返回 null。 */
 function diff(cur, prev, ...keys) {
@@ -272,7 +305,7 @@ async function alert() {
   const seen = last.seen ?? {};
   let reported = last.reported ?? {};
   const pick = (obj, keep) => Object.fromEntries(Object.entries(obj).filter(([k]) => keep(k)));
-  const fresh = pick(now, (k) => k in seen && !(k in reported));
+  const fresh = pick(now, (k) => (k in seen || URGENT(k)) && !(k in reported));
   const gone = pick(reported, (k) => !(k in now) && !(k in seen));
   const hasNew = Object.keys(fresh).length > 0;
   const hasGone = Object.keys(gone).length > 0;

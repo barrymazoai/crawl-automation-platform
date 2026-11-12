@@ -26,6 +26,7 @@ import {
 
 import { labelTranscriptProtocol } from "./protocol/label-transcript-wire.js";
 import { transcribedAnswer, transcriptCalls } from "./vision-transcript-flow.js";
+import { inProcessTranscriptParser, type TranscriptParser } from "./transcript-parse.js";
 import { tooSmallAnswer, tooSmallLabelImage } from "./protocol/label-image-size.js";
 import {
   labelIngredientPresencePolicySchema,
@@ -87,8 +88,8 @@ export class CodexVisionModel implements VisionModel {
 
   private constructor(
     private readonly config: CodexVisionConfig,
-    private readonly client: CodexClient | null,
-    private readonly repairClient: CodexClient | null,
+    private readonly codex: { client: CodexClient | null; repairClient: CodexClient | null },
+    private readonly parser: TranscriptParser = inProcessTranscriptParser,
   ) {
     this.fingerprint = visionFingerprint(config);
     this.extractionProtocol = config.extractionProtocol;
@@ -98,15 +99,19 @@ export class CodexVisionModel implements VisionModel {
 
   /** The fingerprint and protocol a config would have, without opening anything. */
   static describe(raw: unknown) {
-    const model = new CodexVisionModel(CodexVisionConfigSchema.parse(raw), null, null);
+    const unopened = { client: null, repairClient: null };
+    const model = new CodexVisionModel(CodexVisionConfigSchema.parse(raw), unopened);
     return { configFingerprint: model.fingerprint, extractionProtocol: model.extractionProtocol };
   }
 
+  /** KAN-243 2026-11-12: `parser` runs a copy's CPU-only parse steps (a time-limited worker thread in the worker). */
   static async open(
     raw: unknown,
     environment: NodeJS.ProcessEnv,
-    connect?: CodexConnectionFactory,
+    options:
+      CodexConnectionFactory | { connect?: CodexConnectionFactory; parser?: TranscriptParser } = {},
   ) {
+    const { connect, parser } = typeof options === "function" ? { connect: options } : options;
     const parsed = CodexVisionConfigSchema.safeParse(raw);
     if (!parsed.success) {
       throw visionProfile.privateConfig();
@@ -133,7 +138,7 @@ export class CodexVisionModel implements VisionModel {
               },
             )
           : null;
-      return new CodexVisionModel(parsed.data, client, repairClient);
+      return new CodexVisionModel(parsed.data, { client, repairClient }, parser);
     } catch (error) {
       await client.close();
       throw error;
@@ -175,7 +180,13 @@ export class CodexVisionModel implements VisionModel {
     }
     if (this.config.visualProtocol === labelTranscriptProtocol) {
       const calls = transcriptCalls(run, label, formats);
-      return transcribedAnswer({ calls, ocr, policy: this.presencePolicy(), formats });
+      return transcribedAnswer({
+        calls,
+        ocr,
+        policy: this.presencePolicy(),
+        formats,
+        parser: this.parser,
+      });
     }
     return this.config.visualProtocol ? label() : run(visionRequest(this.extractionProtocol));
   }
@@ -196,7 +207,7 @@ export class CodexVisionModel implements VisionModel {
     const image = ImageEvidenceSchema.parse(input.image);
     verifyBytes(image, input.bytes, MAX_IMAGE_BYTES);
     const name = imageName(image.mediaType);
-    return (this.repairClient ?? this.opened()).run(
+    return (this.codex.repairClient ?? this.opened()).run(
       {
         ...labelVisionRepairRequest(input.original, input.findings),
         image: { name, bytes: input.bytes },
@@ -206,13 +217,13 @@ export class CodexVisionModel implements VisionModel {
   }
 
   async close(): Promise<void> {
-    await Promise.all([this.client?.close(), this.repairClient?.close()]);
+    await Promise.all([this.codex.client?.close(), this.codex.repairClient?.close()]);
   }
 
   private opened(): CodexClient {
-    if (!this.client) {
+    if (!this.codex.client) {
       throw visionProfile.closed();
     }
-    return this.client;
+    return this.codex.client;
   }
 }

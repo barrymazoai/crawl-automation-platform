@@ -10,7 +10,8 @@ type HistoryEvent = temporal.api.history.v1.IHistoryEvent;
 /**
  * Owner 2026-10-09: use the LAST reservation for this exact permit id, matching its outcome by scheduledEventId.
  * A timed-out, failed or canceled reservation, or one without completion in a closed run, never delivered the grant.
- * After a completed reservation, any Activity with the permit id or a type other than release/stop counts as work.
+ * After a completed reservation, any Activity with the permit id or a type other than release/stop counts as work; once
+ * the run has closed, only such an Activity a worker started counts.
  * Unknown history without a matching reservation still counts as work; unfinished open histories keep the old rules.
  */
 export function permitWorkScheduled(events: HistoryEvent[], owner: PermitOwner): boolean {
@@ -29,9 +30,16 @@ export function permitWorkScheduled(events: HistoryEvent[], owner: PermitOwner):
     reservationOutcome(event, events[reservation]?.eventId),
   );
   if (outcome >= 0) {
+    const after = following.slice(outcome + 1);
+    // KAN-243 2026-11-12: in a closed run the history is complete, so work only counts once a worker started it. An
+    // enrichment scheduled while the label model worker was stuck never started, held its permit with no execution
+    // and no stop row, and stayed held after its run had ended.
+    const closed = after.some(workflowClosed);
     return (
       Boolean(following[outcome]?.activityTaskCompletedEventAttributes) &&
-      following.slice(outcome + 1).some((event) => workScheduled(event, owner.permitId))
+      after.some(
+        (event) => workScheduled(event, owner.permitId) && (!closed || workStarted(event, after)),
+      )
     );
   }
   return (
@@ -65,6 +73,17 @@ function workScheduled(event: HistoryEvent, permitId: string): boolean {
   return Boolean(
     scheduled &&
     (scheduled.activityId === permitId || !AFTER_RESERVE.has(scheduled.activityType?.name ?? "")),
+  );
+}
+
+/** A worker started this scheduled Activity (Temporal records the start before any outcome). */
+function workStarted(scheduledEvent: HistoryEvent, events: HistoryEvent[]): boolean {
+  const id = scheduledEvent.eventId?.toString();
+  if (!id) {
+    return true;
+  }
+  return events.some(
+    (event) => event.activityTaskStartedEventAttributes?.scheduledEventId?.toString() === id,
   );
 }
 

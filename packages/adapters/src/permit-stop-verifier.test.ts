@@ -160,3 +160,61 @@ describe("executor verification using R59 OCR receipts", () => {
     expect(test.fetch).not.toHaveBeenCalled();
   });
 });
+
+describe("codex turns of a permit without a browser (KAN-243, 2026-11-12)", () => {
+  // The label model worker on Server 一 held its permits after a stuck turn: the browser check refused them.
+  const turn: PermitExecutionIdentity = {
+    kind: "codex",
+    executionId: "turn-1",
+    pid: 15256,
+    host: "servers-Mac-mini.local",
+    startedAt: "2026-11-12T01:29:16.126Z",
+  };
+  function codexFixture(resources: string[], absent: Record<string, unknown> | null) {
+    const test = fixture("done");
+    test.permit.resources = resources;
+    const execution = test.permit.cleanup?.executions[0];
+    if (execution) {
+      execution.identity = turn;
+    }
+    const codexAbsent = vi.fn(async () => absent);
+    const verifier = new ExecutorStopVerifier({
+      ledger: test.ledger,
+      resources: test.resources,
+      browser: test.browser,
+      codexAbsent,
+    });
+    return { ...test, verifier, codexAbsent };
+  }
+
+  it("proves a gone process group on this host and lets the permit be released", async () => {
+    const proof = { kind: "codex-process-group-absent", pid: 15256 };
+    const test = codexFixture(["mini-cpu", "mini-model-account"], proof);
+    expect(await test.verifier.verify(test.permit)).toEqual([
+      { executionId: "turn-1", kind: "codex", stopped: true },
+    ]);
+    expect(test.ledger.prove).toHaveBeenCalledWith(test.permit, turn, proof);
+    expect(test.browser.verify).not.toHaveBeenCalled();
+  });
+
+  it("keeps the permit while the process group may still run, without asking the browser", async () => {
+    const test = codexFixture(["mini-cpu", "mini-model-account"], null);
+    expect(await test.verifier.verify(test.permit)).toEqual([
+      {
+        executionId: "turn-1",
+        kind: "codex",
+        stopped: false,
+        reason: "codex_process_present_or_other_host",
+      },
+    ]);
+    expect(test.ledger.prove).not.toHaveBeenCalled();
+    expect(test.browser.verify).not.toHaveBeenCalled();
+  });
+
+  it("still sends a codex turn of a browser permit to its browser host", async () => {
+    const test = codexFixture(["server2-ego-space-15", "mini-model-account"], { kind: "x" });
+    await test.verifier.verify(test.permit);
+    expect(test.codexAbsent).not.toHaveBeenCalled();
+    expect(test.browser.verify).toHaveBeenCalledOnce();
+  });
+});

@@ -5,21 +5,14 @@ import type {
   LabelIngredientPresencePolicy,
   TranscriptAttempt,
 } from "./protocol/label-ingredient-presence.js";
-import {
-  decodeTranscriptAnswer,
-  dosedRows,
-  transcriptAnswer,
-} from "./protocol/label-transcript-answer.js";
-import { printedPercentHeader } from "../label/transcript/format-panel.js";
-import { marketAmountPositions, marketRules } from "../label/markets/market-rules.js";
-import { copiesPairedRows, transcriptCandidate } from "./protocol/label-transcript-candidate.js";
+import { dosedRows, transcriptAnswer } from "./protocol/label-transcript-answer.js";
 import {
   labelRereadOutputSchema,
   labelRereadPrompt,
   labelTranscriptOutputSchema,
   labelTranscriptPromptFor,
-  labelTranscriptWireSchema,
 } from "./protocol/label-transcript-wire.js";
+import { inProcessTranscriptParser, type TranscriptParser } from "./transcript-parse.js";
 
 /** The model calls one transcribed reading may make. */
 export interface TranscriptCalls {
@@ -63,19 +56,22 @@ export async function transcribedAnswer(input: {
   policy: Required<LabelIngredientPresencePolicy>;
   /** KAN-243: the label formats the copy is parsed in; US alone when absent. */
   formats?: readonly LabelFormatId[] | undefined;
+  /** KAN-243 2026-11-12: where the CPU-only parse steps run (a worker thread with a time limit in the worker). */
+  parser?: TranscriptParser;
 }): Promise<string> {
   const { calls, ocr, policy } = input;
+  const parser = input.parser ?? inProcessTranscriptParser;
   const formats = input.formats && !isUsOnlyFormats(input.formats) ? [...input.formats] : undefined;
   const raw = await calls.transcribe();
   // KAN-243: a copy read in a non-US format names its percentage column; the label answer keeps that header.
-  const heading = formats ? copiedPercentHeader(raw, formats) : null;
+  const heading = formats ? await parser.run("percentHeader", [raw, formats]) : null;
   const fallback = (reason: string, reread: string | null = null) =>
     calls.label({ raw, reason, reread }, heading);
-  const built = parsed(raw, policy, formats);
+  const built = await parser.run("parsedCopy", [raw, policy, formats]);
   if ("reason" in built) {
     return fallback(`copy not parsed: ${built.reason}`);
   }
-  const positions = marketAmountPositions(built.candidate, ocr, formats);
+  const positions = await parser.run("amountPositions", [built.candidate, ocr, formats]);
   if (positions.misplaced.length) {
     return fallback(`amount on another row: ${rowNames(built.candidate, positions.misplaced)}`);
   }
@@ -93,24 +89,26 @@ export async function transcribedAnswer(input: {
   const unconfirmed = dosedRows(built.candidate)
     .filter(({ index }) => !ocrConfirmed.includes(index))
     .map(({ row }) => row.name.text);
-  const elsewhere = (codes: readonly string[]) => ingredientsElsewhere(raw, codes, formats);
-  return confirmedAnswer({ calls, fallback, answerWith, unconfirmed, elsewhere });
+  const elsewhere = (codes: readonly string[]) =>
+    parser.run("ingredientsElsewhere", [raw, codes, formats]);
+  return confirmedAnswer({ calls, parser, fallback, answerWith, unconfirmed, elsewhere });
 }
 
 /** The copy whose checks pass, or whose only open amounts one re-read repeats; otherwise the label protocol. */
 async function confirmedAnswer(at: {
   calls: TranscriptCalls;
+  parser: TranscriptParser;
   fallback: (reason: string, reread?: string | null) => Promise<string>;
   answerWith: (reread: string | null) => string;
   unconfirmed: string[];
-  elsewhere: (codes: readonly string[]) => boolean;
+  elsewhere: (codes: readonly string[]) => Promise<boolean>;
 }): Promise<string> {
   const first = at.answerWith(null);
-  const before = decodeTranscriptAnswer(first);
+  const before = await at.parser.run("decode", [first]);
   if (before.status !== "review") {
     return first;
   }
-  const elsewhere = at.elsewhere(before.codes);
+  const elsewhere = await at.elsewhere(before.codes);
   if (!elsewhere && before.codes.some((code) => code !== AMOUNT_UNREADABLE)) {
     return at.fallback(`checks: ${before.codes.join(", ")}`);
   }
@@ -119,62 +117,11 @@ async function confirmedAnswer(at: {
   }
   const reread = await at.calls.reread(at.unconfirmed);
   const answer = at.answerWith(reread);
-  const after = decoded(answer, elsewhere);
+  const after = await decoded(at.parser, answer, elsewhere);
   return after.accepted ? answer : at.fallback(`re-read not accepted: ${after.reason}`, reread);
 }
 
 const INGREDIENTS_INCOMPLETE = "LABEL.INGREDIENTS_INCOMPLETE";
-
-/**
- * Owner 2026-11-06 (Be Bodywise Biotin gummies on amazon.in: the panel on one side of the jar, the ingredients on another
- * image): a copy whose only open check is the ingredients section, on an image the copy says does not show that
- * section, keeps its panel. The label protocol cannot read a section the image does not show either, and its own
- * reading of that panel was worse (1000 mcg for the printed 10000 mcg); the ingredients come from the image that
- * prints them, as for every partial label. A section copied as unreadable or partly copied is still read again.
- */
-function ingredientsElsewhere(
-  raw: string,
-  codes: readonly string[],
-  formats: readonly LabelFormatId[] | undefined,
-): boolean {
-  if (
-    !codes.includes(INGREDIENTS_INCOMPLETE) ||
-    codes.some((code) => code !== INGREDIENTS_INCOMPLETE && code !== AMOUNT_UNREADABLE)
-  ) {
-    return false;
-  }
-  const wire = marketRules(formats).copyWire(
-    labelTranscriptWireSchema.parse(JSON.parse(raw)),
-    formats ?? [],
-  );
-  return wire.otherIngredientsState === "not_fully_visible" && !wire.otherIngredients?.trim();
-}
-
-function parsed(
-  raw: string,
-  policy: Required<LabelIngredientPresencePolicy>,
-  formats: readonly LabelFormatId[] | undefined,
-) {
-  try {
-    const wire = labelTranscriptWireSchema.parse(JSON.parse(raw));
-    if (copiesPairedRows(wire, formats)) {
-      return { reason: "two ingredients in one row" };
-    }
-    return transcriptCandidate(wire, policy, formats);
-  } catch (error) {
-    recordRecovery(error, { operation: "vision/transcript-flow" });
-    return { reason: "not a transcript" };
-  }
-}
-
-function copiedPercentHeader(raw: string, formats: readonly LabelFormatId[]): string | null {
-  try {
-    return printedPercentHeader(labelTranscriptWireSchema.parse(JSON.parse(raw)).panels, formats);
-  } catch (error) {
-    recordRecovery(error, { operation: "vision/transcript-flow" });
-    return null;
-  }
-}
 
 function rowNames(candidate: Parameters<typeof dosedRows>[0], indices: readonly number[]): string {
   const rows = candidate.formula?.columns[0]?.rows ?? [];
@@ -182,9 +129,13 @@ function rowNames(candidate: Parameters<typeof dosedRows>[0], indices: readonly 
 }
 
 /** Accepted: no open check, or (ingredients printed elsewhere) only the ingredients section open. */
-function decoded(answer: string, elsewhere = false): { accepted: boolean; reason: string } {
+async function decoded(
+  parser: TranscriptParser,
+  answer: string,
+  elsewhere = false,
+): Promise<{ accepted: boolean; reason: string }> {
   try {
-    const result = decodeTranscriptAnswer(answer);
+    const result = await parser.run("decode", [answer]);
     const onlyIngredients =
       elsewhere && result.codes.every((code) => code === INGREDIENTS_INCOMPLETE);
     return {

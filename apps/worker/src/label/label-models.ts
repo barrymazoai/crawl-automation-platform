@@ -10,6 +10,7 @@ import { workerErrors } from "../errors.js";
 import type { LabelStores } from "./label-stores.js";
 import { measuredProvider } from "@crawl-automation/platform";
 import { ocrClient } from "./ocr-client.js";
+import { parseWorkerFile, threadedTranscriptParser } from "./transcript-thread.js";
 
 /** The steps that call a model or the OCR API. Each client opens on first use, so other roles never need one. */
 export interface LabelModels {
@@ -48,11 +49,20 @@ function modelClients(settings: LabelStores["settings"]) {
       opened.push(opening);
       return opening;
     });
+  // KAN-243 2026-11-12: a label copy's parse steps run on time-limited threads, never on this worker's own thread.
+  let parser: ReturnType<typeof threadedTranscriptParser> | null = null;
+  const transcriptParser = () =>
+    (parser ??= threadedTranscriptParser({ filename: parseWorkerFile() }));
   return {
     text: open("text", (raw) => CodexTextModel.open(raw, codexEnvironment())),
-    vision: open("vision", (raw) => CodexVisionModel.open(raw, codexEnvironment())),
+    vision: open("vision", (raw) =>
+      CodexVisionModel.open(raw, codexEnvironment(), { parser: transcriptParser() }),
+    ),
     close: async () => {
-      await Promise.allSettled(opened.map(async (client) => (await client).close()));
+      await Promise.allSettled([
+        ...opened.map(async (client) => (await client).close()),
+        ...(parser ? [parser.close()] : []),
+      ]);
     },
   };
 }
