@@ -30,3 +30,32 @@ export function stopVerdict(evidence: StopEvidence | null, now: Date): StopVerdi
     ? "stopped"
     : "not-proven";
 }
+
+/**
+ * Temporal namespace crawler-v3 keeps a closed run for 7 days, then deletes it; it never deletes a run still running.
+ * KAN-243 (2026-11-12): permits whose owner closed before that window held their resources for weeks (the Whole Foods
+ * brand-scan permit from 10-16 blocked 1,205 brand scans), because "not found" proved nothing. Change this with the
+ * namespace's retention.
+ */
+export const OWNER_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
+export const PURGED_OWNER_STATUS = "PURGED";
+
+/**
+ * The stop evidence of an owner Temporal no longer finds: closed, since its permit was granted longer ago than the
+ * retention. Null while the permit is younger (a missing run then still proves nothing).
+ */
+export function purgedOwnerEvidence(
+  owner: { workflowId: string; grantedAt?: string },
+  now: Date,
+): StopEvidence | null {
+  const granted = owner.grantedAt ? Date.parse(owner.grantedAt) : Number.NaN;
+  if (!Number.isFinite(granted) || now.getTime() - granted <= OWNER_RETENTION_MS) {
+    return null;
+  }
+  return {
+    workflowId: owner.workflowId,
+    status: PURGED_OWNER_STATUS,
+    closedAt: new Date(granted),
+    pendingActivities: 0,
+  };
+}

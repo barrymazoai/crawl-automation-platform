@@ -127,10 +127,11 @@ async function pm2List() {
 
 async function collect() {
   const snap = { at: beijing().iso, offline: await offlineHosts() };
-  const [pm2, sync, resources, ...queues] = await Promise.all([
+  const [pm2, sync, resources, permits, ...queues] = await Promise.all([
     pm2List(),
     api('productSync.status'),
     api('resources.list'),
+    api('resources.permits'),
     ...CHANNELS.map((channel) => api('queue.status', { channel })),
   ]);
   snap.pm2 = Object.fromEntries(
@@ -152,6 +153,7 @@ async function collect() {
   snap.resources = Object.fromEntries(
     (resources ?? []).map((x) => [x.resourceId, { healthy: x.healthy, reason: x.reason }]),
   );
+  snap.stuckPermits = stuckPermits(permits ?? []);
   snap.queue = {};
   CHANNELS.forEach((c, i) => {
     const q = queues[i];
@@ -186,7 +188,39 @@ function issues(s) {
   for (const c of CHANNELS) {
     if (!(c in s.queue)) out[`queue:${c}`] = `${NAMES[c]} 队列状态读不到`;
   }
+  for (const [key, text] of Object.entries(s.stuckPermits ?? {})) out[key] = text;
   return out;
+}
+
+const HOUR = 3_600_000;
+
+/**
+ * KAN-243 2026-11-12: permits the stop sweep has not released, by resource. One from 10-16 held the only Whole Foods
+ * brand-scan permit for 27 days (1,205 brand scans ended in RESOURCE.WAIT_LIMIT) and no alert said so: an unverified
+ * cleanup older than an hour, or an Activity still marked running after a day, is now a problem.
+ */
+function stuckPermits(permits) {
+  const now = Date.now();
+  const groups = {};
+  for (const p of permits) {
+    const state = p.cleanup?.state;
+    const age = now - Date.parse(p.grantedAt);
+    const stuck =
+      (state === 'CLEANUP_UNVERIFIED' && age > HOUR) || (state === 'running' && age > 24 * HOUR);
+    if (!stuck) continue;
+    for (const resource of p.resources ?? []) {
+      const key = `permits:${state}:${resource}`;
+      groups[key] ??= { state, resource, count: 0, oldest: p.grantedAt };
+      groups[key].count += 1;
+      if (p.grantedAt < groups[key].oldest) groups[key].oldest = p.grantedAt;
+    }
+  }
+  return Object.fromEntries(
+    Object.entries(groups).map(([key, g]) => [
+      key,
+      `资源 ${g.resource} 有 ${g.count} 个名额${g.state === 'running' ? '一直标着在跑' : '清理未确认'}，最早 ${g.oldest.slice(0, 16).replace('T', ' ')} UTC 发出；名额收不回，这个资源能同时跑的任务就少了。查 resources.permits / resources.verifyStop。`,
+    ]),
+  );
 }
 
 /**

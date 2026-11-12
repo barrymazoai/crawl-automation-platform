@@ -35,6 +35,10 @@ six channels), and `tailscale status` plus ping for Server 二 and Windows OCR.
   its first sighting, naming any online process at 90% CPU or more and what to
   do (KAN-243 2026-11-12: the label model worker sat at 100% CPU without polling
   for 25 minutes and the alert said only "资源 mini-model-account 不健康").
+- Permits the stop sweep has not released: per resource, an unverified cleanup
+  older than an hour or an Activity still marked running after a day (KAN-243
+  2026-11-12: the only Whole Foods brand-scan permit was held for 27 days and
+  1,205 brand scans ended in RESOURCE.WAIT_LIMIT with no alert).
 - A sent card is logged (`sent {"title":…}`), as a refused one is.
 - Channels: the six original ones and the Amazon storefronts amazon-in, -uk,
   -ca and -de.

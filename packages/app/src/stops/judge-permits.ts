@@ -1,6 +1,11 @@
 import type { HeldPermit } from "../runs/run-model.js";
 import type { PermitOwner } from "@crawl-automation/platform";
-import { stopVerdict, type StopEvidence, type StopVerdict } from "./stop-policy.js";
+import {
+  purgedOwnerEvidence,
+  stopVerdict,
+  type StopEvidence,
+  type StopVerdict,
+} from "./stop-policy.js";
 
 export interface StopEvidenceReader {
   stopEvidence(workflowId: string, runId: string): Promise<StopEvidence | null>;
@@ -28,7 +33,9 @@ export async function judgePermits(
     }
   }
   return permits.map((permit) => {
-    const evidence = evidenceByOwner.get(`${permit.workflowId}/${permit.runId}`);
+    const evidence =
+      evidenceByOwner.get(`${permit.workflowId}/${permit.runId}`) ??
+      purgedOwnerEvidence(permit, now);
     return {
       permit,
       verdict: stopVerdict(

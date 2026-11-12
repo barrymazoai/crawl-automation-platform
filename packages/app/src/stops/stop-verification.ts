@@ -3,7 +3,7 @@ import { appErrors } from "../errors.js";
 import type { HeldPermit } from "../runs/run-model.js";
 import type { ResourceStore } from "../resources/resource-ports.js";
 import type { StopEvidenceReader } from "./judge-permits.js";
-import { stopVerdict } from "./stop-policy.js";
+import { PURGED_OWNER_STATUS, purgedOwnerEvidence, stopVerdict } from "./stop-policy.js";
 
 export interface ExecutionStopResult {
   executionId: string;
@@ -26,6 +26,8 @@ export interface StopVerificationStore {
   finish(owner: PermitOwner, failure: Record<string, unknown> | null): Promise<void>;
   /** Marks a permit that never began work as stopped; false when it began or recorded any execution. */
   settleUnstarted?(owner: PermitOwner): Promise<boolean>;
+  /** Marks a permit of a purged owner as stopped; false while any recorded execution is not proven stopped. */
+  settlePurged?(owner: PermitOwner): Promise<boolean>;
 }
 export interface PermitStopVerifier {
   verify(permit: HeldPermit): Promise<ExecutionStopResult[]>;
@@ -98,13 +100,41 @@ export class StopVerification {
     return (await journal.settleUnstarted?.(permit)) ?? false;
   }
 
+  /**
+   * KAN-243 (2026-11-12): the owner closed so long ago that Temporal deleted it; with no execution left unproven
+   * nothing of it can still run. Recorded executions keep the normal executor rules.
+   */
+  private async purged(permit: HeldPermit, release: (id: string) => Promise<unknown>) {
+    if (permit.cleanup?.executions.some((entry) => entry.stoppedAt === null)) {
+      return null;
+    }
+    if (!(await this.deps.journal.settlePurged?.(permit))) {
+      return null;
+    }
+    await release(permit.permitId);
+    this.deps.log.info(
+      { permitId: permit.permitId, workflowId: permit.workflowId },
+      "purged owner's permit released",
+    );
+    return { permitId: permit.permitId, released: true, executions: [], reason: "owner_purged" };
+  }
+
   private async verifyHeld(permitId: string, release: (id: string) => Promise<unknown>) {
     const permit = await this.deps.resources.findHeld(permitId);
     if (!permit) {
       throw appErrors.create("PERMIT.NOT_FOUND", { details: { permitId } });
     }
-    await requireClosedOwner(this.deps.workflows, permit, this.deps.now?.() ?? new Date());
-    if (await this.unstarted(permit)) {
+    const owner = await requireClosedOwner(
+      this.deps.workflows,
+      permit,
+      this.deps.now?.() ?? new Date(),
+    );
+    if (owner.status === PURGED_OWNER_STATUS) {
+      const purged = await this.purged(permit, release);
+      if (purged) {
+        return purged;
+      }
+    } else if (await this.unstarted(permit)) {
       await release(permitId);
       this.deps.log.info({ permitId, workflowId: permit.workflowId }, "unstarted permit released");
       return { permitId, released: true, executions: [], reason: "work_never_scheduled" };
@@ -128,13 +158,17 @@ export class StopVerification {
   }
 }
 
-/** Closed owner is a prerequisite, never a substitute for executor proof. */
+/**
+ * Closed owner is a prerequisite, never a substitute for executor proof. An owner Temporal deleted after its retention
+ * counts as closed when its permit's grant time is known and older than that (KAN-243).
+ */
 export async function requireClosedOwner(
   reader: StopEvidenceReader,
-  owner: PermitOwner,
+  owner: PermitOwner & { grantedAt?: string },
   now: Date,
 ) {
-  const evidence = await reader.stopEvidence(owner.workflowId, owner.runId);
+  const evidence =
+    (await reader.stopEvidence(owner.workflowId, owner.runId)) ?? purgedOwnerEvidence(owner, now);
   const verdict = stopVerdict(evidence ? { ...evidence, executionStopped: true } : null, now);
   if (verdict !== "stopped") {
     throw appErrors.create(
@@ -144,4 +178,5 @@ export async function requireClosedOwner(
       },
     );
   }
+  return evidence as NonNullable<typeof evidence>;
 }

@@ -13,7 +13,10 @@ export class PostgresStopVerification implements StopVerificationStore {
        LEFT JOIN resource_permit_stop s USING (permit_id)
        WHERE p.released_at IS NULL AND p.permit_id > $1 AND (s.state = 'CLEANUP_UNVERIFIED'
          -- A permit that never began work (no stop row); the verifier still requires a closed owner and history.
-         OR (s.permit_id IS NULL AND p.granted_at < now() - interval '10 minutes'))
+         OR (s.permit_id IS NULL AND p.granted_at < now() - interval '10 minutes')
+         -- KAN-243 2026-11-12: an Activity whose end was never recorded (two GNC permits sat 'running' from 10-16);
+         -- a running owner is refused by the verifier as before.
+         OR (s.state = 'running' AND p.granted_at < now() - interval '1 hour'))
        ORDER BY p.permit_id LIMIT $2`,
       [after, limit],
     );
@@ -51,6 +54,29 @@ export class PostgresStopVerification implements StopVerificationStore {
          WHERE NOT EXISTS (SELECT 1 FROM resource_permit_execution WHERE permit_id = $1)
          ON CONFLICT (permit_id) DO NOTHING RETURNING permit_id`,
         [owner.permitId, { code: "PERMIT.WORK_NEVER_SCHEDULED" }],
+      );
+      return rows.length === 1;
+    });
+  }
+
+  /**
+   * KAN-243 2026-11-12: the owner was deleted by Temporal after its retention, so it closed long ago; with no
+   * unproven execution its permit is stopped (a stop row is written or updated). False otherwise.
+   */
+  async settlePurged(owner: PermitOwner): Promise<boolean> {
+    return this.database.transaction(async (transaction) => {
+      await lockPermit(transaction, owner);
+      const rows = await transaction.query(
+        `INSERT INTO resource_permit_stop (permit_id, state, activity_ended_at, checked_at, failure)
+         SELECT $1, 'stopped', now(), now(), $2::jsonb
+         WHERE NOT EXISTS (
+           SELECT 1 FROM resource_permit_execution WHERE permit_id = $1 AND stopped_at IS NULL
+         )
+         ON CONFLICT (permit_id) DO UPDATE SET state = 'stopped',
+           activity_ended_at = coalesce(resource_permit_stop.activity_ended_at, now()), checked_at = now(),
+           failure = coalesce(resource_permit_stop.failure, '{}'::jsonb) || EXCLUDED.failure
+         RETURNING permit_id`,
+        [owner.permitId, { code: "PERMIT.OWNER_PURGED" }],
       );
       return rows.length === 1;
     });

@@ -217,3 +217,96 @@ describe("permit whose gated work never started (owner 2026-10-07)", () => {
     expect(test.verifier.verify).toHaveBeenCalledOnce();
   });
 });
+
+describe("permit whose owner Temporal deleted after its retention (KAN-243, 2026-11-12)", () => {
+  // The Whole Foods brand-scan permit from 10-16: run closed weeks ago, Temporal answers "not found", no execution.
+  const now = new Date("2026-11-12T06:00:00Z");
+  function purgedFixture(
+    grantedAt: string,
+    executions: NonNullable<HeldPermit["cleanup"]>["executions"],
+  ) {
+    const permit: HeldPermit = {
+      permitId: "permit-wf",
+      workflowId: "brand-listing-a3434739",
+      runId: "run",
+      resources: ["wholefoods-brand-scan"],
+      grantedAt,
+      cleanup: { state: "CLEANUP_UNVERIFIED", attempts: 10104, failure: null, executions },
+    };
+    const resources = {
+      findHeld: vi.fn(async () => permit),
+      held: vi.fn(async () => [permit]),
+      list: vi.fn(async () => []),
+      release: vi.fn(async () => true),
+    };
+    const workflows = { stopEvidence: vi.fn(async () => null) };
+    const journal = {
+      candidates: vi.fn(async () => [permit.permitId]),
+      exclusive: async <T>(work: () => Promise<T>) => work(),
+      attempted: vi.fn(),
+      finish: vi.fn(async () => {
+        if (permit.cleanup) {
+          permit.cleanup.state = "stopped";
+        }
+      }),
+      settlePurged: vi.fn(async () => {
+        if (permit.cleanup) {
+          permit.cleanup.state = "stopped";
+        }
+        return true;
+      }),
+    };
+    const verifier = {
+      verify: vi.fn(async () => [{ executionId: "page", kind: "browser", stopped: true }]),
+    };
+    const log = createLogger({ name: "stop-test", level: "fatal" });
+    const clock = () => now;
+    const stopVerification = new StopVerification({
+      resources,
+      workflows,
+      journal,
+      verifier,
+      log,
+      now: clock,
+    });
+    const service = new ResourceService({
+      resources,
+      workflows,
+      log,
+      stopVerification,
+      now: clock,
+    });
+    return { resources, journal, verifier, service };
+  }
+
+  it("releases a permit older than the retention whose owner is gone and that recorded no execution", async () => {
+    const test = purgedFixture("2026-10-16T15:44:30Z", []);
+    expect(await test.service.verifyStop("permit-wf")).toMatchObject({
+      released: true,
+      reason: "owner_purged",
+    });
+    expect(test.journal.settlePurged).toHaveBeenCalledOnce();
+    expect(test.verifier.verify).not.toHaveBeenCalled();
+    expect(test.resources.release).toHaveBeenCalledWith("permit-wf");
+  });
+
+  it("keeps a younger permit whose owner Temporal cannot find: that proves nothing", async () => {
+    const test = purgedFixture("2026-11-10T00:00:00Z", []);
+    await expect(test.service.verifyStop("permit-wf")).rejects.toMatchObject({
+      code: "PERMIT.STOP_NOT_PROVEN",
+    });
+    expect(test.resources.release).not.toHaveBeenCalled();
+  });
+
+  it("still needs executor proof for a recorded execution of a purged owner", async () => {
+    const page = {
+      identity: { kind: "browser", executionId: "page" },
+      stoppedAt: null,
+      proof: null,
+    };
+    const test = purgedFixture("2026-10-16T15:44:30Z", [page]);
+    expect(await test.service.verifyStop("permit-wf")).toMatchObject({ released: true });
+    expect(test.journal.settlePurged).not.toHaveBeenCalled();
+    expect(test.verifier.verify).toHaveBeenCalledOnce();
+  });
+});
