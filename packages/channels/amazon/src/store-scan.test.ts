@@ -1,3 +1,11 @@
+import { mkdtemp } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import {
+  LOCAL_OBJECT_LIMIT_BYTES,
+  LocalObjectStore,
+  RetainedPublication,
+} from "@crawl-automation/platform";
 import { describe, expect, it, vi } from "vitest";
 import { AmazonStoreArchive } from "./store-archive.js";
 import { AmazonStoreBrandScan } from "./store-scan.js";
@@ -9,6 +17,7 @@ import {
   storeHome,
   storeShop,
   storeHtml,
+  StoreMemory,
   storePublication,
 } from "./testing/store-fakes.js";
 
@@ -179,5 +188,28 @@ describe("Store original evidence", () => {
       true,
     );
     expect(setup.pages.read).toHaveBeenCalledOnce();
+  });
+
+  it("reads back through a real local store opened as the worker opens it (2026-11-13)", async () => {
+    // Every production Store scan ended STORAGE.INVALID_LIMIT: the archive reads at 32 MiB and the worker's local
+    // store was opened at its 8 MiB default. The memory fakes above enforce no limit.
+    const root = await mkdtemp(join(tmpdir(), "store-scan-local-"));
+    const local = await LocalObjectStore.open(root, LOCAL_OBJECT_LIMIT_BYTES);
+    const remote = new StoreMemory();
+    const pages = { read: vi.fn(async () => drawPage()) };
+    const scanner = new AmazonStoreBrandScan({
+      pages,
+      publication: new RetainedPublication(local, remote),
+    });
+    const result = await scanner.scan(request, signal());
+    expect(result.complete).toBe(true);
+    expect(result.archiveKeys).toHaveLength(1);
+    const narrow = await LocalObjectStore.open(root);
+    await expect(
+      new AmazonStoreArchive(new RetainedPublication(narrow, new StoreMemory()), {
+        scanId: request.scanId,
+        url: storeHome,
+      }).inspect(signal()),
+    ).rejects.toMatchObject({ code: "STORAGE.INVALID_LIMIT" });
   });
 });

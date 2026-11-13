@@ -7,7 +7,8 @@ import type { ObjectStore } from "./object-store.js";
 import { storageErrors } from "./storage-errors.js";
 
 const DEFAULT_MAX_BYTES = 8_388_608;
-const LIMIT_MAX_BYTES = 32 * 1024 * 1024;
+/** The largest object a local store can be opened for (Amazon Store-page archives read up to this). */
+export const LOCAL_OBJECT_LIMIT_BYTES = 32 * 1024 * 1024;
 
 /**
  * This machine's copy of evidence, as immutable files under one private folder. A key is created once (hard link
@@ -21,7 +22,7 @@ export class LocalObjectStore implements ObjectStore {
 
   static async open(root: string, maxBytes = DEFAULT_MAX_BYTES): Promise<LocalObjectStore> {
     const validLimit =
-      Number.isSafeInteger(maxBytes) && maxBytes >= 1 && maxBytes <= LIMIT_MAX_BYTES;
+      Number.isSafeInteger(maxBytes) && maxBytes >= 1 && maxBytes <= LOCAL_OBJECT_LIMIT_BYTES;
     if (!validLimit || !isAbsolute(root)) {
       throw storageErrors.create("STORAGE.LOCAL_CONFIG");
     }

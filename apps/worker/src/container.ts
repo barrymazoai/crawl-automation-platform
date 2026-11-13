@@ -43,7 +43,7 @@ import {
   RetainedPublication,
   verifyBytes,
 } from "@crawl-automation/platform";
-import { LocalObjectStore } from "@crawl-automation/platform";
+import { LOCAL_OBJECT_LIMIT_BYTES, LocalObjectStore } from "@crawl-automation/platform";
 import { asFunction, asValue, createContainer, InjectionMode, type AwilixContainer } from "awilix";
 import { buildBrowserParts, type BrowserParts } from "./browser/browser-parts.js";
 import { recordedPipelineCapture, recordedHttpCapture } from "./capture-records.js";
@@ -91,7 +91,9 @@ export async function buildContainer(config: WorkerConfig): Promise<Parts> {
     log: asValue(log),
     database: asValue(createDatabase(config.database, log)),
     r2: asValue(createR2Objects(storage.r2, storage.r2Credentials)),
-    local: asValue(await LocalObjectStore.open(storage.journalRoot)),
+    // Store-page scan archives are read back at up to 32 MiB (store-archive.ts); the 8 MiB default refused every
+    // such read with STORAGE.INVALID_LIMIT before the browser drew a page (KAN-243 round 2026-11-13).
+    local: asValue(await LocalObjectStore.open(storage.journalRoot, LOCAL_OBJECT_LIMIT_BYTES)),
     copies: asValue(await FileCopies.open(storage.cacheRoot)),
     // Channels this worker can collect. A new channel is one adapter added here.
     registry: asFunction(({ database }: WorkerParts) =>
