@@ -100,6 +100,7 @@ describe("amazon.ca storefront (KAN-243, 2026-11-11)", () => {
       "amazon-uk",
       "amazon-ca",
       "amazon-de",
+      "amazon-es",
     ]);
     expect(amazonAdapters[3]).toMatchObject({
       id: "amazon-ca",

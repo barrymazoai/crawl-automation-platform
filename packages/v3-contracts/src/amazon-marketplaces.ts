@@ -45,12 +45,27 @@ export const AMAZON_MARKETPLACES = {
     countryCode: "DE",
     currency: "EUR",
   },
+  // KAN-243 (owner 2026-11-13): Spain, after Germany (22 of 23 pages delivered in Spain through ScraperAPI; English pages
+  // with ?language=en_GB, docs/plans/KAN-243-spain-plan.md). amazon.fr was passed over: it has no English pages.
+  // Supply Smart's allow list has amazon.es.
+  "amazon-es": {
+    marketplace: "amazon.es",
+    origin: "https://www.amazon.es",
+    countryCode: "ES",
+    currency: "EUR",
+  },
 } as const;
 
 export type AmazonChannel = keyof typeof AMAZON_MARKETPLACES;
 export type AmazonMarketplace = (typeof AMAZON_MARKETPLACES)[AmazonChannel]["marketplace"];
 /** The storefronts other than amazon.com: their listings name a marketplace and are sent to their own target. */
-export const FOREIGN_AMAZON_CHANNELS = ["amazon-in", "amazon-uk", "amazon-ca", "amazon-de"] as const;
+export const FOREIGN_AMAZON_CHANNELS = [
+  "amazon-in",
+  "amazon-uk",
+  "amazon-ca",
+  "amazon-de",
+  "amazon-es",
+] as const;
 export type ForeignAmazonChannel = (typeof FOREIGN_AMAZON_CHANNELS)[number];
 /** Every Amazon storefront channel, amazon.com first: the one list other channel lists are built from. */
 export const AMAZON_CHANNELS = ["amazon", ...FOREIGN_AMAZON_CHANNELS] as const;
@@ -100,7 +115,12 @@ export function amazonLabelFormats(channel: AmazonChannel): readonly LabelFormat
  * English. The copy keeps the printed words; what Supply Smart receives is translated into English first (Robert: "我们
  * 平台用户都是英语用户"). Absent: the labels are English (or copied in English only, as Canada's).
  */
-const LABEL_LANGUAGES: Partial<Record<AmazonChannel, "de">> = { "amazon-de": "de" };
+const LABEL_LANGUAGES: Partial<Record<AmazonChannel, "de">> = {
+  "amazon-de": "de",
+  // amazon.es (2026-11-13): our brands' Spanish listings carry the same EU multilingual stickers, copied from their
+  // English (UK) section or else their German (DE) one, never the Spanish.
+  "amazon-es": "de",
+};
 
 /** The language a channel's labels are printed in, or null for English. */
 export function labelLanguageOf(channel: string): "de" | null {

@@ -8,6 +8,7 @@ export {
 export {
   AMAZON_CA,
   AMAZON_DE,
+  AMAZON_ES,
   AMAZON_IN,
   AMAZON_SITES,
   AMAZON_UK,

@@ -22,13 +22,14 @@ const PM2_BIN = '/Users/server/Applications/Crawler Node.app/Contents/bin';
 const PM2_HOME = '/Users/server/apps/crawler-v3/pm2';
 const HOSTS = { '100.84.91.3': 'Server 二', '100.114.3.97': 'Windows OCR' };
 // KAN-243 2026-11-12: the Amazon storefronts too (their queues were not watched).
-const CHANNELS = ['amazon', 'amazon-in', 'amazon-uk', 'amazon-ca', 'amazon-de', 'dtc', 'costco', 'wholefoods', 'gnc', 'swanson'];
+const CHANNELS = ['amazon', 'amazon-in', 'amazon-uk', 'amazon-ca', 'amazon-de', 'amazon-es', 'dtc', 'costco', 'wholefoods', 'gnc', 'swanson'];
 const NAMES = {
   amazon: 'Amazon',
   'amazon-in': 'Amazon 印度',
   'amazon-uk': 'Amazon 英国',
   'amazon-ca': 'Amazon 加拿大',
   'amazon-de': 'Amazon 德国',
+  'amazon-es': 'Amazon 西班牙',
   dtc: 'DTC',
   costco: 'Costco',
   wholefoods: 'Whole Foods',

@@ -379,6 +379,8 @@ export const MARKETPLACE_LABEL_FORMATS: Readonly<Record<string, readonly LabelFo
   "amazon.ca": [US_FACTS, "in-composition/3"],
   // Owner 2026-11-11: Germany reads US bottles, English (UK) sections in the UK's /3 and German labels in the EU format.
   "amazon.de": [US_FACTS, "in-nutritional-information/3", "eu-food-supplement/1"],
+  // Owner 2026-11-13: Spain reads Germany's formats; its listings of our brands carry the same EU multilingual stickers.
+  "amazon.es": [US_FACTS, "in-nutritional-information/3", "eu-food-supplement/1"],
 };
 
 /**

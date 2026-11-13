@@ -13,7 +13,7 @@ export const LabelPreparationSchema = z.strictObject({ pageHasLabelSection: z.bo
 export const ChannelPlanInputSchema = z.strictObject({
   sourcePolicy: LabelSourcePolicySchema.optional(),
   operationId: ExecutionIdSchema, owner: ObservationSchema, channel: z.enum(["swanson", ...AMAZON_CHANNELS, "dtc", "gnc", "costco"]),
-  parserVersion: z.enum(["swanson-rendered/1", "amazon-rendered/1", "amazon-in-rendered/1", "amazon-uk-rendered/1", "amazon-ca-rendered/1", "amazon-de-rendered/1", "dtc-rendered/1", "dtc-agent/1", "gnc-rendered/1", "costco-rendered/1"]), expectedUrl: z.string().url().max(4096), source: ArtifactRefSchema,
+  parserVersion: z.enum(["swanson-rendered/1", "amazon-rendered/1", "amazon-in-rendered/1", "amazon-uk-rendered/1", "amazon-ca-rendered/1", "amazon-de-rendered/1", "amazon-es-rendered/1", "dtc-rendered/1", "dtc-agent/1", "gnc-rendered/1", "costco-rendered/1"]), expectedUrl: z.string().url().max(4096), source: ArtifactRefSchema,
   binding: SourceBindingSchema, text: TextCompatibilitySchema.refine(c => c.resultSchemaVersion === 2),
   ocr: ProcessingCompatibilitySchema.refine(c => c.resultSchemaVersion === 2), visionConfigFingerprint: Sha256Schema,
   // Omitted: page text plus every product image (download, OCR, vision), as before. text-facts-first/1: when the

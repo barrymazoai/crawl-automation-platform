@@ -21,7 +21,8 @@ export interface AmazonSite {
     | "amazon-in-rendered/1"
     | "amazon-uk-rendered/1"
     | "amazon-ca-rendered/1"
-    | "amazon-de-rendered/1";
+    | "amazon-de-rendered/1"
+    | "amazon-es-rendered/1";
   /**
    * KAN-243 (owner 2026-11-07): the longest side, in pixels, gallery images are downloaded at; null keeps the page's own
    * image URLs. Indian labels print small type on a side of the jar: the page's 1500 px image left Man Matters' panel
@@ -169,10 +170,35 @@ export const AMAZON_DE: AmazonSite = {
   language: "en_GB",
 };
 
+// Real amazon.es pages with ?language=en_GB, 2026-11-13 (docs/plans/KAN-243-spain-plan.md §1): the euro price split as
+// on amazon.de, "Delivering to Madrid 28071" (a five-digit postcode), "4,109 in Health & Household (See Top 100 …)"
+// without "#", "Date First Available" day first with the month abbreviated or written out ("2 Dec. 2021", "9 Jun.
+// 2023", "13 July 2021"; "9 Sept. 2016" is no date-fns abbreviation and stays unknown). Health & Household > Vitamins,
+// Minerals & Supplements is node 4347039031, searched in the `hpc` department (Doctor's Best's page 1 links page 2
+// with it, under /-/en/s).
+export const AMAZON_ES: AmazonSite = {
+  channel: "amazon-es",
+  origin: AMAZON_MARKETPLACES["amazon-es"].origin,
+  hosts: /^(?:(?:www|m)\.)?amazon\.es$/,
+  currency: AMAZON_MARKETPLACES["amazon-es"].currency,
+  pricePrefix: /(?:€|EUR\s*)/,
+  postalCode: /\b\d{5}\b/g,
+  dateFormats: ["d MMM. yyyy", "d MMMM yyyy"],
+  parserVersion: "amazon-es-rendered/1",
+  imageSize: 2560,
+  scanSort: "exact-aware-popularity-rank",
+  scanPages: 2,
+  scanProducts: 50,
+  supplementNode: "4347039031",
+  searchAlias: "hpc",
+  language: "en_GB",
+};
+
 export const AMAZON_SITES: Readonly<Record<AmazonChannel, AmazonSite>> = {
   amazon: AMAZON_US,
   "amazon-in": AMAZON_IN,
   "amazon-uk": AMAZON_UK,
   "amazon-ca": AMAZON_CA,
   "amazon-de": AMAZON_DE,
+  "amazon-es": AMAZON_ES,
 };
