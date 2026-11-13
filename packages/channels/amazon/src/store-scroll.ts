@@ -33,11 +33,41 @@ export interface StorePageDriver {
 }
 
 /**
+ * Keeps a snapshot and returns the change in retained bytes. Show more appends: a snapshot holding every ASIN and
+ * link of the previous valid one on the same page supersedes it, so a Store keeps about one page of HTML instead of
+ * one per press (Nature's Bounty, 2026-11-13: 7 presses filled 6 MiB at 132 of 188 products). A list that drops
+ * tiles keeps both. Self-contained: Ego receives it as the third argument of `scrollStorePage`.
+ */
+export function retainStoreSnapshot(
+  snapshots: StoreObservation[],
+  state: StoreObservation,
+  invalid: boolean,
+): number {
+  const size = (snapshot: StoreObservation) => new TextEncoder().encode(snapshot.html).byteLength;
+  const last = snapshots.at(-1);
+  const same = !!last && [last.url === state.url, last.status === state.status].every(Boolean);
+  const valid =
+    !!last && !invalid && [last.ready, !last.blocked, !last.invalidTiles].every(Boolean);
+  const keys = new Set([...state.asins, ...state.navigation]);
+  const contained = !!last && [...last.asins, ...last.navigation].every((key) => keys.has(key));
+  const freed = [same, valid, contained].every(Boolean)
+    ? size(snapshots.pop() as StoreObservation)
+    : 0;
+  snapshots.push(state);
+  return size(state) - freed;
+}
+
+/**
  * Identity-based exhaustion, including equal-count replacements and virtualized tiles. Keep raw
  * HTML whenever a new ASIN/navigation link appears, so every emitted product has retained evidence.
- * This function is self-contained: its compiled body also runs inside Ego's Node runtime.
+ * This function is self-contained: its compiled body also runs inside Ego's Node runtime, where `retain`
+ * (`retainStoreSnapshot`) is passed in: a bundled name of it would not exist there.
  */
-export async function scrollStorePage(driver: StorePageDriver, policy: StoreScrollPolicy) {
+export async function scrollStorePage(
+  driver: StorePageDriver,
+  policy: StoreScrollPolicy,
+  retain: typeof retainStoreSnapshot,
+) {
   const seen = new Set<string>();
   const snapshots: StoreObservation[] = [];
   let stable = 0;
@@ -48,10 +78,8 @@ export async function scrollStorePage(driver: StorePageDriver, policy: StoreScro
     const countChanged = snapshots.at(-1)?.tileCount !== state.tileCount;
     const changed = countChanged || keys.some((key) => !seen.has(key));
     const invalid = [!state.ready, state.blocked, state.invalidTiles].some(Boolean);
-    if ([changed, snapshots.length === 0, invalid].some(Boolean)) {
-      bytes += new TextEncoder().encode(state.html).byteLength;
-      snapshots.push(state);
-    }
+    const keep = [changed, !snapshots.length, invalid].some(Boolean);
+    bytes += keep ? retain(snapshots, state, invalid) : 0;
     keys.forEach((key) => seen.add(key));
     const exhausted = [!state.more, !state.loading, state.bottom].every(Boolean);
     stable = [rounds > 0, !changed, exhausted].every(Boolean) ? stable + 1 : 0;

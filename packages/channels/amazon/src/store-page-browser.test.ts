@@ -19,6 +19,7 @@ function fakePage(html: string) {
     Object.defineProperty(element, "getClientRects", { value: () => [1] });
   }
   const page = {
+    document,
     goto: async () => undefined,
     waitForSelector: async () => undefined,
     waitForTimeout: async () => undefined,
@@ -62,6 +63,34 @@ describe("Store page script with Ego-shaped fake driver", () => {
     expect(
       result.snapshots.every((snapshot) => !snapshot.html.includes("data-crawlv3-store-more")),
     ).toBe(true);
+  });
+
+  it("takes a click whose marked button was replaced as a press (2026-11-13)", async () => {
+    const { browser, page } = fakePage(
+      storeHtml().replace("</body>", "<button>Show more</button></body>"),
+    );
+    page.click.mockImplementationOnce(async () => {
+      page.document.querySelector("button")?.remove();
+      throw new Error('Selector [data-crawlv3-store-more="1"] matched 0 elements');
+    });
+    const result = await new AmazonStorePages(browser).read(
+      storeHome,
+      new AbortController().signal,
+    );
+    expect(page.click).toHaveBeenCalledOnce();
+    expect(result.proof).toMatchObject({ ended: "stable", noMore: true });
+  });
+
+  it("fails a click whose marked button is still there", async () => {
+    const { browser, page } = fakePage(
+      storeHtml().replace("</body>", "<button>Show more</button></body>"),
+    );
+    page.click.mockImplementationOnce(async () => {
+      throw new Error("page.click timed out");
+    });
+    await expect(
+      new AmazonStorePages(browser).read(storeHome, new AbortController().signal),
+    ).rejects.toThrow("page.click timed out");
   });
 
   it("treats a disabled load-more button as still loading, never exhaustion", async () => {

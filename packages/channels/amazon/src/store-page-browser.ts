@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { inspectStoreDom, STORE_SELECTORS } from "./store-dom.js";
-import { scrollStorePage, STORE_SCROLL_POLICY } from "./store-scroll.js";
+import { retainStoreSnapshot, scrollStorePage, STORE_SCROLL_POLICY } from "./store-scroll.js";
 
 export const StoreObservationSchema = z.object({
   url: z.url(),
@@ -34,6 +34,9 @@ export interface StoreBrowserRound {
 }
 
 // Page actions use Ego's SDK. Only the read-only DOM projection runs in page.evaluate.
+// Amazon replaces its Show more button as soon as it is pressed, so Ego's click can report that the marked button is
+// gone after it loaded the next products (Nature's Bounty, 2026-11-13). A marked button that is gone is a press; the
+// next snapshot decides, and a button that is still there is pressed again in the next round.
 export function storePageBody(): string {
   return `
 await page.goto(params.url, { timeout: 45000, waitUntil: "domcontentloaded" });
@@ -41,8 +44,7 @@ await page.waitForSelector(params.selectors.navigation, { timeout: 30000, state:
   .catch(() => null);
 const scroll = ${scrollStorePage.toString()};
 const driver = {
-  snapshot: async () => {
-    const state = await page.evaluate((selectors) => {
+  snapshot: () => page.evaluate((selectors) => {
       const inspect = ${inspectStoreDom.toString()};
       const data = inspect(document, selectors);
       const scopes = [...document.querySelectorAll(selectors.grid)];
@@ -62,16 +64,17 @@ const driver = {
         status: navigation?.responseStatus || null, capturedAt: new Date().toISOString(),
         bottom: window.scrollY + window.innerHeight >= document.documentElement.scrollHeight - 4,
         html };
-    }, params.selectors);
-    return state;
-  },
+    }, params.selectors),
   advance: async (more) => {
-    if (more) await page.click('[data-crawlv3-store-more="1"]', { label: 'load more Store products' });
+    if (more) await page.click('[data-crawlv3-store-more="1"]', { label: 'load more Store products' })
+      .catch(async (error) => {
+        if (await page.evaluate(() => !!document.querySelector('[data-crawlv3-store-more="1"]'))) throw error;
+      });
     await page.evaluate(() => window.scrollBy(0, Math.max(300, window.innerHeight * 0.8)));
     await page.waitForTimeout(1000);
   }
 };
-return scroll(driver, params.policy);`;
+return scroll(driver, params.policy, ${retainStoreSnapshot.toString()});`;
 }
 
 export class AmazonStorePages {

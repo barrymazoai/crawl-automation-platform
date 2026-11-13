@@ -1,6 +1,16 @@
 import { describe, expect, it, vi } from "vitest";
-import { scrollStorePage, STORE_SCROLL_POLICY, type StoreObservation } from "./store-scroll.js";
-import { asinOne, asinTwo, observation } from "./testing/store-fakes.js";
+import {
+  retainStoreSnapshot,
+  scrollStorePage as scrollWith,
+  STORE_SCROLL_POLICY,
+  type StoreObservation,
+  type StorePageDriver,
+  type StoreScrollPolicy,
+} from "./store-scroll.js";
+import { asinOne, asinTwo, observation, storeHtml } from "./testing/store-fakes.js";
+
+const scrollStorePage = (driver: StorePageDriver, policy: StoreScrollPolicy) =>
+  scrollWith(driver, policy, retainStoreSnapshot);
 
 function driverFor(states: StoreObservation[]) {
   let index = 0;
@@ -34,6 +44,22 @@ describe("Store scroll exhaustion", () => {
     const result = await scrollStorePage(driver, STORE_SCROLL_POLICY);
     expect(result.proof).toMatchObject({ rounds: 4, ended: "stable" });
     expect(result.snapshots.map((snapshot) => snapshot.asins)).toEqual([[asinOne], [asinTwo]]);
+  });
+
+  it("keeps only the latest snapshot while Show more appends (2026-11-13)", async () => {
+    const asinThree = "B000000003";
+    const shown = (asins: string[], more: boolean) =>
+      observation({ asins, html: storeHtml(asins), more });
+    const driver = driverFor([
+      shown([asinOne], true),
+      shown([asinOne, asinTwo], true),
+      shown([asinOne, asinTwo, asinThree], false),
+    ]);
+    const result = await scrollStorePage(driver, { ...STORE_SCROLL_POLICY, maxBytes: 600 });
+    expect(result.proof).toMatchObject({ ended: "stable", noMore: true });
+    expect(result.snapshots.map((snapshot) => snapshot.asins)).toEqual([
+      [asinOne, asinTwo, asinThree],
+    ]);
   });
 
   it("clicks load-more and restarts the stable count when it disappears", async () => {
