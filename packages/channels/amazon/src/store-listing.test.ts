@@ -1,3 +1,4 @@
+import { parseHTML } from "linkedom";
 import { describe, expect, it } from "vitest";
 import {
   amazonStoreAddress,
@@ -5,6 +6,7 @@ import {
   amazonStoreSourceUrl,
 } from "./store-address.js";
 import { amazonStoreBrandScan, parseAmazonStoreListing } from "./store-listing.js";
+import { inspectStoreDom, STORE_SELECTORS } from "./store-dom.js";
 import { savedPage } from "./testing/saved-pages.js";
 import { asinOne, asinTwo, storeHome, storeShop, storeHtml } from "./testing/store-fakes.js";
 
@@ -54,6 +56,37 @@ describe("Store addresses and scoped tiles", () => {
     expect(parseAmazonStoreListing(html, storeHome).products[0]?.listingId).toBe(asinOne);
   });
 
+  it("reads a Store whose widget strings say Continue shopping (every Store page does, 2026-11-13)", () => {
+    // Nature's Bounty Store as Server 一's Ego drew it: inline JSON "STORES_WIDGET_ContinueShopping":"Continue shopping".
+    const widgets =
+      '<script>{"STORES_WIDGET_Cart":"Cart","STORES_WIDGET_ContinueShopping":"Continue shopping"}</script>';
+    const listing = parseAmazonStoreListing(
+      storeHtml([asinOne]).replace("</body>", `${widgets}</body>`),
+      storeHome,
+    );
+    expect(listing.products.map(({ listingId }) => listingId)).toEqual([asinOne]);
+  });
+
+  it.each([
+    [
+      "the Continue shopping interstitial",
+      '<form method="POST" action="/checkpoint/validate" id="checkpointForm"></form>',
+    ],
+    ["the captcha form", '<form method="get" action="/errors/validateCaptcha"></form>'],
+    ["the captcha field", '<input id="captchacharacters">'],
+    ["the Robot Check page", "<title>Robot Check</title>"],
+  ])("marks %s as blocked in the browser's own reading", (_name, marker) => {
+    const page = (html: string) =>
+      inspectStoreDom(
+        parseHTML(`<html><head></head><body>${html}</body></html>`).document,
+        STORE_SELECTORS,
+      );
+    expect(page(marker).blocked).toBe(true);
+    expect(page("<p>Continue shopping</p><p>Enter the characters you see below</p>").blocked).toBe(
+      false,
+    );
+  });
+
   it("refuses malformed product identities instead of silently losing a tile", () => {
     expect(() => parseAmazonStoreListing(storeHtml(["BAD"]), storeHome)).toThrow(
       expect.objectContaining({ code: "BRAND_SCAN.TILE_IDENTITY" }),
@@ -61,9 +94,12 @@ describe("Store addresses and scoped tiles", () => {
   });
 
   it("refuses challenges and missing Store navigation", () => {
-    expect(() =>
-      parseAmazonStoreListing("<html><body>Continue shopping</body></html>", storeHome),
-    ).toThrow(expect.objectContaining({ code: "BRAND_SCAN.ACCESS_CHALLENGE" }));
+    const interstitial = `<html><body><h4>To continue, please click the "Continue shopping" button below.</h4>
+      <form method="POST" action="/checkpoint/validate" id="checkpointForm">
+      <button type="submit" name="continueClick" value="true">Continue shopping</button></form></body></html>`;
+    expect(() => parseAmazonStoreListing(interstitial, storeHome)).toThrow(
+      expect.objectContaining({ code: expect.stringMatching(/ACCESS_CHALLENGE$/) }),
+    );
     expect(() => parseAmazonStoreListing("<html><body>Loading</body></html>", storeHome)).toThrow(
       expect.objectContaining({ code: "AMAZON.STORE_UNVERIFIED" }),
     );

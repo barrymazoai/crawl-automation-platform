@@ -34,11 +34,12 @@ export function inspectStoreDom(document: AmazonDocument, selectors: typeof STOR
     asins: [...new Set(asins)],
     navigation: [...new Set(links.map((link) => link.getAttribute("href") ?? ""))],
     ready: navigation.length > 0,
+    // The markers of access-challenge.ts, as DOM: every Store page carries the words "Continue shopping" in its
+    // inline widget strings ("STORES_WIDGET_ContinueShopping"), so page text marked all 501 Stores as challenged.
     blocked:
-      !!document.querySelector('form[action*="validateCaptcha"], #captchacharacters') ||
-      /Robot Check|Enter the characters you see below|Continue shopping/i.test(
-        document.body?.textContent ?? "",
-      ),
+      !!document.querySelector(
+        'form[action*="validateCaptcha"], form[action*="/checkpoint/"], form#checkpointForm, #captchacharacters',
+      ) || /Robot Check/i.test(document.querySelector("title")?.textContent ?? ""),
     invalidTiles: tiles.length > 0 && asins.length === 0,
   };
 }
