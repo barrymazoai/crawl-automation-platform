@@ -86,3 +86,13 @@
 ## 4. 第 4 步：先 1 个，再 20 个，抽查 10 个
 
 和德国一样：1 个商品跑通 → 20 个 → 抽 10 个对照原图检查标签和英文翻译 → 用户同意后全量放开。
+
+## 5. 第 4 步第一个结果：标签要读西班牙文（用户 11-13「可以，加西班牙文」）
+
+- 部署 c15ab907 后跑的第一个商品 B09BVM4YKB 是 `SCRAPERAPI.PROVIDER_FAILURE`（500，56 秒，不计费）；第二个 B09BVX2XS7（Doctor's Best 镁，贴纸 ES/FR/DE/IT，没有 UK 段）进了 Review：读图抄的是放大印出的西班牙文段（「Ingredientes | Dosis (2 comprimidos) | %VRN*」），表头规则不认「Ingredientes:」。
+- §0、§1 里「抄 DE 段、沿用德文翻译」的假设不成立：西班牙站图库里放大的是 ES 段，DE 段只是小图。
+- 改法（只影响 amazon.es）：
+  - 新格式 `es-food-supplement/1`：选图词 Ingredientes、Dosis diaria、Modo de empleo、Complemento alimenticio、VRN、NRV；「Dosis (…)」「Dosis diaria (…)」「Por …」是剂量列，「%VRN*」「%NRV*」是百分比列；「Modo de empleo: …」「Recomendación de consumo: …」是份量；脚注「*= Porcentaje de los valores de referencia…」「** = Necesidad diaria no determinada」跳过。抄图提示：西班牙文照抄不翻译；有英文段抄英文段，否则只抄 ES 段。`amazon.es` 读 `[US_FACTS, "in-nutritional-information/3", "es-food-supplement/1"]`。
+  - 配料表头：用西班牙格式读的标签认「Ingredientes」「Otros ingredientes」「Lista de ingredientes」「Componentes」，不认带 Dosis/VRN/NRV 的表格表头行。
+  - 翻译：`amazon-es` 的标签语言是 `es`，翻译提示用西班牙文的常见词；德文提示一字不变。
+- 回放：Server 一 保存的 1,076 个读图答案（美国 117、印度 150、英国 150、加拿大 150、德国 509）用 c15ab907 和新代码各解码一遍，1,076 个结果逐条相同。读图配置指纹不变（4 个指纹测试在 c15ab907 上本来就不过，哈希相同）。

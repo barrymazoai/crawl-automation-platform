@@ -3,7 +3,7 @@ import { textAnswer } from "../brand-research/text-runner.js";
 import type { BrandTextDeps } from "../brand-research/settings.js";
 import { brandResearchErrors } from "../brand-research/errors.js";
 
-const LANGUAGE_NAMES = { de: "German" } as const;
+const LANGUAGE_NAMES = { de: "German", es: "Spanish" } as const;
 export type LabelLanguage = keyof typeof LANGUAGE_NAMES;
 
 const AnswerSchema = z.strictObject({
@@ -17,6 +17,20 @@ const AnswerSchema = z.strictObject({
     .max(200),
 });
 
+/** The usual English names a label's words take, per language (the German lines are those amazon.de was sent with). */
+const EXAMPLES: Record<LabelLanguage, readonly string[]> = {
+  de: [
+    "- Use the usual English name of an ingredient (Zink: Zinc; Füllstoff: Filler; Überzugsmittel: Coating agent;",
+    "  Trennmittel: Anti-caking agent; davon: of which; Tagesdosis: Daily dose; Kapseln: capsules; Zutaten: Ingredients).",
+  ],
+  // KAN-243 (amazon.es, 2026-11-13): words of Doctor's Best's and Nordic Naturals' Spanish sticker sections.
+  es: [
+    "- Use the usual English name of an ingredient (Magnesio: Magnesium; agente de carga: Bulking agent; Estabilizador:",
+    "  Stabiliser; Antiaglomerante: Anti-caking agent; Emulsionante: Emulsifier; Agente de recubrimiento: Coating agent;",
+    "  de los cuales: of which; Dosis diaria: Daily dose; comprimidos: tablets; cápsulas: capsules; Ingredientes: Ingredients).",
+  ],
+};
+
 /** The prompt for one turn: each printed text numbered, translated one for one. */
 export function labelTranslationPrompt(language: LabelLanguage, texts: readonly string[]): string {
   const name = LANGUAGE_NAMES[language];
@@ -28,8 +42,7 @@ export function labelTranslationPrompt(language: LabelLanguage, texts: readonly 
     "- Translate faithfully: never add, drop, reorder or explain anything, and never correct the label.",
     "- Keep every number, unit, percentage, symbol (®, ™, *, †, %) and punctuation as printed.",
     "- Keep brand and trademark names (e.g. PepZin GI®, Quatrefolic®) and Latin botanical names unchanged.",
-    "- Use the usual English name of an ingredient (Zink: Zinc; Füllstoff: Filler; Überzugsmittel: Coating agent;",
-    "  Trennmittel: Anti-caking agent; davon: of which; Tagesdosis: Daily dose; Kapseln: capsules; Zutaten: Ingredients).",
+    ...EXAMPLES[language],
     "- A text already in English is returned unchanged.",
     "",
     "Texts:",
@@ -45,7 +58,7 @@ export function labelTranslator(deps: BrandTextDeps) {
   const model = `${deps.text.settings.model}/${deps.text.settings.reasoningEffort}`;
   return {
     async translate(input: { language: string; texts: readonly string[] }, signal: AbortSignal) {
-      const language = z.enum(["de"]).parse(input.language);
+      const language = z.enum(["de", "es"]).parse(input.language);
       const answer = await textAnswer(
         deps,
         {

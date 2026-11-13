@@ -10,6 +10,14 @@ describe("label translation turn (KAN-243, Germany plan option A)", () => {
     expect(prompt).toContain("Keep brand and trademark names");
   });
 
+  it("asks for Spanish the same way, with Spanish label words (KAN-243, amazon.es 2026-11-13)", () => {
+    const prompt = labelTranslationPrompt("es", ["de los cuales azúcar", "Dosis (2 comprimidos)"]);
+    expect(prompt).toContain("Translate each Spanish text");
+    expect(prompt).toContain("de los cuales: of which");
+    expect(prompt).not.toContain("Zink: Zinc");
+    expect(labelTranslationPrompt("de", ["davon Zink"])).not.toContain("Magnesio");
+  });
+
   it("keeps an answer only when it translates every text exactly once", () => {
     const texts = ["davon Zink", "Zutaten:"];
     expect(

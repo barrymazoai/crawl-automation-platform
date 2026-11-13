@@ -80,7 +80,7 @@ describe("amazon.es storefront (KAN-243, 2026-11-13)", () => {
     expect(() => amazonProductAddress("https://www.amazon.es/dp/B09BVX2XS7", AMAZON_DE)).toThrow();
   });
 
-  it("is its own channel, asked in English, with its own formula family and Germany's label formats", () => {
+  it("is its own channel, asked in English, with its own formula family and Spanish labels", () => {
     const adapter = amazonAdapters[5];
     expect(adapter).toMatchObject({
       id: "amazon-es",
@@ -93,8 +93,13 @@ describe("amazon.es storefront (KAN-243, 2026-11-13)", () => {
       },
     });
     expect(adapter?.productUrl?.("b09bvx2xs7")).toBe("https://www.amazon.es/dp/B09BVX2XS7");
-    expect(amazonLabelFormats("amazon-es")).toEqual(amazonLabelFormats("amazon-de"));
-    expect(labelLanguageOf("amazon-es")).toBe("de");
+    expect(amazonLabelFormats("amazon-es")).toEqual([
+      "us-facts/1",
+      "in-nutritional-information/3",
+      "es-food-supplement/1",
+    ]);
+    expect(labelLanguageOf("amazon-es")).toBe("es");
+    expect(labelLanguageOf("amazon-de")).toBe("de");
   });
 
   it("is a Review when the page is delivered outside Spain, never an unavailable product", () => {

@@ -36,6 +36,27 @@ it("reads German ingredient headings only in the EU format (KAN-243, amazon.de 2
   expect(assessLabelCandidate(candidate).codes).toContain("LABEL.INGREDIENT_HEADING_INVALID");
   expect(assessLabelCandidate({ ...candidate, labelFormats: [...eu] }).codes).not.toContain("LABEL.INGREDIENT_HEADING_INVALID");
 });
+it("reads Spanish ingredient headings only in the Spanish format (KAN-243, amazon.es 2026-11-13)", () => {
+  const es = ["us-facts/1", "in-nutritional-information/3", "es-food-supplement/1"] as const;
+  const eu = ["us-facts/1", "in-nutritional-information/3", "eu-food-supplement/1"] as const;
+  // Doctor's Best B09BVX2XS7 and Nordic Naturals B0CF5QJMFK print "Ingredientes: …" under the ES table.
+  for (const heading of ["Ingredientes:", "Ingredientes", "INGREDIENTES:", "Otros ingredientes:", "Lista de ingredientes:",
+    "Componentes:", "Ingredientes / Ingredients"]) {
+    expect(isIngredientHeading(heading, es)).toBe(true);
+    // Elsewhere only the English word of a bilingual heading is read, as before.
+    const english = heading === "Ingredientes / Ingredients";
+    expect(isIngredientHeading(heading)).toBe(english);
+    expect(isIngredientHeading(heading, eu)).toBe(english);
+  }
+  for (const heading of ["Ingredientes | Dosis (2 comprimidos) | %VRN*", "Ingredientes por dosis diaria",
+    "Información nutricional", "Ingredientesextra", "Advertencias relacionadas con los ingredientes:"]) {
+    expect(isIngredientHeading(heading, es)).toBe(false);
+  }
+  const candidate = LabelImageCandidateSchema.parse({ ...gncLabelFixture(), otherIngredients: { heading: { text: "Ingredientes:", evidence: "Ingredientes:" }, items: [{ text: "Quelato de lisinato de magnesio", evidence: "Quelato de lisinato de magnesio" }] } });
+  expect(assessLabelCandidate(candidate).codes).toContain("LABEL.INGREDIENT_HEADING_INVALID");
+  expect(assessLabelCandidate({ ...candidate, labelFormats: [...eu] }).codes).toContain("LABEL.INGREDIENT_HEADING_INVALID");
+  expect(assessLabelCandidate({ ...candidate, labelFormats: [...es] }).codes).not.toContain("LABEL.INGREDIENT_HEADING_INVALID");
+});
 it("treats a duplicated Ingredients list as partial without rewriting the candidate", () => {
   const original = ingredientListNotAFormulaExamples.pass[1]!.subject;
   const candidate = structuredClone(original);

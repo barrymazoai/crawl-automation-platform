@@ -89,6 +89,7 @@ export function isIngredientHeading(raw: string, formats?: readonly LabelFormatI
   // KAN-243 (amazon.de, Doctor's Best B09LR81NNL 2026-11-11): German labels head their list "Zutaten:".
   if (/^zutaten(?:liste)?\s*:?$/i.test(text)) return true;
   if (readsGermanIngredientHeadings(formats) && isGermanIngredientHeading(text)) return true;
+  if (readsSpanishIngredientHeadings(formats) && isSpanishIngredientHeading(text)) return true;
   if (!/\b(?:ingredients?|ingr[e\.]{0,2}dients?|oher\s+ingredients)\b/i.test(text)) return false;
   if (/\b(?:supplement|nutrition|drug)\s+facts\b|amount\s+per\s+serving|daily\s+value|contains\s*:|may\s+contain|allergen/i.test(text)) return false;
   return text.length <= 80;
@@ -117,11 +118,34 @@ export function readsGermanIngredientHeadings(formats: readonly LabelFormatId[] 
   return formats?.includes("eu-food-supplement/1") ?? false;
 }
 
+/**
+ * KAN-243 (amazon.es 2026-11-13, Doctor's Best B09BVX2XS7: "Ingredientes:" refused): a Spanish label heads its list
+ * "Ingredientes:", "Otros ingredientes", "Lista de ingredientes" or "Componentes", a multilingual sticker's
+ * "Ingredientes / Ingredients" included. Not one: the facts table's header ("Ingredientes | Dosis (2 comprimidos) |
+ * %VRN*"). Only for a candidate read in the Spanish format, which only amazon.es reads.
+ */
+const SPANISH_INGREDIENT_HEADING =
+  /^(?:(?:lista\s+de|otros)\s+)?(?:ingredientes|componentes)(?![a-záéíóúüñ])/iu;
+const SPANISH_FACTS_TABLE_HEADER = /dosis|\bvrn\b|\bnrv\b|\bcdr\b|nutricional|\|/iu;
+
+function isSpanishIngredientHeading(text: string): boolean {
+  return (
+    SPANISH_INGREDIENT_HEADING.test(text) && !SPANISH_FACTS_TABLE_HEADER.test(text) && text.length <= 80
+  );
+}
+
+/** Whether a candidate read in these formats may head its list in Spanish. */
+export function readsSpanishIngredientHeadings(formats: readonly LabelFormatId[] | undefined): boolean {
+  return formats?.includes("es-food-supplement/1") ?? false;
+}
+
 /** The candidate's formats, named only when they change a rule (see LabelImageCandidateSchema.labelFormats). */
 export function labelFormatsOfCandidate(
   formats: readonly LabelFormatId[] | undefined,
 ): { labelFormats?: LabelFormatId[] } {
-  return formats && readsGermanIngredientHeadings(formats) ? { labelFormats: [...formats] } : {};
+  return formats && (readsGermanIngredientHeadings(formats) || readsSpanishIngredientHeadings(formats))
+    ? { labelFormats: [...formats] }
+    : {};
 }
 
 /** The rule that fired and where: row index and printed name, or the section concerned; `rule` names its table entry. */

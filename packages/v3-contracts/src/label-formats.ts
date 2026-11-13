@@ -18,6 +18,7 @@ export const LabelFormatIdSchema = z.enum([
   "in-nutritional-information/3",
   "in-composition/3",
   "eu-food-supplement/1",
+  "es-food-supplement/1",
 ]);
 export type LabelFormatId = z.infer<typeof LabelFormatIdSchema>;
 
@@ -282,6 +283,53 @@ const EU_FOOD_SUPPLEMENT_1: LabelFormat = {
   ],
 };
 
+/**
+ * amazon.es, 2026-11-13 (docs/plans/KAN-243-spain-plan.md §5): our brands' Spanish listings show the importer's peel-off
+ * multilingual sticker with its Spanish (ES) section enlarged, so the copy reads Spanish, not the German section the EU
+ * format asks for (Doctor's Best B09BVX2XS7 was copied in Spanish under that format and its "Ingredientes:" heading
+ * refused). The ES section prints "Ingredientes | Dosis (2 comprimidos) | %VRN*" (Doctor's Best) or "Ingredientes |
+ * Dosis diaria (2 cucharaditas) | %NRV*" with "de los cuales azúcar" rows (Nordic Naturals B0CF5QJMFK), then
+ * "Ingredientes: …", "Modo de empleo: …" or "Recomendación de consumo: …", and the footnotes "*= Porcentaje de los
+ * valores de referencia de nutrientes según el Reglamento (UE) nº 1169/2011" and "** = Necesidad diaria no
+ * determinada". The copy keeps every word as printed, in Spanish: translating it into English is a later step.
+ */
+const ES_FOOD_SUPPLEMENT_1: LabelFormat = {
+  keywords: ["Ingredientes", "Dosis diaria", "Modo de empleo", "Complemento alimenticio", "VRN", "NRV"],
+  columns: {
+    amount: [
+      /^(?:por\s+)?dosis(?:\s+diaria)?\b.*$/i,
+      /^(?:por|cada)\s+(?:porci[oó]n|raci[oó]n|comprimido|c[aá]psula|perla|cucharad|cacito|sobre|gota)\w*\b.*$/i,
+      /^(?:cantidad|contenido)\s+(?:por|en)\s+(?!100\s*(?:g|ml)\b).+$/i,
+    ],
+    perBasis: [/^(?:(?:cantidad|contenido)\s+)?(?:por|en)\s+100\s*(?:g|ml)\b.*$/i],
+    dailyValue: [
+      { header: /^[*#†‡^]*\s*%?\s*(?:vrn|nrv|cdr|ir)\b.*$/i, basis: "eu_nrv" },
+      { header: /%\s*(?:de\s+(?:los\s+)?)?(?:vrn|nrv|cdr|ir)\b/i, basis: "eu_nrv" },
+    ],
+  },
+  headerCells: [
+    /^(?:ingredientes?|componentes?|nutrientes?|informaci[oó]n\s+nutricional|valores?\s+nutricionales?)\s*[:*]*$/i,
+  ],
+  skip: [
+    /^informaci[oó]n\s+nutricional\s*:?$/i,
+    /^[*#†‡]+\s*=?\s*(?:porcentaje|necesidad|valores?\s+de\s+referencia|vrn|nrv|cdr|ir)\b.*$/i,
+    /^[*#†‡]*\s*(?:vrn|nrv|cdr|ir)\s*[:=]\s*.*$/i,
+    /^complemento\s+alimenticio\b.*$/i,
+  ],
+  servings: [
+    /^(?:porciones|raciones|dosis)\s+por\s+(?:envase|paquete|bote|frasco|lata)\s*[:\-–]?\s*(.*)$/i,
+  ],
+  servingFor: [
+    /^(?:modo\s+de\s+empleo|recomendaci[oó]n\s+de\s+consumo|dosis\s+diaria\s+recomendada)\s*:?\s*(.+)$/i,
+  ],
+  continuation: [/^\(.+\)$/],
+  preparedFrom: none,
+  prompt: [
+    'The label may print a Spanish food-supplement table instead ("Ingredientes | Dosis (2 comprimidos) | %VRN*", "Dosis diaria (2 cucharaditas) | %NRV*", "Información nutricional"). Transcribe it the same way, every word exactly as printed in Spanish: never translate. Rows such as "de los cuales azúcar" are their own rows. Its "Ingredientes:" list is the ingredients text: "otherIngredientsHeading" is "Ingredientes:" as printed and "otherIngredients" its whole body as printed.',
+    'A multilingual label prints the same text once per language, each section marked by a country or language code ("ES", "DE", "FR", "IT", "UK", "EN"). Copy the English section (UK, EN or GB) when one is printed, otherwise the Spanish (ES) section only; leave every other language out.',
+  ],
+};
+
 export const LABEL_FORMATS: Readonly<Record<LabelFormatId, LabelFormat>> = {
   // The US rules live in the transcript parser and the US prompt themselves; this entry adds nothing to them.
   "us-facts/1": {
@@ -366,6 +414,7 @@ export const LABEL_FORMATS: Readonly<Record<LabelFormatId, LabelFormat>> = {
   "in-composition/2": IN_COMPOSITION_2,
   "in-composition/3": IN_COMPOSITION_3,
   "eu-food-supplement/1": EU_FOOD_SUPPLEMENT_1,
+  "es-food-supplement/1": ES_FOOD_SUPPLEMENT_1,
 };
 
 /** The formats a storefront's labels are read in. A storefront not listed is not read at all. */
@@ -379,8 +428,9 @@ export const MARKETPLACE_LABEL_FORMATS: Readonly<Record<string, readonly LabelFo
   "amazon.ca": [US_FACTS, "in-composition/3"],
   // Owner 2026-11-11: Germany reads US bottles, English (UK) sections in the UK's /3 and German labels in the EU format.
   "amazon.de": [US_FACTS, "in-nutritional-information/3", "eu-food-supplement/1"],
-  // Owner 2026-11-13: Spain reads Germany's formats; its listings of our brands carry the same EU multilingual stickers.
-  "amazon.es": [US_FACTS, "in-nutritional-information/3", "eu-food-supplement/1"],
+  // Owner 2026-11-13: Spain reads US bottles, English (UK) sections in the UK's /3 and Spanish labels in its own format
+  // (the stickers' ES section is the enlarged one; "加西班牙文").
+  "amazon.es": [US_FACTS, "in-nutritional-information/3", "es-food-supplement/1"],
 };
 
 /**

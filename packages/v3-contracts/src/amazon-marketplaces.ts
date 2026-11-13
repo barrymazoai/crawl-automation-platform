@@ -115,14 +115,16 @@ export function amazonLabelFormats(channel: AmazonChannel): readonly LabelFormat
  * English. The copy keeps the printed words; what Supply Smart receives is translated into English first (Robert: "我们
  * 平台用户都是英语用户"). Absent: the labels are English (or copied in English only, as Canada's).
  */
-const LABEL_LANGUAGES: Partial<Record<AmazonChannel, "de">> = {
+const LABEL_LANGUAGES: Partial<Record<AmazonChannel, LabelLanguage>> = {
   "amazon-de": "de",
-  // amazon.es (2026-11-13): our brands' Spanish listings carry the same EU multilingual stickers, copied from their
-  // English (UK) section or else their German (DE) one, never the Spanish.
-  "amazon-es": "de",
+  // amazon.es (owner 2026-11-13): the stickers' English (UK) section when printed, otherwise their Spanish (ES) one.
+  "amazon-es": "es",
 };
 
+/** A language labels are copied in other than English. */
+export type LabelLanguage = "de" | "es";
+
 /** The language a channel's labels are printed in, or null for English. */
-export function labelLanguageOf(channel: string): "de" | null {
+export function labelLanguageOf(channel: string): LabelLanguage | null {
   return isAmazonChannel(channel) ? (LABEL_LANGUAGES[channel] ?? null) : null;
 }
