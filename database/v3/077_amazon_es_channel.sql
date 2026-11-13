@@ -11,7 +11,7 @@ ALTER TABLE brand_source ADD CONSTRAINT brand_source_channel_check
 ALTER TABLE queue_control DROP CONSTRAINT queue_control_channel_check;
 ALTER TABLE queue_control ADD CONSTRAINT queue_control_channel_check
   CHECK (channel IN ('amazon', 'amazon-in', 'amazon-uk', 'amazon-ca', 'amazon-de', 'amazon-es', 'gnc', 'swanson', 'dtc', 'costco', 'wholefoods'));
-INSERT INTO queue_control (channel) VALUES ('amazon-de', 'amazon-es');
+INSERT INTO queue_control (channel) VALUES ('amazon-es');
 
 ALTER TABLE brand_scan DROP CONSTRAINT brand_scan_channel_check;
 ALTER TABLE brand_scan ADD CONSTRAINT brand_scan_channel_check

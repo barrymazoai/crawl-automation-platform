@@ -271,7 +271,7 @@ describe("release SQL catalog", () => {
       ],
       [
         "077_amazon_es_channel.sql",
-        "c3520e1f60adf4a28395524427e5fc21ffde4a5082525bb148171dbe0cea2f1c",
+        "62abcfdd04a4e7d9b74304cfa09a1a684ca7f6ade641c2b8cede931a35d33f8f",
       ],
     ]);
     expect(catalog.at(-1)?.name).toBe("077_amazon_es_channel.sql");
