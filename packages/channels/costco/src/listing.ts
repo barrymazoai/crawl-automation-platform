@@ -10,7 +10,13 @@ import { costcoErrors } from "./errors.js";
 import { verifyCostcoStore, type CostcoStore } from "./store.js";
 
 export const COSTCO_TILE = '[data-testid^="ProductTile_"]';
-export const COSTCO_PRODUCT_LINK = `${COSTCO_TILE} a[href*=".product."]`;
+/**
+ * A tile's product link, in either address form. Since 2026-11 Costco's tiles link the canonical `/p/-/<slug>/<id>`
+ * (its old `<slug>.product.<id>.html` redirects there); every tile of the 11-13 round lacked the old form.
+ */
+const PRODUCT_LINKS = ['a[href*=".product."]', 'a[href*="/p/-/"]'];
+const PRODUCT_LINK = PRODUCT_LINKS.join(", ");
+export const COSTCO_PRODUCT_LINK = PRODUCT_LINKS.map((link) => `${COSTCO_TILE} ${link}`).join(", ");
 
 function productOf(link: Element): ListedProduct {
   const href = link.getAttribute("href") ?? "";
@@ -29,7 +35,7 @@ function productOf(link: Element): ListedProduct {
 
 function tileLinks(document: Document): Element[] {
   return [...document.querySelectorAll(COSTCO_TILE)].flatMap((tile) => {
-    const links = [...tile.querySelectorAll('a[href*=".product."]')];
+    const links = [...tile.querySelectorAll(PRODUCT_LINK)];
     if (!links.length) {
       throw brandScanErrors.create("BRAND_SCAN.TILE_IDENTITY", {
         details: { tile: tile.getAttribute("data-testid") },
@@ -47,7 +53,7 @@ export function parseCostcoListing(
 ): DrawnListing {
   const { document } = parseHTML(html);
   const retained = observedItems.flatMap((item) => [
-    ...parseHTML(item.html).document.querySelectorAll('a[href*=".product."]'),
+    ...parseHTML(item.html).document.querySelectorAll(PRODUCT_LINK),
   ]);
   const products = new Map<string, ListedProduct>();
   for (const link of [...retained, ...tileLinks(document)]) {

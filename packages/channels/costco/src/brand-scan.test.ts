@@ -55,6 +55,32 @@ describe("Costco drawn listing", () => {
     ]);
     expect(result.page).toMatchObject({ cards: 2, statedTotal: 2, nextPage: null });
   });
+  it("reads tiles that link the canonical /p/-/ address (Costco since 2026-11), banners still excluded", () => {
+    // The Kaged tile of costco.com/diet-nutrition.html?refinement=brands%3DKaged as Ego drew it on 2026-11-13.
+    const kaged =
+      "kaged-creatine-monohydrate--maxcatalyst-40-individual-serving-stick-packs-variety-pack";
+    const canonical = html
+      .replace(
+        "https://www.costco.com/test-coq10.product.100029983.html",
+        `https://www.costco.com/p/-/${kaged}/100029983`,
+      )
+      .replace("/test-coq10.product.100029983.html?ref=tile", "/p/-/test-coq10/100029983?ref=tile")
+      .replace("/energy-shot.product.4000100002.html", "/p/-/energy-shot/4000100002");
+    expect(canonical).not.toContain(".product.");
+    const result = parseCostcoListing(canonical, COSTCO_STORE);
+    expect(result.page.products.map(({ listingId, url }) => ({ listingId, url }))).toEqual([
+      { listingId: "100029983", url: `https://www.costco.com/${kaged}.product.100029983.html` },
+      {
+        listingId: "4000100002",
+        url: "https://www.costco.com/energy-shot.product.4000100002.html",
+      },
+    ]);
+    expect(
+      parseCostcoListing(canonical, COSTCO_STORE, [
+        { html: `<a href="https://www.costco.com/p/-/${kaged}/4201035734">Kaged</a>` },
+      ]).page.products.map(({ listingId }) => listingId),
+    ).toEqual(["4201035734", "100029983", "4000100002"]);
+  });
   it("rejects mismatched tile identity and empty/loading pages", () => {
     expect(() =>
       parseCostcoListing(html.replace("ProductTile_100029983", "ProductTile_999"), COSTCO_STORE),
