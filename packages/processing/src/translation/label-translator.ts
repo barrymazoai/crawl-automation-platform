@@ -23,11 +23,15 @@ const EXAMPLES: Record<LabelLanguage, readonly string[]> = {
     "- Use the usual English name of an ingredient (Zink: Zinc; Füllstoff: Filler; Überzugsmittel: Coating agent;",
     "  Trennmittel: Anti-caking agent; davon: of which; Tagesdosis: Daily dose; Kapseln: capsules; Zutaten: Ingredients).",
   ],
-  // KAN-243 (amazon.es, 2026-11-13): words of Doctor's Best's and Nordic Naturals' Spanish sticker sections.
+  // KAN-243 (amazon.es, 2026-11-13): words of Doctor's Best's and Nordic Naturals' Spanish sticker sections. A Spanish
+  // listing's copy can be another section of the same multilingual sticker: Doctor's Best B09BVM4YKB's gallery prints
+  // the German section large and the Spanish one small, and was copied in German.
   es: [
     "- Use the usual English name of an ingredient (Magnesio: Magnesium; agente de carga: Bulking agent; Estabilizador:",
     "  Stabiliser; Antiaglomerante: Anti-caking agent; Emulsionante: Emulsifier; Agente de recubrimiento: Coating agent;",
     "  de los cuales: of which; Dosis diaria: Daily dose; comprimidos: tablets; cápsulas: capsules; Ingredientes: Ingredients).",
+    "- A text may be in German, French or Italian instead (a multilingual sticker prints every language): translate it",
+    "  into English the same way (davon: of which; Zutaten: Ingredients; Füllstoff: Filler; Überzugsmittel: Coating agent).",
   ],
 };
 

@@ -15,6 +15,8 @@ describe("label translation turn (KAN-243, Germany plan option A)", () => {
     expect(prompt).toContain("Translate each Spanish text");
     expect(prompt).toContain("de los cuales: of which");
     expect(prompt).not.toContain("Zink: Zinc");
+    // A Spanish listing's copy may be its sticker's German section (Doctor's Best B09BVM4YKB, 2026-11-13).
+    expect(prompt).toContain("A text may be in German, French or Italian instead");
     expect(labelTranslationPrompt("de", ["davon Zink"])).not.toContain("Magnesio");
   });
 
