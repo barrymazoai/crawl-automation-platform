@@ -69,6 +69,7 @@ function setup(items = [brand()]) {
       name: "Example Inc.",
       website: "https://www.Example.com/catalog?ref=brand" as string | null,
     })),
+    resolveDomain: vi.fn(),
     create: vi.fn(),
   };
   const service = new BrandCompanyService({ brands, companies, now: () => now });
