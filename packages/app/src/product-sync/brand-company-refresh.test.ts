@@ -30,6 +30,9 @@ function refreshing(
   smart: {
     companies: Record<string, { id: string; name: string; website: string | null } | Error>;
     owners: Record<string, string>;
+    /** Sent product IDs per brand, and each product's company now. */
+    sent?: Record<string, string[]>;
+    productCompany?: Record<string, string>;
   },
 ) {
   const brands = {
@@ -39,6 +42,10 @@ function refreshing(
     matches: vi.fn(async () => [] as BrandCompanyMatch[]),
     moveCompany: vi.fn(async () => 0),
     staleMatches: vi.fn(async (_filter: { limit: number; checkedBefore: string }) => matches),
+    deliveredProducts: vi.fn(async (brandId: string) => smart.sent?.[brandId] ?? []),
+  };
+  const products = {
+    companyOf: vi.fn(async (id: string) => smart.productCompany?.[id] ?? null),
   };
   const companies = {
     resolve: vi.fn(),
@@ -69,10 +76,10 @@ function refreshing(
     }),
   };
   const runs = { moveCompany: vi.fn(async () => 1) };
-  const service = new BrandCompanyService({ brands, companies, runs, now: () => now });
+  const service = new BrandCompanyService({ brands, companies, products, runs, now: () => now });
   const run = (refreshMatched: { limit: number; checkedBefore?: string } = { limit: 50 }) =>
     service.matchBrands({ limit: 1, refreshMatched }, signal());
-  return { brands, companies, runs, run };
+  return { brands, companies, products, runs, run };
 }
 
 const saved = (fake: ReturnType<typeof refreshing>) =>
@@ -152,9 +159,44 @@ describe("refresh of matched brands (2026-11-14)", () => {
         name: "OP2 Labs",
         error:
           "Error: Supply Smart refused or failed the call.; domain op2labs.com resolves to no company " +
-          "(unmatched: no company owns this domain)",
+          "(unmatched: no company owns this domain); 0 sent products belong to none",
       },
     ]);
+  });
+
+  it("takes the one company holding the products we sent when neither the id nor the domain finds it", async () => {
+    // OP2 Labs was merged into Frog Fuel: its 11 sent products moved, its id and op2labs.com did not.
+    const brand = stale({ name: "OP2 Labs", companyId: merged, domain: "op2labs.com" });
+    const fake = refreshing([brand], {
+      companies: { [survivor]: { id: survivor, name: "Frog Fuel", website: "frogfuel.com" } },
+      owners: { "frogfuel.com": survivor },
+      sent: { [brand.brandId]: ["p1", "p2", "p3"] },
+      productCompany: { p1: survivor, p2: survivor, p3: survivor },
+    });
+
+    const result = await fake.run();
+
+    expect(fake.products.companyOf).toHaveBeenCalledTimes(3);
+    expect(saved(fake)).toEqual([[survivor, "frogfuel.com", now.toISOString()]]);
+    expect(fake.runs.moveCompany).toHaveBeenCalledWith(merged, survivor);
+    expect(result.refreshed).toMatchObject({ merged: 1 });
+    expect(result.errors).toEqual([]);
+  });
+
+  it("reports a brand whose sent products belong to more than one company", async () => {
+    const other = randomUUID();
+    const brand = stale({ name: "Split", companyId: merged, domain: "split.com" });
+    const fake = refreshing([brand], {
+      companies: {},
+      owners: {},
+      sent: { [brand.brandId]: ["p1", "p2"] },
+      productCompany: { p1: survivor, p2: other },
+    });
+
+    const result = await fake.run();
+
+    expect(fake.brands.upsert).not.toHaveBeenCalled();
+    expect(result.errors[0]?.error).toContain(`2 sent products belong to ${survivor}, ${other}`);
   });
 
   it("replaces a changed website it can confirm, and only records the check of an unchanged company", async () => {

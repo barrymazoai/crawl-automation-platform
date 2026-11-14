@@ -9,9 +9,12 @@ import {
   type MatchRefreshResult,
   type NamedBrandCompanyMatch,
 } from "./brand-company-model.js";
-import type { BrandCompanyRepository } from "./ports.js";
+import type { BrandCompanyRepository, ProductCompanies } from "./ports.js";
 
 type Errors = MatchBrandsResult["errors"];
+
+/** Sent products read to find a merged company's survivor; all of them must belong to one company. */
+const PRODUCT_SAMPLE = 10;
 
 /**
  * Owner 2026-11-14: matched brands read against their company again, least recently checked first, one read per
@@ -19,15 +22,19 @@ type Errors = MatchBrandsResult["errors"];
  * 20 companies had changed their website).
  *
  * - A merged company: reading it answers with the survivor. When the read itself is refused, the brand's domain is
- *   asked instead, and the company that owns it now (a merged company's domains move to the survivor) is read.
+ *   asked instead, and the company that owns it now (a merged company's domains move to the survivor) is read. When
+ *   no company owns the domain either, the company that now holds every product we sent for the brand is taken
+ *   (OP2 Labs → Frog Fuel and AkPharma → Prelief, 2026-11-14: their merges moved the products but neither the id
+ *   nor the domain).
  * - The brand then carries the company's current website as its domain, as a first match does.
  * - Nothing changes unless Supply Smart resolves that domain to that very company; otherwise the brand is reported.
  */
 export class BrandCompanyRefresh {
   constructor(
     private readonly deps: {
-      brands: Pick<BrandCompanyRepository, "staleMatches" | "upsert">;
+      brands: Pick<BrandCompanyRepository, "staleMatches" | "upsert" | "deliveredProducts">;
       companies: Pick<SupplySmartCompanies, "get" | "resolveDomain">;
+      products?: ProductCompanies;
       /** Website runs follow a merged company to its survivor, as an owner-approved merge does. */
       runs?: Pick<BrandEnrichmentRuns, "moveCompany">;
       now: () => Date;
@@ -95,7 +102,10 @@ export class BrandCompanyRefresh {
     }
   }
 
-  /** The company as Supply Smart has it now; a refused read falls back to the owner of the brand's domain. */
+  /**
+   * The company as Supply Smart has it now. A refused read falls back to the owner of the brand's domain, then to the
+   * one company holding the products we sent for its brands.
+   */
   private async current(
     companyId: string,
     matches: NamedBrandCompanyMatch[],
@@ -105,19 +115,41 @@ export class BrandCompanyRefresh {
       return await this.deps.companies.get(z.uuid().parse(companyId), signal);
     } catch (error) {
       signal.throwIfAborted();
-      const domain = matches.find((match) => match.domain)?.domain;
-      const owner = domain ? await this.deps.companies.resolveDomain(domain, signal) : null;
-      if (owner?.status !== "matched" || !owner.companyId) {
-        const answer = owner ? `${owner.status}: ${owner.reason}` : "no domain";
-        throw new Error(
-          `${error instanceof Error ? error.message : String(error)}; domain ${domain ?? "-"} resolves to no company (${answer})`,
-          {
-            cause: error,
-          },
-        );
+      const byDomain = await this.domainOwner(matches, signal);
+      const found = byDomain.id ? byDomain : await this.productOwner(matches, signal);
+      if (!found.id) {
+        const read = error instanceof Error ? error.message : String(error);
+        throw new Error(`${read}; ${byDomain.why}; ${found.why}`, { cause: error });
       }
-      return this.deps.companies.get(z.uuid().parse(owner.companyId), signal);
+      return this.deps.companies.get(z.uuid().parse(found.id), signal);
     }
+  }
+
+  private async domainOwner(matches: NamedBrandCompanyMatch[], signal: AbortSignal) {
+    const domain = matches.find((match) => match.domain)?.domain;
+    const owner = domain ? await this.deps.companies.resolveDomain(domain, signal) : null;
+    const id = owner?.status === "matched" ? owner.companyId : null;
+    const answer = owner ? `${owner.status}: ${owner.reason}` : "no domain";
+    return { id, why: `domain ${domain ?? "-"} resolves to no company (${answer})` };
+  }
+
+  private async productOwner(matches: NamedBrandCompanyMatch[], signal: AbortSignal) {
+    const products = this.deps.products;
+    if (!products) {
+      return { id: null, why: "no product reader" };
+    }
+    const ids: string[] = [];
+    for (const { brandId } of matches) {
+      ids.push(...(await this.deps.brands.deliveredProducts(brandId, PRODUCT_SAMPLE)));
+    }
+    const owners = new Set<string | null>();
+    for (const id of ids.slice(0, PRODUCT_SAMPLE)) {
+      owners.add(await products.companyOf(id, signal));
+    }
+    const [only] = owners;
+    const id = owners.size === 1 && only ? only : null;
+    const held = [...owners].map((owner) => owner ?? "none").join(", ") || "none";
+    return { id, why: `${ids.length} sent products belong to ${held}` };
   }
 
   /** The domain a brand is about to carry must resolve to the company it is about to be matched to. */

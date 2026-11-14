@@ -243,6 +243,22 @@ describe.skipIf(!connectionString)("marketplace brand company repository and mig
     ).toHaveLength(1);
   });
 
+  it("lists the Supply Smart products the sync recorded for a brand's listings", async () => {
+    await client.query(`CREATE TABLE product_sync(channel text, listing_id text, variant_key text,
+      supply_smart_product_id uuid)`);
+    const op2 = await seedBrand({ name: "OP2 Labs" });
+    const other = await seedBrand({ name: "Other" });
+    const [sent, foreign] = [randomUUID(), randomUUID()];
+    await client.query(
+      "INSERT INTO product_sync VALUES ($1, $2, '', $3), ($1, $4, '', NULL), ($1, $5, '', $6)",
+      ["amazon", op2.listingId, sent, `${op2.listingId}-unsent`, other.listingId, foreign],
+    );
+    await seedItem({ sourceId: op2.sourceId, listingId: `${op2.listingId}-unsent` });
+
+    expect(await repository.deliveredProducts(op2.brandId, 10)).toEqual([sent]);
+    expect(await repository.deliveredProducts(other.brandId, 10)).toEqual([foreign]);
+  });
+
   it("bounds candidates to 20 UUID strings, only for ambiguous results", async () => {
     const { brandId } = await seedBrand();
     const candidates = Array.from({ length: 20 }, () => randomUUID());

@@ -52,6 +52,7 @@ function setup(items = [brand()]) {
     upsert: vi.fn(async (_match: BrandCompanyMatch) => undefined),
     matches: vi.fn(async () => [] as BrandCompanyMatch[]),
     moveCompany: vi.fn(async () => 0),
+    deliveredProducts: vi.fn(async () => [] as string[]),
     staleMatches: vi.fn(
       async (_filter: { limit: number; checkedBefore: string }) => [] as NamedBrandCompanyMatch[],
     ),

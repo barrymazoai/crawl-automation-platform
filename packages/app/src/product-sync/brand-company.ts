@@ -12,7 +12,7 @@ import {
   type MatchBrandsResult,
   type SyncBrand,
 } from "./brand-company-model.js";
-import type { BrandCompanyRepository } from "./ports.js";
+import type { BrandCompanyRepository, ProductCompanies } from "./ports.js";
 
 /** Read-only Supply Smart operations; no company creation or product ingestion in this step. */
 export class BrandCompanyService {
@@ -20,6 +20,8 @@ export class BrandCompanyService {
     private readonly deps: {
       brands: BrandCompanyRepository;
       companies: Pick<SupplySmartCompanies, "resolve" | "get" | "resolveDomain">;
+      /** A merged company's survivor, found by the products we sent (refresh of matched brands). */
+      products?: ProductCompanies;
       /** Website runs follow a merged company to its survivor, as an owner-approved merge does. */
       runs?: Pick<BrandEnrichmentRuns, "moveCompany">;
       now?: () => Date;

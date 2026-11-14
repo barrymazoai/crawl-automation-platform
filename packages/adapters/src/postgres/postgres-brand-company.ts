@@ -130,6 +130,19 @@ export class PostgresBrandCompany implements BrandCompanyRepository {
     }));
   }
 
+  async deliveredProducts(brandId: string, limit: number): Promise<string[]> {
+    const rows = await this.database.query<{ id: string }>(
+      `SELECT DISTINCT ps.supply_smart_product_id::text AS id
+       FROM brand_source s JOIN queue_item q ON q.source_id = s.id
+       JOIN product_sync ps ON ps.channel = q.channel AND ps.listing_id = q.listing_id
+         AND ps.variant_key = coalesce(q.variant_id, '')
+       WHERE s.brand_id = $1::uuid AND ps.supply_smart_product_id IS NOT NULL
+       LIMIT $2`,
+      [brandId, limit],
+    );
+    return rows.map(({ id }) => id);
+  }
+
   async list(filter: Parameters<BrandCompanyRepository["list"]>[0]): Promise<SyncBrand[]> {
     const rows = await this.database.query<BrandRow>(
       `${completedMarketplaceBrands}

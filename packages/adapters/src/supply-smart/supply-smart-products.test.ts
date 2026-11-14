@@ -48,3 +48,18 @@ it("deletes through product.delete", async () => {
     expect.any(AbortSignal),
   );
 });
+
+it("reads a product's company from the detail view (a merge moves products to the survivor)", async () => {
+  const companyId = "301251c8-6677-4ae2-af3b-58510f878ac4";
+  const call = vi.fn(async (request: SupplySmartCall<z.ZodType>) =>
+    request.answer.parse({
+      id,
+      name: "Frog Fuel Power Protein Shot",
+      companyId,
+      source: "crawler",
+    }),
+  );
+  const client = new SupplySmartProductsClient({ call } as never);
+  expect(await client.companyOf(id, new AbortController().signal)).toBe(companyId);
+  expect(call.mock.calls[0]?.[0]).toMatchObject({ path: "product.getDetail", input: { id } });
+});

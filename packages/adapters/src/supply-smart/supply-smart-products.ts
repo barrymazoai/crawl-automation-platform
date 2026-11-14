@@ -1,4 +1,8 @@
-import type { SupplySmartProductFacts, SupplySmartProducts } from "@crawl-automation/app";
+import type {
+  ProductCompanies,
+  SupplySmartProductFacts,
+  SupplySmartProducts,
+} from "@crawl-automation/app";
 import { z } from "zod";
 import type { SupplySmartRpc } from "./supply-smart-rpc.js";
 
@@ -17,8 +21,22 @@ const DetailSchema = z.looseObject({
  * Products on the product database gateway: `product.getDetail` and `product.delete`, which deletes the product with
  * its listings, images, snapshots and observations. An unknown ID is an error there, never an empty answer.
  */
-export class SupplySmartProductsClient implements SupplySmartProducts {
+export class SupplySmartProductsClient implements SupplySmartProducts, ProductCompanies {
   constructor(private readonly rpc: Pick<SupplySmartRpc, "call">) {}
+
+  /** The product's company now; a merged company's products belong to the survivor (OP2 Labs, 2026-11-14). */
+  async companyOf(productId: string, signal: AbortSignal): Promise<string | null> {
+    const detail = await this.rpc.call(
+      {
+        api: "database",
+        path: "product.getDetail",
+        input: { id: productId },
+        answer: z.looseObject({ companyId: z.string().nullable() }),
+      },
+      signal,
+    );
+    return detail.companyId;
+  }
 
   async facts(productId: string, signal: AbortSignal): Promise<SupplySmartProductFacts> {
     const detail = await this.rpc.call(

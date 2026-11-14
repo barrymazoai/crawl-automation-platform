@@ -39,6 +39,7 @@ export async function productSyncService(parts: {
   const brands = new BrandCompanyService({
     brands: new PostgresBrandCompany(parts.database),
     companies: new SupplySmartCompaniesClient(rpc),
+    products: new SupplySmartProductsClient(rpc),
     runs: new PostgresBrandEnrichmentRuns(parts.database),
   });
   const ledger = new PostgresProductSync(parts.database);

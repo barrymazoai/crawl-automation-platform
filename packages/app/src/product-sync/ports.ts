@@ -20,4 +20,11 @@ export interface BrandCompanyRepository {
   }): Promise<SyncBrand[]>;
   /** Matched brands checked at or before `checkedBefore`, least recently checked first. */
   staleMatches(filter: { limit: number; checkedBefore: string }): Promise<NamedBrandCompanyMatch[]>;
+  /** Supply Smart product IDs the sync recorded for this brand's products (any channel), at most `limit`. */
+  deliveredProducts(brandId: string, limit: number): Promise<string[]>;
+}
+
+/** The company a Supply Smart product belongs to now (a merge moves products to the survivor). */
+export interface ProductCompanies {
+  companyOf(productId: string, signal: AbortSignal): Promise<string | null>;
 }
