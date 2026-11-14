@@ -5,6 +5,10 @@ export const amazonErrors = defineErrors({
     category: "SOURCE",
     message: "The page has no verified Amazon Store navigation.",
   },
+  "AMAZON.STORE_EMPTY": {
+    category: "SOURCE",
+    message: "The Amazon Store was read, but no product could be identified on any of its pages.",
+  },
   "AMAZON.STORE_REDIRECT": {
     category: "SOURCE",
     message: "The browser left the requested Amazon Store sub-page.",

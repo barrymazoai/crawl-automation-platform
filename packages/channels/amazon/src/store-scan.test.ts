@@ -114,6 +114,15 @@ describe("Amazon Store navigation scan", () => {
     expect(setup.pages.read).toHaveBeenCalledTimes(100);
   });
 
+  it("asks a person about a Store read in full that shows no product (2026-11-14)", async () => {
+    const setup = scannerFor(
+      new Map([[storeHome, drawPage({ html: storeHtml([], [storeHome]) })]]),
+    );
+    await expect(setup.scanner.scan(request, signal())).rejects.toMatchObject({
+      code: "AMAZON.STORE_EMPTY",
+    });
+  });
+
   it.each([
     ["redirect", { url: storeShop }, "AMAZON.STORE_REDIRECT"],
     ["HTTP failure", { status: 503 }, "BRAND_SCAN.HTTP_STATUS"],

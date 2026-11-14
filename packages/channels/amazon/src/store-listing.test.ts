@@ -87,6 +87,48 @@ describe("Store addresses and scoped tiles", () => {
     );
   });
 
+  describe("one-page Stores without a navigation bar (2026-11-14)", () => {
+    const header = `<div data-testid="header-nav-area"><div class="Breadcrumbs__breadcrumbs__x">
+      <a href="#">GOJOY NATURALS</a></div></div>`;
+    const showcase = (asin: string) => `<div class="ProductShowcase__container__x">
+      <a href="/dp/${asin}?ref_=ast_bln">Showcase ${asin}</a></div>`;
+
+    it("reads a one-page Store's product grid", () => {
+      const html = `<html><body>${header}<ul class="ProductGrid__grid__x">
+        <li class="ProductGridItem__itemOuter__x" data-asin="${asinOne}"><a href="/dp/${asinOne}">One</a></li>
+        </ul>${showcase(asinTwo)}</body></html>`;
+      const listing = parseAmazonStoreListing(html, storeHome);
+      // A grid is the Store's list; its showcases are not read beside it.
+      expect(listing.products.map((product) => product.listingId)).toEqual([asinOne]);
+      expect(listing.navigation).toEqual([]);
+    });
+
+    it("reads the product modules of a one-page Store without a grid", () => {
+      const html = `<html><body>${header}${showcase(asinOne)}
+        <div class="ProductCarouselItem__item__x"><a href="/dp/${asinTwo}">Carousel</a></div>
+        <div class="EditorialTile__tile__x"><img src="hero.jpg"></div>
+        <div id="rhf"><a href="/dp/B0RECOMMEN">Customers also bought</a></div></body></html>`;
+      expect(
+        parseAmazonStoreListing(html, storeHome).products.map((item) => item.listingId),
+      ).toEqual([asinOne, asinTwo]);
+    });
+
+    it("never reads modules beside the navigation of a Store with sub-pages", () => {
+      const html = storeHtml([], [storeHome]).replace(
+        "</body>",
+        `${header}${showcase(asinTwo)}</body>`,
+      );
+      expect(parseAmazonStoreListing(html, storeHome).products).toEqual([]);
+    });
+
+    it("still refuses a page that has neither a Store navigation nor a Store header", () => {
+      const product = `<html><body><div id="dp">${showcase(asinOne)}</div></body></html>`;
+      expect(() => parseAmazonStoreListing(product, storeHome)).toThrow(
+        expect.objectContaining({ code: "AMAZON.STORE_UNVERIFIED" }),
+      );
+    });
+  });
+
   it("refuses malformed product identities instead of silently losing a tile", () => {
     expect(() => parseAmazonStoreListing(storeHtml(["BAD"]), storeHome)).toThrow(
       expect.objectContaining({ code: "BRAND_SCAN.TILE_IDENTITY" }),

@@ -8,13 +8,24 @@ export const STORE_SELECTORS = {
   tiles:
     'li[class*="ProductGridItem__itemOuter__"], [class*="ProductCard__"], [data-testid="product-tile"]',
   grid: '[class*="ProductGrid__grid__"], [data-testid="product-grid"]',
+  /**
+   * A Store's own header: a one-page Store has no navigation bar, only its header and breadcrumb (63 of 500 Stores,
+   * 2026-11-14, e.g. GOJOY NATURALS). A product page carries neither.
+   */
+  header: '[data-testid="header-nav-area"], [class*="Breadcrumbs__breadcrumbs__"]',
+  /** Product modules of a one-page Store without a product grid (48 of those 63 show their products only here). */
+  modules:
+    '[class*="ProductShowcase__"], [class*="ProductCarouselItem__"], [class*="EditorialTile__"]',
 };
 
 /** Self-contained so the same read-only projection runs in Ego and over retained HTML. */
 export function inspectStoreDom(document: AmazonDocument, selectors: typeof STORE_SELECTORS) {
   const navigation = [...document.querySelectorAll(selectors.navigation)];
   const links = navigation.flatMap((nav) => [...nav.querySelectorAll("a[href]")]);
-  const tiles = [...document.querySelectorAll(selectors.tiles)];
+  const grid = [...document.querySelectorAll(selectors.tiles)];
+  // A one-page Store (no navigation) without grid tiles lists its products in its own modules only.
+  const single = navigation.length === 0 && !!document.querySelector(selectors.header);
+  const tiles = grid.length || !single ? grid : [...document.querySelectorAll(selectors.modules)];
   const asins = tiles.flatMap((tile) => {
     if (tile.querySelector('[class*="Sponsored"], [class*="sponsored"], a[href*="/sspa/"]')) {
       return [];
@@ -33,13 +44,13 @@ export function inspectStoreDom(document: AmazonDocument, selectors: typeof STOR
     tileCount: tiles.length,
     asins: [...new Set(asins)],
     navigation: [...new Set(links.map((link) => link.getAttribute("href") ?? ""))],
-    ready: navigation.length > 0,
+    ready: navigation.length > 0 || single,
     // The markers of access-challenge.ts, as DOM: every Store page carries the words "Continue shopping" in its
     // inline widget strings ("STORES_WIDGET_ContinueShopping"), so page text marked all 501 Stores as challenged.
     blocked:
       !!document.querySelector(
         'form[action*="validateCaptcha"], form[action*="/checkpoint/"], form#checkpointForm, #captchacharacters',
       ) || /Robot Check/i.test(document.querySelector("title")?.textContent ?? ""),
-    invalidTiles: tiles.length > 0 && asins.length === 0,
+    invalidTiles: grid.length > 0 && asins.length === 0,
   };
 }

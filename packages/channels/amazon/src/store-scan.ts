@@ -95,15 +95,16 @@ export class AmazonStoreBrandScan {
         (await archive.inspect(signal)) ??
         (await archive.save(await this.deps.pages.read(url, signal), signal));
       const listing = listingOf(draw, url);
-      for (const link of listing.navigation) {
-        const next = amazonStoreNavigation(link, source.storeKey);
-        if (next) {
-          pending.add(next);
-        }
-      }
+      const next = listing.navigation.map((link) => amazonStoreNavigation(link, source.storeKey));
+      next.filter((page): page is string => !!page).forEach((page) => pending.add(page));
       pages.push({ ...listing, products: newProducts(listing.products, seen) });
       archiveKeys.push(archive.key);
       proofs.push({ url, scroll: draw.proof });
+    }
+    if (!seen.size) {
+      // A Store page lists products; reading none is a question for a person, never a quiet "not sold here"
+      // (2026-11-14: 48 one-page Stores show theirs only outside the product grid).
+      throw amazonErrors.create("AMAZON.STORE_EMPTY");
     }
     return {
       sourceUrl: source.url,

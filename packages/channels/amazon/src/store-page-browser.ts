@@ -40,7 +40,8 @@ export interface StoreBrowserRound {
 export function storePageBody(): string {
   return `
 await page.goto(params.url, { timeout: 45000, waitUntil: "domcontentloaded" });
-await page.waitForSelector(params.selectors.navigation, { timeout: 30000, state: "attached" })
+await page.waitForSelector(params.selectors.navigation + ", " + params.selectors.header,
+  { timeout: 30000, state: "attached" })
   .catch(() => null);
 const scroll = ${scrollStorePage.toString()};
 const driver = {
