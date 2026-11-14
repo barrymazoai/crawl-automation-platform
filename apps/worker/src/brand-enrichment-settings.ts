@@ -62,6 +62,11 @@ export const BrandEnrichmentSettingsSchema = BrandEnrichmentWorkflowSettingsSche
           apiUrl: z.url().optional(),
           matchLimit: z.number().int().min(1).max(500).default(200),
           /**
+           * Owner 2026-11-14: matched brands read against their Supply Smart company again each round, those checked a
+           * week ago or earlier first (2,207 matched brands; one read per company). 0 turns it off.
+           */
+          refreshLimit: z.number().int().min(0).max(5000).default(50),
+          /**
            * Website lookups run one per Ego space; a run waits for its permits at most ~5.5 h (400 polls) and gets
            * one automatic attempt, so only a short line of waiting runs is kept.
            */

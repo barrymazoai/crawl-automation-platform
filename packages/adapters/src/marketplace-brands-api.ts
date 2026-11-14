@@ -15,6 +15,23 @@ const matched = z.object({
       ambiguous: z.number(),
       unmatched: z.number(),
       errors: z.array(z.object({ brandId: z.string(), name: z.string(), error: z.string() })),
+      refreshed: z
+        .object({
+          checked: z.number(),
+          merged: z.number(),
+          website: z.number(),
+          unchanged: z.number(),
+          changes: z.array(
+            z.object({
+              brandId: z.string(),
+              name: z.string(),
+              kind: z.enum(["merged", "website"]),
+              from: z.object({ companyId: z.string().nullable(), domain: z.string().nullable() }),
+              to: z.object({ companyId: z.string().nullable(), domain: z.string().nullable() }),
+            }),
+          ),
+        })
+        .optional(),
     }),
   }),
 });
@@ -27,8 +44,9 @@ export class MarketplaceBrandsApi {
     private readonly fetch: typeof globalThis.fetch = globalThis.fetch,
   ) {}
 
-  async matchBrands(limit: number, signal: AbortSignal) {
-    return matched.parse(await this.call("productSync.matchBrands", { limit }, signal)).result.data;
+  async matchBrands(limit: number, signal: AbortSignal, refreshLimit = 0) {
+    const input = { limit, ...(refreshLimit ? { refreshMatched: { limit: refreshLimit } } : {}) };
+    return matched.parse(await this.call("productSync.matchBrands", input, signal)).result.data;
   }
 
   async startMarketplaceBrands(limit: number, signal: AbortSignal) {

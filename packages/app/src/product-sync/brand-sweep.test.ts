@@ -20,7 +20,7 @@ function setup(live: number, maxLiveRuns = 50) {
   const sweep = new MarketplaceBrandSweep({
     api,
     runs: { live: async () => live },
-    settings: { matchLimit: 200, maxLiveRuns },
+    settings: { matchLimit: 200, refreshLimit: 50, maxLiveRuns },
     log,
   });
   return { sweep, api, order };
@@ -29,7 +29,7 @@ function setup(live: number, maxLiveRuns = 50) {
 it("matches new brands first, then starts website runs only up to the live limit", async () => {
   const fake = setup(45);
   await fake.sweep.sweep(signal);
-  expect(fake.api.matchBrands).toHaveBeenCalledWith(200, signal);
+  expect(fake.api.matchBrands).toHaveBeenCalledWith(200, signal, 50);
   expect(fake.order).toEqual(["match", "start 5"]);
 });
 

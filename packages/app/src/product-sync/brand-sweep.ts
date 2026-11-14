@@ -4,6 +4,8 @@ import type { MatchBrandsResult } from "./brand-company-model.js";
 export interface MarketplaceBrandSweepSettings {
   /** Brands checked against Supply Smart per round: never checked, or unmatched for a day. */
   matchLimit: number;
+  /** Matched brands read against their company again per round (0: none). */
+  refreshLimit: number;
   /**
    * Marketplace website runs alive at once (2026-10-15: 267 at once ran the worker out of memory). Codex load is
    * bounded by the runs' permits (one Ego space, the shared model account), not by this number.
@@ -21,7 +23,11 @@ export class MarketplaceBrandSweep {
     private readonly deps: {
       /** The API's `productSync.matchBrands` and `brandEnrichment.startMarketplaceBrands`: one path with operators. */
       api: {
-        matchBrands(limit: number, signal: AbortSignal): Promise<MatchBrandsResult>;
+        matchBrands(
+          limit: number,
+          signal: AbortSignal,
+          refreshLimit: number,
+        ): Promise<MatchBrandsResult>;
         startMarketplaceBrands(limit: number, signal: AbortSignal): Promise<unknown[]>;
       };
       runs: { live(): Promise<number> };
@@ -32,14 +38,28 @@ export class MarketplaceBrandSweep {
 
   async sweep(signal: AbortSignal): Promise<void> {
     const { settings } = this.deps;
-    const matched = await this.deps.api.matchBrands(settings.matchLimit, signal);
+    const matched = await this.deps.api.matchBrands(
+      settings.matchLimit,
+      signal,
+      settings.refreshLimit,
+    );
     signal.throwIfAborted();
     const live = await this.deps.runs.live();
     // The start API takes at most 100 brands per call.
     const free = Math.min(100, settings.maxLiveRuns - live);
     const started = free > 0 ? await this.deps.api.startMarketplaceBrands(free, signal) : [];
     this.deps.log.info(
-      { ...matched, errors: matched.errors.length, live, started: started.length },
+      {
+        ...matched,
+        errors: matched.errors.length,
+        refreshed: matched.refreshed && {
+          ...matched.refreshed,
+          changes: matched.refreshed.changes.length,
+        },
+        changes: matched.refreshed?.changes,
+        live,
+        started: started.length,
+      },
       "marketplace brands",
     );
   }

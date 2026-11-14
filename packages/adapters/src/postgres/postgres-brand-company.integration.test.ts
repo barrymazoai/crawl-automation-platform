@@ -205,6 +205,44 @@ describe.skipIf(!connectionString)("marketplace brand company repository and mig
     }
   });
 
+  it("lists matched brands checked before a time, least recently checked first (2026-11-14)", async () => {
+    const older = await seedBrand({ name: "Organic India USA", withItem: false });
+    const old = await seedBrand({ name: "MET-Rx", withItem: false });
+    const recent = await seedBrand({ withItem: false });
+    const waiting = await seedBrand({ withItem: false });
+    const company = randomUUID();
+    const matched = { status: "matched" as const, companyId: company, domain: "example.com" };
+    await repository.upsert(
+      savedMatch(old.brandId, { ...matched, checkedAt: "2026-10-02T00:00:00.000Z" }),
+    );
+    await repository.upsert(
+      savedMatch(older.brandId, { ...matched, checkedAt: "2026-10-01T00:00:00.000Z" }),
+    );
+    await repository.upsert(
+      savedMatch(recent.brandId, { ...matched, checkedAt: "2026-11-13T00:00:00.000Z" }),
+    );
+    await repository.upsert(savedMatch(waiting.brandId, { checkedAt: "2026-10-01T00:00:00.000Z" }));
+
+    const stale = await repository.staleMatches({
+      limit: 10,
+      checkedBefore: "2026-11-07T00:00:00.000Z",
+    });
+
+    expect(stale).toEqual([
+      {
+        ...savedMatch(older.brandId, { ...matched, checkedAt: "2026-10-01T00:00:00.000Z" }),
+        name: "Organic India USA",
+      },
+      {
+        ...savedMatch(old.brandId, { ...matched, checkedAt: "2026-10-02T00:00:00.000Z" }),
+        name: "MET-Rx",
+      },
+    ]);
+    expect(
+      await repository.staleMatches({ limit: 1, checkedBefore: "2026-11-07T00:00:00.000Z" }),
+    ).toHaveLength(1);
+  });
+
   it("bounds candidates to 20 UUID strings, only for ambiguous results", async () => {
     const { brandId } = await seedBrand();
     const candidates = Array.from({ length: 20 }, () => randomUUID());

@@ -1,4 +1,9 @@
-import type { BrandCompanyMatch, BrandCompanyStatus, SyncBrand } from "./brand-company-model.js";
+import type {
+  BrandCompanyMatch,
+  BrandCompanyStatus,
+  NamedBrandCompanyMatch,
+  SyncBrand,
+} from "./brand-company-model.js";
 
 export interface BrandCompanyRepository {
   upsert(result: BrandCompanyMatch): Promise<void>;
@@ -13,4 +18,6 @@ export interface BrandCompanyRepository {
     checkedBefore: string;
     recheckUnmatched: boolean;
   }): Promise<SyncBrand[]>;
+  /** Matched brands checked at or before `checkedBefore`, least recently checked first. */
+  staleMatches(filter: { limit: number; checkedBefore: string }): Promise<NamedBrandCompanyMatch[]>;
 }

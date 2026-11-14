@@ -3,6 +3,7 @@ import {
   type BrandCompanyMatch,
   type BrandCompanyRepository,
   type MarketplaceBrands,
+  type NamedBrandCompanyMatch,
   type SyncBrand,
   type WaitingMarketplaceBrand,
 } from "@crawl-automation/app";
@@ -89,6 +90,38 @@ export class PostgresBrandCompany implements BrandCompanyRepository {
     return rows.map((row) => ({
       brandId: row.brand_id,
       status: row.status,
+      companyId: row.company_id,
+      domain: row.domain,
+      matchedBy: row.matched_by,
+      candidates: row.candidates,
+      checkedAt: row.checked_at.toISOString(),
+    }));
+  }
+
+  async staleMatches(filter: {
+    limit: number;
+    checkedBefore: string;
+  }): Promise<NamedBrandCompanyMatch[]> {
+    const rows = await this.database.query<{
+      brand_id: string;
+      name: string;
+      company_id: string;
+      domain: string | null;
+      matched_by: string | null;
+      candidates: string[];
+      checked_at: Date;
+    }>(
+      `SELECT match.brand_id::text, brand.name, match.company_id::text, match.domain, match.matched_by,
+         match.candidates, match.checked_at
+       FROM supply_smart_brand_company match JOIN brand ON brand.id = match.brand_id
+       WHERE match.status = 'matched' AND match.company_id IS NOT NULL AND match.checked_at <= $1::timestamptz
+       ORDER BY match.checked_at, match.brand_id LIMIT $2`,
+      [filter.checkedBefore, filter.limit],
+    );
+    return rows.map((row) => ({
+      brandId: row.brand_id,
+      name: row.name,
+      status: "matched",
       companyId: row.company_id,
       domain: row.domain,
       matchedBy: row.matched_by,

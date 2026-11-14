@@ -5,6 +5,7 @@ import { BrandCompanyService } from "./brand-company.js";
 import {
   BRAND_COMPANY_CANDIDATE_LIMIT,
   type BrandCompanyMatch,
+  type NamedBrandCompanyMatch,
   type SyncBrand,
 } from "./brand-company-model.js";
 
@@ -51,6 +52,9 @@ function setup(items = [brand()]) {
     upsert: vi.fn(async (_match: BrandCompanyMatch) => undefined),
     matches: vi.fn(async () => [] as BrandCompanyMatch[]),
     moveCompany: vi.fn(async () => 0),
+    staleMatches: vi.fn(
+      async (_filter: { limit: number; checkedBefore: string }) => [] as NamedBrandCompanyMatch[],
+    ),
   };
   const companies = {
     resolve: vi.fn(async (): Promise<CompanyResolution> => ({

@@ -1,6 +1,7 @@
 import {
   loadBrandEnrichmentSecrets,
   PostgresBrandCompany,
+  PostgresBrandEnrichmentRuns,
   PostgresProductSync,
   RetainedListingDateOriginals,
   SupplySmartCompaniesClient,
@@ -38,6 +39,7 @@ export async function productSyncService(parts: {
   const brands = new BrandCompanyService({
     brands: new PostgresBrandCompany(parts.database),
     companies: new SupplySmartCompaniesClient(rpc),
+    runs: new PostgresBrandEnrichmentRuns(parts.database),
   });
   const ledger = new PostgresProductSync(parts.database);
   const control = syncControl(parts, ledger);
