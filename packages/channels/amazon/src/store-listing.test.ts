@@ -87,7 +87,7 @@ describe("Store addresses and scoped tiles", () => {
     );
   });
 
-  describe("one-page Stores without a navigation bar (2026-11-14)", () => {
+  describe("Stores without a navigation bar or without a product grid (2026-11-14)", () => {
     const header = `<div data-testid="header-nav-area"><div class="Breadcrumbs__breadcrumbs__x">
       <a href="#">GOJOY NATURALS</a></div></div>`;
     const showcase = (asin: string) => `<div class="ProductShowcase__container__x">
@@ -113,12 +113,21 @@ describe("Store addresses and scoped tiles", () => {
       ).toEqual([asinOne, asinTwo]);
     });
 
-    it("never reads modules beside the navigation of a Store with sub-pages", () => {
-      const html = storeHtml([], [storeHome]).replace(
+    it("reads the modules of a Store page with navigation but no grid (Nectar, 2026-11-14)", () => {
+      const html = storeHtml([], [storeHome]).replace("</body>", `${showcase(asinTwo)}</body>`);
+      expect(
+        parseAmazonStoreListing(html, storeHome).products.map((item) => item.listingId),
+      ).toEqual([asinTwo]);
+    });
+
+    it("reads only the grid of a Store page that has one, never its modules beside it", () => {
+      const html = storeHtml([asinOne], [storeHome]).replace(
         "</body>",
-        `${header}${showcase(asinTwo)}</body>`,
+        `${showcase(asinTwo)}</body>`,
       );
-      expect(parseAmazonStoreListing(html, storeHome).products).toEqual([]);
+      expect(
+        parseAmazonStoreListing(html, storeHome).products.map((item) => item.listingId),
+      ).toEqual([asinOne]);
     });
 
     it("still refuses a page that has neither a Store navigation nor a Store header", () => {

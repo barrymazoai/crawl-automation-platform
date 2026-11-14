@@ -13,7 +13,10 @@ export const STORE_SELECTORS = {
    * 2026-11-14, e.g. GOJOY NATURALS). A product page carries neither.
    */
   header: '[data-testid="header-nav-area"], [class*="Breadcrumbs__breadcrumbs__"]',
-  /** Product modules of a one-page Store without a product grid (48 of those 63 show their products only here). */
+  /**
+   * Product modules of a Store page without a product grid: 48 of those 63 one-page Stores, and 72 Stores with
+   * navigation recorded complete with no product (2026-11-14, e.g. Nectar, First Endurance), show theirs only here.
+   */
   modules:
     '[class*="ProductShowcase__"], [class*="ProductCarouselItem__"], [class*="EditorialTile__"]',
 };
@@ -23,9 +26,10 @@ export function inspectStoreDom(document: AmazonDocument, selectors: typeof STOR
   const navigation = [...document.querySelectorAll(selectors.navigation)];
   const links = navigation.flatMap((nav) => [...nav.querySelectorAll("a[href]")]);
   const grid = [...document.querySelectorAll(selectors.tiles)];
-  // A one-page Store (no navigation) without grid tiles lists its products in its own modules only.
-  const single = navigation.length === 0 && !!document.querySelector(selectors.header);
-  const tiles = grid.length || !single ? grid : [...document.querySelectorAll(selectors.modules)];
+  // A one-page Store has no navigation, only its header. A Store page without grid tiles lists its products in its
+  // own modules; a page with a grid is read from its grid only.
+  const store = navigation.length > 0 || !!document.querySelector(selectors.header);
+  const tiles = grid.length || !store ? grid : [...document.querySelectorAll(selectors.modules)];
   const asins = tiles.flatMap((tile) => {
     if (tile.querySelector('[class*="Sponsored"], [class*="sponsored"], a[href*="/sspa/"]')) {
       return [];
@@ -44,7 +48,7 @@ export function inspectStoreDom(document: AmazonDocument, selectors: typeof STOR
     tileCount: tiles.length,
     asins: [...new Set(asins)],
     navigation: [...new Set(links.map((link) => link.getAttribute("href") ?? ""))],
-    ready: navigation.length > 0 || single,
+    ready: store,
     // The markers of access-challenge.ts, as DOM: every Store page carries the words "Continue shopping" in its
     // inline widget strings ("STORES_WIDGET_ContinueShopping"), so page text marked all 501 Stores as challenged.
     blocked:
