@@ -1,3 +1,5 @@
+import type { CachePruneReport } from "./cache-prune.js";
+
 /** What one journal prune checked and removed (or, in a preview, would remove). */
 export interface JournalPruneReport {
   removeFiles: boolean;
@@ -21,6 +23,8 @@ export interface JournalPruneReport {
   foldersRemoved: number;
   failedFolders: number;
   examples: { notInR2: string[]; differs: string[]; failed: string[] };
+  /** The workers' copies cache pruned in the same run, when configured. */
+  cache?: CachePruneReport;
 }
 
 export function emptyReport(removeFiles: boolean, now: Date): JournalPruneReport {

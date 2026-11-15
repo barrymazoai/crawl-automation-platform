@@ -64,6 +64,27 @@ describe("journal prune settings", () => {
   });
 });
 
+describe("copies cache prune settings", () => {
+  const root = "/srv/crawler/live/pipeline/journal";
+  const cacheRoot = "/srv/crawler/live/pipeline/cache";
+
+  it("prunes no cache unless one is named, and keeps two days of copies by default", () => {
+    expect(
+      ApiConfigSchema.parse({ ...productionShaped, journalPrune: { root } }).journalPrune?.cache,
+    ).toBeUndefined();
+    const named = { ...productionShaped, journalPrune: { root, cache: { root: cacheRoot } } };
+    expect(ApiConfigSchema.parse(named).journalPrune?.cache).toEqual({
+      root: cacheRoot,
+      maxAgeHours: 48,
+    });
+  });
+
+  it("refuses a relative cache folder", () => {
+    const relative = { ...productionShaped, journalPrune: { root, cache: { root: "cache" } } };
+    expect(ApiConfigSchema.safeParse(relative).success).toBe(false);
+  });
+});
+
 describe("test evidence settings", () => {
   it("keeps test capture optional for existing API configs", () => {
     expect(ApiConfigSchema.parse(productionShaped).evidence).toBeUndefined();

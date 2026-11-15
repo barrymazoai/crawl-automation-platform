@@ -157,6 +157,16 @@ export const ApiConfigSchema = z
          * started through the API.
          */
         intervalMinutes: z.number().int().min(5).max(1440).nullable().default(60),
+        /**
+         * Owner 2026-11-15: the workers' copies cache (`storage.cacheRoot`) is pruned in the same run; a copy last
+         * written more than `maxAgeHours` ago goes and is read from R2 again when needed. Absent: not pruned.
+         */
+        cache: z
+          .strictObject({
+            root: absolutePath,
+            maxAgeHours: z.number().int().min(1).max(720).default(48),
+          })
+          .optional(),
       })
       .optional(),
   })

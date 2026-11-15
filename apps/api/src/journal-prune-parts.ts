@@ -1,5 +1,5 @@
 import { JournalPruneService } from "@crawl-automation/app";
-import { createR2Objects, pruneJournal, type Logger } from "@crawl-automation/platform";
+import { createR2Objects, pruneCache, pruneJournal, type Logger } from "@crawl-automation/platform";
 import type { ApiConfig } from "./config.js";
 
 /** The journal prune when this API is configured for it; its own R2 client lists, it never writes. */
@@ -14,9 +14,24 @@ export function journalPruneService(parts: { config: ApiConfig; log: Logger }) {
     prefixes: settings.prefixes,
     minAgeMs: settings.minAgeHours * 3_600_000,
   };
+  const now = () => new Date();
+  const cache = settings.cache;
   return new JournalPruneService({
-    prune: (removeFiles, signal) =>
-      pruneJournal({ ...input, removeFiles }, { remote: r2.store, now: () => new Date() }, signal),
+    prune: async (removeFiles, signal) => {
+      const report = await pruneJournal(
+        { ...input, removeFiles },
+        { remote: r2.store, now },
+        signal,
+      );
+      if (!cache) {
+        return report;
+      }
+      const maxAgeMs = cache.maxAgeHours * 3_600_000;
+      return {
+        ...report,
+        cache: await pruneCache({ root: cache.root, maxAgeMs, removeFiles }, { now }, signal),
+      };
+    },
     log: parts.log.child({ service: "journal-prune" }),
     intervalMs: settings.intervalMinutes === null ? null : settings.intervalMinutes * 60_000,
   });
