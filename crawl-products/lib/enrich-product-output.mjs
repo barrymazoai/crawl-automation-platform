@@ -8,6 +8,7 @@ import {
   semanticEvidenceGaps,
 } from "./product-semantics.mjs";
 import { normalizeHealthFunctions } from "./health-function-vocab.mjs";
+import { resolveSubstanceHint } from "./substance-aliases.mjs";
 import { classifyNutritionSingleProduct } from "./product-scope.mjs";
 import {
   normalizeVariantOptions,
@@ -105,10 +106,13 @@ function normalizeMainIngredients(values, { vocabularyCase = true } = {}) {
     if (!substanceText && (formText || category)) {
       throw new Error(`mainIngredients[${index}] form/category requires substance`);
     }
-    const substance = vocabularyCase
-      ? canonicalVocabularyName(substanceText)
-      : substanceText;
-    const form = vocabularyCase ? canonicalVocabularyName(formText) : formText;
+    // KAN-285: Supply Smart matches hints by exact name and recreates unknown substances, so names it merged
+    // away are sent as the keeper (and form). See substance-aliases.mjs.
+    const { substance, form } = resolveSubstanceHint({
+      name,
+      substance: vocabularyCase ? canonicalVocabularyName(substanceText) : substanceText,
+      form: vocabularyCase ? canonicalVocabularyName(formText) : formText,
+    });
     const item = substance
       ? {
           name,

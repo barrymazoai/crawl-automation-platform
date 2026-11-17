@@ -225,6 +225,28 @@ describe("Supply Smart enrich product output", () => {
     });
   });
 
+  it("sends substance names Supply Smart merged away as the keeper (KAN-285)", () => {
+    const input = toEnrichProductInput({
+      sourceUrl: "https://www.example.com/products/b-complex",
+      fields: {
+        title: "B Complex",
+        images: ["https://cdn.test/b.jpg"],
+        main_ingredients: [
+          { name: "Thiamine HCl", substance: "Thiamine", form: "Thiamine HCl", category: "vitamins" },
+          { name: "Vitamin K2 (MK-7)", substance: "Vitamin K2", form: "MK-7", category: "vitamins" },
+          { name: "Magnesium Stearate", substance: "Magnesium", form: "Magnesium Stearate", category: "minerals" },
+          { name: "Zinc Citrate", substance: "Zinc", form: "Zinc Citrate", category: "minerals" },
+        ],
+      },
+    }, { processedAt: "2026-11-17T00:00:00.000Z", requireGalleryReview: false, requireIngredientTaxonomy: false });
+    expect(input.mainIngredients).toEqual([
+      { name: "Thiamine HCl", substance: "Vitamin B1", form: "Thiamine HCl", category: "vitamins" },
+      { name: "Vitamin K2 (MK-7)", substance: "Vitamin K", form: "Vitamin K2", category: "vitamins" },
+      { name: "Magnesium Stearate", substance: "Magnesium Stearate", category: "minerals" },
+      { name: "Zinc Citrate", substance: "Zinc", form: "Zinc Citrate", category: "minerals" },
+    ]);
+  });
+
   it("uses SKU as the listing anchor and preserves it in variantAttrs", () => {
     const withSku = toEnrichProductInput({
       ...apiReadyRecord("A"),
