@@ -91,5 +91,4 @@ each run writes only when all its dry runs pass.
   One card per missed push (`overdue-alert.json`). Dry runs don't count as syncs.
 
 First pushes 2026-11-17: test 04:36 UTC, production 09:04 UTC (after main 2544192c deployed migration 0098), each
-24,269 rows / 74 codes; a dry run against both afterwards found every row unchanged. No failure alert yet: check
-`cron.log` / `last-run.json` in the data directory.
+24,269 rows / 74 codes; a dry run against both afterwards found every row unchanged.
