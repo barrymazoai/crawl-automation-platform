@@ -167,6 +167,22 @@ export const ApiConfigSchema = z
             maxAgeHours: z.number().int().min(1).max(720).default(48),
           })
           .optional(),
+        /**
+         * Owner 2026-11-17: per-step timing (`activity`) and reuse (`preparation`) rows of `usage_event` are kept
+         * seven days and removed in the same run, at most `maxRowsPerRun` a run. Cost rows cannot be named here and
+         * are kept. Absent: nothing is removed.
+         */
+        usage: z
+          .strictObject({
+            kinds: z
+              .array(z.enum(["activity", "preparation"]))
+              .min(1)
+              .default(["activity", "preparation"]),
+            // The database refuses removing such a row younger than seven days (078).
+            keepDays: z.number().int().min(7).max(365).default(7),
+            maxRowsPerRun: z.number().int().min(1).max(5_000_000).default(500_000),
+          })
+          .optional(),
       })
       .optional(),
   })

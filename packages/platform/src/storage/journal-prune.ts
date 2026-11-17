@@ -6,7 +6,7 @@ import { ObjectKeySchema } from "@crawl-automation/v3-contracts";
 import { emptyReport, type JournalPruneReport } from "./journal-prune-report.js";
 import type { ListedObject } from "./r2-objects.js";
 
-export type { JournalPruneReport } from "./journal-prune-report.js";
+export type { JournalPruneReport, UsageRetentionReport } from "./journal-prune-report.js";
 
 /**
  * Owner 2026-10-19: the original product pages (`OriginalHtmlArchive`, `v3/<channel>-html/<operation>/…`) are read

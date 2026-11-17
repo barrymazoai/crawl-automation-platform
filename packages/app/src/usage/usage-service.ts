@@ -15,6 +15,8 @@ export class UsageService {
         models: "client calls; internal provider requests and token counts may be unavailable",
         credits: "reported credits only; unknownCreditCalls are excluded from the sum",
         history: "measurements begin when migration 041 and instrumented workers are deployed",
+        retention:
+          "step timings and preparation reuse are kept 7 days where the cleanup is configured (078); costs, calls and tokens are kept",
       },
       ...(await this.reader.summarize(window)),
     };

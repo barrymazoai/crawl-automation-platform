@@ -85,6 +85,35 @@ describe("copies cache prune settings", () => {
   });
 });
 
+describe("usage retention settings", () => {
+  const root = "/srv/crawler/live/pipeline/journal";
+  const usage = (settings: unknown) =>
+    ApiConfigSchema.safeParse({ ...productionShaped, journalPrune: { root, usage: settings } });
+
+  it("removes no usage rows unless named, and keeps timing and reuse rows seven days by default", () => {
+    expect(
+      ApiConfigSchema.parse({ ...productionShaped, journalPrune: { root } }).journalPrune?.usage,
+    ).toBeUndefined();
+    expect(usage({}).data?.journalPrune?.usage).toEqual({
+      kinds: ["activity", "preparation"],
+      keepDays: 7,
+      maxRowsPerRun: 500_000,
+    });
+  });
+
+  it("keeps at least the seven days the database guards", () => {
+    expect(usage({ keepDays: 6 }).success).toBe(false);
+    expect(usage({ keepDays: 14 }).data?.journalPrune?.usage?.keepDays).toBe(14);
+  });
+
+  it.each(["capture", "model-text", "model-image", "model-enrichment", "ocr", "brand-request"])(
+    "never names the cost rows of %s",
+    (kind) => {
+      expect(usage({ kinds: [kind] }).success).toBe(false);
+    },
+  );
+});
+
 describe("test evidence settings", () => {
   it("keeps test capture optional for existing API configs", () => {
     expect(ApiConfigSchema.parse(productionShaped).evidence).toBeUndefined();

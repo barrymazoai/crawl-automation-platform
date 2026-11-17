@@ -53,6 +53,7 @@ export * from "./postgres/enrichment-repository.js";
 export * from "./postgres/enrichment-dispatch.js";
 export * from "./postgres/usage-measurements.js";
 export * from "./postgres/usage-reader.js";
+export * from "./postgres/usage-retention.js";
 export * from "./postgres/round-reader.js";
 export * from "./postgres/queue-attempts.js";
 export * from "./postgres/postgres-site-analyses.js";

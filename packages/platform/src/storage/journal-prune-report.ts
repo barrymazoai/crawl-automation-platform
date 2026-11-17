@@ -25,6 +25,23 @@ export interface JournalPruneReport {
   examples: { notInR2: string[]; differs: string[]; failed: string[] };
   /** The workers' copies cache pruned in the same run, when configured. */
   cache?: CachePruneReport;
+  /** Usage rows past their retention removed in the same run, when configured. */
+  usage?: UsageRetentionReport;
+}
+
+/** What one usage retention pass removed (or, in a preview, would remove). */
+export interface UsageRetentionReport {
+  kinds: string[];
+  /** Rows of these kinds started before this time are past retention. */
+  before: string;
+  /** Rows past retention when the pass started. */
+  older: number;
+  /** Rows removed (in a preview: that would be removed), at most the per-run limit. */
+  removed: number;
+  /** True when the per-run limit stopped the pass; the next run continues. */
+  limited: boolean;
+  /** Why the pass stopped early; `removed` still counts the rows removed before it. */
+  error?: string;
 }
 
 export function emptyReport(removeFiles: boolean, now: Date): JournalPruneReport {
