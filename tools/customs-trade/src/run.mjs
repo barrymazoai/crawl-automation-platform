@@ -1,5 +1,6 @@
 // node src/run.mjs --env <file> --data-dir <dir> [--months 36 | --from YYYY-MM --to YYYY-MM]
 //                  [--direction import|export] [--only <code,code>] [--push] [--codes <codes.json>]
+//                  [--webhook-file <file>]
 //
 // Pulls U.S. monthly trade by code × partner country from the Census International Trade API for the
 // codes in codes.json, and with --push sends it to Supply Smart's customsTrade.ingest (KAN-282):
@@ -10,10 +11,16 @@
 // past months (the previous years every June) reach Supply Smart without a separate job.
 //
 // Env file (private, never logged): CENSUS_API_KEY, SUPPLY_SMART_DATABASE_RPC_URL, SUPPLY_SMART_API_KEY.
+//
+// --webhook-file (the 「Supply Smart 服务通知」 bot, as the regulatory sync): a green card after a push,
+// a red card naming the stage when a run fails (the error with every env value redacted). check-sync.mjs
+// covers a run that never starts.
 import { mkdir, open, readFile, rm, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs, parseEnv } from 'node:util';
+import { feishuNotifier } from '../../notify/feishu.mjs';
+import { failureCard, redact, successCard } from './alert.mjs';
 import { createCensus, createSupplySmart } from './clients.mjs';
 import { addCounts, batchId, monthRange, monthsBack, toBatches, toSlices } from './slices.mjs';
 
@@ -31,6 +38,7 @@ const { values: args } = parseArgs({
     only: { type: 'string' },
     codes: { type: 'string', default: join(HERE, '..', 'codes.json') },
     push: { type: 'boolean', default: false },
+    'webhook-file': { type: 'string' },
   },
 });
 if (!args.env || !args['data-dir']) throw new Error('--env and --data-dir are required');
@@ -39,20 +47,26 @@ if (args.direction && !['import', 'export'].includes(args.direction)) throw new 
 const log = {
   info: (o, msg) => console.error(JSON.stringify({ t: new Date().toISOString(), level: 'info', msg, ...o })),
   warn: (o, msg) => console.error(JSON.stringify({ t: new Date().toISOString(), level: 'warn', msg, ...o })),
+  error: (o, msg) => console.error(JSON.stringify({ t: new Date().toISOString(), level: 'error', msg, ...o })),
 };
 
-const env = parseEnv(await readFile(args.env, 'utf8'));
 const dataDir = resolve(args['data-dir']);
-await mkdir(dataDir, { recursive: true });
-
-// One run at a time
+const notifier = await feishuNotifier(args['webhook-file'], { log });
+let env = {};
+let stage = 'start';
+let lock = null;
 const lockPath = join(dataDir, '.run.lock');
-const lock = await open(lockPath, 'wx').catch((e) => {
-  throw new Error(e.code === 'EEXIST' ? `${lockPath} exists: another run is going (remove it if that run is dead)` : e.message);
-});
-await lock.write(`${process.pid} ${new Date().toISOString()}\n`);
 
 try {
+  env = parseEnv(await readFile(args.env, 'utf8'));
+  await mkdir(dataDir, { recursive: true });
+  // One run at a time
+  lock = await open(lockPath, 'wx').catch((e) => {
+    throw new Error(e.code === 'EEXIST' ? `${lockPath} exists: another run is going (remove it if that run is dead)` : e.message);
+  });
+  await lock.write(`${process.pid} ${new Date().toISOString()}\n`);
+
+  stage = 'fetch';
   const census = createCensus({ apiKey: env.CENSUS_API_KEY, log });
   const fetchedAt = new Date().toISOString().replace(/\.\d{3}Z$/, 'Z');
   const runId = `customs-${fetchedAt}`;
@@ -87,6 +101,7 @@ try {
   await writeFile(join(runDir, 'slices.jsonl'), slices.map((s) => JSON.stringify(s)).join('\n') + '\n');
 
   // 2. Dry runs of every batch, then (with --push) the real ones
+  stage = 'dry';
   const supplySmart = createSupplySmart({ databaseRpcUrl: env.SUPPLY_SMART_DATABASE_RPC_URL, apiKey: env.SUPPLY_SMART_API_KEY, log });
   const batches = toBatches(slices);
   const run = { runId, fetchedAt };
@@ -100,6 +115,7 @@ try {
   };
   const dry = await send(true);
   log.info({ supplySmart: supplySmart.host, batches: batches.length, dry }, 'dry runs passed');
+  stage = 'push';
   const real = args.push ? await send(false) : null;
   if (real) log.info({ counts: real }, 'pushed');
 
@@ -120,7 +136,26 @@ try {
   await writeFile(join(runDir, 'report.json'), JSON.stringify(report, null, 2));
   await writeFile(join(dataDir, 'last-run.json'), JSON.stringify({ ...report, perCode: undefined }, null, 2));
   console.log(JSON.stringify({ ...report, perCode: undefined }));
+  if (real) {
+    const sent = await notifier.send(successCard(report));
+    log.info({ notification: sent }, 'success card');
+  }
+} catch (error) {
+  const host = (() => {
+    try {
+      return new URL(env.SUPPLY_SMART_DATABASE_RPC_URL).host;
+    } catch {
+      return null;
+    }
+  })();
+  const message = redact(error?.message ?? error, Object.values(env));
+  log.error({ stage, err: message }, 'run failed');
+  const sent = await notifier.send(failureCard({ host, stage, error: message, dataDir }));
+  log.info({ notification: sent }, 'failure card');
+  process.exitCode = 1;
 } finally {
-  await lock.close();
-  await rm(lockPath, { force: true });
+  if (lock) {
+    await lock.close();
+    await rm(lockPath, { force: true });
+  }
 }

@@ -73,9 +73,22 @@ ends, and every run re-reads the last 36 months, so revisions land too. Test fir
 each run writes only when all its dry runs pass.
 
 ```
-0 10 12 * * cd $HOME/apps/customs-trade/tools/customs-trade && PATH=$HOME/.local/bin:/usr/bin:/bin node src/run.mjs --env $HOME/apps/customs-trade-private/.env --data-dir $HOME/customs-trade-data --push >> $HOME/customs-trade-data/cron.log 2>&1
-30 10 12 * * cd $HOME/apps/customs-trade/tools/customs-trade && PATH=$HOME/.local/bin:/usr/bin:/bin node src/run.mjs --env $HOME/apps/customs-trade-private/.env.production --data-dir $HOME/customs-trade-data-prod --push >> $HOME/customs-trade-data-prod/cron.log 2>&1
+0 10 12 * * cd $HOME/apps/customs-trade/tools/customs-trade && PATH=$HOME/.local/bin:/usr/bin:/bin node src/run.mjs --env $HOME/apps/customs-trade-private/.env --data-dir $HOME/customs-trade-data --push --webhook-file $HOME/apps/regulatory-private/feishu.webhook >> $HOME/customs-trade-data/cron.log 2>&1
+30 10 12 * * cd $HOME/apps/customs-trade/tools/customs-trade && PATH=$HOME/.local/bin:/usr/bin:/bin node src/run.mjs --env $HOME/apps/customs-trade-private/.env.production --data-dir $HOME/customs-trade-data-prod --push --webhook-file $HOME/apps/regulatory-private/feishu.webhook >> $HOME/customs-trade-data-prod/cron.log 2>&1
+15 12 * * * cd $HOME/apps/customs-trade/tools/customs-trade && PATH=$HOME/.local/bin:/usr/bin:/bin node src/check-sync.mjs --data-dir $HOME/customs-trade-data --label 测试环境 --webhook-file $HOME/apps/regulatory-private/feishu.webhook >> $HOME/customs-trade-data/check.log 2>&1
+20 12 * * * cd $HOME/apps/customs-trade/tools/customs-trade && PATH=$HOME/.local/bin:/usr/bin:/bin node src/check-sync.mjs --data-dir $HOME/customs-trade-data-prod --label 生产环境 --webhook-file $HOME/apps/regulatory-private/feishu.webhook >> $HOME/customs-trade-data-prod/check.log 2>&1
 ```
+
+## Alerts (「Supply Smart 服务通知」, the regulatory sync's bot)
+
+- `run.mjs --webhook-file`: a **green** card after every push (environment, window and latest month, rows
+  inserted / updated / restored / removed / unchanged; "no change" when Census published nothing new), a **red**
+  card when a run fails, naming where it stopped: start (env file, run lock), Census fetch, dry run (nothing
+  written) or the real push (some batches may be in; each batch replaces whole code × month slices, so one rerun
+  completes it). The error text has every env-file value and any `key=` redacted (`src/alert.mjs`).
+- `check-sync.mjs`, daily: a **red** card when the newest run in `runs/` that pushed is older than 33 days (the
+  12th to the 12th is at most 31), or there is none: catches the run that never started (crontab, machine down).
+  One card per missed push (`overdue-alert.json`). Dry runs don't count as syncs.
 
 First pushes 2026-11-17: test 04:36 UTC, production 09:04 UTC (after main 2544192c deployed migration 0098), each
 24,269 rows / 74 codes; a dry run against both afterwards found every row unchanged. No failure alert yet: check
