@@ -58,15 +58,25 @@ About 1 MB per run; old runs can be deleted.
 - Against the USITC DataWeb exports of the KAN-282 pilot (2025-01 … 2026-09, 8 codes in both): 907
   cells, 0 differences in value and quantity.
 
-## On Server 一 (proposed, not installed)
+## On Server 一 (installed 2026-11-17)
 
 ```sh
-cd $HOME/apps/<clone> && git pull                                  # code only through git (repo rule)
-# env file copied once by scp (confidential config): $HOME/apps/customs-trade-private/.env, chmod 600
+cd $HOME/apps/customs-trade && git pull                            # code only through git (repo rule)
+# confidential config, chmod 600, never in git:
+#   $HOME/apps/customs-trade-private/.env             test        (SUPPLY_SMART_* from brand-enrichment/.env.supply-smart-test)
+#   $HOME/apps/customs-trade-private/.env.production  production  (SUPPLY_SMART_* from brand-enrichment/.env.brand-enrichment)
+#   both carry CENSUS_API_KEY
 ```
 
-crontab, monthly on the 12th (Census publishes a month about 5 weeks after it ends):
+crontab (Server 一 runs on US Central), monthly on the 12th: Census publishes a month about 5 to 8 weeks after it
+ends, and every run re-reads the last 36 months, so revisions land too. Test first, production half an hour later;
+each run writes only when all its dry runs pass.
 
 ```
-0 10 12 * * cd $HOME/apps/<clone>/tools/customs-trade && PATH=$HOME/.local/bin:/usr/bin:/bin node src/run.mjs --env $HOME/apps/customs-trade-private/.env --data-dir $HOME/customs-trade-data --push >> $HOME/customs-trade-data/cron.log 2>&1
+0 10 12 * * cd $HOME/apps/customs-trade/tools/customs-trade && PATH=$HOME/.local/bin:/usr/bin:/bin node src/run.mjs --env $HOME/apps/customs-trade-private/.env --data-dir $HOME/customs-trade-data --push >> $HOME/customs-trade-data/cron.log 2>&1
+30 10 12 * * cd $HOME/apps/customs-trade/tools/customs-trade && PATH=$HOME/.local/bin:/usr/bin:/bin node src/run.mjs --env $HOME/apps/customs-trade-private/.env.production --data-dir $HOME/customs-trade-data-prod --push >> $HOME/customs-trade-data-prod/cron.log 2>&1
 ```
+
+First pushes 2026-11-17: test 04:36 UTC, production 09:04 UTC (after main 2544192c deployed migration 0098), each
+24,269 rows / 74 codes; a dry run against both afterwards found every row unchanged. No failure alert yet: check
+`cron.log` / `last-run.json` in the data directory.
