@@ -1,0 +1,377 @@
+{
+  "_about": "Codes pulled from the Census International Trade API (KAN-282). Only codes that stand for one ingredient: tier A = mostly a supplement / nutrient ingredient, A2 = one ingredient but dominated by food / feed / industry use. Mixed (basket) codes are not pulled. Import codes: HTS 2026 lines checked in the KAN-282 pilot (each returned 12 months of data). Export codes: Schedule B 2026 concordance (census.gov sbsdf.zip econcord.txt), kept only when the line is the same single ingredient; vitamin D, biotin, glucosamine, glycine, mint leaves, inositol (with sterols) and gelatin (with photographic gelatin) have no such export line. 0909.61 (anise / badian / caraway / fennel) was dropped as a basket. 'ingredient' is a label for people; the mapping to Supply Smart substances is made on the Supply Smart side.",
+  "import": [
+    {
+      "code": "2936270000",
+      "ingredient": "Vitamin C",
+      "tier": "A"
+    },
+    {
+      "code": "2936295020",
+      "ingredient": "Vitamin D",
+      "tier": "A"
+    },
+    {
+      "code": "2936250000",
+      "ingredient": "Vitamin B6",
+      "tier": "A"
+    },
+    {
+      "code": "2936260000",
+      "ingredient": "Vitamin B12",
+      "tier": "A"
+    },
+    {
+      "code": "2936280000",
+      "ingredient": "Vitamin E",
+      "tier": "A"
+    },
+    {
+      "code": "2936291610",
+      "ingredient": "Vitamin B3 (niacin, pharmaceutical grade)",
+      "tier": "A"
+    },
+    {
+      "code": "2936291620",
+      "ingredient": "Vitamin B3 (niacin, other)",
+      "tier": "A"
+    },
+    {
+      "code": "2936291630",
+      "ingredient": "Vitamin B3 (niacinamide)",
+      "tier": "A"
+    },
+    {
+      "code": "2936291000",
+      "ingredient": "Folate (folic acid)",
+      "tier": "A"
+    },
+    {
+      "code": "2936295030",
+      "ingredient": "Biotin",
+      "tier": "A"
+    },
+    {
+      "code": "2936210000",
+      "ingredient": "Vitamin A",
+      "tier": "A"
+    },
+    {
+      "code": "2936230000",
+      "ingredient": "Vitamin B2",
+      "tier": "A"
+    },
+    {
+      "code": "2936240100",
+      "ingredient": "Vitamin B5",
+      "tier": "A"
+    },
+    {
+      "code": "2936220000",
+      "ingredient": "Vitamin B1",
+      "tier": "A"
+    },
+    {
+      "code": "2906131000",
+      "ingredient": "Inositol",
+      "tier": "A"
+    },
+    {
+      "code": "2914620000",
+      "ingredient": "Coenzyme Q10",
+      "tier": "A"
+    },
+    {
+      "code": "2932999010",
+      "ingredient": "Glucosamine",
+      "tier": "A"
+    },
+    {
+      "code": "1211201020",
+      "ingredient": "Ginseng (root, cultivated)",
+      "tier": "A"
+    },
+    {
+      "code": "1211201090",
+      "ingredient": "Ginseng (root, wild)",
+      "tier": "A"
+    },
+    {
+      "code": "1211201500",
+      "ingredient": "Ginseng (root, chilled or frozen)",
+      "tier": "A"
+    },
+    {
+      "code": "1302194120",
+      "ingredient": "Ginseng (extract)",
+      "tier": "A"
+    },
+    {
+      "code": "0910300000",
+      "ingredient": "Turmeric",
+      "tier": "A2"
+    },
+    {
+      "code": "0910110010",
+      "ingredient": "Ginger (whole, certified organic)",
+      "tier": "A2"
+    },
+    {
+      "code": "0910110015",
+      "ingredient": "Ginger (whole, other)",
+      "tier": "A2"
+    },
+    {
+      "code": "0910120000",
+      "ingredient": "Ginger (crushed or ground)",
+      "tier": "A2"
+    },
+    {
+      "code": "0904110020",
+      "ingredient": "Black Pepper (whole)",
+      "tier": "A2"
+    },
+    {
+      "code": "0904120000",
+      "ingredient": "Black Pepper (crushed or ground; genus Piper)",
+      "tier": "A2"
+    },
+    {
+      "code": "0906110000",
+      "ingredient": "Cinnamon (Ceylon, whole)",
+      "tier": "A2"
+    },
+    {
+      "code": "0906190000",
+      "ingredient": "Cinnamon (other, whole)",
+      "tier": "A2"
+    },
+    {
+      "code": "0906200000",
+      "ingredient": "Cinnamon (crushed or ground)",
+      "tier": "A2"
+    },
+    {
+      "code": "0902209050",
+      "ingredient": "Green Tea (leaf)",
+      "tier": "A2"
+    },
+    {
+      "code": "1302120000",
+      "ingredient": "Licorice (extract)",
+      "tier": "A2"
+    },
+    {
+      "code": "2923100000",
+      "ingredient": "Choline",
+      "tier": "A2"
+    },
+    {
+      "code": "2939300000",
+      "ingredient": "Caffeine",
+      "tier": "A2"
+    },
+    {
+      "code": "1504206020",
+      "ingredient": "Fish Oil (menhaden)",
+      "tier": "A2"
+    },
+    {
+      "code": "1504206040",
+      "ingredient": "Fish Oil (other fish)",
+      "tier": "A2"
+    },
+    {
+      "code": "1108200000",
+      "ingredient": "Inulin",
+      "tier": "A2"
+    },
+    {
+      "code": "1302200000",
+      "ingredient": "Pectin",
+      "tier": "A2"
+    },
+    {
+      "code": "3503005510",
+      "ingredient": "Gelatin (edible)",
+      "tier": "A2"
+    },
+    {
+      "code": "2922410010",
+      "ingredient": "L-Lysine (food grade, FCC)",
+      "tier": "A2"
+    },
+    {
+      "code": "2922410090",
+      "ingredient": "L-Lysine (other)",
+      "tier": "A2"
+    },
+    {
+      "code": "2922494300",
+      "ingredient": "Glycine",
+      "tier": "A2"
+    },
+    {
+      "code": "1211902000",
+      "ingredient": "Peppermint (mint leaves, crude)",
+      "tier": "A2"
+    }
+  ],
+  "export": [
+    {
+      "code": "2936270000",
+      "ingredient": "Vitamin C",
+      "tier": "A"
+    },
+    {
+      "code": "2936291000",
+      "ingredient": "Folate (folic acid)",
+      "tier": "A"
+    },
+    {
+      "code": "2936291600",
+      "ingredient": "Vitamin B3 (niacin and niacinamide)",
+      "tier": "A"
+    },
+    {
+      "code": "2936250000",
+      "ingredient": "Vitamin B6",
+      "tier": "A"
+    },
+    {
+      "code": "2936260000",
+      "ingredient": "Vitamin B12",
+      "tier": "A"
+    },
+    {
+      "code": "2936280000",
+      "ingredient": "Vitamin E",
+      "tier": "A"
+    },
+    {
+      "code": "2936210000",
+      "ingredient": "Vitamin A",
+      "tier": "A"
+    },
+    {
+      "code": "2936230000",
+      "ingredient": "Vitamin B2",
+      "tier": "A"
+    },
+    {
+      "code": "2936240100",
+      "ingredient": "Vitamin B5",
+      "tier": "A"
+    },
+    {
+      "code": "2936220000",
+      "ingredient": "Vitamin B1",
+      "tier": "A"
+    },
+    {
+      "code": "2914620000",
+      "ingredient": "Coenzyme Q10",
+      "tier": "A"
+    },
+    {
+      "code": "1211201020",
+      "ingredient": "Ginseng (root, cultivated)",
+      "tier": "A"
+    },
+    {
+      "code": "1211201090",
+      "ingredient": "Ginseng (root, wild)",
+      "tier": "A"
+    },
+    {
+      "code": "1211201500",
+      "ingredient": "Ginseng (root, chilled or frozen)",
+      "tier": "A"
+    },
+    {
+      "code": "0910300000",
+      "ingredient": "Turmeric",
+      "tier": "A2"
+    },
+    {
+      "code": "0910110000",
+      "ingredient": "Ginger (whole)",
+      "tier": "A2"
+    },
+    {
+      "code": "0910120000",
+      "ingredient": "Ginger (crushed or ground)",
+      "tier": "A2"
+    },
+    {
+      "code": "0904110000",
+      "ingredient": "Black Pepper (whole; genus Piper)",
+      "tier": "A2"
+    },
+    {
+      "code": "0904120000",
+      "ingredient": "Black Pepper (crushed or ground; genus Piper)",
+      "tier": "A2"
+    },
+    {
+      "code": "0906110000",
+      "ingredient": "Cinnamon (Ceylon, whole)",
+      "tier": "A2"
+    },
+    {
+      "code": "0906190000",
+      "ingredient": "Cinnamon (other, whole)",
+      "tier": "A2"
+    },
+    {
+      "code": "0906200000",
+      "ingredient": "Cinnamon (crushed or ground)",
+      "tier": "A2"
+    },
+    {
+      "code": "0902200000",
+      "ingredient": "Green Tea (leaf)",
+      "tier": "A2"
+    },
+    {
+      "code": "1302120000",
+      "ingredient": "Licorice (extract)",
+      "tier": "A2"
+    },
+    {
+      "code": "2923100000",
+      "ingredient": "Choline",
+      "tier": "A2"
+    },
+    {
+      "code": "2939300000",
+      "ingredient": "Caffeine",
+      "tier": "A2"
+    },
+    {
+      "code": "1504206020",
+      "ingredient": "Fish Oil (menhaden)",
+      "tier": "A2"
+    },
+    {
+      "code": "1504207000",
+      "ingredient": "Fish Oil (other fish)",
+      "tier": "A2"
+    },
+    {
+      "code": "1108200000",
+      "ingredient": "Inulin",
+      "tier": "A2"
+    },
+    {
+      "code": "1302200000",
+      "ingredient": "Pectin",
+      "tier": "A2"
+    },
+    {
+      "code": "2922410000",
+      "ingredient": "L-Lysine",
+      "tier": "A2"
+    }
+  ]
+}
