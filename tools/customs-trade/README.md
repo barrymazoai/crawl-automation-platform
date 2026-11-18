@@ -7,7 +7,7 @@ Temporal, no browser; it writes nothing but its data directory and the push.
 
 ## What it pulls
 
-`codes.json`: 43 import and 31 export codes, each standing for one ingredient (tier A = mostly a
+`codes.json`: 71 import and 43 export codes (48 ingredients; 17 added 2026-11-18 after the match-gap check), each standing for one ingredient (tier A = mostly a
 supplement / nutrient ingredient, A2 = one ingredient, dominated by food / feed / industry). Mixed codes
 (vegetable extracts, glycosides, colouring matter, food preparations) are not pulled: their ingredient
 share cannot be told. Why each code is there, and which ingredients have no export line, is in `_about`.

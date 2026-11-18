@@ -215,6 +215,146 @@
       "code": "1211902000",
       "ingredient": "Peppermint (mint leaves, crude)",
       "tier": "A2"
+    },
+    {
+      "code": "1211908920",
+      "ingredient": "Psyllium",
+      "tier": "A"
+    },
+    {
+      "code": "2938100000",
+      "ingredient": "Rutin",
+      "tier": "A"
+    },
+    {
+      "code": "1504102000",
+      "ingredient": "Cod Liver Oil",
+      "tier": "A"
+    },
+    {
+      "code": "0404100500",
+      "ingredient": "Whey Protein",
+      "tier": "A2"
+    },
+    {
+      "code": "0404901000",
+      "ingredient": "Milk Protein",
+      "tier": "A2"
+    },
+    {
+      "code": "3501101000",
+      "ingredient": "Milk Protein",
+      "tier": "A2"
+    },
+    {
+      "code": "3501105000",
+      "ingredient": "Casein",
+      "tier": "A2"
+    },
+    {
+      "code": "2930400000",
+      "ingredient": "L-Methionine",
+      "tier": "A2"
+    },
+    {
+      "code": "2923202010",
+      "ingredient": "Lecithin",
+      "tier": "A2"
+    },
+    {
+      "code": "2923202050",
+      "ingredient": "Lecithin",
+      "tier": "A2"
+    },
+    {
+      "code": "1301200000",
+      "ingredient": "Acacia",
+      "tier": "A2"
+    },
+    {
+      "code": "1302320020",
+      "ingredient": "Guar",
+      "tier": "A2"
+    },
+    {
+      "code": "1204000010",
+      "ingredient": "Flaxseed",
+      "tier": "A2"
+    },
+    {
+      "code": "1204000025",
+      "ingredient": "Flaxseed",
+      "tier": "A2"
+    },
+    {
+      "code": "1204000035",
+      "ingredient": "Flaxseed",
+      "tier": "A2"
+    },
+    {
+      "code": "1204000055",
+      "ingredient": "Flaxseed",
+      "tier": "A2"
+    },
+    {
+      "code": "1204000075",
+      "ingredient": "Flaxseed",
+      "tier": "A2"
+    },
+    {
+      "code": "0910200000",
+      "ingredient": "Saffron",
+      "tier": "A2"
+    },
+    {
+      "code": "0907100000",
+      "ingredient": "Cloves",
+      "tier": "A2"
+    },
+    {
+      "code": "0907200000",
+      "ingredient": "Cloves",
+      "tier": "A2"
+    },
+    {
+      "code": "1210100000",
+      "ingredient": "Hops",
+      "tier": "A2"
+    },
+    {
+      "code": "1210200020",
+      "ingredient": "Hops",
+      "tier": "A2"
+    },
+    {
+      "code": "1210200040",
+      "ingredient": "Hops",
+      "tier": "A2"
+    },
+    {
+      "code": "1302130000",
+      "ingredient": "Hops",
+      "tier": "A2"
+    },
+    {
+      "code": "0904216090",
+      "ingredient": "Cayenne",
+      "tier": "A2"
+    },
+    {
+      "code": "0904227600",
+      "ingredient": "Cayenne",
+      "tier": "A2"
+    },
+    {
+      "code": "2102204000",
+      "ingredient": "Brewer's Yeast",
+      "tier": "A2"
+    },
+    {
+      "code": "2906135000",
+      "ingredient": "Plant Sterols",
+      "tier": "A2"
     }
   ],
   "export": [
@@ -371,6 +511,66 @@
     {
       "code": "2922410000",
       "ingredient": "L-Lysine",
+      "tier": "A2"
+    },
+    {
+      "code": "2938100000",
+      "ingredient": "Rutin",
+      "tier": "A"
+    },
+    {
+      "code": "0404100500",
+      "ingredient": "Whey Protein",
+      "tier": "A2"
+    },
+    {
+      "code": "2923202000",
+      "ingredient": "Lecithin",
+      "tier": "A2"
+    },
+    {
+      "code": "1301200000",
+      "ingredient": "Acacia",
+      "tier": "A2"
+    },
+    {
+      "code": "1204000000",
+      "ingredient": "Flaxseed",
+      "tier": "A2"
+    },
+    {
+      "code": "0910200000",
+      "ingredient": "Saffron",
+      "tier": "A2"
+    },
+    {
+      "code": "0907100000",
+      "ingredient": "Cloves",
+      "tier": "A2"
+    },
+    {
+      "code": "0907200000",
+      "ingredient": "Cloves",
+      "tier": "A2"
+    },
+    {
+      "code": "1210100000",
+      "ingredient": "Hops",
+      "tier": "A2"
+    },
+    {
+      "code": "1210200020",
+      "ingredient": "Hops",
+      "tier": "A2"
+    },
+    {
+      "code": "1210200040",
+      "ingredient": "Hops",
+      "tier": "A2"
+    },
+    {
+      "code": "1302130000",
+      "ingredient": "Hops",
       "tier": "A2"
     }
   ]
