@@ -91,6 +91,25 @@ describe.skipIf(!hasPostgres)("PostgresUsageRetention", () => {
     expect(await left()).toEqual([]);
   });
 
+  it("removes the oldest rows first when the limit stops the pass", async () => {
+    await seed([
+      { kind: "activity", startedAt: daysAgo(9), count: 2 },
+      { kind: "activity", startedAt: daysAgo(20), count: 2 },
+      { kind: "preparation", startedAt: daysAgo(15) },
+    ]);
+
+    const report = await retention().prune({ ...settings, maxRows: 3, removeRows: true }, signal());
+
+    expect(report).toMatchObject({ older: 5, removed: 3, limited: true });
+    const kept = await postgres.database.query<{ kind: string; started_at: Date }>(
+      "SELECT kind, started_at FROM usage_event ORDER BY started_at",
+    );
+    expect(kept.map((row) => [row.kind, row.started_at.toISOString()])).toEqual([
+      ["activity", daysAgo(9)],
+      ["activity", daysAgo(9)],
+    ]);
+  });
+
   it("keeps cost rows immutable in the database itself", async () => {
     await seed([{ kind: "capture", startedAt: daysAgo(40) }]);
 
@@ -113,7 +132,7 @@ describe.skipIf(!hasPostgres)("PostgresUsageRetention", () => {
   });
 
   it("reports a failure with the rows already removed instead of throwing", async () => {
-    const answers: unknown[][] = [[{ rows: 120_000 }], [{ rows: 50_000 }]];
+    const answers: unknown[][] = [[{ rows: 120_000 }], [{ rows: 5_000 }]];
     const failing = new PostgresUsageRetention(
       {
         query: async <Row extends object>() => {
@@ -132,7 +151,7 @@ describe.skipIf(!hasPostgres)("PostgresUsageRetention", () => {
       signal(),
     );
 
-    expect(report).toMatchObject({ older: 120_000, removed: 50_000, limited: false });
+    expect(report).toMatchObject({ older: 120_000, removed: 5_000, limited: false });
     expect(report.error).toContain("permission denied");
   });
 

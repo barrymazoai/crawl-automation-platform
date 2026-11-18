@@ -14,10 +14,14 @@ export interface UsageRetentionInput {
   removeRows: boolean;
 }
 
-/** Rows removed per statement: each batch commits on its own, so no lock or transaction is held for long. */
-const BATCH_ROWS = 50_000;
+/**
+ * Rows removed per statement: each batch commits on its own, so no lock or transaction is held for long. 2026-11-17:
+ * 50,000 a statement ran past the 5 s statement timeout once the oldest pages were mostly removed rows; on Server 一
+ * 10,000 took 1.8–4.1 s and 5,000 took 0.7–1.0 s (2026-11-18).
+ */
+const BATCH_ROWS = 5_000;
 
-/** The partial index `usage_event_retention` (078) covers exactly these rows; the literal list lets it be used. */
+/** The partial index `usage_event_retention` (078) covers exactly these rows; the literal list lets the count use it. */
 const REMOVABLE =
   "kind IN ('activity', 'preparation') AND kind = ANY($1::text[]) AND started_at < $2::timestamptz";
 
@@ -50,6 +54,10 @@ export class PostgresUsageRetention {
     return report;
   }
 
+  /**
+   * Oldest first through an index on `started_at`: without the order the planner scanned the table from its start,
+   * through the pages earlier passes had emptied, and every statement hit the timeout (2026-11-17 21:00 onward).
+   */
   private async remove(report: UsageRetentionReport, maxRows: number, signal: AbortSignal) {
     while (report.removed < maxRows) {
       signal.throwIfAborted();
@@ -57,7 +65,7 @@ export class PostgresUsageRetention {
       const [gone] = await this.database.query<{ rows: number }>(
         `WITH gone AS (
            DELETE FROM usage_event WHERE event_id IN (
-             SELECT event_id FROM usage_event WHERE ${REMOVABLE} LIMIT $3)
+             SELECT event_id FROM usage_event WHERE ${REMOVABLE} ORDER BY started_at LIMIT $3)
            RETURNING 1)
          SELECT count(*)::int AS rows FROM gone`,
         [report.kinds, report.before, batch],
