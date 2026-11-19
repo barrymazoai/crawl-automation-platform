@@ -21,14 +21,23 @@ const appSchema = z.strictObject({
     ),
   out_file: path,
   error_file: path,
+  /**
+   * Owner 2026-11-19: logs keep the configured name. Without it PM2 appends the process id (`label-worker.out-27.log`),
+   * every deploy starts a new id, and pm2-logrotate never cleans the old names (4 GB on Server 一 by 2026-11-18).
+   */
+  merge_logs: z.literal(true),
   autorestart: z.literal(false),
   watch: z.literal(false),
   exec_mode: z.literal("fork"),
   instances: z.literal(1),
 });
-const ecosystemSchema = z
-  .strictObject({ apps: z.array(appSchema) })
-  .refine((file) => new Set(file.apps.map((app) => app.name)).size === file.apps.length);
+const uniqueNames = (file: { apps: { name: string }[] }) =>
+  new Set(file.apps.map((app) => app.name)).size === file.apps.length;
+const ecosystemSchema = z.strictObject({ apps: z.array(appSchema) }).refine(uniqueNames);
+/** A process file written before 2026-11-19 has no `merge_logs`; it still reads. */
+const writtenEcosystemSchema = z
+  .strictObject({ apps: z.array(appSchema.extend({ merge_logs: z.literal(true).optional() })) })
+  .refine(uniqueNames);
 
 /** The file and programmatic starts use exactly the same options. No persistence or restart policy. */
 export function ecosystemApp(job: JobDefinition): z.output<typeof appSchema> {
@@ -41,6 +50,7 @@ export function ecosystemApp(job: JobDefinition): z.output<typeof appSchema> {
     env: job.env,
     out_file: job.outFile,
     error_file: job.errorFile,
+    merge_logs: true,
     autorestart: false,
     watch: false,
     exec_mode: "fork",
@@ -54,7 +64,7 @@ export function ecosystem(jobs: readonly JobDefinition[]) {
 
 export function readEcosystem(bytes: string): JobDefinition[] {
   try {
-    const file = ecosystemSchema.parse(JSON.parse(bytes));
+    const file = writtenEcosystemSchema.parse(JSON.parse(bytes));
     return file.apps.map((app) => ({
       name: app.name,
       script: app.script,

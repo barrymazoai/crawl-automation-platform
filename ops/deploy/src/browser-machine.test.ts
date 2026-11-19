@@ -47,6 +47,7 @@ describe("Server 二 browser-only deployment", () => {
             },
             out_file: "/srv/logs/browser.out",
             error_file: "/srv/logs/browser.err",
+            merge_logs: true,
             autorestart: false,
             watch: false,
             exec_mode: "fork",

@@ -38,6 +38,7 @@ describe("PM2 ecosystem file", () => {
       env: exampleJob().env,
       out_file: exampleJob().outFile,
       error_file: exampleJob().errorFile,
+      merge_logs: true,
     });
     expect(
       file.apps.every(
@@ -48,6 +49,12 @@ describe("PM2 ecosystem file", () => {
     expect(bytes).not.toMatch(/startup|save|cron_restart|max_memory_restart/);
     expect((await stat(options().file)).mode & 0o777).toBe(0o600);
     expect(readEcosystem(bytes)).toEqual([exampleJob(), exampleJob("vision-worker")]);
+  });
+
+  it("still reads a process file written before logs kept their configured name", () => {
+    const { apps } = ecosystem([exampleJob()]);
+    const before = apps.map(({ merge_logs: _merged, ...app }) => app);
+    expect(readEcosystem(JSON.stringify({ apps: before }))).toEqual([exampleJob()]);
   });
 
   it("backs up the exact previous bytes privately before replacing", async () => {
